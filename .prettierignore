@@ -1,0 +1,7 @@
+node_modules
+dist
+out
+.turbo
+.cache
+*.tsbuildinfo
+*.lock

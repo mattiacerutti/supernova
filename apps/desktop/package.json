@@ -1,0 +1,35 @@
+{
+  "name": "@pi-desktop/desktop",
+  "private": true,
+  "version": "0.0.0",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "lint": "eslint --cache .",
+    "prettier": "prettier --check . --ignore-path ../../.prettierignore",
+    "typecheck": "tsc --noEmit",
+    "start": "electron-vite preview",
+    "dev": "electron-vite dev",
+    "build": "bun run typecheck && electron-vite build --ignoreConfigWarning",
+    "postinstall": "electron-builder install-app-deps",
+    "build:unpack": "bun run build && electron-builder --dir",
+    "build:win": "bun run build && electron-builder --win",
+    "build:mac": "bun run build && electron-builder --mac",
+    "build:linux": "bun run build && electron-builder --linux"
+  },
+  "dependencies": {
+    "@electron-toolkit/utils": "^4.0.0",
+    "@pi-desktop/pi-runtime": "workspace:*",
+    "electron-serve": "^3.0.1"
+  },
+  "devDependencies": {
+    "@electron-toolkit/eslint-config-ts": "^3.1.0",
+    "@pi-desktop/web": "workspace:*",
+    "@types/node": "^22.19.1",
+    "electron": "^39.2.6",
+    "electron-builder": "^26.0.12",
+    "electron-vite": "^5.0.0",
+    "eslint": "^9.39.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.6"
+  }
+}

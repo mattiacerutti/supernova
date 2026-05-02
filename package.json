@@ -1,0 +1,30 @@
+{
+  "name": "pi-desktop",
+  "private": true,
+  "packageManager": "bun@1.3.13",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:web": "turbo run dev --filter=@pi-desktop/web",
+    "dev:desktop": "turbo run dev --filter=@pi-desktop/desktop",
+    "start:desktop": "turbo run start --filter=@pi-desktop/desktop",
+    "build:web": "turbo run build --filter=@pi-desktop/web",
+    "build:desktop": "turbo run build --filter=@pi-desktop/desktop",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "prettier": "turbo run prettier",
+    "typecheck": "turbo run typecheck",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "prettier": "^3.8.3"
+  },
+  "dependencies": {
+    "turbo": "^2.9.7"
+  }
+}

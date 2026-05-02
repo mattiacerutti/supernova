@@ -1,0 +1,15 @@
+#!/bin/sh
+set -e
+
+bun -e '
+const pkg = await Bun.file("package.json").json();
+const expectedBunVersion = pkg.packageManager?.split("@")[1];
+
+if (!expectedBunVersion) {
+  throw new Error("packageManager field not found in root package.json");
+}
+
+if (process.versions.bun !== expectedBunVersion) {
+  throw new Error(`This repo requires bun@${expectedBunVersion}, but you are using bun@${process.versions.bun}`);
+}
+'
