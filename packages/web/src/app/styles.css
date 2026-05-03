@@ -18,6 +18,7 @@
 
   body {
     margin: 0;
+    user-select: none;
   }
 
   :root[data-desktop-shell="integrated-titlebar"],
@@ -31,6 +32,39 @@
   textarea {
     font: inherit;
   }
+
+  input,
+  textarea,
+  [contenteditable="true"] {
+    user-select: text;
+  }
+
+  * {
+    scrollbar-color: rgb(113 113 122 / 0.65) transparent;
+    scrollbar-width: thin;
+  }
+
+  *::-webkit-scrollbar {
+    height: 0.75rem;
+    width: 0.75rem;
+  }
+
+  *::-webkit-scrollbar-track,
+  *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: rgb(113 113 122 / 0.65);
+    background-clip: content-box;
+    border: 0.25rem solid transparent;
+    border-radius: 9999px;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: rgb(161 161 170 / 0.75);
+    background-clip: content-box;
+  }
 }
 
 @layer components {
@@ -42,7 +76,30 @@
     box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12);
   }
 
-  .desktop-window-frame,
+  .chat-panel {
+    border-left: 1px solid rgb(255 255 255 / 0.1);
+    border-bottom-left-radius: 1.5rem;
+    border-top-left-radius: 1.5rem;
+  }
+
+  .chat-panel[data-sidebar-visible="false"] {
+    animation: chat-panel-flush-left 200ms step-end forwards;
+  }
+
+  .sidebar-collapse {
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transition:
+      grid-template-rows 160ms ease-out,
+      opacity 120ms ease-out;
+  }
+
+  .sidebar-collapse[data-expanded="true"] {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+
   .desktop-titlebar {
     -webkit-app-region: drag;
   }
@@ -53,5 +110,19 @@
   select,
   a {
     -webkit-app-region: no-drag;
+  }
+}
+
+@keyframes chat-panel-flush-left {
+  0% {
+    border-left-color: rgb(255 255 255 / 0.1);
+    border-bottom-left-radius: 1.5rem;
+    border-top-left-radius: 1.5rem;
+  }
+
+  100% {
+    border-left-color: transparent;
+    border-bottom-left-radius: 0;
+    border-top-left-radius: 0;
   }
 }
