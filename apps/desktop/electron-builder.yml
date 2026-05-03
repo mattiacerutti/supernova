@@ -10,8 +10,8 @@ files:
   - "!{.env,.env.*,.npmrc,pnpm-lock.yaml}"
   - "!tsconfig.json"
 extraResources:
-  - from: ../web/dist
-    to: web-dist
+  - from: ../server/dist
+    to: server
 win:
   executableName: pi-desktop
 nsis:

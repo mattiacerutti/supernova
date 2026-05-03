@@ -1,0 +1,35 @@
+{
+  "name": "@pi-desktop/server",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "bin": {
+    "pi-desktop-server": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "dev": "bun src/bootstrap.ts",
+    "start": "bun dist/cli.js",
+    "build": "rm -rf dist && bun build src/cli.ts src/bootstrap.ts --target node --outdir dist && cp -R ../../packages/web/dist dist/client",
+    "lint": "eslint .",
+    "prettier": "prettier --check . --ignore-path ../../.prettierignore",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@pi-desktop/web": "workspace:*",
+    "@hono/node-server": "^1.19.6",
+    "commander": "^14.0.2",
+    "hono": "^4.11.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.1",
+    "eslint": "^10.3.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.59.1"
+  }
+}

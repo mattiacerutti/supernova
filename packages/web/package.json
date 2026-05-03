@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "bun run typecheck && vite build",
     "typecheck": "tsc -b",
     "lint": "eslint .",
     "prettier": "prettier --check . --ignore-path ../../.prettierignore",

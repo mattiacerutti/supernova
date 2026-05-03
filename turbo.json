@@ -4,9 +4,33 @@
       "cache": false,
       "persistent": true
     },
+    "start": {
+      "cache": false,
+      "persistent": true
+    },
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**", "out/**"]
+    },
+    "package:unpack": {
+      "dependsOn": ["build", "^build"],
+      "cache": false,
+      "outputs": ["dist/**"]
+    },
+    "package:win": {
+      "dependsOn": ["build", "^build"],
+      "cache": false,
+      "outputs": ["dist/**"]
+    },
+    "package:mac": {
+      "dependsOn": ["build", "^build"],
+      "cache": false,
+      "outputs": ["dist/**"]
+    },
+    "package:linux": {
+      "dependsOn": ["build", "^build"],
+      "cache": false,
+      "outputs": ["dist/**"]
     },
     "lint": {
       "outputs": []

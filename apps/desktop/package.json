@@ -11,19 +11,18 @@
     "dev": "electron-vite dev",
     "build": "bun run typecheck && electron-vite build --ignoreConfigWarning",
     "postinstall": "electron-builder install-app-deps",
-    "build:unpack": "bun run build && electron-builder --dir",
-    "build:win": "bun run build && electron-builder --win",
-    "build:mac": "bun run build && electron-builder --mac",
-    "build:linux": "bun run build && electron-builder --linux"
+    "package:unpack": "electron-builder --dir",
+    "package:win": "electron-builder --win",
+    "package:mac": "electron-builder --mac",
+    "package:linux": "electron-builder --linux"
   },
   "dependencies": {
     "@electron-toolkit/utils": "^4.0.0",
-    "@pi-desktop/pi-runtime": "workspace:*",
-    "electron-serve": "^3.0.1"
+    "@pi-desktop/pi-runtime": "workspace:*"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config-ts": "^3.1.0",
-    "@pi-desktop/web": "workspace:*",
+    "@pi-desktop/server": "workspace:*",
     "@types/node": "^22.19.1",
     "electron": "^39.2.6",
     "electron-builder": "^26.0.12",
