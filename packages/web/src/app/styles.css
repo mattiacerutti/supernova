@@ -20,8 +20,38 @@
     margin: 0;
   }
 
+  :root[data-desktop-shell="integrated-titlebar"],
+  :root[data-desktop-shell="integrated-titlebar"] body,
+  :root[data-desktop-shell="integrated-titlebar"] #root {
+    background: transparent;
+    overflow: hidden;
+  }
+
   button,
   textarea {
     font: inherit;
+  }
+}
+
+@layer components {
+  .desktop-window {
+    background: transparent;
+  }
+
+  .desktop-window-frame {
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12);
+  }
+
+  .desktop-window-frame,
+  .desktop-titlebar {
+    -webkit-app-region: drag;
+  }
+
+  button,
+  input,
+  textarea,
+  select,
+  a {
+    -webkit-app-region: no-drag;
   }
 }

@@ -1,5 +1,6 @@
 import {spawn} from "node:child_process";
 import type {ChildProcessWithoutNullStreams} from "node:child_process";
+import type {BrowserWindowConstructorOptions} from "electron";
 import {app, shell, BrowserWindow, ipcMain} from "electron";
 import {join} from "path";
 import {electronApp, optimizer} from "@electron-toolkit/utils";
@@ -41,6 +42,7 @@ async function createWindow(): Promise<void> {
     height: 780,
     show: false,
     autoHideMenuBar: true,
+    ...windowChromeOptions(),
     webPreferences: {
       preload: join(__dirname, "../preload/index.js"),
       sandbox: false,
@@ -48,6 +50,10 @@ async function createWindow(): Promise<void> {
       nodeIntegration: false,
     },
   });
+
+  if (process.platform === "darwin") {
+    mainWindow.setBackgroundColor("#00000000");
+  }
 
   mainWindow.on("ready-to-show", () => {
     mainWindow?.show();
@@ -63,6 +69,24 @@ async function createWindow(): Promise<void> {
   });
 
   mainWindow.loadURL(server.url);
+}
+
+function windowChromeOptions(): Pick<
+  BrowserWindowConstructorOptions,
+  "backgroundColor" | "titleBarStyle" | "trafficLightPosition" | "transparent" | "vibrancy" | "visualEffectState"
+> {
+  if (process.platform !== "darwin") {
+    return {};
+  }
+
+  return {
+    backgroundColor: "#00000000",
+    titleBarStyle: "hiddenInset",
+    trafficLightPosition: {x: 24, y: 24},
+    transparent: true,
+    vibrancy: "fullscreen-ui",
+    visualEffectState: "active",
+  };
 }
 
 function startServerProcess(options: {host: string; isDev: boolean; port: number}): Promise<SpawnedServer> {

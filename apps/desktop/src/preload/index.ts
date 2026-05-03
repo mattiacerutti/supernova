@@ -12,18 +12,26 @@ const pi = {
   },
 };
 
+const piDesktopShell = {
+  integratedTitleBar: process.platform === "darwin",
+  platform: process.platform,
+};
+
 declare global {
   interface Window {
     pi: typeof pi;
+    piDesktopShell: typeof piDesktopShell;
   }
 }
 
 if (process.contextIsolated) {
   try {
     contextBridge.exposeInMainWorld("pi", pi);
+    contextBridge.exposeInMainWorld("piDesktopShell", piDesktopShell);
   } catch (error) {
     console.error(error);
   }
 } else {
   window.pi = pi;
+  window.piDesktopShell = piDesktopShell;
 }
