@@ -18,8 +18,8 @@ The Pi SDK is used as the execution engine (https://pi.dev/docs). This repositor
 apps/server    → Node server + user-facing CLI. Owns Pi runtime, workspace access, HTTP/WebSocket APIs, and serves the web client.
 apps/desktop   → Electron shell. Starts/embeds the server and loads the server URL.
 
-packages/web         → React/Vite client bundle consumed by the server. No native/filesystem assumptions.
-packages/pi-runtime  → Pi SDK integration (Node-only), consumed by the server.
+packages/web            → React/Vite client bundle consumed by the server. No native/filesystem assumptions.
+packages/agent-runtime  → Agent runtime services and provider SDK integrations (Node-only), consumed by the server.
 ```
 
 ### Runtime Model
@@ -80,6 +80,7 @@ Architecture:
 
 ### Imports and logging
 
-- Always use path aliases (`@/...`, `@assets/...`) over deep relative imports.
+- Always use path aliases (`@/...`, `@assets/...`) over deep relative imports. Never use relative path imports (`./...` or `../...`)
+- Never include TypeScript file extensions in imports (`.ts` or `.tsx`).
 - Do not create local `index.ts` barrel files.
 - Keep logging minimal and purposeful; remove noisy debug output when not needed.

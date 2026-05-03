@@ -1,0 +1,33 @@
+{
+  "name": "@pi-desktop/contracts",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/rpc.ts",
+      "import": "./src/rpc.ts"
+    },
+    "./agent": {
+      "types": "./src/agent.ts",
+      "import": "./src/agent.ts"
+    },
+    "./pi": {
+      "types": "./src/pi.ts",
+      "import": "./src/pi.ts"
+    }
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "prettier": "prettier --check . --ignore-path ../../.prettierignore",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "effect": "4.0.0-beta.60"
+  },
+  "devDependencies": {
+    "eslint": "^10.3.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.59.1"
+  }
+}

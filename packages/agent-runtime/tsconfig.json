@@ -3,6 +3,9 @@
   "include": ["src/**/*"],
   "compilerOptions": {
     "noEmit": true,
+    "paths": {
+      "@/*": ["./src/*"]
+    },
     "types": ["node"]
   }
 }

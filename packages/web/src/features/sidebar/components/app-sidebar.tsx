@@ -8,7 +8,7 @@ import {cn} from "@/lib/cn";
 import {useSidebarProjects} from "@/features/sidebar/hooks/use-sidebar-projects";
 
 export default function AppSidebar() {
-  const {actions, expandedProjectIds, projects, projectsCollapsed, toggleProject, toggleProjectsCollapsed} = useSidebarProjects();
+  const {actions, error, expandedProjectIds, isLoading, projects, projectsCollapsed, toggleProject, toggleProjectsCollapsed} = useSidebarProjects();
 
   const handleProjectsActionClick = (event: MouseEvent<HTMLDivElement>): void => {
     event.stopPropagation();
@@ -44,6 +44,9 @@ export default function AppSidebar() {
 
         <div className="sidebar-collapse" data-expanded={!projectsCollapsed}>
           <ul className="overflow-hidden">
+            {isLoading && <li className="px-2 py-1 text-sm text-zinc-600">Loading projects...</li>}
+            {error && <li className="px-2 py-1 text-sm text-red-400">Unable to load projects.</li>}
+            {!isLoading && !error && projects.length === 0 && <li className="px-2 py-1 text-sm text-zinc-600">No Pi chats found.</li>}
             {projects.map((project) => (
               <ProjectTreeItem expanded={expandedProjectIds.has(project.id)} key={project.id} onToggle={toggleProject} project={project} />
             ))}

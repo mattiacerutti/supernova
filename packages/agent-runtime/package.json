@@ -1,5 +1,5 @@
 {
-  "name": "@pi-desktop/pi-runtime",
+  "name": "@pi-desktop/agent-runtime",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -7,6 +7,10 @@
     ".": {
       "types": "./src/index.ts",
       "import": "./src/index.ts"
+    },
+    "./*": {
+      "types": "./src/*.ts",
+      "import": "./src/*.ts"
     }
   },
   "scripts": {
@@ -14,7 +18,11 @@
     "prettier": "prettier --check . --ignore-path ../../.prettierignore",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@mariozechner/pi-coding-agent": "^0.72.1",
+    "@pi-desktop/contracts": "workspace:*",
+    "effect": "4.0.0-beta.60"
+  },
   "devDependencies": {
     "@types/node": "^22.19.1",
     "eslint": "^10.3.0",

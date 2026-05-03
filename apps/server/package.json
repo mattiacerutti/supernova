@@ -6,12 +6,6 @@
   "bin": {
     "pi-desktop-server": "./dist/cli.js"
   },
-  "exports": {
-    ".": {
-      "types": "./src/index.ts",
-      "import": "./src/index.ts"
-    }
-  },
   "scripts": {
     "dev": "bun src/bootstrap.ts",
     "start": "bun dist/cli.js",
@@ -21,10 +15,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@effect/platform-node": "4.0.0-beta.60",
+    "@pi-desktop/agent-runtime": "workspace:*",
+    "@pi-desktop/contracts": "workspace:*",
     "@pi-desktop/web": "workspace:*",
-    "@hono/node-server": "^1.19.6",
     "commander": "^14.0.2",
-    "hono": "^4.11.2"
+    "effect": "4.0.0-beta.60"
   },
   "devDependencies": {
     "@types/node": "^22.19.1",

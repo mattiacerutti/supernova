@@ -1,4 +1,4 @@
-import {DEFAULT_HOST, DEFAULT_WEB_DEV_URL, startServer} from "./runtime.ts";
+import {DEFAULT_HOST, DEFAULT_WEB_DEV_URL, startServer} from "@/runtime";
 
 function parsePort(value: string | undefined): number {
   const port = Number(value ?? 0);

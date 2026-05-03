@@ -4,12 +4,9 @@ import type {BrowserWindowConstructorOptions} from "electron";
 import {app, shell, BrowserWindow, ipcMain} from "electron";
 import {join} from "path";
 import {electronApp, optimizer} from "@electron-toolkit/utils";
-import {createPiRuntime} from "@pi-desktop/pi-runtime";
 
 declare const PI_DESKTOP_IS_DEV: boolean;
 declare const PI_DESKTOP_SERVER_ENTRY: string;
-
-const runtime = createPiRuntime({cwd: process.cwd()});
 
 let mainWindow: BrowserWindow | undefined;
 let server: SpawnedServer | undefined;
@@ -19,15 +16,8 @@ interface SpawnedServer {
   url: string;
 }
 
-runtime.onEvent((event) => {
-  mainWindow?.webContents.send("pi:event", event);
-});
-
-function registerPiIpc(): void {
-  ipcMain.handle("pi:init", () => runtime.init());
-  ipcMain.handle("pi:get-state", () => runtime.getState());
-  ipcMain.handle("pi:prompt", (_event, message: string) => runtime.prompt(message));
-  ipcMain.handle("pi:abort", () => runtime.abort());
+function registerDesktopIpc(): void {
+  ipcMain.handle("desktop:get-server-url", () => server?.url);
 }
 
 async function createWindow(): Promise<void> {
@@ -168,7 +158,7 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window);
   });
 
-  registerPiIpc();
+  registerDesktopIpc();
 
   void createWindow().catch(failStartup);
 
@@ -181,7 +171,6 @@ app.whenReady().then(() => {
 
 app.on("before-quit", () => {
   server?.process.kill();
-  runtime.dispose();
 });
 
 // Quit when all windows are closed, except on macOS. There, it's common

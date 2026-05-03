@@ -2,10 +2,9 @@
   "extends": "../../tsconfig.base.json",
   "include": ["src/**/*"],
   "compilerOptions": {
-    "lib": ["ES2023"],
+    "noEmit": true,
     "paths": {
       "@/*": ["./src/*"]
-    },
-    "types": ["node"]
+    }
   }
 }

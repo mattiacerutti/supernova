@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import {Command, InvalidArgumentError} from "commander";
-import {DEFAULT_HOST, DEFAULT_PORT, startServer} from "./runtime.ts";
+import {DEFAULT_HOST, DEFAULT_PORT, startServer} from "@/runtime";
 
 function parsePort(value: string): number {
   const port = Number(value);
