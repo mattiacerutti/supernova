@@ -90,7 +90,7 @@ export default function AppSidebar() {
           <span>Settings</span>
         </Button>
       </div>
-      {openProjectDialogOpen && <OpenProjectDialog onClose={handleCloseProjectDialog} onOpenProject={handleOpenProject} />}
+      <OpenProjectDialog onClose={handleCloseProjectDialog} onOpenProject={handleOpenProject} open={openProjectDialogOpen} />
     </aside>
   );
 }

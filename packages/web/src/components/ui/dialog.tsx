@@ -18,7 +18,7 @@ export default function Dialog(props: IDialogProps) {
   return (
     <BaseDialog.Root onOpenChange={onOpenChange} open={open}>
       <BaseDialog.Portal>
-        <BaseDialog.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px]" />
+        <BaseDialog.Backdrop className="fixed inset-0 z-50 bg-black/55 opacity-100 backdrop-blur-[1px] transition-opacity duration-150 ease-out data-closed:opacity-0 data-ending-style:opacity-0 data-starting-style:opacity-0" />
         <BaseDialog.Viewport className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center overflow-hidden">
           <div
             className={cn("relative z-50 flex h-[min(calc(100svh-1rem),32rem)] w-[min(calc(100vw-1rem),40rem)] flex-col items-center overflow-visible", containerClassName)}
@@ -26,7 +26,8 @@ export default function Dialog(props: IDialogProps) {
           >
             <BaseDialog.Popup
               className={cn(
-                "pointer-events-auto flex max-h-full w-full flex-col overflow-hidden rounded-2xl border border-white/[0.06] bg-[#18181b] shadow-xl shadow-black/40",
+                "pointer-events-auto flex max-h-full w-full flex-col overflow-hidden rounded-2xl border border-white/10 bg-neutral-900",
+                "origin-center translate-y-0 scale-100 opacity-100 transition-[opacity,scale,translate] duration-200 ease-out data-closed:translate-y-1 data-closed:scale-[0.985] data-closed:opacity-0 data-ending-style:translate-y-1 data-ending-style:scale-[0.985] data-ending-style:opacity-0 data-starting-style:translate-y-1 data-starting-style:scale-[0.985] data-starting-style:opacity-0",
                 className
               )}
               data-slot="dialog-content"
@@ -35,11 +36,7 @@ export default function Dialog(props: IDialogProps) {
                 <BaseDialog.Title className="text-base font-medium text-neutral-100" data-slot="dialog-title">
                   {title}
                 </BaseDialog.Title>
-                <BaseDialog.Close
-                  aria-label="Close dialog"
-                  className="grid size-7 cursor-pointer place-items-center rounded-md text-neutral-500 hover:bg-white/5 hover:text-neutral-300"
-                  data-slot="dialog-close-button"
-                >
+                <BaseDialog.Close aria-label="Close dialog" className="grid size-9 cursor-pointer place-items-center text-neutral-400 hover:text-neutral-100">
                   <Icon name="x" size="md" />
                 </BaseDialog.Close>
               </div>

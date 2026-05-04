@@ -24,10 +24,11 @@ function formatSuggestionPath(displayPath: string): {parent: string; name: strin
 interface IOpenProjectDialogProps {
   onClose: () => void;
   onOpenProject: (projectPath: string) => void;
+  open: boolean;
 }
 
 export default function OpenProjectDialog(props: IOpenProjectDialogProps) {
-  const {onClose, onOpenProject} = props;
+  const {onClose, onOpenProject, open} = props;
 
   const [projectPath, setProjectPath] = useState("");
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
@@ -84,9 +85,9 @@ export default function OpenProjectDialog(props: IOpenProjectDialogProps) {
   const hasContent = suggestionsQuery.data != null || suggestionsQuery.isLoading || suggestionsQuery.error != null;
 
   return (
-    <Dialog onOpenChange={(open) => !open && onClose()} open title="Open project">
+    <Dialog onOpenChange={(nextOpen) => !nextOpen && onClose()} open={open} title="Open project">
       <div className="shrink-0 px-5 pt-4">
-        <div className="flex items-center gap-2.5 border-b border-white/6 pb-3">
+        <div className="flex items-center gap-2.5 border-b border-white/10 pb-3">
           <Icon className="text-neutral-500" name="search" size="md" />
           <input
             autoFocus
