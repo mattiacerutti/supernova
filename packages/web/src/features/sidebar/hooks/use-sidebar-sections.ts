@@ -1,37 +1,13 @@
-import {useState} from "react";
-
-const initialExpandedProjects = new Set<string>();
+import {useSidebarSectionsStore} from "@/features/sidebar/stores/sidebar-store";
 
 export function useSidebarSections() {
-  const [expandedProjects, setExpandedProjects] = useState(initialExpandedProjects);
-  const [isPinnedCollapsed, setIsPinnedCollapsed] = useState(false);
-  const [isProjectsCollapsed, setIsProjectsCollapsed] = useState(false);
-
-  const expandProject = (projectId: string): void => {
-    setExpandedProjects((currentProjectIds) => new Set(currentProjectIds).add(projectId));
-  };
-
-  const toggleProject = (projectId: string): void => {
-    setExpandedProjects((currentProjects) => {
-      const nextProjects = new Set(currentProjects);
-
-      if (nextProjects.has(projectId)) {
-        nextProjects.delete(projectId);
-        return nextProjects;
-      }
-
-      nextProjects.add(projectId);
-      return nextProjects;
-    });
-  };
-
-  const toggleProjectsCollapsed = (): void => {
-    setIsProjectsCollapsed((collapsed) => !collapsed);
-  };
-
-  const togglePinnedCollapsed = (): void => {
-    setIsPinnedCollapsed((collapsed) => !collapsed);
-  };
+  const expandedProjects = useSidebarSectionsStore((state) => state.expandedProjects);
+  const isPinnedCollapsed = useSidebarSectionsStore((state) => state.isPinnedCollapsed);
+  const isProjectsCollapsed = useSidebarSectionsStore((state) => state.isProjectsCollapsed);
+  const expandProject = useSidebarSectionsStore((state) => state.expandProject);
+  const togglePinnedCollapsed = useSidebarSectionsStore((state) => state.togglePinnedCollapsed);
+  const toggleProject = useSidebarSectionsStore((state) => state.toggleProject);
+  const toggleProjectsCollapsed = useSidebarSectionsStore((state) => state.toggleProjectsCollapsed);
 
   return {
     expandProject,
