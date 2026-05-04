@@ -3,7 +3,7 @@ import Icon from "@/components/ui/icon";
 import IconButton from "@/components/ui/icon-button";
 import {cn} from "@/lib/cn";
 import ChatPanel from "@/features/chat/components/chat-panel";
-import AppSidebar from "@/features/sidebar/components/app-sidebar";
+import Sidebar from "@/features/sidebar/components/sidebar";
 
 interface IAppProps {
   integratedTitleBar?: boolean;
@@ -33,7 +33,7 @@ export default function App(props: IAppProps) {
         </div>
 
         <div className={cn("shrink-0 overflow-hidden transition-[width] duration-200 ease-out", sidebarVisible ? "w-full md:w-72" : "w-0")}>
-          <AppSidebar />
+          <Sidebar />
         </div>
         <ChatPanel sidebarVisible={sidebarVisible} />
       </section>

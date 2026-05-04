@@ -2,7 +2,7 @@ import {useState} from "react";
 
 const initialExpandedProjects = new Set<string>();
 
-export function useSidebarProjectSection() {
+export function useSidebarSections() {
   const [expandedProjects, setExpandedProjects] = useState(initialExpandedProjects);
   const [isPinnedCollapsed, setIsPinnedCollapsed] = useState(false);
   const [isProjectsCollapsed, setIsProjectsCollapsed] = useState(false);

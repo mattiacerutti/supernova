@@ -4,20 +4,20 @@ import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import IconButton from "@/components/ui/icon-button";
 import Menu, {MenuItem} from "@/components/ui/menu";
-import type {IProjectTreeProject} from "@/features/projects/types/project-tree";
+import type {IProjectListProject} from "@/features/projects/types/project-list";
 import {useListProjectSessions} from "@/features/projects/hooks/api/use-list-project-sessions";
 import {useRenameProject} from "@/features/projects/hooks/use-rename-project";
 import {useProjectsStore} from "@/features/projects/stores/projects-store";
 import {formatUpdatedAt} from "@/features/projects/utils/format-updated-at";
 import {cn} from "@/lib/cn";
 
-interface IProjectTreeItemProps {
+interface IProjectListItemProps {
   expanded: boolean;
-  project: IProjectTreeProject;
+  project: IProjectListProject;
   onToggle: (projectId: string) => void;
 }
 
-export default function ProjectTreeItem(props: IProjectTreeItemProps) {
+export default function ProjectListItem(props: IProjectListItemProps) {
   const {expanded, onToggle, project} = props;
 
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);

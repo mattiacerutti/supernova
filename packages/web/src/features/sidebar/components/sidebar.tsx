@@ -5,24 +5,24 @@ import type {MouseEvent} from "react";
 import {useState} from "react";
 import SidebarActionButton from "@/features/sidebar/components/sidebar-action-button";
 import OpenProjectDialog from "@/features/projects/components/open-project-dialog";
-import ProjectTreeItem from "@/features/projects/components/project-tree-item";
-import {useProjectTree} from "@/features/projects/hooks/use-project-tree";
+import ProjectListItem from "@/features/projects/components/project-list-item";
+import {useProjectList} from "@/features/projects/hooks/use-project-list";
 import {useProjectsStore} from "@/features/projects/stores/projects-store";
 import {cn} from "@/lib/cn";
-import {useSidebarProjectSection} from "@/features/sidebar/hooks/use-sidebar-project-section";
+import {useSidebarSections} from "@/features/sidebar/hooks/use-sidebar-sections";
 import type {SidebarActionId} from "@/features/sidebar/types/sidebar";
 import {sidebarActions} from "@/features/sidebar/stores/sidebar-store";
 
-export default function AppSidebar() {
-  const {expandProject, expandedProjects, isPinnedCollapsed, isProjectsCollapsed, togglePinnedCollapsed, toggleProject, toggleProjectsCollapsed} = useSidebarProjectSection();
+export default function Sidebar() {
+  const {expandProject, expandedProjects, isPinnedCollapsed, isProjectsCollapsed, togglePinnedCollapsed, toggleProject, toggleProjectsCollapsed} = useSidebarSections();
 
-  const projects = useProjectTree();
+  const projects = useProjectList();
   const pinnedProjects = projects.filter((project) => project.pinned);
   const regularProjects = projects.filter((project) => !project.pinned);
 
   const [openProjectDialogOpen, setOpenProjectDialogOpen] = useState(false);
 
-  // We need the parent to be control the state of the dialog to reset it when opening.
+  // We need the parent to control the state of the dialog to reset it when opening.
   const [openProjectPath, setOpenProjectPath] = useState("");
   const [openProjectActiveSuggestionIndex, setOpenProjectActiveSuggestionIndex] = useState(0);
 
@@ -77,7 +77,7 @@ export default function AppSidebar() {
             <div className="sidebar-collapse" data-expanded={!isPinnedCollapsed}>
               <ul className="overflow-hidden pb-3">
                 {pinnedProjects.map((project) => (
-                  <ProjectTreeItem expanded={expandedProjects.has(project.id)} key={project.id} onToggle={toggleProject} project={project} />
+                  <ProjectListItem expanded={expandedProjects.has(project.id)} key={project.id} onToggle={toggleProject} project={project} />
                 ))}
               </ul>
             </div>
@@ -107,7 +107,7 @@ export default function AppSidebar() {
           <ul className="overflow-hidden">
             {regularProjects.length === 0 && <li className="px-2 py-1 text-sm text-neutral-600">Add a project to get started.</li>}
             {regularProjects.map((project) => (
-              <ProjectTreeItem expanded={expandedProjects.has(project.id)} key={project.id} onToggle={toggleProject} project={project} />
+              <ProjectListItem expanded={expandedProjects.has(project.id)} key={project.id} onToggle={toggleProject} project={project} />
             ))}
           </ul>
         </div>
