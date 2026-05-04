@@ -12,6 +12,9 @@ import {useProjectsStore} from "@/features/projects/stores/projects-store";
 import {formatUpdatedAt} from "@/features/projects/utils/format-updated-at";
 import {cn} from "@/lib/cn";
 
+const INITIAL_CHAT_LIMIT = 5;
+const CHAT_LIMIT_INCREMENT = 5;
+
 interface IProjectListItemProps {
   expanded: boolean;
   project: IProjectListProject;
@@ -22,6 +25,8 @@ export default function ProjectListItem(props: IProjectListItemProps) {
   const {expanded, onToggle, project} = props;
 
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
+  const [loadedChatLimit, setLoadedChatLimit] = useState(INITIAL_CHAT_LIMIT);
+  const [visibleChatLimit, setVisibleChatLimit] = useState(INITIAL_CHAT_LIMIT);
   const [confirmingArchiveChatId, setConfirmingArchiveChatId] = useState<string | null>(null);
   const removeProject = useProjectsStore((state) => state.removeProject);
   const toggleChatPinned = useProjectsStore((state) => state.toggleChatPinned);
@@ -38,7 +43,7 @@ export default function ProjectListItem(props: IProjectListItemProps) {
     renaming,
     startRenaming,
   } = useRenameProject({projectId: project.id, projectName: project.name});
-  const sessionsQuery = useListProjectSessions({enabled: expanded, projectPath: project.path});
+  const sessionsQuery = useListProjectSessions({enabled: expanded, limit: loadedChatLimit, projectPath: project.path});
 
   const chats =
     sessionsQuery.data?.sessions
@@ -49,8 +54,13 @@ export default function ProjectListItem(props: IProjectListItemProps) {
         updatedAt: formatUpdatedAt(chat.updatedAt),
       }))
       .toSorted((left, right) => Number(right.pinned) - Number(left.pinned)) ?? [];
+  const visibleChats = chats.slice(0, visibleChatLimit);
 
   const hasChats = chats.length > 0;
+  const hasHiddenLoadedChats = chats.length > visibleChatLimit;
+  const canShowLessChats = visibleChatLimit > INITIAL_CHAT_LIMIT;
+  const canShowMoreChats = hasHiddenLoadedChats || !!sessionsQuery.data?.hasMore;
+  const canShowLessAtEnd = canShowLessChats && !canShowMoreChats;
   const canOpenInFinder = window.desktopShell?.platform === "darwin";
 
   const handleToggle = (): void => {
@@ -88,6 +98,20 @@ export default function ProjectListItem(props: IProjectListItemProps) {
 
   const handleOpenInFinder = (): void => {
     void window.desktopShell?.openInFinder(project.path);
+  };
+
+  const handleLoadMoreChats = (): void => {
+    if (hasHiddenLoadedChats) {
+      setVisibleChatLimit(chats.length);
+      return;
+    }
+
+    setLoadedChatLimit((limit) => limit + CHAT_LIMIT_INCREMENT);
+    setVisibleChatLimit((limit) => limit + CHAT_LIMIT_INCREMENT);
+  };
+
+  const handleShowLessChats = (): void => {
+    setVisibleChatLimit(INITIAL_CHAT_LIMIT);
   };
 
   return (
@@ -151,11 +175,16 @@ export default function ProjectListItem(props: IProjectListItemProps) {
 
       <div className="sidebar-collapse" data-expanded={expanded}>
         <div className="overflow-hidden py-0.5">
-          {sessionsQuery.isPending && <p className="px-8 py-1 text-sm text-neutral-600">Loading chats...</p>}
+          {sessionsQuery.isPending && (
+            <span className="ml-10 inline-flex items-center justify-start gap-2 px-0 py-1 text-sm text-neutral-600">
+              Loading chats
+              <span className="size-2.5 animate-spin rounded-full border border-neutral-600 border-t-neutral-300" aria-hidden="true" />
+            </span>
+          )}
           {sessionsQuery.error != null && <p className="px-8 py-1 text-sm text-red-400">Unable to load chats.</p>}
           {hasChats && (
             <ul className="space-y-0.5">
-              {chats.map((chat) => {
+              {visibleChats.map((chat) => {
                 const confirmingArchive = confirmingArchiveChatId === chat.id;
 
                 return (
@@ -190,6 +219,24 @@ export default function ProjectListItem(props: IProjectListItemProps) {
                 );
               })}
             </ul>
+          )}
+
+          {canShowMoreChats && (
+            <Button
+              className="ml-10 inline-flex items-center justify-start gap-2 px-0 py-1 text-xs"
+              disabled={sessionsQuery.isFetching}
+              onClick={handleLoadMoreChats}
+              variant="primary"
+            >
+              Show more
+              {sessionsQuery.isFetching && <span className="size-2.5 animate-spin rounded-full border border-neutral-600 border-t-neutral-300" aria-hidden="true" />}
+            </Button>
+          )}
+
+          {canShowLessAtEnd && (
+            <Button className="ml-10 justify-start px-0 py-1 text-xs" onClick={handleShowLessChats} variant="primary">
+              Show less
+            </Button>
           )}
 
           {!sessionsQuery.isPending && sessionsQuery.error == null && !hasChats && <p className="px-8 py-1 text-sm text-neutral-600">No chats</p>}

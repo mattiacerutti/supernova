@@ -15,6 +15,8 @@ export const AgentFolderSuggestionsListRpc = Rpc.make("listFolderSuggestions", {
 export const AgentProjectSessionsListRpc = Rpc.make("listProjectSessions", {
   error: AgentProjectSessionsListError,
   payload: Schema.Struct({
+    cursor: Schema.optional(Schema.String),
+    limit: Schema.optional(Schema.Number),
     projectPath: Schema.String,
   }),
   success: AgentProjectSessionsListResult,

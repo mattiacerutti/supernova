@@ -11,7 +11,7 @@ export const AgentRpcLive = AgentRpcGroup.toLayer(
     return {
       archiveProjectSession: ({projectPath, sessionId}) => projects.archiveSession(projectPath, sessionId),
       listFolderSuggestions: ({query}) => folders.listSuggestions(query),
-      listProjectSessions: ({projectPath}) => projects.listSessions(projectPath),
+      listProjectSessions: (input) => projects.listSessions(input),
     };
   })
 );

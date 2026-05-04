@@ -9,6 +9,8 @@ export const AgentChatSummary = Schema.Struct({
 export type IAgentChatSummary = typeof AgentChatSummary.Type;
 
 export const AgentProjectSessionsListResult = Schema.Struct({
+  hasMore: Schema.Boolean,
+  nextCursor: Schema.optional(Schema.String),
   projectPath: Schema.String,
   sessions: Schema.Array(AgentChatSummary),
 });
