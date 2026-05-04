@@ -18,6 +18,16 @@ interface SpawnedServer {
 
 function registerDesktopIpc(): void {
   ipcMain.handle("desktop:get-server-url", () => server?.url);
+  ipcMain.handle("desktop:open-in-finder", async (_, projectPath: unknown) => {
+    if (typeof projectPath !== "string" || projectPath.trim().length === 0) {
+      throw new Error("Project path is required to open Finder.");
+    }
+
+    const errorMessage = await shell.openPath(projectPath);
+    if (errorMessage) {
+      throw new Error(errorMessage);
+    }
+  });
 }
 
 async function createWindow(): Promise<void> {

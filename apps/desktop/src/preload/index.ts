@@ -3,6 +3,7 @@ import {contextBridge, ipcRenderer} from "electron";
 const desktopShell = {
   getServerUrl: () => ipcRenderer.invoke("desktop:get-server-url"),
   integratedTitleBar: process.platform === "darwin",
+  openInFinder: (projectPath: string) => ipcRenderer.invoke("desktop:open-in-finder", projectPath),
   platform: process.platform,
 };
 

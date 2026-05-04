@@ -6,6 +6,7 @@ import Menu, {MenuItem} from "@/components/ui/menu";
 import type {IProjectTreeProject} from "@/features/projects/types/project-tree";
 import {formatUpdatedAt} from "@/features/projects/utils/format-updated-at";
 import {useListProjectSessions} from "@/features/projects/hooks/api/use-list-project-sessions";
+import {useRenameProject} from "@/features/projects/hooks/use-rename-project";
 import {useProjectsStore} from "@/features/projects/stores/projects-store";
 import {cn} from "@/lib/cn";
 
@@ -20,6 +21,17 @@ export default function ProjectTreeItem(props: IProjectTreeItemProps) {
 
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
   const removeProject = useProjectsStore((state) => state.removeProject);
+  const {
+    draftName,
+    handleBlur: handleRenameBlur,
+    handleChange: handleRenameChange,
+    handleClick: handleRenameClick,
+    handleFocus: handleRenameFocus,
+    handleKeyDown: handleRenameKeyDown,
+    inputRef: renameInputRef,
+    renaming,
+    startRenaming,
+  } = useRenameProject({projectId: project.id, projectName: project.name});
   const sessionsQuery = useListProjectSessions({enabled: expanded, projectPath: project.path});
 
   const chats =
@@ -40,6 +52,10 @@ export default function ProjectTreeItem(props: IProjectTreeItemProps) {
     removeProject(project.id);
   };
 
+  const handleOpenInFinder = (): void => {
+    void window.desktopShell?.openInFinder(project.path);
+  };
+
   return (
     <li>
       <Button
@@ -50,7 +66,19 @@ export default function ProjectTreeItem(props: IProjectTreeItemProps) {
       >
         <div className="flex flex-row gap-2 items-center ">
           <Icon className="text-neutral-400" name={expanded ? "folder-open" : "folder"} size="sm" />
-          <span className="min-w-0 flex-1 truncate text-sm">{project.name}</span>
+          {renaming && (
+            <input
+              className="min-w-0 flex-1 truncate bg-transparent text-sm text-neutral-400 outline-none"
+              onBlur={handleRenameBlur}
+              onChange={handleRenameChange}
+              onClick={handleRenameClick}
+              onFocus={handleRenameFocus}
+              onKeyDown={handleRenameKeyDown}
+              ref={renameInputRef}
+              value={draftName}
+            />
+          )}
+          {!renaming && <span className="min-w-0 flex-1 truncate text-sm">{project.name}</span>}
         </div>
         <div className="flex items-center gap-0.5">
           <div className={cn("opacity-0 group-hover:opacity-100", actionsMenuOpen && "opacity-100")}>
@@ -69,11 +97,11 @@ export default function ProjectTreeItem(props: IProjectTreeItemProps) {
                 Pin project
               </MenuItem>
               {canOpenInFinder && (
-                <MenuItem disabled icon={<Icon name="folder-open" size="sm" />}>
+                <MenuItem icon={<Icon name="folder-open" size="sm" />} onClick={handleOpenInFinder}>
                   Open in Finder
                 </MenuItem>
               )}
-              <MenuItem disabled icon={<Icon name="edit" size="sm" />}>
+              <MenuItem icon={<Icon name="edit" size="sm" />} onClick={startRenaming}>
                 Rename project
               </MenuItem>
               <MenuItem icon={<Icon name="x" size="sm" />} onClick={handleRemoveProject}>

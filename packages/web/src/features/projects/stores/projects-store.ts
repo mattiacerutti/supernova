@@ -14,6 +14,7 @@ interface IProjectsState {
   readonly projects: IStoredProject[];
   readonly addProject: (projectPath: string) => IStoredProject | undefined;
   readonly removeProject: (projectId: string) => void;
+  readonly renameProject: (projectId: string, name: string) => void;
 }
 
 function normalizeProjectPath(projectPath: string): string {
@@ -52,6 +53,14 @@ export const useProjectsStore = create<IProjectsState>()(
       },
       removeProject: (projectId) => {
         set((state) => ({projects: state.projects.filter((project) => project.id !== projectId)}));
+      },
+      renameProject: (projectId, name) => {
+        const trimmedName = name.trim();
+        if (trimmedName.length === 0) return;
+
+        set((state) => ({
+          projects: state.projects.map((project) => (project.id === projectId ? {...project, name: trimmedName} : project)),
+        }));
       },
     }),
     {

@@ -5,7 +5,9 @@ import AppProviders from "@/app/providers";
 import "@/app/styles.css";
 
 interface IDesktopShell {
+  getServerUrl: () => Promise<string | undefined>;
   integratedTitleBar: boolean;
+  openInFinder: (projectPath: string) => Promise<void>;
   platform: string;
 }
 
