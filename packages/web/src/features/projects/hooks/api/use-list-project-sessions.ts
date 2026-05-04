@@ -1,5 +1,6 @@
 import {useQuery} from "@tanstack/react-query";
-import {useAgentRpcClient} from "@/rpc/use-agent-rpc-client";
+import {Effect} from "effect";
+import {AgentRpcProtocolClientService, eq} from "@/rpc/effect-query";
 
 export function listProjectSessionsQueryKey(projectPath: string) {
   return ["agent", "project", "sessions", projectPath] as const;
@@ -12,11 +13,16 @@ interface IUseListProjectSessionsOptions {
 
 export function useListProjectSessions(options: IUseListProjectSessionsOptions) {
   const {enabled, projectPath} = options;
-  const client = useAgentRpcClient();
 
-  return useQuery({
-    enabled: enabled && projectPath.length > 0,
-    queryFn: () => client.run((rpc) => rpc.projectSessionsList({projectPath})),
-    queryKey: listProjectSessionsQueryKey(projectPath),
-  });
+  return useQuery(
+    eq.queryOptions({
+      enabled: enabled && projectPath.length > 0,
+      queryFn: () =>
+        Effect.gen(function* () {
+          const rpc = yield* AgentRpcProtocolClientService;
+          return yield* rpc.projectSessionsList({projectPath});
+        }),
+      queryKey: listProjectSessionsQueryKey(projectPath),
+    })
+  );
 }

@@ -7,7 +7,7 @@ const SERVER_URL_SEARCH_PARAM = "agentDesktopServerUrl";
 
 const makeAgentRpcProtocolClient = RpcClient.make(AgentRpcGroup);
 type AgentRpcClientFactory = typeof makeAgentRpcProtocolClient;
-type AgentRpcProtocolClient = AgentRpcClientFactory extends Effect.Effect<infer Client, unknown, unknown> ? Client : never;
+export type AgentRpcProtocolClient = AgentRpcClientFactory extends Effect.Effect<infer Client, unknown, unknown> ? Client : never;
 
 interface ITransportSession {
   readonly clientPromise: Promise<AgentRpcProtocolClient>;
@@ -42,10 +42,10 @@ function resolveAgentDesktopWsUrl(): string {
 
 export interface IAgentRpcClient {
   readonly dispose: () => Promise<void>;
-  readonly run: <TSuccess>(execute: (client: AgentRpcProtocolClient) => Effect.Effect<TSuccess, unknown, never>) => Promise<TSuccess>;
+  readonly run: <TSuccess, TError>(execute: (client: AgentRpcProtocolClient) => Effect.Effect<TSuccess, TError, never>) => Promise<TSuccess>;
 }
 
-function createProtocolLayer(socketUrl: AgentRpcSocketUrlProvider) {
+export function createAgentRpcProtocolLayer(socketUrl: AgentRpcSocketUrlProvider = resolveAgentDesktopWsUrl) {
   const resolvedSocketUrl =
     typeof socketUrl === "function"
       ? Effect.sync(socketUrl).pipe(
@@ -68,7 +68,7 @@ class AgentRpcClient implements IAgentRpcClient {
   private readonly session: ITransportSession;
 
   constructor(socketUrl: AgentRpcSocketUrlProvider) {
-    const runtime = ManagedRuntime.make(createProtocolLayer(socketUrl));
+    const runtime = ManagedRuntime.make(createAgentRpcProtocolLayer(socketUrl));
     const clientScope = runtime.runSync(Scope.make());
     this.session = {
       clientPromise: runtime.runPromise(Scope.provide(clientScope)(makeAgentRpcProtocolClient)),
@@ -82,7 +82,7 @@ class AgentRpcClient implements IAgentRpcClient {
     this.session.runtime.dispose();
   }
 
-  async run<TSuccess>(execute: (client: AgentRpcProtocolClient) => Effect.Effect<TSuccess, unknown, never>): Promise<TSuccess> {
+  async run<TSuccess, TError>(execute: (client: AgentRpcProtocolClient) => Effect.Effect<TSuccess, TError, never>): Promise<TSuccess> {
     const client = await this.session.clientPromise;
     return this.session.runtime.runPromise(Effect.suspend(() => execute(client)));
   }

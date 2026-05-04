@@ -8,6 +8,8 @@ export interface IStoredProject {
   readonly name: string;
   readonly path: string;
   readonly addedAt: string;
+  readonly pinned?: boolean;
+  readonly pinnedChatIds?: string[];
 }
 
 interface IProjectsState {
@@ -15,6 +17,8 @@ interface IProjectsState {
   readonly addProject: (projectPath: string) => IStoredProject | undefined;
   readonly removeProject: (projectId: string) => void;
   readonly renameProject: (projectId: string, name: string) => void;
+  readonly toggleChatPinned: (projectId: string, chatId: string) => void;
+  readonly toggleProjectPinned: (projectId: string) => void;
 }
 
 function normalizeProjectPath(projectPath: string): string {
@@ -60,6 +64,22 @@ export const useProjectsStore = create<IProjectsState>()(
 
         set((state) => ({
           projects: state.projects.map((project) => (project.id === projectId ? {...project, name: trimmedName} : project)),
+        }));
+      },
+      toggleChatPinned: (projectId, chatId) => {
+        set((state) => ({
+          projects: state.projects.map((project) => {
+            if (project.id !== projectId) return project;
+
+            const pinnedChatIds = project.pinnedChatIds ?? [];
+            const nextPinnedChatIds = pinnedChatIds.includes(chatId) ? pinnedChatIds.filter((pinnedChatId) => pinnedChatId !== chatId) : [...pinnedChatIds, chatId];
+            return {...project, pinnedChatIds: nextPinnedChatIds};
+          }),
+        }));
+      },
+      toggleProjectPinned: (projectId) => {
+        set((state) => ({
+          projects: state.projects.map((project) => (project.id === projectId ? {...project, pinned: project.pinned !== true} : project)),
         }));
       },
     }),

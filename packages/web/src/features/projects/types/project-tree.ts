@@ -1,5 +1,6 @@
 export interface IProjectTreeChat {
   id: string;
+  pinned: boolean;
   title: string;
   updatedAt: string;
 }
@@ -8,5 +9,6 @@ export interface IProjectTreeProject {
   id: string;
   name: string;
   path: string;
-  chats: IProjectTreeChat[];
+  pinned: boolean;
+  pinnedChatIds: string[];
 }

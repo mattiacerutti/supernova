@@ -4,6 +4,7 @@ const initialExpandedProjects = new Set<string>();
 
 export function useSidebarProjectSection() {
   const [expandedProjects, setExpandedProjects] = useState(initialExpandedProjects);
+  const [isPinnedCollapsed, setIsPinnedCollapsed] = useState(false);
   const [isProjectsCollapsed, setIsProjectsCollapsed] = useState(false);
 
   const expandProject = (projectId: string): void => {
@@ -28,10 +29,16 @@ export function useSidebarProjectSection() {
     setIsProjectsCollapsed((collapsed) => !collapsed);
   };
 
+  const togglePinnedCollapsed = (): void => {
+    setIsPinnedCollapsed((collapsed) => !collapsed);
+  };
+
   return {
     expandProject,
     expandedProjects,
+    isPinnedCollapsed,
     isProjectsCollapsed,
+    togglePinnedCollapsed,
     toggleProject,
     toggleProjectsCollapsed,
   };

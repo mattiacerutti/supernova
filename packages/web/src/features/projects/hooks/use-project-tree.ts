@@ -5,9 +5,10 @@ export function useProjectTree(): IProjectTreeProject[] {
   const storedProjects = useProjectsStore((state) => state.projects);
 
   return storedProjects.map((project) => ({
-    chats: [],
     id: project.id,
     name: project.name,
     path: project.path,
+    pinned: project.pinned === true,
+    pinnedChatIds: project.pinnedChatIds ?? [],
   }));
 }
