@@ -3,8 +3,10 @@ import type {IconProps as IconifyIconProps} from "@iconify/react";
 import {cn} from "@/lib/cn";
 
 type IconName =
+  | "archive"
   | "arrow-left"
   | "arrow-right"
+  | "check"
   | "chevron-down"
   | "edit"
   | "filter"
@@ -28,8 +30,10 @@ interface IIconProps extends Omit<IconifyIconProps, "children" | "icon" | "size"
 }
 
 const icons: Record<IconName, string> = {
+  archive: "lucide:archive",
   "arrow-left": "lucide:arrow-left",
   "arrow-right": "lucide:arrow-right",
+  check: "lucide:check",
   "chevron-down": "lucide:chevron-down",
   edit: "cuida:edit-outline",
   filter: "lucide:list-filter",

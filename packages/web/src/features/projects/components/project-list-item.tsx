@@ -5,6 +5,7 @@ import Icon from "@/components/ui/icon";
 import IconButton from "@/components/ui/icon-button";
 import Menu, {MenuItem} from "@/components/ui/menu";
 import type {IProjectListProject} from "@/features/projects/types/project-list";
+import {useArchiveProjectSession} from "@/features/projects/hooks/api/use-archive-project-session";
 import {useListProjectSessions} from "@/features/projects/hooks/api/use-list-project-sessions";
 import {useRenameProject} from "@/features/projects/hooks/use-rename-project";
 import {useProjectsStore} from "@/features/projects/stores/projects-store";
@@ -21,9 +22,11 @@ export default function ProjectListItem(props: IProjectListItemProps) {
   const {expanded, onToggle, project} = props;
 
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
+  const [confirmingArchiveChatId, setConfirmingArchiveChatId] = useState<string | null>(null);
   const removeProject = useProjectsStore((state) => state.removeProject);
   const toggleChatPinned = useProjectsStore((state) => state.toggleChatPinned);
   const toggleProjectPinned = useProjectsStore((state) => state.toggleProjectPinned);
+  const archiveProjectSessionMutation = useArchiveProjectSession();
   const {
     draftName,
     handleBlur: handleRenameBlur,
@@ -65,6 +68,22 @@ export default function ProjectListItem(props: IProjectListItemProps) {
   const handleToggleChatPinned = (event: MouseEvent<HTMLButtonElement>, chatId: string): void => {
     event.stopPropagation();
     toggleChatPinned(project.id, chatId);
+  };
+
+  const handleArchiveChat = (event: MouseEvent<HTMLButtonElement>, chatId: string): void => {
+    event.stopPropagation();
+
+    if (confirmingArchiveChatId !== chatId) {
+      setConfirmingArchiveChatId(chatId);
+      return;
+    }
+
+    setConfirmingArchiveChatId(null);
+    archiveProjectSessionMutation.mutate({projectPath: project.path, sessionId: chatId});
+  };
+
+  const handleChatMouseLeave = (chatId: string): void => {
+    if (confirmingArchiveChatId === chatId) setConfirmingArchiveChatId(null);
   };
 
   const handleOpenInFinder = (): void => {
@@ -136,28 +155,40 @@ export default function ProjectListItem(props: IProjectListItemProps) {
           {sessionsQuery.error != null && <p className="px-8 py-1 text-sm text-red-400">Unable to load chats.</p>}
           {hasChats && (
             <ul className="space-y-0.5">
-              {chats.map((chat) => (
-                <li key={chat.id}>
-                  <Button as="div" className="group/chat flex w-full items-center gap-2 py-1 pl-2 pr-1 text-left text-neutral-200 hover:bg-white/7" variant="ghost">
-                    <IconButton
-                      className={cn("size-6", !chat.pinned && "invisible group-hover/chat:visible")}
-                      label={chat.pinned ? "Unpin chat" : "Pin chat"}
-                      onClick={(event) => handleToggleChatPinned(event, chat.id)}
-                    >
-                      <Icon name="pin" size="sm" />
-                    </IconButton>
-                    <span className="min-w-0 flex-1 truncate text-sm">{chat.title}</span>
-                    <span className="grid w-12 shrink-0 place-items-center justify-items-end">
-                      <span className="col-start-1 row-start-1 w-full justify-self-end pr-1.5 text-right text-xs text-neutral-600 group-hover/chat:invisible">
-                        {chat.updatedAt}
-                      </span>
-                      <IconButton className="invisible col-start-1 row-start-1 size-6 group-hover/chat:visible" label="Archive chat">
-                        <Icon name="trash" size="sm" />
+              {chats.map((chat) => {
+                const confirmingArchive = confirmingArchiveChatId === chat.id;
+
+                return (
+                  <li key={chat.id} onMouseLeave={() => handleChatMouseLeave(chat.id)}>
+                    <Button as="div" className="group/chat flex w-full items-center gap-2 py-1 pl-2 pr-1 text-left text-neutral-200 hover:bg-white/7" variant="ghost">
+                      <IconButton
+                        className={cn("size-6", !chat.pinned && "invisible group-hover/chat:visible")}
+                        label={chat.pinned ? "Unpin chat" : "Pin chat"}
+                        onClick={(event) => handleToggleChatPinned(event, chat.id)}
+                      >
+                        <Icon name="pin" size="sm" />
                       </IconButton>
-                    </span>
-                  </Button>
-                </li>
-              ))}
+                      <span className="min-w-0 flex-1 truncate text-sm">{chat.title}</span>
+                      <span className="grid w-12 shrink-0 place-items-center justify-items-end">
+                        <span className="col-start-1 row-start-1 w-full justify-self-end pr-1.5 text-right text-xs text-neutral-600 group-hover/chat:invisible">
+                          {chat.updatedAt}
+                        </span>
+                        <IconButton
+                          className={cn(
+                            "col-start-1 row-start-1 size-5 disabled:cursor-not-allowed disabled:opacity-50",
+                            confirmingArchive ? "rounded-lg bg-red-500/25 text-red-500 hover:bg-red-500/35 hover:text-red-400" : "invisible group-hover/chat:visible"
+                          )}
+                          disabled={archiveProjectSessionMutation.isPending}
+                          label={confirmingArchive ? "Confirm archive chat" : "Archive chat"}
+                          onClick={(event) => handleArchiveChat(event, chat.id)}
+                        >
+                          <Icon name={confirmingArchive ? "x" : "archive"} size="xs" />
+                        </IconButton>
+                      </span>
+                    </Button>
+                  </li>
+                );
+              })}
             </ul>
           )}
 

@@ -1,7 +1,13 @@
 import {Context, Effect} from "effect";
-import type {AgentProjectSessionsListError, IAgentProjectSessionsListResult} from "@pi-desktop/contracts/projects";
+import type {
+  AgentProjectSessionArchiveError,
+  AgentProjectSessionsListError,
+  IAgentProjectSessionArchiveResult,
+  IAgentProjectSessionsListResult,
+} from "@pi-desktop/contracts/projects";
 
 export interface IProjectsService {
+  readonly archiveSession: (projectPath: string, sessionId: string) => Effect.Effect<IAgentProjectSessionArchiveResult, AgentProjectSessionArchiveError>;
   readonly listSessions: (projectPath: string) => Effect.Effect<IAgentProjectSessionsListResult, AgentProjectSessionsListError>;
 }
 

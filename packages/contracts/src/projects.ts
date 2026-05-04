@@ -18,3 +18,14 @@ export class AgentProjectSessionsListError extends Schema.TaggedErrorClass<Agent
   cause: Schema.optional(Schema.Defect),
   message: Schema.String,
 }) {}
+
+export const AgentProjectSessionArchiveResult = Schema.Struct({
+  projectPath: Schema.String,
+  sessionId: Schema.String,
+});
+export type IAgentProjectSessionArchiveResult = typeof AgentProjectSessionArchiveResult.Type;
+
+export class AgentProjectSessionArchiveError extends Schema.TaggedErrorClass<AgentProjectSessionArchiveError>()("AgentProjectSessionArchiveError", {
+  cause: Schema.optional(Schema.Defect),
+  message: Schema.String,
+}) {}

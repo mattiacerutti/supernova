@@ -2,7 +2,7 @@ import * as Rpc from "effect/unstable/rpc/Rpc";
 import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 import {Schema} from "effect";
 import {AgentFolderSuggestionsListError, AgentFolderSuggestionsListResult} from "@pi-desktop/contracts/folders";
-import {AgentProjectSessionsListError, AgentProjectSessionsListResult} from "@pi-desktop/contracts/projects";
+import {AgentProjectSessionArchiveError, AgentProjectSessionArchiveResult, AgentProjectSessionsListError, AgentProjectSessionsListResult} from "@pi-desktop/contracts/projects";
 
 export const AgentFolderSuggestionsListRpc = Rpc.make("listFolderSuggestions", {
   error: AgentFolderSuggestionsListError,
@@ -20,4 +20,13 @@ export const AgentProjectSessionsListRpc = Rpc.make("listProjectSessions", {
   success: AgentProjectSessionsListResult,
 });
 
-export const AgentRpcGroup = RpcGroup.make(AgentFolderSuggestionsListRpc, AgentProjectSessionsListRpc);
+export const AgentProjectSessionArchiveRpc = Rpc.make("archiveProjectSession", {
+  error: AgentProjectSessionArchiveError,
+  payload: Schema.Struct({
+    projectPath: Schema.String,
+    sessionId: Schema.String,
+  }),
+  success: AgentProjectSessionArchiveResult,
+});
+
+export const AgentRpcGroup = RpcGroup.make(AgentFolderSuggestionsListRpc, AgentProjectSessionsListRpc, AgentProjectSessionArchiveRpc);
