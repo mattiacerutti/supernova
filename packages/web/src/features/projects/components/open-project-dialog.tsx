@@ -1,5 +1,5 @@
-import {useDeferredValue, useEffect, useRef, useState} from "react";
-import type {KeyboardEvent} from "react";
+import {useDeferredValue, useEffect, useRef} from "react";
+import type {Dispatch, KeyboardEvent, SetStateAction} from "react";
 import Button from "@/components/ui/button";
 import Dialog from "@/components/ui/dialog";
 import Icon from "@/components/ui/icon";
@@ -29,16 +29,17 @@ function formatSuggestionPath(displayPath: string, homePath: string | undefined)
 }
 
 interface IOpenProjectDialogProps {
+  activeSuggestionIndex: number;
+  onActiveSuggestionIndexChange: Dispatch<SetStateAction<number>>;
   onClose: () => void;
   onOpenProject: (projectPath: string) => void;
+  onProjectPathChange: (projectPath: string) => void;
   open: boolean;
+  projectPath: string;
 }
 
 export default function OpenProjectDialog(props: IOpenProjectDialogProps) {
-  const {onClose, onOpenProject, open} = props;
-
-  const [projectPath, setProjectPath] = useState("");
-  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
+  const {activeSuggestionIndex, onActiveSuggestionIndexChange, onClose, onOpenProject, onProjectPathChange, open, projectPath} = props;
 
   const suggestionRefs = useRef<Array<HTMLDivElement | null>>([]);
   const deferredProjectPath = useDeferredValue(projectPath);
@@ -64,18 +65,28 @@ export default function OpenProjectDialog(props: IOpenProjectDialogProps) {
   };
 
   const handleSuggestionOpen = (suggestionPath: string): void => {
-    onOpenProject(suggestionPath);
+    handleOpenProject(suggestionPath);
   };
 
   const handleProjectPathChange = (value: string): void => {
-    setProjectPath(value);
-    setActiveSuggestionIndex(0);
+    onProjectPathChange(value);
+    onActiveSuggestionIndexChange(0);
+  };
+
+  const handleDialogOpenChange = (nextOpen: boolean): void => {
+    if (nextOpen) return;
+
+    onClose();
+  };
+
+  const handleOpenProject = (suggestionPath: string): void => {
+    onOpenProject(suggestionPath);
   };
 
   const handleInputKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
     if ((event.key === "ArrowDown" || event.key === "ArrowUp") && suggestionRows.length > 0) {
       event.preventDefault();
-      setActiveSuggestionIndex((currentIndex) => {
+      onActiveSuggestionIndexChange((currentIndex) => {
         const nextIndex = event.key === "ArrowDown" ? currentIndex + 1 : currentIndex - 1;
         return (nextIndex + suggestionRows.length) % suggestionRows.length;
       });
@@ -84,7 +95,7 @@ export default function OpenProjectDialog(props: IOpenProjectDialogProps) {
 
     if (event.key === "Enter" && activeSuggestion) {
       event.preventDefault();
-      onOpenProject(activeSuggestion.path);
+      handleOpenProject(activeSuggestion.path);
       return;
     }
 
@@ -97,7 +108,7 @@ export default function OpenProjectDialog(props: IOpenProjectDialogProps) {
   const hasContent = suggestionsQuery.data != null || suggestionsQuery.isLoading || suggestionsQuery.error != null;
 
   return (
-    <Dialog onOpenChange={(nextOpen) => !nextOpen && onClose()} open={open} title="Open project">
+    <Dialog onOpenChange={handleDialogOpenChange} open={open} title="Open project">
       <div className="shrink-0 px-5 pt-4">
         <div className="flex items-center gap-2.5 border-b border-white/10 pb-3">
           <Icon className="text-neutral-500" name="search" size="md" />

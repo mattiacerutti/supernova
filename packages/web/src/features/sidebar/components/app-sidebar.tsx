@@ -18,6 +18,11 @@ export default function AppSidebar() {
   const {expandProject, expandedProjects, isProjectsCollapsed, toggleProject, toggleProjectsCollapsed} = useSidebarProjectSection();
 
   const [openProjectDialogOpen, setOpenProjectDialogOpen] = useState(false);
+
+  // We need the parent to be control the state of the dialog to reset it when opening.
+  const [openProjectPath, setOpenProjectPath] = useState("");
+  const [openProjectActiveSuggestionIndex, setOpenProjectActiveSuggestionIndex] = useState(0);
+
   const addProject = useProjectsStore((state) => state.addProject);
 
   const handleProjectsActionClick = (event: MouseEvent<HTMLDivElement>): void => {
@@ -25,6 +30,8 @@ export default function AppSidebar() {
   };
 
   const handleOpenProjectDialog = (): void => {
+    setOpenProjectPath("");
+    setOpenProjectActiveSuggestionIndex(0);
     setOpenProjectDialogOpen(true);
   };
 
@@ -90,7 +97,15 @@ export default function AppSidebar() {
           <span>Settings</span>
         </Button>
       </div>
-      <OpenProjectDialog onClose={handleCloseProjectDialog} onOpenProject={handleOpenProject} open={openProjectDialogOpen} />
+      <OpenProjectDialog
+        activeSuggestionIndex={openProjectActiveSuggestionIndex}
+        onActiveSuggestionIndexChange={setOpenProjectActiveSuggestionIndex}
+        projectPath={openProjectPath}
+        onProjectPathChange={setOpenProjectPath}
+        onClose={handleCloseProjectDialog}
+        onOpenProject={handleOpenProject}
+        open={openProjectDialogOpen}
+      />
     </aside>
   );
 }
