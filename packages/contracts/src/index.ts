@@ -4,7 +4,7 @@ import {Schema} from "effect";
 import {AgentFolderSuggestionsListError, AgentFolderSuggestionsListResult} from "@pi-desktop/contracts/folders";
 import {AgentProjectSessionsListError, AgentProjectSessionsListResult} from "@pi-desktop/contracts/projects";
 
-export const AgentFolderSuggestionsListRpc = Rpc.make("folderSuggestionsList", {
+export const AgentFolderSuggestionsListRpc = Rpc.make("listFolderSuggestions", {
   error: AgentFolderSuggestionsListError,
   payload: Schema.Struct({
     query: Schema.String,
@@ -12,7 +12,7 @@ export const AgentFolderSuggestionsListRpc = Rpc.make("folderSuggestionsList", {
   success: AgentFolderSuggestionsListResult,
 });
 
-export const AgentProjectSessionsListRpc = Rpc.make("projectSessionsList", {
+export const AgentProjectSessionsListRpc = Rpc.make("listProjectSessions", {
   error: AgentProjectSessionsListError,
   payload: Schema.Struct({
     projectPath: Schema.String,

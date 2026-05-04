@@ -1,15 +1,20 @@
 import {useQuery} from "@tanstack/react-query";
-import {useAgentRpcClient} from "@/rpc/use-agent-rpc-client";
+import {Effect} from "effect";
+import {AgentRpcProtocolClientService, eq} from "@/rpc/effect-query";
 
 export function listFolderSuggestionsQueryKey(query: string) {
   return ["agent", "folder", "suggestions", query] as const;
 }
 
 export function useListFolderSuggestions(query: string) {
-  const client = useAgentRpcClient();
-
-  return useQuery({
-    queryFn: () => client.run((rpc) => rpc.folderSuggestionsList({query})),
-    queryKey: listFolderSuggestionsQueryKey(query),
-  });
+  return useQuery(
+    eq.queryOptions({
+      queryFn: () =>
+        Effect.gen(function* () {
+          const rpc = yield* AgentRpcProtocolClientService;
+          return yield* rpc.listFolderSuggestions({query});
+        }),
+      queryKey: listFolderSuggestionsQueryKey(query),
+    })
+  );
 }

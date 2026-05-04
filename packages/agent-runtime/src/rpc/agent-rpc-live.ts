@@ -9,8 +9,8 @@ export const AgentRpcLive = AgentRpcGroup.toLayer(
     const projects = yield* ProjectsService;
 
     return {
-      folderSuggestionsList: ({query}) => folders.listSuggestions(query),
-      projectSessionsList: ({projectPath}) => projects.listSessions(projectPath),
+      listFolderSuggestions: ({query}) => folders.listSuggestions(query),
+      listProjectSessions: ({projectPath}) => projects.listSessions(projectPath),
     };
   })
 );

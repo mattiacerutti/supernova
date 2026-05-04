@@ -20,7 +20,7 @@ export function useListProjectSessions(options: IUseListProjectSessionsOptions) 
       queryFn: () =>
         Effect.gen(function* () {
           const rpc = yield* AgentRpcProtocolClientService;
-          return yield* rpc.projectSessionsList({projectPath});
+          return yield* rpc.listProjectSessions({projectPath});
         }),
       queryKey: listProjectSessionsQueryKey(projectPath),
     })
