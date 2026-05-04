@@ -92,7 +92,7 @@ export default function AppSidebar() {
       </div>
 
       <div className="border-t border-white/10 p-3">
-        <Button className="text-neutral-300 hover:text-white" size="row-sm" variant="plain">
+        <Button className="text-neutral-300 hover:text-white" size="sm" variant="primary">
           <Icon name="settings" size="sm" />
           <span>Settings</span>
         </Button>

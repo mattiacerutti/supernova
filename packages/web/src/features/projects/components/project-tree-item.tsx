@@ -58,7 +58,7 @@ export default function ProjectTreeItem(props: IProjectTreeItemProps) {
               onOpenChange={setActionsMenuOpen}
               open={actionsMenuOpen}
               trigger={(triggerProps) => (
-                <Button {...triggerProps} className="size-7" size="icon-md" variant="plain">
+                <Button {...triggerProps} className="size-7" shape="icon" size="md" variant="primary">
                   <Icon name="more-horizontal" size="sm" />
                 </Button>
               )}
@@ -82,7 +82,7 @@ export default function ProjectTreeItem(props: IProjectTreeItemProps) {
             </Menu>
           </div>
           <IconButton className="size-7" label={`New chat in ${project.name}`}>
-            <Icon name="edit" size="sm" />
+            <Icon name="edit" size="xs" />
           </IconButton>
         </div>
       </Button>

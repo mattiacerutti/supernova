@@ -1,18 +1,16 @@
-import type {ButtonHTMLAttributes, ReactNode} from "react";
-import Button, {type ButtonSize, type ButtonVariant} from "@/components/ui/button";
+import type {ReactNode} from "react";
+import Button, {type IButtonProps} from "@/components/ui/button";
 
-interface IIconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+interface IIconButtonProps extends Omit<IButtonProps, "aria-label" | "children"> {
   children: ReactNode;
   label: string;
-  size?: ButtonSize;
-  variant?: ButtonVariant;
 }
 
 export default function IconButton(props: IIconButtonProps) {
-  const {children, className, label, type = "button", size, variant, ...buttonProps} = props;
+  const {children, className, label, shape, size, type = "button", variant, ...buttonProps} = props;
 
   return (
-    <Button aria-label={label} className={className} size={size || "icon-md"} type={type} variant={variant || "plain"} {...buttonProps}>
+    <Button aria-label={label} className={className} shape={shape || "icon"} size={size || "md"} type={type} variant={variant || "primary"} {...buttonProps}>
       {children}
     </Button>
   );

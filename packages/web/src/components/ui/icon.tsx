@@ -1,24 +1,5 @@
-import {
-  ArrowLeft,
-  ArrowRight,
-  ChevronsUp,
-  ChevronDown,
-  Edit3,
-  Folder,
-  FolderOpen,
-  FolderPlus,
-  ListFilter,
-  Maximize2,
-  MoreHorizontal,
-  PanelLeft,
-  Pin,
-  Plus,
-  Search,
-  Settings,
-  Trash2,
-  X,
-} from "lucide-react";
-import type {LucideIcon, LucideProps} from "lucide-react";
+import {Icon as IconifyIcon} from "@iconify/react";
+import type {IconProps as IconifyIconProps} from "@iconify/react";
 import {cn} from "@/lib/cn";
 
 type IconName =
@@ -41,41 +22,43 @@ type IconName =
   | "trash"
   | "x";
 
-interface IIconProps extends Omit<LucideProps, "children"> {
+interface IIconProps extends Omit<IconifyIconProps, "children" | "icon" | "size"> {
   name: IconName;
-  size?: "sm" | "md" | "lg";
+  size?: "lg" | "md" | "sm" | "xs";
 }
 
-const icons: Record<IconName, LucideIcon> = {
-  "arrow-left": ArrowLeft,
-  "arrow-right": ArrowRight,
-  "chevron-down": ChevronDown,
-  edit: Edit3,
-  filter: ListFilter,
-  folder: Folder,
-  "folder-open": FolderOpen,
-  "folder-plus": FolderPlus,
-  maximize: Maximize2,
-  "more-horizontal": MoreHorizontal,
-  "panel-left": PanelLeft,
-  pin: Pin,
-  plus: Plus,
-  search: Search,
-  send: ChevronsUp,
-  settings: Settings,
-  trash: Trash2,
-  x: X,
+const icons: Record<IconName, string> = {
+  "arrow-left": "lucide:arrow-left",
+  "arrow-right": "lucide:arrow-right",
+  "chevron-down": "lucide:chevron-down",
+  edit: "cuida:edit-outline",
+  filter: "lucide:list-filter",
+  folder: "cuida:folder-outline",
+  "folder-open": "fluent:folder-open-24-regular",
+  "folder-plus": "mdi:create-new-folder-outline",
+  maximize: "lucide:maximize-2",
+  "more-horizontal": "lucide:more-horizontal",
+  "panel-left": "tabler:layout-sidebar",
+  pin: "fluent:pin-12-regular",
+  plus: "lucide:plus",
+  search: "lucide:search",
+  send: "lucide:chevrons-up",
+  settings: "lucide:settings",
+  trash: "lucide:trash-2",
+  x: "lucide:x",
 };
 
 const sizeClasses: Record<NonNullable<IIconProps["size"]>, string> = {
-  sm: "size-3.5",
-  md: "size-4.5",
-  lg: "size-5.5",
+  xs: "size-3.5",
+  sm: "size-4",
+  md: "size-5",
+  lg: "size-6",
 };
 
 export default function Icon(props: IIconProps) {
-  const {className, name, size = "md", strokeWidth = 1.8, ...iconProps} = props;
-  const LucideIconComponent = icons[name];
+  const {className, name, size = "md", ...iconProps} = props;
+  const icon = icons[name];
+  const resolvedClassName = cn(sizeClasses[size], "shrink-0", className);
 
-  return <LucideIconComponent aria-hidden="true" className={cn(sizeClasses[size], "shrink-0", className)} strokeWidth={strokeWidth} {...iconProps} />;
+  return <IconifyIcon aria-hidden="true" className={resolvedClassName} icon={icon} {...iconProps} />;
 }

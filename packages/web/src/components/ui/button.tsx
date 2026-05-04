@@ -1,12 +1,14 @@
 import type {ButtonHTMLAttributes, KeyboardEvent, MouseEventHandler, ReactNode} from "react";
 import {cn} from "@/lib/cn";
 
-export type ButtonVariant = "bare" | "ghost" | "plain";
-export type ButtonSize = "icon-md" | "icon-sm" | "none" | "row-sm";
+export type ButtonVariant = "bare" | "ghost" | "primary";
+export type ButtonSize = "lg" | "md" | "none" | "sm";
+export type ButtonShape = "default" | "icon";
 
-interface IButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+export interface IButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   as?: "button" | "div";
   children: ReactNode;
+  shape?: ButtonShape;
   size?: ButtonSize;
   variant?: ButtonVariant;
 }
@@ -14,19 +16,26 @@ interface IButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 const variantClasses: Record<ButtonVariant, string> = {
   bare: "cursor-pointer",
   ghost: "cursor-pointer rounded-lg hover:bg-white/7 hover:text-white",
-  plain: "cursor-pointer text-neutral-400 hover:text-neutral-100 [&_svg]:text-current",
+  primary: "cursor-pointer text-neutral-400 hover:text-neutral-100 [&_svg]:text-current",
 };
 
-const sizeClasses: Record<ButtonSize, string> = {
-  "icon-md": "grid size-9 place-items-center",
-  "icon-sm": "grid size-6 place-items-center",
+const defaultSizeClasses: Record<ButtonSize, string> = {
+  lg: "flex w-full items-center gap-3 px-3 py-2 text-left text-base",
+  md: "flex w-full items-center gap-2.5 px-2.5 py-2 text-left text-sm",
   none: "",
-  "row-sm": "flex w-full items-center gap-2.5 px-2 py-1.5 text-left text-sm",
+  sm: "flex w-full items-center gap-2.5 px-2 py-1.5 text-left text-sm",
+};
+
+const iconSizeClasses: Record<ButtonSize, string> = {
+  lg: "grid size-10 place-items-center",
+  md: "grid size-9 place-items-center",
+  none: "",
+  sm: "grid size-6 place-items-center",
 };
 
 export default function Button(props: IButtonProps) {
-  const {as = "button", children, className, onClick, onKeyDown, size = "none", type = "button", variant = "bare", ...buttonProps} = props;
-  const resolvedClassName = cn(variantClasses[variant], sizeClasses[size], className);
+  const {as = "button", children, className, onClick, onKeyDown, shape = "default", size = "none", type = "button", variant = "bare", ...buttonProps} = props;
+  const resolvedClassName = cn(variantClasses[variant], shape === "icon" ? iconSizeClasses[size] : defaultSizeClasses[size], className);
 
   if (as === "div") {
     const handleClick = onClick as unknown as MouseEventHandler<HTMLDivElement> | undefined;
