@@ -141,7 +141,8 @@ function failStartup(error: unknown): void {
 }
 
 function resolveServerCommand(): string {
-  return app.isPackaged ? process.execPath : "bun";
+  if (PI_DESKTOP_IS_DEV) return "bun";
+  return app.isPackaged ? process.execPath : "node";
 }
 
 function resolveServerEntry(): string {

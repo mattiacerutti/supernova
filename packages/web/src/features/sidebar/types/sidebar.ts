@@ -5,15 +5,3 @@ export interface ISidebarAction {
   icon: "edit" | "folder" | "search";
   label: string;
 }
-
-export interface ISidebarChat {
-  id: string;
-  title: string;
-  updatedAt: string;
-}
-
-export interface ISidebarProject {
-  id: string;
-  name: string;
-  chats: ISidebarChat[];
-}

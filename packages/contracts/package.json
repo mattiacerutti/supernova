@@ -5,16 +5,12 @@
   "type": "module",
   "exports": {
     ".": {
-      "types": "./src/rpc.ts",
-      "import": "./src/rpc.ts"
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
     },
-    "./agent": {
-      "types": "./src/agent.ts",
-      "import": "./src/agent.ts"
-    },
-    "./pi": {
-      "types": "./src/pi.ts",
-      "import": "./src/pi.ts"
+    "./*": {
+      "types": "./src/*.ts",
+      "import": "./src/*.ts"
     }
   },
   "scripts": {

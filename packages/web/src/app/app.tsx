@@ -18,8 +18,8 @@ export default function App(props: IAppProps) {
   };
 
   return (
-    <main className={cn("min-h-svh text-zinc-100", integratedTitleBar ? "desktop-window" : "bg-zinc-950")}>
-      <section className={cn("relative flex min-h-svh overflow-hidden", integratedTitleBar ? "desktop-window-frame bg-neutral-900/75" : "bg-zinc-900")}>
+    <main className={cn("min-h-svh text-neutral-100", integratedTitleBar ? "desktop-window" : "bg-neutral-950")}>
+      <section className={cn("relative flex min-h-svh overflow-hidden", integratedTitleBar ? "desktop-window-frame bg-neutral-900/75" : "bg-neutral-900")}>
         <div className={cn("desktop-titlebar absolute inset-x-0 top-0 z-10 flex h-16 items-center gap-1 pr-3", integratedTitleBar ? "pl-25" : "pl-3")}>
           <IconButton className="size-7" label="Toggle sidebar" onClick={handleToggleSidebar}>
             <Icon name="panel-left" size="sm" />

@@ -14,7 +14,7 @@ interface IButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 const variantClasses: Record<ButtonVariant, string> = {
   bare: "cursor-pointer",
   ghost: "cursor-pointer rounded-lg hover:bg-white/7 hover:text-white",
-  plain: "cursor-pointer text-zinc-400 hover:text-zinc-100 [&_svg]:text-current",
+  plain: "cursor-pointer text-neutral-400 hover:text-neutral-100 [&_svg]:text-current",
 };
 
 const sizeClasses: Record<ButtonSize, string> = {

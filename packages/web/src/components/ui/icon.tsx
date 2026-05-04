@@ -16,6 +16,7 @@ import {
   Search,
   Settings,
   Trash2,
+  X,
 } from "lucide-react";
 import type {LucideIcon, LucideProps} from "lucide-react";
 import {cn} from "@/lib/cn";
@@ -37,7 +38,8 @@ type IconName =
   | "search"
   | "send"
   | "settings"
-  | "trash";
+  | "trash"
+  | "x";
 
 interface IIconProps extends Omit<LucideProps, "children"> {
   name: IconName;
@@ -62,6 +64,7 @@ const icons: Record<IconName, LucideIcon> = {
   send: ChevronsUp,
   settings: Settings,
   trash: Trash2,
+  x: X,
 };
 
 const sizeClasses: Record<NonNullable<IIconProps["size"]>, string> = {

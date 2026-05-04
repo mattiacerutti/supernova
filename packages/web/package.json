@@ -12,6 +12,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@base-ui/react": "^1.4.1",
     "@pi-desktop/contracts": "workspace:*",
     "@tanstack/react-query": "^5.90.0",
     "clsx": "^2.1.1",
@@ -19,7 +20,8 @@
     "lucide-react": "^1.14.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
-    "tailwind-merge": "^3.5.0"
+    "tailwind-merge": "^3.5.0",
+    "zustand": "^5.0.9"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
