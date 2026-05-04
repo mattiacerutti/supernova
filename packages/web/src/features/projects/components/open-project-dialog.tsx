@@ -1,22 +1,29 @@
 import {useDeferredValue, useEffect, useRef, useState} from "react";
 import type {KeyboardEvent} from "react";
+import Button from "@/components/ui/button";
 import Dialog from "@/components/ui/dialog";
 import Icon from "@/components/ui/icon";
 import {useListFolderSuggestions} from "@/features/projects/hooks/api/use-list-folder-suggestions";
 import {useProjectsStore} from "@/features/projects/stores/projects-store";
 import {cn} from "@/lib/cn";
 
-function formatSuggestionPath(displayPath: string): {parent: string; name: string; suffix: string} {
+function formatSuggestionPath(displayPath: string, homePath: string | undefined): {parent: string; name: string; suffix: string} {
   const trimmedPath = displayPath.replace(/\/$/, "");
-  const lastSlashIndex = trimmedPath.lastIndexOf("/");
+
+  const normalizedHomePath = homePath?.replace(/\/$/, "");
+  const displayTrimmedPath =
+    normalizedHomePath && (trimmedPath === normalizedHomePath || trimmedPath.startsWith(`${normalizedHomePath}/`))
+      ? `~${trimmedPath.slice(normalizedHomePath.length)}`
+      : trimmedPath;
+  const lastSlashIndex = displayTrimmedPath.lastIndexOf("/");
 
   if (lastSlashIndex <= 0) {
-    return {name: trimmedPath, parent: "", suffix: "/"};
+    return {name: displayTrimmedPath, parent: "", suffix: "/"};
   }
 
   return {
-    name: trimmedPath.slice(lastSlashIndex + 1),
-    parent: `${trimmedPath.slice(0, lastSlashIndex + 1)}`,
+    name: displayTrimmedPath.slice(lastSlashIndex + 1),
+    parent: `${displayTrimmedPath.slice(0, lastSlashIndex + 1)}`,
     suffix: "/",
   };
 }
@@ -33,9 +40,10 @@ export default function OpenProjectDialog(props: IOpenProjectDialogProps) {
   const [projectPath, setProjectPath] = useState("");
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
 
-  const suggestionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const suggestionRefs = useRef<Array<HTMLDivElement | null>>([]);
   const deferredProjectPath = useDeferredValue(projectPath);
   const suggestionsQuery = useListFolderSuggestions(deferredProjectPath);
+  const homePath = suggestionsQuery.data?.homePath;
   const suggestedFolders = suggestionsQuery.data?.suggestions ?? [];
 
   const storedProjects = useProjectsStore((state) => state.projects);
@@ -51,7 +59,11 @@ export default function OpenProjectDialog(props: IOpenProjectDialogProps) {
     suggestionRefs.current[highlightedSuggestionIndex]?.scrollIntoView({block: "center"});
   }, [highlightedSuggestionIndex]);
 
-  const handleSuggestionClick = (suggestionPath: string): void => {
+  const handleSuggestionAutocomplete = (suggestionPath: string): void => {
+    handleProjectPathChange(suggestionPath.endsWith("/") ? suggestionPath : `${suggestionPath}/`);
+  };
+
+  const handleSuggestionOpen = (suggestionPath: string): void => {
     onOpenProject(suggestionPath);
   };
 
@@ -112,26 +124,33 @@ export default function OpenProjectDialog(props: IOpenProjectDialogProps) {
             <div className="pb-2">
               <p className="px-3 pb-1 pt-2 text-xs font-medium text-neutral-600">Recent projects</p>
               {recentProjects.map((project, index) => {
-                const {name, parent, suffix} = formatSuggestionPath(project.path);
+                const {name, parent, suffix} = formatSuggestionPath(project.path, homePath);
                 const highlighted = index === highlightedSuggestionIndex;
 
                 return (
-                  <button
-                    className={cn("flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-white/6", highlighted && "bg-white/6")}
+                  <div
+                    className={cn("group flex w-full items-center gap-1 rounded-lg hover:bg-white/6", highlighted && "bg-white/6")}
                     key={project.id}
-                    onClick={() => handleSuggestionClick(project.path)}
                     ref={(element) => {
                       suggestionRefs.current[index] = element;
                     }}
-                    type="button"
                   >
-                    <Icon className="shrink-0 text-neutral-500" name="folder" size="sm" />
-                    <span className="min-w-0 flex-1 truncate text-[15px]">
-                      {parent && <span className="text-neutral-500">{parent}</span>}
-                      <span className="text-neutral-200">{name}</span>
-                      <span className="text-neutral-500">{suffix}</span>
-                    </span>
-                  </button>
+                    <button
+                      className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 px-3 py-2 text-left"
+                      onClick={() => handleSuggestionAutocomplete(project.path)}
+                      type="button"
+                    >
+                      <Icon className="shrink-0 text-neutral-500" name="folder" size="sm" />
+                      <span className="min-w-0 flex-1 truncate text-[15px]">
+                        {parent && <span className="text-neutral-500">{parent}</span>}
+                        <span className="text-neutral-200">{name}</span>
+                        <span className="text-neutral-500">{suffix}</span>
+                      </span>
+                    </button>
+                    <Button className="mr-1 px-2 py-1 text-neutral-500 hover:text-neutral-100" onClick={() => handleSuggestionOpen(project.path)} variant="plain">
+                      ↵
+                    </Button>
+                  </div>
                 );
               })}
             </div>
@@ -140,26 +159,33 @@ export default function OpenProjectDialog(props: IOpenProjectDialogProps) {
           {showingDefaultSuggestions && <p className="px-3 pb-1 pt-2 text-xs font-medium text-neutral-600">Open project</p>}
 
           {suggestedFolders.map((suggestion, index) => {
-            const {name, parent, suffix} = formatSuggestionPath(suggestion.path);
+            const {name, parent, suffix} = formatSuggestionPath(suggestion.path, homePath);
             const highlighted = recentProjects.length + index === highlightedSuggestionIndex;
 
             return (
-              <button
-                className={cn("flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-white/6", highlighted && "bg-white/6")}
+              <div
+                className={cn("group flex w-full items-center gap-1 rounded-lg hover:bg-white/6", highlighted && "bg-white/6")}
                 key={suggestion.path}
-                onClick={() => handleSuggestionClick(suggestion.path)}
                 ref={(element) => {
                   suggestionRefs.current[recentProjects.length + index] = element;
                 }}
-                type="button"
               >
-                <Icon className="shrink-0 text-neutral-500" name="folder" size="sm" />
-                <span className="min-w-0 flex-1 truncate text-[15px]">
-                  {parent && <span className="text-neutral-500">{parent}</span>}
-                  <span className="text-neutral-200">{name}</span>
-                  <span className="text-neutral-500">{suffix}</span>
-                </span>
-              </button>
+                <button
+                  className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 px-3 py-2 text-left"
+                  onClick={() => handleSuggestionAutocomplete(suggestion.path)}
+                  type="button"
+                >
+                  <Icon className="shrink-0 text-neutral-500" name="folder" size="sm" />
+                  <span className="min-w-0 flex-1 truncate text-[15px]">
+                    {parent && <span className="text-neutral-500">{parent}</span>}
+                    <span className="text-neutral-200">{name}</span>
+                    <span className="text-neutral-500">{suffix}</span>
+                  </span>
+                </button>
+                <Button className="mr-1 px-2 py-1 text-neutral-500 hover:text-neutral-100" onClick={() => handleSuggestionOpen(suggestion.path)} variant="plain">
+                  ↵
+                </Button>
+              </div>
             );
           })}
         </div>

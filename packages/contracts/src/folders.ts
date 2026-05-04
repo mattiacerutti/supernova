@@ -7,6 +7,7 @@ export const AgentFolderSuggestion = Schema.Struct({
 export type IAgentFolderSuggestion = typeof AgentFolderSuggestion.Type;
 
 export const AgentFolderSuggestionsListResult = Schema.Struct({
+  homePath: Schema.String,
   query: Schema.String,
   suggestions: Schema.Array(AgentFolderSuggestion),
 });
