@@ -74,7 +74,10 @@ export default function Sidebar() {
               </div>
             </Button>
 
-            <div className="sidebar-collapse" data-expanded={!isPinnedCollapsed}>
+            <div
+              className="grid grid-rows-[0fr] opacity-0 transition-[grid-template-rows,opacity] duration-[160ms] ease-out data-[expanded=true]:grid-rows-[1fr] data-[expanded=true]:opacity-100"
+              data-expanded={!isPinnedCollapsed}
+            >
               <ul className="overflow-hidden pb-3">
                 {pinnedProjects.map((project) => (
                   <ProjectListItem expanded={expandedProjects.has(project.id)} key={project.id} onToggle={toggleProject} project={project} />
@@ -103,7 +106,10 @@ export default function Sidebar() {
           </div>
         </Button>
 
-        <div className="sidebar-collapse" data-expanded={!isProjectsCollapsed}>
+        <div
+          className="grid grid-rows-[0fr] opacity-0 transition-[grid-template-rows,opacity] duration-[160ms] ease-out data-[expanded=true]:grid-rows-[1fr] data-[expanded=true]:opacity-100"
+          data-expanded={!isProjectsCollapsed}
+        >
           <ul className="overflow-hidden">
             {regularProjects.length === 0 && <li className="px-2 py-1 text-sm text-neutral-600">Add a project to get started.</li>}
             {regularProjects.map((project) => (

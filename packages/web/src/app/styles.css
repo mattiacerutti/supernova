@@ -86,20 +86,6 @@
     animation: chat-panel-flush-left 200ms step-end forwards;
   }
 
-  .sidebar-collapse {
-    display: grid;
-    grid-template-rows: 0fr;
-    opacity: 0;
-    transition:
-      grid-template-rows 160ms ease-out,
-      opacity 120ms ease-out;
-  }
-
-  .sidebar-collapse[data-expanded="true"] {
-    grid-template-rows: 1fr;
-    opacity: 1;
-  }
-
   .desktop-titlebar {
     -webkit-app-region: drag;
   }

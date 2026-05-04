@@ -122,7 +122,7 @@ export default function ProjectListItem(props: IProjectListItemProps) {
         onClick={handleToggle}
         variant="ghost"
       >
-        <div className="flex min-w-0 flex-1 flex-row gap-2 items-center ">
+        <div className="flex min-w-0 flex-1 flex-row gap-2 items-center">
           <Icon className="text-neutral-400" name={expanded ? "folder-open" : "folder"} size="sm" />
           {renaming && (
             <input
@@ -173,7 +173,10 @@ export default function ProjectListItem(props: IProjectListItemProps) {
         </div>
       </Button>
 
-      <div className="sidebar-collapse" data-expanded={expanded}>
+      <div
+        className="grid grid-rows-[0fr] opacity-0 origin-top transition-[grid-template-rows,opacity,transform] duration-320 ease-in-out data-[expanded=true]:grid-rows-[1fr] data-[expanded=true]:opacity-100"
+        data-expanded={expanded}
+      >
         <div className="overflow-hidden py-0.5">
           {sessionsQuery.isPending && (
             <span className="ml-10 inline-flex items-center justify-start gap-2 px-0 py-1 text-sm text-neutral-600">
