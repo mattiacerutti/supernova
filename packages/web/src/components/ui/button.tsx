@@ -1,8 +1,8 @@
 import type {ButtonHTMLAttributes, KeyboardEvent, MouseEventHandler, ReactNode} from "react";
 import {cn} from "@/lib/cn";
 
-type ButtonVariant = "bare" | "ghost" | "plain";
-type ButtonSize = "icon-md" | "icon-sm" | "none" | "row-sm";
+export type ButtonVariant = "bare" | "ghost" | "plain";
+export type ButtonSize = "icon-md" | "icon-sm" | "none" | "row-sm";
 
 interface IButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   as?: "button" | "div";
