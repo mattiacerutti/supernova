@@ -1,3 +1,4 @@
+import {Link} from "@tanstack/react-router";
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import IconButton from "@/components/ui/icon-button";
@@ -75,7 +76,7 @@ export default function Sidebar() {
             </Button>
 
             <div
-              className="grid grid-rows-[0fr] opacity-0 transition-[grid-template-rows,opacity] duration-[160ms] ease-out data-[expanded=true]:grid-rows-[1fr] data-[expanded=true]:opacity-100"
+              className="grid grid-rows-[0fr] opacity-0 transition-[grid-template-rows,opacity] duration-160 ease-out data-[expanded=true]:grid-rows-[1fr] data-[expanded=true]:opacity-100"
               data-expanded={!isPinnedCollapsed}
             >
               <ul className="overflow-hidden pb-3">
@@ -107,7 +108,7 @@ export default function Sidebar() {
         </Button>
 
         <div
-          className="grid grid-rows-[0fr] opacity-0 transition-[grid-template-rows,opacity] duration-[160ms] ease-out data-[expanded=true]:grid-rows-[1fr] data-[expanded=true]:opacity-100"
+          className="grid grid-rows-[0fr] opacity-0 transition-[grid-template-rows,opacity] duration-160 ease-out data-[expanded=true]:grid-rows-[1fr] data-[expanded=true]:opacity-100"
           data-expanded={!isProjectsCollapsed}
         >
           <ul className="overflow-hidden">
@@ -119,11 +120,11 @@ export default function Sidebar() {
         </div>
       </div>
 
-      <div className="border-t border-white/10 p-3">
-        <Button className="text-neutral-300 hover:text-white" size="sm" variant="primary">
+      <div className="px-3 pb-2 pt-2">
+        <Link className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sm text-neutral-300 hover:bg-white/7 hover:text-white" to="/settings">
           <Icon name="settings" size="sm" />
           <span>Settings</span>
-        </Button>
+        </Link>
       </div>
       <OpenProjectDialog
         activeSuggestionIndex={openProjectActiveSuggestionIndex}

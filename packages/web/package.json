@@ -16,6 +16,7 @@
     "@iconify/react": "^6.0.2",
     "@pi-desktop/contracts": "workspace:*",
     "@tanstack/react-query": "^5.90.0",
+    "@tanstack/react-router": "^1.169.1",
     "clsx": "^2.1.1",
     "effect": "4.0.0-beta.60",
     "effect-query": "^1.0.0",

@@ -2,7 +2,7 @@ import {Icon as IconifyIcon} from "@iconify/react";
 import type {IconProps as IconifyIconProps} from "@iconify/react";
 import {cn} from "@/lib/cn";
 
-type IconName =
+export type IconName =
   | "archive"
   | "arrow-left"
   | "arrow-right"
@@ -13,15 +13,24 @@ type IconName =
   | "folder"
   | "folder-open"
   | "folder-plus"
+  | "gauge"
+  | "git-branch"
   | "maximize"
   | "more-horizontal"
   | "panel-left"
+  | "panel-top"
+  | "paperclip"
   | "pin"
   | "plus"
+  | "rectangle-horizontal"
   | "search"
   | "send"
+  | "server"
   | "settings"
+  | "shield"
+  | "sun"
   | "trash"
+  | "workflow"
   | "x";
 
 interface IIconProps extends Omit<IconifyIconProps, "children" | "icon" | "size"> {
@@ -40,15 +49,24 @@ const icons: Record<IconName, string> = {
   folder: "cuida:folder-outline",
   "folder-open": "fluent:folder-open-24-regular",
   "folder-plus": "mdi:create-new-folder-outline",
+  gauge: "lucide:gauge",
+  "git-branch": "lucide:git-branch",
   maximize: "lucide:maximize-2",
   "more-horizontal": "lucide:more-horizontal",
   "panel-left": "tabler:layout-sidebar",
+  "panel-top": "lucide:panel-top",
+  paperclip: "lucide:paperclip",
   pin: "fluent:pin-12-regular",
   plus: "lucide:plus",
+  "rectangle-horizontal": "lucide:rectangle-horizontal",
   search: "lucide:search",
   send: "lucide:chevrons-up",
+  server: "lucide:server",
   settings: "lucide:settings",
+  shield: "lucide:shield",
+  sun: "lucide:sun",
   trash: "lucide:trash-2",
+  workflow: "lucide:workflow",
   x: "lucide:x",
 };
 

@@ -1,9 +1,5 @@
-import {useState} from "react";
-import Icon from "@/components/ui/icon";
-import IconButton from "@/components/ui/icon-button";
-import {cn} from "@/lib/cn";
-import ChatPanel from "@/features/chat/components/chat-panel";
-import Sidebar from "@/features/sidebar/components/sidebar";
+import {RouterProvider} from "@tanstack/react-router";
+import {router} from "@/app/router";
 
 interface IAppProps {
   integratedTitleBar?: boolean;
@@ -11,32 +7,6 @@ interface IAppProps {
 
 export default function App(props: IAppProps) {
   const {integratedTitleBar = false} = props;
-  const [sidebarVisible, setSidebarVisible] = useState(true);
 
-  const handleToggleSidebar = (): void => {
-    setSidebarVisible((visible) => !visible);
-  };
-
-  return (
-    <main className={cn("min-h-svh text-neutral-100", integratedTitleBar ? "desktop-window" : "bg-neutral-950")}>
-      <section className={cn("relative flex min-h-svh overflow-hidden", integratedTitleBar ? "desktop-window-frame bg-neutral-800/75" : "bg-neutral-700")}>
-        <div className={cn("desktop-titlebar absolute inset-x-0 top-0 z-10 flex h-16 items-center gap-1 pr-3", integratedTitleBar ? "pl-25" : "pl-3")}>
-          <IconButton className="size-7" label="Toggle sidebar" onClick={handleToggleSidebar}>
-            <Icon name="panel-left" size="sm" />
-          </IconButton>
-          <IconButton className="size-7" label="Go back">
-            <Icon name="arrow-left" size="sm" />
-          </IconButton>
-          <IconButton className="size-7" label="Go forward">
-            <Icon name="arrow-right" size="sm" />
-          </IconButton>
-        </div>
-
-        <div className={cn("shrink-0 overflow-hidden transition-[width] duration-200 ease-out", sidebarVisible ? "w-full md:w-72" : "w-0")}>
-          <Sidebar />
-        </div>
-        <ChatPanel sidebarVisible={sidebarVisible} />
-      </section>
-    </main>
-  );
+  return <RouterProvider context={{integratedTitleBar}} router={router} />;
 }

@@ -76,14 +76,14 @@
     box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12);
   }
 
-  .chat-panel {
+  .app-panel {
     border-left: 1px solid rgb(255 255 255 / 0.1);
     border-bottom-left-radius: 1.5rem;
     border-top-left-radius: 1.5rem;
   }
 
-  .chat-panel[data-sidebar-visible="false"] {
-    animation: chat-panel-flush-left 200ms step-end forwards;
+  .app-panel[data-sidebar-visible="false"] {
+    animation: app-panel-flush-left 200ms step-end forwards;
   }
 
   .desktop-titlebar {
@@ -99,7 +99,7 @@
   }
 }
 
-@keyframes chat-panel-flush-left {
+@keyframes app-panel-flush-left {
   0% {
     border-left-color: rgb(255 255 255 / 0.1);
     border-bottom-left-radius: 1.5rem;
