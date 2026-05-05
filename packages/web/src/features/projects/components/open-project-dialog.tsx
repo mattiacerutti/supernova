@@ -158,7 +158,7 @@ export default function OpenProjectDialog(props: IOpenProjectDialogProps) {
                         <span className="text-neutral-500">{suffix}</span>
                       </span>
                     </button>
-                    <Button className="mr-1 px-2 py-1 text-neutral-500 hover:text-neutral-100" onClick={() => handleSuggestionOpen(project.path)} variant="primary">
+                    <Button className="mr-1 px-2 py-1 text-neutral-500 hover:text-neutral-100" onClick={() => handleSuggestionOpen(project.path)} variant="ghost">
                       ↵
                     </Button>
                   </div>
@@ -193,7 +193,7 @@ export default function OpenProjectDialog(props: IOpenProjectDialogProps) {
                     <span className="text-neutral-500">{suffix}</span>
                   </span>
                 </button>
-                <Button className="mr-1 px-2 py-1 text-neutral-500 hover:text-neutral-100" onClick={() => handleSuggestionOpen(suggestion.path)} variant="primary">
+                <Button className="mr-1 px-2 py-1 text-neutral-500 hover:text-neutral-100" onClick={() => handleSuggestionOpen(suggestion.path)} variant="ghost">
                   ↵
                 </Button>
               </div>

@@ -44,12 +44,12 @@ export default function ProviderRow(props: IProviderRowProps) {
         {sourceLabel && <p className="truncate text-xs text-neutral-600">{sourceLabel}</p>}
       </div>
       {provider.connected && (
-        <Button className="w-auto shrink-0 px-3 text-xs" disabled={!provider.disconnectable || isDisconnecting} onClick={handleDisconnect} size="sm" variant="ghost">
+        <Button className="w-auto shrink-0 px-3 text-xs" disabled={!provider.disconnectable || isDisconnecting} onClick={handleDisconnect} size="sm" variant="primary">
           {isDisconnecting ? "Disconnecting..." : provider.disconnectable ? "Disconnect" : "Managed externally"}
         </Button>
       )}
       {!provider.connected && (
-        <Button className="w-auto shrink-0 px-3 text-xs" disabled={!canConnect} onClick={() => onConnect(provider)} size="sm" variant="ghost">
+        <Button className="w-auto shrink-0 px-3 text-xs" disabled={!canConnect} onClick={() => onConnect(provider)} size="sm" variant="primary">
           {canConnect ? "Connect" : "Configure externally"}
         </Button>
       )}

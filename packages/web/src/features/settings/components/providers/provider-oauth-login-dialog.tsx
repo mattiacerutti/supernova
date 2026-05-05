@@ -78,7 +78,7 @@ export default function ProviderOAuthLoginContent(props: IProviderOAuthLoginCont
           {isManualCodeFallback && (
             <div className="space-y-3">
               {!manualFallbackVisible && (
-                <Button className="flex w-fit items-center gap-1.5 px-0 text-xs" onClick={() => setManualFallbackVisible(true)} size="sm" variant="primary">
+                <Button className="flex w-fit items-center gap-1.5 px-0 text-xs" onClick={() => setManualFallbackVisible(true)} size="sm" variant="ghost">
                   <Icon name="edit" size="xs" />
                   <span>Paste redirect URL or code instead</span>
                 </Button>
@@ -142,7 +142,7 @@ export default function ProviderOAuthLoginContent(props: IProviderOAuthLoginCont
         </div>
       )}
       <div className="flex justify-end gap-2 pt-2">
-        <Button className="w-auto px-3 text-xs" onClick={handleClose} size="sm" variant="ghost">
+        <Button className="w-auto px-3 text-xs" onClick={handleClose} size="sm" variant="primary">
           {isComplete ? "Close" : "Cancel"}
         </Button>
         {showPromptContinue && session && (
@@ -152,7 +152,7 @@ export default function ProviderOAuthLoginContent(props: IProviderOAuthLoginCont
             form="provider-login-prompt-form"
             size="sm"
             type="submit"
-            variant="ghost"
+            variant="primary"
           >
             Continue
           </Button>
@@ -164,7 +164,7 @@ export default function ProviderOAuthLoginContent(props: IProviderOAuthLoginCont
             form="provider-login-manual-code-form"
             size="sm"
             type="submit"
-            variant="ghost"
+            variant="primary"
           >
             Continue
           </Button>

@@ -120,10 +120,10 @@ export default function ProjectListItem(props: IProjectListItemProps) {
         as="div"
         className={cn("group flex w-full justify-between items-center gap-2 pl-2 pr-1 py-0.5 text-neutral-400 hover:text-neutral-400", actionsMenuOpen && "bg-white/7")}
         onClick={handleToggle}
-        variant="ghost"
+        variant="primary"
       >
         <div className="flex min-w-0 flex-1 flex-row gap-2 items-center">
-          <Icon className="text-neutral-400" name={expanded ? "folder-open" : "folder"} size="sm" />
+          <Icon className="text-neutral-400" name={expanded ? "folder-open" : "folder"} size="xs" />
           {renaming && (
             <input
               className="min-w-0 flex-1 truncate bg-transparent text-sm text-neutral-400 outline-none"
@@ -144,25 +144,25 @@ export default function ProjectListItem(props: IProjectListItemProps) {
               onOpenChange={setActionsMenuOpen}
               open={actionsMenuOpen}
               trigger={(triggerProps) => (
-                <Button {...triggerProps} className="size-7" shape="icon" size="md" variant="primary">
-                  <Icon name="more-horizontal" size="sm" />
+                <Button {...triggerProps} className="size-7" shape="icon" size="md" variant="ghost">
+                  <Icon name="more-horizontal" size="xs" />
                 </Button>
               )}
               triggerLabel={`Project actions for ${project.name}`}
               sideOffset={2}
             >
-              <MenuItem icon={<Icon name="pin" size="sm" />} onClick={handleToggleProjectPinned}>
+              <MenuItem icon={<Icon name="pin" size="xs" />} onClick={handleToggleProjectPinned}>
                 {project.pinned ? "Unpin project" : "Pin project"}
               </MenuItem>
               {canOpenInFinder && (
-                <MenuItem icon={<Icon name="folder-open" size="sm" />} onClick={handleOpenInFinder}>
+                <MenuItem icon={<Icon name="folder-open" size="xs" />} onClick={handleOpenInFinder}>
                   Open in Finder
                 </MenuItem>
               )}
-              <MenuItem icon={<Icon name="edit" size="sm" />} onClick={startRenaming}>
+              <MenuItem icon={<Icon name="edit" size="xs" />} onClick={startRenaming}>
                 Rename project
               </MenuItem>
-              <MenuItem icon={<Icon name="x" size="sm" />} onClick={handleRemoveProject}>
+              <MenuItem icon={<Icon name="x" size="xs" />} onClick={handleRemoveProject}>
                 Remove
               </MenuItem>
             </Menu>
@@ -192,13 +192,13 @@ export default function ProjectListItem(props: IProjectListItemProps) {
 
                 return (
                   <li key={chat.id} onMouseLeave={() => handleChatMouseLeave(chat.id)}>
-                    <Button as="div" className="group/chat flex w-full items-center gap-2 py-1 pl-2 pr-1 text-left text-neutral-200 hover:bg-white/7" variant="ghost">
+                    <Button as="div" className="group/chat flex w-full items-center gap-2 py-1 pl-2 pr-1 text-left text-neutral-200 hover:bg-white/7" variant="primary">
                       <IconButton
                         className={cn("size-6", !chat.pinned && "invisible group-hover/chat:visible")}
                         label={chat.pinned ? "Unpin chat" : "Pin chat"}
                         onClick={(event) => handleToggleChatPinned(event, chat.id)}
                       >
-                        <Icon name="pin" size="sm" />
+                        <Icon name="pin" size="xs" />
                       </IconButton>
                       <span className="min-w-0 flex-1 truncate text-sm">{chat.title}</span>
                       <span className="grid w-12 shrink-0 place-items-center justify-items-end">
@@ -229,7 +229,7 @@ export default function ProjectListItem(props: IProjectListItemProps) {
               className="ml-10 inline-flex items-center justify-start gap-2 px-0 py-1 text-xs"
               disabled={sessionsQuery.isFetching}
               onClick={handleLoadMoreChats}
-              variant="primary"
+              variant="ghost"
             >
               Show more
               {sessionsQuery.isFetching && <span className="size-2.5 animate-spin rounded-full border border-neutral-600 border-t-neutral-300" aria-hidden="true" />}
@@ -237,7 +237,7 @@ export default function ProjectListItem(props: IProjectListItemProps) {
           )}
 
           {canShowLessAtEnd && (
-            <Button className="ml-10 justify-start px-0 py-1 text-xs" onClick={handleShowLessChats} variant="primary">
+            <Button className="ml-10 justify-start px-0 py-1 text-xs" onClick={handleShowLessChats} variant="ghost">
               Show less
             </Button>
           )}

@@ -45,10 +45,10 @@ export default function ProviderApiKeyContent(props: IProviderApiKeyContentProps
       </div>
       {setApiKeyMutation.error && <p className="text-sm text-red-400">{setApiKeyMutation.error.message}</p>}
       <div className="flex justify-end gap-2">
-        <Button className="w-auto px-3 text-xs" onClick={handleClose} size="sm" variant="ghost">
+        <Button className="w-auto px-3 text-xs" onClick={handleClose} size="sm" variant="primary">
           Cancel
         </Button>
-        <Button className="w-auto px-3 text-xs" disabled={setApiKeyMutation.isPending || apiKey.trim().length === 0} size="sm" type="submit" variant="ghost">
+        <Button className="w-auto px-3 text-xs" disabled={setApiKeyMutation.isPending || apiKey.trim().length === 0} size="sm" type="submit" variant="primary">
           {setApiKeyMutation.isPending ? "Connecting..." : "Connect"}
         </Button>
       </div>

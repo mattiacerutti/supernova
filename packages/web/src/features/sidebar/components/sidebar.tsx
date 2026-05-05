@@ -71,7 +71,7 @@ export default function Sidebar() {
             <Button className="group/pinned mb-2 flex h-6 w-full items-center justify-between px-2 text-neutral-500" onClick={togglePinnedCollapsed} variant="bare">
               <div className="flex items-center gap-1.5 text-left text-sm">
                 <span>Pinned</span>
-                <Icon className={cn("opacity-0 group-hover/pinned:opacity-100", isPinnedCollapsed && "-rotate-90")} name="chevron-down" size="sm" />
+                <Icon className={cn("opacity-0 group-hover/pinned:opacity-100", isPinnedCollapsed && "-rotate-90")} name="chevron-down" size="xs" />
               </div>
             </Button>
 
@@ -88,21 +88,21 @@ export default function Sidebar() {
           </div>
         )}
 
-        <Button className="group/projects mb-2 flex h-6 w-full items-center justify-between px-2 text-neutral-500" onClick={toggleProjectsCollapsed} variant="bare">
+        <Button as="div" className="group/projects mb-2 flex h-6 w-full items-center justify-between px-2 text-neutral-500" onClick={toggleProjectsCollapsed} variant="bare">
           <div className="flex items-center gap-1.5 text-left text-sm">
             <span>Projects</span>
-            <Icon className={cn("opacity-0 group-hover/projects:opacity-100", isProjectsCollapsed && "-rotate-90")} name="chevron-down" size="sm" />
+            <Icon className={cn("opacity-0 group-hover/projects:opacity-100", isProjectsCollapsed && "-rotate-90")} name="chevron-down" size="xs" />
           </div>
 
           <div className="flex items-center gap-2 opacity-0 group-hover/projects:opacity-100" onClick={handleProjectsActionClick}>
             <IconButton className="size-6" label="Expand projects">
-              <Icon name="maximize" size="sm" />
+              <Icon name="maximize" size="xs" />
             </IconButton>
             <IconButton className="size-6" label="Filter projects">
-              <Icon name="filter" size="sm" />
+              <Icon name="filter" size="xs" />
             </IconButton>
             <IconButton className="size-6" label="New project" onClick={handleOpenProjectDialog}>
-              <Icon name="folder-plus" size="sm" />
+              <Icon name="folder-plus" size="xs" />
             </IconButton>
           </div>
         </Button>
