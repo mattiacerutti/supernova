@@ -1,7 +1,8 @@
 import {readdir} from "node:fs/promises";
 import {homedir} from "node:os";
 import {basename, dirname, isAbsolute, join, resolve, sep} from "node:path";
-import type {IAgentFolderSuggestion} from "@pi-desktop/contracts/folders";
+import {Effect} from "effect";
+import {AgentFolderSuggestionsListError, type IAgentFolderSuggestion} from "@pi-desktop/contracts/folders";
 
 const MAX_SUGGESTIONS = 200;
 
@@ -58,9 +59,8 @@ function toFolderSuggestion(folderPath: string): IAgentFolderSuggestion {
   };
 }
 
-export async function listLocalFolderSuggestions(query: string): Promise<IAgentFolderSuggestion[]> {
+async function listLocalFolderSuggestions(query: string): Promise<IAgentFolderSuggestion[]> {
   const parsedQuery = parseFolderQuery(query);
-
   const childDirectories = await readChildDirectories(parsedQuery.baseDir);
 
   return childDirectories
@@ -68,4 +68,19 @@ export async function listLocalFolderSuggestions(query: string): Promise<IAgentF
     .toSorted((left, right) => left.localeCompare(right))
     .slice(0, MAX_SUGGESTIONS)
     .map(toFolderSuggestion);
+}
+
+export function listFolderSuggestions(query: string) {
+  return Effect.tryPromise({
+    try: async () => ({
+      homePath: homedir(),
+      query,
+      suggestions: await listLocalFolderSuggestions(query),
+    }),
+    catch: (cause) =>
+      new AgentFolderSuggestionsListError({
+        cause,
+        message: cause instanceof Error ? cause.message : "Failed to list folder suggestions.",
+      }),
+  });
 }
