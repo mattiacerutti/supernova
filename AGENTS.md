@@ -32,7 +32,7 @@ Desktop app:
 Electron app → spawns bundled server → server owns runtime/filesystem/workspaces → BrowserWindow loads server URL
 ```
 
-- The **server process** is the authority for native capabilities: Pi runtime, workspace filesystem access, subprocesses, shell/git, credentials, sessions, and future API/WebSocket routing.
+- The **server process** is the authority for native capabilities: Pi runtime, workspace filesystem access, subprocesses, shell/git, credentials, sessions, and API/WebSocket routing.
 - The **web package** is a pure client UI. It must communicate with server APIs and must not assume browser-local filesystem/native access.
 - The **desktop app** is a convenience shell and OS integration layer. It should not own web serving or Pi runtime logic.
 - Remote/LAN browser access means operations happen on the machine running `apps/server`, not the machine running the browser.
@@ -74,13 +74,26 @@ Architecture:
 - Use `import type` for types; keep strings double-quoted and favor `const` over `let`.
 - Use kebab-case for files and folders.
 
+### Core Priorities
+
+1. Performance first.
+2. Reliability first.
+3. Keep behavior predictable under load and during failures (session restarts, reconnects, partial streams).
+
+If a tradeoff is required, choose correctness and robustness over short-term convenience.
+
+## Maintainability
+
+Long term maintainability is a core priority. If you add new functionality, first check if there is shared logic that can be extracted to a separate module. Duplicate logic across multiple files is a code smell and should be avoided. Don't be afraid to change existing code. Don't take shortcuts by just adding local logic to solve a problem.
+
 ### Typing
 
 - TypeScript is strict. Prefer `interface` for object shapes and prefix with `I` (e.g., `IComponentProps`, `IFunctionState`). Reach for `type` only when you need unions/intersections or literal unions, and do not prefix with neither `I` or `T` in that case.
 
 ### Imports and logging
 
-- Always use path aliases (`@/...`, `@assets/...`) over deep relative imports. Never use relative path imports (`./...` or `../...`)
+- Prefer package or path aliases (`@/...`, `@assets/...`, `@pi-desktop/...`) over deep relative imports. Never use relative path imports (`./...` or `../...`).
+- Follow package-specific import guidance when it is more precise, such as using `@pi-desktop/agent-runtime/...` for source imports that must typecheck from dependent packages.
 - Never include TypeScript file extensions in imports (`.ts` or `.tsx`).
 - Do not create local `index.ts` barrel files.
 - Keep logging minimal and purposeful; remove noisy debug output when not needed.
