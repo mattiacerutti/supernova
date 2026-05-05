@@ -12,7 +12,7 @@ import {Effect, Exit, Fiber, Layer, Scope} from "effect";
 import {RpcSerialization, RpcServer} from "effect/unstable/rpc";
 import {Hono} from "hono";
 
-export const DEFAULT_HOST = "127.0.0.1";
+export const DEFAULT_HOST = "localhost";
 export const DEFAULT_PORT = 4317;
 export const DEFAULT_WEB_DEV_URL = "http://localhost:5173";
 
@@ -36,7 +36,6 @@ function resolveClientDir(): string | undefined {
 
 function resolveDevRedirectUrl(devUrl: string, requestUrl: URL): string {
   const redirectUrl = new URL(requestUrl.pathname + requestUrl.search, devUrl);
-  redirectUrl.searchParams.set("agentDesktopServerUrl", requestUrl.origin);
   return redirectUrl.toString();
 }
 

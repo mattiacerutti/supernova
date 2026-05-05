@@ -9,7 +9,7 @@
   ],
   "scripts": {
     "dev:server": "turbo run dev --filter=@pi-desktop/web --filter=@pi-desktop/server",
-    "dev:desktop": "turbo run dev --filter=@pi-desktop/web --filter=@pi-desktop/desktop",
+    "dev:desktop": "turbo run dev --filter=@pi-desktop/web --filter=@pi-desktop/server --filter=@pi-desktop/desktop",
     "start:server": "turbo run start --filter=@pi-desktop/server",
     "start:desktop": "turbo run start --filter=@pi-desktop/desktop",
     "build": "turbo run build",

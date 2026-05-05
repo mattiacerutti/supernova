@@ -1,7 +1,7 @@
-import {DEFAULT_HOST, DEFAULT_WEB_DEV_URL, startServer} from "@/runtime";
+import {DEFAULT_HOST, DEFAULT_PORT, DEFAULT_WEB_DEV_URL, startServer} from "@/runtime";
 
 function parsePort(value: string | undefined): number {
-  const port = Number(value ?? 0);
+  const port = Number(value ?? DEFAULT_PORT);
   if (!Number.isInteger(port) || port < 0 || port > 65_535) {
     throw new Error("PI_DESKTOP_SERVER_PORT must be an integer between 0 and 65535.");
   }

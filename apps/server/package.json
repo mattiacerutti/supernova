@@ -7,7 +7,7 @@
     "pi-desktop-server": "./dist/cli.js"
   },
   "scripts": {
-    "dev": "PI_DESKTOP_SERVER_DEV=1 bun src/bootstrap.ts",
+    "dev": "PI_DESKTOP_SERVER_DEV=1 bun --watch src/bootstrap.ts",
     "start": "node dist/cli.js",
     "build": "rm -rf dist && bun build src/cli.ts src/bootstrap.ts --target node --outdir dist && cp -R ../../packages/web/dist dist/client",
     "lint": "eslint .",

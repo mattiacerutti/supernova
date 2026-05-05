@@ -11,6 +11,8 @@ declare const PI_DESKTOP_SERVER_ENTRY: string;
 let mainWindow: BrowserWindow | undefined;
 let server: SpawnedServer | undefined;
 
+const DEV_WEB_URL = "http://localhost:5173";
+
 interface SpawnedServer {
   process: ChildProcessWithoutNullStreams;
   url: string;
@@ -31,11 +33,12 @@ function registerDesktopIpc(): void {
 }
 
 async function createWindow(): Promise<void> {
-  server ??= await startServerProcess({
-    host: "127.0.0.1",
-    isDev: PI_DESKTOP_IS_DEV,
-    port: 0,
-  });
+  if (!PI_DESKTOP_IS_DEV) {
+    server ??= await startServerProcess({
+      host: "127.0.0.1",
+      port: 0,
+    });
+  }
 
   mainWindow = new BrowserWindow({
     width: 1100,
@@ -68,7 +71,13 @@ async function createWindow(): Promise<void> {
     return {action: "deny"};
   });
 
-  mainWindow.loadURL(server.url);
+  mainWindow.loadURL(resolveRendererUrl());
+}
+
+function resolveRendererUrl(): string {
+  if (PI_DESKTOP_IS_DEV) return DEV_WEB_URL;
+  if (!server) throw new Error("Pi Desktop server is not available.");
+  return server.url;
 }
 
 function windowChromeOptions(): Pick<
@@ -89,7 +98,7 @@ function windowChromeOptions(): Pick<
   };
 }
 
-function startServerProcess(options: {host: string; isDev: boolean; port: number}): Promise<SpawnedServer> {
+function startServerProcess(options: {host: string; port: number}): Promise<SpawnedServer> {
   const args = [resolveServerEntry()];
 
   const child = spawn(resolveServerCommand(), args, {
@@ -97,7 +106,7 @@ function startServerProcess(options: {host: string; isDev: boolean; port: number
       ...process.env,
       PI_DESKTOP_SERVER_HOST: options.host,
       PI_DESKTOP_SERVER_PORT: String(options.port),
-      PI_DESKTOP_SERVER_DEV: options.isDev ? "1" : "0",
+      PI_DESKTOP_SERVER_DEV: "0",
       ...(app.isPackaged ? {ELECTRON_RUN_AS_NODE: "1"} : {}),
     },
   });
@@ -151,7 +160,6 @@ function failStartup(error: unknown): void {
 }
 
 function resolveServerCommand(): string {
-  if (PI_DESKTOP_IS_DEV) return "bun";
   return app.isPackaged ? process.execPath : "node";
 }
 
