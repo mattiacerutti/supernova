@@ -1,6 +1,6 @@
 import {Outlet, useParams, useRouteContext} from "@tanstack/react-router";
 import HomePage from "@/features/home/components/home-page";
-import SettingsPage from "@/features/settings/components/settings-page";
+import SettingsPage from "@/features/settings/pages/settings-page";
 
 export function RootRoute() {
   return <Outlet />;

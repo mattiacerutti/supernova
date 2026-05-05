@@ -32,7 +32,7 @@ export default function Dialog(props: IDialogProps) {
               )}
               data-slot="dialog-content"
             >
-              <div className="flex shrink-0 items-center justify-between px-5 pt-5" data-slot="dialog-header">
+              <div className="flex shrink-0 items-center justify-between px-5 pb-1 pt-3" data-slot="dialog-header">
                 <BaseDialog.Title className="text-base font-medium text-neutral-100" data-slot="dialog-title">
                   {title}
                 </BaseDialog.Title>
@@ -41,7 +41,7 @@ export default function Dialog(props: IDialogProps) {
                 </BaseDialog.Close>
               </div>
 
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden" data-slot="dialog-body">
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-5" data-slot="dialog-body">
                 {children}
               </div>
             </BaseDialog.Popup>

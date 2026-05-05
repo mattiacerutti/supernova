@@ -1,7 +1,8 @@
 import SplitPageShell from "@/app/components/split-page-shell";
-import SettingsPanel from "@/features/settings/components/settings-panel";
-import SettingsSidebar from "@/features/settings/components/settings-sidebar";
+import SettingsSidebar from "@/features/settings/components/sidebar/settings-sidebar";
 import {getSettingsSection} from "@/features/settings/data/settings-sections";
+import GeneralSettingsPage from "@/features/settings/pages/general-settings-page";
+import ProvidersSettingsPage from "@/features/settings/pages/providers-settings-page";
 
 interface ISettingsPageProps {
   integratedTitleBar: boolean;
@@ -14,7 +15,8 @@ export default function SettingsPage(props: ISettingsPageProps) {
 
   return (
     <SplitPageShell integratedTitleBar={integratedTitleBar} sidebar={<SettingsSidebar activeSectionId={section.id} />}>
-      <SettingsPanel section={section} />
+      {section.id === "providers" && <ProvidersSettingsPage />}
+      {section.id === "general" && <GeneralSettingsPage section={section} />}
     </SplitPageShell>
   );
 }

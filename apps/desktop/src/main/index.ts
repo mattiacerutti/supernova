@@ -54,6 +54,10 @@ async function createWindow(): Promise<void> {
     },
   });
 
+  if (PI_DESKTOP_IS_DEV) {
+    mainWindow.webContents.openDevTools({mode: "detach"});
+  }
+
   if (process.platform === "darwin") {
     mainWindow.setBackgroundColor("#00000000");
   }

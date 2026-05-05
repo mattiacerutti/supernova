@@ -109,7 +109,7 @@ export default function OpenProjectDialog(props: IOpenProjectDialogProps) {
 
   return (
     <Dialog onOpenChange={handleDialogOpenChange} open={open} title="Open project">
-      <div className="shrink-0 px-5 pt-4">
+      <div className="shrink-0 pt-4">
         <div className="flex items-center gap-2.5 border-b border-white/10 pb-3">
           <Icon className="text-neutral-500" name="search" size="md" />
           <input

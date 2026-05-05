@@ -8,6 +8,7 @@ export type IconName =
   | "arrow-right"
   | "check"
   | "chevron-down"
+  | "copy"
   | "edit"
   | "filter"
   | "folder"
@@ -15,6 +16,8 @@ export type IconName =
   | "folder-plus"
   | "gauge"
   | "git-branch"
+  | "key"
+  | "loader"
   | "maximize"
   | "more-horizontal"
   | "panel-left"
@@ -30,6 +33,7 @@ export type IconName =
   | "shield"
   | "sun"
   | "trash"
+  | "user"
   | "workflow"
   | "x";
 
@@ -44,6 +48,7 @@ const icons: Record<IconName, string> = {
   "arrow-right": "lucide:arrow-right",
   check: "lucide:check",
   "chevron-down": "lucide:chevron-down",
+  copy: "lucide:copy",
   edit: "cuida:edit-outline",
   filter: "lucide:list-filter",
   folder: "cuida:folder-outline",
@@ -51,6 +56,8 @@ const icons: Record<IconName, string> = {
   "folder-plus": "mdi:create-new-folder-outline",
   gauge: "lucide:gauge",
   "git-branch": "lucide:git-branch",
+  key: "lucide:key-round",
+  loader: "lucide:loader-circle",
   maximize: "lucide:maximize-2",
   "more-horizontal": "lucide:more-horizontal",
   "panel-left": "tabler:layout-sidebar",
@@ -66,6 +73,7 @@ const icons: Record<IconName, string> = {
   shield: "lucide:shield",
   sun: "lucide:sun",
   trash: "lucide:trash-2",
+  user: "lucide:user",
   workflow: "lucide:workflow",
   x: "lucide:x",
 };
