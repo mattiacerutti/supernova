@@ -8,9 +8,13 @@
       "types": "./src/index.ts",
       "import": "./src/index.ts"
     },
+    "./*/rpc": {
+      "types": "./src/*/rpc.ts",
+      "import": "./src/*/rpc.ts"
+    },
     "./*": {
-      "types": "./src/*.ts",
-      "import": "./src/*.ts"
+      "types": "./src/*/*.ts",
+      "import": "./src/*/*.ts"
     }
   },
   "scripts": {

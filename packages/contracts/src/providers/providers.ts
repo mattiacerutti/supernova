@@ -24,8 +24,6 @@ export const AgentProvider = Schema.Struct({
 });
 export type IAgentProvider = typeof AgentProvider.Type;
 
-// -----------------------------
-
 export const AgentProvidersListResult = Schema.Array(AgentProvider);
 export type IAgentProvidersListResult = typeof AgentProvidersListResult.Type;
 
