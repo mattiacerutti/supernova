@@ -1,0 +1,84 @@
+import {useState} from "react";
+import type {CSSProperties, PointerEvent, ReactNode} from "react";
+import {useSidebarSectionsStore} from "@/features/sidebar/stores/sidebar-store";
+import {cn} from "@/lib/cn";
+
+interface IResizableSidebarLayoutProps {
+  children: ReactNode;
+  integratedTitleBar: boolean;
+  sidebar: ReactNode;
+  sidebarVisible?: boolean;
+  titlebarActions?: ReactNode;
+}
+
+export default function ResizableSidebarLayout(props: IResizableSidebarLayoutProps) {
+  const {children, integratedTitleBar, sidebar, sidebarVisible = true, titlebarActions} = props;
+  const sidebarWidth = useSidebarSectionsStore((state) => state.sidebarWidth);
+  const setSidebarWidth = useSidebarSectionsStore((state) => state.setSidebarWidth);
+  const [resizeHandleActive, setResizeHandleActive] = useState(false);
+  const [resizing, setResizing] = useState(false);
+
+  const handleResizePointerDown = (event: PointerEvent<HTMLDivElement>): void => {
+    event.preventDefault();
+    setResizing(true);
+    let nextSidebarWidth = sidebarWidth;
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    const handlePointerMove = (moveEvent: globalThis.PointerEvent): void => {
+      nextSidebarWidth = moveEvent.clientX;
+      setSidebarWidth(nextSidebarWidth);
+    };
+
+    const handlePointerUp = (): void => {
+      setSidebarWidth(nextSidebarWidth);
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      setResizing(false);
+      setResizeHandleActive(false);
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp, {once: true});
+  };
+
+  const sidebarStyle = {"--sidebar-width": `${sidebarWidth}px`} as CSSProperties;
+
+  return (
+    <main className={cn("h-svh overflow-hidden text-neutral-100", integratedTitleBar ? "desktop-window" : "bg-neutral-950")}>
+      <section className={cn("relative flex h-full min-h-0 overflow-hidden", integratedTitleBar ? "desktop-window-frame bg-neutral-800/75" : "bg-neutral-700")}>
+        <div className={cn("desktop-titlebar absolute inset-x-0 top-0 z-10 flex h-16 items-center gap-1 pr-3", integratedTitleBar ? "pl-25" : "pl-3")}>{titlebarActions}</div>
+
+        <div
+          className={cn("relative shrink-0 overflow-hidden", !resizing && "transition-[width] duration-200 ease-out", sidebarVisible ? "w-full md:w-(--sidebar-width)" : "w-0")}
+          style={sidebarStyle}
+        >
+          {sidebar}
+          {sidebarVisible && (
+            <div
+              className="absolute bottom-0 right-0 top-0 hidden w-1 cursor-col-resize md:block"
+              onPointerDown={handleResizePointerDown}
+              onPointerEnter={() => setResizeHandleActive(true)}
+              onPointerLeave={() => {
+                if (!resizing) setResizeHandleActive(false);
+              }}
+            />
+          )}
+        </div>
+        <section
+          className={cn(
+            "app-panel flex h-full min-h-0 flex-1 flex-col border-l bg-neutral-950/80 pt-14",
+            resizeHandleActive || resizing ? "border-white/20" : "border-transparent"
+          )}
+          data-sidebar-visible={sidebarVisible}
+        >
+          {children}
+        </section>
+      </section>
+    </main>
+  );
+}

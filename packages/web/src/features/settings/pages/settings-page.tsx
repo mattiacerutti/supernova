@@ -1,4 +1,4 @@
-import SplitPageShell from "@/app/components/split-page-shell";
+import SplitPageShell from "@/components/split-page-shell";
 import SettingsSidebar from "@/features/settings/components/sidebar/settings-sidebar";
 import {getSettingsSection} from "@/features/settings/data/settings-sections";
 import GeneralSettingsPage from "@/features/settings/pages/general-settings-page";

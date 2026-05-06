@@ -1,8 +1,8 @@
 import {useState} from "react";
 import Icon from "@/components/ui/icon";
 import IconButton from "@/components/ui/icon-button";
-import SplitPageShell from "@/app/components/split-page-shell";
 import ChatPanel from "@/features/chat/components/chat-panel";
+import ResizableSidebarLayout from "@/features/sidebar/components/resizable-sidebar-layout";
 import Sidebar from "@/features/sidebar/components/sidebar";
 
 interface IHomePageProps {
@@ -32,8 +32,8 @@ export default function HomePage(props: IHomePageProps) {
   );
 
   return (
-    <SplitPageShell integratedTitleBar={integratedTitleBar} sidebar={<Sidebar />} sidebarVisible={sidebarVisible} titlebarActions={titlebarActions}>
+    <ResizableSidebarLayout integratedTitleBar={integratedTitleBar} sidebar={<Sidebar />} sidebarVisible={sidebarVisible} titlebarActions={titlebarActions}>
       <ChatPanel />
-    </SplitPageShell>
+    </ResizableSidebarLayout>
   );
 }
