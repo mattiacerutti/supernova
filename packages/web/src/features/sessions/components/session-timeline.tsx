@@ -1,7 +1,7 @@
-import {useVirtualizer} from "@tanstack/react-virtual";
+import {LegendList, type LegendListRef} from "@legendapp/list/react";
 import type {IAgentSessionTurnEvent, IAgentSessionUserMessage} from "@pi-desktop/contracts/sessions";
-import type {RefObject} from "react";
-import {memo, useState} from "react";
+import {memo, useCallback, useState} from "react";
+import {flushSync} from "react-dom";
 import Icon from "@/components/ui/icon";
 import AssistantMessage from "@/features/sessions/components/messages/assistant-message";
 import StreamingAssistantMessage from "@/features/sessions/components/messages/streaming-assistant-message";
@@ -9,6 +9,14 @@ import UserMessageContent from "@/features/sessions/components/messages/user-mes
 import {eventError, formatDuration, getWorkIconName} from "@/features/sessions/lib/session-render-items";
 import type {SessionRenderItem} from "@/features/sessions/types/session-render-item";
 import {cn} from "@/lib/cn";
+
+type AutoFollowState = "following" | "detaching" | "detached";
+
+function nextAutoFollowState(current: AutoFollowState, isAtEnd: boolean): AutoFollowState {
+  if (current === "detaching") return isAtEnd ? "detaching" : "detached";
+  if (current === "detached") return isAtEnd ? "following" : "detached";
+  return "following";
+}
 
 const UserMessage = memo(function UserMessage(props: {message: IAgentSessionUserMessage}) {
   const {message} = props;
@@ -117,48 +125,76 @@ const SessionTimelineRow = memo(function SessionTimelineRow(props: {item: Sessio
 interface ISessionTimelineProps {
   items: readonly SessionRenderItem[];
   isStreaming: boolean;
-  scrollRef: RefObject<HTMLDivElement | null>;
+  listRef: React.RefObject<LegendListRef | null>;
   streamError: string | null;
 }
 
 export default function SessionTimeline(props: ISessionTimelineProps) {
-  const {isStreaming, items, scrollRef, streamError} = props;
+  const {isStreaming, items, listRef, streamError} = props;
+  const [autoFollowState, setAutoFollowState] = useState<AutoFollowState>("following");
+  const maintainScrollAtEnd = autoFollowState === "following";
 
-  // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual manages measurement callbacks internally.
-  const virtualizer = useVirtualizer({
-    count: items.length,
-    estimateSize: () => 140,
-    getScrollElement: () => scrollRef.current,
-    overscan: 8,
-  });
-  const virtualItems = virtualizer.getVirtualItems();
+  const handleScroll = useCallback((): void => {
+    const state = listRef.current?.getState();
+    if (!state) return;
+
+    setAutoFollowState((current) => nextAutoFollowState(current, state.isAtEnd));
+  }, [listRef]);
+
+  const handleWheelCapture = useCallback((event: React.WheelEvent<HTMLDivElement>): void => {
+    if (event.deltaY >= 0) return;
+
+    flushSync(() => {
+      setAutoFollowState("detaching");
+    });
+  }, []);
+
+  const renderItem = useCallback(
+    (renderProps: {item: SessionRenderItem}): React.ReactNode => (
+      <div className="mx-auto w-full max-w-3xl px-5 pb-8 md:px-8">
+        <SessionTimelineRow item={renderProps.item} live={renderProps.item.type === "assistant" && renderProps.item.live} />
+      </div>
+    ),
+    []
+  );
 
   return (
-    <div className="mt-10 min-h-0 flex-1 overflow-y-auto" ref={scrollRef}>
-      <div className={cn("mx-auto min-h-full max-w-3xl select-text px-5 pb-8 pt-6 md:px-8", items.length === 0 && "flex items-center justify-center")}>
-        {items.length === 0 && <p className="text-center text-sm text-neutral-600">No messages yet.</p>}
-        {items.length > 0 && (
-          <div className="relative w-full" style={{height: virtualizer.getTotalSize()}}>
-            {virtualItems.map((virtualItem) => {
-              const item = items[virtualItem.index];
-              if (!item) return null;
-              return (
-                <div
-                  className="absolute left-0 top-0 w-full pb-8"
-                  data-index={virtualItem.index}
-                  key={`${virtualItem.index}:${item.type === "user" ? item.message.id : item.type === "assistant" ? item.event.id : item.id}`}
-                  ref={virtualizer.measureElement}
-                  style={{transform: `translateY(${virtualItem.start}px)`}}
-                >
-                  <SessionTimelineRow item={item} live={item.type === "assistant" && item.live} />
-                </div>
-              );
-            })}
-          </div>
-        )}
-        {isStreaming && <div className="size-2 animate-pulse rounded-full bg-neutral-500" />}
-        {streamError && <p className="rounded-lg border border-red-500/15 bg-red-500/10 px-3 py-2 text-xs text-red-300">{streamError}</p>}
-      </div>
+    <div className="mt-10 min-h-0 flex-1 select-text">
+      {items.length === 0 && !isStreaming && !streamError && (
+        <div className="flex min-h-full items-center justify-center px-5 pb-8 pt-6 md:px-8">
+          <p className="text-center text-sm text-neutral-600">No messages yet.</p>
+        </div>
+      )}
+      {(items.length > 0 || isStreaming || streamError) && (
+        <LegendList<SessionRenderItem>
+          className="h-full overflow-x-hidden overscroll-y-contain"
+          contentContainerStyle={{paddingTop: 24}}
+          data={items}
+          estimatedItemSize={140}
+          initialScrollAtEnd
+          keyExtractor={getSessionRenderItemKey}
+          ListFooterComponent={
+            <div className="mx-auto w-full max-w-3xl px-5 pb-8 md:px-8">
+              {isStreaming && <div className="size-2 animate-pulse rounded-full bg-neutral-500" />}
+              {streamError && <p className="rounded-lg border border-red-500/15 bg-red-500/10 px-3 py-2 text-xs text-red-300">{streamError}</p>}
+            </div>
+          }
+          maintainScrollAtEnd={maintainScrollAtEnd && {animated: false, on: {dataChange: true, itemLayout: true}}}
+          maintainScrollAtEndThreshold={0.1}
+          maintainVisibleContentPosition
+          onScroll={handleScroll}
+          onWheelCapture={handleWheelCapture}
+          ref={listRef}
+          renderItem={renderItem}
+        />
+      )}
     </div>
   );
+}
+
+function getSessionRenderItemKey(item: SessionRenderItem, index: number): string {
+  if (item.type === "user") return `user:${item.message.id}`;
+  if (item.type === "assistant") return `assistant:${item.event.id}`;
+
+  return `work:${index}:${item.id}`;
 }

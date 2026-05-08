@@ -90,7 +90,7 @@ function SessionConversation(props: ISessionConversationProps) {
         <h1 className="min-w-0 truncate text-sm font-medium text-neutral-100">{session.title}</h1>
       </header>
 
-      <SessionTimeline isStreaming={stream.isStreaming} items={stream.renderItems} scrollRef={stream.scrollRef} streamError={stream.streamError} />
+      <SessionTimeline isStreaming={stream.isStreaming} items={stream.renderItems} listRef={stream.listRef} streamError={stream.streamError} />
 
       <SessionComposer
         disabled={stream.isStreaming || modelsPending}

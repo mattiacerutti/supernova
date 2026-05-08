@@ -1,5 +1,6 @@
 import type {AgentSessionStreamEvent, IAgentModelReference, IAgentSessionTurn, IAgentSessionUserMessage} from "@pi-desktop/contracts/sessions";
-import {useMemo, useRef, useState} from "react";
+import type {LegendListRef} from "@legendapp/list/react";
+import {useCallback, useMemo, useRef, useState} from "react";
 import {useSendSessionMessage} from "@/features/sessions/hooks/api/use-send-session-message";
 import {turnsToRenderItems} from "@/features/sessions/lib/session-render-items";
 import {interpolateStreamTurn, STREAM_FRAME_MAX_DELTA_MS} from "@/features/sessions/lib/stream-interpolation";
@@ -8,7 +9,7 @@ import type {SessionRenderItem} from "@/features/sessions/types/session-render-i
 interface IUseSessionMessageStreamResult {
   renderItems: readonly SessionRenderItem[];
   isStreaming: boolean;
-  scrollRef: React.RefObject<HTMLDivElement | null>;
+  listRef: React.RefObject<LegendListRef | null>;
   streamError: string | null;
   submitMessage: (message: string) => void;
 }
@@ -29,7 +30,6 @@ interface IStreamingStreamState {
 type StreamState = IIdleStreamState | IStreamingStreamState;
 
 interface ISmoothStreamingTurnInput {
-  onScroll: () => void;
   onTurn: (turn: IAgentSessionTurn) => void;
 }
 
@@ -79,8 +79,6 @@ function useSmoothStreamingTurn(input: ISmoothStreamingTurnInput): ISmoothStream
       streamRenderedTurnRef.current = nextTurn;
 
       if (nextTurnResult.changed || currentTurn !== nextTurn) input.onTurn(nextTurn);
-      input.onScroll();
-
       if (!nextTurnResult.done) {
         scheduledFrameRef.current = window.requestAnimationFrame(renderFrame);
       }
@@ -114,7 +112,7 @@ export function useSessionMessageStream(input: IUseSessionMessageStreamInput): I
   const {modelReference, sessionId, sessionTurns} = input;
   const sendMessageMutation = useSendSessionMessage();
 
-  const messagesScrollRef = useRef<HTMLDivElement>(null);
+  const messagesListRef = useRef<LegendListRef>(null);
   const scrollAnimationFrameRef = useRef<number | null>(null);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [streamState, setStreamState] = useState<StreamState>({status: "idle", turns: sessionTurns});
@@ -123,28 +121,22 @@ export function useSessionMessageStream(input: IUseSessionMessageStreamInput): I
   const isStreaming = streamState.status === "streaming";
   const streamTurn = isStreaming ? streamState.turn : null;
 
-  // TODO: Seems like work duration is not working. Could be due to us relying on event timestamps which may not
-  //  be sent correctly by the backend. Investigate this.
   const baseRenderItems = useMemo(() => turnsToRenderItems(baseTurns, false), [baseTurns]);
   const streamRenderItems = useMemo(() => (streamTurn ? turnsToRenderItems([streamTurn], isStreaming) : []), [isStreaming, streamTurn]);
   const renderItems = [...baseRenderItems, ...streamRenderItems];
 
-  const scrollToBottom = (): void => {
+  const forceScrollToBottom = useCallback((): void => {
     // If there's already a scheduled scroll, do nothing, as it will scroll to the bottom at the right time.
     // This prevents scheduling multiple redundant scrolls when many messages are received in a short time.
     if (scrollAnimationFrameRef.current !== null) return;
 
     scrollAnimationFrameRef.current = window.requestAnimationFrame(() => {
       scrollAnimationFrameRef.current = null;
-      const element = messagesScrollRef.current;
-      if (!element) return;
-      // TODO: Only auto-scroll when the user is already near the bottom, so reading older messages is not interrupted by streaming updates. Also, autoscroll to the bottom when rendering session
-      element.scrollTop = element.scrollHeight;
+      void messagesListRef.current?.scrollToEnd({animated: false});
     });
-  };
+  }, []);
 
   const smoothStreamingTurn = useSmoothStreamingTurn({
-    onScroll: scrollToBottom,
     onTurn: (turn) => {
       setStreamState((current) => (current.status === "streaming" ? {...current, turn} : current));
     },
@@ -211,7 +203,7 @@ export function useSessionMessageStream(input: IUseSessionMessageStreamInput): I
     }));
     setStreamError(null);
 
-    scrollToBottom();
+    forceScrollToBottom();
 
     sendMessageMutation.mutate(
       {
@@ -230,7 +222,7 @@ export function useSessionMessageStream(input: IUseSessionMessageStreamInput): I
   return {
     renderItems,
     isStreaming,
-    scrollRef: messagesScrollRef,
+    listRef: messagesListRef,
     streamError,
     submitMessage,
   };
