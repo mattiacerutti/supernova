@@ -22,12 +22,36 @@ function formatNativeThinkingLabel(level: ModelThinkingLevel, nativeLevel: strin
     .join(" ");
 }
 
-export function toAgentModelDetails(model: Model<Api>, providerDisplayName: string): IAgentModelDetails {
-  const thinkingLevels = getSupportedThinkingLevels(model).map((level) => ({
-    label: formatNativeThinkingLabel(level, model.thinkingLevelMap?.[level]),
-    value: level,
-  }));
+function getNativeThinkingLevel(model: Model<Api>, level: ModelThinkingLevel): string {
+  const nativeLevel = model.thinkingLevelMap?.[level];
+  if (nativeLevel) return nativeLevel;
 
+  return level;
+}
+
+function getThinkingLevelOptions(model: Model<Api>): IAgentModelDetails["thinkingLevels"] {
+  // Pi exposes canonical thinking levels, but provider metadata can map several
+  // of them to the same native value. Show only one option per native value so
+  // the UI does not offer duplicate choices that behave identically.
+  const deduped = new Map<string, IAgentModelDetails["thinkingLevels"][number]>();
+
+  for (const level of getSupportedThinkingLevels(model)) {
+    const nativeLevel = getNativeThinkingLevel(model, level);
+    const previous = deduped.get(nativeLevel);
+    const option = {
+      label: formatNativeThinkingLabel(level, nativeLevel),
+      value: level,
+    };
+
+    if (!previous || level === nativeLevel) {
+      deduped.set(nativeLevel, option);
+    }
+  }
+
+  return Array.from(deduped.values());
+}
+
+export function toAgentModelDetails(model: Model<Api>, providerDisplayName: string): IAgentModelDetails {
   return {
     capabilities: {
       attachments: true,
@@ -39,6 +63,6 @@ export function toAgentModelDetails(model: Model<Api>, providerDisplayName: stri
     name: model.name,
     providerId: model.provider,
     providerName: providerDisplayName,
-    thinkingLevels,
+    thinkingLevels: getThinkingLevelOptions(model),
   };
 }
