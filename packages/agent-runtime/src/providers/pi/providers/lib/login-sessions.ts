@@ -1,4 +1,3 @@
-import {AuthStorage, ModelRegistry} from "@mariozechner/pi-coding-agent";
 import type {AgentProviderLoginInputKind, IAgentProviderLoginSession} from "@pi-desktop/contracts/providers";
 
 interface ILoginWaiter {
@@ -23,10 +22,7 @@ export interface ILoginSessionState {
   waiter?: ILoginWaiter;
 }
 
-export const EXTERNAL_AUTH_PROVIDERS = new Set(["amazon-bedrock", "google-vertex"]);
-export const authStorage = AuthStorage.create();
 export const loginSessions = new Map<string, ILoginSessionState>();
-export const modelRegistry = ModelRegistry.create(authStorage);
 
 export function getLoginSessionState(loginSessionId: string): ILoginSessionState {
   const session = loginSessions.get(loginSessionId);
@@ -49,8 +45,4 @@ export function toLoginSession(state: ILoginSessionState): IAgentProviderLoginSe
     providerName: state.providerName,
     status: state.status,
   };
-}
-
-export function errorMessage(cause: unknown, fallback: string): string {
-  return cause instanceof Error ? cause.message : fallback;
 }

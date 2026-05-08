@@ -2,8 +2,11 @@ import {randomUUID} from "node:crypto";
 import {Effect} from "effect";
 import {AgentProviderLoginError} from "@pi-desktop/contracts/providers";
 import type {AgentProviderLoginInputKind} from "@pi-desktop/contracts/providers";
-import {authStorage, errorMessage, loginSessions, modelRegistry, toLoginSession} from "@pi-desktop/agent-runtime/providers/pi/providers/operations/pi-provider-runtime";
-import type {ILoginSessionState} from "@pi-desktop/agent-runtime/providers/pi/providers/operations/pi-provider-runtime";
+import {PiProviderSdkService} from "@pi-desktop/agent-runtime/providers/pi/providers/pi-provider-sdk";
+import type {IPiProviderSdkService} from "@pi-desktop/agent-runtime/providers/pi/providers/pi-provider-sdk";
+import {loginSessions, toLoginSession} from "@pi-desktop/agent-runtime/providers/pi/providers/lib/login-sessions";
+import type {ILoginSessionState} from "@pi-desktop/agent-runtime/providers/pi/providers/lib/login-sessions";
+import {errorMessage} from "@pi-desktop/agent-runtime/providers/pi/providers/lib/provider-errors";
 
 interface IOAuthPrompt {
   allowEmpty?: boolean;
@@ -22,9 +25,9 @@ function waitForInput(state: ILoginSessionState, kind: AgentProviderLoginInputKi
   });
 }
 
-async function runOAuthLogin(state: ILoginSessionState): Promise<void> {
+async function runOAuthLogin(providerSdk: IPiProviderSdkService, state: ILoginSessionState): Promise<void> {
   try {
-    await authStorage.login(state.providerId, {
+    await providerSdk.authStorage.login(state.providerId, {
       onAuth: (info) => {
         state.status = "authenticating";
         state.authUrl = info.url;
@@ -41,7 +44,7 @@ async function runOAuthLogin(state: ILoginSessionState): Promise<void> {
       onPrompt: (prompt: IOAuthPrompt) => waitForInput(state, "prompt", prompt),
       signal: state.abortController.signal,
     });
-    modelRegistry.refresh();
+    providerSdk.modelRegistry.refresh();
     state.status = "succeeded";
     state.progress = "Connected";
     state.waiter = undefined;
@@ -58,23 +61,27 @@ async function runOAuthLogin(state: ILoginSessionState): Promise<void> {
 }
 
 export function startProviderOAuthLogin(providerId: string) {
-  return Effect.try({
-    try: () => {
-      const provider = authStorage.getOAuthProviders().find((candidate) => candidate.id === providerId);
-      if (!provider) throw new Error("Provider does not support OAuth login.");
+  return Effect.gen(function* () {
+    const providerSdk = yield* PiProviderSdkService;
 
-      const session: ILoginSessionState = {
-        abortController: new AbortController(),
-        loginSessionId: randomUUID(),
-        providerId,
-        providerName: provider.name,
-        status: "pending",
-      };
+    return yield* Effect.try({
+      try: () => {
+        const provider = providerSdk.authStorage.getOAuthProviders().find((candidate) => candidate.id === providerId);
+        if (!provider) throw new Error("Provider does not support OAuth login.");
 
-      loginSessions.set(session.loginSessionId, session);
-      void runOAuthLogin(session);
-      return toLoginSession(session);
-    },
-    catch: (cause) => new AgentProviderLoginError({cause, message: errorMessage(cause, "Failed to start provider login.")}),
+        const session: ILoginSessionState = {
+          abortController: new AbortController(),
+          loginSessionId: randomUUID(),
+          providerId,
+          providerName: provider.name,
+          status: "pending",
+        };
+
+        loginSessions.set(session.loginSessionId, session);
+        void runOAuthLogin(providerSdk, session);
+        return toLoginSession(session);
+      },
+      catch: (cause) => new AgentProviderLoginError({cause, message: errorMessage(cause, "Failed to start provider login.")}),
+    });
   });
 }

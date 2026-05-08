@@ -155,7 +155,7 @@ export function normalizePiSessionTurns(messages: readonly PiAgentMessage[], fal
 
       const existingToolIndex = toolEventIndexes.get(message.toolCallId);
 
-      if (existingToolIndex) {
+      if (existingToolIndex !== undefined) {
         const existingToolEvent = currentEvents[existingToolIndex];
         if (!existingToolEvent || existingToolEvent.type !== "tool") {
           currentEvents.push(toolEvent);
