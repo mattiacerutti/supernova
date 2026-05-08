@@ -9,7 +9,7 @@ function getProviderSourceLabel(provider: IAgentProvider): string | undefined {
   if (provider.source === "stored") return "Connected";
   if (provider.sourceLabel) return provider.sourceLabel;
   if (provider.source === "environment") return "Environment variable";
-  if (provider.source === "models_json_key" || provider.source === "models_json_command") return "models.json";
+  if (provider.source === "config") return "Configuration";
   return "Configured externally";
 }
 

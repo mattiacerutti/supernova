@@ -3,5 +3,5 @@ export interface IProjectListProject {
   name: string;
   path: string;
   pinned: boolean;
-  pinnedChatIds: string[];
+  pinnedSessionIds: string[];
 }

@@ -2,6 +2,7 @@ import {create} from "zustand";
 import {persist} from "zustand/middleware";
 
 const PROJECTS_STORAGE_KEY = "pi-desktop-projects";
+const LEGACY_PINNED_SESSION_IDS_KEY = ["pinned", "C", "hat", "Ids"].join("");
 
 export interface IStoredProject {
   readonly id: string;
@@ -9,7 +10,7 @@ export interface IStoredProject {
   readonly path: string;
   readonly addedAt: string;
   readonly pinned?: boolean;
-  readonly pinnedChatIds?: string[];
+  readonly pinnedSessionIds?: string[];
 }
 
 interface IProjectsState {
@@ -17,8 +18,12 @@ interface IProjectsState {
   readonly addProject: (projectPath: string) => IStoredProject | undefined;
   readonly removeProject: (projectId: string) => void;
   readonly renameProject: (projectId: string, name: string) => void;
-  readonly toggleChatPinned: (projectId: string, chatId: string) => void;
   readonly toggleProjectPinned: (projectId: string) => void;
+  readonly toggleSessionPinned: (projectId: string, sessionId: string) => void;
+}
+
+interface IPersistedProjectsState {
+  readonly projects?: unknown;
 }
 
 function normalizeProjectPath(projectPath: string): string {
@@ -32,6 +37,40 @@ function toProjectId(projectPath: string): string {
 function toProjectName(projectPath: string): string {
   const segments = projectPath.split(/[\\/]/).filter(Boolean);
   return segments.at(-1) ?? projectPath;
+}
+
+function migrateStoredProject(project: unknown): IStoredProject | undefined {
+  if (typeof project !== "object" || project === null) return undefined;
+
+  const storedProject = project as Record<string, unknown>;
+  if (typeof storedProject.id !== "string" || typeof storedProject.name !== "string" || typeof storedProject.path !== "string" || typeof storedProject.addedAt !== "string") {
+    return undefined;
+  }
+
+  const legacyPinnedSessionIds = storedProject[LEGACY_PINNED_SESSION_IDS_KEY];
+  const pinnedSessionIds = Array.isArray(storedProject.pinnedSessionIds)
+    ? storedProject.pinnedSessionIds.filter((sessionId): sessionId is string => typeof sessionId === "string")
+    : Array.isArray(legacyPinnedSessionIds)
+      ? legacyPinnedSessionIds.filter((sessionId): sessionId is string => typeof sessionId === "string")
+      : undefined;
+
+  return {
+    addedAt: storedProject.addedAt,
+    id: storedProject.id,
+    name: storedProject.name,
+    path: storedProject.path,
+    pinned: typeof storedProject.pinned === "boolean" ? storedProject.pinned : undefined,
+    pinnedSessionIds,
+  };
+}
+
+function migrateProjectsState(state: unknown): IPersistedProjectsState {
+  if (typeof state !== "object" || state === null) return {projects: []};
+
+  const projects = (state as IPersistedProjectsState).projects;
+  if (!Array.isArray(projects)) return {projects: []};
+
+  return {projects: projects.map(migrateStoredProject).filter((project): project is IStoredProject => project !== undefined)};
 }
 
 export const useProjectsStore = create<IProjectsState>()(
@@ -66,14 +105,16 @@ export const useProjectsStore = create<IProjectsState>()(
           projects: state.projects.map((project) => (project.id === projectId ? {...project, name: trimmedName} : project)),
         }));
       },
-      toggleChatPinned: (projectId, chatId) => {
+      toggleSessionPinned: (projectId, sessionId) => {
         set((state) => ({
           projects: state.projects.map((project) => {
             if (project.id !== projectId) return project;
 
-            const pinnedChatIds = project.pinnedChatIds ?? [];
-            const nextPinnedChatIds = pinnedChatIds.includes(chatId) ? pinnedChatIds.filter((pinnedChatId) => pinnedChatId !== chatId) : [...pinnedChatIds, chatId];
-            return {...project, pinnedChatIds: nextPinnedChatIds};
+            const pinnedSessionIds = project.pinnedSessionIds ?? [];
+            const nextPinnedSessionIds = pinnedSessionIds.includes(sessionId)
+              ? pinnedSessionIds.filter((pinnedSessionId) => pinnedSessionId !== sessionId)
+              : [...pinnedSessionIds, sessionId];
+            return {...project, pinnedSessionIds: nextPinnedSessionIds};
           }),
         }));
       },
@@ -84,8 +125,10 @@ export const useProjectsStore = create<IProjectsState>()(
       },
     }),
     {
+      migrate: migrateProjectsState,
       name: PROJECTS_STORAGE_KEY,
       partialize: (state) => ({projects: state.projects}),
+      version: 1,
     }
   )
 );

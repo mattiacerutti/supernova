@@ -1,5 +1,5 @@
 import {Outlet, useParams, useRouteContext} from "@tanstack/react-router";
-import HomePage from "@/components/home-page";
+import HomePage from "@/features/home/pages/home-page";
 import SettingsPage from "@/features/settings/pages/settings-page";
 
 export function RootRoute() {
@@ -10,6 +10,13 @@ export function HomeRoute() {
   const {integratedTitleBar} = useRouteContext({from: "__root__"});
 
   return <HomePage integratedTitleBar={integratedTitleBar} />;
+}
+
+export function SessionRoute() {
+  const {integratedTitleBar} = useRouteContext({from: "__root__"});
+  const {sessionId} = useParams({from: "/session/$sessionId"});
+
+  return <HomePage sessionId={sessionId} integratedTitleBar={integratedTitleBar} />;
 }
 
 export function SettingsRoute() {

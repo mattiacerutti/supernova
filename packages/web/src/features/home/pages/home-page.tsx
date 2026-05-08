@@ -1,16 +1,17 @@
 import {useState} from "react";
 import Icon from "@/components/ui/icon";
 import IconButton from "@/components/ui/icon-button";
-import ChatPanel from "@/features/chat/components/chat-panel";
 import ResizableSidebarLayout from "@/features/sidebar/components/resizable-sidebar-layout";
 import Sidebar from "@/features/sidebar/components/sidebar";
+import SessionPage from "@/features/sessions/pages/session-page";
 
 interface IHomePageProps {
   integratedTitleBar: boolean;
+  sessionId?: string;
 }
 
 export default function HomePage(props: IHomePageProps) {
-  const {integratedTitleBar} = props;
+  const {integratedTitleBar, sessionId} = props;
   const [sidebarVisible, setSidebarVisible] = useState(true);
 
   const handleToggleSidebar = (): void => {
@@ -33,7 +34,15 @@ export default function HomePage(props: IHomePageProps) {
 
   return (
     <ResizableSidebarLayout integratedTitleBar={integratedTitleBar} sidebar={<Sidebar />} sidebarVisible={sidebarVisible} titlebarActions={titlebarActions}>
-      <ChatPanel />
+      {sessionId ? <SessionPage key={sessionId} sessionId={sessionId} /> : <EmptySessionState />}
     </ResizableSidebarLayout>
+  );
+}
+
+function EmptySessionState() {
+  return (
+    <div className="grid flex-1 place-items-center px-6 py-10">
+      <p className="text-sm text-neutral-600">Select a session or start a new one.</p>
+    </div>
   );
 }

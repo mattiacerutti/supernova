@@ -9,6 +9,6 @@ export function useProjectList(): IProjectListProject[] {
     name: project.name,
     path: project.path,
     pinned: project.pinned === true,
-    pinnedChatIds: project.pinnedChatIds ?? [],
+    pinnedSessionIds: project.pinnedSessionIds ?? [],
   }));
 }

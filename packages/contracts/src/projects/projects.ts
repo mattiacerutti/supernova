@@ -1,18 +1,11 @@
 import {Schema} from "effect";
-
-export const AgentChatSummary = Schema.Struct({
-  id: Schema.String,
-  messageCount: Schema.Number,
-  title: Schema.String,
-  updatedAt: Schema.String,
-});
-export type IAgentChatSummary = typeof AgentChatSummary.Type;
+import {AgentSessionSummary} from "@pi-desktop/contracts/sessions";
 
 export const AgentProjectSessionsListResult = Schema.Struct({
   hasMore: Schema.Boolean,
   nextCursor: Schema.optional(Schema.String),
   projectPath: Schema.String,
-  sessions: Schema.Array(AgentChatSummary),
+  sessions: Schema.Array(AgentSessionSummary),
 });
 export type IAgentProjectSessionsListResult = typeof AgentProjectSessionsListResult.Type;
 

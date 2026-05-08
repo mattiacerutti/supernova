@@ -1,0 +1,20 @@
+export default function UserMessage(props: {children: string}) {
+  const {children} = props;
+  const parts = children.split(/(`[^`]+`)/g);
+
+  return (
+    <span className="whitespace-pre-wrap">
+      {parts.map((part, index) => {
+        if (part.startsWith("`") && part.endsWith("`") && part.length > 2) {
+          return (
+            <code className="rounded bg-white/8 px-1 py-0.5 font-mono text-xs text-neutral-200" key={`${part}-${index}`}>
+              {part.slice(1, -1)}
+            </code>
+          );
+        }
+
+        return <span key={`${part}-${index}`}>{part}</span>;
+      })}
+    </span>
+  );
+}

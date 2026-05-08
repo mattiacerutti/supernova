@@ -16,9 +16,11 @@
   "scripts": {
     "lint": "eslint .",
     "prettier": "prettier --check . --ignore-path ../../.prettierignore",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@mariozechner/pi-ai": "^0.73.0",
     "@mariozechner/pi-coding-agent": "^0.72.1",
     "@pi-desktop/contracts": "workspace:*",
     "effect": "4.0.0-beta.60"
@@ -27,6 +29,7 @@
     "@types/node": "^22.19.1",
     "eslint": "^10.3.0",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.59.1"
+    "typescript-eslint": "^8.59.1",
+    "vitest": "^4.0.15"
   }
 }

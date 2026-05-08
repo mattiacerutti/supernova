@@ -5,11 +5,11 @@ export type AgentProviderAuthType = typeof AgentProviderAuthType.Type;
 
 export const AgentProviderAuthSource = Schema.Union([
   Schema.Literal("stored"),
-  Schema.Literal("runtime"),
   Schema.Literal("environment"),
-  Schema.Literal("fallback"),
-  Schema.Literal("models_json_key"),
-  Schema.Literal("models_json_command"),
+  Schema.Literal("config"),
+  Schema.Literal("runtime"),
+  Schema.Literal("external"),
+  Schema.Literal("unknown"),
 ]);
 export type AgentProviderAuthSource = typeof AgentProviderAuthSource.Type;
 

@@ -1,7 +1,23 @@
 import {Effect} from "effect";
 import {AgentProvidersListError} from "@pi-desktop/contracts/providers";
-import type {IAgentProvider} from "@pi-desktop/contracts/providers";
+import type {AgentProviderAuthSource, IAgentProvider} from "@pi-desktop/contracts/providers";
 import {authStorage, errorMessage, EXTERNAL_AUTH_PROVIDERS, modelRegistry} from "@pi-desktop/agent-runtime/providers/pi/providers/operations/pi-provider-runtime";
+
+function normalizeSource(source: string | undefined): AgentProviderAuthSource | undefined {
+  switch (source) {
+    case "stored":
+    case "runtime":
+    case "environment":
+      return source;
+    case "models_json_key":
+    case "models_json_command":
+      return "config";
+    case "fallback":
+      return "external";
+    default:
+      return source ? "unknown" : undefined;
+  }
+}
 
 export function listProviders() {
   return Effect.try({
@@ -20,7 +36,7 @@ export function listProviders() {
           return {
             id: providerId,
             name: modelRegistry.getProviderDisplayName(providerId),
-            source: status.source,
+            source: normalizeSource(status.source),
             sourceLabel: status.label,
             authTypes: oauthProviderIds.has(providerId) ? ["api_key", "oauth"] : ["api_key"],
             connected: status.configured || status.source !== undefined,

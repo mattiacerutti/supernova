@@ -19,6 +19,7 @@
     "package:desktop:linux": "turbo run package:linux --filter=@pi-desktop/desktop",
     "lint": "turbo run lint",
     "prettier": "turbo run prettier",
+    "test": "turbo run test",
     "typecheck": "turbo run typecheck",
     "prepare": "husky"
   },

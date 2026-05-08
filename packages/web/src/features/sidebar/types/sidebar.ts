@@ -1,4 +1,4 @@
-export type SidebarActionId = "new-chat" | "new-project" | "search";
+export type SidebarActionId = "new-project" | "new-session" | "search";
 
 export interface ISidebarAction {
   id: SidebarActionId;

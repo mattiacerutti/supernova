@@ -1,5 +1,6 @@
 import {useState} from "react";
 import type {MouseEvent} from "react";
+import {useLocation, useNavigate} from "@tanstack/react-router";
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import IconButton from "@/components/ui/icon-button";
@@ -12,8 +13,8 @@ import {useProjectsStore} from "@/features/projects/stores/projects-store";
 import {formatUpdatedAt} from "@/features/projects/utils/format-updated-at";
 import {cn} from "@/lib/cn";
 
-const INITIAL_CHAT_LIMIT = 5;
-const CHAT_LIMIT_INCREMENT = 5;
+const INITIAL_SESSION_LIMIT = 5;
+const SESSION_LIMIT_INCREMENT = 5;
 
 interface IProjectListItemProps {
   expanded: boolean;
@@ -25,11 +26,13 @@ export default function ProjectListItem(props: IProjectListItemProps) {
   const {expanded, onToggle, project} = props;
 
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
-  const [loadedChatLimit, setLoadedChatLimit] = useState(INITIAL_CHAT_LIMIT);
-  const [visibleChatLimit, setVisibleChatLimit] = useState(INITIAL_CHAT_LIMIT);
-  const [confirmingArchiveChatId, setConfirmingArchiveChatId] = useState<string | null>(null);
+  const [loadedSessionLimit, setLoadedSessionLimit] = useState(INITIAL_SESSION_LIMIT);
+  const [visibleSessionLimit, setVisibleSessionLimit] = useState(INITIAL_SESSION_LIMIT);
+  const [confirmingArchiveSessionId, setConfirmingArchiveSessionId] = useState<string | null>(null);
+  const location = useLocation();
+  const navigate = useNavigate();
   const removeProject = useProjectsStore((state) => state.removeProject);
-  const toggleChatPinned = useProjectsStore((state) => state.toggleChatPinned);
+  const toggleSessionPinned = useProjectsStore((state) => state.toggleSessionPinned);
   const toggleProjectPinned = useProjectsStore((state) => state.toggleProjectPinned);
   const archiveProjectSessionMutation = useArchiveProjectSession();
   const {
@@ -43,24 +46,24 @@ export default function ProjectListItem(props: IProjectListItemProps) {
     renaming,
     startRenaming,
   } = useRenameProject({projectId: project.id, projectName: project.name});
-  const sessionsQuery = useListProjectSessions({enabled: expanded, limit: loadedChatLimit, projectPath: project.path});
+  const sessionsQuery = useListProjectSessions({enabled: expanded, limit: loadedSessionLimit, projectPath: project.path});
 
-  const chats =
+  const sessions =
     sessionsQuery.data?.sessions
-      .map((chat) => ({
-        id: chat.id,
-        pinned: project.pinnedChatIds.includes(chat.id),
-        title: chat.title,
-        updatedAt: formatUpdatedAt(chat.updatedAt),
+      .map((session) => ({
+        id: session.id,
+        pinned: project.pinnedSessionIds.includes(session.id),
+        title: session.title,
+        updatedAt: formatUpdatedAt(session.updatedAt),
       }))
       .toSorted((left, right) => Number(right.pinned) - Number(left.pinned)) ?? [];
-  const visibleChats = chats.slice(0, visibleChatLimit);
+  const visibleSessions = sessions.slice(0, visibleSessionLimit);
 
-  const hasChats = chats.length > 0;
-  const hasHiddenLoadedChats = chats.length > visibleChatLimit;
-  const canShowLessChats = visibleChatLimit > INITIAL_CHAT_LIMIT;
-  const canShowMoreChats = hasHiddenLoadedChats || !!sessionsQuery.data?.hasMore;
-  const canShowLessAtEnd = canShowLessChats && !canShowMoreChats;
+  const hasSessions = sessions.length > 0;
+  const hasHiddenLoadedSessions = sessions.length > visibleSessionLimit;
+  const canShowLessSessions = visibleSessionLimit > INITIAL_SESSION_LIMIT;
+  const canShowMoreSessions = hasHiddenLoadedSessions || !!sessionsQuery.data?.hasMore;
+  const canShowLessAtEnd = canShowLessSessions && !canShowMoreSessions;
   const canOpenInFinder = window.desktopShell?.platform === "darwin";
 
   const handleToggle = (): void => {
@@ -75,43 +78,47 @@ export default function ProjectListItem(props: IProjectListItemProps) {
     toggleProjectPinned(project.id);
   };
 
-  const handleToggleChatPinned = (event: MouseEvent<HTMLButtonElement>, chatId: string): void => {
+  const handleToggleSessionPinned = (event: MouseEvent<HTMLButtonElement>, sessionId: string): void => {
     event.stopPropagation();
-    toggleChatPinned(project.id, chatId);
+    toggleSessionPinned(project.id, sessionId);
   };
 
-  const handleArchiveChat = (event: MouseEvent<HTMLButtonElement>, chatId: string): void => {
+  const handleArchiveSession = (event: MouseEvent<HTMLButtonElement>, sessionId: string): void => {
     event.stopPropagation();
 
-    if (confirmingArchiveChatId !== chatId) {
-      setConfirmingArchiveChatId(chatId);
+    if (confirmingArchiveSessionId !== sessionId) {
+      setConfirmingArchiveSessionId(sessionId);
       return;
     }
 
-    setConfirmingArchiveChatId(null);
-    archiveProjectSessionMutation.mutate({projectPath: project.path, sessionId: chatId});
+    setConfirmingArchiveSessionId(null);
+    archiveProjectSessionMutation.mutate({projectPath: project.path, sessionId});
   };
 
-  const handleChatMouseLeave = (chatId: string): void => {
-    if (confirmingArchiveChatId === chatId) setConfirmingArchiveChatId(null);
+  const handleOpenSession = (sessionId: string): void => {
+    void navigate({params: {sessionId}, to: "/session/$sessionId"});
+  };
+
+  const handleSessionMouseLeave = (sessionId: string): void => {
+    if (confirmingArchiveSessionId === sessionId) setConfirmingArchiveSessionId(null);
   };
 
   const handleOpenInFinder = (): void => {
     void window.desktopShell?.openInFinder(project.path);
   };
 
-  const handleLoadMoreChats = (): void => {
-    if (hasHiddenLoadedChats) {
-      setVisibleChatLimit(chats.length);
+  const handleLoadMoreSessions = (): void => {
+    if (hasHiddenLoadedSessions) {
+      setVisibleSessionLimit(sessions.length);
       return;
     }
 
-    setLoadedChatLimit((limit) => limit + CHAT_LIMIT_INCREMENT);
-    setVisibleChatLimit((limit) => limit + CHAT_LIMIT_INCREMENT);
+    setLoadedSessionLimit((limit) => limit + SESSION_LIMIT_INCREMENT);
+    setVisibleSessionLimit((limit) => limit + SESSION_LIMIT_INCREMENT);
   };
 
-  const handleShowLessChats = (): void => {
-    setVisibleChatLimit(INITIAL_CHAT_LIMIT);
+  const handleShowLessSessions = (): void => {
+    setVisibleSessionLimit(INITIAL_SESSION_LIMIT);
   };
 
   return (
@@ -167,7 +174,7 @@ export default function ProjectListItem(props: IProjectListItemProps) {
               </MenuItem>
             </Menu>
           </div>
-          <IconButton className="size-7" label={`New chat in ${project.name}`}>
+          <IconButton className="size-7" label={`New session in ${project.name}`}>
             <Icon name="edit" size="xs" />
           </IconButton>
         </div>
@@ -180,39 +187,47 @@ export default function ProjectListItem(props: IProjectListItemProps) {
         <div className="overflow-hidden py-0.5">
           {sessionsQuery.isPending && (
             <span className="ml-10 inline-flex items-center justify-start gap-2 px-0 py-1 text-sm text-neutral-600">
-              Loading chats
+              Loading sessions
               <span className="size-2.5 animate-spin rounded-full border border-neutral-600 border-t-neutral-300" aria-hidden="true" />
             </span>
           )}
-          {sessionsQuery.error != null && <p className="px-8 py-1 text-sm text-red-400">Unable to load chats.</p>}
-          {hasChats && (
+          {sessionsQuery.error != null && <p className="px-8 py-1 text-sm text-red-400">Unable to load sessions.</p>}
+          {hasSessions && (
             <ul className="space-y-0.5">
-              {visibleChats.map((chat) => {
-                const confirmingArchive = confirmingArchiveChatId === chat.id;
+              {visibleSessions.map((session) => {
+                const confirmingArchive = confirmingArchiveSessionId === session.id;
 
                 return (
-                  <li key={chat.id} onMouseLeave={() => handleChatMouseLeave(chat.id)}>
-                    <Button as="div" className="group/chat flex w-full items-center gap-2 py-1 pl-2 pr-1 text-left text-neutral-200 hover:bg-white/7" variant="primary">
+                  <li key={session.id} onMouseLeave={() => handleSessionMouseLeave(session.id)}>
+                    <Button
+                      as="div"
+                      className={cn(
+                        "group/session flex w-full items-center gap-2 py-1 pl-2 pr-1 text-left text-neutral-100 hover:bg-white/7",
+                        location.pathname === `/session/${session.id}` && "bg-white/8 text-white"
+                      )}
+                      onClick={() => handleOpenSession(session.id)}
+                      variant="primary"
+                    >
                       <IconButton
-                        className={cn("size-6", !chat.pinned && "invisible group-hover/chat:visible")}
-                        label={chat.pinned ? "Unpin chat" : "Pin chat"}
-                        onClick={(event) => handleToggleChatPinned(event, chat.id)}
+                        className={cn("size-6", !session.pinned && "invisible group-hover/session:visible")}
+                        label={session.pinned ? "Unpin session" : "Pin session"}
+                        onClick={(event) => handleToggleSessionPinned(event, session.id)}
                       >
                         <Icon name="pin" size="xs" />
                       </IconButton>
-                      <span className="min-w-0 flex-1 truncate text-sm">{chat.title}</span>
+                      <span className="min-w-0 flex-1 truncate text-sm">{session.title}</span>
                       <span className="grid w-12 shrink-0 place-items-center justify-items-end">
-                        <span className="col-start-1 row-start-1 w-full justify-self-end pr-1.5 text-right text-xs text-neutral-600 group-hover/chat:invisible">
-                          {chat.updatedAt}
+                        <span className="col-start-1 row-start-1 w-full justify-self-end pr-1.5 text-right text-xs text-neutral-600 group-hover/session:invisible">
+                          {session.updatedAt}
                         </span>
                         <IconButton
                           className={cn(
                             "col-start-1 row-start-1 size-5 disabled:cursor-not-allowed disabled:opacity-50",
-                            confirmingArchive ? "rounded-lg bg-red-500/25 text-red-500 hover:bg-red-500/35 hover:text-red-400" : "invisible group-hover/chat:visible"
+                            confirmingArchive ? "rounded-lg bg-red-500/25 text-red-500 hover:bg-red-500/35 hover:text-red-400" : "invisible group-hover/session:visible"
                           )}
                           disabled={archiveProjectSessionMutation.isPending}
-                          label={confirmingArchive ? "Confirm archive chat" : "Archive chat"}
-                          onClick={(event) => handleArchiveChat(event, chat.id)}
+                          label={confirmingArchive ? "Confirm archive session" : "Archive session"}
+                          onClick={(event) => handleArchiveSession(event, session.id)}
                         >
                           <Icon name={confirmingArchive ? "x" : "archive"} size="xs" />
                         </IconButton>
@@ -224,11 +239,11 @@ export default function ProjectListItem(props: IProjectListItemProps) {
             </ul>
           )}
 
-          {canShowMoreChats && (
+          {canShowMoreSessions && (
             <Button
               className="ml-10 inline-flex items-center justify-start gap-2 px-0 py-1 text-xs"
               disabled={sessionsQuery.isFetching}
-              onClick={handleLoadMoreChats}
+              onClick={handleLoadMoreSessions}
               variant="ghost"
             >
               Show more
@@ -237,12 +252,12 @@ export default function ProjectListItem(props: IProjectListItemProps) {
           )}
 
           {canShowLessAtEnd && (
-            <Button className="ml-10 justify-start px-0 py-1 text-xs" onClick={handleShowLessChats} variant="ghost">
+            <Button className="ml-10 justify-start px-0 py-1 text-xs" onClick={handleShowLessSessions} variant="ghost">
               Show less
             </Button>
           )}
 
-          {!sessionsQuery.isPending && sessionsQuery.error == null && !hasChats && <p className="px-8 py-1 text-sm text-neutral-600">No chats</p>}
+          {!sessionsQuery.isPending && sessionsQuery.error == null && !hasSessions && <p className="px-8 py-1 text-sm text-neutral-600">No sessions</p>}
         </div>
       </div>
     </li>
