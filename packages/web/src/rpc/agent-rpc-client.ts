@@ -1,5 +1,5 @@
 import {AgentRpcGroup} from "@pi-desktop/contracts";
-import {Effect, Exit, Layer, ManagedRuntime, Scope} from "effect";
+import {Effect, Exit, Fiber, Layer, ManagedRuntime, Scope} from "effect";
 import {RpcClient, RpcSerialization} from "effect/unstable/rpc";
 import * as Socket from "effect/unstable/socket/Socket";
 
@@ -42,7 +42,12 @@ function resolveAgentDesktopWsUrl(): string {
 
 export interface IAgentRpcClient {
   readonly dispose: () => Promise<void>;
+  readonly fork: <TSuccess, TError>(execute: (client: AgentRpcProtocolClient) => Effect.Effect<TSuccess, TError, never>) => Promise<IAgentRpcClientFiber>;
   readonly run: <TSuccess, TError>(execute: (client: AgentRpcProtocolClient) => Effect.Effect<TSuccess, TError, never>) => Promise<TSuccess>;
+}
+
+export interface IAgentRpcClientFiber {
+  readonly interrupt: () => Promise<void>;
 }
 
 export function createAgentRpcProtocolLayer(socketUrl: AgentRpcSocketUrlProvider = resolveAgentDesktopWsUrl) {
@@ -80,6 +85,15 @@ class AgentRpcClient implements IAgentRpcClient {
   async dispose(): Promise<void> {
     await this.session.runtime.runPromise(Scope.close(this.session.clientScope, Exit.void));
     this.session.runtime.dispose();
+  }
+
+  async fork<TSuccess, TError>(execute: (client: AgentRpcProtocolClient) => Effect.Effect<TSuccess, TError, never>): Promise<IAgentRpcClientFiber> {
+    const client = await this.session.clientPromise;
+    const fiber = this.session.runtime.runFork(Effect.suspend(() => execute(client)));
+
+    return {
+      interrupt: () => this.session.runtime.runPromise(Fiber.interrupt(fiber).pipe(Effect.ignore)),
+    };
   }
 
   async run<TSuccess, TError>(execute: (client: AgentRpcProtocolClient) => Effect.Effect<TSuccess, TError, never>): Promise<TSuccess> {

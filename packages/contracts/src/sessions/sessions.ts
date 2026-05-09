@@ -182,7 +182,7 @@ export const AgentSessionStreamEvent = Schema.Union([
   /** Terminal stream failure. */
   Schema.Struct({type: Schema.Literal("error"), error: Schema.String}),
   /** Incremental update for the active turn emitted while the agent is working. */
-  Schema.Struct({type: Schema.Literal("turn"), turn: AgentSessionTurn}),
+  Schema.Struct({type: Schema.Literal("turn"), turn: AgentSessionTurn, session: Schema.optional(AgentSessionSummary)}),
   /** Initial transcript snapshot emitted before prompting starts. */
   Schema.Struct({type: Schema.Literal("ready"), turns: Schema.Array(AgentSessionTurn)}),
   /** Final authoritative transcript snapshot emitted after prompting completes. */

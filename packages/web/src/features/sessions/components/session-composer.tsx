@@ -14,12 +14,23 @@ interface ISessionComposerProps {
   onModelChange: (value: string) => void;
   onSubmit: (message: string) => void;
   onThinkingLevelChange: (value: string) => void;
+  placeholder?: string;
   selectedModelKey: string;
   selectedThinkingLevel: string | undefined;
 }
 
 export default function SessionComposer(props: ISessionComposerProps) {
-  const {disabled, models, modelsLoading, onModelChange, onSubmit, onThinkingLevelChange, selectedModelKey, selectedThinkingLevel} = props;
+  const {
+    disabled,
+    models,
+    modelsLoading,
+    onModelChange,
+    onSubmit,
+    onThinkingLevelChange,
+    placeholder = "Ask for follow-up changes",
+    selectedModelKey,
+    selectedThinkingLevel,
+  } = props;
   const [draft, setDraft] = useState("");
 
   const canSend = draft.trim().length > 0 && !disabled;
@@ -48,7 +59,7 @@ export default function SessionComposer(props: ISessionComposerProps) {
           disabled={disabled}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Ask for follow-up changes"
+          placeholder={placeholder}
           rows={1}
           value={draft}
         />

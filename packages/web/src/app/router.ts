@@ -1,5 +1,5 @@
 import {createRootRouteWithContext, createRoute, createRouter} from "@tanstack/react-router";
-import {HomeRoute, RootRoute, SessionRoute, SettingsRoute, SettingsSectionRoute} from "@/app/routes";
+import {HomeRoute, NewSessionRoute, RootRoute, SessionRoute, SettingsRoute, SettingsSectionRoute} from "@/app/routes";
 
 interface IRouterContext {
   integratedTitleBar: boolean;
@@ -27,13 +27,19 @@ const sessionRoute = createRoute({
   component: SessionRoute,
 });
 
+const newSessionRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "session/new",
+  component: NewSessionRoute,
+});
+
 const settingsSectionRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "settings/$sectionId",
   component: SettingsSectionRoute,
 });
 
-const routeTree = rootRoute.addChildren([indexRoute, sessionRoute, settingsRoute, settingsSectionRoute]);
+const routeTree = rootRoute.addChildren([indexRoute, newSessionRoute, sessionRoute, settingsRoute, settingsSectionRoute]);
 
 export const router = createRouter({
   context: {

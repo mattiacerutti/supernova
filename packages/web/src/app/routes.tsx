@@ -1,4 +1,4 @@
-import {Outlet, useParams, useRouteContext} from "@tanstack/react-router";
+import {Outlet, useParams, useRouteContext, useSearch} from "@tanstack/react-router";
 import HomePage from "@/features/home/pages/home-page";
 import SettingsPage from "@/features/settings/pages/settings-page";
 
@@ -17,6 +17,13 @@ export function SessionRoute() {
   const {sessionId} = useParams({from: "/session/$sessionId"});
 
   return <HomePage sessionId={sessionId} integratedTitleBar={integratedTitleBar} />;
+}
+
+export function NewSessionRoute() {
+  const {integratedTitleBar} = useRouteContext({from: "__root__"});
+  const search = useSearch({from: "/session/new"}) as {projectId?: string};
+
+  return <HomePage newSessionProjectId={search.projectId} integratedTitleBar={integratedTitleBar} />;
 }
 
 export function SettingsRoute() {

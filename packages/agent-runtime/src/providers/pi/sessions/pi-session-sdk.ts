@@ -6,6 +6,7 @@ export type PiSessionInfo = SessionInfo;
 
 export interface IPiSessionSdkService {
   readonly createAgentSession: typeof createAgentSession;
+  readonly createSessionManager: typeof SessionManager.create;
   readonly listSessions: () => Promise<readonly PiSessionInfo[]>;
   readonly openSessionManager: typeof SessionManager.open;
 }
@@ -14,6 +15,7 @@ export class PiSessionSdkService extends Context.Service<PiSessionSdkService, IP
 
 export const PiSessionSdkLive = Layer.succeed(PiSessionSdkService, {
   createAgentSession,
+  createSessionManager: SessionManager.create,
   listSessions: () => SessionManager.listAll(),
   openSessionManager: SessionManager.open,
 });

@@ -10,6 +10,7 @@ import type {
 } from "@pi-desktop/contracts/sessions";
 
 export interface ISessionsService {
+  readonly create: (projectPath: string) => Effect.Effect<IAgentSessionDetails, AgentSessionLoadError>;
   readonly get: (sessionId: string) => Effect.Effect<IAgentSessionDetails, AgentSessionLoadError>;
   readonly listModels: () => Effect.Effect<IAgentSessionModelsListResult, AgentSessionModelsListError>;
   readonly sendMessage: (input: {message: string; model: IAgentModelReference; sessionId: string}) => Stream.Stream<AgentSessionStreamEvent>;

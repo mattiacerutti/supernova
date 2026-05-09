@@ -1,5 +1,6 @@
 import {Icon as IconifyIcon} from "@iconify/react";
 import type {IconProps as IconifyIconProps} from "@iconify/react";
+
 import {cn} from "@/lib/cn";
 
 export type IconName =
@@ -20,6 +21,7 @@ export type IconName =
   | "loader"
   | "maximize"
   | "more-horizontal"
+  | "new-session"
   | "panel-left"
   | "panel-top"
   | "paperclip"
@@ -62,6 +64,7 @@ const icons: Record<IconName, string> = {
   loader: "lucide:loader-circle",
   maximize: "lucide:maximize-2",
   "more-horizontal": "lucide:more-horizontal",
+  "new-session": "cuida:edit-outline",
   "panel-left": "tabler:layout-sidebar",
   "panel-top": "lucide:panel-top",
   paperclip: "lucide:paperclip",
@@ -94,5 +97,5 @@ export default function Icon(props: IIconProps) {
   const icon = icons[name];
   const resolvedClassName = cn(sizeClasses[size], "shrink-0", className);
 
-  return <IconifyIcon aria-hidden="true" className={resolvedClassName} icon={icon} {...iconProps} />;
+  return <IconifyIcon aria-hidden="true" className={resolvedClassName} icon={icon} ssr {...iconProps} />;
 }

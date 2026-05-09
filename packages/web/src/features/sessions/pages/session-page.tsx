@@ -69,6 +69,7 @@ function SessionConversation(props: ISessionConversationProps) {
 
   const stream = useSessionMessageStream({
     modelReference: selectedModelReference,
+    projectPath: session.projectPath,
     sessionId: session.id,
     sessionTurns: session.turns,
   });
@@ -89,14 +90,14 @@ function SessionConversation(props: ISessionConversationProps) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <header className="flex shrink-0 items-center justify-between">
+      <header className="flex shrink-0 items-center justify-between pt-2.5">
         <h1 className="min-w-0 truncate text-sm font-medium text-neutral-100">{session.title}</h1>
       </header>
 
       <SessionTimeline isStreaming={stream.isStreaming} items={stream.renderItems} listRef={stream.listRef} streamError={stream.streamError} />
 
       <SessionComposer
-        disabled={stream.isStreaming || modelsPending}
+        disabled={stream.isStreaming || modelsPending || !selectedModelReference}
         models={availableModels}
         modelsLoading={modelsPending}
         onModelChange={handleModelChange}

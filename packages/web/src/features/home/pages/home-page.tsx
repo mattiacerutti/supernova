@@ -3,16 +3,22 @@ import Icon from "@/components/ui/icon";
 import IconButton from "@/components/ui/icon-button";
 import ResizableSidebarLayout from "@/features/sidebar/components/resizable-sidebar-layout";
 import Sidebar from "@/features/sidebar/components/sidebar";
+import {useProjectList} from "@/features/projects/hooks/use-project-list";
+import NewSessionPage from "@/features/sessions/pages/new-session-page";
 import SessionPage from "@/features/sessions/pages/session-page";
 
 interface IHomePageProps {
   integratedTitleBar: boolean;
+  newSessionProjectId?: string;
   sessionId?: string;
 }
 
 export default function HomePage(props: IHomePageProps) {
-  const {integratedTitleBar, sessionId} = props;
+  const {integratedTitleBar, newSessionProjectId, sessionId} = props;
   const [sidebarVisible, setSidebarVisible] = useState(true);
+
+  const projects = useProjectList();
+  const newSessionProject = newSessionProjectId ? projects.find((project) => project.id === newSessionProjectId) : undefined;
 
   const handleToggleSidebar = (): void => {
     setSidebarVisible((visible) => !visible);
@@ -34,7 +40,9 @@ export default function HomePage(props: IHomePageProps) {
 
   return (
     <ResizableSidebarLayout integratedTitleBar={integratedTitleBar} sidebar={<Sidebar />} sidebarVisible={sidebarVisible} titlebarActions={titlebarActions}>
-      {sessionId ? <SessionPage key={sessionId} sessionId={sessionId} /> : <EmptySessionState />}
+      {newSessionProject && <NewSessionPage projectName={newSessionProject.name} projectPath={newSessionProject.path} />}
+      {!newSessionProject && sessionId && <SessionPage key={sessionId} sessionId={sessionId} />}
+      {!newSessionProject && !sessionId && <EmptySessionState />}
     </ResizableSidebarLayout>
   );
 }

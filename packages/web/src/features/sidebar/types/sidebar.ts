@@ -1,7 +1,7 @@
-export type SidebarActionId = "new-project" | "new-session" | "search";
+export type SidebarActionId = "new-project" | "search";
 
 export interface ISidebarAction {
   id: SidebarActionId;
-  icon: "edit" | "folder" | "search";
+  icon: "folder" | "search";
   label: string;
 }

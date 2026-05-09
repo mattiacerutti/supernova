@@ -1,4 +1,4 @@
-import {Effect, Layer, Stream} from "effect";
+import {Effect, Fiber, Layer, Stream} from "effect";
 import {describe, expect, it, vi} from "vitest";
 import {PiProviderSdkService} from "@pi-desktop/agent-runtime/providers/pi/providers/pi-provider-sdk";
 import {PiSessionsLive} from "@pi-desktop/agent-runtime/providers/pi/sessions/pi-sessions-live";
@@ -31,7 +31,30 @@ async function collectEvents(stream: Stream.Stream<AgentSessionStreamEvent>): Pr
   return events;
 }
 
-function makePiSessionsHarness(input?: {availableModels?: unknown[]; sessions?: PiSessionInfo[]}) {
+async function waitForEvent(events: readonly AgentSessionStreamEvent[]): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const startedAt = Date.now();
+    const poll = (): void => {
+      if (events.length > 0) {
+        resolve();
+        return;
+      }
+
+      if (Date.now() - startedAt > 1_000) {
+        reject(new Error("Timed out waiting for stream event."));
+        return;
+      }
+
+      setTimeout(poll, 0);
+    };
+
+    poll();
+  });
+}
+
+function makePiSessionsHarness(input?: {availableModels?: unknown[]; prompt?: (message: string) => Promise<void>; sessions?: PiSessionInfo[]; sessionName?: string}) {
+  const abort = vi.fn(async () => undefined);
+  const appendSessionInfo = vi.fn();
   const messages: unknown[] = [];
   const dispose = vi.fn();
   const setModel = vi.fn();
@@ -42,18 +65,26 @@ function makePiSessionsHarness(input?: {availableModels?: unknown[]; sessions?: 
   const providerSdk = {
     authStorage: {},
     modelRegistry: {
-      getAvailable: vi.fn(async () => input?.availableModels ?? [selectedModel]),
+      getAvailable: vi.fn(() => input?.availableModels ?? [selectedModel]),
     },
+  };
+
+  const sessionManager = {
+    appendSessionInfo,
+    getSessionName: vi.fn(() => input?.sessionName ?? sessionInfo.name),
   };
 
   const sessionSdk = {
     createAgentSession: vi.fn(async () => ({
       session: {
+        abort,
         dispose,
         get messages() {
           return messages;
         },
         prompt: async (message: string) => {
+          if (input?.prompt) return input.prompt(message);
+
           const userMessage = {content: [{text: message, type: "text"}], id: "user-1", role: "user", timestamp: 1};
           const assistantMessage: {content: Array<Record<string, string>>; id: string; model: string; role: string; timestamp: number} = {
             content: [{thinking: "Checking the workspace", type: "thinking"}],
@@ -83,7 +114,7 @@ function makePiSessionsHarness(input?: {availableModels?: unknown[]; sessions?: 
       },
     })),
     listSessions: vi.fn(async () => input?.sessions ?? [sessionInfo]),
-    openSessionManager: vi.fn(() => ({})),
+    openSessionManager: vi.fn(() => sessionManager),
   };
 
   const sessionsLive = PiSessionsLive.pipe(
@@ -96,7 +127,7 @@ function makePiSessionsHarness(input?: {availableModels?: unknown[]; sessions?: 
       return yield* Effect.promise(() => collectEvents(sessions.sendMessage(messageInput)));
     }).pipe(Effect.provide(sessionsLive));
 
-  return {dispose, sendMessage, sessionSdk, setModel, setThinkingLevel, unsubscribe};
+  return {abort, appendSessionInfo, dispose, sendMessage, sessionSdk, sessionsLive, setModel, setThinkingLevel, unsubscribe};
 }
 
 describe("PiSessionsLive", () => {
@@ -162,5 +193,37 @@ describe("PiSessionsLive", () => {
 
     expect(events).toEqual([{error: "Session not found.", type: "error"}]);
     expect(harness.sessionSdk.createAgentSession).not.toHaveBeenCalled();
+  });
+
+  it("aborts and disposes the active session when stream consumption is interrupted", async () => {
+    let resolvePromptStarted: (() => void) | undefined;
+    const promptStarted = new Promise<void>((resolve) => {
+      resolvePromptStarted = resolve;
+    });
+    const promptBlocker = new Promise<void>(() => undefined);
+    const harness = makePiSessionsHarness({
+      prompt: async () => {
+        resolvePromptStarted?.();
+        await promptBlocker;
+      },
+    });
+    const events: AgentSessionStreamEvent[] = [];
+
+    const program = Effect.gen(function* () {
+      const sessions = yield* SessionsService;
+      yield* Stream.runForEach(sessions.sendMessage({message: "Fix it", model: {id: "claude-sonnet", providerId: "anthropic"}, sessionId: "session-1"}), (event) =>
+        Effect.sync(() => events.push(event))
+      );
+    }).pipe(Effect.provide(harness.sessionsLive));
+
+    const fiber = Effect.runFork(program);
+    await promptStarted;
+    await waitForEvent(events);
+    await Effect.runPromise(Fiber.interrupt(fiber).pipe(Effect.ignore));
+
+    expect(events[0]).toMatchObject({type: "ready"});
+    expect(harness.abort).toHaveBeenCalledOnce();
+    expect(harness.unsubscribe).toHaveBeenCalledOnce();
+    expect(harness.dispose).toHaveBeenCalledOnce();
   });
 });

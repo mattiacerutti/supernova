@@ -10,6 +10,7 @@ import {useArchiveProjectSession} from "@/features/projects/hooks/api/use-archiv
 import {useListProjectSessions} from "@/features/projects/hooks/api/use-list-project-sessions";
 import {useRenameProject} from "@/features/projects/hooks/use-rename-project";
 import {useProjectsStore} from "@/features/projects/stores/projects-store";
+import {useSessionStreamStore} from "@/features/sessions/stores/session-stream-store";
 import {formatUpdatedAt} from "@/features/projects/utils/format-updated-at";
 import {cn} from "@/lib/cn";
 
@@ -34,6 +35,7 @@ export default function ProjectListItem(props: IProjectListItemProps) {
   const removeProject = useProjectsStore((state) => state.removeProject);
   const toggleSessionPinned = useProjectsStore((state) => state.toggleSessionPinned);
   const toggleProjectPinned = useProjectsStore((state) => state.toggleProjectPinned);
+  const sessionStreams = useSessionStreamStore((state) => state.streams);
   const archiveProjectSessionMutation = useArchiveProjectSession();
   const {
     draftName,
@@ -97,6 +99,11 @@ export default function ProjectListItem(props: IProjectListItemProps) {
 
   const handleOpenSession = (sessionId: string): void => {
     void navigate({params: {sessionId}, to: "/session/$sessionId"});
+  };
+
+  const handleNewSession = (event: MouseEvent<HTMLButtonElement>): void => {
+    event.stopPropagation();
+    void navigate({search: {projectId: project.id}, to: "/session/new"});
   };
 
   const handleSessionMouseLeave = (sessionId: string): void => {
@@ -174,8 +181,8 @@ export default function ProjectListItem(props: IProjectListItemProps) {
               </MenuItem>
             </Menu>
           </div>
-          <IconButton className="size-7" label={`New session in ${project.name}`}>
-            <Icon name="edit" size="xs" />
+          <IconButton className="size-7" label={`New session in ${project.name}`} onClick={handleNewSession}>
+            <Icon name="new-session" size="xs" />
           </IconButton>
         </div>
       </Button>
@@ -196,6 +203,8 @@ export default function ProjectListItem(props: IProjectListItemProps) {
             <ul className="space-y-0.5">
               {visibleSessions.map((session) => {
                 const confirmingArchive = confirmingArchiveSessionId === session.id;
+                const sessionStream = sessionStreams[session.id];
+                const sessionStreaming = sessionStream?.status === "streaming" || sessionStream?.status === "stopping";
 
                 return (
                   <li key={session.id} onMouseLeave={() => handleSessionMouseLeave(session.id)}>
@@ -217,8 +226,12 @@ export default function ProjectListItem(props: IProjectListItemProps) {
                       </IconButton>
                       <span className="min-w-0 flex-1 truncate text-sm">{session.title}</span>
                       <span className="grid w-12 shrink-0 place-items-center justify-items-end">
-                        <span className="col-start-1 row-start-1 w-full justify-self-end pr-1.5 text-right text-xs text-neutral-600 group-hover/session:invisible">
-                          {session.updatedAt}
+                        <span className="col-start-1 row-start-1 w-full justify-self-end pr-1.5 text-right text-xs text-neutral-400 group-hover/session:invisible">
+                          {sessionStreaming ? (
+                            <span className="inline-block size-2 animate-spin rounded-full border border-neutral-600 border-t-neutral-300" aria-label="Session streaming" />
+                          ) : (
+                            session.updatedAt
+                          )}
                         </span>
                         <IconButton
                           className={cn(

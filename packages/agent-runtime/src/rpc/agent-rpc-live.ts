@@ -15,6 +15,7 @@ export const AgentRpcLive = AgentRpcGroup.toLayer(
     return {
       archiveProjectSession: ({projectPath, sessionId}) => projects.archiveSession(projectPath, sessionId),
       cancelProviderLogin: ({loginSessionId}) => providers.cancelLogin(loginSessionId),
+      createSession: ({projectPath}) => sessions.create(projectPath),
       getProviderLoginSession: ({loginSessionId}) => providers.getLoginSession(loginSessionId),
       getSession: ({sessionId}) => sessions.get(sessionId),
       listFolderSuggestions: ({query}) => folders.listSuggestions(query),

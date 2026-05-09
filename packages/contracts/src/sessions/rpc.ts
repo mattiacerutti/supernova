@@ -17,6 +17,14 @@ export const AgentSessionGetRpc = Rpc.make("getSession", {
   success: AgentSessionDetails,
 });
 
+export const AgentSessionCreateRpc = Rpc.make("createSession", {
+  error: AgentSessionLoadError,
+  payload: Schema.Struct({
+    projectPath: Schema.String,
+  }),
+  success: AgentSessionDetails,
+});
+
 export const AgentSessionModelsListRpc = Rpc.make("listSessionModels", {
   error: AgentSessionModelsListError,
   payload: Schema.Void,
@@ -33,4 +41,4 @@ export const AgentSessionMessageSendRpc = Rpc.make("sendSessionMessage", {
   success: AgentSessionStreamEvent,
 });
 
-export const AgentSessionRpcs = [AgentSessionGetRpc, AgentSessionModelsListRpc, AgentSessionMessageSendRpc] as const;
+export const AgentSessionRpcs = [AgentSessionGetRpc, AgentSessionCreateRpc, AgentSessionModelsListRpc, AgentSessionMessageSendRpc] as const;
