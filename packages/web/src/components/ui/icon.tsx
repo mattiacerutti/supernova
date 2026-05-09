@@ -31,6 +31,8 @@ export type IconName =
   | "server"
   | "settings"
   | "shield"
+  | "star"
+  | "star-filled"
   | "sun"
   | "trash"
   | "user"
@@ -71,6 +73,8 @@ const icons: Record<IconName, string> = {
   server: "lucide:server",
   settings: "lucide:settings",
   shield: "lucide:shield",
+  star: "lucide:star",
+  "star-filled": "iconoir:star-solid",
   sun: "lucide:sun",
   trash: "lucide:trash-2",
   user: "lucide:user",

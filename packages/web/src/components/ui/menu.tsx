@@ -20,6 +20,7 @@ interface IMenuProps {
 
 interface IMenuItemProps extends ComponentProps<typeof BaseMenu.Item> {
   icon?: ReactNode;
+  trailing?: ReactNode;
 }
 
 export default function Menu(props: IMenuProps) {
@@ -67,7 +68,7 @@ export default function Menu(props: IMenuProps) {
 }
 
 export function MenuItem(props: IMenuItemProps) {
-  const {children, className, icon, onClick, ...itemProps} = props;
+  const {children, className, icon, onClick, trailing, ...itemProps} = props;
 
   const handleClick: NonNullable<ComponentProps<typeof BaseMenu.Item>["onClick"]> = (event) => {
     event.stopPropagation();
@@ -85,6 +86,7 @@ export function MenuItem(props: IMenuItemProps) {
     >
       {icon && <span className="flex h-5 w-3 shrink-0 items-center justify-center text-neutral-300">{icon}</span>}
       <span className="min-w-0 flex-1 truncate leading-5">{children}</span>
+      {trailing && <span className="ml-auto flex h-5 shrink-0 items-center justify-center text-neutral-300">{trailing}</span>}
     </BaseMenu.Item>
   );
 }

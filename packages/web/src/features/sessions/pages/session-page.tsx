@@ -5,6 +5,7 @@ import {useSession} from "@/features/sessions/hooks/api/use-session";
 import {useSessionModels} from "@/features/sessions/hooks/api/use-session-models";
 import {useSessionMessageStream} from "@/features/sessions/hooks/use-session-message-stream";
 import {modelKey, resolveThinkingLevel, selectionFromModel, selectionKey} from "@/features/sessions/lib/model-selection";
+import {useModelPickerStore} from "@/features/sessions/stores/model-picker-store";
 import {useSessionModelSelectionStore} from "@/features/sessions/stores/session-model-selection-store";
 
 interface ISessionPageProps {
@@ -52,6 +53,7 @@ function SessionConversation(props: ISessionConversationProps) {
 
   const storedSessionModel = useSessionModelSelectionStore((state) => state.selections[session.id]);
   const setSessionModelSelection = useSessionModelSelectionStore((state) => state.setSelection);
+  const recordRecentModel = useModelPickerStore((state) => state.recordRecentModel);
 
   /* 
   TODO: Refactor this logic, it's a bit convoluted. Priority right now is: session local stored model > session provider stored model > first available model.
@@ -76,6 +78,7 @@ function SessionConversation(props: ISessionConversationProps) {
     if (!nextModel) return;
 
     setSessionModelSelection(session.id, selectionFromModel(nextModel, resolveThinkingLevel(nextModel, selectedModelReference?.thinkingLevel)));
+    recordRecentModel(value);
   };
 
   const handleThinkingLevelChange = (value: string): void => {

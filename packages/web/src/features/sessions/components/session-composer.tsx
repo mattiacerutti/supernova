@@ -2,6 +2,9 @@ import type {IAgentModelDetails} from "@pi-desktop/contracts/sessions";
 import type {KeyboardEvent} from "react";
 import {useState} from "react";
 import Icon from "@/components/ui/icon";
+import IconButton from "@/components/ui/icon-button";
+import ModelPicker from "@/features/sessions/components/model-picker";
+import ThinkingLevelPicker from "@/features/sessions/components/thinking-level-picker";
 import {modelKey} from "@/features/sessions/lib/model-selection";
 
 interface ISessionComposerProps {
@@ -51,61 +54,43 @@ export default function SessionComposer(props: ISessionComposerProps) {
         />
 
         <div className="mt-2 flex items-center justify-between gap-2">
-          <button
-            aria-label="Attach files"
+          <IconButton
+            label="Attach files"
             className="grid size-8 place-items-center rounded-full text-neutral-400 transition hover:bg-white/6 hover:text-neutral-100"
-            type="button"
+            size="none"
+            variant="ghost"
           >
             <Icon name="plus" size="sm" />
-          </button>
+          </IconButton>
 
           <div className="flex min-w-0 items-center gap-2">
-            <div className="relative flex min-w-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs transition hover:bg-white/5">
-              <span className="truncate text-neutral-100">{selectedModelName}</span>
-              <Icon className="shrink-0 text-neutral-500" name="chevron-down" size="xs" />
-              <select
-                className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-default"
-                disabled={disabled || modelsLoading || models.length === 0}
-                onChange={(event) => onModelChange(event.target.value)}
-                value={selectedModelKey}
-              >
-                {modelsLoading && <option value="">Loading models</option>}
-                {!modelsLoading && models.length === 0 && <option value="">No model</option>}
-                {models.map((model) => (
-                  <option key={modelKey(model.providerId, model.id)} value={modelKey(model.providerId, model.id)}>
-                    {model.displayName}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <ModelPicker
+              disabled={disabled}
+              models={models}
+              modelsLoading={modelsLoading}
+              onModelChange={onModelChange}
+              selectedModelKey={selectedModelKey}
+              selectedModelName={selectedModelName}
+            />
 
-            <div className="relative flex min-w-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs transition hover:bg-white/5">
-              <span className="truncate text-neutral-500">{selectedThinkingLabel}</span>
-              <Icon className="shrink-0 text-neutral-500" name="chevron-down" size="xs" />
-              <select
-                className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-default"
-                disabled={disabled || thinkingLevels.length === 0}
-                onChange={(event) => onThinkingLevelChange(event.target.value)}
-                value={selectedThinkingLevel ?? ""}
-              >
-                {thinkingLevels.length === 0 && <option value="">No reasoning</option>}
-                {thinkingLevels.map((level) => (
-                  <option key={level.value} value={level.value}>
-                    {level.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <ThinkingLevelPicker
+              disabled={disabled}
+              onThinkingLevelChange={onThinkingLevelChange}
+              selectedThinkingLabel={selectedThinkingLabel}
+              selectedThinkingLevel={selectedThinkingLevel}
+              thinkingLevels={thinkingLevels}
+            />
 
-            <button
-              aria-label="Send message"
+            <IconButton
+              label="Send message"
               className="grid size-9 place-items-center rounded-full bg-neutral-300 text-neutral-950 transition hover:bg-white disabled:cursor-default disabled:bg-white/10 disabled:text-neutral-500"
               disabled={!canSend}
               onClick={handleSubmit}
-              type="button"
+              size="none"
+              variant="bare"
             >
               <Icon name="send" size="sm" />
-            </button>
+            </IconButton>
           </div>
         </div>
       </div>
