@@ -60,7 +60,7 @@ export default function ModelPicker(props: IModelPickerProps) {
       trigger={(triggerProps) => (
         <Button
           {...triggerProps}
-          className="flex min-w-0 items-center gap-1.5  px-2.5 py-1 text-xs  disabled:cursor-default disabled:opacity-50"
+          className="flex min-w-0 items-center gap-1.5  px-2.5 py-1 text-xs"
           disabled={disabled || modelsLoading || models.length === 0}
           type="button"
           variant="primary"

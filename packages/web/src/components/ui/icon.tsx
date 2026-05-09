@@ -69,7 +69,7 @@ const icons: Record<IconName, string> = {
   plus: "lucide:plus",
   "rectangle-horizontal": "lucide:rectangle-horizontal",
   search: "lucide:search",
-  send: "lucide:chevrons-up",
+  send: "stash:arrow-up-solid",
   server: "lucide:server",
   settings: "lucide:settings",
   shield: "lucide:shield",

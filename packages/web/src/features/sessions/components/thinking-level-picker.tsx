@@ -21,9 +21,10 @@ export default function ThinkingLevelPicker(props: IThinkingLevelPickerProps) {
       trigger={(triggerProps) => (
         <Button
           {...triggerProps}
-          className="flex min-w-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs text-neutral-500 transition hover:bg-white/5 disabled:cursor-default disabled:opacity-50"
+          className="flex min-w-0 items-center gap-1.5  px-2.5 py-1 text-xs"
           disabled={disabled || thinkingLevels.length === 0}
           type="button"
+          variant="primary"
         >
           <span className="truncate">{selectedThinkingLabel}</span>
           <Icon className="shrink-0 text-neutral-500" name="chevron-down" size="xs" />

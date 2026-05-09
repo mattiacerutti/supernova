@@ -42,9 +42,9 @@ export default function SessionComposer(props: ISessionComposerProps) {
 
   return (
     <div className="px-4 pb-4 md:px-6">
-      <div className="mx-auto max-w-3xl rounded-2xl bg-[#2b2b2b] p-3 ring-1 ring-white/6">
+      <div className="mx-auto max-w-3xl rounded-3xl bg-[#2b2b2b] p-3 ring-1 ring-white/6 shadow-md">
         <textarea
-          className="min-h-10 w-full resize-none bg-transparent px-1 text-sm text-neutral-100 outline-none placeholder:text-neutral-500"
+          className="min-h-10 w-full resize-none bg-transparent p-1 text-sm text-neutral-100 outline-none placeholder:text-neutral-500"
           disabled={disabled}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={handleKeyDown}
@@ -53,7 +53,7 @@ export default function SessionComposer(props: ISessionComposerProps) {
           value={draft}
         />
 
-        <div className="mt-2 flex items-center justify-between gap-2">
+        <div className="flex items-center justify-between gap-2">
           <IconButton
             label="Attach files"
             className="grid size-8 place-items-center rounded-full text-neutral-400 transition hover:bg-white/6 hover:text-neutral-100"
@@ -63,23 +63,25 @@ export default function SessionComposer(props: ISessionComposerProps) {
             <Icon name="plus" size="sm" />
           </IconButton>
 
-          <div className="flex min-w-0 items-center gap-2">
-            <ModelPicker
-              disabled={disabled}
-              models={models}
-              modelsLoading={modelsLoading}
-              onModelChange={onModelChange}
-              selectedModelKey={selectedModelKey}
-              selectedModelName={selectedModelName}
-            />
+          <div className="flex min-w-0 items-center gap-4">
+            <div className="flex gap-2">
+              <ModelPicker
+                disabled={disabled}
+                models={models}
+                modelsLoading={modelsLoading}
+                onModelChange={onModelChange}
+                selectedModelKey={selectedModelKey}
+                selectedModelName={selectedModelName}
+              />
 
-            <ThinkingLevelPicker
-              disabled={disabled}
-              onThinkingLevelChange={onThinkingLevelChange}
-              selectedThinkingLabel={selectedThinkingLabel}
-              selectedThinkingLevel={selectedThinkingLevel}
-              thinkingLevels={thinkingLevels}
-            />
+              <ThinkingLevelPicker
+                disabled={disabled}
+                onThinkingLevelChange={onThinkingLevelChange}
+                selectedThinkingLabel={selectedThinkingLabel}
+                selectedThinkingLevel={selectedThinkingLevel}
+                thinkingLevels={thinkingLevels}
+              />
+            </div>
 
             <IconButton
               label="Send message"
@@ -89,7 +91,7 @@ export default function SessionComposer(props: ISessionComposerProps) {
               size="none"
               variant="bare"
             >
-              <Icon name="send" size="sm" />
+              <Icon name="send" size="md" />
             </IconButton>
           </div>
         </div>
