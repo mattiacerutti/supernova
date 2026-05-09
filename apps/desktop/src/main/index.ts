@@ -95,7 +95,7 @@ function windowChromeOptions(): Pick<
   return {
     backgroundColor: "#00000000",
     titleBarStyle: "hiddenInset",
-    trafficLightPosition: {x: 24, y: 25},
+    trafficLightPosition: {x: 20, y: 17},
     transparent: true,
     vibrancy: "fullscreen-ui",
     visualEffectState: "active",

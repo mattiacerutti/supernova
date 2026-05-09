@@ -49,9 +49,9 @@ export default function ResizableSidebarLayout(props: IResizableSidebarLayoutPro
   const sidebarStyle = {"--sidebar-width": `${sidebarWidth}px`} as CSSProperties;
 
   return (
-    <main className={cn("h-svh overflow-hidden text-neutral-100", integratedTitleBar && "desktop-window")}>
+    <main className={cn("h-svh overflow-hidden text-neutral-200", integratedTitleBar && "desktop-window")}>
       <section className={cn("relative flex h-full min-h-0 overflow-hidden", integratedTitleBar ? "desktop-window-frame bg-[#282829]/80" : "bg-[#282829]")}>
-        <div className={cn("desktop-titlebar absolute inset-x-0 top-0 z-10 flex h-16 items-center gap-1 pr-3", integratedTitleBar ? "pl-25" : "pl-3")}>{titlebarActions}</div>
+        <div className={cn("desktop-titlebar absolute inset-x-0 top-0 z-10 flex h-12 items-center gap-1 pr-3", integratedTitleBar ? "pl-23" : "pl-3")}>{titlebarActions}</div>
 
         <div
           className={cn("relative shrink-0 overflow-hidden", !resizing && "transition-[width] duration-250 ease-in-out", sidebarVisible ? "w-full md:w-(--sidebar-width)" : "w-0")}
@@ -71,7 +71,7 @@ export default function ResizableSidebarLayout(props: IResizableSidebarLayoutPro
         </div>
         <section
           className={cn(
-            "app-panel flex h-full min-h-0 flex-1 flex-col border-l-[0.1px] rounded-xl bg-[#181818] px-4 py-3",
+            "app-panel flex h-full min-h-0 flex-1 flex-col border-l-[0.1px] rounded-xl bg-[#181818] px-4 pb-3 pt-1",
             resizeHandleActive || resizing ? "border-white/30" : "border-white/22"
           )}
           data-sidebar-visible={sidebarVisible}

@@ -75,7 +75,7 @@ export default function ModelPicker(props: IModelPickerProps) {
         <div className="flex items-center gap-2 rounded-xl bg-white/3 px-3 py-2 text-neutral-500 ring-1 ring-white/5 focus-within:text-neutral-300 focus-within:ring-white/10">
           <Icon name="search" size="sm" />
           <input
-            className="min-w-0 flex-1 bg-transparent text-sm text-neutral-100 outline-none placeholder:text-neutral-600"
+            className="min-w-0 flex-1 bg-transparent text-sm text-neutral-200 outline-none placeholder:text-neutral-600"
             onChange={(event) => setSearch(event.target.value)}
             onKeyDown={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
@@ -101,7 +101,10 @@ export default function ModelPicker(props: IModelPickerProps) {
                     const showProvider = section.title === "Favorites" || section.title === "Recents";
 
                     return (
-                      <div className="group flex cursor-pointer items-center rounded-xl transition-colors hover:bg-white/6" key={`${section.title}-${value}`}>
+                      <div
+                        className="group flex cursor-pointer items-center rounded-xl corner-superellipse/1.3 transition-colors hover:bg-white/6"
+                        key={`${section.title}-${value}`}
+                      >
                         <Button className="min-w-0 flex-1 px-2 py-2 text-left" onClick={() => handleModelSelect(value)} variant="bare">
                           <div className="truncate text-sm font-medium text-neutral-200">{model.name}</div>
                           {showProvider && <div className="truncate text-xs text-neutral-600">{model.providerName}</div>}
@@ -109,8 +112,8 @@ export default function ModelPicker(props: IModelPickerProps) {
                         <IconButton
                           label={favorite ? "Remove from favorites" : "Add to favorites"}
                           className={cn(
-                            "mr-2 grid size-7 place-items-center rounded-lg text-neutral-500 opacity-0 transition hover:bg-white/8 hover:text-neutral-100 group-hover:opacity-100",
-                            favorite && "text-neutral-100 opacity-100"
+                            "mr-2 grid size-7 place-items-center rounded-xl corner-superellipse/1.3 text-neutral-500 opacity-0 transition hover:bg-white/8 hover:text-neutral-100 group-hover:opacity-100",
+                            favorite && "text-neutral-200 opacity-100"
                           )}
                           onClick={(event) => handleFavoriteClick(event, value)}
                           onPointerDown={(event) => {

@@ -54,7 +54,7 @@ export default function Menu(props: IMenuProps) {
         <BaseMenu.Positioner align={align} alignOffset={alignOffset} className="z-50 outline-none" side={side} sideOffset={sideOffset}>
           <BaseMenu.Popup
             className={cn(
-              "min-w-45 rounded-xl border border-white/10 bg-neutral-800/95 p-1 text-neutral-100 shadow-2xl shadow-black/35 backdrop-blur-3xl outline-none",
+              "min-w-45 rounded-xl border border-white/10 bg-neutral-800/95 p-1 text-neutral-200 shadow-2xl shadow-black/35 backdrop-blur-3xl outline-none",
               "origin-(--transform-origin) translate-y-0 scale-100 opacity-100 transition-[opacity,scale,translate] duration-200 ease-out data-closed:translate-y-1 data-closed:scale-[0.985] data-closed:opacity-0 data-ending-style:translate-y-1 data-ending-style:scale-[0.985] data-ending-style:opacity-0 data-starting-style:translate-y-1 data-starting-style:scale-[0.985] data-starting-style:opacity-0",
               className
             )}
@@ -78,7 +78,7 @@ export function MenuItem(props: IMenuItemProps) {
   return (
     <BaseMenu.Item
       className={cn(
-        "flex cursor-pointer items-center gap-2.5 rounded-[0.6rem] px-2 py-1.5 text-left text-sm leading-5 outline-none transition-colors hover:bg-white/8 data-disabled:cursor-default data-disabled:opacity-45 data-highlighted:bg-white/8",
+        "flex cursor-pointer items-center gap-2.5 rounded-xl corner-superellipse/1.3 px-2 py-1.5 text-left text-sm leading-5 outline-none transition-colors hover:bg-white/8 data-disabled:cursor-default data-disabled:opacity-45 data-highlighted:bg-white/8",
         className
       )}
       onClick={handleClick}

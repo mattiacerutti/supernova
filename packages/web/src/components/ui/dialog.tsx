@@ -33,10 +33,13 @@ export default function Dialog(props: IDialogProps) {
               data-slot="dialog-content"
             >
               <div className="flex shrink-0 items-center justify-between px-5 pb-1 pt-3" data-slot="dialog-header">
-                <BaseDialog.Title className="text-base font-medium text-neutral-100" data-slot="dialog-title">
+                <BaseDialog.Title className="text-base font-medium text-neutral-200" data-slot="dialog-title">
                   {title}
                 </BaseDialog.Title>
-                <BaseDialog.Close aria-label="Close dialog" className="grid size-9 cursor-pointer place-items-center text-neutral-400 hover:text-neutral-100">
+                <BaseDialog.Close
+                  aria-label="Close dialog"
+                  className="grid size-9 cursor-pointer place-items-center rounded-xl corner-superellipse/1.3 text-neutral-400 hover:bg-white/7 hover:text-neutral-100"
+                >
                   <Icon name="x" size="md" />
                 </BaseDialog.Close>
               </div>

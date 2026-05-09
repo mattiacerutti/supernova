@@ -55,7 +55,7 @@ export default function SessionComposer(props: ISessionComposerProps) {
     <div className="px-4 pb-4 md:px-6">
       <div className="mx-auto max-w-3xl rounded-3xl bg-[#2b2b2b] p-3 ring-1 ring-white/6 shadow-md">
         <textarea
-          className="min-h-10 w-full resize-none bg-transparent p-1 text-sm text-neutral-100 outline-none placeholder:text-neutral-500"
+          className="min-h-10 w-full resize-none bg-transparent p-1 text-sm text-neutral-200 outline-none placeholder:text-neutral-500"
           disabled={disabled}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={handleKeyDown}

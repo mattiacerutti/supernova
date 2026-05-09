@@ -116,7 +116,7 @@ export default function ProvidersSettingsPage() {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-6 py-8 md:px-10">
       <div className="mx-auto w-full max-w-3xl">
-        <h1 className="text-3xl font-semibold tracking-tight text-white">Providers</h1>
+        <h1 className="text-3xl font-semibold tracking-tight text-neutral-200">Providers</h1>
         <p className="mt-2 text-sm text-neutral-500">Connect model providers to use them.</p>
 
         {providersQuery.isPending && <p className="mt-8 text-sm text-neutral-500">Loading providers...</p>}

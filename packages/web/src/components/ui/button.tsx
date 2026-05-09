@@ -16,7 +16,8 @@ export interface IButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 const variantClasses: Record<ButtonVariant, string> = {
   bare: "cursor-pointer disabled:cursor-default disabled:opacity-50",
   ghost: "cursor-pointer text-neutral-400 hover:text-neutral-100 disabled:cursor-default disabled:opacity-50 disabled:hover:text-neutral-400 [&_svg]:text-current",
-  primary: "cursor-pointer rounded-lg hover:bg-white/7 hover:text-white disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-current",
+  primary:
+    "cursor-pointer rounded-xl text-neutral-300 corner-superellipse/1.3 hover:bg-white/7 hover:text-white disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-current",
 };
 
 const defaultSizeClasses: Record<ButtonSize, string> = {

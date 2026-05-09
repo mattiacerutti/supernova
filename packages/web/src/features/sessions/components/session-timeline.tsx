@@ -2,6 +2,7 @@ import {LegendList, type LegendListRef} from "@legendapp/list/react";
 import type {IAgentSessionTurnEvent, IAgentSessionUserMessage} from "@pi-desktop/contracts/sessions";
 import {memo, useCallback, useState} from "react";
 import {flushSync} from "react-dom";
+import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import AssistantMessage from "@/features/sessions/components/messages/assistant-message";
 import StreamingAssistantMessage from "@/features/sessions/components/messages/streaming-assistant-message";
@@ -23,7 +24,7 @@ const UserMessage = memo(function UserMessage(props: {message: IAgentSessionUser
 
   return (
     <article className="flex justify-end">
-      <div className="max-w-lg rounded-xl bg-neutral-800 px-3 py-1.5 text-sm leading-relaxed text-neutral-100">
+      <div className="max-w-lg rounded-2xl corner-superellipse/1.3 bg-neutral-800 px-3.5 py-2 text-sm leading-relaxed text-neutral-200">
         <UserMessageContent>{message.content}</UserMessageContent>
       </div>
     </article>
@@ -81,7 +82,7 @@ const WorkBlock = memo(function WorkBlock(props: {item: Extract<SessionRenderIte
 
   if (item.live) {
     return (
-      <section className="space-y-5">
+      <section className="space-y-3">
         {item.events.map((event) => (
           <WorkEvent event={event} key={event.id} live={true} />
         ))}
@@ -90,18 +91,18 @@ const WorkBlock = memo(function WorkBlock(props: {item: Extract<SessionRenderIte
   }
 
   return (
-    <section className="space-y-5">
-      <button
-        className="group flex cursor-pointer select-none items-center gap-1.5 text-sm text-neutral-500 transition hover:text-neutral-300"
+    <section className="space-y-3">
+      <Button
+        className="group inline-flex w-fit select-none gap-1.5 px-0 py-0 text-sm text-neutral-500 hover:text-neutral-30 items-center 0"
         onClick={handleToggle}
-        type="button"
+        variant="ghost"
       >
         <span>Worked for {formatDuration(item.durationMs)}</span>
-        <Icon className={cn("transition-transform duration-160 ease-out", showExpanded && "rotate-180")} name="chevron-down" size="xs" />
-      </button>
+        <Icon className={cn("transition-transform duration-160 ease-out", showExpanded && "rotate-90")} name="chevron-right" size="xs" />
+      </Button>
       <div className="h-px bg-white/7" />
       <div
-        className="grid grid-rows-[0fr] opacity-0 will-change-[grid-template-rows,opacity] transition-[grid-template-rows,opacity] duration-120 ease-out data-[expanded=true]:grid-rows-[1fr] data-[expanded=true]:opacity-100"
+        className="grid grid-rows-[0fr] opacity-0 will-change-[grid-template-rows,opacity] transition-[grid-template-rows,opacity] duration-300 ease-in-out data-[expanded=true]:grid-rows-[1fr] data-[expanded=true]:opacity-100"
         data-expanded={showExpanded}
       >
         <div className="space-y-5 overflow-hidden">
@@ -151,7 +152,7 @@ export default function SessionTimeline(props: ISessionTimelineProps) {
 
   const renderItem = useCallback(
     (renderProps: {item: SessionRenderItem}): React.ReactNode => (
-      <div className="mx-auto w-full max-w-3xl px-5 pb-8 md:px-8">
+      <div className={cn("mx-auto w-full max-w-3xl px-5 md:px-8", renderProps.item.type === "work" ? "pb-4" : "pb-8")}>
         <SessionTimelineRow item={renderProps.item} live={renderProps.item.type === "assistant" && renderProps.item.live} />
       </div>
     ),
@@ -159,7 +160,7 @@ export default function SessionTimeline(props: ISessionTimelineProps) {
   );
 
   return (
-    <div className="mt-10 min-h-0 flex-1 select-text">
+    <div className="min-h-0 flex-1 select-text">
       {items.length === 0 && !isStreaming && !streamError && (
         <div className="flex min-h-full items-center justify-center px-5 pb-8 pt-6 md:px-8">
           <p className="text-center text-sm text-neutral-600">No messages yet.</p>
@@ -175,7 +176,14 @@ export default function SessionTimeline(props: ISessionTimelineProps) {
           keyExtractor={getSessionRenderItemKey}
           ListFooterComponent={
             <div className="mx-auto w-full max-w-3xl px-5 pb-8 md:px-8">
-              {isStreaming && <div className="size-2 animate-pulse rounded-full bg-neutral-500" />}
+              {isStreaming && (
+                <div className="relative w-fit text-sm text-neutral-600">
+                  <span>Thinking</span>
+                  <span aria-hidden="true" className="thinking-shimmer absolute inset-0 text-neutral-200">
+                    Thinking
+                  </span>
+                </div>
+              )}
               {streamError && <p className="rounded-lg border border-red-500/15 bg-red-500/10 px-3 py-2 text-xs text-red-300">{streamError}</p>}
             </div>
           }

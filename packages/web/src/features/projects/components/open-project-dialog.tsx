@@ -114,7 +114,7 @@ export default function OpenProjectDialog(props: IOpenProjectDialogProps) {
           <Icon className="text-neutral-500" name="search" size="md" />
           <input
             autoFocus
-            className="min-w-0 flex-1 bg-transparent text-[15px] text-neutral-100 outline-none placeholder:text-neutral-600"
+            className="min-w-0 flex-1 bg-transparent text-[15px] text-neutral-200 outline-none placeholder:text-neutral-600"
             onChange={(event) => handleProjectPathChange(event.target.value)}
             onKeyDown={handleInputKeyDown}
             placeholder="Search folders"
@@ -140,16 +140,16 @@ export default function OpenProjectDialog(props: IOpenProjectDialogProps) {
 
                 return (
                   <div
-                    className={cn("group flex w-full items-center gap-1 rounded-lg hover:bg-white/6", highlighted && "bg-white/6")}
+                    className={cn("group flex w-full items-center gap-1 rounded-xl corner-superellipse/1.3 hover:bg-white/6", highlighted && "bg-white/6")}
                     key={project.id}
                     ref={(element) => {
                       suggestionRefs.current[index] = element;
                     }}
                   >
-                    <button
+                    <Button
                       className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 px-3 py-2 text-left"
                       onClick={() => handleSuggestionAutocomplete(project.path)}
-                      type="button"
+                      variant="bare"
                     >
                       <Icon className="shrink-0 text-neutral-500" name="folder" size="sm" />
                       <span className="min-w-0 flex-1 truncate text-[15px]">
@@ -157,7 +157,7 @@ export default function OpenProjectDialog(props: IOpenProjectDialogProps) {
                         <span className="text-neutral-200">{name}</span>
                         <span className="text-neutral-500">{suffix}</span>
                       </span>
-                    </button>
+                    </Button>
                     <Button className="mr-1 px-2 py-1 text-neutral-500 hover:text-neutral-100" onClick={() => handleSuggestionOpen(project.path)} variant="ghost">
                       ↵
                     </Button>
@@ -175,16 +175,16 @@ export default function OpenProjectDialog(props: IOpenProjectDialogProps) {
 
             return (
               <div
-                className={cn("group flex w-full items-center gap-1 rounded-lg hover:bg-white/6", highlighted && "bg-white/6")}
+                className={cn("group flex w-full items-center gap-1 rounded-xl corner-superellipse/1.3 hover:bg-white/6", highlighted && "bg-white/6")}
                 key={suggestion.path}
                 ref={(element) => {
                   suggestionRefs.current[recentProjects.length + index] = element;
                 }}
               >
-                <button
+                <Button
                   className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 px-3 py-2 text-left"
                   onClick={() => handleSuggestionAutocomplete(suggestion.path)}
-                  type="button"
+                  variant="bare"
                 >
                   <Icon className="shrink-0 text-neutral-500" name="folder" size="sm" />
                   <span className="min-w-0 flex-1 truncate text-[15px]">
@@ -192,7 +192,7 @@ export default function OpenProjectDialog(props: IOpenProjectDialogProps) {
                     <span className="text-neutral-200">{name}</span>
                     <span className="text-neutral-500">{suffix}</span>
                   </span>
-                </button>
+                </Button>
                 <Button className="mr-1 px-2 py-1 text-neutral-500 hover:text-neutral-100" onClick={() => handleSuggestionOpen(suggestion.path)} variant="ghost">
                   ↵
                 </Button>

@@ -90,8 +90,8 @@ function SessionConversation(props: ISessionConversationProps) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <header className="flex shrink-0 items-center justify-between pt-2.5">
-        <h1 className="min-w-0 truncate text-sm font-medium text-neutral-100">{session.title}</h1>
+      <header className="-mx-4 flex shrink-0 items-center justify-between border-b border-neutral-800 px-4 pb-3 pt-2.5">
+        <h1 className="sticky left-48 min-w-0 truncate text-sm font-medium text-neutral-200">{session.title}</h1>
       </header>
 
       <SessionTimeline isStreaming={stream.isStreaming} items={stream.renderItems} listRef={stream.listRef} streamError={stream.streamError} />

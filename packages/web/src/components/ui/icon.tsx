@@ -9,6 +9,7 @@ export type IconName =
   | "arrow-right"
   | "check"
   | "chevron-down"
+  | "chevron-right"
   | "copy"
   | "edit"
   | "filter"
@@ -52,6 +53,7 @@ const icons: Record<IconName, string> = {
   "arrow-right": "lucide:arrow-right",
   check: "lucide:check",
   "chevron-down": "lucide:chevron-down",
+  "chevron-right": "lucide:chevron-right",
   copy: "lucide:copy",
   edit: "cuida:edit-outline",
   filter: "lucide:list-filter",

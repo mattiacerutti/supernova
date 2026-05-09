@@ -1,8 +1,10 @@
 @import "tailwindcss";
+@plugin "@toolwind/corner-shape";
 
 @theme {
-  --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", Inter, ui-sans-serif, system-ui, sans-serif;
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --text-sm: 0.85rem;
 }
 
 @layer base {
@@ -12,8 +14,6 @@
     color: #d4d4d8;
     font-synthesis: none;
     text-rendering: optimizeLegibility;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
   }
 
   body {
@@ -103,6 +103,23 @@
     font-family: var(--font-mono);
     font-size: 0.8125rem;
     line-height: 1.5rem;
+  }
+
+  .thinking-shimmer {
+    animation: thinking-shimmer 2s ease-in-out infinite;
+    mask-image: linear-gradient(90deg, transparent 0%, black 42%, black 58%, transparent 100%);
+    mask-repeat: no-repeat;
+    mask-size: 26% 100%;
+  }
+}
+
+@keyframes thinking-shimmer {
+  0% {
+    mask-position: -130% 0;
+  }
+
+  100% {
+    mask-position: 130% 0;
   }
 }
 

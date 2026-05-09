@@ -132,12 +132,12 @@ export default function ProjectListItem(props: IProjectListItemProps) {
     <li>
       <Button
         as="div"
-        className={cn("group flex w-full justify-between items-center gap-2 pl-2 pr-1 py-0.5 text-neutral-400 hover:text-neutral-400", actionsMenuOpen && "bg-white/7")}
+        className={cn("group flex w-full justify-between items-center gap-2 pl-2 pr-1 py-0.5 text-neutral-400 hover:text-neutral-300", actionsMenuOpen && "bg-white/7")}
         onClick={handleToggle}
         variant="primary"
       >
         <div className="flex min-w-0 flex-1 flex-row gap-2 items-center">
-          <Icon className="text-neutral-400" name={expanded ? "folder-open" : "folder"} size="xs" />
+          <Icon className="text-neutral-400" name={expanded ? "folder-open" : "folder"} size="sm" />
           {renaming && (
             <input
               className="min-w-0 flex-1 truncate bg-transparent text-sm text-neutral-400 outline-none"
@@ -211,14 +211,14 @@ export default function ProjectListItem(props: IProjectListItemProps) {
                     <Button
                       as="div"
                       className={cn(
-                        "group/session flex w-full items-center gap-2 py-1 pl-2 pr-1 text-left text-neutral-100 hover:bg-white/7",
-                        location.pathname === `/session/${session.id}` && "bg-white/8 text-white"
+                        "group/session flex w-full items-center gap-2 py-1.5 pl-2 pr-1 text-left",
+                        location.pathname === `/session/${session.id}` && "bg-white/8 text-neutral-200"
                       )}
                       onClick={() => handleOpenSession(session.id)}
                       variant="primary"
                     >
                       <IconButton
-                        className={cn("size-6", !session.pinned && "invisible group-hover/session:visible")}
+                        className={cn("size-4 shrink-0", !session.pinned && "invisible group-hover/session:visible")}
                         label={session.pinned ? "Unpin session" : "Pin session"}
                         onClick={(event) => handleToggleSessionPinned(event, session.id)}
                       >
@@ -226,7 +226,7 @@ export default function ProjectListItem(props: IProjectListItemProps) {
                       </IconButton>
                       <span className="min-w-0 flex-1 truncate text-sm">{session.title}</span>
                       <span className="grid w-12 shrink-0 place-items-center justify-items-end">
-                        <span className="col-start-1 row-start-1 w-full justify-self-end pr-1.5 text-right text-xs text-neutral-400 group-hover/session:invisible">
+                        <span className="col-start-1 row-start-1 w-full justify-self-end pr-1.5 text-right text-xs text-neutral-500 group-hover/session:invisible">
                           {sessionStreaming ? (
                             <span className="inline-block size-2 animate-spin rounded-full border border-neutral-600 border-t-neutral-300" aria-label="Session streaming" />
                           ) : (
@@ -236,7 +236,9 @@ export default function ProjectListItem(props: IProjectListItemProps) {
                         <IconButton
                           className={cn(
                             "col-start-1 row-start-1 size-5 disabled:cursor-not-allowed disabled:opacity-50",
-                            confirmingArchive ? "rounded-lg bg-red-500/25 text-red-500 hover:bg-red-500/35 hover:text-red-400" : "invisible group-hover/session:visible"
+                            confirmingArchive
+                              ? "rounded-xl corner-superellipse/1.3 bg-red-500/25 text-red-500 hover:bg-red-500/35 hover:text-red-400"
+                              : "invisible group-hover/session:visible"
                           )}
                           disabled={archiveProjectSessionMutation.isPending}
                           label={confirmingArchive ? "Confirm archive session" : "Archive session"}
@@ -253,19 +255,14 @@ export default function ProjectListItem(props: IProjectListItemProps) {
           )}
 
           {canShowMoreSessions && (
-            <Button
-              className="ml-10 inline-flex items-center justify-start gap-2 px-0 py-1 text-xs"
-              disabled={sessionsQuery.isFetching}
-              onClick={handleLoadMoreSessions}
-              variant="ghost"
-            >
+            <Button className="ml-8 inline-flex items-center justify-start gap-2 py-1 text-xs" disabled={sessionsQuery.isFetching} onClick={handleLoadMoreSessions} variant="ghost">
               Show more
               {sessionsQuery.isFetching && <span className="size-2.5 animate-spin rounded-full border border-neutral-600 border-t-neutral-300" aria-hidden="true" />}
             </Button>
           )}
 
           {canShowLessAtEnd && (
-            <Button className="ml-10 justify-start px-0 py-1 text-xs" onClick={handleShowLessSessions} variant="ghost">
+            <Button className="ml-8 justify-start px-0 py-1 text-xs" onClick={handleShowLessSessions} variant="ghost">
               Show less
             </Button>
           )}
