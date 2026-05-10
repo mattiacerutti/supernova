@@ -4,6 +4,7 @@ import type {BrowserWindowConstructorOptions} from "electron";
 import {app, shell, BrowserWindow, ipcMain} from "electron";
 import {join} from "path";
 import {electronApp, optimizer} from "@electron-toolkit/utils";
+import installExtension, {REACT_DEVELOPER_TOOLS} from "electron-devtools-installer";
 
 declare const PI_DESKTOP_IS_DEV: boolean;
 declare const PI_DESKTOP_SERVER_ENTRY: string;
@@ -76,6 +77,16 @@ async function createWindow(): Promise<void> {
   });
 
   mainWindow.loadURL(resolveRendererUrl());
+}
+
+async function installDevToolsExtensions(): Promise<void> {
+  if (!PI_DESKTOP_IS_DEV) return;
+
+  try {
+    await installExtension(REACT_DEVELOPER_TOOLS);
+  } catch (error) {
+    console.warn("Failed to install React DevTools extension.", error);
+  }
 }
 
 function resolveRendererUrl(): string {
@@ -183,7 +194,7 @@ app.whenReady().then(() => {
 
   registerDesktopIpc();
 
-  void createWindow().catch(failStartup);
+  void installDevToolsExtensions().then(createWindow).catch(failStartup);
 
   app.on("activate", function () {
     // On macOS it's common to re-create a window in the app when the

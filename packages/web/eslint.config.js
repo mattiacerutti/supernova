@@ -11,9 +11,12 @@ const tsconfigRootDir = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig([
   globalIgnores(["dist"]),
+
   {
     files: ["**/*.{ts,tsx}"],
-    extends: [js.configs.recommended, tseslint.configs.recommended, reactHooks.configs.flat.recommended, reactRefresh.configs.vite],
+
+    extends: [js.configs.recommended, tseslint.configs.recommended, reactHooks.configs.flat["recommended-latest"], reactRefresh.configs.vite],
+
     languageOptions: {
       globals: globals.browser,
       parserOptions: {
