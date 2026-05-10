@@ -68,7 +68,6 @@ export function sendSessionMessage(input: ISendSessionMessageInput) {
                   message: input.message,
                   model: selectedModel,
                   modelRegistry: piSdk.modelRegistry,
-                  thinkingLevel: input.model.thinkingLevel,
                 }).catch(() => input.message);
 
                 sessionManager.appendSessionInfo(title);

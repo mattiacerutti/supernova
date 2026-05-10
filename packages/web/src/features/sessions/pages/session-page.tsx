@@ -1,13 +1,13 @@
 import type {IAgentSessionDetails} from "@pi-desktop/contracts/sessions";
 import SessionComposer from "@/features/sessions/components/composer/session-composer";
 import SessionTimeline from "@/features/sessions/components/session-timeline";
+import SessionTitleText from "@/features/sessions/components/session-title-text";
 import {useSession} from "@/features/sessions/hooks/api/use-session";
 import {useSessionModels} from "@/features/sessions/hooks/api/use-session-models";
 import {useSessionMessageStream} from "@/features/sessions/hooks/use-session-message-stream";
 import {modelKey, resolveThinkingLevel, selectionFromModel, selectionKey} from "@/features/sessions/lib/model-picker/model-utils";
 import {useModelPickerStore} from "@/features/sessions/stores/model-picker-store";
 import {useSessionModelsStore} from "@/features/sessions/stores/session-models-store";
-import {cn} from "@/lib/cn";
 
 interface ISessionPageProps {
   sessionId: string;
@@ -93,8 +93,8 @@ function SessionConversation(props: ISessionConversationProps) {
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <header className="-mx-4 flex min-w-0 shrink-0 items-center justify-between overflow-hidden border-b border-neutral-800 px-4 pb-3 pt-2.5">
-        <h1 key={session.title} className={cn("min-w-0 max-w-xs truncate text-sm font-medium text-neutral-200", stream.titleRevealKey === session.title && "session-title-reveal")}>
-          {session.title}
+        <h1 className="min-w-0 max-w-xs truncate text-sm font-medium text-neutral-200">
+          <SessionTitleText className="block truncate" title={session.title} />
         </h1>
       </header>
 

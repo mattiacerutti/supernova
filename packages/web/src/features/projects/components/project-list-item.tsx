@@ -11,6 +11,7 @@ import {useListProjectSessions} from "@/features/projects/hooks/api/use-list-pro
 import {useRenameProject} from "@/features/projects/hooks/use-rename-project";
 import {useProjectsStore} from "@/features/projects/stores/projects-store";
 import {useSessionStreamStore} from "@/features/sessions/stores/session-stream-store";
+import SessionTitleText from "@/features/sessions/components/session-title-text";
 import {formatUpdatedAt} from "@/features/projects/utils/format-updated-at";
 import {cn} from "@/lib/cn";
 
@@ -224,9 +225,7 @@ export default function ProjectListItem(props: IProjectListItemProps) {
                       >
                         <Icon name="pin" size="xs" />
                       </IconButton>
-                      <span key={session.title} className={cn("min-w-0 flex-1 truncate text-sm", sessionStream?.titleRevealKey === session.title && "session-title-reveal")}>
-                        {session.title}
-                      </span>
+                      <SessionTitleText className="min-w-0 flex-1 truncate text-sm" title={session.title} />
                       <span className="grid w-12 shrink-0 place-items-center justify-items-end">
                         <span className="col-start-1 row-start-1 w-full justify-self-end pr-1.5 text-right text-xs text-neutral-500 group-hover/session:invisible">
                           {sessionStreaming ? (

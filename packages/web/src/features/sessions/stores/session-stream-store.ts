@@ -22,7 +22,6 @@ export interface ISessionStreamState {
   readonly projectPath: string;
   readonly status: SessionStreamStatus;
   readonly streamId: string;
-  readonly titleRevealKey: string | null;
   readonly turn: IAgentSessionTurn | null;
   readonly turns: readonly IAgentSessionTurn[];
 }
@@ -66,10 +65,8 @@ function createInitialStreamTurn(input: {message: string; model: IAgentModelRefe
   };
 }
 
-function applySessionSummary(input: {projectPath: string; queryClient: QueryClient; sessionId: string; summary: IAgentSessionSummary}): boolean {
+function applySessionSummary(input: {projectPath: string; queryClient: QueryClient; sessionId: string; summary: IAgentSessionSummary}): void {
   const {projectPath, queryClient, sessionId, summary} = input;
-  const previousSession = queryClient.getQueryData<IAgentSessionDetails>(sessionQueryKey(sessionId));
-  const titleChanged = previousSession != null && previousSession.title !== summary.title;
 
   queryClient.setQueryData<IAgentSessionDetails>(sessionQueryKey(sessionId), (session) => (session ? {...session, title: summary.title, updatedAt: summary.updatedAt} : session));
   queryClient.setQueriesData<IAgentProjectSessionsListResult>({queryKey: listProjectSessionsQueryKey(projectPath)}, (result) => {
@@ -82,8 +79,6 @@ function applySessionSummary(input: {projectPath: string; queryClient: QueryClie
 
     return {...result, sessions};
   });
-
-  return titleChanged;
 }
 
 function applyDoneTurns(input: {queryClient: QueryClient; sessionId: string; turns: readonly IAgentSessionTurn[]}): void {
@@ -116,8 +111,8 @@ export const useSessionStreamStore = create<ISessionStreamStoreState>()((set, ge
     }
 
     if (event.type === "turn") {
-      const titleChanged = event.session ? applySessionSummary({projectPath, queryClient, sessionId, summary: event.session}) : false;
-      updateStream(sessionId, streamId, (entry) => ({...entry, titleRevealKey: titleChanged && event.session ? event.session.title : entry.titleRevealKey, turn: event.turn}));
+      if (event.session) applySessionSummary({projectPath, queryClient, sessionId, summary: event.session});
+      updateStream(sessionId, streamId, (entry) => ({...entry, turn: event.turn}));
       return;
     }
 
@@ -143,7 +138,7 @@ export const useSessionStreamStore = create<ISessionStreamStoreState>()((set, ge
       set((state) => ({
         streams: {
           ...state.streams,
-          [sessionId]: {error: null, fiber: null, model, projectPath, status: "streaming", streamId, titleRevealKey: null, turn, turns: sessionTurns},
+          [sessionId]: {error: null, fiber: null, model, projectPath, status: "streaming", streamId, turn, turns: sessionTurns},
         },
       }));
 
