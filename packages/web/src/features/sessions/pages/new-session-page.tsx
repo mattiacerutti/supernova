@@ -4,7 +4,7 @@ import {useState} from "react";
 import SessionComposer from "@/features/sessions/components/session-composer";
 import {useCreateSession} from "@/features/sessions/hooks/api/use-create-session";
 import {useSessionModels} from "@/features/sessions/hooks/api/use-session-models";
-import {modelKey, resolveThinkingLevel, selectionFromModel, selectionKey} from "@/features/sessions/lib/model-selection";
+import {modelKey, resolveThinkingLevel, selectionFromModel} from "@/features/sessions/lib/model-selection";
 import {useModelPickerStore} from "@/features/sessions/stores/model-picker-store";
 import {useSessionModelSelectionStore} from "@/features/sessions/stores/session-model-selection-store";
 import {useSessionStreamStore} from "@/features/sessions/stores/session-stream-store";
@@ -27,7 +27,9 @@ export default function NewSessionPage(props: INewSessionPageProps) {
   const startStream = useSessionStreamStore((state) => state.startStream);
   const setSessionModelSelection = useSessionModelSelectionStore((state) => state.setSelection);
   const recordRecentModel = useModelPickerStore((state) => state.recordRecentModel);
+  const setLastThinkingLevel = useModelPickerStore((state) => state.setLastThinkingLevel);
   const recentModelKeys = useModelPickerStore((state) => state.recentModelKeys);
+  const lastThinkingLevel = useModelPickerStore((state) => state.lastThinkingLevel);
 
   const [selectedModelKey, setSelectedModelKey] = useState("");
   const [selectedThinkingLevel, setSelectedThinkingLevel] = useState<string | undefined>(undefined);
@@ -36,17 +38,22 @@ export default function NewSessionPage(props: INewSessionPageProps) {
     (availableModels[0] ? modelKey(availableModels[0].providerId, availableModels[0].id) : "");
   const resolvedModelKey = selectedModelKey || defaultModelKey;
   const selectedModel = availableModels.find((model) => modelKey(model.providerId, model.id) === resolvedModelKey);
-  const resolvedThinkingLevel = selectedModel ? resolveThinkingLevel(selectedModel, selectedThinkingLevel) : undefined;
-  const resolvedSelectedModelKey = selectionKey(selectedModel ? selectionFromModel(selectedModel, selectedThinkingLevel) : undefined) || resolvedModelKey;
+  const resolvedThinkingLevel = selectedModel ? resolveThinkingLevel(selectedModel, selectedThinkingLevel ?? lastThinkingLevel) : undefined;
 
   const handleModelChange = (value: string): void => {
+    const nextModel = availableModels.find((model) => modelKey(model.providerId, model.id) === value);
+    if (!nextModel) return;
+
+    const currentLevel = selectedThinkingLevel ?? lastThinkingLevel;
+    const nextThinkingLevel = resolveThinkingLevel(nextModel, currentLevel);
     setSelectedModelKey(value);
-    setSelectedThinkingLevel(undefined);
+    setSelectedThinkingLevel(nextThinkingLevel);
     recordRecentModel(value);
   };
 
   const handleThinkingLevelChange = (value: string): void => {
     setSelectedThinkingLevel(value);
+    setLastThinkingLevel(value);
   };
 
   const handleSubmit = (message: string): void => {
@@ -58,6 +65,8 @@ export default function NewSessionPage(props: INewSessionPageProps) {
         onSuccess: (session) => {
           const modelReference = selectionFromModel(selectedModel, resolvedThinkingLevel);
           setSessionModelSelection(session.id, modelReference);
+          recordRecentModel(resolvedModelKey);
+          setLastThinkingLevel(resolvedThinkingLevel);
           startStream({message, model: modelReference, projectPath, queryClient, rpcClient, sessionId: session.id, sessionTurns: session.turns});
           void navigate({params: {sessionId: session.id}, to: "/session/$sessionId"});
         },
@@ -80,7 +89,7 @@ export default function NewSessionPage(props: INewSessionPageProps) {
           onSubmit={handleSubmit}
           onThinkingLevelChange={handleThinkingLevelChange}
           placeholder="Ask anything."
-          selectedModelKey={resolvedSelectedModelKey}
+          selectedModelKey={resolvedModelKey}
           selectedThinkingLevel={resolvedThinkingLevel}
         />
       </div>

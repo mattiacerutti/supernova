@@ -55,8 +55,10 @@ function SessionConversation(props: ISessionConversationProps) {
   const storedSessionModel = useSessionModelSelectionStore((state) => state.selections[session.id]);
   const setSessionModelSelection = useSessionModelSelectionStore((state) => state.setSelection);
   const recordRecentModel = useModelPickerStore((state) => state.recordRecentModel);
+  const setLastThinkingLevel = useModelPickerStore((state) => state.setLastThinkingLevel);
+  const lastThinkingLevel = useModelPickerStore((state) => state.lastThinkingLevel);
 
-  /* 
+  /*
   TODO: Refactor this logic, it's a bit convoluted. Priority right now is: session local stored model > session provider stored model > first available model.
   Since `storedSessionModel` and `session.model` are model references but model list contains model details, we need to do this back and forth for ensuring everything is mapped.
   I don't like this nested selectionFromModel(resolveThinkingLevel()).
@@ -79,14 +81,20 @@ function SessionConversation(props: ISessionConversationProps) {
     const nextModel = availableModels.find((model) => modelKey(model.providerId, model.id) === value);
     if (!nextModel) return;
 
-    setSessionModelSelection(session.id, selectionFromModel(nextModel, resolveThinkingLevel(nextModel, selectedModelReference?.thinkingLevel)));
+    const currentLevel = selectedModelReference?.thinkingLevel ?? lastThinkingLevel;
+    const nextThinkingLevel = resolveThinkingLevel(nextModel, currentLevel);
+    const nextSelection = selectionFromModel(nextModel, nextThinkingLevel);
+
+    setSessionModelSelection(session.id, nextSelection);
     recordRecentModel(value);
   };
 
   const handleThinkingLevelChange = (value: string): void => {
     if (!selectedModel) return;
 
-    setSessionModelSelection(session.id, selectionFromModel(selectedModel, value));
+    const nextSelection = selectionFromModel(selectedModel, value);
+    setSessionModelSelection(session.id, nextSelection);
+    setLastThinkingLevel(value);
   };
 
   return (
