@@ -1,4 +1,5 @@
 import type {IAgentSessionDetails} from "@pi-desktop/contracts/sessions";
+import type {AppEnvironment} from "@/app/app-environment";
 import SessionComposer from "@/features/sessions/components/composer/session-composer";
 import SessionTimeline from "@/features/sessions/components/session-timeline";
 import SessionTitleText from "@/features/sessions/components/session-title-text";
@@ -8,13 +9,15 @@ import {useSessionMessageStream} from "@/features/sessions/hooks/use-session-mes
 import {modelKey, resolveThinkingLevel, selectionFromModel, selectionKey} from "@/features/sessions/lib/model-picker/model-utils";
 import {useModelPickerStore} from "@/features/sessions/stores/model-picker-store";
 import {useSessionModelsStore} from "@/features/sessions/stores/session-models-store";
+import {cn} from "@/lib/cn";
 
 interface ISessionPageProps {
+  appEnvironment: AppEnvironment;
   sessionId: string;
 }
 
 export default function SessionPage(props: ISessionPageProps) {
-  const {sessionId} = props;
+  const {appEnvironment, sessionId} = props;
 
   const sessionQuery = useSession(sessionId);
 
@@ -37,15 +40,16 @@ export default function SessionPage(props: ISessionPageProps) {
     );
   }
 
-  return <SessionConversation session={sessionQuery.data} />;
+  return <SessionConversation appEnvironment={appEnvironment} session={sessionQuery.data} />;
 }
 
 interface ISessionConversationProps {
+  appEnvironment: AppEnvironment;
   session: IAgentSessionDetails;
 }
 
 function SessionConversation(props: ISessionConversationProps) {
-  const {session} = props;
+  const {appEnvironment, session} = props;
 
   const {data: models, isPending: modelsPending} = useSessionModels();
   const availableModels = models ?? [];
@@ -62,6 +66,8 @@ function SessionConversation(props: ISessionConversationProps) {
 
   const selectedThinkingLevel = storedSessionModel?.thinkingLevel ?? session.model?.thinkingLevel;
   const selectedModelReference = selectedModel ? selectionFromModel(selectedModel, resolveThinkingLevel(selectedModel, selectedThinkingLevel)) : undefined;
+
+  const titleOffset = appEnvironment === "mac" ? "left-48" : appEnvironment === "web" ? "left-12" : "left-20";
 
   const stream = useSessionMessageStream({
     modelReference: selectedModelReference,
@@ -92,8 +98,8 @@ function SessionConversation(props: ISessionConversationProps) {
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <header className="-mx-4 flex min-w-0 shrink-0 items-center justify-between overflow-hidden border-b border-neutral-800 px-4 pb-3 pt-2.5">
-        <h1 className="min-w-0 max-w-xs truncate text-sm font-medium text-neutral-200">
+      <header className="-mx-4 flex min-w-0 shrink-0 items-center justify-between border-b border-neutral-800 px-4 pb-3 pt-2.5">
+        <h1 className={cn("sticky min-w-0 max-w-xs truncate text-sm font-medium text-neutral-200", titleOffset)}>
           <SessionTitleText className="block truncate" title={session.title} />
         </h1>
       </header>

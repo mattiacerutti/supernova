@@ -1,22 +1,26 @@
 import {useState} from "react";
 import type {CSSProperties, PointerEvent, ReactNode} from "react";
+import type {AppEnvironment} from "@/app/app-environment";
+import {isDesktopEnvironment, isMacEnvironment} from "@/app/app-environment";
 import {useSidebarSectionsStore} from "@/features/sidebar/stores/sidebar-store";
 import {cn} from "@/lib/cn";
 
 interface IResizableSidebarLayoutProps {
+  appEnvironment: AppEnvironment;
   children: ReactNode;
-  integratedTitleBar: boolean;
   sidebar: ReactNode;
   sidebarVisible?: boolean;
   titlebarActions?: ReactNode;
 }
 
 export default function ResizableSidebarLayout(props: IResizableSidebarLayoutProps) {
-  const {children, integratedTitleBar, sidebar, sidebarVisible = true, titlebarActions} = props;
+  const {appEnvironment, children, sidebar, sidebarVisible = true, titlebarActions} = props;
   const sidebarWidth = useSidebarSectionsStore((state) => state.sidebarWidth);
   const setSidebarWidth = useSidebarSectionsStore((state) => state.setSidebarWidth);
   const [resizeHandleActive, setResizeHandleActive] = useState(false);
   const [resizing, setResizing] = useState(false);
+  const desktopEnvironment = isDesktopEnvironment(appEnvironment);
+  const macEnvironment = isMacEnvironment(appEnvironment);
 
   const handleResizePointerDown = (event: PointerEvent<HTMLDivElement>): void => {
     event.preventDefault();
@@ -49,9 +53,9 @@ export default function ResizableSidebarLayout(props: IResizableSidebarLayoutPro
   const sidebarStyle = {"--sidebar-width": `${sidebarWidth}px`} as CSSProperties;
 
   return (
-    <main className={cn("h-svh overflow-hidden text-neutral-200", integratedTitleBar && "desktop-window")}>
-      <section className={cn("relative flex h-full min-h-0 overflow-hidden", integratedTitleBar ? "desktop-window-frame bg-[#282829]/80" : "bg-[#282829]")}>
-        <div className={cn("desktop-titlebar absolute inset-x-0 top-0 z-10 flex h-12 items-center gap-1 pr-3", integratedTitleBar ? "pl-23" : "pl-3")}>{titlebarActions}</div>
+    <main className={cn("h-svh overflow-hidden text-neutral-200", desktopEnvironment && "desktop-window")}>
+      <section className={cn("relative flex h-full min-h-0 overflow-hidden", desktopEnvironment ? "desktop-window-frame bg-[#282829]/80" : "bg-[#282829]")}>
+        <div className={cn("desktop-titlebar absolute inset-x-0 top-0 z-10 flex h-12 items-center gap-1 pr-3", macEnvironment ? "pl-23" : "pl-3")}>{titlebarActions}</div>
 
         <div
           className={cn("relative shrink-0 overflow-hidden", !resizing && "transition-[width] duration-250 ease-in-out", sidebarVisible ? "w-full md:w-(--sidebar-width)" : "w-0")}

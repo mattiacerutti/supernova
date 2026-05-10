@@ -21,9 +21,15 @@
     user-select: none;
   }
 
-  :root[data-desktop-shell="integrated-titlebar"],
-  :root[data-desktop-shell="integrated-titlebar"] body,
-  :root[data-desktop-shell="integrated-titlebar"] #root {
+  :root[data-app-environment="mac"],
+  :root[data-app-environment="mac"] body,
+  :root[data-app-environment="mac"] #root,
+  :root[data-app-environment="windows"],
+  :root[data-app-environment="windows"] body,
+  :root[data-app-environment="windows"] #root,
+  :root[data-app-environment="linux"],
+  :root[data-app-environment="linux"] body,
+  :root[data-app-environment="linux"] #root {
     background: transparent;
     overflow: hidden;
   }

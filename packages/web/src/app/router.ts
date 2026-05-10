@@ -1,8 +1,9 @@
 import {createRootRouteWithContext, createRoute, createRouter} from "@tanstack/react-router";
+import type {AppEnvironment} from "@/app/app-environment";
 import {HomeRoute, NewSessionRoute, RootRoute, SessionRoute, SettingsRoute, SettingsSectionRoute} from "@/app/routes";
 
 interface IRouterContext {
-  integratedTitleBar: boolean;
+  appEnvironment: AppEnvironment;
 }
 
 const rootRoute = createRootRouteWithContext<IRouterContext>()({
@@ -43,7 +44,7 @@ const routeTree = rootRoute.addChildren([indexRoute, newSessionRoute, sessionRou
 
 export const router = createRouter({
   context: {
-    integratedTitleBar: false,
+    appEnvironment: "web",
   },
   routeTree,
 });

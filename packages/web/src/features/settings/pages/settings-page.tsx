@@ -1,3 +1,5 @@
+import type {AppEnvironment} from "@/app/app-environment";
+import {isDesktopEnvironment} from "@/app/app-environment";
 import SettingsSidebar from "@/features/settings/components/sidebar/settings-sidebar";
 import {getSettingsSection} from "@/features/settings/data/settings-sections";
 import {cn} from "@/lib/cn";
@@ -5,17 +7,18 @@ import ProvidersSettingsPage from "@/features/settings/pages/settings/providers-
 import GeneralSettingsPage from "@/features/settings/pages/settings/general-settings-page";
 
 interface ISettingsPageProps {
-  integratedTitleBar: boolean;
+  appEnvironment: AppEnvironment;
   sectionId?: string;
 }
 
 export default function SettingsPage(props: ISettingsPageProps) {
-  const {integratedTitleBar, sectionId} = props;
+  const {appEnvironment, sectionId} = props;
   const section = getSettingsSection(sectionId);
+  const desktopEnvironment = isDesktopEnvironment(appEnvironment);
 
   return (
-    <main className={cn("h-svh overflow-hidden text-neutral-200", integratedTitleBar && "desktop-window")}>
-      <section className={cn("relative flex h-full min-h-0 overflow-hidden", integratedTitleBar ? "desktop-window-frame bg-[#282829]/80" : "bg-[#282829]")}>
+    <main className={cn("h-svh overflow-hidden text-neutral-200", desktopEnvironment && "desktop-window")}>
+      <section className={cn("relative flex h-full min-h-0 overflow-hidden", desktopEnvironment ? "desktop-window-frame bg-[#282829]/80" : "bg-[#282829]")}>
         <div className={cn("shrink-0 overflow-hidden transition-[width] duration-200 ease-out w-full md:w-72")}>
           <SettingsSidebar activeSectionId={section.id} />
         </div>

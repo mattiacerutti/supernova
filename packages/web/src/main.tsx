@@ -1,6 +1,7 @@
 import {StrictMode} from "react";
 import {createRoot} from "react-dom/client";
 import App from "@/app/app";
+import {getAppEnvironment} from "@/app/app-environment";
 import AppProviders from "@/app/providers";
 import "@/app/styles.css";
 
@@ -18,15 +19,14 @@ declare global {
 }
 
 const desktopShell = window.desktopShell;
+const appEnvironment = getAppEnvironment(desktopShell?.platform);
 
-if (desktopShell?.integratedTitleBar) {
-  document.documentElement.dataset.desktopShell = "integrated-titlebar";
-}
+document.documentElement.dataset.appEnvironment = appEnvironment;
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <AppProviders>
-      <App integratedTitleBar={desktopShell?.integratedTitleBar === true} />
+      <App appEnvironment={appEnvironment} />
     </AppProviders>
   </StrictMode>
 );

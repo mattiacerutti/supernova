@@ -1,5 +1,7 @@
 import {useState} from "react";
 import {useRouter, useRouterState, useCanGoBack} from "@tanstack/react-router";
+import type {AppEnvironment} from "@/app/app-environment";
+import {isDesktopEnvironment} from "@/app/app-environment";
 import Icon from "@/components/ui/icon";
 import IconButton from "@/components/ui/icon-button";
 import ResizableSidebarLayout from "@/features/sidebar/components/resizable-sidebar-layout";
@@ -9,13 +11,13 @@ import NewSessionPage from "@/features/sessions/pages/new-session-page";
 import SessionPage from "@/features/sessions/pages/session-page";
 
 interface IHomePageProps {
-  integratedTitleBar: boolean;
+  appEnvironment: AppEnvironment;
   newSessionProjectId?: string;
   sessionId?: string;
 }
 
 export default function HomePage(props: IHomePageProps) {
-  const {integratedTitleBar, newSessionProjectId, sessionId} = props;
+  const {appEnvironment, newSessionProjectId, sessionId} = props;
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const router = useRouter();
 
@@ -25,11 +27,11 @@ export default function HomePage(props: IHomePageProps) {
 
   const canGoBack = useCanGoBack();
 
-  // There is no `canGoForward` hook in TanStack Router, so we need to derive it from the history length and current index.
-  // This is NOT reliable because `router.history` represents the entire's browser tab history, but it's the best we can
-  // do for now without keeping state ourselves since navigation buttons are only rendered in electron anyway.
+  // TanStack Router does not expose canGoForward. This is good enough for desktop chrome,
+  // where navigation stays inside the Electron shell and we do not want extra state.
   const currentIndex = router.history.location.state.__TSR_index ?? 0;
   const canGoForward = currentIndex < router.history.length - 1;
+  const navigationVisible = isDesktopEnvironment(appEnvironment);
 
   const projects = useProjectList();
   const newSessionProject = newSessionProjectId ? projects.find((project) => project.id === newSessionProjectId) : undefined;
@@ -51,7 +53,7 @@ export default function HomePage(props: IHomePageProps) {
       <IconButton className="size-7" label="Toggle sidebar" onClick={handleToggleSidebar}>
         <Icon name="panel-left" size="sm" />
       </IconButton>
-      {integratedTitleBar && (
+      {navigationVisible && (
         <>
           <IconButton className="size-7" disabled={!canGoBack} label="Go back" onClick={handleGoBack}>
             <Icon name="arrow-left" size="sm" />
@@ -65,9 +67,9 @@ export default function HomePage(props: IHomePageProps) {
   );
 
   return (
-    <ResizableSidebarLayout integratedTitleBar={integratedTitleBar} sidebar={<Sidebar />} sidebarVisible={sidebarVisible} titlebarActions={titlebarActions}>
+    <ResizableSidebarLayout appEnvironment={appEnvironment} sidebar={<Sidebar />} sidebarVisible={sidebarVisible} titlebarActions={titlebarActions}>
       {newSessionProject && <NewSessionPage projectName={newSessionProject.name} projectPath={newSessionProject.path} />}
-      {!newSessionProject && sessionId && <SessionPage key={sessionId} sessionId={sessionId} />}
+      {!newSessionProject && sessionId && <SessionPage appEnvironment={appEnvironment} key={sessionId} sessionId={sessionId} />}
       {!newSessionProject && !sessionId && <EmptySessionState />}
     </ResizableSidebarLayout>
   );

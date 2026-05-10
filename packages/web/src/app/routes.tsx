@@ -7,34 +7,34 @@ export function RootRoute() {
 }
 
 export function HomeRoute() {
-  const {integratedTitleBar} = useRouteContext({from: "__root__"});
+  const {appEnvironment} = useRouteContext({from: "__root__"});
 
-  return <HomePage integratedTitleBar={integratedTitleBar} />;
+  return <HomePage appEnvironment={appEnvironment} />;
 }
 
 export function SessionRoute() {
-  const {integratedTitleBar} = useRouteContext({from: "__root__"});
+  const {appEnvironment} = useRouteContext({from: "__root__"});
   const {sessionId} = useParams({from: "/session/$sessionId"});
 
-  return <HomePage sessionId={sessionId} integratedTitleBar={integratedTitleBar} />;
+  return <HomePage appEnvironment={appEnvironment} sessionId={sessionId} />;
 }
 
 export function NewSessionRoute() {
-  const {integratedTitleBar} = useRouteContext({from: "__root__"});
+  const {appEnvironment} = useRouteContext({from: "__root__"});
   const search = useSearch({from: "/session/new"}) as {projectId?: string};
 
-  return <HomePage newSessionProjectId={search.projectId} integratedTitleBar={integratedTitleBar} />;
+  return <HomePage appEnvironment={appEnvironment} newSessionProjectId={search.projectId} />;
 }
 
 export function SettingsRoute() {
-  const {integratedTitleBar} = useRouteContext({from: "__root__"});
+  const {appEnvironment} = useRouteContext({from: "__root__"});
 
-  return <SettingsPage integratedTitleBar={integratedTitleBar} />;
+  return <SettingsPage appEnvironment={appEnvironment} />;
 }
 
 export function SettingsSectionRoute() {
-  const {integratedTitleBar} = useRouteContext({from: "__root__"});
+  const {appEnvironment} = useRouteContext({from: "__root__"});
   const {sectionId} = useParams({from: "/settings/$sectionId"});
 
-  return <SettingsPage integratedTitleBar={integratedTitleBar} sectionId={sectionId} />;
+  return <SettingsPage appEnvironment={appEnvironment} sectionId={sectionId} />;
 }

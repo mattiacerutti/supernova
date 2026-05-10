@@ -1,12 +1,13 @@
 import {RouterProvider} from "@tanstack/react-router";
+import type {AppEnvironment} from "@/app/app-environment";
 import {router} from "@/app/router";
 
 interface IAppProps {
-  integratedTitleBar?: boolean;
+  appEnvironment?: AppEnvironment;
 }
 
 export default function App(props: IAppProps) {
-  const {integratedTitleBar = false} = props;
+  const {appEnvironment = "web"} = props;
 
-  return <RouterProvider context={{integratedTitleBar}} router={router} />;
+  return <RouterProvider context={{appEnvironment}} router={router} />;
 }
