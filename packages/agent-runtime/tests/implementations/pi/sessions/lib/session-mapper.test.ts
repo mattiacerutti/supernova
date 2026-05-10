@@ -124,4 +124,24 @@ describe("normalizePiSessionTurns", () => {
     expect(turns[0]).toMatchObject({status: "error"});
     expectTurnEvents(turns[0], [{content: "", error: "Model failed", type: "assistant"}]);
   });
+
+  it("does not render user-initiated aborts as assistant errors", () => {
+    const turns = normalizePiSessionTurns(
+      piMessages([
+        {content: [{text: "Fix it", type: "text"}], id: "user-1", role: "user", timestamp: 1},
+        {
+          content: [{thinking: "I should inspect the project.", type: "thinking"}],
+          errorMessage: "Request was aborted.",
+          id: "assistant-1",
+          role: "assistant",
+          stopReason: "aborted",
+          timestamp: 2,
+        },
+      ]),
+      model
+    );
+
+    expect(turns[0]).toMatchObject({status: "completed"});
+    expectTurnEvents(turns[0], [{content: "I should inspect the project.", type: "reasoning"}]);
+  });
 });

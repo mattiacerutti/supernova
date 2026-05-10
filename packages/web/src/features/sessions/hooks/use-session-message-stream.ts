@@ -3,17 +3,17 @@ import type {LegendListRef} from "@legendapp/list/react";
 import {useQueryClient} from "@tanstack/react-query";
 import {useRef} from "react";
 import {useSessionStreamStore} from "@/features/sessions/stores/session-stream-store";
+import type {SessionStreamStatus} from "@/features/sessions/stores/session-stream-store";
 import {turnsToRenderItems} from "@/features/sessions/lib/session-render-items";
 import type {SessionRenderItem} from "@/features/sessions/types/session-render-item";
 import {useAgentRpcClient} from "@/rpc/use-agent-rpc-client";
 
 interface IUseSessionMessageStreamResult {
   renderItems: readonly SessionRenderItem[];
-  isStopping: boolean;
-  isStreaming: boolean;
   listRef: React.RefObject<LegendListRef | null>;
   stopStreaming: () => void;
   streamError: string | null;
+  streamStatus: SessionStreamStatus;
   submitMessage: (message: string) => void;
 }
 
@@ -29,12 +29,13 @@ export function useSessionMessageStream(input: IUseSessionMessageStreamInput): I
   const queryClient = useQueryClient();
   const rpcClient = useAgentRpcClient();
   const messagesListRef = useRef<LegendListRef>(null);
+
   const stream = useSessionStreamStore((state) => state.streams[sessionId]);
   const startStream = useSessionStreamStore((state) => state.startStream);
   const stopStream = useSessionStreamStore((state) => state.stopStream);
 
-  const isStreaming = stream?.status === "streaming" || stream?.status === "stopping";
-  const isStopping = stream?.status === "stopping";
+  const streamStatus = stream?.status ?? "idle";
+  const isStreaming = streamStatus !== "idle";
   const baseTurns = stream?.turns ?? sessionTurns;
   const streamTurn = stream?.turn ?? null;
   const renderItems = [...turnsToRenderItems(baseTurns, false), ...(streamTurn ? turnsToRenderItems([streamTurn], isStreaming) : [])];
@@ -60,11 +61,10 @@ export function useSessionMessageStream(input: IUseSessionMessageStreamInput): I
 
   return {
     renderItems,
-    isStopping,
-    isStreaming,
     listRef: messagesListRef,
     stopStreaming,
     streamError: stream?.error ?? null,
+    streamStatus,
     submitMessage,
   };
 }

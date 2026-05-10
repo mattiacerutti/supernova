@@ -5,6 +5,6 @@ export type SessionWorkEvent = Extract<IAgentSessionTurnEvent, {type: "reasoning
 
 export type AssistantSessionRenderItem = {type: "assistant"; event: SessionAssistantEvent; live: boolean};
 export type UserSessionRenderItem = {type: "user"; message: IAgentSessionUserMessage};
-export type WorkSessionRenderItem = {type: "work"; events: SessionWorkEvent[]; durationMs: number | undefined; id: string; live: boolean};
+export type WorkSessionRenderItem = {type: "work"; collapsible: boolean; events: SessionWorkEvent[]; durationMs: number | undefined; id: string; live: boolean};
 
 export type SessionRenderItem = AssistantSessionRenderItem | UserSessionRenderItem | WorkSessionRenderItem;

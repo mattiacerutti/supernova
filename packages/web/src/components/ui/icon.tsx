@@ -36,6 +36,7 @@ export type IconName =
   | "shield"
   | "star"
   | "star-filled"
+  | "stop"
   | "sun"
   | "trash"
   | "user"
@@ -80,6 +81,7 @@ const icons: Record<IconName, string> = {
   shield: "lucide:shield",
   star: "lucide:star",
   "star-filled": "iconoir:star-solid",
+  stop: "material-symbols:stop-rounded",
   sun: "lucide:sun",
   trash: "lucide:trash-2",
   user: "lucide:user",

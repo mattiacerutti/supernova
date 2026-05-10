@@ -16,6 +16,7 @@ function workDuration(events: SessionWorkEvent[], completedAt: string | undefine
  */
 function turnToRenderItems(turn: IAgentSessionTurn, isStreaming: boolean): SessionRenderItem[] {
   const items: SessionRenderItem[] = [];
+  const hasAssistantResponse = turn.events.some((event) => event.type === "assistant" && event.content.trim().length > 0);
 
   let workEvents: SessionWorkEvent[] = [];
   let workIndex = 0;
@@ -23,6 +24,7 @@ function turnToRenderItems(turn: IAgentSessionTurn, isStreaming: boolean): Sessi
   const flushWork = (live: boolean, completedAt?: string): void => {
     if (workEvents.length === 0) return;
     items.push({
+      collapsible: hasAssistantResponse,
       id: `work-${workIndex}`,
       type: "work",
       events: workEvents,

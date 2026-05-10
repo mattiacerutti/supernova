@@ -45,11 +45,11 @@ export default function WorkBlock(props: IWorkBlockProps) {
     setExpanded((currentExpanded) => !currentExpanded);
   };
 
-  if (item.live) {
+  if (item.live || !item.collapsible) {
     return (
       <section className="space-y-3">
         {item.events.map((event) => (
-          <WorkEvent event={event} key={event.id} live={true} />
+          <WorkEvent event={event} key={event.id} live={item.live} />
         ))}
       </section>
     );

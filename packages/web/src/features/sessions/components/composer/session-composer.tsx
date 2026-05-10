@@ -11,12 +11,14 @@ interface ISessionComposerProps {
   disabled: boolean;
   modelsLoading: boolean;
   models: readonly IAgentModelDetails[];
+  onInterrupt?: () => void;
   onModelChange: (value: string) => void;
   onSubmit: (message: string) => void;
   onThinkingLevelChange: (value: string) => void;
   placeholder?: string;
   selectedModelKey: string;
   selectedThinkingLevel: string | undefined;
+  streamStatus?: "idle" | "streaming" | "stopping";
 }
 
 export default function SessionComposer(props: ISessionComposerProps) {
@@ -24,16 +26,23 @@ export default function SessionComposer(props: ISessionComposerProps) {
     disabled,
     models,
     modelsLoading,
+    onInterrupt,
     onModelChange,
     onSubmit,
     onThinkingLevelChange,
     placeholder = "Ask for follow-up changes",
     selectedModelKey,
     selectedThinkingLevel,
+    streamStatus = "idle",
   } = props;
   const [draft, setDraft] = useState("");
 
-  const canSend = draft.trim().length > 0 && !disabled;
+  const isStreaming = streamStatus !== "idle";
+  const inputDisabled = disabled || isStreaming;
+  const canSend = draft.trim().length > 0 && !disabled && !isStreaming;
+  const canInterrupt = streamStatus === "streaming";
+  const primaryActionDisabled = isStreaming ? !canInterrupt : !canSend;
+  const primaryActionLabel = isStreaming ? (streamStatus === "stopping" ? "Stopping stream" : "Stop streaming") : "Send message";
   const selectedModel = models.find((model) => modelKey(model.providerId, model.id) === selectedModelKey);
   const selectedModelName = modelsLoading ? "Loading models" : (selectedModel?.name ?? "No model");
   const thinkingLevels = selectedModel?.thinkingLevels ?? [];
@@ -43,6 +52,15 @@ export default function SessionComposer(props: ISessionComposerProps) {
     if (!canSend) return;
     onSubmit(draft.trim());
     setDraft("");
+  };
+
+  const handlePrimaryAction = (): void => {
+    if (isStreaming) {
+      if (canInterrupt) onInterrupt?.();
+      return;
+    }
+
+    handleSubmit();
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
@@ -56,7 +74,7 @@ export default function SessionComposer(props: ISessionComposerProps) {
       <div className="mx-auto max-w-3xl rounded-3xl corner-superellipse/1.3 bg-[#2b2b2b] px-3 py-2 ring-1 ring-white/6 shadow-md">
         <textarea
           className="min-h-10 w-full resize-none bg-transparent p-1 text-sm text-neutral-200 outline-none placeholder:text-md placeholder:text-white/25 placeholder:font-light"
-          disabled={disabled}
+          disabled={inputDisabled}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
@@ -77,7 +95,7 @@ export default function SessionComposer(props: ISessionComposerProps) {
           <div className="flex min-w-0 items-center gap-4">
             <div className="flex gap-2">
               <ModelPicker
-                disabled={disabled}
+                disabled={inputDisabled}
                 models={models}
                 modelsLoading={modelsLoading}
                 onModelChange={onModelChange}
@@ -86,7 +104,7 @@ export default function SessionComposer(props: ISessionComposerProps) {
               />
 
               <ThinkingLevelPicker
-                disabled={disabled}
+                disabled={inputDisabled}
                 onThinkingLevelChange={onThinkingLevelChange}
                 selectedThinkingLabel={selectedThinkingLabel}
                 selectedThinkingLevel={selectedThinkingLevel}
@@ -95,14 +113,14 @@ export default function SessionComposer(props: ISessionComposerProps) {
             </div>
 
             <IconButton
-              label="Send message"
+              label={primaryActionLabel}
               className="grid size-9 place-items-center rounded-full bg-neutral-300 text-neutral-950 transition hover:bg-white disabled:cursor-default disabled:bg-white/10 disabled:text-neutral-500"
-              disabled={!canSend}
-              onClick={handleSubmit}
+              disabled={primaryActionDisabled}
+              onClick={handlePrimaryAction}
               size="none"
               variant="bare"
             >
-              <Icon name="send" size="md" />
+              <Icon name={isStreaming ? "stop" : "send"} size="md" />
             </IconButton>
           </div>
         </div>

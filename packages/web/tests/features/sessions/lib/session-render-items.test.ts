@@ -45,9 +45,25 @@ describe("turnsToRenderItems", () => {
 
     expect(items).toMatchObject([
       {message: {content: "Ship it"}, type: "user"},
-      {durationMs: 5000, events: [{type: "reasoning"}, {tool: {name: "bash"}, type: "tool"}], id: "work-0", live: false, type: "work"},
+      {collapsible: true, durationMs: 5000, events: [{type: "reasoning"}, {tool: {name: "bash"}, type: "tool"}], id: "work-0", live: false, type: "work"},
       {event: {content: "assistant assistant-1", type: "assistant"}, live: false, type: "assistant"},
-      {durationMs: 3000, events: [{tool: {name: "read"}, type: "tool"}], id: "work-1", live: false, type: "work"},
+      {collapsible: true, durationMs: 3000, events: [{tool: {name: "read"}, type: "tool"}], id: "work-1", live: false, type: "work"},
+    ]);
+  });
+
+  it("keeps reasoning and tool-only turns expanded when there is no assistant response", () => {
+    const items = turnsToRenderItems(
+      [
+        turn({
+          events: [reasoningEvent("reasoning-1", 1), toolEvent("tool-1", 3, "bash")],
+        }),
+      ],
+      false
+    );
+
+    expect(items).toMatchObject([
+      {message: {content: "Ship it"}, type: "user"},
+      {collapsible: false, events: [{type: "reasoning"}, {tool: {name: "bash"}, type: "tool"}], live: false, type: "work"},
     ]);
   });
 
@@ -63,7 +79,11 @@ describe("turnsToRenderItems", () => {
       true
     );
 
-    expect(items).toMatchObject([{type: "user"}, {event: {id: "assistant-1"}, live: true, type: "assistant"}, {events: [{id: "tool-1"}], live: true, type: "work"}]);
+    expect(items).toMatchObject([
+      {type: "user"},
+      {event: {id: "assistant-1"}, live: true, type: "assistant"},
+      {collapsible: true, events: [{id: "tool-1"}], live: true, type: "work"},
+    ]);
   });
 });
 

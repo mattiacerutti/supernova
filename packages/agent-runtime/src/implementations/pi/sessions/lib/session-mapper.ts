@@ -79,7 +79,9 @@ export function normalizePiSessionTurns(messages: readonly PiAgentMessage[], fal
         break;
       }
       case "assistant": {
-        const error = message.errorMessage;
+        // Pi records user-initiated stops as aborted assistant errors.
+        // The UI renders the preserved partial turn instead of showing that as a failure.
+        const error = message.stopReason === "aborted" ? undefined : message.errorMessage;
         if (message.content.length === 0 && !error) break;
         ensureUser(id, timestamp);
 

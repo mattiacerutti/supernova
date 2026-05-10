@@ -76,6 +76,8 @@ function SessionConversation(props: ISessionConversationProps) {
     sessionTurns: session.turns,
   });
 
+  const isStreaming = stream.streamStatus !== "idle";
+
   const handleModelChange = (value: string): void => {
     const nextModel = availableModels.find((model) => modelKey(model.providerId, model.id) === value);
     if (!nextModel) return;
@@ -104,17 +106,19 @@ function SessionConversation(props: ISessionConversationProps) {
         </h1>
       </header>
 
-      <SessionTimeline isStreaming={stream.isStreaming} items={stream.renderItems} listRef={stream.listRef} streamError={stream.streamError} />
+      <SessionTimeline isStreaming={isStreaming} items={stream.renderItems} listRef={stream.listRef} streamError={stream.streamError} />
 
       <SessionComposer
-        disabled={stream.isStreaming || modelsPending || !selectedModelReference}
+        disabled={modelsPending || !selectedModelReference}
         models={availableModels}
         modelsLoading={modelsPending}
+        onInterrupt={stream.stopStreaming}
         onModelChange={handleModelChange}
         onSubmit={stream.submitMessage}
         onThinkingLevelChange={handleThinkingLevelChange}
         selectedModelKey={selectedModelKey}
         selectedThinkingLevel={selectedModelReference?.thinkingLevel}
+        streamStatus={stream.streamStatus}
       />
     </div>
   );
