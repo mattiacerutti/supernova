@@ -7,6 +7,7 @@ import {useSessionMessageStream} from "@/features/sessions/hooks/use-session-mes
 import {modelKey, resolveThinkingLevel, selectionFromModel, selectionKey} from "@/features/sessions/lib/model-selection";
 import {useModelPickerStore} from "@/features/sessions/stores/model-picker-store";
 import {useSessionModelSelectionStore} from "@/features/sessions/stores/session-model-selection-store";
+import {cn} from "@/lib/cn";
 
 interface ISessionPageProps {
   sessionId: string;
@@ -91,7 +92,12 @@ function SessionConversation(props: ISessionConversationProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <header className="-mx-4 flex shrink-0 items-center justify-between border-b border-neutral-800 px-4 pb-3 pt-2.5">
-        <h1 className="sticky left-48 min-w-0 truncate text-sm font-medium text-neutral-200">{session.title}</h1>
+        <h1
+          key={session.title}
+          className={cn("sticky left-48 min-w-0 truncate text-sm font-medium text-neutral-200", stream.titleRevealKey === session.title && "session-title-reveal")}
+        >
+          {session.title}
+        </h1>
       </header>
 
       <SessionTimeline isStreaming={stream.isStreaming} items={stream.renderItems} listRef={stream.listRef} streamError={stream.streamError} />

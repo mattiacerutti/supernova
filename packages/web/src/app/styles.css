@@ -111,6 +111,29 @@
     mask-repeat: no-repeat;
     mask-size: 26% 100%;
   }
+
+  .session-title-reveal {
+    animation: session-title-reveal 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    transform-origin: left center;
+  }
+}
+
+@keyframes session-title-reveal {
+  0% {
+    clip-path: inset(0 100% 0 0);
+    opacity: 0;
+    transform: translateX(-0.25rem);
+  }
+
+  45% {
+    opacity: 1;
+  }
+
+  100% {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 @keyframes thinking-shimmer {

@@ -224,7 +224,9 @@ export default function ProjectListItem(props: IProjectListItemProps) {
                       >
                         <Icon name="pin" size="xs" />
                       </IconButton>
-                      <span className="min-w-0 flex-1 truncate text-sm">{session.title}</span>
+                      <span key={session.title} className={cn("min-w-0 flex-1 truncate text-sm", sessionStream?.titleRevealKey === session.title && "session-title-reveal")}>
+                        {session.title}
+                      </span>
                       <span className="grid w-12 shrink-0 place-items-center justify-items-end">
                         <span className="col-start-1 row-start-1 w-full justify-self-end pr-1.5 text-right text-xs text-neutral-500 group-hover/session:invisible">
                           {sessionStreaming ? (

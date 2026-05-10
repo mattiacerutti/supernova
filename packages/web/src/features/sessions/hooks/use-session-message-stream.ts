@@ -15,6 +15,7 @@ interface IUseSessionMessageStreamResult {
   stopStreaming: () => void;
   streamError: string | null;
   submitMessage: (message: string) => void;
+  titleRevealKey: string | null;
 }
 
 interface IUseSessionMessageStreamInput {
@@ -66,5 +67,6 @@ export function useSessionMessageStream(input: IUseSessionMessageStreamInput): I
     stopStreaming,
     streamError: stream?.error ?? null,
     submitMessage,
+    titleRevealKey: stream?.titleRevealKey ?? null,
   };
 }
