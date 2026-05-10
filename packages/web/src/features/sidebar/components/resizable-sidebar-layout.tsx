@@ -71,7 +71,7 @@ export default function ResizableSidebarLayout(props: IResizableSidebarLayoutPro
         </div>
         <section
           className={cn(
-            "app-panel flex h-full min-h-0 flex-1 flex-col border-l-[0.1px] rounded-xl bg-[#181818] px-4 pb-3 pt-1",
+            "app-panel flex h-full min-h-0 min-w-0 flex-1 flex-col border-l-[0.1px] rounded-xl bg-[#181818] px-4 pb-3 pt-1",
             resizeHandleActive || resizing ? "border-white/30" : "border-white/22"
           )}
           data-sidebar-visible={sidebarVisible}

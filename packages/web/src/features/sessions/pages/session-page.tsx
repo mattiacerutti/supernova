@@ -91,12 +91,9 @@ function SessionConversation(props: ISessionConversationProps) {
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <header className="-mx-4 flex shrink-0 items-center justify-between border-b border-neutral-800 px-4 pb-3 pt-2.5">
-        <h1
-          key={session.title}
-          className={cn("sticky left-48 min-w-0 truncate text-sm font-medium text-neutral-200", stream.titleRevealKey === session.title && "session-title-reveal")}
-        >
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <header className="-mx-4 flex min-w-0 shrink-0 items-center justify-between overflow-hidden border-b border-neutral-800 px-4 pb-3 pt-2.5">
+        <h1 key={session.title} className={cn("min-w-0 max-w-xs truncate text-sm font-medium text-neutral-200", stream.titleRevealKey === session.title && "session-title-reveal")}>
           {session.title}
         </h1>
       </header>
