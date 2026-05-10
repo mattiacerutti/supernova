@@ -1,6 +1,7 @@
 import {useState} from "react";
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
+import MessageActions from "@/features/sessions/components/messages/message-actions";
 import MessageContent from "@/features/sessions/components/messages/message-content";
 import {formatDuration, getWorkIconName} from "@/features/sessions/lib/session-render-items";
 import type {SessionWorkEvent} from "@/features/sessions/types/session-render-item";
@@ -35,11 +36,20 @@ function WorkEvent(props: {event: SessionWorkEvent; live: boolean}) {
 interface IWorkBlockProps {
   item: WorkSessionRenderItem;
 }
+
+function workCopyText(events: SessionWorkEvent[]): string {
+  return events
+    .filter((event) => event.type === "reasoning")
+    .map((event) => event.content)
+    .join("\n\n");
+}
+
 export default function WorkBlock(props: IWorkBlockProps) {
   const {item} = props;
   const [expanded, setExpanded] = useState(false);
 
   const showExpanded = item.live || expanded;
+  const copyText = item.collapsible ? "" : workCopyText(item.events);
 
   const handleToggle = (): void => {
     setExpanded((currentExpanded) => !currentExpanded);
@@ -47,10 +57,11 @@ export default function WorkBlock(props: IWorkBlockProps) {
 
   if (item.live || !item.collapsible) {
     return (
-      <section className="space-y-3">
+      <section className="group/message space-y-3">
         {item.events.map((event) => (
           <WorkEvent event={event} key={event.id} live={item.live} />
         ))}
+        <MessageActions copyText={copyText} />
       </section>
     );
   }
