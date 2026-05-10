@@ -1,12 +1,12 @@
 import {useNavigate} from "@tanstack/react-router";
 import {useQueryClient} from "@tanstack/react-query";
 import {useState} from "react";
-import SessionComposer from "@/features/sessions/components/session-composer";
+import SessionComposer from "@/features/sessions/components/composer/session-composer";
 import {useCreateSession} from "@/features/sessions/hooks/api/use-create-session";
 import {useSessionModels} from "@/features/sessions/hooks/api/use-session-models";
-import {modelKey, resolveThinkingLevel, selectionFromModel} from "@/features/sessions/lib/model-selection";
+import {modelKey, resolveThinkingLevel, selectionFromModel} from "@/features/sessions/lib/model-picker/model-utils";
 import {useModelPickerStore} from "@/features/sessions/stores/model-picker-store";
-import {useSessionModelSelectionStore} from "@/features/sessions/stores/session-model-selection-store";
+import {useSessionModelsStore} from "@/features/sessions/stores/session-models-store";
 import {useSessionStreamStore} from "@/features/sessions/stores/session-stream-store";
 import {useAgentRpcClient} from "@/rpc/use-agent-rpc-client";
 
@@ -25,7 +25,7 @@ export default function NewSessionPage(props: INewSessionPageProps) {
   const {data: models, isPending: modelsPending} = useSessionModels();
   const availableModels = models ?? [];
   const startStream = useSessionStreamStore((state) => state.startStream);
-  const setSessionModelSelection = useSessionModelSelectionStore((state) => state.setSelection);
+  const setSessionModel = useSessionModelsStore((state) => state.setSessionModel);
   const recordRecentModel = useModelPickerStore((state) => state.recordRecentModel);
   const setLastThinkingLevel = useModelPickerStore((state) => state.setLastThinkingLevel);
   const recentModelKeys = useModelPickerStore((state) => state.recentModelKeys);
@@ -64,7 +64,7 @@ export default function NewSessionPage(props: INewSessionPageProps) {
       {
         onSuccess: (session) => {
           const modelReference = selectionFromModel(selectedModel, resolvedThinkingLevel);
-          setSessionModelSelection(session.id, modelReference);
+          setSessionModel(session.id, modelReference);
           recordRecentModel(resolvedModelKey);
           setLastThinkingLevel(resolvedThinkingLevel);
           startStream({message, model: modelReference, projectPath, queryClient, rpcClient, sessionId: session.id, sessionTurns: session.turns});

@@ -1,5 +1,5 @@
 import {Outlet, useParams, useRouteContext, useSearch} from "@tanstack/react-router";
-import HomePage from "@/features/home/pages/home-page";
+import HomePage from "@/components/home-page";
 import SettingsPage from "@/features/settings/pages/settings-page";
 
 export function RootRoute() {

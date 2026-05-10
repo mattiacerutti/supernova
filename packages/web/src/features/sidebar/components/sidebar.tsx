@@ -140,11 +140,11 @@ export default function Sidebar() {
       <OpenProjectDialog
         activeSuggestionIndex={openProjectActiveSuggestionIndex}
         onActiveSuggestionIndexChange={setOpenProjectActiveSuggestionIndex}
-        projectPath={openProjectPath}
-        onProjectPathChange={setOpenProjectPath}
         onClose={handleCloseProjectDialog}
         onOpenProject={handleOpenProject}
+        onProjectPathChange={setOpenProjectPath}
         open={openProjectDialogOpen}
+        projectPath={openProjectPath}
       />
     </aside>
   );

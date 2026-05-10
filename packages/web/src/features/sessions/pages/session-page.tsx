@@ -1,12 +1,12 @@
 import type {IAgentSessionDetails} from "@pi-desktop/contracts/sessions";
-import SessionComposer from "@/features/sessions/components/session-composer";
+import SessionComposer from "@/features/sessions/components/composer/session-composer";
 import SessionTimeline from "@/features/sessions/components/session-timeline";
 import {useSession} from "@/features/sessions/hooks/api/use-session";
 import {useSessionModels} from "@/features/sessions/hooks/api/use-session-models";
 import {useSessionMessageStream} from "@/features/sessions/hooks/use-session-message-stream";
-import {modelKey, resolveThinkingLevel, selectionFromModel, selectionKey} from "@/features/sessions/lib/model-selection";
+import {modelKey, resolveThinkingLevel, selectionFromModel, selectionKey} from "@/features/sessions/lib/model-picker/model-utils";
 import {useModelPickerStore} from "@/features/sessions/stores/model-picker-store";
-import {useSessionModelSelectionStore} from "@/features/sessions/stores/session-model-selection-store";
+import {useSessionModelsStore} from "@/features/sessions/stores/session-models-store";
 import {cn} from "@/lib/cn";
 
 interface ISessionPageProps {
@@ -44,25 +44,18 @@ interface ISessionConversationProps {
   session: IAgentSessionDetails;
 }
 
-// Keep the loaded conversation in a child component so hooks below can treat session data as present, not query-optional.
 function SessionConversation(props: ISessionConversationProps) {
   const {session} = props;
 
-  // TODO: Investigate why this is called useSessionModels if we're not passing any session specific info to it. Maybe it should be just useModels?
   const {data: models, isPending: modelsPending} = useSessionModels();
   const availableModels = models ?? [];
 
-  const storedSessionModel = useSessionModelSelectionStore((state) => state.selections[session.id]);
-  const setSessionModelSelection = useSessionModelSelectionStore((state) => state.setSelection);
+  const storedSessionModel = useSessionModelsStore((state) => state.models[session.id]);
+  const setSessionModel = useSessionModelsStore((state) => state.setSessionModel);
   const recordRecentModel = useModelPickerStore((state) => state.recordRecentModel);
   const setLastThinkingLevel = useModelPickerStore((state) => state.setLastThinkingLevel);
   const lastThinkingLevel = useModelPickerStore((state) => state.lastThinkingLevel);
 
-  /*
-  TODO: Refactor this logic, it's a bit convoluted. Priority right now is: session local stored model > session provider stored model > first available model.
-  Since `storedSessionModel` and `session.model` are model references but model list contains model details, we need to do this back and forth for ensuring everything is mapped.
-  I don't like this nested selectionFromModel(resolveThinkingLevel()).
-  */
   const selectedModelKey =
     selectionKey(storedSessionModel) || selectionKey(session.model) || (availableModels[0] ? modelKey(availableModels[0].providerId, availableModels[0].id) : "");
   const selectedModel = availableModels.find((model) => modelKey(model.providerId, model.id) === selectedModelKey);
@@ -85,7 +78,7 @@ function SessionConversation(props: ISessionConversationProps) {
     const nextThinkingLevel = resolveThinkingLevel(nextModel, currentLevel);
     const nextSelection = selectionFromModel(nextModel, nextThinkingLevel);
 
-    setSessionModelSelection(session.id, nextSelection);
+    setSessionModel(session.id, nextSelection);
     recordRecentModel(value);
   };
 
@@ -93,7 +86,7 @@ function SessionConversation(props: ISessionConversationProps) {
     if (!selectedModel) return;
 
     const nextSelection = selectionFromModel(selectedModel, value);
-    setSessionModelSelection(session.id, nextSelection);
+    setSessionModel(session.id, nextSelection);
     setLastThinkingLevel(value);
   };
 

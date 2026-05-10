@@ -1,5 +1,5 @@
-import {useEffect, useRef, useState} from "react";
 import type {ChangeEvent, FocusEvent, KeyboardEvent, MouseEvent} from "react";
+import {useRef, useState} from "react";
 import {useProjectsStore} from "@/features/projects/stores/projects-store";
 
 interface IUseRenameProjectOptions {
@@ -14,14 +14,6 @@ export function useRenameProject(options: IUseRenameProjectOptions) {
   const [draftName, setDraftName] = useState(projectName);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const renameProject = useProjectsStore((state) => state.renameProject);
-
-  useEffect(() => {
-    if (!renaming) return;
-
-    const input = inputRef.current;
-    input?.focus();
-    input?.setSelectionRange(input.value.length, input.value.length);
-  }, [renaming]);
 
   const startRenaming = (): void => {
     setDraftName(projectName);
@@ -69,14 +61,22 @@ export function useRenameProject(options: IUseRenameProjectOptions) {
     cancelRename();
   };
 
+  const handleInputRef = (element: HTMLInputElement | null): void => {
+    inputRef.current = element;
+    if (element && renaming) {
+      element.focus();
+      element.setSelectionRange(element.value.length, element.value.length);
+    }
+  };
+
   return {
     draftName,
     handleBlur,
     handleChange,
     handleClick,
     handleFocus,
+    handleInputRef,
     handleKeyDown,
-    inputRef,
     renaming,
     startRenaming,
   };

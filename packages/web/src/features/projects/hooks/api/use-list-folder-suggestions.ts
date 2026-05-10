@@ -9,6 +9,7 @@ export function listFolderSuggestionsQueryKey(query: string) {
 export function useListFolderSuggestions(query: string) {
   return useQuery(
     eq.queryOptions({
+      placeholderData: (previousData) => previousData,
       queryFn: () =>
         Effect.gen(function* () {
           const rpc = yield* AgentRpcProtocolClientService;

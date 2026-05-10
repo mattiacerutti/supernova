@@ -1,5 +1,5 @@
-import {useDeferredValue, useEffect, useRef} from "react";
 import type {Dispatch, KeyboardEvent, SetStateAction} from "react";
+import {useDeferredValue} from "react";
 import Button from "@/components/ui/button";
 import Dialog from "@/components/ui/dialog";
 import Icon from "@/components/ui/icon";
@@ -38,74 +38,113 @@ interface IOpenProjectDialogProps {
   projectPath: string;
 }
 
+interface ISuggestionItemProps {
+  highlighted: boolean;
+  homePath: string | undefined;
+  onAutocomplete: (path: string) => void;
+  onOpen: (path: string) => void;
+  path: string;
+}
+
+function SuggestionItem(props: ISuggestionItemProps) {
+  const {highlighted, homePath, onAutocomplete, onOpen, path} = props;
+  const {name, parent, suffix} = formatSuggestionPath(path, homePath);
+
+  return (
+    <div
+      className={cn("group flex w-full items-center gap-1 rounded-xl corner-superellipse/1.3 hover:bg-white/6", highlighted && "bg-white/6")}
+      ref={(element) => {
+        if (highlighted && element) {
+          element.scrollIntoView({block: "center"});
+        }
+      }}
+    >
+      <Button className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 px-3 py-2 text-left" onClick={() => onAutocomplete(path)} variant="bare">
+        <Icon className="shrink-0 text-neutral-500" name="folder" size="sm" />
+        <span className="min-w-0 flex-1 truncate text-[15px]">
+          {parent && <span className="text-neutral-500">{parent}</span>}
+          <span className="text-neutral-200">{name}</span>
+          <span className="text-neutral-500">{suffix}</span>
+        </span>
+      </Button>
+      <Button className="mr-1 px-2 py-1 text-neutral-500 hover:text-neutral-100" onClick={() => onOpen(path)} variant="ghost">
+        ↵
+      </Button>
+    </div>
+  );
+}
+
 export default function OpenProjectDialog(props: IOpenProjectDialogProps) {
   const {activeSuggestionIndex, onActiveSuggestionIndexChange, onClose, onOpenProject, onProjectPathChange, open, projectPath} = props;
 
-  const suggestionRefs = useRef<Array<HTMLDivElement | null>>([]);
   const deferredProjectPath = useDeferredValue(projectPath);
   const suggestionsQuery = useListFolderSuggestions(deferredProjectPath);
   const homePath = suggestionsQuery.data?.homePath;
-  const suggestedFolders = suggestionsQuery.data?.suggestions ?? [];
 
   const storedProjects = useProjectsStore((state) => state.projects);
   const recentProjects = storedProjects.slice(0, 5);
+  const suggestedFolders = suggestionsQuery.data?.suggestions ?? [];
 
-  const showingDefaultSuggestions = projectPath.trim().length === 0;
+  const isShowingDefaults = projectPath.trim().length === 0;
 
-  const suggestionRows = [...recentProjects, ...suggestedFolders];
-  const highlightedSuggestionIndex = suggestionRows.length === 0 ? -1 : Math.min(activeSuggestionIndex, suggestionRows.length - 1);
-  const activeSuggestion = highlightedSuggestionIndex >= 0 ? suggestionRows[highlightedSuggestionIndex] : undefined;
+  const suggestions = (() => {
+    const result: Array<{index: number; kind: "recent" | "folder"; path: string}> = [];
+    let index = 0;
 
-  useEffect(() => {
-    suggestionRefs.current[highlightedSuggestionIndex]?.scrollIntoView({block: "center"});
-  }, [highlightedSuggestionIndex]);
+    if (isShowingDefaults) {
+      for (const project of recentProjects) {
+        result.push({index: index++, kind: "recent", path: project.path});
+      }
+    }
 
-  const handleSuggestionAutocomplete = (suggestionPath: string): void => {
-    handleProjectPathChange(suggestionPath.endsWith("/") ? suggestionPath : `${suggestionPath}/`);
-  };
+    for (const folder of suggestedFolders) {
+      result.push({index: index++, kind: "folder", path: folder.path});
+    }
 
-  const handleSuggestionOpen = (suggestionPath: string): void => {
-    handleOpenProject(suggestionPath);
-  };
+    return result;
+  })();
 
-  const handleProjectPathChange = (value: string): void => {
+  const highlightedIndex = suggestions.length === 0 ? -1 : Math.min(activeSuggestionIndex, suggestions.length - 1);
+  const activeSuggestion = highlightedIndex >= 0 ? suggestions[highlightedIndex] : undefined;
+
+  const handlePathChange = (value: string): void => {
     onProjectPathChange(value);
     onActiveSuggestionIndexChange(0);
   };
 
-  const handleDialogOpenChange = (nextOpen: boolean): void => {
-    if (nextOpen) return;
-
-    onClose();
+  const handleAutocomplete = (path: string): void => {
+    handlePathChange(path.endsWith("/") ? path : `${path}/`);
   };
 
-  const handleOpenProject = (suggestionPath: string): void => {
-    onOpenProject(suggestionPath);
-  };
-
-  const handleInputKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
-    if ((event.key === "ArrowDown" || event.key === "ArrowUp") && suggestionRows.length > 0) {
+  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
+    if ((event.key === "ArrowDown" || event.key === "ArrowUp") && suggestions.length > 0) {
       event.preventDefault();
-      onActiveSuggestionIndexChange((currentIndex) => {
-        const nextIndex = event.key === "ArrowDown" ? currentIndex + 1 : currentIndex - 1;
-        return (nextIndex + suggestionRows.length) % suggestionRows.length;
+      onActiveSuggestionIndexChange((current) => {
+        const delta = event.key === "ArrowDown" ? 1 : -1;
+        return (current + delta + suggestions.length) % suggestions.length;
       });
       return;
     }
 
     if (event.key === "Enter" && activeSuggestion) {
       event.preventDefault();
-      handleOpenProject(activeSuggestion.path);
+      onOpenProject(activeSuggestion.path);
       return;
     }
 
-    if (event.key !== "Tab" || !activeSuggestion) return;
-
-    event.preventDefault();
-    handleProjectPathChange(activeSuggestion.path.endsWith("/") ? activeSuggestion.path : `${activeSuggestion.path}/`);
+    if (event.key === "Tab" && activeSuggestion) {
+      event.preventDefault();
+      handleAutocomplete(activeSuggestion.path);
+    }
   };
 
-  const hasContent = suggestionsQuery.data != null || suggestionsQuery.isLoading || suggestionsQuery.error != null;
+  const handleDialogOpenChange = (nextOpen: boolean): void => {
+    if (!nextOpen) onClose();
+  };
+
+  const isLoading = suggestionsQuery.isPending && !suggestionsQuery.data;
+  const hasError = !!suggestionsQuery.error;
+  const isEmpty = !isLoading && !hasError && suggestedFolders.length === 0 && !isShowingDefaults;
 
   return (
     <Dialog onOpenChange={handleDialogOpenChange} open={open} title="Open project">
@@ -115,92 +154,52 @@ export default function OpenProjectDialog(props: IOpenProjectDialogProps) {
           <input
             autoFocus
             className="min-w-0 flex-1 bg-transparent text-[15px] text-neutral-200 outline-none placeholder:text-neutral-600"
-            onChange={(event) => handleProjectPathChange(event.target.value)}
-            onKeyDown={handleInputKeyDown}
+            onChange={(event) => handlePathChange(event.target.value)}
+            onKeyDown={handleKeyDown}
             placeholder="Search folders"
             value={projectPath}
           />
         </div>
       </div>
 
-      {hasContent && (
-        <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
-          {suggestionsQuery.isLoading && <p className="px-3 py-2 text-sm text-neutral-600">Searching folders...</p>}
-          {suggestionsQuery.error && <p className="px-3 py-2 text-sm text-red-400">Unable to search folders.</p>}
-          {!suggestionsQuery.isLoading && !suggestionsQuery.error && suggestionsQuery.data?.suggestions.length === 0 && (
-            <p className="px-3 py-2 text-sm text-neutral-600">No matching folders.</p>
-          )}
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+        {isLoading && <p className="px-3 py-2 text-sm text-neutral-600">Searching folders...</p>}
+        {hasError && <p className="px-3 py-2 text-sm text-red-400">Unable to search folders.</p>}
+        {isEmpty && <p className="px-3 py-2 text-sm text-neutral-600">No matching folders.</p>}
 
-          {showingDefaultSuggestions && recentProjects.length > 0 && (
-            <div className="pb-2">
-              <p className="px-3 pb-1 pt-2 text-xs font-medium text-neutral-600">Recent projects</p>
-              {recentProjects.map((project, index) => {
-                const {name, parent, suffix} = formatSuggestionPath(project.path, homePath);
-                const highlighted = index === highlightedSuggestionIndex;
+        {isShowingDefaults && recentProjects.length > 0 && (
+          <div className="pb-2">
+            <p className="px-3 pb-1 pt-2 text-xs font-medium text-neutral-600">Recent projects</p>
+            {suggestions
+              .filter((s) => s.kind === "recent")
+              .map((s) => (
+                <SuggestionItem
+                  highlighted={s.index === highlightedIndex}
+                  homePath={homePath}
+                  key={`recent-${s.path}`}
+                  onAutocomplete={handleAutocomplete}
+                  onOpen={onOpenProject}
+                  path={s.path}
+                />
+              ))}
+          </div>
+        )}
 
-                return (
-                  <div
-                    className={cn("group flex w-full items-center gap-1 rounded-xl corner-superellipse/1.3 hover:bg-white/6", highlighted && "bg-white/6")}
-                    key={project.id}
-                    ref={(element) => {
-                      suggestionRefs.current[index] = element;
-                    }}
-                  >
-                    <Button
-                      className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 px-3 py-2 text-left"
-                      onClick={() => handleSuggestionAutocomplete(project.path)}
-                      variant="bare"
-                    >
-                      <Icon className="shrink-0 text-neutral-500" name="folder" size="sm" />
-                      <span className="min-w-0 flex-1 truncate text-[15px]">
-                        {parent && <span className="text-neutral-500">{parent}</span>}
-                        <span className="text-neutral-200">{name}</span>
-                        <span className="text-neutral-500">{suffix}</span>
-                      </span>
-                    </Button>
-                    <Button className="mr-1 px-2 py-1 text-neutral-500 hover:text-neutral-100" onClick={() => handleSuggestionOpen(project.path)} variant="ghost">
-                      ↵
-                    </Button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+        {isShowingDefaults && <p className="px-3 pb-1 pt-2 text-xs font-medium text-neutral-600">Open project</p>}
 
-          {showingDefaultSuggestions && <p className="px-3 pb-1 pt-2 text-xs font-medium text-neutral-600">Open project</p>}
-
-          {suggestedFolders.map((suggestion, index) => {
-            const {name, parent, suffix} = formatSuggestionPath(suggestion.path, homePath);
-            const highlighted = recentProjects.length + index === highlightedSuggestionIndex;
-
-            return (
-              <div
-                className={cn("group flex w-full items-center gap-1 rounded-xl corner-superellipse/1.3 hover:bg-white/6", highlighted && "bg-white/6")}
-                key={suggestion.path}
-                ref={(element) => {
-                  suggestionRefs.current[recentProjects.length + index] = element;
-                }}
-              >
-                <Button
-                  className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 px-3 py-2 text-left"
-                  onClick={() => handleSuggestionAutocomplete(suggestion.path)}
-                  variant="bare"
-                >
-                  <Icon className="shrink-0 text-neutral-500" name="folder" size="sm" />
-                  <span className="min-w-0 flex-1 truncate text-[15px]">
-                    {parent && <span className="text-neutral-500">{parent}</span>}
-                    <span className="text-neutral-200">{name}</span>
-                    <span className="text-neutral-500">{suffix}</span>
-                  </span>
-                </Button>
-                <Button className="mr-1 px-2 py-1 text-neutral-500 hover:text-neutral-100" onClick={() => handleSuggestionOpen(suggestion.path)} variant="ghost">
-                  ↵
-                </Button>
-              </div>
-            );
-          })}
-        </div>
-      )}
+        {suggestions
+          .filter((s) => s.kind === "folder")
+          .map((s) => (
+            <SuggestionItem
+              highlighted={s.index === highlightedIndex}
+              homePath={homePath}
+              key={`folder-${s.path}`}
+              onAutocomplete={handleAutocomplete}
+              onOpen={onOpenProject}
+              path={s.path}
+            />
+          ))}
+      </div>
     </Dialog>
   );
 }

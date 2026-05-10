@@ -73,7 +73,7 @@ export const useSidebarSectionsStore = create<ISidebarSectionsState>()(
         },
         reviver: (key, value) => {
           if (key === EXPANDED_PROJECTS_STORAGE_VALUE_KEY && Array.isArray(value)) {
-            return new Set(value.filter((projectId): projectId is string => typeof projectId === "string"));
+            return new Set(value);
           }
 
           return value;

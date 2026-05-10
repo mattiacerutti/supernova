@@ -1,7 +1,8 @@
-import type {IAgentSessionToolTurnEvent, IAgentSessionTurn, IAgentSessionTurnEvent} from "@pi-desktop/contracts/sessions";
+import type {IAgentSessionToolTurnEvent, IAgentSessionTurn} from "@pi-desktop/contracts/sessions";
 import type {SessionRenderItem} from "@/features/sessions/types/session-render-item";
+import type {SessionWorkEvent} from "@/features/sessions/types/session-render-item";
 
-function workDuration(events: IAgentSessionTurnEvent[], completedAt: string | undefined): number | undefined {
+function workDuration(events: SessionWorkEvent[], completedAt: string | undefined): number | undefined {
   const times = events.map((event) => new Date(event.timestamp).getTime());
   const startedAt = times.at(0);
   const completedAtMs = completedAt === undefined ? times.at(-1) : new Date(completedAt).getTime();
@@ -16,7 +17,7 @@ function workDuration(events: IAgentSessionTurnEvent[], completedAt: string | un
 function turnToRenderItems(turn: IAgentSessionTurn, isStreaming: boolean): SessionRenderItem[] {
   const items: SessionRenderItem[] = [];
 
-  let workEvents: IAgentSessionTurnEvent[] = [];
+  let workEvents: SessionWorkEvent[] = [];
   let workIndex = 0;
 
   const flushWork = (live: boolean, completedAt?: string): void => {
@@ -62,8 +63,4 @@ export function formatDuration(durationMs: number | undefined): string {
 
 export function getWorkIconName(event: IAgentSessionToolTurnEvent): "folder" | "server" {
   return event.tool?.name === "bash" ? "server" : "folder";
-}
-
-export function eventError(event: IAgentSessionTurnEvent): string | undefined {
-  return event.type === "assistant" ? event.error : undefined;
 }

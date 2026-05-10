@@ -164,8 +164,6 @@ export const AgentModelDetails = Schema.Struct({
   id: Schema.String,
   /** Provider-supplied model name, for example "GPT 5.5". */
   name: Schema.String,
-  /** UI-ready model label, typically combining model and provider names. */
-  displayName: Schema.String,
   /** Model feature capabilities. */
   capabilities: AgentModelCapabilities,
   /** Identifier of the provider that owns the model. */

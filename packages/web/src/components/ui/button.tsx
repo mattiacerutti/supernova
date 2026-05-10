@@ -39,8 +39,6 @@ export default function Button(props: IButtonProps) {
   const resolvedClassName = cn(variantClasses[variant], shape === "icon" ? iconSizeClasses[size] : defaultSizeClasses[size], className);
 
   if (as === "div") {
-    const handleClick = onClick as unknown as MouseEventHandler<HTMLDivElement> | undefined;
-
     const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
       onKeyDown?.(event as unknown as KeyboardEvent<HTMLButtonElement>);
 
@@ -53,7 +51,7 @@ export default function Button(props: IButtonProps) {
     };
 
     return (
-      <div className={resolvedClassName} onClick={handleClick} onKeyDown={handleKeyDown} role="button" tabIndex={0}>
+      <div className={resolvedClassName} onClick={onClick as unknown as MouseEventHandler<HTMLDivElement>} onKeyDown={handleKeyDown} role="button" tabIndex={0}>
         {children}
       </div>
     );

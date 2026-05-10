@@ -44,7 +44,7 @@ export default function ProjectListItem(props: IProjectListItemProps) {
     handleClick: handleRenameClick,
     handleFocus: handleRenameFocus,
     handleKeyDown: handleRenameKeyDown,
-    inputRef: renameInputRef,
+    handleInputRef: renameInputRef,
     renaming,
     startRenaming,
   } = useRenameProject({projectId: project.id, projectName: project.name});
