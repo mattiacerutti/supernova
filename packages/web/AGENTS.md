@@ -8,11 +8,13 @@
 ## Project structure and architecture
 
 - Maintain feature-first organization under `src/features/<feature>`.
-- Feature code lives under `src/features/<feature>/{pages,components,hooks,stores,types}` as needed.
+- Feature code lives under `src/features/<feature>/{pages,components,hooks,stores,types,lib,utils}` as needed.
 - Route/page-level components live in `src/features/<feature>/pages`.
-- Feature-specific UI lives in `src/features/<feature>/components`, grouped by domain when useful.
+- Feature-specific UI lives in `src/features/<feature>/components`, grouped by domain when useful or when too much files are in the root /components folder, making it hard to navigate.
 - Feature hooks live in `src/features/<feature>/hooks`.
 - API hooks live in `src/features/<feature>/hooks/api`, grouped by domain when a feature has multiple query/mutation families.
+- Feature `lib` folders contain feature-specific domain logic, state transformations, mappers, parsers, render-item builders, and other meaningful behavior that is not UI or React-specific.
+- Feature `utils` folders contain small, generic helpers for that feature, such as formatting or simple value normalization. If a utility starts encoding domain behavior, move it to `lib`.
 - Shared reusable UI lives in `src/components`; shared UI primitives live in `src/components/ui`.
 - Shared non-UI utilities live in `src/lib`.
 - App-level composition, routing, and shell code lives in `src/app`.

@@ -20,6 +20,7 @@ apps/desktop   → Electron shell. Starts/embeds the server and loads the server
 
 packages/web            → React/Vite client bundle consumed by the server. No native/filesystem assumptions.
 packages/agent-runtime  → Agent runtime services and provider SDK integrations (Node-only), consumed by the server.
+packages/contracts      → Shared Effect schemas, RPC definitions, and domain contracts used by server and web.
 ```
 
 ### Runtime Model
@@ -34,6 +35,7 @@ Electron app → spawns bundled server → server owns runtime/filesystem/worksp
 
 - The **server process** is the authority for native capabilities: Pi runtime, workspace filesystem access, subprocesses, shell/git, credentials, sessions, and API/WebSocket routing.
 - The **web package** is a pure client UI. It must communicate with server APIs and must not assume browser-local filesystem/native access.
+- The **contracts package** defines shared API/RPC boundaries and serializable domain types. Keep it environment-neutral and free of runtime ownership logic.
 - The **desktop app** is a convenience shell and OS integration layer. It should not own web serving or Pi runtime logic.
 - Remote/LAN browser access means operations happen on the machine running `apps/server`, not the machine running the browser.
 
@@ -67,6 +69,21 @@ Architecture:
 - Do not mix npm/yarn/pnpm unless strictly required by external tooling
 - Use **workspace packages** (`apps/*`, `packages/*`)
 - Prefer **TypeScript everywhere**
+- Always run verification commands from the repository root because this is a Turborepo workspace:
+  - `bun run test`
+  - `bun run typecheck`
+  - `bun run lint`
+
+## Reference Repositories
+
+Additional repositories may be cloned under `.context/` to provide local context. When a user asks how other projects solve a problem, implement a pattern, or structure similar functionality, check `.context/` first before looking elsewhere.
+
+Known useful references include:
+
+- `.context/effect` for Effect examples, internals, and idioms.
+- `.context/pi-mono` for Pi SDK and related monorepo patterns.
+
+Other repositories may also be present in `.context/`; inspect the directory when broader examples or prior art would help.
 
 ## Code Standards
 
