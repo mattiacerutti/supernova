@@ -1,6 +1,6 @@
 import {createRootRouteWithContext, createRoute, createRouter} from "@tanstack/react-router";
 import type {AppEnvironment} from "@/app/app-environment";
-import {HomeRoute, NewSessionRoute, RootRoute, SessionRoute, SettingsRoute, SettingsSectionRoute} from "@/app/routes";
+import {HomeLayoutRoute, HomeRoute, NewSessionRoute, RootRoute, SessionRoute, SettingsRoute, SettingsSectionRoute} from "@/app/routes";
 
 interface IRouterContext {
   appEnvironment: AppEnvironment;
@@ -10,8 +10,14 @@ const rootRoute = createRootRouteWithContext<IRouterContext>()({
   component: RootRoute,
 });
 
-const indexRoute = createRoute({
+const homeLayoutRoute = createRoute({
   getParentRoute: () => rootRoute,
+  id: "home-layout",
+  component: HomeLayoutRoute,
+});
+
+const indexRoute = createRoute({
+  getParentRoute: () => homeLayoutRoute,
   path: "/",
   component: HomeRoute,
 });
@@ -23,13 +29,13 @@ const settingsRoute = createRoute({
 });
 
 const sessionRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => homeLayoutRoute,
   path: "session/$sessionId",
   component: SessionRoute,
 });
 
 const newSessionRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => homeLayoutRoute,
   path: "session/new",
   component: NewSessionRoute,
 });
@@ -40,7 +46,7 @@ const settingsSectionRoute = createRoute({
   component: SettingsSectionRoute,
 });
 
-const routeTree = rootRoute.addChildren([indexRoute, newSessionRoute, sessionRoute, settingsRoute, settingsSectionRoute]);
+const routeTree = rootRoute.addChildren([homeLayoutRoute.addChildren([indexRoute, newSessionRoute, sessionRoute]), settingsRoute, settingsSectionRoute]);
 
 export const router = createRouter({
   context: {
