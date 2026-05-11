@@ -271,7 +271,14 @@ export default function ProjectListItem(props: IProjectListItemProps) {
           {canShowMoreSessions && (
             <Button className="ml-8 inline-flex items-center justify-start gap-2 py-1 text-xs" disabled={sessionsQuery.isFetching} onClick={handleLoadMoreSessions} variant="ghost">
               Show more
-              {sessionsQuery.isFetching && <span className="size-2.5 animate-spin rounded-full border border-neutral-600 border-t-neutral-300" aria-hidden="true" />}
+              <span className="grid size-2.5 place-items-center" aria-hidden="true">
+                <span
+                  className={cn(
+                    "size-2.5 rounded-full border border-neutral-600 border-t-neutral-300 opacity-0 transition-opacity duration-100",
+                    sessionsQuery.isFetching && "animate-spin opacity-100 delay-150"
+                  )}
+                />
+              </span>
             </Button>
           )}
 
