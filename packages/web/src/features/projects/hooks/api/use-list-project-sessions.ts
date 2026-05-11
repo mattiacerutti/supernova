@@ -2,8 +2,12 @@ import {useQuery} from "@tanstack/react-query";
 import {Effect} from "effect";
 import {AgentRpcProtocolClientService, eq} from "@/rpc/effect-query";
 
+export function allProjectSessionsQueryKey() {
+  return ["agent", "project", "sessions"] as const;
+}
+
 export function listProjectSessionsQueryKey(projectPath: string) {
-  return ["agent", "project", "sessions", projectPath] as const;
+  return [...allProjectSessionsQueryKey(), projectPath] as const;
 }
 
 interface IUseListProjectSessionsOptions {

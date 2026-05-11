@@ -1,20 +1,22 @@
 import {useQuery} from "@tanstack/react-query";
-import {AgentRpcProtocolClientService, eq} from "@/rpc/effect-query";
 import {Effect} from "effect";
+import {AgentRpcProtocolClientService, eq} from "@/rpc/effect-query";
 
 export function sessionQueryKey(sessionId: string) {
   return ["session", sessionId] as const;
 }
 
+export function sessionQueryOptions(sessionId: string) {
+  return eq.queryOptions({
+    queryFn: () =>
+      Effect.gen(function* () {
+        const rpc = yield* AgentRpcProtocolClientService;
+        return yield* rpc.getSession({sessionId});
+      }),
+    queryKey: sessionQueryKey(sessionId),
+  });
+}
+
 export function useSession(sessionId: string) {
-  return useQuery(
-    eq.queryOptions({
-      queryFn: () =>
-        Effect.gen(function* () {
-          const rpc = yield* AgentRpcProtocolClientService;
-          return yield* rpc.getSession({sessionId});
-        }),
-      queryKey: sessionQueryKey(sessionId),
-    })
-  );
+  return useQuery(sessionQueryOptions(sessionId));
 }

@@ -1,6 +1,7 @@
 import {useState} from "react";
 import type {MouseEvent} from "react";
 import {useLocation, useNavigate} from "@tanstack/react-router";
+import {useQueryClient} from "@tanstack/react-query";
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import IconButton from "@/components/ui/icon-button";
@@ -10,6 +11,7 @@ import {useArchiveProjectSession} from "@/features/projects/hooks/api/use-archiv
 import {useListProjectSessions} from "@/features/projects/hooks/api/use-list-project-sessions";
 import {useRenameProject} from "@/features/projects/hooks/use-rename-project";
 import {useProjectsStore} from "@/features/projects/stores/projects-store";
+import {sessionQueryOptions} from "@/features/sessions/hooks/api/use-session";
 import {useSessionStreamStore} from "@/features/sessions/stores/session-stream-store";
 import SessionTitleText from "@/features/sessions/components/session-title-text";
 import {formatUpdatedAt} from "@/features/projects/utils/format-updated-at";
@@ -33,6 +35,7 @@ export default function ProjectListItem(props: IProjectListItemProps) {
   const [confirmingArchiveSessionId, setConfirmingArchiveSessionId] = useState<string | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const removeProject = useProjectsStore((state) => state.removeProject);
   const toggleSessionPinned = useProjectsStore((state) => state.toggleSessionPinned);
   const toggleProjectPinned = useProjectsStore((state) => state.toggleProjectPinned);
@@ -100,6 +103,10 @@ export default function ProjectListItem(props: IProjectListItemProps) {
 
   const handleOpenSession = (sessionId: string): void => {
     void navigate({params: {sessionId}, to: "/session/$sessionId"});
+  };
+
+  const handlePrefetchSession = (sessionId: string): void => {
+    void queryClient.prefetchQuery(sessionQueryOptions(sessionId));
   };
 
   const handleNewSession = (event: MouseEvent<HTMLButtonElement>): void => {
@@ -208,7 +215,13 @@ export default function ProjectListItem(props: IProjectListItemProps) {
                 const sessionStreaming = sessionStream?.status === "streaming" || sessionStream?.status === "stopping";
 
                 return (
-                  <li key={session.id} onMouseLeave={() => handleSessionMouseLeave(session.id)}>
+                  <li
+                    key={session.id}
+                    onFocusCapture={() => handlePrefetchSession(session.id)}
+                    onMouseLeave={() => handleSessionMouseLeave(session.id)}
+                    onPointerDown={() => handlePrefetchSession(session.id)}
+                    onPointerEnter={() => handlePrefetchSession(session.id)}
+                  >
                     <Button
                       as="div"
                       className={cn(

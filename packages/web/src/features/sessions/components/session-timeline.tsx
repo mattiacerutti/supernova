@@ -26,7 +26,7 @@ const SessionTimelineRow = memo(function SessionTimelineRow(props: {item: Sessio
 interface ISessionTimelineProps {
   items: readonly SessionRenderItem[];
   isStreaming: boolean;
-  listRef: React.RefObject<LegendListRef | null>;
+  listRef?: React.RefObject<LegendListRef | null>;
   streamError: string | null;
 }
 
@@ -36,7 +36,7 @@ export default function SessionTimeline(props: ISessionTimelineProps) {
   const maintainScrollAtEnd = autoFollowState === "following";
 
   const handleScroll = (): void => {
-    const state = listRef.current?.getState();
+    const state = listRef?.current?.getState();
     if (!state) return;
 
     setAutoFollowState((current) => nextAutoFollowState(current, state.isAtEnd));

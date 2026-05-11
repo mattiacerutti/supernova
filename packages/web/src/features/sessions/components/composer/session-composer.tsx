@@ -5,6 +5,7 @@ import Icon from "@/components/ui/icon";
 import IconButton from "@/components/ui/icon-button";
 import ModelPicker from "@/features/sessions/components/composer/pickers/model-picker";
 import ThinkingLevelPicker from "@/features/sessions/components/composer/pickers/thinking-level-picker";
+import SessionComposerShell from "@/features/sessions/components/composer/session-composer-shell";
 import {modelKey} from "@/features/sessions/lib/model-picker/model-utils";
 
 interface ISessionComposerProps {
@@ -70,61 +71,50 @@ export default function SessionComposer(props: ISessionComposerProps) {
   };
 
   return (
-    <div className="px-4 pb-4 md:px-6">
-      <div className="mx-auto max-w-3xl rounded-3xl corner-superellipse/1.3 bg-[#2b2b2b] px-3 py-2 ring-1 ring-white/6 shadow-md">
-        <textarea
-          className="max-h-48 min-h-10 w-full resize-none overflow-y-auto bg-transparent p-1 text-sm text-neutral-200 outline-none field-sizing-content placeholder:text-md placeholder:font-light placeholder:text-white/25"
-          disabled={inputDisabled}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={placeholder}
-          rows={1}
-          value={draft}
-        />
+    <SessionComposerShell
+      attachmentDisabled={inputDisabled}
+      controls={
+        <div className="flex gap-2">
+          <ModelPicker
+            disabled={inputDisabled}
+            models={models}
+            modelsLoading={modelsLoading}
+            onModelChange={onModelChange}
+            selectedModelKey={selectedModelKey}
+            selectedModelName={selectedModelName}
+          />
 
-        <div className="flex items-center justify-between gap-2">
-          <IconButton
-            label="Attach files"
-            className="grid size-8 place-items-center rounded-full text-neutral-400 transition hover:bg-white/6 hover:text-neutral-100"
-            size="none"
-            variant="ghost"
-          >
-            <Icon name="plus" size="sm" />
-          </IconButton>
-
-          <div className="flex min-w-0 items-center gap-4">
-            <div className="flex gap-2">
-              <ModelPicker
-                disabled={inputDisabled}
-                models={models}
-                modelsLoading={modelsLoading}
-                onModelChange={onModelChange}
-                selectedModelKey={selectedModelKey}
-                selectedModelName={selectedModelName}
-              />
-
-              <ThinkingLevelPicker
-                disabled={inputDisabled}
-                onThinkingLevelChange={onThinkingLevelChange}
-                selectedThinkingLabel={selectedThinkingLabel}
-                selectedThinkingLevel={selectedThinkingLevel}
-                thinkingLevels={thinkingLevels}
-              />
-            </div>
-
-            <IconButton
-              label={primaryActionLabel}
-              className="grid size-9 place-items-center rounded-full bg-neutral-300 text-neutral-950 transition hover:bg-white disabled:cursor-default disabled:bg-white/10 disabled:text-neutral-500"
-              disabled={primaryActionDisabled}
-              onClick={handlePrimaryAction}
-              size="none"
-              variant="bare"
-            >
-              <Icon name={isStreaming ? "stop" : "send"} size="md" />
-            </IconButton>
-          </div>
+          <ThinkingLevelPicker
+            disabled={inputDisabled}
+            onThinkingLevelChange={onThinkingLevelChange}
+            selectedThinkingLabel={selectedThinkingLabel}
+            selectedThinkingLevel={selectedThinkingLevel}
+            thinkingLevels={thinkingLevels}
+          />
         </div>
-      </div>
-    </div>
+      }
+      primaryAction={
+        <IconButton
+          label={primaryActionLabel}
+          className="grid size-9 place-items-center rounded-full bg-neutral-300 text-neutral-950 transition hover:bg-white disabled:cursor-default disabled:bg-white/10 disabled:text-neutral-500"
+          disabled={primaryActionDisabled}
+          onClick={handlePrimaryAction}
+          size="none"
+          variant="bare"
+        >
+          <Icon name={isStreaming ? "stop" : "send"} size="md" />
+        </IconButton>
+      }
+    >
+      <textarea
+        className="max-h-48 min-h-10 w-full resize-none overflow-y-auto bg-transparent p-1 text-sm text-neutral-200 outline-none field-sizing-content placeholder:text-md placeholder:font-light placeholder:text-white/25"
+        disabled={inputDisabled}
+        onChange={(event) => setDraft(event.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        rows={1}
+        value={draft}
+      />
+    </SessionComposerShell>
   );
 }

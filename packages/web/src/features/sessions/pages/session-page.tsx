@@ -1,15 +1,17 @@
 import type {IAgentSessionDetails} from "@pi-desktop/contracts/sessions";
 import type {AppEnvironment} from "@/app/app-environment";
 import SessionComposer from "@/features/sessions/components/composer/session-composer";
+import SessionComposerSkeleton from "@/features/sessions/components/composer/session-composer-skeleton";
+import SessionLayout from "@/features/sessions/components/session-layout";
 import SessionTimeline from "@/features/sessions/components/session-timeline";
 import SessionTitleText from "@/features/sessions/components/session-title-text";
 import {useSession} from "@/features/sessions/hooks/api/use-session";
 import {useSessionModels} from "@/features/sessions/hooks/api/use-session-models";
+import {useCachedSessionTitle} from "@/features/sessions/hooks/use-cached-session-title";
 import {useSessionMessageStream} from "@/features/sessions/hooks/use-session-message-stream";
 import {modelKey, resolveThinkingLevel, selectionFromModel, selectionKey} from "@/features/sessions/lib/model-picker/model-utils";
 import {useModelPickerStore} from "@/features/sessions/stores/model-picker-store";
 import {useSessionModelsStore} from "@/features/sessions/stores/session-models-store";
-import {cn} from "@/lib/cn";
 
 interface ISessionPageProps {
   appEnvironment: AppEnvironment;
@@ -22,14 +24,7 @@ export default function SessionPage(props: ISessionPageProps) {
   const sessionQuery = useSession(sessionId);
 
   if (sessionQuery.isPending) {
-    return (
-      <div className="grid flex-1 place-items-center px-6 py-10">
-        <div className="flex items-center gap-3 text-sm text-neutral-500">
-          <span className="size-4 animate-spin rounded-full border border-neutral-600 border-t-neutral-200" />
-          Loading session
-        </div>
-      </div>
-    );
+    return <SessionLoading appEnvironment={appEnvironment} sessionId={sessionId} />;
   }
 
   if (sessionQuery.error || !sessionQuery.data) {
@@ -41,6 +36,31 @@ export default function SessionPage(props: ISessionPageProps) {
   }
 
   return <SessionConversation appEnvironment={appEnvironment} session={sessionQuery.data} />;
+}
+
+interface ISessionLoadingProps {
+  readonly appEnvironment: AppEnvironment;
+  readonly sessionId: string;
+}
+
+function SessionLoading(props: ISessionLoadingProps) {
+  const {appEnvironment, sessionId} = props;
+  const cachedTitle = useCachedSessionTitle(sessionId);
+
+  return (
+    <SessionLayout
+      appEnvironment={appEnvironment}
+      composer={<SessionComposerSkeleton />}
+      timeline={<div className="min-h-0 flex-1" />}
+      title={
+        cachedTitle ? (
+          <span className="block truncate">{cachedTitle}</span>
+        ) : (
+          <span className="block h-4 w-36 animate-pulse rounded-full bg-white/10" aria-label="Loading session title" />
+        )
+      }
+    />
+  );
 }
 
 interface ISessionConversationProps {
@@ -66,8 +86,6 @@ function SessionConversation(props: ISessionConversationProps) {
 
   const selectedThinkingLevel = storedSessionModel?.thinkingLevel ?? session.model?.thinkingLevel;
   const selectedModelReference = selectedModel ? selectionFromModel(selectedModel, resolveThinkingLevel(selectedModel, selectedThinkingLevel)) : undefined;
-
-  const titleOffset = appEnvironment === "mac" ? "left-48" : appEnvironment === "web" ? "left-12" : "left-20";
 
   const stream = useSessionMessageStream({
     modelReference: selectedModelReference,
@@ -99,27 +117,24 @@ function SessionConversation(props: ISessionConversationProps) {
   };
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <header className="-mx-4 flex min-w-0 shrink-0 items-center justify-between border-b border-neutral-800 px-4 pb-3 pt-2.5">
-        <h1 className={cn("sticky min-w-0 max-w-xs truncate text-sm font-medium text-neutral-200", titleOffset)}>
-          <SessionTitleText className="block truncate" title={session.title} />
-        </h1>
-      </header>
-
-      <SessionTimeline isStreaming={isStreaming} items={stream.renderItems} listRef={stream.listRef} streamError={stream.streamError} />
-
-      <SessionComposer
-        disabled={modelsPending || !selectedModelReference}
-        models={availableModels}
-        modelsLoading={modelsPending}
-        onInterrupt={stream.stopStreaming}
-        onModelChange={handleModelChange}
-        onSubmit={stream.submitMessage}
-        onThinkingLevelChange={handleThinkingLevelChange}
-        selectedModelKey={selectedModelKey}
-        selectedThinkingLevel={selectedModelReference?.thinkingLevel}
-        streamStatus={stream.streamStatus}
-      />
-    </div>
+    <SessionLayout
+      appEnvironment={appEnvironment}
+      composer={
+        <SessionComposer
+          disabled={modelsPending || !selectedModelReference}
+          models={availableModels}
+          modelsLoading={modelsPending}
+          onInterrupt={stream.stopStreaming}
+          onModelChange={handleModelChange}
+          onSubmit={stream.submitMessage}
+          onThinkingLevelChange={handleThinkingLevelChange}
+          selectedModelKey={selectedModelKey}
+          selectedThinkingLevel={selectedModelReference?.thinkingLevel}
+          streamStatus={stream.streamStatus}
+        />
+      }
+      timeline={<SessionTimeline isStreaming={isStreaming} items={stream.renderItems} listRef={stream.listRef} streamError={stream.streamError} />}
+      title={<SessionTitleText className="block truncate" title={session.title} />}
+    />
   );
 }
