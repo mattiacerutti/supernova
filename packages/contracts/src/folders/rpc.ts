@@ -1,6 +1,14 @@
 import * as Rpc from "effect/unstable/rpc/Rpc";
 import {Schema} from "effect";
-import {AgentFolderSuggestionsListError, AgentFolderSuggestionsListResult} from "@pi-desktop/contracts/folders";
+import {AgentFolderCreateError, AgentFolderCreateResult, AgentFolderSuggestionsListError, AgentFolderSuggestionsListResult} from "@pi-desktop/contracts/folders";
+
+export const AgentFolderCreateRpc = Rpc.make("createFolder", {
+  error: AgentFolderCreateError,
+  payload: Schema.Struct({
+    path: Schema.String,
+  }),
+  success: AgentFolderCreateResult,
+});
 
 export const AgentFolderSuggestionsListRpc = Rpc.make("listFolderSuggestions", {
   error: AgentFolderSuggestionsListError,
@@ -10,4 +18,4 @@ export const AgentFolderSuggestionsListRpc = Rpc.make("listFolderSuggestions", {
   success: AgentFolderSuggestionsListResult,
 });
 
-export const AgentFolderRpcs = [AgentFolderSuggestionsListRpc] as const;
+export const AgentFolderRpcs = [AgentFolderCreateRpc, AgentFolderSuggestionsListRpc] as const;
