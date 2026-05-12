@@ -2,8 +2,12 @@ import {useNavigate} from "@tanstack/react-router";
 import {useQueryClient} from "@tanstack/react-query";
 import {useState} from "react";
 import SessionComposer from "@/features/sessions/components/composer/session-composer";
+import AttachmentDropOverlay from "@/features/sessions/components/attachments/attachment-drop-overlay";
+import ModelPicker from "@/features/sessions/components/composer/pickers/model-picker";
+import ThinkingLevelPicker from "@/features/sessions/components/composer/pickers/thinking-level-picker";
 import {useCreateSession} from "@/features/sessions/hooks/api/use-create-session";
 import {useSessionModels} from "@/features/sessions/hooks/api/use-session-models";
+import {useComposerAttachments} from "@/features/sessions/hooks/use-composer-attachments";
 import {modelKey, resolveThinkingLevel, selectionFromModel} from "@/features/sessions/lib/model-picker/model-utils";
 import {useModelPickerStore} from "@/features/sessions/stores/model-picker-store";
 import {useSessionModelsStore} from "@/features/sessions/stores/session-models-store";
@@ -39,6 +43,12 @@ export default function NewSessionPage(props: NewSessionPageProps) {
   const resolvedModelKey = selectedModelKey || defaultModelKey;
   const selectedModel = availableModels.find((model) => modelKey(model.providerId, model.id) === resolvedModelKey);
   const resolvedThinkingLevel = selectedModel ? resolveThinkingLevel(selectedModel, selectedThinkingLevel ?? lastThinkingLevel) : undefined;
+  const selectedModelName = modelsPending ? "Loading models" : (selectedModel?.name ?? "No model");
+  const thinkingLevels = selectedModel?.thinkingLevels ?? [];
+  const selectedThinkingLabel = thinkingLevels.find((level) => level.value === resolvedThinkingLevel)?.label ?? "No reasoning";
+  const composerDisabled = createSessionMutation.isPending || modelsPending || !selectedModel;
+  const imageSupported = selectedModel?.capabilities.images === true;
+  const composerAttachments = useComposerAttachments({disabled: composerDisabled, imageSupported});
 
   const handleModelChange = (value: string): void => {
     const nextModel = availableModels.find((model) => modelKey(model.providerId, model.id) === value);
@@ -46,6 +56,7 @@ export default function NewSessionPage(props: NewSessionPageProps) {
 
     const currentLevel = selectedThinkingLevel ?? lastThinkingLevel;
     const nextThinkingLevel = resolveThinkingLevel(nextModel, currentLevel);
+    if (!nextModel.capabilities.images) composerAttachments.removeUnsupportedImages();
     setSelectedModelKey(value);
     setSelectedThinkingLevel(nextThinkingLevel);
     recordRecentModel(value);
@@ -56,7 +67,7 @@ export default function NewSessionPage(props: NewSessionPageProps) {
     setLastThinkingLevel(value);
   };
 
-  const handleSubmit = (message: string): void => {
+  const handleSubmit = (message: string, attachments: typeof composerAttachments.attachments): void => {
     if (!selectedModel) return;
 
     createSessionMutation.mutate(
@@ -67,7 +78,7 @@ export default function NewSessionPage(props: NewSessionPageProps) {
           setSessionModel(session.id, modelReference);
           recordRecentModel(resolvedModelKey);
           setLastThinkingLevel(resolvedThinkingLevel);
-          startStream({message, model: modelReference, projectPath, queryClient, rpcClient, sessionId: session.id, sessionTurns: session.turns});
+          startStream({attachments, message, model: modelReference, projectPath, queryClient, rpcClient, sessionId: session.id, sessionTurns: session.turns});
           void navigate({params: {sessionId: session.id}, to: "/session/$sessionId"});
         },
       }
@@ -75,24 +86,41 @@ export default function NewSessionPage(props: NewSessionPageProps) {
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4 pb-16 pt-10">
+    <div {...composerAttachments.dropZoneProps} className="relative flex min-h-0 flex-1 flex-col items-center justify-center px-4 pb-16 pt-10">
       <div className="w-full max-w-3xl">
         <h1 className="mb-10 text-center text-4xl font-normal tracking-tight text-neutral-50">
           What should we build in <i>{projectName}</i>?
         </h1>
         {createSessionMutation.error && <p className="mb-4 text-center text-sm text-red-300">Unable to create the session.</p>}
-        <SessionComposer
-          disabled={createSessionMutation.isPending || modelsPending || !selectedModel}
-          models={availableModels}
-          modelsLoading={modelsPending}
-          onModelChange={handleModelChange}
-          onSubmit={handleSubmit}
-          onThinkingLevelChange={handleThinkingLevelChange}
-          placeholder="Ask anything."
-          selectedModelKey={resolvedModelKey}
-          selectedThinkingLevel={resolvedThinkingLevel}
-        />
+        <SessionComposer.Root attachments={composerAttachments} disabled={composerDisabled} onSubmit={handleSubmit}>
+          <SessionComposer.Attachments />
+          <SessionComposer.Input placeholder="Ask anything." />
+          <SessionComposer.Toolbar>
+            <SessionComposer.AttachButton />
+            <SessionComposer.ActionGroup>
+              <div className="flex gap-2">
+                <ModelPicker
+                  disabled={composerDisabled}
+                  models={availableModels}
+                  modelsLoading={modelsPending}
+                  onModelChange={handleModelChange}
+                  selectedModelKey={resolvedModelKey}
+                  selectedModelName={selectedModelName}
+                />
+                <ThinkingLevelPicker
+                  disabled={composerDisabled}
+                  onThinkingLevelChange={handleThinkingLevelChange}
+                  selectedThinkingLabel={selectedThinkingLabel}
+                  selectedThinkingLevel={resolvedThinkingLevel}
+                  thinkingLevels={thinkingLevels}
+                />
+              </div>
+              <SessionComposer.SubmitButton />
+            </SessionComposer.ActionGroup>
+          </SessionComposer.Toolbar>
+        </SessionComposer.Root>
       </div>
+      {composerAttachments.isDraggingFiles && <AttachmentDropOverlay />}
     </div>
   );
 }

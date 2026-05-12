@@ -20,8 +20,8 @@ export const AgentThinkingLevelOption = Schema.Struct({
 
 /** Feature capabilities advertised for a model. */
 export const AgentModelCapabilities = Schema.Struct({
-  /** Whether the model supports non-text attachments, such as images or files. */
-  attachments: Schema.Boolean,
+  /** Whether the model supports native image inputs. Text attachments are converted to prompt context. */
+  images: Schema.Boolean,
   /** Whether the model supports explicit thinking or reasoning modes. */
   reasoning: Schema.Boolean,
   /** Whether the model can request tool calls. */

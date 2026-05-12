@@ -1,4 +1,4 @@
-import type {AgentModelReference, AgentSessionTurn} from "@pi-desktop/contracts/sessions/schemas";
+import type {AgentModelReference, AgentSessionAttachment, AgentSessionTurn} from "@pi-desktop/contracts/sessions/schemas";
 import type {LegendListRef} from "@legendapp/list/react";
 import {useQueryClient} from "@tanstack/react-query";
 import {useRef} from "react";
@@ -14,7 +14,7 @@ interface UseSessionMessageStreamResult {
   stopStreaming: () => void;
   streamError: string | null;
   streamStatus: SessionStreamStatus;
-  submitMessage: (message: string) => void;
+  submitMessage: (message: string, attachments: readonly AgentSessionAttachment[]) => void;
 }
 
 interface UseSessionMessageStreamInput {
@@ -40,7 +40,7 @@ export function useSessionMessageStream(input: UseSessionMessageStreamInput): Us
   const streamTurn = stream?.turn ?? null;
   const renderItems = [...turnsToRenderItems(baseTurns, false), ...(streamTurn ? turnsToRenderItems([streamTurn], isStreaming) : [])];
 
-  const submitMessage = (message: string): void => {
+  const submitMessage = (message: string, attachments: readonly AgentSessionAttachment[]): void => {
     if (isStreaming) return;
 
     if (!modelReference) {
@@ -49,7 +49,7 @@ export function useSessionMessageStream(input: UseSessionMessageStreamInput): Us
       return;
     }
 
-    startStream({message, model: modelReference, projectPath, queryClient, rpcClient, sessionId, sessionTurns: baseTurns});
+    startStream({attachments, message, model: modelReference, projectPath, queryClient, rpcClient, sessionId, sessionTurns: baseTurns});
     window.requestAnimationFrame(() => {
       void messagesListRef.current?.scrollToEnd({animated: false});
     });

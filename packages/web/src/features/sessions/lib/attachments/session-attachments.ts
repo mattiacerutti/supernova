@@ -1,0 +1,58 @@
+import type {AgentSessionAttachment} from "@pi-desktop/contracts/sessions/schemas";
+import {attachmentMime, fileExtension} from "@/features/sessions/lib/attachments/attachment-classification";
+
+export const MAX_SESSION_ATTACHMENTS = 10;
+export const MAX_SESSION_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+
+export {fileRequiresImageCapability, SESSION_ATTACHMENT_ACCEPT} from "@/features/sessions/lib/attachments/attachment-classification";
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  let binary = "";
+
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.slice(index, index + chunkSize));
+  }
+
+  return window.btoa(binary);
+}
+
+export function formatAttachmentType(attachment: {mime: string; name: string}): string {
+  const extension = fileExtension(attachment.name);
+  if (extension) return extension.toUpperCase();
+
+  const subtype = attachment.mime.split("/").at(1);
+  if (!subtype || subtype === "octet-stream") return "FILE";
+
+  return (
+    subtype
+      .split(/[+;.-]/)
+      .at(0)
+      ?.toUpperCase() ?? "FILE"
+  );
+}
+
+export function formatAttachmentSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+export async function fileToSessionAttachment(file: File): Promise<AgentSessionAttachment> {
+  const buffer = await file.arrayBuffer();
+  const mime = attachmentMime(file, buffer);
+
+  if (!mime) {
+    throw new Error(`${file.name} is not a supported attachment type.`);
+  }
+
+  return {
+    id: `${file.name}-${file.size}-${file.lastModified}-${Math.random().toString(36).slice(2)}`,
+    mime,
+    name: file.name,
+    size: file.size,
+    contentBase64: arrayBufferToBase64(buffer),
+  };
+}

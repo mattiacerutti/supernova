@@ -12,6 +12,7 @@ export type IconName =
   | "chevron-right"
   | "copy"
   | "edit"
+  | "file"
   | "filter"
   | "folder"
   | "folder-open"
@@ -19,6 +20,7 @@ export type IconName =
   | "gauge"
   | "git-branch"
   | "key"
+  | "image"
   | "loader"
   | "maximize"
   | "more-horizontal"
@@ -57,12 +59,14 @@ const icons: Record<IconName, string> = {
   "chevron-right": "lucide:chevron-right",
   copy: "lucide:copy",
   edit: "cuida:edit-outline",
+  file: "lucide:file",
   filter: "lucide:list-filter",
   folder: "cuida:folder-outline",
   "folder-open": "fluent:folder-open-24-regular",
   "folder-plus": "mdi:create-new-folder-outline",
   gauge: "lucide:gauge",
   "git-branch": "lucide:git-branch",
+  image: "lucide:image",
   key: "lucide:key-round",
   loader: "lucide:loader-circle",
   maximize: "lucide:maximize-2",

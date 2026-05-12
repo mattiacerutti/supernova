@@ -1,5 +1,7 @@
 import type {AgentSessionDetails} from "@pi-desktop/contracts/sessions/schemas";
 import type {AppEnvironment} from "@/app/app-environment";
+import ModelPicker from "@/features/sessions/components/composer/pickers/model-picker";
+import ThinkingLevelPicker from "@/features/sessions/components/composer/pickers/thinking-level-picker";
 import SessionComposer from "@/features/sessions/components/composer/session-composer";
 import SessionComposerSkeleton from "@/features/sessions/components/composer/session-composer-skeleton";
 import SessionLayout from "@/features/sessions/components/session-layout";
@@ -7,6 +9,7 @@ import SessionTimeline from "@/features/sessions/components/session-timeline";
 import SessionTitleText from "@/features/sessions/components/session-title-text";
 import {useSession} from "@/features/sessions/hooks/api/use-session";
 import {useSessionModels} from "@/features/sessions/hooks/api/use-session-models";
+import {useComposerAttachments} from "@/features/sessions/hooks/use-composer-attachments";
 import {useCachedSessionTitle} from "@/features/sessions/hooks/use-cached-session-title";
 import {useSessionMessageStream} from "@/features/sessions/hooks/use-session-message-stream";
 import {modelKey, resolveThinkingLevel, selectionFromModel, selectionKey} from "@/features/sessions/lib/model-picker/model-utils";
@@ -86,6 +89,13 @@ function SessionConversation(props: SessionConversationProps) {
 
   const selectedThinkingLevel = storedSessionModel?.thinkingLevel ?? session.model?.thinkingLevel;
   const selectedModelReference = selectedModel ? selectionFromModel(selectedModel, resolveThinkingLevel(selectedModel, selectedThinkingLevel)) : undefined;
+  const selectedModelName = modelsPending ? "Loading models" : (selectedModel?.name ?? "No model");
+  const thinkingLevels = selectedModel?.thinkingLevels ?? [];
+  const selectedThinkingLabel = thinkingLevels.find((level) => level.value === selectedModelReference?.thinkingLevel)?.label ?? "No reasoning";
+
+  const composerDisabled = modelsPending || !selectedModelReference;
+  const imageSupported = selectedModel?.capabilities.images === true;
+  const composerAttachments = useComposerAttachments({disabled: composerDisabled, imageSupported});
 
   const stream = useSessionMessageStream({
     modelReference: selectedModelReference,
@@ -104,6 +114,7 @@ function SessionConversation(props: SessionConversationProps) {
     const nextThinkingLevel = resolveThinkingLevel(nextModel, currentLevel);
     const nextSelection = selectionFromModel(nextModel, nextThinkingLevel);
 
+    if (!nextModel.capabilities.images) composerAttachments.removeUnsupportedImages();
     setSessionModel(session.id, nextSelection);
     recordRecentModel(value);
   };
@@ -119,19 +130,42 @@ function SessionConversation(props: SessionConversationProps) {
   return (
     <SessionLayout
       appEnvironment={appEnvironment}
+      attachmentDropOverlayVisible={composerAttachments.isDraggingFiles}
+      attachmentDropZoneProps={composerAttachments.dropZoneProps}
       composer={
-        <SessionComposer
-          disabled={modelsPending || !selectedModelReference}
-          models={availableModels}
-          modelsLoading={modelsPending}
+        <SessionComposer.Root
+          attachments={composerAttachments}
+          disabled={composerDisabled}
           onInterrupt={stream.stopStreaming}
-          onModelChange={handleModelChange}
           onSubmit={stream.submitMessage}
-          onThinkingLevelChange={handleThinkingLevelChange}
-          selectedModelKey={selectedModelKey}
-          selectedThinkingLevel={selectedModelReference?.thinkingLevel}
           streamStatus={stream.streamStatus}
-        />
+        >
+          <SessionComposer.Attachments />
+          <SessionComposer.Input />
+          <SessionComposer.Toolbar>
+            <SessionComposer.AttachButton />
+            <SessionComposer.ActionGroup>
+              <div className="flex gap-2">
+                <ModelPicker
+                  disabled={composerDisabled || isStreaming}
+                  models={availableModels}
+                  modelsLoading={modelsPending}
+                  onModelChange={handleModelChange}
+                  selectedModelKey={selectedModelKey}
+                  selectedModelName={selectedModelName}
+                />
+                <ThinkingLevelPicker
+                  disabled={composerDisabled || isStreaming}
+                  onThinkingLevelChange={handleThinkingLevelChange}
+                  selectedThinkingLabel={selectedThinkingLabel}
+                  selectedThinkingLevel={selectedModelReference?.thinkingLevel}
+                  thinkingLevels={thinkingLevels}
+                />
+              </div>
+              <SessionComposer.SubmitButton />
+            </SessionComposer.ActionGroup>
+          </SessionComposer.Toolbar>
+        </SessionComposer.Root>
       }
       timeline={<SessionTimeline isStreaming={isStreaming} items={stream.renderItems} listRef={stream.listRef} streamError={stream.streamError} />}
       title={<SessionTitleText className="block truncate" title={session.title} />}

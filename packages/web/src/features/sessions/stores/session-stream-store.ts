@@ -1,6 +1,13 @@
 import type {QueryClient} from "@tanstack/react-query";
 import type {AgentSessionStreamEvent} from "@pi-desktop/contracts/sessions/procedures";
-import type {AgentModelReference, AgentSessionDetails, AgentSessionSummary, AgentSessionTurn, AgentSessionUserMessage} from "@pi-desktop/contracts/sessions/schemas";
+import type {
+  AgentModelReference,
+  AgentSessionAttachment,
+  AgentSessionDetails,
+  AgentSessionSummary,
+  AgentSessionTurn,
+  AgentSessionUserMessage,
+} from "@pi-desktop/contracts/sessions/schemas";
 import type {AgentProjectSessionsListResult} from "@pi-desktop/contracts/projects/procedures";
 import {create} from "zustand";
 import {Effect, Stream} from "effect";
@@ -29,6 +36,7 @@ interface SessionStreamEntry extends SessionStreamState {
 }
 
 interface StartSessionStreamInput {
+  readonly attachments: readonly AgentSessionAttachment[];
   readonly message: string;
   readonly model: AgentModelReference;
   readonly projectPath: string;
@@ -49,13 +57,26 @@ function createStreamId(sessionId: string): string {
   return `${sessionId}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
 }
 
+function attachmentMetadata(attachments: readonly AgentSessionAttachment[]): AgentSessionAttachment[] | undefined {
+  if (attachments.length === 0) return undefined;
+
+  return attachments.map((attachment) => ({
+    id: attachment.id,
+    contentBase64: attachment.contentBase64,
+    mime: attachment.mime,
+    name: attachment.name,
+    size: attachment.size,
+  }));
+}
+
 /**
  * Creates an optimistic local turn immediately so the user message appears before
  * the server emits the canonical turn snapshot.
  */
-function createInitialStreamTurn(input: {message: string; model: AgentModelReference}): AgentSessionTurn {
+function createInitialStreamTurn(input: {attachments: readonly AgentSessionAttachment[]; message: string; model: AgentModelReference}): AgentSessionTurn {
   const timestamp = new Date().toISOString();
-  const localMessage: AgentSessionUserMessage = {content: input.message, id: `local-${Date.now()}`, timestamp};
+
+  const localMessage: AgentSessionUserMessage = {attachments: attachmentMetadata(input.attachments), content: input.message, id: `local-${Date.now()}`, timestamp};
 
   return {
     events: [],
@@ -167,12 +188,12 @@ export const useSessionStreamStore = create<SessionStreamStoreState>()((set, get
   return {
     streams: {},
     startStream: (input) => {
-      const {message, model, projectPath, queryClient, rpcClient, sessionId, sessionTurns} = input;
+      const {attachments, message, model, projectPath, queryClient, rpcClient, sessionId, sessionTurns} = input;
       const current = get().streams[sessionId];
       if (current?.status === "streaming" || current?.status === "stopping") return;
 
       const streamId = createStreamId(sessionId);
-      const turn = createInitialStreamTurn({message, model});
+      const turn = createInitialStreamTurn({attachments, message, model});
 
       // Optimistically append the user's message before the RPC stream has fully
       // initialized. The next `ready` event will replace `turns` with runtime data.
@@ -187,7 +208,7 @@ export const useSessionStreamStore = create<SessionStreamStoreState>()((set, get
       // transcript snapshots; Zustand owns the transient live turn and fiber.
       void rpcClient
         .fork((rpc) =>
-          rpc.sendSessionMessage({message, model, sessionId}).pipe(
+          rpc.sendSessionMessage({attachments, message, model, sessionId}).pipe(
             Stream.runForEach((event) => Effect.sync(() => handleStreamEvent({event, projectPath, queryClient, sessionId, streamId}))),
             Effect.catch((cause: unknown) => Effect.sync(() => failStream(sessionId, streamId, cause))),
             Effect.ensuring(Effect.sync(() => finishStream(sessionId, streamId, queryClient)))

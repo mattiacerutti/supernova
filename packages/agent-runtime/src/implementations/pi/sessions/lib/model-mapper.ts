@@ -46,7 +46,7 @@ function getThinkingLevelOptions(model: Model<Api>): AgentModelDetails["thinking
 export function toAgentModelDetails(model: Model<Api>, providerDisplayName: string): AgentModelDetails {
   return {
     capabilities: {
-      attachments: true,
+      images: true,
       reasoning: model.reasoning === true,
       toolCalls: true,
     },

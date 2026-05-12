@@ -1,7 +1,8 @@
 import {Schema} from "effect";
-import {AgentModelReference, AgentSessionSummary, AgentSessionTurn} from "../schemas";
+import {AgentModelReference, AgentSessionAttachment, AgentSessionSummary, AgentSessionTurn} from "../schemas";
 
 export const AgentSessionMessageSendPayload = Schema.Struct({
+  attachments: Schema.Array(AgentSessionAttachment),
   message: Schema.String,
   model: AgentModelReference,
   sessionId: Schema.String,
