@@ -14,6 +14,7 @@ export function getSession(sessionId: string) {
         const sessionInfo = await findSessionById(piSdk, sessionId);
         const sessionManager = piSdk.SessionManager.open(sessionInfo.path);
         const sessionContext = sessionManager.buildSessionContext();
+        const branch = sessionManager.getBranch();
         const summary = toPiSessionSummary(sessionInfo);
 
         const model = sessionContext.model ? {id: sessionContext.model.modelId, providerId: sessionContext.model.provider, thinkingLevel: sessionContext.thinkingLevel} : undefined;
@@ -23,7 +24,7 @@ export function getSession(sessionId: string) {
           model,
           projectPath: sessionInfo.cwd,
           title: summary.title,
-          turns: model ? normalizePiSessionTurns(sessionContext.messages, model) : [],
+          turns: model ? normalizePiSessionTurns(branch, model) : [],
           updatedAt: summary.updatedAt,
         };
       },

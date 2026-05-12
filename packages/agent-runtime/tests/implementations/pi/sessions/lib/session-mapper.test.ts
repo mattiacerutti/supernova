@@ -1,12 +1,27 @@
 import {describe, expect, it} from "vitest";
 import {normalizePiSessionTurns} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-mapper";
 import type {AgentModelReference} from "@pi-desktop/contracts/sessions/schemas";
-import type {AgentSession} from "@mariozechner/pi-coding-agent";
+import type {AgentSession, SessionEntry} from "@mariozechner/pi-coding-agent";
 
 const model: AgentModelReference = {id: "claude-sonnet", providerId: "anthropic", thinkingLevel: "high"};
 
-function piMessages(messages: unknown[]): AgentSession["messages"] {
-  return messages as AgentSession["messages"];
+function piEntries(messages: unknown[]): SessionEntry[] {
+  let parentId: string | null = null;
+
+  return messages.map((message, index) => {
+    const timestamp =
+      typeof message === "object" && message !== null && "timestamp" in message ? new Date(message.timestamp as string | number).toISOString() : new Date(0).toISOString();
+    const entry: SessionEntry = {
+      id: `entry-${index}`,
+      message: message as AgentSession["messages"][number],
+      parentId,
+      timestamp,
+      type: "message",
+    };
+
+    parentId = entry.id;
+    return entry;
+  });
 }
 
 function expectTurnEvents(turn: ReturnType<typeof normalizePiSessionTurns>[number] | undefined, events: Array<Record<string, unknown>>): void {
@@ -16,7 +31,7 @@ function expectTurnEvents(turn: ReturnType<typeof normalizePiSessionTurns>[numbe
 describe("normalizePiSessionTurns", () => {
   it("groups a user request, reasoning, tool result, and assistant response into one model-attributed turn", () => {
     const turns = normalizePiSessionTurns(
-      piMessages([
+      piEntries([
         {content: [{text: "Fix the tests", type: "text"}], id: "user-1", role: "user", timestamp: 1},
         {
           content: [
@@ -34,10 +49,10 @@ describe("normalizePiSessionTurns", () => {
 
     expect(turns).toHaveLength(1);
     expect(turns[0]).toMatchObject({
-      id: "turn-1970-01-01T00:00:00.001Z-user-0",
+      id: "turn-entry-0",
       model,
       status: "completed",
-      userMessage: {content: "Fix the tests", id: "1970-01-01T00:00:00.001Z-user-0"},
+      userMessage: {content: "Fix the tests", id: "entry-0"},
     });
     expectTurnEvents(turns[0], [
       {
@@ -57,7 +72,7 @@ describe("normalizePiSessionTurns", () => {
 
   it("updates a pending tool call when it is the first event in the turn", () => {
     const turns = normalizePiSessionTurns(
-      piMessages([
+      piEntries([
         {content: [{text: "Run tests", type: "text"}], id: "user-1", role: "user", timestamp: 1},
         {
           content: [{arguments: {command: "bun test"}, id: "call-1", name: "bash", type: "toolCall"}],
@@ -81,7 +96,7 @@ describe("normalizePiSessionTurns", () => {
 
   it("preserves assistant content order while replacing completed tool calls in place", () => {
     const turns = normalizePiSessionTurns(
-      piMessages([
+      piEntries([
         {content: [{text: "Inspect and fix", type: "text"}], id: "user-1", role: "user", timestamp: 1},
         {
           content: [
@@ -114,7 +129,7 @@ describe("normalizePiSessionTurns", () => {
 
   it("maps assistant errors into error turns", () => {
     const turns = normalizePiSessionTurns(
-      piMessages([
+      piEntries([
         {content: [{text: "Fix it", type: "text"}], id: "user-1", role: "user", timestamp: 1},
         {content: [], errorMessage: "Model failed", id: "assistant-1", role: "assistant", timestamp: 2},
       ]),
@@ -127,7 +142,7 @@ describe("normalizePiSessionTurns", () => {
 
   it("does not render user-initiated aborts as assistant errors", () => {
     const turns = normalizePiSessionTurns(
-      piMessages([
+      piEntries([
         {content: [{text: "Fix it", type: "text"}], id: "user-1", role: "user", timestamp: 1},
         {
           content: [{thinking: "I should inspect the project.", type: "thinking"}],
@@ -143,5 +158,56 @@ describe("normalizePiSessionTurns", () => {
 
     expect(turns[0]).toMatchObject({status: "completed"});
     expectTurnEvents(turns[0], [{content: "I should inspect the project.", type: "reasoning"}]);
+  });
+
+  it("ignores compaction and custom entries while preserving raw branch messages", () => {
+    const turns = normalizePiSessionTurns(
+      [
+        ...piEntries([
+          {content: [{text: "First request", type: "text"}], id: "user-1", role: "user", timestamp: 1},
+          {content: [{text: "First response", type: "text"}], id: "assistant-1", role: "assistant", timestamp: 2},
+        ]),
+        {
+          firstKeptEntryId: "entry-2",
+          id: "compaction-1",
+          parentId: "entry-1",
+          summary: "Compacted summary",
+          timestamp: "1970-01-01T00:00:03.000Z",
+          tokensBefore: 1000,
+          type: "compaction",
+        },
+        {customType: "pi-desktop.test", id: "custom-1", parentId: "compaction-1", timestamp: "1970-01-01T00:00:04.000Z", type: "custom"},
+        {
+          id: "entry-2",
+          message: {content: [{text: "Second request", type: "text"}], id: "user-2", role: "user", timestamp: 5} as AgentSession["messages"][number],
+          parentId: "custom-1",
+          timestamp: "1970-01-01T00:00:05.000Z",
+          type: "message",
+        },
+        {
+          id: "entry-3",
+          message: {
+            api: "anthropic",
+            content: [{text: "Second response", type: "text"}],
+            id: "assistant-2",
+            model: "claude-sonnet",
+            provider: "anthropic",
+            role: "assistant",
+            stopReason: "stop",
+            timestamp: 6,
+            usage: {cacheRead: 0, cacheWrite: 0, cost: {cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0}, input: 0, output: 0, totalTokens: 0},
+          } as AgentSession["messages"][number],
+          parentId: "entry-2",
+          timestamp: "1970-01-01T00:00:06.000Z",
+          type: "message",
+        },
+      ],
+      model
+    );
+
+    expect(turns).toMatchObject([
+      {events: [{content: "First response", type: "assistant"}], userMessage: {content: "First request"}},
+      {events: [{content: "Second response", type: "assistant"}], userMessage: {content: "Second request"}},
+    ]);
   });
 });

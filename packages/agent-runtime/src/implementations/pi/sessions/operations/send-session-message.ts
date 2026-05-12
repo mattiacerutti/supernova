@@ -6,7 +6,7 @@ import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk"
 import {generateSessionTitle} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-title-generator";
 import {toPiThinkingLevel} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/thinking-levels";
 import {findSessionById} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-resolver";
-import {normalizePiSessionTurns} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-mapper";
+import {createSyntheticBranchEntries, normalizePiSessionTurns} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-mapper";
 
 type PiAgentMessage = AgentSession["messages"][number];
 
@@ -87,13 +87,24 @@ export function sendSessionMessage(input: SendSessionMessageInput) {
               await session.setModel(selectedModel);
               session.setThinkingLevel(toPiThinkingLevel(input.model.thinkingLevel));
 
-              emit({turns: normalizePiSessionTurns(session.messages, input.model), type: "ready"});
+              // UI history comes from the persisted branch at rest; live stream state comes from Pi's in-memory messages.
+              const baseBranch = sessionManager.getBranch();
+              const baseMessageCount = session.messages.length;
+              const baseParentId = baseBranch.at(-1)?.id ?? null;
 
-              const currentMessages = (message: PiAgentMessage): readonly PiAgentMessage[] =>
-                session.messages.some((m) => m === message) ? session.messages : [...session.messages, message];
+              emit({turns: normalizePiSessionTurns(baseBranch, input.model), type: "ready"});
+
+              const currentLiveMessages = (message?: PiAgentMessage): readonly PiAgentMessage[] => {
+                const messages = session.messages.slice(baseMessageCount);
+                if (!message || messages.some((m) => m === message)) return messages;
+                // Include Pi's in-progress streaming message before it is finalized into session.messages.
+                return [...messages, message];
+              };
 
               const emitMessages = (messages: readonly PiAgentMessage[]): void => {
-                const turn = normalizePiSessionTurns(messages, input.model).at(-1);
+                const syntheticEntries = createSyntheticBranchEntries({messages, parentId: baseParentId});
+                // Stream updates represent one active prompt, so the synthetic delta should normalize to one turn.
+                const [turn] = normalizePiSessionTurns(syntheticEntries, input.model);
                 if (!turn) return;
 
                 const title = sessionManager.getSessionName();
@@ -117,13 +128,13 @@ export function sendSessionMessage(input: SendSessionMessageInput) {
                   case "message_update":
                   case "message_end": {
                     if ("message" in event) {
-                      emitMessages(currentMessages(event.message));
+                      emitMessages(currentLiveMessages(event.message));
                     }
                     break;
                   }
                   case "tool_execution_start":
                   case "tool_execution_end": {
-                    emitMessages(session.messages);
+                    emitMessages(currentLiveMessages());
                     break;
                   }
                 }
@@ -131,7 +142,10 @@ export function sendSessionMessage(input: SendSessionMessageInput) {
 
               try {
                 await session.prompt(input.message);
-                const finalTurns = normalizePiSessionTurns(session.messages, input.model);
+                const liveMessages = session.messages.slice(baseMessageCount);
+                // Avoid reading getBranch() here: Pi persistence may still lag behind prompt completion.
+                const syntheticEntries = createSyntheticBranchEntries({messages: liveMessages, parentId: baseParentId});
+                const finalTurns = normalizePiSessionTurns([...baseBranch, ...syntheticEntries], input.model);
                 emit({turns: finalTurns, type: "done"});
               } finally {
                 await release(false);

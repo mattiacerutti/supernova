@@ -21,6 +21,7 @@ function session(overrides: Partial<PiSessionInfo>): PiSessionInfo {
 }
 
 function makePiSdk(input?: {
+  branch?: unknown[];
   createdSessionFile?: string;
   sessionContext?: {messages: unknown[]; model?: {modelId: string; provider: string}; thinkingLevel?: string};
   sessions?: PiSessionInfo[];
@@ -41,6 +42,7 @@ function makePiSdk(input?: {
             model: undefined,
             thinkingLevel: undefined,
           },
+        getBranch: () => input?.branch ?? [],
       })),
     },
     authStorage: {
@@ -94,14 +96,54 @@ describe("PiSessionsLive", () => {
     expect(result).toEqual({id: "created-session", projectPath: "/workspace", title: "New session", turns: [], updatedAt: "2026-01-01T00:00:00.000Z"});
   });
 
-  it("loads a persisted session with the selected model and normalized transcript", async () => {
+  it("loads raw branch history instead of compacted LLM context messages", async () => {
     const sessionPath = join(await mkdtemp(join(tmpdir(), "pi-desktop-loaded-session-")), "session-1.jsonl");
     await writeFile(sessionPath, "{}\n");
     const piSdk = makePiSdk({
+      branch: [
+        {
+          id: "old-user",
+          message: {content: [{text: "Original request", type: "text"}], id: "old-user-message", role: "user", timestamp: 1},
+          parentId: null,
+          timestamp: "1970-01-01T00:00:00.001Z",
+          type: "message",
+        },
+        {
+          id: "old-assistant",
+          message: {content: [{text: "Original response", type: "text"}], id: "old-assistant-message", role: "assistant", timestamp: 2},
+          parentId: "old-user",
+          timestamp: "1970-01-01T00:00:00.002Z",
+          type: "message",
+        },
+        {
+          firstKeptEntryId: "recent-user",
+          id: "compaction-1",
+          parentId: "old-assistant",
+          summary: "Compacted summary that should not render.",
+          timestamp: "1970-01-01T00:00:00.003Z",
+          tokensBefore: 1000,
+          type: "compaction",
+        },
+        {
+          id: "recent-user",
+          message: {content: [{text: "Recent request", type: "text"}], id: "recent-user-message", role: "user", timestamp: 4},
+          parentId: "compaction-1",
+          timestamp: "1970-01-01T00:00:00.004Z",
+          type: "message",
+        },
+        {
+          id: "recent-assistant",
+          message: {content: [{text: "Recent response", type: "text"}], id: "recent-assistant-message", role: "assistant", timestamp: 5},
+          parentId: "recent-user",
+          timestamp: "1970-01-01T00:00:00.005Z",
+          type: "message",
+        },
+      ],
       sessionContext: {
         messages: [
-          {content: [{text: "Fix it", type: "text"}], id: "user-1", role: "user", timestamp: 1},
-          {content: [{text: "Done", type: "text"}], id: "assistant-1", role: "assistant", timestamp: 2},
+          {content: [{text: "Compacted summary that should not render.", type: "text"}], id: "summary-1", role: "user", timestamp: 3},
+          {content: [{text: "Recent request", type: "text"}], id: "recent-user-message", role: "user", timestamp: 4},
+          {content: [{text: "Recent response", type: "text"}], id: "recent-assistant-message", role: "assistant", timestamp: 5},
         ],
         model: {modelId: "claude-sonnet", provider: "anthropic"},
         thinkingLevel: "high",
@@ -122,7 +164,10 @@ describe("PiSessionsLive", () => {
       model: {id: "claude-sonnet", providerId: "anthropic", thinkingLevel: "high"},
       projectPath: "/workspace",
       title: "Fix it",
-      turns: [{events: [{content: "Done", type: "assistant"}], userMessage: {content: "Fix it"}}],
+      turns: [
+        {events: [{content: "Original response", type: "assistant"}], userMessage: {content: "Original request"}},
+        {events: [{content: "Recent response", type: "assistant"}], userMessage: {content: "Recent request"}},
+      ],
     });
   });
 

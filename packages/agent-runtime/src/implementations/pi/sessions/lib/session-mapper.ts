@@ -1,4 +1,4 @@
-import type {AgentSession} from "@mariozechner/pi-coding-agent";
+import type {AgentSession, SessionEntry, SessionMessageEntry} from "@mariozechner/pi-coding-agent";
 import type {
   AgentModelReference,
   AgentSessionTool,
@@ -9,19 +9,38 @@ import type {
 } from "@pi-desktop/contracts/sessions/schemas";
 import {sessionTurn} from "@pi-desktop/agent-runtime/implementations/shared/session-turns";
 
+import type {ImageContent, TextContent} from "@mariozechner/pi-ai";
+
 type PiAgentMessage = AgentSession["messages"][number];
 
-function partsToText(content: unknown): string {
+function isMessageEntry(entry: SessionEntry): entry is SessionMessageEntry {
+  return entry.type === "message";
+}
+
+export function createSyntheticBranchEntries(input: {messages: readonly PiAgentMessage[]; parentId: string | null}): SessionEntry[] {
+  let parentId = input.parentId;
+
+  return input.messages.map((message, index) => {
+    const entry: SessionMessageEntry = {
+      id: `synthetic-${index}-${message.role}`,
+      message,
+      parentId,
+      timestamp: new Date(message.timestamp).toISOString(),
+      type: "message",
+    };
+
+    parentId = entry.id;
+    return entry;
+  });
+}
+
+function partsToText(content: string | (TextContent | ImageContent)[]): string {
   if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
 
   return content
     .map((part) => {
-      if (typeof part !== "object" || part === null) return "";
-      if ("type" in part) {
-        if (part.type === "text" && "text" in part && typeof part.text === "string") return part.text;
-        if (part.type === "image") return "[Image]";
-      }
+      if (part.type === "text") return part.text ?? "";
+      if (part.type === "image") return "[Image]";
       return "";
     })
     .filter(Boolean)
@@ -47,11 +66,11 @@ function toolSummary(toolName: string): string {
   }
 }
 
-export function normalizePiSessionTurns(messages: readonly PiAgentMessage[], fallbackModel: AgentModelReference): AgentSessionTurn[] {
+export function normalizePiSessionTurns(entries: readonly SessionEntry[], fallbackModel: AgentModelReference): AgentSessionTurn[] {
   const turns: AgentSessionTurn[] = [];
   let currentUser: AgentSessionUserMessage | undefined;
   let currentEvents: AgentSessionTurnEvent[] = [];
-  const toolEventIndexes = new Map<string, number>();
+  const toolEventIndexes = new Map<string, {event: AgentSessionToolTurnEvent; index: number}>();
 
   const flush = (): void => {
     if (!currentUser) return;
@@ -64,11 +83,12 @@ export function normalizePiSessionTurns(messages: readonly PiAgentMessage[], fal
     currentUser ??= {content: "", id: `implicit-user-${id}`, timestamp};
   };
 
-  for (const [index, message] of messages.entries()) {
-    if (!("role" in message)) continue;
+  for (const entry of entries) {
+    if (!isMessageEntry(entry)) continue;
 
-    const timestamp = new Date(message.timestamp).toISOString();
-    const id = `${timestamp}-${message.role}-${index}`;
+    const message = entry.message;
+    const timestamp = entry.timestamp;
+    const id = entry.id;
 
     switch (message.role) {
       case "user": {
@@ -116,8 +136,7 @@ export function normalizePiSessionTurns(messages: readonly PiAgentMessage[], fal
             }
             case "toolCall": {
               const toolName = part.name;
-              toolEventIndexes.set(part.id, currentEvents.length);
-              currentEvents.push({
+              const toolEvent: AgentSessionToolTurnEvent = {
                 id: `${id}-tool-${partIndex}-${part.id}`,
                 timestamp,
                 tool: {
@@ -127,7 +146,9 @@ export function normalizePiSessionTurns(messages: readonly PiAgentMessage[], fal
                   summary: toolSummary(toolName),
                 },
                 type: "tool",
-              });
+              };
+              toolEventIndexes.set(part.id, {event: toolEvent, index: currentEvents.length});
+              currentEvents.push(toolEvent);
               break;
             }
           }
@@ -157,25 +178,19 @@ export function normalizePiSessionTurns(messages: readonly PiAgentMessage[], fal
           type: "tool",
         };
 
-        const existingToolIndex = toolEventIndexes.get(message.toolCallId);
+        const existingTool = toolEventIndexes.get(message.toolCallId);
 
-        if (existingToolIndex === undefined) {
+        if (!existingTool) {
           currentEvents.push(toolEvent);
           break;
         }
 
-        const existingToolEvent = currentEvents[existingToolIndex];
-        if (!existingToolEvent || existingToolEvent.type !== "tool") {
-          currentEvents.push(toolEvent);
-          break;
-        }
-
-        currentEvents[existingToolIndex] = {
+        currentEvents[existingTool.index] = {
           ...toolEvent,
-          durationMs: new Date(timestamp).getTime() - new Date(existingToolEvent.timestamp).getTime(),
-          id: existingToolEvent.id,
-          timestamp: existingToolEvent.timestamp,
-          tool: {...completedTool, input: existingToolEvent.tool?.input},
+          durationMs: new Date(timestamp).getTime() - new Date(existingTool.event.timestamp).getTime(),
+          id: existingTool.event.id,
+          timestamp: existingTool.event.timestamp,
+          tool: {...completedTool, input: existingTool.event.tool?.input},
         };
         break;
       }
