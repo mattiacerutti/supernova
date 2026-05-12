@@ -4,7 +4,7 @@ import {join} from "node:path";
 import {Effect, Layer} from "effect";
 import {afterEach, describe, expect, it, vi} from "vitest";
 import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
-import type {IPiSdkService, PiSessionInfo} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
+import type {PiSdkServiceShape, PiSessionInfo} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
 import {PiProjectsLive} from "@pi-desktop/agent-runtime/implementations/pi/projects/pi-projects-live";
 import {ProjectsService} from "@pi-desktop/agent-runtime/services/projects/projects-service";
 
@@ -20,16 +20,16 @@ function session(overrides: Partial<PiSessionInfo>): PiSessionInfo {
   } as PiSessionInfo;
 }
 
-function makePiSdk(sessions: PiSessionInfo[]): IPiSdkService {
+function makePiSdk(sessions: PiSessionInfo[]): PiSdkServiceShape {
   return {
     SessionManager: {
       list: vi.fn(async () => sessions),
     },
     createAgentSession: vi.fn(),
-  } as unknown as IPiSdkService;
+  } as unknown as PiSdkServiceShape;
 }
 
-function runWithProjects<A, E>(piSdk: IPiSdkService, effect: Effect.Effect<A, E, ProjectsService>) {
+function runWithProjects<A, E>(piSdk: PiSdkServiceShape, effect: Effect.Effect<A, E, ProjectsService>) {
   return Effect.runPromise(effect.pipe(Effect.provide(PiProjectsLive.pipe(Layer.provide(Layer.succeed(PiSdkService, piSdk))))));
 }
 

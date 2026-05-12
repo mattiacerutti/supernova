@@ -1,9 +1,9 @@
 import {Context, Effect} from "effect";
-import type {AgentFolderCreateError, AgentFolderSuggestionsListError, IAgentFolderCreateResult, IAgentFolderSuggestionsListResult} from "@pi-desktop/contracts/folders/procedures";
+import type {AgentFolderCreateError, AgentFolderSuggestionsListError, AgentFolderCreateResult, AgentFolderSuggestionsListResult} from "@pi-desktop/contracts/folders/procedures";
 
-export interface IFoldersService {
-  readonly create: (path: string) => Effect.Effect<IAgentFolderCreateResult, AgentFolderCreateError>;
-  readonly listSuggestions: (query: string) => Effect.Effect<IAgentFolderSuggestionsListResult, AgentFolderSuggestionsListError>;
+export interface FoldersServiceShape {
+  readonly create: (path: string) => Effect.Effect<AgentFolderCreateResult, AgentFolderCreateError>;
+  readonly listSuggestions: (query: string) => Effect.Effect<AgentFolderSuggestionsListResult, AgentFolderSuggestionsListError>;
 }
 
-export class FoldersService extends Context.Service<FoldersService, IFoldersService>()("pi-desktop/agent-runtime/FoldersService") {}
+export class FoldersService extends Context.Service<FoldersService, FoldersServiceShape>()("pi-desktop/agent-runtime/FoldersService") {}

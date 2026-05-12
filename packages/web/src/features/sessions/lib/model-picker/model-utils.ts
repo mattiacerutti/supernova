@@ -1,4 +1,4 @@
-import type {IAgentModelDetails, IAgentModelReference} from "@pi-desktop/contracts/sessions/schemas";
+import type {AgentModelDetails, AgentModelReference} from "@pi-desktop/contracts/sessions/schemas";
 
 const thinkingLevelRank: Record<string, number> = {
   off: 0,
@@ -13,11 +13,11 @@ export function modelKey(provider: string, id: string): string {
   return `${provider}|${id}`;
 }
 
-export function selectionKey(selection: IAgentModelReference | undefined): string {
+export function selectionKey(selection: AgentModelReference | undefined): string {
   return selection ? modelKey(selection.providerId, selection.id) : "";
 }
 
-export function selectionFromModel(model: IAgentModelDetails, thinkingLevel: string | undefined): IAgentModelReference {
+export function selectionFromModel(model: AgentModelDetails, thinkingLevel: string | undefined): AgentModelReference {
   return {
     id: model.id,
     providerId: model.providerId,
@@ -25,7 +25,7 @@ export function selectionFromModel(model: IAgentModelDetails, thinkingLevel: str
   };
 }
 
-export function resolveThinkingLevel(model: IAgentModelDetails, preferredThinkingLevel: string | undefined): string | undefined {
+export function resolveThinkingLevel(model: AgentModelDetails, preferredThinkingLevel: string | undefined): string | undefined {
   const [first, ...rest] = model.thinkingLevels;
   if (first === undefined) return undefined;
   if (!preferredThinkingLevel) return first.value;

@@ -5,7 +5,7 @@ import {cn} from "@/lib/cn";
 
 type MenuTriggerProps = Omit<ComponentProps<typeof Button>, "children">;
 
-interface IMenuProps {
+interface MenuProps {
   align?: ComponentProps<typeof BaseMenu.Positioner>["align"];
   alignOffset?: ComponentProps<typeof BaseMenu.Positioner>["alignOffset"];
   children: ReactNode;
@@ -18,12 +18,12 @@ interface IMenuProps {
   triggerLabel: string;
 }
 
-interface IMenuItemProps extends ComponentProps<typeof BaseMenu.Item> {
+interface MenuItemProps extends ComponentProps<typeof BaseMenu.Item> {
   icon?: ReactNode;
   trailing?: ReactNode;
 }
 
-export default function Menu(props: IMenuProps) {
+export default function Menu(props: MenuProps) {
   const {align = "end", alignOffset, children, className, onOpenChange, open, side = "bottom", sideOffset = 8, trigger, triggerLabel} = props;
 
   const handleTriggerClick = (event: MouseEvent<HTMLButtonElement>, onClick: MenuTriggerProps["onClick"]): void => {
@@ -67,7 +67,7 @@ export default function Menu(props: IMenuProps) {
   );
 }
 
-export function MenuItem(props: IMenuItemProps) {
+export function MenuItem(props: MenuItemProps) {
   const {children, className, icon, onClick, trailing, ...itemProps} = props;
 
   const handleClick: NonNullable<ComponentProps<typeof BaseMenu.Item>["onClick"]> = (event) => {

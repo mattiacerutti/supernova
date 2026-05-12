@@ -4,7 +4,7 @@ import {persist} from "zustand/middleware";
 const MODEL_PICKER_STORAGE_KEY = "pi-desktop-model-picker";
 const MAX_RECENT_MODELS = 5;
 
-interface IModelPickerState {
+interface ModelPickerState {
   readonly favoriteModelKeys: readonly string[];
   readonly recentModelKeys: readonly string[];
   readonly lastThinkingLevel: string | undefined;
@@ -13,7 +13,7 @@ interface IModelPickerState {
   readonly toggleFavoriteModel: (modelKey: string) => void;
 }
 
-export const useModelPickerStore = create<IModelPickerState>()(
+export const useModelPickerStore = create<ModelPickerState>()(
   persist(
     (set) => ({
       favoriteModelKeys: [],

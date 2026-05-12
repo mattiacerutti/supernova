@@ -3,12 +3,12 @@ import Icon from "@/components/ui/icon";
 
 type ConnectMethod = "api_key" | "oauth";
 
-interface IProviderConnectMethodContentProps {
+interface ProviderConnectMethodContentProps {
   onSelect: (method: ConnectMethod) => void;
   isStartingOAuthLogin: boolean;
 }
 
-export default function ProviderConnectMethodContent(props: IProviderConnectMethodContentProps) {
+export default function ProviderConnectMethodContent(props: ProviderConnectMethodContentProps) {
   const {onSelect, isStartingOAuthLogin} = props;
 
   return (

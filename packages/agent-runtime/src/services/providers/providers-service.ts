@@ -4,20 +4,20 @@ import type {
   AgentProviderLoginError,
   AgentProviderLogoutError,
   AgentProvidersListError,
-  IAgentProviderApiKeySetResult,
-  IAgentProviderLogoutResult,
-  IAgentProvidersListResult,
+  AgentProviderApiKeySetResult,
+  AgentProviderLogoutResult,
+  AgentProvidersListResult,
 } from "@pi-desktop/contracts/providers/procedures";
-import type {IAgentProviderLoginSession} from "@pi-desktop/contracts/providers/schemas";
+import type {AgentProviderLoginSession} from "@pi-desktop/contracts/providers/schemas";
 
-export interface IProvidersService {
-  readonly list: () => Effect.Effect<IAgentProvidersListResult, AgentProvidersListError>;
-  readonly cancelLogin: (loginSessionId: string) => Effect.Effect<IAgentProviderLoginSession, AgentProviderLoginError>;
-  readonly getLoginSession: (loginSessionId: string) => Effect.Effect<IAgentProviderLoginSession, AgentProviderLoginError>;
-  readonly logout: (providerId: string) => Effect.Effect<IAgentProviderLogoutResult, AgentProviderLogoutError>;
-  readonly setApiKey: (providerId: string, apiKey: string) => Effect.Effect<IAgentProviderApiKeySetResult, AgentProviderApiKeySetError>;
-  readonly startOAuthLogin: (providerId: string) => Effect.Effect<IAgentProviderLoginSession, AgentProviderLoginError>;
-  readonly submitLoginInput: (loginSessionId: string, input: string) => Effect.Effect<IAgentProviderLoginSession, AgentProviderLoginError>;
+export interface ProvidersServiceShape {
+  readonly list: () => Effect.Effect<AgentProvidersListResult, AgentProvidersListError>;
+  readonly cancelLogin: (loginSessionId: string) => Effect.Effect<AgentProviderLoginSession, AgentProviderLoginError>;
+  readonly getLoginSession: (loginSessionId: string) => Effect.Effect<AgentProviderLoginSession, AgentProviderLoginError>;
+  readonly logout: (providerId: string) => Effect.Effect<AgentProviderLogoutResult, AgentProviderLogoutError>;
+  readonly setApiKey: (providerId: string, apiKey: string) => Effect.Effect<AgentProviderApiKeySetResult, AgentProviderApiKeySetError>;
+  readonly startOAuthLogin: (providerId: string) => Effect.Effect<AgentProviderLoginSession, AgentProviderLoginError>;
+  readonly submitLoginInput: (loginSessionId: string, input: string) => Effect.Effect<AgentProviderLoginSession, AgentProviderLoginError>;
 }
 
-export class ProvidersService extends Context.Service<ProvidersService, IProvidersService>()("pi-desktop/agent-runtime/ProvidersService") {}
+export class ProvidersService extends Context.Service<ProvidersService, ProvidersServiceShape>()("pi-desktop/agent-runtime/ProvidersService") {}

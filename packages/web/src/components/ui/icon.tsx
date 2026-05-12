@@ -43,7 +43,7 @@ export type IconName =
   | "workflow"
   | "x";
 
-interface IIconProps extends Omit<IconifyIconProps, "children" | "icon" | "size"> {
+interface IconProps extends Omit<IconifyIconProps, "children" | "icon" | "size"> {
   name: IconName;
   size?: "lg" | "md" | "sm" | "xs";
 }
@@ -89,14 +89,14 @@ const icons: Record<IconName, string> = {
   x: "lucide:x",
 };
 
-const sizeClasses: Record<NonNullable<IIconProps["size"]>, string> = {
+const sizeClasses: Record<NonNullable<IconProps["size"]>, string> = {
   xs: "size-3.5",
   sm: "size-4",
   md: "size-5",
   lg: "size-6",
 };
 
-export default function Icon(props: IIconProps) {
+export default function Icon(props: IconProps) {
   const {className, name, size = "md", ...iconProps} = props;
   const icon = icons[name];
   const resolvedClassName = cn(sizeClasses[size], "shrink-0", className);

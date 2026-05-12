@@ -1,4 +1,4 @@
-import type {IAgentModelDetails} from "@pi-desktop/contracts/sessions/schemas";
+import type {AgentModelDetails} from "@pi-desktop/contracts/sessions/schemas";
 import type {KeyboardEvent} from "react";
 import {useState} from "react";
 import Icon from "@/components/ui/icon";
@@ -8,10 +8,10 @@ import ThinkingLevelPicker from "@/features/sessions/components/composer/pickers
 import SessionComposerShell from "@/features/sessions/components/composer/session-composer-shell";
 import {modelKey} from "@/features/sessions/lib/model-picker/model-utils";
 
-interface ISessionComposerProps {
+interface SessionComposerProps {
   disabled: boolean;
   modelsLoading: boolean;
-  models: readonly IAgentModelDetails[];
+  models: readonly AgentModelDetails[];
   onInterrupt?: () => void;
   onModelChange: (value: string) => void;
   onSubmit: (message: string) => void;
@@ -22,7 +22,7 @@ interface ISessionComposerProps {
   streamStatus?: "idle" | "streaming" | "stopping";
 }
 
-export default function SessionComposer(props: ISessionComposerProps) {
+export default function SessionComposer(props: SessionComposerProps) {
   const {
     disabled,
     models,

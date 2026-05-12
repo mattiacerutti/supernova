@@ -12,5 +12,5 @@ export class AgentSessionCreateError extends Schema.TaggedErrorClass<AgentSessio
   message: Schema.String,
 }) {}
 
-export type IAgentSessionCreatePayload = typeof AgentSessionCreatePayload.Type;
-export type IAgentSessionCreateResult = typeof AgentSessionCreateResult.Type;
+export type AgentSessionCreatePayload = typeof AgentSessionCreatePayload.Type;
+export type AgentSessionCreateResult = typeof AgentSessionCreateResult.Type;

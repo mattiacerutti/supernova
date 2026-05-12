@@ -5,7 +5,7 @@ import {isDesktopEnvironment, isMacEnvironment} from "@/app/app-environment";
 import {useSidebarSectionsStore} from "@/features/sidebar/stores/sidebar-store";
 import {cn} from "@/lib/cn";
 
-interface IResizableSidebarLayoutProps {
+interface ResizableSidebarLayoutProps {
   appEnvironment: AppEnvironment;
   children: ReactNode;
   sidebar: ReactNode;
@@ -13,7 +13,7 @@ interface IResizableSidebarLayoutProps {
   titlebarActions?: ReactNode;
 }
 
-export default function ResizableSidebarLayout(props: IResizableSidebarLayoutProps) {
+export default function ResizableSidebarLayout(props: ResizableSidebarLayoutProps) {
   const {appEnvironment, children, sidebar, sidebarVisible = true, titlebarActions} = props;
   const sidebarWidth = useSidebarSectionsStore((state) => state.sidebarWidth);
   const setSidebarWidth = useSidebarSectionsStore((state) => state.setSidebarWidth);

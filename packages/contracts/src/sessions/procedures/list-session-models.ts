@@ -11,5 +11,5 @@ export class AgentSessionModelsListError extends Schema.TaggedErrorClass<AgentSe
   message: Schema.String,
 }) {}
 
-export type IAgentSessionModelsListPayload = typeof AgentSessionModelsListPayload.Type;
-export type IAgentSessionModelsListResult = typeof AgentSessionModelsListResult.Type;
+export type AgentSessionModelsListPayload = typeof AgentSessionModelsListPayload.Type;
+export type AgentSessionModelsListResult = typeof AgentSessionModelsListResult.Type;

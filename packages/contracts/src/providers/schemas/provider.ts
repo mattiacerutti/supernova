@@ -23,4 +23,4 @@ export const AgentProvider = Schema.Struct({
 
 export type AgentProviderAuthType = typeof AgentProviderAuthType.Type;
 export type AgentProviderAuthSource = typeof AgentProviderAuthSource.Type;
-export type IAgentProvider = typeof AgentProvider.Type;
+export type AgentProvider = typeof AgentProvider.Type;

@@ -14,5 +14,5 @@ export class AgentProviderApiKeySetError extends Schema.TaggedErrorClass<AgentPr
   message: Schema.String,
 }) {}
 
-export type IAgentProviderApiKeySetPayload = typeof AgentProviderApiKeySetPayload.Type;
-export type IAgentProviderApiKeySetResult = typeof AgentProviderApiKeySetResult.Type;
+export type AgentProviderApiKeySetPayload = typeof AgentProviderApiKeySetPayload.Type;
+export type AgentProviderApiKeySetResult = typeof AgentProviderApiKeySetResult.Type;

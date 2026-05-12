@@ -2,14 +2,14 @@ import type {ReactNode} from "react";
 import Icon from "@/components/ui/icon";
 import IconButton from "@/components/ui/icon-button";
 
-interface ISessionComposerShellProps {
+interface SessionComposerShellProps {
   readonly attachmentDisabled: boolean;
   readonly children: ReactNode;
   readonly controls: ReactNode;
   readonly primaryAction: ReactNode;
 }
 
-export default function SessionComposerShell(props: ISessionComposerShellProps) {
+export default function SessionComposerShell(props: SessionComposerShellProps) {
   const {attachmentDisabled, children, controls, primaryAction} = props;
 
   return (

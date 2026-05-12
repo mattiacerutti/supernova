@@ -10,5 +10,5 @@ export class AgentProvidersListError extends Schema.TaggedErrorClass<AgentProvid
   message: Schema.String,
 }) {}
 
-export type IAgentProvidersListPayload = typeof AgentProvidersListPayload.Type;
-export type IAgentProvidersListResult = typeof AgentProvidersListResult.Type;
+export type AgentProvidersListPayload = typeof AgentProvidersListPayload.Type;
+export type AgentProvidersListResult = typeof AgentProvidersListResult.Type;

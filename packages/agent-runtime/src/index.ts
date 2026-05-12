@@ -9,7 +9,7 @@ export {FileSystemFoldersLive} from "@pi-desktop/agent-runtime/implementations/f
 export {PiProvidersLive} from "@pi-desktop/agent-runtime/implementations/pi/providers/pi-providers-live";
 export {PiProjectsLive} from "@pi-desktop/agent-runtime/implementations/pi/projects/pi-projects-live";
 export {PiSessionsLive} from "@pi-desktop/agent-runtime/implementations/pi/sessions/pi-sessions-live";
-export type {IFoldersService} from "@pi-desktop/agent-runtime/services/folders/folders-service";
-export type {IProvidersService} from "@pi-desktop/agent-runtime/services/providers/providers-service";
-export type {IProjectsService} from "@pi-desktop/agent-runtime/services/projects/projects-service";
-export type {ISessionsService} from "@pi-desktop/agent-runtime/services/sessions/sessions-service";
+export type {FoldersServiceShape} from "@pi-desktop/agent-runtime/services/folders/folders-service";
+export type {ProvidersServiceShape} from "@pi-desktop/agent-runtime/services/providers/providers-service";
+export type {ProjectsServiceShape} from "@pi-desktop/agent-runtime/services/projects/projects-service";
+export type {SessionsServiceShape} from "@pi-desktop/agent-runtime/services/sessions/sessions-service";

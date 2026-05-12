@@ -10,4 +10,4 @@ export const AgentSessionUserMessage = Schema.Struct({
   timestamp: Schema.optional(Schema.String),
 });
 
-export type IAgentSessionUserMessage = typeof AgentSessionUserMessage.Type;
+export type AgentSessionUserMessage = typeof AgentSessionUserMessage.Type;

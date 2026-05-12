@@ -4,7 +4,7 @@ import {join} from "node:path";
 import {Effect, Layer} from "effect";
 import {afterEach, describe, expect, it, vi} from "vitest";
 import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
-import type {IPiSdkService, PiSessionInfo} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
+import type {PiSdkServiceShape, PiSessionInfo} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
 import {PiSessionsLive} from "@pi-desktop/agent-runtime/implementations/pi/sessions/pi-sessions-live";
 import {SessionsService} from "@pi-desktop/agent-runtime/services/sessions/sessions-service";
 
@@ -24,7 +24,7 @@ function makePiSdk(input?: {
   createdSessionFile?: string;
   sessionContext?: {messages: unknown[]; model?: {modelId: string; provider: string}; thinkingLevel?: string};
   sessions?: PiSessionInfo[];
-}): IPiSdkService {
+}): PiSdkServiceShape {
   return {
     SessionManager: {
       create: vi.fn(() => ({
@@ -65,10 +65,10 @@ function makePiSdk(input?: {
       getProviderDisplayName: vi.fn(() => "Anthropic"),
       refresh: vi.fn(),
     },
-  } as unknown as IPiSdkService;
+  } as unknown as PiSdkServiceShape;
 }
 
-function runWithSessions<A, E>(piSdk: IPiSdkService, effect: Effect.Effect<A, E, SessionsService>) {
+function runWithSessions<A, E>(piSdk: PiSdkServiceShape, effect: Effect.Effect<A, E, SessionsService>) {
   return Effect.runPromise(effect.pipe(Effect.provide(PiSessionsLive.pipe(Layer.provide(Layer.succeed(PiSdkService, piSdk))))));
 }
 

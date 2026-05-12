@@ -3,7 +3,7 @@
 ## Language and naming
 
 - Components/hooks are PascalCase; files stay kebab-case (`auth-wrapper.tsx`, `text-field.tsx`).
-- Destructure props inside the body: `function Component(props: IComponentProps) { const {foo} = props; }`.
+- Destructure props inside the body: `function Component(props: ComponentProps) { const {foo} = props; }`.
 
 ## Project structure and architecture
 
@@ -22,7 +22,7 @@
 
 ## Components and hooks
 
-- Default-export UI components as `export default function Component(props: IProps) { ... }`; define handlers as `const handleX = () => {}` inside the component.
+- Default-export UI components as `export default function Component(props: ComponentProps) { ... }`; define handlers as `const handleX = () => {}` inside the component.
 - Prefer shared components before creating feature-local variants; only fork when the shared version cannot be extended cleanly.
 - When you need to render conditional UI, prefer `condition && <Component />` over `condition ? <Component /> : null`.
 - Keep components in separate files unless they are small, deeply related implementation details of the parent component.

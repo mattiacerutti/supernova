@@ -6,12 +6,12 @@ import Input from "@/components/ui/input";
 import {useProviderLoginSession} from "@/features/settings/hooks/api/auth/use-provider-login-session";
 import {useSubmitProviderLoginInput} from "@/features/settings/hooks/api/auth/use-submit-provider-login-input";
 
-interface IProviderOAuthLoginContentProps {
+interface ProviderOAuthLoginContentProps {
   loginSessionId?: string;
   onClose: (cancelLogin: boolean) => void;
 }
 
-export default function ProviderOAuthLoginContent(props: IProviderOAuthLoginContentProps) {
+export default function ProviderOAuthLoginContent(props: ProviderOAuthLoginContentProps) {
   const {loginSessionId, onClose} = props;
   const [input, setInput] = useState("");
   const [manualFallbackVisible, setManualFallbackVisible] = useState(false);

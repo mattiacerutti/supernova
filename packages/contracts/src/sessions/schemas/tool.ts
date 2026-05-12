@@ -20,4 +20,4 @@ export const AgentSessionTool = Schema.Struct({
 });
 
 export type AgentToolStatus = typeof AgentToolStatus.Type;
-export type IAgentSessionTool = typeof AgentSessionTool.Type;
+export type AgentSessionTool = typeof AgentSessionTool.Type;

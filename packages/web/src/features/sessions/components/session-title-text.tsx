@@ -2,19 +2,19 @@ import type {AnimationEvent} from "react";
 import {useState} from "react";
 import {cn} from "@/lib/cn";
 
-interface ISessionTitleTextProps {
+interface SessionTitleTextProps {
   readonly className?: string;
   readonly title: string;
 }
 
-interface ISessionTitleRevealState {
+interface SessionTitleRevealState {
   readonly revealingTitle: string | null;
   readonly title: string;
 }
 
-export default function SessionTitleText(props: ISessionTitleTextProps) {
+export default function SessionTitleText(props: SessionTitleTextProps) {
   const {className, title} = props;
-  const [revealState, setRevealState] = useState<ISessionTitleRevealState>(() => ({revealingTitle: null, title}));
+  const [revealState, setRevealState] = useState<SessionTitleRevealState>(() => ({revealingTitle: null, title}));
 
   if (revealState.title !== title) {
     setRevealState({revealingTitle: title, title});

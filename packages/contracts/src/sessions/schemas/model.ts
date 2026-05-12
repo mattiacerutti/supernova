@@ -44,7 +44,7 @@ export const AgentModelDetails = Schema.Struct({
   thinkingLevels: Schema.Array(AgentThinkingLevelOption),
 });
 
-export type IAgentModelReference = typeof AgentModelReference.Type;
-export type IAgentThinkingLevelOption = typeof AgentThinkingLevelOption.Type;
-export type IAgentModelCapabilities = typeof AgentModelCapabilities.Type;
-export type IAgentModelDetails = typeof AgentModelDetails.Type;
+export type AgentModelReference = typeof AgentModelReference.Type;
+export type AgentThinkingLevelOption = typeof AgentThinkingLevelOption.Type;
+export type AgentModelCapabilities = typeof AgentModelCapabilities.Type;
+export type AgentModelDetails = typeof AgentModelDetails.Type;

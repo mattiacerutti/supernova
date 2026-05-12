@@ -6,12 +6,12 @@ import {cn} from "@/lib/cn";
 import ProvidersSettingsPage from "@/features/settings/pages/settings/providers-settings-page";
 import GeneralSettingsPage from "@/features/settings/pages/settings/general-settings-page";
 
-interface ISettingsPageProps {
+interface SettingsPageProps {
   appEnvironment: AppEnvironment;
   sectionId?: string;
 }
 
-export default function SettingsPage(props: ISettingsPageProps) {
+export default function SettingsPage(props: SettingsPageProps) {
   const {appEnvironment, sectionId} = props;
   const section = getSettingsSection(sectionId);
   const desktopEnvironment = isDesktopEnvironment(appEnvironment);

@@ -2,11 +2,11 @@ import {createRootRouteWithContext, createRoute, createRouter} from "@tanstack/r
 import type {AppEnvironment} from "@/app/app-environment";
 import {HomeLayoutRoute, HomeRoute, NewSessionRoute, RootRoute, SessionRoute, SettingsRoute, SettingsSectionRoute} from "@/app/routes";
 
-interface IRouterContext {
+interface RouterContext {
   appEnvironment: AppEnvironment;
 }
 
-const rootRoute = createRootRouteWithContext<IRouterContext>()({
+const rootRoute = createRootRouteWithContext<RouterContext>()({
   component: RootRoute,
 });
 

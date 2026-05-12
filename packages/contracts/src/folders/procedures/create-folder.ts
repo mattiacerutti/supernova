@@ -13,5 +13,5 @@ export class AgentFolderCreateError extends Schema.TaggedErrorClass<AgentFolderC
   message: Schema.String,
 }) {}
 
-export type IAgentFolderCreatePayload = typeof AgentFolderCreatePayload.Type;
-export type IAgentFolderCreateResult = typeof AgentFolderCreateResult.Type;
+export type AgentFolderCreatePayload = typeof AgentFolderCreatePayload.Type;
+export type AgentFolderCreateResult = typeof AgentFolderCreateResult.Type;

@@ -5,7 +5,7 @@ import {getAppEnvironment} from "@/app/app-environment";
 import AppProviders from "@/app/providers";
 import "@/app/styles.css";
 
-interface IDesktopShell {
+interface DesktopShell {
   getServerUrl: () => Promise<string | undefined>;
   integratedTitleBar: boolean;
   openInFinder: (projectPath: string) => Promise<void>;
@@ -14,7 +14,7 @@ interface IDesktopShell {
 
 declare global {
   interface Window {
-    desktopShell?: IDesktopShell;
+    desktopShell?: DesktopShell;
   }
 }
 

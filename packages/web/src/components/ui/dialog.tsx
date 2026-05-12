@@ -3,7 +3,7 @@ import {Dialog as BaseDialog} from "@base-ui/react/dialog";
 import Icon from "@/components/ui/icon";
 import {cn} from "@/lib/cn";
 
-interface IDialogProps {
+interface DialogProps {
   children: ReactNode;
   className?: string;
   containerClassName?: string;
@@ -12,7 +12,7 @@ interface IDialogProps {
   title: ReactNode;
 }
 
-export default function Dialog(props: IDialogProps) {
+export default function Dialog(props: DialogProps) {
   const {children, className, containerClassName, onOpenChange, open, title} = props;
 
   return (

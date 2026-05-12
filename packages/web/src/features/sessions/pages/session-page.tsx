@@ -1,4 +1,4 @@
-import type {IAgentSessionDetails} from "@pi-desktop/contracts/sessions/schemas";
+import type {AgentSessionDetails} from "@pi-desktop/contracts/sessions/schemas";
 import type {AppEnvironment} from "@/app/app-environment";
 import SessionComposer from "@/features/sessions/components/composer/session-composer";
 import SessionComposerSkeleton from "@/features/sessions/components/composer/session-composer-skeleton";
@@ -13,12 +13,12 @@ import {modelKey, resolveThinkingLevel, selectionFromModel, selectionKey} from "
 import {useModelPickerStore} from "@/features/sessions/stores/model-picker-store";
 import {useSessionModelsStore} from "@/features/sessions/stores/session-models-store";
 
-interface ISessionPageProps {
+interface SessionPageProps {
   appEnvironment: AppEnvironment;
   sessionId: string;
 }
 
-export default function SessionPage(props: ISessionPageProps) {
+export default function SessionPage(props: SessionPageProps) {
   const {appEnvironment, sessionId} = props;
 
   const sessionQuery = useSession(sessionId);
@@ -38,12 +38,12 @@ export default function SessionPage(props: ISessionPageProps) {
   return <SessionConversation appEnvironment={appEnvironment} session={sessionQuery.data} />;
 }
 
-interface ISessionLoadingProps {
+interface SessionLoadingProps {
   readonly appEnvironment: AppEnvironment;
   readonly sessionId: string;
 }
 
-function SessionLoading(props: ISessionLoadingProps) {
+function SessionLoading(props: SessionLoadingProps) {
   const {appEnvironment, sessionId} = props;
   const cachedTitle = useCachedSessionTitle(sessionId);
 
@@ -63,12 +63,12 @@ function SessionLoading(props: ISessionLoadingProps) {
   );
 }
 
-interface ISessionConversationProps {
+interface SessionConversationProps {
   appEnvironment: AppEnvironment;
-  session: IAgentSessionDetails;
+  session: AgentSessionDetails;
 }
 
-function SessionConversation(props: ISessionConversationProps) {
+function SessionConversation(props: SessionConversationProps) {
   const {appEnvironment, session} = props;
 
   const {data: models, isPending: modelsPending} = useSessionModels();

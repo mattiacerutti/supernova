@@ -13,5 +13,5 @@ export class AgentProviderLogoutError extends Schema.TaggedErrorClass<AgentProvi
   message: Schema.String,
 }) {}
 
-export type IAgentProviderLogoutPayload = typeof AgentProviderLogoutPayload.Type;
-export type IAgentProviderLogoutResult = typeof AgentProviderLogoutResult.Type;
+export type AgentProviderLogoutPayload = typeof AgentProviderLogoutPayload.Type;
+export type AgentProviderLogoutResult = typeof AgentProviderLogoutResult.Type;

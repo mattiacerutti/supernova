@@ -9,7 +9,7 @@ const makeAgentRpcProtocolClient = RpcClient.make(AgentRpcGroup);
 type AgentRpcClientFactory = typeof makeAgentRpcProtocolClient;
 export type AgentRpcProtocolClient = AgentRpcClientFactory extends Effect.Effect<infer Client, unknown, unknown> ? Client : never;
 
-interface ITransportSession {
+interface TransportSession {
   readonly clientPromise: Promise<AgentRpcProtocolClient>;
   readonly clientScope: Scope.Closeable;
   readonly runtime: ManagedRuntime.ManagedRuntime<RpcClient.Protocol, never>;
@@ -40,13 +40,13 @@ function resolveAgentDesktopWsUrl(): string {
   return serverUrl.toString();
 }
 
-export interface IAgentRpcClient {
+export interface AgentRpcClientApi {
   readonly dispose: () => Promise<void>;
-  readonly fork: <TSuccess, TError>(execute: (client: AgentRpcProtocolClient) => Effect.Effect<TSuccess, TError, never>) => Promise<IAgentRpcClientFiber>;
+  readonly fork: <TSuccess, TError>(execute: (client: AgentRpcProtocolClient) => Effect.Effect<TSuccess, TError, never>) => Promise<AgentRpcClientFiber>;
   readonly run: <TSuccess, TError>(execute: (client: AgentRpcProtocolClient) => Effect.Effect<TSuccess, TError, never>) => Promise<TSuccess>;
 }
 
-export interface IAgentRpcClientFiber {
+export interface AgentRpcClientFiber {
   readonly interrupt: () => Promise<void>;
 }
 
@@ -69,8 +69,8 @@ export function createAgentRpcProtocolLayer(socketUrl: AgentRpcSocketUrlProvider
   return protocolLayer.pipe(Layer.provide(Layer.mergeAll(socketLayer, RpcSerialization.layerJson)));
 }
 
-class AgentRpcClient implements IAgentRpcClient {
-  private readonly session: ITransportSession;
+class AgentRpcClient implements AgentRpcClientApi {
+  private readonly session: TransportSession;
 
   constructor(socketUrl: AgentRpcSocketUrlProvider) {
     const runtime = ManagedRuntime.make(createAgentRpcProtocolLayer(socketUrl));
@@ -87,7 +87,7 @@ class AgentRpcClient implements IAgentRpcClient {
     this.session.runtime.dispose();
   }
 
-  async fork<TSuccess, TError>(execute: (client: AgentRpcProtocolClient) => Effect.Effect<TSuccess, TError, never>): Promise<IAgentRpcClientFiber> {
+  async fork<TSuccess, TError>(execute: (client: AgentRpcProtocolClient) => Effect.Effect<TSuccess, TError, never>): Promise<AgentRpcClientFiber> {
     const client = await this.session.clientPromise;
     const fiber = this.session.runtime.runFork(Effect.suspend(() => execute(client)));
 
@@ -102,6 +102,6 @@ class AgentRpcClient implements IAgentRpcClient {
   }
 }
 
-export function createAgentRpcClient(socketUrl: AgentRpcSocketUrlProvider = resolveAgentDesktopWsUrl): IAgentRpcClient {
+export function createAgentRpcClient(socketUrl: AgentRpcSocketUrlProvider = resolveAgentDesktopWsUrl): AgentRpcClientApi {
   return new AgentRpcClient(socketUrl);
 }

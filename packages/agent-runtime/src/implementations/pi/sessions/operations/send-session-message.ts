@@ -1,7 +1,7 @@
 import type {AgentSession} from "@mariozechner/pi-coding-agent";
 import {Effect, Queue, Stream} from "effect";
 import type {AgentSessionStreamEvent} from "@pi-desktop/contracts/sessions/procedures";
-import type {IAgentModelReference, IAgentSessionSummary} from "@pi-desktop/contracts/sessions/schemas";
+import type {AgentModelReference, AgentSessionSummary} from "@pi-desktop/contracts/sessions/schemas";
 import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
 import {generateSessionTitle} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-title-generator";
 import {toPiThinkingLevel} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/thinking-levels";
@@ -10,13 +10,13 @@ import {normalizePiSessionTurns} from "@pi-desktop/agent-runtime/implementations
 
 type PiAgentMessage = AgentSession["messages"][number];
 
-interface ISendSessionMessageInput {
+interface SendSessionMessageInput {
   message: string;
-  model: IAgentModelReference;
+  model: AgentModelReference;
   sessionId: string;
 }
 
-export function sendSessionMessage(input: ISendSessionMessageInput) {
+export function sendSessionMessage(input: SendSessionMessageInput) {
   return Stream.unwrap(
     Effect.gen(function* () {
       const piSdk = yield* PiSdkService;
@@ -100,7 +100,7 @@ export function sendSessionMessage(input: ISendSessionMessageInput) {
 
                 if (needsTitleGeneration && title) {
                   needsTitleGeneration = false;
-                  const sessionSummary: IAgentSessionSummary = {
+                  const sessionSummary: AgentSessionSummary = {
                     id: sessionInfo.id,
                     title,
                     updatedAt: new Date().toISOString(),

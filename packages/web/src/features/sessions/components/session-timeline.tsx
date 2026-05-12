@@ -23,14 +23,14 @@ const SessionTimelineRow = memo(function SessionTimelineRow(props: {item: Sessio
   if (item.type === "work") return <WorkBlock item={item} />;
 });
 
-interface ISessionTimelineProps {
+interface SessionTimelineProps {
   items: readonly SessionRenderItem[];
   isStreaming: boolean;
   listRef?: React.RefObject<LegendListRef | null>;
   streamError: string | null;
 }
 
-export default function SessionTimeline(props: ISessionTimelineProps) {
+export default function SessionTimeline(props: SessionTimelineProps) {
   const {isStreaming, items, listRef, streamError} = props;
   const [autoFollowState, setAutoFollowState] = useState<AutoFollowState>("following");
   const maintainScrollAtEnd = autoFollowState === "following";

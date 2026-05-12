@@ -103,10 +103,6 @@ If a tradeoff is required, choose correctness and robustness over short-term con
 
 Long term maintainability is a core priority. If you add new functionality, first check if there is shared logic that can be extracted to a separate module. Duplicate logic across multiple files is a code smell and should be avoided. Don't be afraid to change existing code. Don't take shortcuts by just adding local logic to solve a problem.
 
-### Typing
-
-- TypeScript is strict. Prefer `interface` for object shapes and prefix with `I` (e.g., `IComponentProps`, `IFunctionState`). Reach for `type` only when you need unions/intersections or literal unions, and do not prefix with neither `I` or `T` in that case.
-
 ### Imports and logging
 
 - Prefer package or path aliases (`@/...`, `@assets/...`, `@pi-desktop/...`) over deep relative imports. Never use relative path imports (`./...` or `../...`).

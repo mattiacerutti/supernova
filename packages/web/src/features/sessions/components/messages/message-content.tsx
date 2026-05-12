@@ -78,14 +78,14 @@ function CodeBlock(props: {children: ReactNode; code: string; language?: string}
   );
 }
 
-interface IMessageContentProps {
+interface MessageContentProps {
   children: string;
   className?: string;
   mode?: "markdown" | "text";
   streaming?: boolean;
 }
 
-export default function MessageContent(props: IMessageContentProps) {
+export default function MessageContent(props: MessageContentProps) {
   const {children, className, mode = "markdown", streaming = false} = props;
 
   if (streaming) {

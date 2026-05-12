@@ -1,9 +1,9 @@
-import type {IAgentModelDetails} from "@pi-desktop/contracts/sessions/schemas";
+import type {AgentModelDetails} from "@pi-desktop/contracts/sessions/schemas";
 import {describe, expect, it} from "vitest";
 import {getModelPickerSections} from "@/features/sessions/lib/model-picker/model-picker";
 import {modelKey} from "@/features/sessions/lib/model-picker/model-utils";
 
-function model(overrides: Pick<IAgentModelDetails, "id" | "name" | "providerId" | "providerName"> & Partial<IAgentModelDetails>): IAgentModelDetails {
+function model(overrides: Pick<AgentModelDetails, "id" | "name" | "providerId" | "providerName"> & Partial<AgentModelDetails>): AgentModelDetails {
   return {
     capabilities: {attachments: false, reasoning: true, toolCalls: true},
     thinkingLevels: [],
@@ -15,7 +15,7 @@ function sectionSummary(input: ReturnType<typeof getModelPickerSections>): Array
   return input.map((section) => ({models: section.models.map((sectionModel) => modelKey(sectionModel.providerId, sectionModel.id)), title: section.title}));
 }
 
-function searchResultKeys(search: string, models: readonly IAgentModelDetails[]): string[] {
+function searchResultKeys(search: string, models: readonly AgentModelDetails[]): string[] {
   return getModelPickerSections({favoriteModelKeys: [], models, recentModelKeys: [], search}).flatMap((section) =>
     section.models.map((sectionModel) => modelKey(sectionModel.providerId, sectionModel.id))
   );

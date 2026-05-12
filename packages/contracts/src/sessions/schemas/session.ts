@@ -28,5 +28,5 @@ export const AgentSessionSummary = Schema.Struct({
   updatedAt: Schema.String,
 });
 
-export type IAgentSessionDetails = typeof AgentSessionDetails.Type;
-export type IAgentSessionSummary = typeof AgentSessionSummary.Type;
+export type AgentSessionDetails = typeof AgentSessionDetails.Type;
+export type AgentSessionSummary = typeof AgentSessionSummary.Type;

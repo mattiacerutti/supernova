@@ -3,11 +3,11 @@ import {useState} from "react";
 import SessionStreamsProvider from "@/features/sessions/components/session-streams-provider";
 import AgentRpcClientProvider from "@/rpc/agent-rpc-client-provider";
 
-interface IAppProvidersProps {
+interface AppProvidersProps {
   children: React.ReactNode;
 }
 
-export default function AppProviders(props: IAppProvidersProps) {
+export default function AppProviders(props: AppProvidersProps) {
   const {children} = props;
   const [queryClient] = useState(() => new QueryClient());
 

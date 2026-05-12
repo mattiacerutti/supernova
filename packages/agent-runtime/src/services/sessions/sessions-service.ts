@@ -5,15 +5,15 @@ import type {
   AgentSessionLoadError,
   AgentSessionModelsListError,
   AgentSessionStreamEvent,
-  IAgentSessionModelsListResult,
+  AgentSessionModelsListResult,
 } from "@pi-desktop/contracts/sessions/procedures";
-import type {IAgentSessionDetails, IAgentModelReference} from "@pi-desktop/contracts/sessions/schemas";
+import type {AgentSessionDetails, AgentModelReference} from "@pi-desktop/contracts/sessions/schemas";
 
-export interface ISessionsService {
-  readonly create: (projectPath: string) => Effect.Effect<IAgentSessionDetails, AgentSessionCreateError>;
-  readonly get: (sessionId: string) => Effect.Effect<IAgentSessionDetails, AgentSessionLoadError>;
-  readonly listModels: () => Effect.Effect<IAgentSessionModelsListResult, AgentSessionModelsListError>;
-  readonly sendMessage: (input: {message: string; model: IAgentModelReference; sessionId: string}) => Stream.Stream<AgentSessionStreamEvent>;
+export interface SessionsServiceShape {
+  readonly create: (projectPath: string) => Effect.Effect<AgentSessionDetails, AgentSessionCreateError>;
+  readonly get: (sessionId: string) => Effect.Effect<AgentSessionDetails, AgentSessionLoadError>;
+  readonly listModels: () => Effect.Effect<AgentSessionModelsListResult, AgentSessionModelsListError>;
+  readonly sendMessage: (input: {message: string; model: AgentModelReference; sessionId: string}) => Stream.Stream<AgentSessionStreamEvent>;
 }
 
-export class SessionsService extends Context.Service<SessionsService, ISessionsService>()("pi-desktop/agent-runtime/SessionsService") {}
+export class SessionsService extends Context.Service<SessionsService, SessionsServiceShape>()("pi-desktop/agent-runtime/SessionsService") {}

@@ -5,7 +5,7 @@ import type {PiSessionInfo} from "@pi-desktop/agent-runtime/implementations/pi/p
 import {PiSessionsLive} from "@pi-desktop/agent-runtime/implementations/pi/sessions/pi-sessions-live";
 import {SessionsService} from "@pi-desktop/agent-runtime/services/sessions/sessions-service";
 import type {AgentSessionStreamEvent} from "@pi-desktop/contracts/sessions/procedures";
-import type {IAgentModelReference} from "@pi-desktop/contracts/sessions/schemas";
+import type {AgentModelReference} from "@pi-desktop/contracts/sessions/schemas";
 
 //TODO: Refactor these tests, they are awful
 
@@ -118,7 +118,7 @@ function makePiSessionsHarness(input?: {availableModels?: unknown[]; prompt?: (m
 
   const sessionsLive = PiSessionsLive.pipe(Layer.provide(Layer.succeed(PiSdkService, piSdk as never)));
 
-  const sendMessage = (messageInput: {message: string; model: IAgentModelReference; sessionId: string}) =>
+  const sendMessage = (messageInput: {message: string; model: AgentModelReference; sessionId: string}) =>
     Effect.gen(function* () {
       const sessions = yield* SessionsService;
       return yield* Effect.promise(() => collectEvents(sessions.sendMessage(messageInput)));

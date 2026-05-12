@@ -3,7 +3,7 @@ import {persist} from "zustand/middleware";
 
 const PROJECTS_STORAGE_KEY = "pi-desktop-projects";
 
-export interface IStoredProject {
+export interface StoredProject {
   readonly id: string;
   readonly name: string;
   readonly path: string;
@@ -12,9 +12,9 @@ export interface IStoredProject {
   readonly pinnedSessionIds?: string[];
 }
 
-interface IProjectsState {
-  readonly projects: IStoredProject[];
-  readonly addProject: (projectPath: string) => IStoredProject | undefined;
+interface ProjectsState {
+  readonly projects: StoredProject[];
+  readonly addProject: (projectPath: string) => StoredProject | undefined;
   readonly removeProject: (projectId: string) => void;
   readonly renameProject: (projectId: string, name: string) => void;
   readonly toggleProjectPinned: (projectId: string) => void;
@@ -34,7 +34,7 @@ function toProjectName(projectPath: string): string {
   return segments.at(-1) ?? projectPath;
 }
 
-export const useProjectsStore = create<IProjectsState>()(
+export const useProjectsStore = create<ProjectsState>()(
   persist(
     (set, get) => ({
       projects: [],
@@ -45,7 +45,7 @@ export const useProjectsStore = create<IProjectsState>()(
         const existingProject = get().projects.find((project) => project.path === normalizedPath);
         if (existingProject) return existingProject;
 
-        const project: IStoredProject = {
+        const project: StoredProject = {
           id: toProjectId(normalizedPath),
           name: toProjectName(normalizedPath),
           path: normalizedPath,

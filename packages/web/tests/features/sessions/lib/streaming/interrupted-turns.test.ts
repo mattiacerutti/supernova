@@ -1,14 +1,14 @@
-import type {IAgentSessionReasoningTurnEvent, IAgentSessionTurn} from "@pi-desktop/contracts/sessions/schemas";
+import type {AgentSessionReasoningTurnEvent, AgentSessionTurn} from "@pi-desktop/contracts/sessions/schemas";
 import {describe, expect, it} from "vitest";
 import {upsertInterruptedTurn} from "@/features/sessions/lib/streaming/interrupted-turns";
 
 const model = {id: "claude-sonnet", providerId: "anthropic", thinkingLevel: "high"};
 
-function reasoningEvent(id: string, second: number): IAgentSessionReasoningTurnEvent {
+function reasoningEvent(id: string, second: number): AgentSessionReasoningTurnEvent {
   return {content: `reasoning ${id}`, id, timestamp: `2026-01-01T00:00:0${second}.000Z`, type: "reasoning"};
 }
 
-function turn(overrides: Partial<IAgentSessionTurn>): IAgentSessionTurn {
+function turn(overrides: Partial<AgentSessionTurn>): AgentSessionTurn {
   return {
     events: [],
     id: "turn-1",

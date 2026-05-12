@@ -1,17 +1,17 @@
-import type {IAgentThinkingLevelOption} from "@pi-desktop/contracts/sessions/schemas";
+import type {AgentThinkingLevelOption} from "@pi-desktop/contracts/sessions/schemas";
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import Menu, {MenuItem} from "@/components/ui/menu";
 
-interface IThinkingLevelPickerProps {
+interface ThinkingLevelPickerProps {
   disabled: boolean;
   onThinkingLevelChange: (value: string) => void;
   selectedThinkingLabel: string;
   selectedThinkingLevel: string | undefined;
-  thinkingLevels: readonly IAgentThinkingLevelOption[];
+  thinkingLevels: readonly AgentThinkingLevelOption[];
 }
 
-export default function ThinkingLevelPicker(props: IThinkingLevelPickerProps) {
+export default function ThinkingLevelPicker(props: ThinkingLevelPickerProps) {
   const {disabled, onThinkingLevelChange, selectedThinkingLabel, selectedThinkingLevel, thinkingLevels} = props;
 
   return (

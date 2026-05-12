@@ -1,46 +1,46 @@
 import type {QueryClient} from "@tanstack/react-query";
 import type {AgentSessionStreamEvent} from "@pi-desktop/contracts/sessions/procedures";
-import type {IAgentModelReference, IAgentSessionDetails, IAgentSessionSummary, IAgentSessionTurn, IAgentSessionUserMessage} from "@pi-desktop/contracts/sessions/schemas";
-import type {IAgentProjectSessionsListResult} from "@pi-desktop/contracts/projects/procedures";
+import type {AgentModelReference, AgentSessionDetails, AgentSessionSummary, AgentSessionTurn, AgentSessionUserMessage} from "@pi-desktop/contracts/sessions/schemas";
+import type {AgentProjectSessionsListResult} from "@pi-desktop/contracts/projects/procedures";
 import {create} from "zustand";
 import {Effect, Stream} from "effect";
 import {listProjectSessionsQueryKey} from "@/features/projects/hooks/api/use-list-project-sessions";
 import {sessionQueryKey} from "@/features/sessions/hooks/api/use-session";
 import {upsertInterruptedTurn} from "@/features/sessions/lib/streaming/interrupted-turns";
-import type {IAgentRpcClient, IAgentRpcClientFiber} from "@/rpc/agent-rpc-client";
+import type {AgentRpcClientApi, AgentRpcClientFiber} from "@/rpc/agent-rpc-client";
 
 export type SessionStreamStatus = "idle" | "streaming" | "stopping";
 
-export interface ISessionStreamState {
+export interface SessionStreamState {
   readonly error: string | null;
   /** Drives the composer button and prevents duplicate sends while a turn is active. */
   readonly status: SessionStreamStatus;
   /** Unique per-send token. Async callbacks use this to avoid mutating a newer stream for the same session. */
   readonly streamId: string;
   /** Currently streaming turn, kept separate from committed turns until the runtime confirms completion. */
-  readonly turn: IAgentSessionTurn | null;
+  readonly turn: AgentSessionTurn | null;
   /** Last committed transcript snapshot used as the base while optimistic streaming UI is active. */
-  readonly turns: readonly IAgentSessionTurn[];
+  readonly turns: readonly AgentSessionTurn[];
 }
 
-interface ISessionStreamEntry extends ISessionStreamState {
+interface SessionStreamEntry extends SessionStreamState {
   /** Client-side Effect fiber for the active RPC stream. Interrupting it propagates cancellation to the server stream. */
-  readonly fiber: IAgentRpcClientFiber | null;
+  readonly fiber: AgentRpcClientFiber | null;
 }
 
-interface IStartSessionStreamInput {
+interface StartSessionStreamInput {
   readonly message: string;
-  readonly model: IAgentModelReference;
+  readonly model: AgentModelReference;
   readonly projectPath: string;
   readonly queryClient: QueryClient;
-  readonly rpcClient: IAgentRpcClient;
+  readonly rpcClient: AgentRpcClientApi;
   readonly sessionId: string;
-  readonly sessionTurns: readonly IAgentSessionTurn[];
+  readonly sessionTurns: readonly AgentSessionTurn[];
 }
 
-interface ISessionStreamStoreState {
-  readonly streams: Record<string, ISessionStreamEntry | undefined>;
-  readonly startStream: (input: IStartSessionStreamInput) => void;
+interface SessionStreamStoreState {
+  readonly streams: Record<string, SessionStreamEntry | undefined>;
+  readonly startStream: (input: StartSessionStreamInput) => void;
   readonly stopAllStreams: () => void;
   readonly stopStream: (sessionId: string) => void;
 }
@@ -53,9 +53,9 @@ function createStreamId(sessionId: string): string {
  * Creates an optimistic local turn immediately so the user message appears before
  * the server emits the canonical turn snapshot.
  */
-function createInitialStreamTurn(input: {message: string; model: IAgentModelReference}): IAgentSessionTurn {
+function createInitialStreamTurn(input: {message: string; model: AgentModelReference}): AgentSessionTurn {
   const timestamp = new Date().toISOString();
-  const localMessage: IAgentSessionUserMessage = {content: input.message, id: `local-${Date.now()}`, timestamp};
+  const localMessage: AgentSessionUserMessage = {content: input.message, id: `local-${Date.now()}`, timestamp};
 
   return {
     events: [],
@@ -72,11 +72,11 @@ function createInitialStreamTurn(input: {message: string; model: IAgentModelRefe
  * query and the project session list in sync so sidebar/title UI updates without
  * waiting for a refetch.
  */
-function applySessionSummary(input: {projectPath: string; queryClient: QueryClient; sessionId: string; summary: IAgentSessionSummary}): void {
+function applySessionSummary(input: {projectPath: string; queryClient: QueryClient; sessionId: string; summary: AgentSessionSummary}): void {
   const {projectPath, queryClient, sessionId, summary} = input;
 
-  queryClient.setQueryData<IAgentSessionDetails>(sessionQueryKey(sessionId), (session) => (session ? {...session, title: summary.title, updatedAt: summary.updatedAt} : session));
-  queryClient.setQueriesData<IAgentProjectSessionsListResult>({queryKey: listProjectSessionsQueryKey(projectPath)}, (result) => {
+  queryClient.setQueryData<AgentSessionDetails>(sessionQueryKey(sessionId), (session) => (session ? {...session, title: summary.title, updatedAt: summary.updatedAt} : session));
+  queryClient.setQueriesData<AgentProjectSessionsListResult>({queryKey: listProjectSessionsQueryKey(projectPath)}, (result) => {
     if (!result) return result;
 
     const sessionExists = result.sessions.some((session) => session.id === sessionId);
@@ -89,18 +89,18 @@ function applySessionSummary(input: {projectPath: string; queryClient: QueryClie
 }
 
 /** Writes the latest canonical transcript into React Query. */
-function applyDoneTurns(input: {queryClient: QueryClient; sessionId: string; turns: readonly IAgentSessionTurn[]}): void {
+function applyDoneTurns(input: {queryClient: QueryClient; sessionId: string; turns: readonly AgentSessionTurn[]}): void {
   const {queryClient, sessionId, turns} = input;
-  queryClient.setQueryData<IAgentSessionDetails>(sessionQueryKey(sessionId), (session) => (session ? {...session, turns} : session));
+  queryClient.setQueryData<AgentSessionDetails>(sessionQueryKey(sessionId), (session) => (session ? {...session, turns} : session));
 }
 
-export const useSessionStreamStore = create<ISessionStreamStoreState>()((set, get) => {
+export const useSessionStreamStore = create<SessionStreamStoreState>()((set, get) => {
   /**
    * All async stream callbacks must pass through this guard. A session can start
    * another stream after a previous one finishes, and stale callbacks from the old
    * fiber must never overwrite the newer stream state.
    */
-  const updateStream = (sessionId: string, streamId: string, update: (entry: ISessionStreamEntry) => ISessionStreamEntry): void => {
+  const updateStream = (sessionId: string, streamId: string, update: (entry: SessionStreamEntry) => SessionStreamEntry): void => {
     set((state) => {
       const current = state.streams[sessionId];
       if (!current || current.streamId !== streamId) return state;

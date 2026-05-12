@@ -1,4 +1,4 @@
 import {createContext} from "react";
-import type {IAgentRpcClient} from "@/rpc/agent-rpc-client";
+import type {AgentRpcClientApi} from "@/rpc/agent-rpc-client";
 
-export const AgentRpcClientContext = createContext<IAgentRpcClient | null>(null);
+export const AgentRpcClientContext = createContext<AgentRpcClientApi | null>(null);

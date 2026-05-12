@@ -10,14 +10,14 @@ export function listProjectSessionsQueryKey(projectPath: string) {
   return [...allProjectSessionsQueryKey(), projectPath] as const;
 }
 
-interface IUseListProjectSessionsOptions {
+interface UseListProjectSessionsOptions {
   cursor?: string;
   enabled: boolean;
   limit?: number;
   projectPath: string;
 }
 
-export function useListProjectSessions(options: IUseListProjectSessionsOptions) {
+export function useListProjectSessions(options: UseListProjectSessionsOptions) {
   const {cursor, enabled, limit, projectPath} = options;
 
   return useQuery(

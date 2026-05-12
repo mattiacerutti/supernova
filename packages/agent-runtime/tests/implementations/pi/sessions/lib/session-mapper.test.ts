@@ -1,9 +1,9 @@
 import {describe, expect, it} from "vitest";
 import {normalizePiSessionTurns} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-mapper";
-import type {IAgentModelReference} from "@pi-desktop/contracts/sessions/schemas";
+import type {AgentModelReference} from "@pi-desktop/contracts/sessions/schemas";
 import type {AgentSession} from "@mariozechner/pi-coding-agent";
 
-const model: IAgentModelReference = {id: "claude-sonnet", providerId: "anthropic", thinkingLevel: "high"};
+const model: AgentModelReference = {id: "claude-sonnet", providerId: "anthropic", thinkingLevel: "high"};
 
 function piMessages(messages: unknown[]): AgentSession["messages"] {
   return messages as AgentSession["messages"];

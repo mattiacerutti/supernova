@@ -1,11 +1,11 @@
 import type {AgentSession} from "@mariozechner/pi-coding-agent";
 import type {
-  IAgentModelReference,
-  IAgentSessionTool,
-  IAgentSessionToolTurnEvent,
-  IAgentSessionTurn,
-  IAgentSessionTurnEvent,
-  IAgentSessionUserMessage,
+  AgentModelReference,
+  AgentSessionTool,
+  AgentSessionToolTurnEvent,
+  AgentSessionTurn,
+  AgentSessionTurnEvent,
+  AgentSessionUserMessage,
 } from "@pi-desktop/contracts/sessions/schemas";
 import {sessionTurn} from "@pi-desktop/agent-runtime/implementations/shared/session-turns";
 
@@ -47,10 +47,10 @@ function toolSummary(toolName: string): string {
   }
 }
 
-export function normalizePiSessionTurns(messages: readonly PiAgentMessage[], fallbackModel: IAgentModelReference): IAgentSessionTurn[] {
-  const turns: IAgentSessionTurn[] = [];
-  let currentUser: IAgentSessionUserMessage | undefined;
-  let currentEvents: IAgentSessionTurnEvent[] = [];
+export function normalizePiSessionTurns(messages: readonly PiAgentMessage[], fallbackModel: AgentModelReference): AgentSessionTurn[] {
+  const turns: AgentSessionTurn[] = [];
+  let currentUser: AgentSessionUserMessage | undefined;
+  let currentEvents: AgentSessionTurnEvent[] = [];
   const toolEventIndexes = new Map<string, number>();
 
   const flush = (): void => {
@@ -141,7 +141,7 @@ export function normalizePiSessionTurns(messages: readonly PiAgentMessage[], fal
       case "toolResult": {
         const output = partsToText(message.content);
 
-        const completedTool: IAgentSessionTool = {
+        const completedTool: AgentSessionTool = {
           name: message.toolName,
           status: message.isError ? "error" : "completed",
           output: message.isError ? undefined : output,
@@ -150,7 +150,7 @@ export function normalizePiSessionTurns(messages: readonly PiAgentMessage[], fal
         };
 
         ensureUser(id, timestamp);
-        const toolEvent: IAgentSessionToolTurnEvent = {
+        const toolEvent: AgentSessionToolTurnEvent = {
           id,
           timestamp,
           tool: completedTool,

@@ -15,5 +15,5 @@ export class AgentProjectSessionArchiveError extends Schema.TaggedErrorClass<Age
   message: Schema.String,
 }) {}
 
-export type IAgentProjectSessionArchivePayload = typeof AgentProjectSessionArchivePayload.Type;
-export type IAgentProjectSessionArchiveResult = typeof AgentProjectSessionArchiveResult.Type;
+export type AgentProjectSessionArchivePayload = typeof AgentProjectSessionArchivePayload.Type;
+export type AgentProjectSessionArchiveResult = typeof AgentProjectSessionArchiveResult.Type;

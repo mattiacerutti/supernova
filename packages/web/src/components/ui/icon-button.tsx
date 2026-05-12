@@ -1,12 +1,12 @@
 import type {ReactNode} from "react";
-import Button, {type IButtonProps} from "@/components/ui/button";
+import Button, {type ButtonProps} from "@/components/ui/button";
 
-interface IIconButtonProps extends Omit<IButtonProps, "aria-label" | "children"> {
+interface IconButtonProps extends Omit<ButtonProps, "aria-label" | "children"> {
   children: ReactNode;
   label: string;
 }
 
-export default function IconButton(props: IIconButtonProps) {
+export default function IconButton(props: IconButtonProps) {
   const {children, className, label, shape, size, type = "button", variant, ...buttonProps} = props;
 
   return (

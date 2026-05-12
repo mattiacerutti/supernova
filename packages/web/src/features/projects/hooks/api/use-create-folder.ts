@@ -2,7 +2,7 @@ import {useMutation, useQueryClient} from "@tanstack/react-query";
 import {Effect} from "effect";
 import {AgentRpcProtocolClientService, eq} from "@/rpc/effect-query";
 
-interface ICreateFolderInput {
+interface CreateFolderInput {
   path: string;
 }
 
@@ -11,7 +11,7 @@ export function useCreateFolder() {
 
   return useMutation(
     eq.mutationOptions({
-      mutationFn: (input: ICreateFolderInput) =>
+      mutationFn: (input: CreateFolderInput) =>
         Effect.gen(function* () {
           const rpc = yield* AgentRpcProtocolClientService;
           return yield* rpc.createFolder(input);

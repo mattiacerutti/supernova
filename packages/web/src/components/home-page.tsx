@@ -8,12 +8,12 @@ import IconButton from "@/components/ui/icon-button";
 import ResizableSidebarLayout from "@/features/sidebar/components/resizable-sidebar-layout";
 import Sidebar from "@/features/sidebar/components/sidebar";
 
-interface IHomePageProps {
+interface HomePageProps {
   appEnvironment: AppEnvironment;
   children: ReactNode;
 }
 
-export default function HomePage(props: IHomePageProps) {
+export default function HomePage(props: HomePageProps) {
   const {appEnvironment, children} = props;
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const router = useRouter();

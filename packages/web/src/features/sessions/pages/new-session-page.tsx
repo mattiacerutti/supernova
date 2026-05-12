@@ -10,12 +10,12 @@ import {useSessionModelsStore} from "@/features/sessions/stores/session-models-s
 import {useSessionStreamStore} from "@/features/sessions/stores/session-stream-store";
 import {useAgentRpcClient} from "@/rpc/use-agent-rpc-client";
 
-interface INewSessionPageProps {
+interface NewSessionPageProps {
   projectName: string;
   projectPath: string;
 }
 
-export default function NewSessionPage(props: INewSessionPageProps) {
+export default function NewSessionPage(props: NewSessionPageProps) {
   const {projectName, projectPath} = props;
 
   const navigate = useNavigate();

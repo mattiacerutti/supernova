@@ -1,10 +1,10 @@
-import type {IAgentProvider} from "@pi-desktop/contracts/providers/schemas";
+import type {AgentProvider} from "@pi-desktop/contracts/providers/schemas";
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import {cn} from "@/lib/cn";
 import {useState} from "react";
 
-function getProviderSourceLabel(provider: IAgentProvider): string | undefined {
+function getProviderSourceLabel(provider: AgentProvider): string | undefined {
   if (!provider.connected) return undefined;
   if (provider.source === "stored") return "Connected";
   if (provider.sourceLabel) return provider.sourceLabel;
@@ -13,14 +13,14 @@ function getProviderSourceLabel(provider: IAgentProvider): string | undefined {
   return "Configured externally";
 }
 
-interface IProviderRowProps {
-  provider: IAgentProvider;
+interface ProviderRowProps {
+  provider: AgentProvider;
   isFirst: boolean;
-  onConnect: (provider: IAgentProvider) => void;
-  onDisconnect: (provider: IAgentProvider) => Promise<void>;
+  onConnect: (provider: AgentProvider) => void;
+  onDisconnect: (provider: AgentProvider) => Promise<void>;
 }
 
-export default function ProviderRow(props: IProviderRowProps) {
+export default function ProviderRow(props: ProviderRowProps) {
   const {isFirst, onConnect, onDisconnect, provider} = props;
 
   const [isDisconnecting, setIsDisconnecting] = useState(false);

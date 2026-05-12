@@ -3,18 +3,18 @@ import {Effect} from "effect";
 import {AgentProviderLoginError} from "@pi-desktop/contracts/providers/procedures";
 import type {AgentProviderLoginInputKind} from "@pi-desktop/contracts/providers/schemas";
 import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
-import type {IPiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
+import type {PiSdkServiceShape} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
 import {loginSessions, toLoginSession} from "@pi-desktop/agent-runtime/implementations/pi/providers/lib/login-sessions";
-import type {ILoginSessionState} from "@pi-desktop/agent-runtime/implementations/pi/providers/lib/login-sessions";
+import type {LoginSessionState} from "@pi-desktop/agent-runtime/implementations/pi/providers/lib/login-sessions";
 import {errorMessage} from "@pi-desktop/agent-runtime/implementations/pi/providers/lib/provider-errors";
 
-interface IOAuthPrompt {
+interface OAuthPrompt {
   allowEmpty?: boolean;
   message: string;
   placeholder?: string;
 }
 
-function waitForInput(state: ILoginSessionState, kind: AgentProviderLoginInputKind, prompt: IOAuthPrompt): Promise<string> {
+function waitForInput(state: LoginSessionState, kind: AgentProviderLoginInputKind, prompt: OAuthPrompt): Promise<string> {
   return new Promise((resolve, reject) => {
     state.status = "waiting_input";
     state.inputKind = kind;
@@ -25,7 +25,7 @@ function waitForInput(state: ILoginSessionState, kind: AgentProviderLoginInputKi
   });
 }
 
-async function runOAuthLogin(piSdk: IPiSdkService, state: ILoginSessionState): Promise<void> {
+async function runOAuthLogin(piSdk: PiSdkServiceShape, state: LoginSessionState): Promise<void> {
   try {
     await piSdk.authStorage.login(state.providerId, {
       onAuth: (info) => {
@@ -41,7 +41,7 @@ async function runOAuthLogin(piSdk: IPiSdkService, state: ILoginSessionState): P
       onProgress: (message) => {
         state.progress = message;
       },
-      onPrompt: (prompt: IOAuthPrompt) => waitForInput(state, "prompt", prompt),
+      onPrompt: (prompt: OAuthPrompt) => waitForInput(state, "prompt", prompt),
       signal: state.abortController.signal,
     });
     piSdk.modelRegistry.refresh();
@@ -69,7 +69,7 @@ export function startProviderOAuthLogin(providerId: string) {
         const provider = piSdk.authStorage.getOAuthProviders().find((candidate) => candidate.id === providerId);
         if (!provider) throw new Error("Provider does not support OAuth login.");
 
-        const session: ILoginSessionState = {
+        const session: LoginSessionState = {
           abortController: new AbortController(),
           loginSessionId: randomUUID(),
           providerId,

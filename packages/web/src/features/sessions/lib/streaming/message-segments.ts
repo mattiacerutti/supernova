@@ -1,4 +1,4 @@
-export interface IStreamingMessageSegment {
+export interface StreamingMessageSegment {
   mode: "markdown" | "text";
   text: string;
 }
@@ -26,7 +26,7 @@ function findOpenFenceStart(text: string): number | undefined {
   return open?.start;
 }
 
-export function segmentStreamingMessage(text: string): IStreamingMessageSegment[] {
+export function segmentStreamingMessage(text: string): StreamingMessageSegment[] {
   if (!text) return [];
 
   // An unfinished fenced block is the most unstable Markdown shape while

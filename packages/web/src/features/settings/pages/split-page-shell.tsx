@@ -3,7 +3,7 @@ import type {AppEnvironment} from "@/app/app-environment";
 import {isDesktopEnvironment, isMacEnvironment} from "@/app/app-environment";
 import {cn} from "@/lib/cn";
 
-interface ISplitPageShellProps {
+interface SplitPageShellProps {
   appEnvironment: AppEnvironment;
   children: ReactNode;
   sidebar: ReactNode;
@@ -11,7 +11,7 @@ interface ISplitPageShellProps {
   titlebarActions?: ReactNode;
 }
 
-export default function SplitPageShell(props: ISplitPageShellProps) {
+export default function SplitPageShell(props: SplitPageShellProps) {
   const {appEnvironment, children, sidebar, sidebarVisible = true, titlebarActions} = props;
   const desktopEnvironment = isDesktopEnvironment(appEnvironment);
   const macEnvironment = isMacEnvironment(appEnvironment);

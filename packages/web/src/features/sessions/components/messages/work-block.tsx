@@ -33,7 +33,7 @@ function WorkEvent(props: {event: SessionWorkEvent; live: boolean}) {
   return null;
 }
 
-interface IWorkBlockProps {
+interface WorkBlockProps {
   item: WorkSessionRenderItem;
 }
 
@@ -44,7 +44,7 @@ function workCopyText(events: SessionWorkEvent[]): string {
     .join("\n\n");
 }
 
-export default function WorkBlock(props: IWorkBlockProps) {
+export default function WorkBlock(props: WorkBlockProps) {
   const {item} = props;
   const [expanded, setExpanded] = useState(false);
 

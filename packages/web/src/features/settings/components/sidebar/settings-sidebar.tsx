@@ -4,11 +4,11 @@ import {cn} from "@/lib/cn";
 import {settingsSections} from "@/features/settings/data/settings-sections";
 import type {SettingsSectionId} from "@/features/settings/data/settings-sections";
 
-interface ISettingsSidebarProps {
+interface SettingsSidebarProps {
   activeSectionId: SettingsSectionId;
 }
 
-export default function SettingsSidebar(props: ISettingsSidebarProps) {
+export default function SettingsSidebar(props: SettingsSidebarProps) {
   const {activeSectionId} = props;
 
   return (

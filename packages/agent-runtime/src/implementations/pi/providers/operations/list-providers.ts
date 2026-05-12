@@ -1,6 +1,6 @@
 import {Effect} from "effect";
 import {AgentProvidersListError} from "@pi-desktop/contracts/providers/procedures";
-import type {AgentProviderAuthSource, IAgentProvider} from "@pi-desktop/contracts/providers/schemas";
+import type {AgentProviderAuthSource, AgentProvider} from "@pi-desktop/contracts/providers/schemas";
 import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
 import {EXTERNAL_AUTH_PROVIDERS} from "@pi-desktop/agent-runtime/implementations/pi/providers/constants";
 import {errorMessage} from "@pi-desktop/agent-runtime/implementations/pi/providers/lib/provider-errors";
@@ -36,7 +36,7 @@ export function listProviders() {
 
         return Array.from(providerIds)
           .filter((providerId) => !EXTERNAL_AUTH_PROVIDERS.has(providerId))
-          .map<IAgentProvider>((providerId) => {
+          .map<AgentProvider>((providerId) => {
             const status = piSdk.modelRegistry.getProviderAuthStatus(providerId);
             return {
               id: providerId,

@@ -6,7 +6,7 @@ import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import IconButton from "@/components/ui/icon-button";
 import Menu, {MenuItem} from "@/components/ui/menu";
-import type {IProjectListProject} from "@/features/projects/types/project-list";
+import type {ProjectListProject} from "@/features/projects/types/project-list";
 import {useArchiveProjectSession} from "@/features/projects/hooks/api/use-archive-project-session";
 import {useListProjectSessions} from "@/features/projects/hooks/api/use-list-project-sessions";
 import {useRenameProject} from "@/features/projects/hooks/use-rename-project";
@@ -20,13 +20,13 @@ import {cn} from "@/lib/cn";
 const INITIAL_SESSION_LIMIT = 5;
 const SESSION_LIMIT_INCREMENT = 5;
 
-interface IProjectListItemProps {
+interface ProjectListItemProps {
   expanded: boolean;
-  project: IProjectListProject;
+  project: ProjectListProject;
   onToggle: (projectId: string) => void;
 }
 
-export default function ProjectListItem(props: IProjectListItemProps) {
+export default function ProjectListItem(props: ProjectListItemProps) {
   const {expanded, onToggle, project} = props;
 
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);

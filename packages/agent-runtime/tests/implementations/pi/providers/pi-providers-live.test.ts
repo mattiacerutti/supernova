@@ -1,12 +1,12 @@
 import {Effect, Layer} from "effect";
 import {afterEach, describe, expect, it, vi} from "vitest";
 import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
-import type {IPiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
+import type {PiSdkServiceShape} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
 import {loginSessions} from "@pi-desktop/agent-runtime/implementations/pi/providers/lib/login-sessions";
 import {PiProvidersLive} from "@pi-desktop/agent-runtime/implementations/pi/providers/pi-providers-live";
 import {ProvidersService} from "@pi-desktop/agent-runtime/services/providers/providers-service";
 
-interface IOAuthLoginOptions {
+interface OAuthLoginOptions {
   readonly onAuth: (info: {instructions?: string; url: string}) => void;
   readonly onManualCodeInput: () => Promise<string>;
   readonly onProgress: (message: string) => void;
@@ -14,7 +14,7 @@ interface IOAuthLoginOptions {
   readonly signal: AbortSignal;
 }
 
-function makePiSdk(input?: {login?: (providerId: string, options: IOAuthLoginOptions) => Promise<void>}): IPiSdkService {
+function makePiSdk(input?: {login?: (providerId: string, options: OAuthLoginOptions) => Promise<void>}): PiSdkServiceShape {
   return {
     authStorage: {
       getOAuthProviders: vi.fn(() => [
@@ -34,10 +34,10 @@ function makePiSdk(input?: {login?: (providerId: string, options: IOAuthLoginOpt
       getProviderDisplayName: vi.fn((providerId: string) => (providerId === "openai" ? "OpenAI" : "Anthropic")),
       refresh: vi.fn(),
     },
-  } as unknown as IPiSdkService;
+  } as unknown as PiSdkServiceShape;
 }
 
-function runWithProviders<A, E>(piSdk: IPiSdkService, effect: Effect.Effect<A, E, ProvidersService>) {
+function runWithProviders<A, E>(piSdk: PiSdkServiceShape, effect: Effect.Effect<A, E, ProvidersService>) {
   return Effect.runPromise(effect.pipe(Effect.provide(PiProvidersLive.pipe(Layer.provide(Layer.succeed(PiSdkService, piSdk))))));
 }
 

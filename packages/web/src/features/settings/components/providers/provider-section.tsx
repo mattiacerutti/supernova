@@ -1,14 +1,14 @@
-import type {IAgentProvider} from "@pi-desktop/contracts/providers/schemas";
+import type {AgentProvider} from "@pi-desktop/contracts/providers/schemas";
 import ProviderRow from "@/features/settings/components/providers/provider-row";
 
-interface IProviderSectionProps {
+interface ProviderSectionProps {
   title: string;
-  providers: readonly IAgentProvider[];
-  onConnect: (provider: IAgentProvider) => void;
-  onDisconnect: (provider: IAgentProvider) => Promise<void>;
+  providers: readonly AgentProvider[];
+  onConnect: (provider: AgentProvider) => void;
+  onDisconnect: (provider: AgentProvider) => Promise<void>;
 }
 
-export default function ProviderSection(props: IProviderSectionProps) {
+export default function ProviderSection(props: ProviderSectionProps) {
   const {onConnect, onDisconnect, providers, title} = props;
 
   return (

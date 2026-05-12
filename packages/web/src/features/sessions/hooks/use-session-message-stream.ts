@@ -1,4 +1,4 @@
-import type {IAgentModelReference, IAgentSessionTurn} from "@pi-desktop/contracts/sessions/schemas";
+import type {AgentModelReference, AgentSessionTurn} from "@pi-desktop/contracts/sessions/schemas";
 import type {LegendListRef} from "@legendapp/list/react";
 import {useQueryClient} from "@tanstack/react-query";
 import {useRef} from "react";
@@ -8,7 +8,7 @@ import {turnsToRenderItems} from "@/features/sessions/lib/session-render-items";
 import type {SessionRenderItem} from "@/features/sessions/types/session-render-item";
 import {useAgentRpcClient} from "@/rpc/use-agent-rpc-client";
 
-interface IUseSessionMessageStreamResult {
+interface UseSessionMessageStreamResult {
   renderItems: readonly SessionRenderItem[];
   listRef: React.RefObject<LegendListRef | null>;
   stopStreaming: () => void;
@@ -17,14 +17,14 @@ interface IUseSessionMessageStreamResult {
   submitMessage: (message: string) => void;
 }
 
-interface IUseSessionMessageStreamInput {
+interface UseSessionMessageStreamInput {
   projectPath: string;
   sessionId: string;
-  sessionTurns: readonly IAgentSessionTurn[];
-  modelReference: IAgentModelReference | undefined;
+  sessionTurns: readonly AgentSessionTurn[];
+  modelReference: AgentModelReference | undefined;
 }
 
-export function useSessionMessageStream(input: IUseSessionMessageStreamInput): IUseSessionMessageStreamResult {
+export function useSessionMessageStream(input: UseSessionMessageStreamInput): UseSessionMessageStreamResult {
   const {modelReference, projectPath, sessionId, sessionTurns} = input;
   const queryClient = useQueryClient();
   const rpcClient = useAgentRpcClient();

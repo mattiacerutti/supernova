@@ -1,4 +1,4 @@
-import type {IAgentModelDetails} from "@pi-desktop/contracts/sessions/schemas";
+import type {AgentModelDetails} from "@pi-desktop/contracts/sessions/schemas";
 import type {MouseEvent} from "react";
 import {useRef, useState} from "react";
 import Button from "@/components/ui/button";
@@ -10,16 +10,16 @@ import {modelKey} from "@/features/sessions/lib/model-picker/model-utils";
 import {useModelPickerStore} from "@/features/sessions/stores/model-picker-store";
 import {cn} from "@/lib/cn";
 
-interface IModelPickerProps {
+interface ModelPickerProps {
   disabled: boolean;
-  models: readonly IAgentModelDetails[];
+  models: readonly AgentModelDetails[];
   modelsLoading: boolean;
   onModelChange: (value: string) => void;
   selectedModelKey: string;
   selectedModelName: string;
 }
 
-export default function ModelPicker(props: IModelPickerProps) {
+export default function ModelPicker(props: ModelPickerProps) {
   const {disabled, models, modelsLoading, onModelChange, selectedModelKey, selectedModelName} = props;
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);

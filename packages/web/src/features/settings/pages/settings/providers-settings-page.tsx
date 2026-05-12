@@ -1,5 +1,5 @@
 import {useState} from "react";
-import type {IAgentProvider} from "@pi-desktop/contracts/providers/schemas";
+import type {AgentProvider} from "@pi-desktop/contracts/providers/schemas";
 import Dialog from "@/components/ui/dialog";
 import ProviderApiKeyContent from "@/features/settings/components/providers/provider-api-key-dialog";
 import ProviderConnectMethodContent from "@/features/settings/components/providers/provider-connect-method-dialog";
@@ -20,7 +20,7 @@ export default function ProvidersSettingsPage() {
   const {isPending: isStartingOAuthLogin, data: loginSession, mutateAsync: startOAuthLoginMutation} = useStartProviderOAuthLogin();
   const cancelLoginMutation = useCancelProviderLogin();
 
-  const [selectedProvider, setSelectedProvider] = useState<IAgentProvider | undefined>();
+  const [selectedProvider, setSelectedProvider] = useState<AgentProvider | undefined>();
   const [providerDialogOpen, setProviderDialogOpen] = useState(false);
   const [providerDialogView, setProviderDialogView] = useState<ProviderDialogView | undefined>();
   const loginSessionId = loginSession?.loginSessionId;
@@ -41,16 +41,16 @@ export default function ProvidersSettingsPage() {
     }, 300);
   };
 
-  const startOAuthLogin = async (provider: IAgentProvider) => {
+  const startOAuthLogin = async (provider: AgentProvider) => {
     await startOAuthLoginMutation({providerId: provider.id});
     setProviderDialogView("oauth");
   };
 
-  const handleDisconnect = async (provider: IAgentProvider) => {
+  const handleDisconnect = async (provider: AgentProvider) => {
     await logoutMutation.mutateAsync({providerId: provider.id});
   };
 
-  const handleConnect = async (provider: IAgentProvider) => {
+  const handleConnect = async (provider: AgentProvider) => {
     const hasOAuth = provider.authTypes.includes("oauth");
     const hasApiKey = provider.authTypes.includes("api_key");
 

@@ -29,7 +29,7 @@ function formatSuggestionPath(displayPath: string, homePath: string | undefined)
   };
 }
 
-interface IOpenProjectDialogProps {
+interface OpenProjectDialogProps {
   activeSuggestionIndex: number;
   onActiveSuggestionIndexChange: Dispatch<SetStateAction<number>>;
   onClose: () => void;
@@ -39,7 +39,7 @@ interface IOpenProjectDialogProps {
   projectPath: string;
 }
 
-interface ISuggestionItemProps {
+interface SuggestionItemProps {
   highlighted: boolean;
   homePath: string | undefined;
   onAutocomplete: (path: string) => void;
@@ -49,7 +49,7 @@ interface ISuggestionItemProps {
   shouldScrollIntoView: boolean;
 }
 
-function SuggestionItem(props: ISuggestionItemProps) {
+function SuggestionItem(props: SuggestionItemProps) {
   const {highlighted, homePath, onAutocomplete, onHoverEnd, onPointerHover, path, shouldScrollIntoView} = props;
   const {name, parent, suffix} = formatSuggestionPath(path, homePath);
 
@@ -80,7 +80,7 @@ function SuggestionItem(props: ISuggestionItemProps) {
   );
 }
 
-export default function OpenProjectDialog(props: IOpenProjectDialogProps) {
+export default function OpenProjectDialog(props: OpenProjectDialogProps) {
   const {activeSuggestionIndex, onActiveSuggestionIndexChange, onClose, onOpenProject, onProjectPathChange, open, projectPath} = props;
   const [hoveredSuggestionIndex, setHoveredSuggestionIndex] = useState<number | null>(null);
   const [selectionSource, setSelectionSource] = useState<"keyboard" | "mouse">("keyboard");

@@ -19,5 +19,5 @@ export const AgentSessionStreamEvent = Schema.Union([
   Schema.Struct({type: Schema.Literal("done"), turns: Schema.Array(AgentSessionTurn)}),
 ]);
 
-export type IAgentSessionMessageSendPayload = typeof AgentSessionMessageSendPayload.Type;
+export type AgentSessionMessageSendPayload = typeof AgentSessionMessageSendPayload.Type;
 export type AgentSessionStreamEvent = typeof AgentSessionStreamEvent.Type;

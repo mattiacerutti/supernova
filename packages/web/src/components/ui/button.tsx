@@ -5,7 +5,7 @@ export type ButtonVariant = "bare" | "ghost" | "primary";
 export type ButtonSize = "lg" | "md" | "none" | "sm";
 export type ButtonShape = "default" | "icon";
 
-export interface IButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   as?: "button" | "div";
   children: ReactNode;
   shape?: ButtonShape;
@@ -34,7 +34,7 @@ const iconSizeClasses: Record<ButtonSize, string> = {
   sm: "grid size-6 place-items-center",
 };
 
-export default function Button(props: IButtonProps) {
+export default function Button(props: ButtonProps) {
   const {as = "button", children, className, onClick, onKeyDown, shape = "default", size = "none", type = "button", variant = "bare", ...buttonProps} = props;
   const resolvedClassName = cn(variantClasses[variant], shape === "icon" ? iconSizeClasses[size] : defaultSizeClasses[size], className);
 

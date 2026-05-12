@@ -28,4 +28,4 @@ export const AgentProviderLoginSession = Schema.Struct({
 
 export type AgentProviderLoginStatus = typeof AgentProviderLoginStatus.Type;
 export type AgentProviderLoginInputKind = typeof AgentProviderLoginInputKind.Type;
-export type IAgentProviderLoginSession = typeof AgentProviderLoginSession.Type;
+export type AgentProviderLoginSession = typeof AgentProviderLoginSession.Type;

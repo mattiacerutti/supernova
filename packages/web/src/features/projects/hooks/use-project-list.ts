@@ -1,7 +1,7 @@
 import {useProjectsStore} from "@/features/projects/stores/projects-store";
-import type {IProjectListProject} from "@/features/projects/types/project-list";
+import type {ProjectListProject} from "@/features/projects/types/project-list";
 
-export function useProjectList(): IProjectListProject[] {
+export function useProjectList(): ProjectListProject[] {
   const storedProjects = useProjectsStore((state) => state.projects);
 
   return storedProjects.map((project) => ({

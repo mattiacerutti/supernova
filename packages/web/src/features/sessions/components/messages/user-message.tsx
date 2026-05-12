@@ -1,4 +1,4 @@
-import type {IAgentSessionUserMessage} from "@pi-desktop/contracts/sessions/schemas";
+import type {AgentSessionUserMessage} from "@pi-desktop/contracts/sessions/schemas";
 import MessageActions from "@/features/sessions/components/messages/message-actions";
 
 function UserMessageContent(props: {children: string}) {
@@ -22,11 +22,11 @@ function UserMessageContent(props: {children: string}) {
   );
 }
 
-interface IUserMessageProps {
-  message: IAgentSessionUserMessage;
+interface UserMessageProps {
+  message: AgentSessionUserMessage;
 }
 
-export default function UserMessage(props: IUserMessageProps) {
+export default function UserMessage(props: UserMessageProps) {
   const {message} = props;
 
   return (

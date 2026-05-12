@@ -65,8 +65,8 @@ export const AgentSessionTurn = Schema.Struct({
   completedAt: Schema.optional(Schema.String),
 });
 
-export type IAgentSessionAssistantTurnEvent = typeof AgentSessionAssistantTurnEvent.Type;
-export type IAgentSessionReasoningTurnEvent = typeof AgentSessionReasoningTurnEvent.Type;
-export type IAgentSessionToolTurnEvent = typeof AgentSessionToolTurnEvent.Type;
-export type IAgentSessionTurn = typeof AgentSessionTurn.Type;
-export type IAgentSessionTurnEvent = typeof AgentSessionTurnEvent.Type;
+export type AgentSessionAssistantTurnEvent = typeof AgentSessionAssistantTurnEvent.Type;
+export type AgentSessionReasoningTurnEvent = typeof AgentSessionReasoningTurnEvent.Type;
+export type AgentSessionToolTurnEvent = typeof AgentSessionToolTurnEvent.Type;
+export type AgentSessionTurn = typeof AgentSessionTurn.Type;
+export type AgentSessionTurnEvent = typeof AgentSessionTurnEvent.Type;

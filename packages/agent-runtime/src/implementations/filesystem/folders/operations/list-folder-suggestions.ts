@@ -4,17 +4,17 @@ import {homedir} from "node:os";
 import {basename, dirname, isAbsolute, join} from "node:path";
 import {Effect} from "effect";
 import {AgentFolderSuggestionsListError} from "@pi-desktop/contracts/folders/procedures";
-import type {IAgentFolderSuggestion} from "@pi-desktop/contracts/folders/schemas";
+import type {AgentFolderSuggestion} from "@pi-desktop/contracts/folders/schemas";
 import {expandHomePath, resolveFolderPath} from "@pi-desktop/agent-runtime/implementations/filesystem/folders/lib/folder-paths";
 
 const MAX_SUGGESTIONS = 200;
 
-interface IParsedFolderQuery {
+interface ParsedFolderQuery {
   readonly baseDir: string;
   readonly searchTerm: string;
 }
 
-function parseFolderQuery(query: string): IParsedFolderQuery {
+function parseFolderQuery(query: string): ParsedFolderQuery {
   const trimmedQuery = query.trim();
   if (trimmedQuery.length === 0) {
     return {baseDir: homedir(), searchTerm: ""};
@@ -47,7 +47,7 @@ async function readFolderPathType(path: string): Promise<"directory" | "file" | 
   return folderStat.isDirectory() ? "directory" : "file";
 }
 
-async function listLocalFolderSuggestions(query: string): Promise<IAgentFolderSuggestion[]> {
+async function listLocalFolderSuggestions(query: string): Promise<AgentFolderSuggestion[]> {
   const parsedQuery = parseFolderQuery(query);
   const childDirectories = await readChildDirectories(parsedQuery.baseDir);
 

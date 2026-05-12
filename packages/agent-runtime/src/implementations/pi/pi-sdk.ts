@@ -7,14 +7,14 @@ export const modelRegistry = ModelRegistry.create(authStorage);
 
 export type PiSessionInfo = SessionInfo;
 
-export interface IPiSdkService {
+export interface PiSdkServiceShape {
   readonly authStorage: typeof authStorage;
   readonly createAgentSession: typeof createAgentSession;
   readonly modelRegistry: typeof modelRegistry;
   readonly SessionManager: typeof SessionManager;
 }
 
-export class PiSdkService extends Context.Service<PiSdkService, IPiSdkService>()("pi-desktop/agent-runtime/PiSdkService") {}
+export class PiSdkService extends Context.Service<PiSdkService, PiSdkServiceShape>()("pi-desktop/agent-runtime/PiSdkService") {}
 
 export const PiSdkLive = Layer.succeed(PiSdkService, {
   authStorage,

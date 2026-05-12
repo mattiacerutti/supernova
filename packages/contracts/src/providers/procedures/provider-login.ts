@@ -25,8 +25,8 @@ export class AgentProviderLoginError extends Schema.TaggedErrorClass<AgentProvid
   message: Schema.String,
 }) {}
 
-export type IAgentProviderOAuthLoginStartPayload = typeof AgentProviderOAuthLoginStartPayload.Type;
-export type IAgentProviderLoginSessionGetPayload = typeof AgentProviderLoginSessionGetPayload.Type;
-export type IAgentProviderLoginInputSubmitPayload = typeof AgentProviderLoginInputSubmitPayload.Type;
-export type IAgentProviderLoginCancelPayload = typeof AgentProviderLoginCancelPayload.Type;
-export type IAgentProviderLoginResult = typeof AgentProviderLoginResult.Type;
+export type AgentProviderOAuthLoginStartPayload = typeof AgentProviderOAuthLoginStartPayload.Type;
+export type AgentProviderLoginSessionGetPayload = typeof AgentProviderLoginSessionGetPayload.Type;
+export type AgentProviderLoginInputSubmitPayload = typeof AgentProviderLoginInputSubmitPayload.Type;
+export type AgentProviderLoginCancelPayload = typeof AgentProviderLoginCancelPayload.Type;
+export type AgentProviderLoginResult = typeof AgentProviderLoginResult.Type;

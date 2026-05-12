@@ -1,10 +1,10 @@
-import type {ISettingsSection} from "@/features/settings/data/settings-sections";
+import type {SettingsSection} from "@/features/settings/data/settings-sections";
 
-interface IGeneralSettingsPageProps {
-  section: ISettingsSection;
+interface GeneralSettingsPageProps {
+  section: SettingsSection;
 }
 
-export default function GeneralSettingsPage(props: IGeneralSettingsPageProps) {
+export default function GeneralSettingsPage(props: GeneralSettingsPageProps) {
   const {section} = props;
 
   return (

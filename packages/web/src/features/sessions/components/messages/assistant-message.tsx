@@ -2,12 +2,12 @@ import MessageContent from "@/features/sessions/components/messages/message-cont
 import MessageActions from "@/features/sessions/components/messages/message-actions";
 import type {SessionAssistantEvent} from "@/features/sessions/types/session-render-item";
 
-interface IAssistantMessageProps {
+interface AssistantMessageProps {
   event: SessionAssistantEvent;
   live: boolean;
 }
 
-export default function AssistantMessage(props: IAssistantMessageProps) {
+export default function AssistantMessage(props: AssistantMessageProps) {
   const {event, live} = props;
 
   const error = event.error;

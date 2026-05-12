@@ -2,12 +2,12 @@ import type {ChangeEvent, FocusEvent, KeyboardEvent, MouseEvent} from "react";
 import {useRef, useState} from "react";
 import {useProjectsStore} from "@/features/projects/stores/projects-store";
 
-interface IUseRenameProjectOptions {
+interface UseRenameProjectOptions {
   projectId: string;
   projectName: string;
 }
 
-export function useRenameProject(options: IUseRenameProjectOptions) {
+export function useRenameProject(options: UseRenameProjectOptions) {
   const {projectId, projectName} = options;
 
   const [renaming, setRenaming] = useState(false);

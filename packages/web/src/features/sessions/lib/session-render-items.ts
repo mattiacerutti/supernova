@@ -1,4 +1,4 @@
-import type {IAgentSessionToolTurnEvent, IAgentSessionTurn} from "@pi-desktop/contracts/sessions/schemas";
+import type {AgentSessionToolTurnEvent, AgentSessionTurn} from "@pi-desktop/contracts/sessions/schemas";
 import type {SessionRenderItem} from "@/features/sessions/types/session-render-item";
 import type {SessionWorkEvent} from "@/features/sessions/types/session-render-item";
 
@@ -14,7 +14,7 @@ function workDuration(events: SessionWorkEvent[], completedAt: string | undefine
 /**
  * Converts a single turn into a list of render items. A turn can contain multiple assistant events interleaved with tool / reasoning events, and we want to group consecutive tool/ reasoning events into "work" items. For streaming turns, the last "work" item is considered live and may have an open-ended duration.
  */
-function turnToRenderItems(turn: IAgentSessionTurn, isStreaming: boolean): SessionRenderItem[] {
+function turnToRenderItems(turn: AgentSessionTurn, isStreaming: boolean): SessionRenderItem[] {
   const items: SessionRenderItem[] = [];
   const hasAssistantResponse = turn.events.some((event) => event.type === "assistant" && event.content.trim().length > 0);
 
@@ -54,7 +54,7 @@ function turnToRenderItems(turn: IAgentSessionTurn, isStreaming: boolean): Sessi
   return items;
 }
 
-export function turnsToRenderItems(turns: readonly IAgentSessionTurn[], isStreaming: boolean): SessionRenderItem[] {
+export function turnsToRenderItems(turns: readonly AgentSessionTurn[], isStreaming: boolean): SessionRenderItem[] {
   return turns.flatMap((turn) => turnToRenderItems(turn, isStreaming));
 }
 
@@ -63,6 +63,6 @@ export function formatDuration(durationMs: number | undefined): string {
   return `${Math.max(1, Math.round(durationMs / 1000))}s`;
 }
 
-export function getWorkIconName(event: IAgentSessionToolTurnEvent): "folder" | "server" {
+export function getWorkIconName(event: AgentSessionToolTurnEvent): "folder" | "server" {
   return event.tool?.name === "bash" ? "server" : "folder";
 }

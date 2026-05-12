@@ -1,11 +1,11 @@
 import {useSessionStreamStore} from "@/features/sessions/stores/session-stream-store";
 import {useMountEffect} from "@/lib/use-mount-effect";
 
-interface ISessionStreamsProviderProps {
+interface SessionStreamsProviderProps {
   children: React.ReactNode;
 }
 
-export default function SessionStreamsProvider(props: ISessionStreamsProviderProps) {
+export default function SessionStreamsProvider(props: SessionStreamsProviderProps) {
   const {children} = props;
   const stopAllStreams = useSessionStreamStore((state) => state.stopAllStreams);
 

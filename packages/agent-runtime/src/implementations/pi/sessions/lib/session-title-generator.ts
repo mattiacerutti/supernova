@@ -12,13 +12,13 @@ Rules:
 
 const sessionTitleMaxTokens = 256;
 
-interface IGenerateSessionTitleInput {
+interface GenerateSessionTitleInput {
   message: string;
   model: Parameters<typeof completeSimple>[0];
   modelRegistry: ModelRegistry;
 }
 
-export async function generateSessionTitle(input: IGenerateSessionTitleInput): Promise<string> {
+export async function generateSessionTitle(input: GenerateSessionTitleInput): Promise<string> {
   const requestAuth = await input.modelRegistry.getApiKeyAndHeaders(input.model);
   if (!requestAuth.ok) throw new Error("Failed to get API key and headers for the model.");
 

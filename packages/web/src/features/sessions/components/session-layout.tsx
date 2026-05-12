@@ -2,14 +2,14 @@ import type {ReactNode} from "react";
 import type {AppEnvironment} from "@/app/app-environment";
 import {cn} from "@/lib/cn";
 
-interface ISessionLayoutProps {
+interface SessionLayoutProps {
   readonly appEnvironment: AppEnvironment;
   readonly composer: ReactNode;
   readonly timeline: ReactNode;
   readonly title: ReactNode;
 }
 
-export default function SessionLayout(props: ISessionLayoutProps) {
+export default function SessionLayout(props: SessionLayoutProps) {
   const {appEnvironment, composer, timeline, title} = props;
   const titleOffset = appEnvironment === "mac" ? "left-48" : appEnvironment === "web" ? "left-12" : "left-20";
 

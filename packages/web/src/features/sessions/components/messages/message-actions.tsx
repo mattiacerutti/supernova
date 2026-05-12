@@ -3,12 +3,12 @@ import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import {cn} from "@/lib/cn";
 
-interface IMessageActionsProps {
+interface MessageActionsProps {
   align?: "end" | "start";
   copyText: string;
 }
 
-export default function MessageActions(props: IMessageActionsProps) {
+export default function MessageActions(props: MessageActionsProps) {
   const {align = "start", copyText} = props;
   const [copied, setCopied] = useState(false);
   const canCopy = copyText.length > 0;

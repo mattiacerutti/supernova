@@ -1,11 +1,11 @@
-import type {AgentProviderLoginInputKind, IAgentProviderLoginSession} from "@pi-desktop/contracts/providers/schemas";
+import type {AgentProviderLoginInputKind, AgentProviderLoginSession} from "@pi-desktop/contracts/providers/schemas";
 
-interface ILoginWaiter {
+interface LoginWaiter {
   reject: (error: Error) => void;
   resolve: (input: string) => void;
 }
 
-export interface ILoginSessionState {
+export interface LoginSessionState {
   allowEmptyInput?: boolean;
   abortController: AbortController;
   authUrl?: string;
@@ -18,19 +18,19 @@ export interface ILoginSessionState {
   prompt?: string;
   providerId: string;
   providerName: string;
-  status: IAgentProviderLoginSession["status"];
-  waiter?: ILoginWaiter;
+  status: AgentProviderLoginSession["status"];
+  waiter?: LoginWaiter;
 }
 
-export const loginSessions = new Map<string, ILoginSessionState>();
+export const loginSessions = new Map<string, LoginSessionState>();
 
-export function getLoginSessionState(loginSessionId: string): ILoginSessionState {
+export function getLoginSessionState(loginSessionId: string): LoginSessionState {
   const session = loginSessions.get(loginSessionId);
   if (!session) throw new Error("Login session not found.");
   return session;
 }
 
-export function toLoginSession(state: ILoginSessionState): IAgentProviderLoginSession {
+export function toLoginSession(state: LoginSessionState): AgentProviderLoginSession {
   return {
     allowEmptyInput: state.allowEmptyInput,
     authUrl: state.authUrl,

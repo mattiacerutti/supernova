@@ -1,4 +1,4 @@
-import type {ISidebarAction} from "@/features/sidebar/types/sidebar";
+import type {SidebarAction} from "@/features/sidebar/types/sidebar";
 import {create} from "zustand";
 import {createJSONStorage, persist} from "zustand/middleware";
 
@@ -8,7 +8,7 @@ const DEFAULT_SIDEBAR_WIDTH = 288;
 const MIN_SIDEBAR_WIDTH = 240;
 const MAX_SIDEBAR_WIDTH = 480;
 
-interface ISidebarSectionsState {
+interface SidebarSectionsState {
   readonly expandedProjects: Set<string>;
   readonly isPinnedCollapsed: boolean;
   readonly isProjectsCollapsed: boolean;
@@ -20,12 +20,12 @@ interface ISidebarSectionsState {
   readonly toggleProjectsCollapsed: () => void;
 }
 
-export const sidebarActions: ISidebarAction[] = [
+export const sidebarActions: SidebarAction[] = [
   {id: "new-project", icon: "folder", label: "New project"},
   {id: "search", icon: "search", label: "Search"},
 ];
 
-export const useSidebarSectionsStore = create<ISidebarSectionsState>()(
+export const useSidebarSectionsStore = create<SidebarSectionsState>()(
   persist(
     (set) => ({
       expandedProjects: new Set<string>(),

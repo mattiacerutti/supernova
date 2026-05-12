@@ -18,5 +18,5 @@ export class AgentFolderSuggestionsListError extends Schema.TaggedErrorClass<Age
   message: Schema.String,
 }) {}
 
-export type IAgentFolderSuggestionsListPayload = typeof AgentFolderSuggestionsListPayload.Type;
-export type IAgentFolderSuggestionsListResult = typeof AgentFolderSuggestionsListResult.Type;
+export type AgentFolderSuggestionsListPayload = typeof AgentFolderSuggestionsListPayload.Type;
+export type AgentFolderSuggestionsListResult = typeof AgentFolderSuggestionsListResult.Type;
