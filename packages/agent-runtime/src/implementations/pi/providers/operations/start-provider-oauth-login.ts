@@ -1,7 +1,7 @@
 import {randomUUID} from "node:crypto";
 import {Effect} from "effect";
-import {AgentProviderLoginError} from "@pi-desktop/contracts/providers";
-import type {AgentProviderLoginInputKind} from "@pi-desktop/contracts/providers";
+import {AgentProviderLoginError} from "@pi-desktop/contracts/providers/procedures";
+import type {AgentProviderLoginInputKind} from "@pi-desktop/contracts/providers/schemas";
 import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
 import type {IPiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
 import {loginSessions, toLoginSession} from "@pi-desktop/agent-runtime/implementations/pi/providers/lib/login-sessions";

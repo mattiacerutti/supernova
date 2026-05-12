@@ -1,4 +1,4 @@
-import type {IAgentSessionTurnEvent, IAgentSessionUserMessage} from "@pi-desktop/contracts/sessions";
+import type {IAgentSessionTurnEvent, IAgentSessionUserMessage} from "@pi-desktop/contracts/sessions/schemas";
 
 export type SessionAssistantEvent = Extract<IAgentSessionTurnEvent, {type: "assistant"}>;
 export type SessionWorkEvent = Extract<IAgentSessionTurnEvent, {type: "reasoning" | "tool"}>;

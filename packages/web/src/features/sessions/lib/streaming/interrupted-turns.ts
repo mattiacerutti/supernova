@@ -1,4 +1,4 @@
-import type {IAgentSessionTurn} from "@pi-desktop/contracts/sessions";
+import type {IAgentSessionTurn} from "@pi-desktop/contracts/sessions/schemas";
 
 export function completeInterruptedTurn(turn: IAgentSessionTurn): IAgentSessionTurn {
   const completedAt = turn.completedAt ?? turn.events.at(-1)?.timestamp ?? new Date().toISOString();

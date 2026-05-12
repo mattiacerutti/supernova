@@ -1,4 +1,4 @@
-import type {IAgentSessionReasoningTurnEvent, IAgentSessionTurn} from "@pi-desktop/contracts/sessions";
+import type {IAgentSessionReasoningTurnEvent, IAgentSessionTurn} from "@pi-desktop/contracts/sessions/schemas";
 import {describe, expect, it} from "vitest";
 import {upsertInterruptedTurn} from "@/features/sessions/lib/streaming/interrupted-turns";
 

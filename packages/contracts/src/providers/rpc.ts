@@ -1,69 +1,61 @@
 import * as Rpc from "effect/unstable/rpc/Rpc";
-import {Schema} from "effect";
 import {
   AgentProviderApiKeySetError,
+  AgentProviderApiKeySetPayload,
   AgentProviderApiKeySetResult,
   AgentProviderLoginError,
-  AgentProviderLoginSession,
+  AgentProviderLoginCancelPayload,
+  AgentProviderLoginInputSubmitPayload,
+  AgentProviderLoginResult,
+  AgentProviderLoginSessionGetPayload,
   AgentProviderLogoutError,
+  AgentProviderLogoutPayload,
   AgentProviderLogoutResult,
   AgentProvidersListError,
+  AgentProvidersListPayload,
   AgentProvidersListResult,
-} from "@pi-desktop/contracts/providers";
+  AgentProviderOAuthLoginStartPayload,
+} from "@pi-desktop/contracts/providers/procedures";
 
 export const AgentProvidersListRpc = Rpc.make("listProviders", {
   error: AgentProvidersListError,
-  payload: Schema.Void,
+  payload: AgentProvidersListPayload,
   success: AgentProvidersListResult,
 });
 
 export const AgentProviderApiKeySetRpc = Rpc.make("setProviderApiKey", {
   error: AgentProviderApiKeySetError,
-  payload: Schema.Struct({
-    apiKey: Schema.String,
-    providerId: Schema.String,
-  }),
+  payload: AgentProviderApiKeySetPayload,
   success: AgentProviderApiKeySetResult,
 });
 
 export const AgentProviderOAuthLoginStartRpc = Rpc.make("startProviderOAuthLogin", {
   error: AgentProviderLoginError,
-  payload: Schema.Struct({
-    providerId: Schema.String,
-  }),
-  success: AgentProviderLoginSession,
+  payload: AgentProviderOAuthLoginStartPayload,
+  success: AgentProviderLoginResult,
 });
 
 export const AgentProviderLoginSessionGetRpc = Rpc.make("getProviderLoginSession", {
   error: AgentProviderLoginError,
-  payload: Schema.Struct({
-    loginSessionId: Schema.String,
-  }),
-  success: AgentProviderLoginSession,
+  payload: AgentProviderLoginSessionGetPayload,
+  success: AgentProviderLoginResult,
 });
 
 export const AgentProviderLoginInputSubmitRpc = Rpc.make("submitProviderLoginInput", {
   error: AgentProviderLoginError,
-  payload: Schema.Struct({
-    input: Schema.String,
-    loginSessionId: Schema.String,
-  }),
-  success: AgentProviderLoginSession,
+  payload: AgentProviderLoginInputSubmitPayload,
+  success: AgentProviderLoginResult,
 });
 
 export const AgentProviderLoginCancelRpc = Rpc.make("cancelProviderLogin", {
   error: AgentProviderLoginError,
-  payload: Schema.Struct({
-    loginSessionId: Schema.String,
-  }),
-  success: AgentProviderLoginSession,
+  payload: AgentProviderLoginCancelPayload,
+  success: AgentProviderLoginResult,
 });
 
 export const AgentProviderLogoutRpc = Rpc.make("logoutProvider", {
   error: AgentProviderLogoutError,
-  payload: Schema.Struct({
-    providerId: Schema.String,
-  }),
+  payload: AgentProviderLogoutPayload,
   success: AgentProviderLogoutResult,
 });
 

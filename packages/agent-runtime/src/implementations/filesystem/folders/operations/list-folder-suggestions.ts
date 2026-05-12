@@ -3,7 +3,8 @@ import {readdir, stat} from "node:fs/promises";
 import {homedir} from "node:os";
 import {basename, dirname, isAbsolute, join} from "node:path";
 import {Effect} from "effect";
-import {AgentFolderSuggestionsListError, type IAgentFolderSuggestion} from "@pi-desktop/contracts/folders";
+import {AgentFolderSuggestionsListError} from "@pi-desktop/contracts/folders/procedures";
+import type {IAgentFolderSuggestion} from "@pi-desktop/contracts/folders/schemas";
 import {expandHomePath, resolveFolderPath} from "@pi-desktop/agent-runtime/implementations/filesystem/folders/lib/folder-paths";
 
 const MAX_SUGGESTIONS = 200;

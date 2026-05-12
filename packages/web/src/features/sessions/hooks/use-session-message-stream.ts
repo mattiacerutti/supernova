@@ -1,4 +1,4 @@
-import type {IAgentModelReference, IAgentSessionTurn} from "@pi-desktop/contracts/sessions";
+import type {IAgentModelReference, IAgentSessionTurn} from "@pi-desktop/contracts/sessions/schemas";
 import type {LegendListRef} from "@legendapp/list/react";
 import {useQueryClient} from "@tanstack/react-query";
 import {useRef} from "react";

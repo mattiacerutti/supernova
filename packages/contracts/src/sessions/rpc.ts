@@ -1,42 +1,38 @@
 import * as Rpc from "effect/unstable/rpc/Rpc";
-import {Schema} from "effect";
 import {
-  AgentSessionDetails,
+  AgentSessionCreateError,
+  AgentSessionCreatePayload,
+  AgentSessionCreateResult,
+  AgentSessionGetPayload,
+  AgentSessionGetResult,
   AgentSessionLoadError,
-  AgentModelReference,
+  AgentSessionMessageSendPayload,
   AgentSessionModelsListError,
+  AgentSessionModelsListPayload,
   AgentSessionModelsListResult,
   AgentSessionStreamEvent,
-} from "@pi-desktop/contracts/sessions";
+} from "@pi-desktop/contracts/sessions/procedures";
 
 export const AgentSessionGetRpc = Rpc.make("getSession", {
   error: AgentSessionLoadError,
-  payload: Schema.Struct({
-    sessionId: Schema.String,
-  }),
-  success: AgentSessionDetails,
+  payload: AgentSessionGetPayload,
+  success: AgentSessionGetResult,
 });
 
 export const AgentSessionCreateRpc = Rpc.make("createSession", {
-  error: AgentSessionLoadError,
-  payload: Schema.Struct({
-    projectPath: Schema.String,
-  }),
-  success: AgentSessionDetails,
+  error: AgentSessionCreateError,
+  payload: AgentSessionCreatePayload,
+  success: AgentSessionCreateResult,
 });
 
 export const AgentSessionModelsListRpc = Rpc.make("listSessionModels", {
   error: AgentSessionModelsListError,
-  payload: Schema.Void,
+  payload: AgentSessionModelsListPayload,
   success: AgentSessionModelsListResult,
 });
 
 export const AgentSessionMessageSendRpc = Rpc.make("sendSessionMessage", {
-  payload: Schema.Struct({
-    message: Schema.String,
-    model: AgentModelReference,
-    sessionId: Schema.String,
-  }),
+  payload: AgentSessionMessageSendPayload,
   stream: true,
   success: AgentSessionStreamEvent,
 });

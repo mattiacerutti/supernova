@@ -1,4 +1,4 @@
-import type {IAgentModelReference, IAgentSessionTurn, IAgentSessionTurnEvent, IAgentSessionUserMessage} from "@pi-desktop/contracts/sessions";
+import type {IAgentModelReference, IAgentSessionTurn, IAgentSessionTurnEvent, IAgentSessionUserMessage} from "@pi-desktop/contracts/sessions/schemas";
 
 export function sessionTurnStatus(events: readonly IAgentSessionTurnEvent[], streaming = false): IAgentSessionTurn["status"] {
   if (events.some((event) => (event.type === "assistant" && Boolean(event.error)) || (event.type === "tool" && event.tool?.status === "error"))) return "error";

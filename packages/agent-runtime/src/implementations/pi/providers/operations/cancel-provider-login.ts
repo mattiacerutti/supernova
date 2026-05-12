@@ -1,5 +1,5 @@
 import {Effect} from "effect";
-import {AgentProviderLoginError} from "@pi-desktop/contracts/providers";
+import {AgentProviderLoginError} from "@pi-desktop/contracts/providers/procedures";
 import {getLoginSessionState, toLoginSession} from "@pi-desktop/agent-runtime/implementations/pi/providers/lib/login-sessions";
 import {errorMessage} from "@pi-desktop/agent-runtime/implementations/pi/providers/lib/provider-errors";
 

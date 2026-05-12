@@ -1,5 +1,5 @@
 import {Effect} from "effect";
-import {AgentSessionLoadError} from "@pi-desktop/contracts/sessions";
+import {AgentSessionLoadError} from "@pi-desktop/contracts/sessions/procedures";
 import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
 import {toPiSessionSummary} from "@pi-desktop/agent-runtime/implementations/pi/projects/pi-session-mapper";
 import {findSessionById} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-resolver";

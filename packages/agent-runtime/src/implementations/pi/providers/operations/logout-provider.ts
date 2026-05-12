@@ -1,5 +1,5 @@
 import {Effect} from "effect";
-import {AgentProviderLogoutError} from "@pi-desktop/contracts/providers";
+import {AgentProviderLogoutError} from "@pi-desktop/contracts/providers/procedures";
 import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
 import {errorMessage} from "@pi-desktop/agent-runtime/implementations/pi/providers/lib/provider-errors";
 

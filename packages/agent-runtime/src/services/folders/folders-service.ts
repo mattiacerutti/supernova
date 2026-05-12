@@ -1,5 +1,5 @@
 import {Context, Effect} from "effect";
-import type {AgentFolderCreateError, AgentFolderSuggestionsListError, IAgentFolderCreateResult, IAgentFolderSuggestionsListResult} from "@pi-desktop/contracts/folders";
+import type {AgentFolderCreateError, AgentFolderSuggestionsListError, IAgentFolderCreateResult, IAgentFolderSuggestionsListResult} from "@pi-desktop/contracts/folders/procedures";
 
 export interface IFoldersService {
   readonly create: (path: string) => Effect.Effect<IAgentFolderCreateResult, AgentFolderCreateError>;

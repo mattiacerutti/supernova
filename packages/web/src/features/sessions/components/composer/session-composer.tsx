@@ -1,4 +1,4 @@
-import type {IAgentModelDetails} from "@pi-desktop/contracts/sessions";
+import type {IAgentModelDetails} from "@pi-desktop/contracts/sessions/schemas";
 import type {KeyboardEvent} from "react";
 import {useState} from "react";
 import Icon from "@/components/ui/icon";

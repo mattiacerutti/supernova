@@ -1,4 +1,4 @@
-import type {IAgentSessionAssistantTurnEvent, IAgentSessionToolTurnEvent, IAgentSessionTurn} from "@pi-desktop/contracts/sessions";
+import type {IAgentSessionAssistantTurnEvent, IAgentSessionToolTurnEvent, IAgentSessionTurn} from "@pi-desktop/contracts/sessions/schemas";
 import {describe, expect, it} from "vitest";
 import {interpolateStreamTurn, STREAM_FRAME_MAX_DELTA_MS} from "@/features/sessions/lib/streaming/turn-interpolation";
 

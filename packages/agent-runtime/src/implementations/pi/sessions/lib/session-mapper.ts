@@ -6,7 +6,7 @@ import type {
   IAgentSessionTurn,
   IAgentSessionTurnEvent,
   IAgentSessionUserMessage,
-} from "@pi-desktop/contracts/sessions";
+} from "@pi-desktop/contracts/sessions/schemas";
 import {sessionTurn} from "@pi-desktop/agent-runtime/implementations/shared/session-turns";
 
 type PiAgentMessage = AgentSession["messages"][number];

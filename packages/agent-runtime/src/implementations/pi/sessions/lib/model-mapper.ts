@@ -1,6 +1,6 @@
 import {getSupportedThinkingLevels} from "@mariozechner/pi-ai";
 import type {Api, Model, ModelThinkingLevel} from "@mariozechner/pi-ai";
-import type {IAgentModelDetails} from "@pi-desktop/contracts/sessions";
+import type {IAgentModelDetails} from "@pi-desktop/contracts/sessions/schemas";
 
 const thinkingLevelLabels: Record<ModelThinkingLevel, string> = {
   high: "High",

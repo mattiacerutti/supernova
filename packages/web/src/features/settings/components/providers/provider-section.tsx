@@ -1,4 +1,4 @@
-import type {IAgentProvider} from "@pi-desktop/contracts/providers";
+import type {IAgentProvider} from "@pi-desktop/contracts/providers/schemas";
 import ProviderRow from "@/features/settings/components/providers/provider-row";
 
 interface IProviderSectionProps {

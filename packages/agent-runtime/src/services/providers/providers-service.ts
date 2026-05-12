@@ -5,10 +5,10 @@ import type {
   AgentProviderLogoutError,
   AgentProvidersListError,
   IAgentProviderApiKeySetResult,
-  IAgentProviderLoginSession,
   IAgentProviderLogoutResult,
   IAgentProvidersListResult,
-} from "@pi-desktop/contracts/providers";
+} from "@pi-desktop/contracts/providers/procedures";
+import type {IAgentProviderLoginSession} from "@pi-desktop/contracts/providers/schemas";
 
 export interface IProvidersService {
   readonly list: () => Effect.Effect<IAgentProvidersListResult, AgentProvidersListError>;

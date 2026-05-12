@@ -1,13 +1,7 @@
 import type {QueryClient} from "@tanstack/react-query";
-import type {
-  AgentSessionStreamEvent,
-  IAgentModelReference,
-  IAgentSessionDetails,
-  IAgentSessionSummary,
-  IAgentSessionTurn,
-  IAgentSessionUserMessage,
-} from "@pi-desktop/contracts/sessions";
-import type {IAgentProjectSessionsListResult} from "@pi-desktop/contracts/projects";
+import type {AgentSessionStreamEvent} from "@pi-desktop/contracts/sessions/procedures";
+import type {IAgentModelReference, IAgentSessionDetails, IAgentSessionSummary, IAgentSessionTurn, IAgentSessionUserMessage} from "@pi-desktop/contracts/sessions/schemas";
+import type {IAgentProjectSessionsListResult} from "@pi-desktop/contracts/projects/procedures";
 import {create} from "zustand";
 import {Effect, Stream} from "effect";
 import {listProjectSessionsQueryKey} from "@/features/projects/hooks/api/use-list-project-sessions";

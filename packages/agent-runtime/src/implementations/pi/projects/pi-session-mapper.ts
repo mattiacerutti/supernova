@@ -1,5 +1,5 @@
 import type {SessionInfo} from "@mariozechner/pi-coding-agent";
-import type {IAgentSessionSummary} from "@pi-desktop/contracts/sessions";
+import type {IAgentSessionSummary} from "@pi-desktop/contracts/sessions/schemas";
 
 export type PiSessionInfo = Pick<SessionInfo, "cwd" | "firstMessage" | "id" | "modified" | "name">;
 

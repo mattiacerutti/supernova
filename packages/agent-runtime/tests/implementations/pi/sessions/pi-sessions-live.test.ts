@@ -4,7 +4,8 @@ import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk"
 import type {PiSessionInfo} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
 import {PiSessionsLive} from "@pi-desktop/agent-runtime/implementations/pi/sessions/pi-sessions-live";
 import {SessionsService} from "@pi-desktop/agent-runtime/services/sessions/sessions-service";
-import type {AgentSessionStreamEvent, IAgentModelReference} from "@pi-desktop/contracts/sessions";
+import type {AgentSessionStreamEvent} from "@pi-desktop/contracts/sessions/procedures";
+import type {IAgentModelReference} from "@pi-desktop/contracts/sessions/schemas";
 
 //TODO: Refactor these tests, they are awful
 

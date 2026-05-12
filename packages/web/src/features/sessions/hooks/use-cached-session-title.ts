@@ -1,4 +1,4 @@
-import type {IAgentProjectSessionsListResult} from "@pi-desktop/contracts/projects";
+import type {IAgentProjectSessionsListResult} from "@pi-desktop/contracts/projects/procedures";
 import {useQueryClient} from "@tanstack/react-query";
 import {allProjectSessionsQueryKey} from "@/features/projects/hooks/api/use-list-project-sessions";
 

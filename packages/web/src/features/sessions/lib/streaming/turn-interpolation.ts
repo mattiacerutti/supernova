@@ -1,4 +1,4 @@
-import type {IAgentSessionTurn} from "@pi-desktop/contracts/sessions";
+import type {IAgentSessionTurn} from "@pi-desktop/contracts/sessions/schemas";
 
 const STREAM_BACKLOG_CATCHUP_RATE = 8;
 export const STREAM_FRAME_MAX_DELTA_MS = 34;

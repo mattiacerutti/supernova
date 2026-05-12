@@ -1,6 +1,6 @@
 import {useState} from "react";
 import type {FormEvent} from "react";
-import type {IAgentProvider} from "@pi-desktop/contracts/providers";
+import type {IAgentProvider} from "@pi-desktop/contracts/providers/schemas";
 import Button from "@/components/ui/button";
 import Input from "@/components/ui/input";
 import {useSetProviderApiKey} from "@/features/settings/hooks/api/auth/use-set-provider-api-key";

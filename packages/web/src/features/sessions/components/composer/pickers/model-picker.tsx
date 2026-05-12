@@ -1,4 +1,4 @@
-import type {IAgentModelDetails} from "@pi-desktop/contracts/sessions";
+import type {IAgentModelDetails} from "@pi-desktop/contracts/sessions/schemas";
 import type {MouseEvent} from "react";
 import {useRef, useState} from "react";
 import Button from "@/components/ui/button";

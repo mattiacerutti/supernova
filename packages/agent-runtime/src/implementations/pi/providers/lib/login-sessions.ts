@@ -1,4 +1,4 @@
-import type {AgentProviderLoginInputKind, IAgentProviderLoginSession} from "@pi-desktop/contracts/providers";
+import type {AgentProviderLoginInputKind, IAgentProviderLoginSession} from "@pi-desktop/contracts/providers/schemas";
 
 interface ILoginWaiter {
   reject: (error: Error) => void;

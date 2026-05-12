@@ -1,4 +1,4 @@
-import type {IAgentSessionUserMessage} from "@pi-desktop/contracts/sessions";
+import type {IAgentSessionUserMessage} from "@pi-desktop/contracts/sessions/schemas";
 import MessageActions from "@/features/sessions/components/messages/message-actions";
 
 function UserMessageContent(props: {children: string}) {

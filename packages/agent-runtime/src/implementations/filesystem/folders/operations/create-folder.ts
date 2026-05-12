@@ -1,6 +1,6 @@
 import {mkdir} from "node:fs/promises";
 import {Effect} from "effect";
-import {AgentFolderCreateError} from "@pi-desktop/contracts/folders";
+import {AgentFolderCreateError} from "@pi-desktop/contracts/folders/procedures";
 import {resolveFolderPath} from "@pi-desktop/agent-runtime/implementations/filesystem/folders/lib/folder-paths";
 
 export function createFolder(path: string) {

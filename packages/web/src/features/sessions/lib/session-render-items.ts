@@ -1,4 +1,4 @@
-import type {IAgentSessionToolTurnEvent, IAgentSessionTurn} from "@pi-desktop/contracts/sessions";
+import type {IAgentSessionToolTurnEvent, IAgentSessionTurn} from "@pi-desktop/contracts/sessions/schemas";
 import type {SessionRenderItem} from "@/features/sessions/types/session-render-item";
 import type {SessionWorkEvent} from "@/features/sessions/types/session-render-item";
 

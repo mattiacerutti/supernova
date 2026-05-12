@@ -1,5 +1,5 @@
 import {useState} from "react";
-import type {IAgentProvider} from "@pi-desktop/contracts/providers";
+import type {IAgentProvider} from "@pi-desktop/contracts/providers/schemas";
 import Dialog from "@/components/ui/dialog";
 import ProviderApiKeyContent from "@/features/settings/components/providers/provider-api-key-dialog";
 import ProviderConnectMethodContent from "@/features/settings/components/providers/provider-connect-method-dialog";

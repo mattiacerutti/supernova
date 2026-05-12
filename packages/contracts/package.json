@@ -12,9 +12,13 @@
       "types": "./src/*/rpc.ts",
       "import": "./src/*/rpc.ts"
     },
-    "./*": {
-      "types": "./src/*/*.ts",
-      "import": "./src/*/*.ts"
+    "./*/procedures": {
+      "types": "./src/*/procedures/index.ts",
+      "import": "./src/*/procedures/index.ts"
+    },
+    "./*/schemas": {
+      "types": "./src/*/schemas/index.ts",
+      "import": "./src/*/schemas/index.ts"
     }
   },
   "scripts": {

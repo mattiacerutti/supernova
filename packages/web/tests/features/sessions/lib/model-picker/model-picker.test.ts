@@ -1,4 +1,4 @@
-import type {IAgentModelDetails} from "@pi-desktop/contracts/sessions";
+import type {IAgentModelDetails} from "@pi-desktop/contracts/sessions/schemas";
 import {describe, expect, it} from "vitest";
 import {getModelPickerSections} from "@/features/sessions/lib/model-picker/model-picker";
 import {modelKey} from "@/features/sessions/lib/model-picker/model-utils";

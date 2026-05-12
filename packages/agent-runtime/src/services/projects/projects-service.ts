@@ -4,7 +4,7 @@ import type {
   AgentProjectSessionsListError,
   IAgentProjectSessionArchiveResult,
   IAgentProjectSessionsListResult,
-} from "@pi-desktop/contracts/projects";
+} from "@pi-desktop/contracts/projects/procedures";
 
 export interface IProjectsService {
   readonly archiveSession: (projectPath: string, sessionId: string) => Effect.Effect<IAgentProjectSessionArchiveResult, AgentProjectSessionArchiveError>;

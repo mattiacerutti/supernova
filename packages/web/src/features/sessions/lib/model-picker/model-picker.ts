@@ -1,4 +1,4 @@
-import type {IAgentModelDetails} from "@pi-desktop/contracts/sessions";
+import type {IAgentModelDetails} from "@pi-desktop/contracts/sessions/schemas";
 import {matchSorter} from "match-sorter";
 import {modelKey} from "@/features/sessions/lib/model-picker/model-utils";
 

@@ -1,4 +1,4 @@
-import type {IAgentSessionAssistantTurnEvent, IAgentSessionReasoningTurnEvent, IAgentSessionToolTurnEvent, IAgentSessionTurn} from "@pi-desktop/contracts/sessions";
+import type {IAgentSessionAssistantTurnEvent, IAgentSessionReasoningTurnEvent, IAgentSessionToolTurnEvent, IAgentSessionTurn} from "@pi-desktop/contracts/sessions/schemas";
 import {describe, expect, it} from "vitest";
 import {formatDuration, turnsToRenderItems} from "@/features/sessions/lib/session-render-items";
 

@@ -1,4 +1,4 @@
-import type {IAgentSessionDetails} from "@pi-desktop/contracts/sessions";
+import type {IAgentSessionDetails} from "@pi-desktop/contracts/sessions/schemas";
 import type {AppEnvironment} from "@/app/app-environment";
 import SessionComposer from "@/features/sessions/components/composer/session-composer";
 import SessionComposerSkeleton from "@/features/sessions/components/composer/session-composer-skeleton";

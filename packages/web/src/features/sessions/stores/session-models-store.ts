@@ -1,4 +1,4 @@
-import type {IAgentModelReference} from "@pi-desktop/contracts/sessions";
+import type {IAgentModelReference} from "@pi-desktop/contracts/sessions/schemas";
 import {create} from "zustand";
 import {persist} from "zustand/middleware";
 

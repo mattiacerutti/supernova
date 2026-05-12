@@ -1,4 +1,4 @@
-import type {IAgentModelDetails, IAgentModelReference} from "@pi-desktop/contracts/sessions";
+import type {IAgentModelDetails, IAgentModelReference} from "@pi-desktop/contracts/sessions/schemas";
 
 const thinkingLevelRank: Record<string, number> = {
   off: 0,

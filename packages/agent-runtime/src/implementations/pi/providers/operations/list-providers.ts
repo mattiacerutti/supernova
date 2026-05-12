@@ -1,6 +1,6 @@
 import {Effect} from "effect";
-import {AgentProvidersListError} from "@pi-desktop/contracts/providers";
-import type {AgentProviderAuthSource, IAgentProvider} from "@pi-desktop/contracts/providers";
+import {AgentProvidersListError} from "@pi-desktop/contracts/providers/procedures";
+import type {AgentProviderAuthSource, IAgentProvider} from "@pi-desktop/contracts/providers/schemas";
 import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
 import {EXTERNAL_AUTH_PROVIDERS} from "@pi-desktop/agent-runtime/implementations/pi/providers/constants";
 import {errorMessage} from "@pi-desktop/agent-runtime/implementations/pi/providers/lib/provider-errors";
