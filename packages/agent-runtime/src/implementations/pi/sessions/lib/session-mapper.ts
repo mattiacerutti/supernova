@@ -1,5 +1,6 @@
-import type {AgentSession, SessionEntry, SessionMessageEntry} from "@mariozechner/pi-coding-agent";
+import type {AgentSession, CustomEntry, SessionEntry, SessionMessageEntry} from "@mariozechner/pi-coding-agent";
 import type {
+  AgentSessionAttachment,
   AgentModelReference,
   AgentSessionTool,
   AgentSessionToolTurnEvent,
@@ -10,6 +11,8 @@ import type {
 import {sessionTurn} from "@pi-desktop/agent-runtime/implementations/shared/session-turns";
 
 import type {ImageContent, TextContent} from "@mariozechner/pi-ai";
+import {ATTACHMENTS_CUSTOM_TYPE} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-attachments";
+import type {SessionAttachmentMetadata} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-attachments";
 
 type PiAgentMessage = AgentSession["messages"][number];
 
@@ -17,34 +20,82 @@ function isMessageEntry(entry: SessionEntry): entry is SessionMessageEntry {
   return entry.type === "message";
 }
 
-export function createSyntheticBranchEntries(input: {messages: readonly PiAgentMessage[]; parentId: string | null}): SessionEntry[] {
+function isAttachmentsEntry(entry: SessionEntry): entry is CustomEntry<{attachments: SessionAttachmentMetadata[]}> {
+  return entry.type === "custom" && entry.customType === ATTACHMENTS_CUSTOM_TYPE;
+}
+
+export function createSyntheticBranchEntries(input: {
+  attachmentMetadata?: {attachments: readonly SessionAttachmentMetadata[]};
+  messages: readonly PiAgentMessage[];
+  parentId: string | null;
+}): SessionEntry[] {
   let parentId = input.parentId;
+  const entries: SessionEntry[] = [];
 
-  return input.messages.map((message, index) => {
-    const entry: SessionMessageEntry = {
-      id: `synthetic-${index}-${message.role}`,
-      message,
+  if (input.attachmentMetadata?.attachments.length) {
+    const id = "synthetic-attachments";
+    entries.push({
+      customType: ATTACHMENTS_CUSTOM_TYPE,
+      data: input.attachmentMetadata,
+      id,
       parentId,
-      timestamp: new Date(message.timestamp).toISOString(),
-      type: "message",
-    };
+      timestamp: new Date(input.messages[0]?.timestamp ?? Date.now()).toISOString(),
+      type: "custom",
+    });
+    parentId = id;
+  }
 
-    parentId = entry.id;
-    return entry;
-  });
+  for (const [index, message] of input.messages.entries()) {
+    const id = `synthetic-${index}-${message.role}`;
+
+    if (message.role === "custom") {
+      entries.push({
+        content: message.content,
+        customType: message.customType,
+        details: message.details,
+        display: message.display,
+        id,
+        parentId,
+        timestamp: new Date(message.timestamp).toISOString(),
+        type: "custom_message",
+      });
+    } else {
+      entries.push({
+        id,
+        message,
+        parentId,
+        timestamp: new Date(message.timestamp).toISOString(),
+        type: "message",
+      });
+    }
+
+    parentId = id;
+  }
+
+  return entries;
 }
 
 function partsToText(content: string | (TextContent | ImageContent)[]): string {
   if (typeof content === "string") return content;
 
   return content
-    .map((part) => {
-      if (part.type === "text") return part.text ?? "";
-      if (part.type === "image") return "[Image]";
-      return "";
-    })
+    .map((part) => (part.type === "text" ? part.text : ""))
     .filter(Boolean)
     .join("\n");
+}
+
+function userAttachments(content: string | (TextContent | ImageContent)[], metadata: readonly SessionAttachmentMetadata[] | undefined): AgentSessionAttachment[] | undefined {
+  if (!metadata?.length) return;
+
+  const images = typeof content === "string" ? [] : content.filter((p): p is ImageContent => p.type === "image");
+  let imageIndex = 0;
+
+  return metadata.map((a) => {
+    const base: AgentSessionAttachment = {id: a.id, mime: a.mime, name: a.name, size: a.size};
+    if (a.kind !== "image") return base;
+    const image = images[imageIndex++];
+    return image ? {...base, contentBase64: image.data} : base;
+  });
 }
 
 function toolSummary(toolName: string): string {
@@ -72,6 +123,8 @@ export function normalizePiSessionTurns(entries: readonly SessionEntry[], fallba
   let currentEvents: AgentSessionTurnEvent[] = [];
   const toolEventIndexes = new Map<string, {event: AgentSessionToolTurnEvent; index: number}>();
 
+  const attachmentsByParent = new Map<string, readonly SessionAttachmentMetadata[]>();
+
   const flush = (): void => {
     if (!currentUser) return;
     turns.push(sessionTurn({events: currentEvents, model: fallbackModel, userMessage: currentUser}));
@@ -84,6 +137,14 @@ export function normalizePiSessionTurns(entries: readonly SessionEntry[], fallba
   };
 
   for (const entry of entries) {
+    if (isAttachmentsEntry(entry)) {
+      attachmentsByParent.set(
+        entry.id,
+        (entry.data?.attachments ?? []).sort((a, b) => a.order - b.order)
+      );
+      continue;
+    }
+
     if (!isMessageEntry(entry)) continue;
 
     const message = entry.message;
@@ -95,7 +156,8 @@ export function normalizePiSessionTurns(entries: readonly SessionEntry[], fallba
         const content = partsToText(message.content);
         if (content.length === 0) break;
         flush();
-        currentUser = {content, id, timestamp};
+        const attachments = entry.parentId ? attachmentsByParent.get(entry.parentId) : undefined;
+        currentUser = {attachments: userAttachments(message.content, attachments), content, id, timestamp};
         break;
       }
       case "assistant": {

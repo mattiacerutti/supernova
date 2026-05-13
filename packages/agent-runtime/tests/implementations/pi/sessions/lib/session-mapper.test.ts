@@ -210,4 +210,140 @@ describe("normalizePiSessionTurns", () => {
       {events: [{content: "Second response", type: "assistant"}], userMessage: {content: "Second request"}},
     ]);
   });
+
+  it("reconstructs attachment metadata and image previews from branch entries", () => {
+    const entries: SessionEntry[] = [
+      {
+        customType: "pi-desktop.attachments",
+        data: {
+          attachments: [
+            {id: "image-1", kind: "image", mime: "image/png", name: "diagram.png", order: 0, size: 12},
+            {id: "text-1", kind: "text", mime: "text/plain", name: "notes.txt", order: 1, size: 24},
+          ],
+        },
+        id: "attachments-1",
+        parentId: null,
+        timestamp: "1970-01-01T00:00:00.001Z",
+        type: "custom",
+      },
+      {
+        id: "user-1",
+        message: {
+          content: [
+            {text: "Review these files", type: "text"},
+            {data: "aW1hZ2UtYnl0ZXM=", mimeType: "image/png", type: "image"},
+          ],
+          id: "user-message-1",
+          role: "user",
+          timestamp: 2,
+        } as AgentSession["messages"][number],
+        parentId: "attachments-1",
+        timestamp: "1970-01-01T00:00:00.002Z",
+        type: "message",
+      },
+      {
+        content: "<attachments>text content for the model</attachments>",
+        customType: "pi-desktop.text-attachments",
+        display: false,
+        id: "text-attachments-1",
+        parentId: "user-1",
+        timestamp: "1970-01-01T00:00:00.003Z",
+        type: "custom_message",
+      },
+      {
+        id: "assistant-1",
+        message: {
+          api: "anthropic",
+          content: [{text: "Reviewed.", type: "text"}],
+          id: "assistant-message-1",
+          model: "claude-sonnet",
+          provider: "anthropic",
+          role: "assistant",
+          stopReason: "stop",
+          timestamp: 4,
+          usage: {cacheRead: 0, cacheWrite: 0, cost: {cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0}, input: 0, output: 0, totalTokens: 0},
+        } as AgentSession["messages"][number],
+        parentId: "text-attachments-1",
+        timestamp: "1970-01-01T00:00:00.004Z",
+        type: "message",
+      },
+    ];
+
+    const turns = normalizePiSessionTurns(entries, model);
+
+    expect(turns).toMatchObject([
+      {
+        events: [{content: "Reviewed.", type: "assistant"}],
+        userMessage: {
+          attachments: [
+            {contentBase64: "aW1hZ2UtYnl0ZXM=", id: "image-1", mime: "image/png", name: "diagram.png", size: 12},
+            {id: "text-1", mime: "text/plain", name: "notes.txt", size: 24},
+          ],
+          content: "Review these files",
+        },
+      },
+    ]);
+  });
+
+  it("preserves mixed attachment order while matching multiple image previews by image order", () => {
+    const entries: SessionEntry[] = [
+      {
+        customType: "pi-desktop.attachments",
+        data: {
+          attachments: [
+            {id: "text-1", kind: "text", mime: "text/plain", name: "notes.txt", order: 0, size: 10},
+            {id: "image-1", kind: "image", mime: "image/png", name: "first.png", order: 1, size: 11},
+            {id: "text-2", kind: "text", mime: "text/markdown", name: "plan.md", order: 2, size: 12},
+            {id: "image-2", kind: "image", mime: "image/jpeg", name: "second.jpg", order: 3, size: 13},
+          ],
+        },
+        id: "attachments-1",
+        parentId: null,
+        timestamp: "1970-01-01T00:00:00.001Z",
+        type: "custom",
+      },
+      {
+        id: "user-1",
+        message: {
+          content: [
+            {text: "Review all attachments", type: "text"},
+            {data: "Zmlyc3QtaW1hZ2U=", mimeType: "image/png", type: "image"},
+            {data: "c2Vjb25kLWltYWdl", mimeType: "image/jpeg", type: "image"},
+          ],
+          id: "user-message-1",
+          role: "user",
+          timestamp: 2,
+        } as AgentSession["messages"][number],
+        parentId: "attachments-1",
+        timestamp: "1970-01-01T00:00:00.002Z",
+        type: "message",
+      },
+      {
+        id: "assistant-1",
+        message: {
+          api: "anthropic",
+          content: [{text: "Reviewed all attachments.", type: "text"}],
+          id: "assistant-message-1",
+          model: "claude-sonnet",
+          provider: "anthropic",
+          role: "assistant",
+          stopReason: "stop",
+          timestamp: 3,
+          usage: {cacheRead: 0, cacheWrite: 0, cost: {cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0}, input: 0, output: 0, totalTokens: 0},
+        } as AgentSession["messages"][number],
+        parentId: "user-1",
+        timestamp: "1970-01-01T00:00:00.003Z",
+        type: "message",
+      },
+    ];
+
+    const turns = normalizePiSessionTurns(entries, model);
+
+    expect(turns[0]?.userMessage.attachments).toEqual([
+      {id: "text-1", mime: "text/plain", name: "notes.txt", size: 10},
+      {contentBase64: "Zmlyc3QtaW1hZ2U=", id: "image-1", mime: "image/png", name: "first.png", size: 11},
+      {id: "text-2", mime: "text/markdown", name: "plan.md", size: 12},
+      {contentBase64: "c2Vjb25kLWltYWdl", id: "image-2", mime: "image/jpeg", name: "second.jpg", size: 13},
+    ]);
+  });
 });

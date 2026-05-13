@@ -1,22 +1,17 @@
 import type {AgentSession} from "@mariozechner/pi-coding-agent";
 import {Effect, Queue, Stream} from "effect";
-import type {AgentSessionStreamEvent} from "@pi-desktop/contracts/sessions/procedures";
-import type {AgentModelReference, AgentSessionSummary} from "@pi-desktop/contracts/sessions/schemas";
+import type {AgentSessionMessageSendPayload, AgentSessionStreamEvent} from "@pi-desktop/contracts/sessions/procedures";
+import type {AgentSessionSummary} from "@pi-desktop/contracts/sessions/schemas";
 import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
 import {generateSessionTitle} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-title-generator";
 import {toPiThinkingLevel} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/thinking-levels";
 import {findSessionById} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-resolver";
 import {createSyntheticBranchEntries, normalizePiSessionTurns} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-mapper";
+import {ATTACHMENTS_CUSTOM_TYPE, TEXT_ATTACHMENTS_CUSTOM_TYPE, prepareSessionAttachments} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-attachments";
 
 type PiAgentMessage = AgentSession["messages"][number];
 
-interface SendSessionMessageInput {
-  message: string;
-  model: AgentModelReference;
-  sessionId: string;
-}
-
-export function sendSessionMessage(input: SendSessionMessageInput) {
+export function sendSessionMessage(input: AgentSessionMessageSendPayload) {
   return Stream.unwrap(
     Effect.gen(function* () {
       const piSdk = yield* PiSdkService;
@@ -87,12 +82,30 @@ export function sendSessionMessage(input: SendSessionMessageInput) {
               await session.setModel(selectedModel);
               session.setThinkingLevel(toPiThinkingLevel(input.model.thinkingLevel));
 
+              const attachments = prepareSessionAttachments(input.attachments);
+
               // UI history comes from the persisted branch at rest; live stream state comes from Pi's in-memory messages.
               const baseBranch = sessionManager.getBranch();
               const baseMessageCount = session.messages.length;
               const baseParentId = baseBranch.at(-1)?.id ?? null;
 
               emit({turns: normalizePiSessionTurns(baseBranch, input.model), type: "ready"});
+
+              if (attachments.metadata.length > 0) {
+                sessionManager.appendCustomEntry(ATTACHMENTS_CUSTOM_TYPE, {attachments: attachments.metadata});
+              }
+
+              if (attachments.textContent) {
+                await session.sendCustomMessage(
+                  {
+                    content: attachments.textContent,
+                    customType: TEXT_ATTACHMENTS_CUSTOM_TYPE,
+                    display: false,
+                    details: {attachmentIds: attachments.metadata.filter((attachment) => attachment.kind === "text").map((attachment) => attachment.id)},
+                  },
+                  {deliverAs: "nextTurn"}
+                );
+              }
 
               const currentLiveMessages = (message?: PiAgentMessage): readonly PiAgentMessage[] => {
                 const messages = session.messages.slice(baseMessageCount);
@@ -102,7 +115,7 @@ export function sendSessionMessage(input: SendSessionMessageInput) {
               };
 
               const emitMessages = (messages: readonly PiAgentMessage[]): void => {
-                const syntheticEntries = createSyntheticBranchEntries({messages, parentId: baseParentId});
+                const syntheticEntries = createSyntheticBranchEntries({attachmentMetadata: {attachments: attachments.metadata}, messages, parentId: baseParentId});
                 // Stream updates represent one active prompt, so the synthetic delta should normalize to one turn.
                 const [turn] = normalizePiSessionTurns(syntheticEntries, input.model);
                 if (!turn) return;
@@ -141,10 +154,10 @@ export function sendSessionMessage(input: SendSessionMessageInput) {
               });
 
               try {
-                await session.prompt(input.message);
+                await session.prompt(input.message, attachments.images.length > 0 ? {images: attachments.images} : undefined);
                 const liveMessages = session.messages.slice(baseMessageCount);
                 // Avoid reading getBranch() here: Pi persistence may still lag behind prompt completion.
-                const syntheticEntries = createSyntheticBranchEntries({messages: liveMessages, parentId: baseParentId});
+                const syntheticEntries = createSyntheticBranchEntries({attachmentMetadata: {attachments: attachments.metadata}, messages: liveMessages, parentId: baseParentId});
                 const finalTurns = normalizePiSessionTurns([...baseBranch, ...syntheticEntries], input.model);
                 emit({turns: finalTurns, type: "done"});
               } finally {

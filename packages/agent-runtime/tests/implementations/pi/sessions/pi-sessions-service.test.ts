@@ -171,6 +171,80 @@ describe("PiSessionsLive", () => {
     });
   });
 
+  it("loads attachment metadata and image previews from compacted raw branch history", async () => {
+    const sessionPath = join(await mkdtemp(join(tmpdir(), "pi-desktop-loaded-attachments-")), "session-1.jsonl");
+    await writeFile(sessionPath, "{}\n");
+    const piSdk = makePiSdk({
+      branch: [
+        {
+          customType: "pi-desktop.attachments",
+          data: {attachments: [{id: "image-1", kind: "image", mime: "image/png", name: "diagram.png", order: 0, size: 12}]},
+          id: "attachments-1",
+          parentId: null,
+          timestamp: "1970-01-01T00:00:00.001Z",
+          type: "custom",
+        },
+        {
+          id: "old-user",
+          message: {
+            content: [
+              {text: "Review this diagram", type: "text"},
+              {data: "aW1hZ2UtYnl0ZXM=", mimeType: "image/png", type: "image"},
+            ],
+            id: "old-user-message",
+            role: "user",
+            timestamp: 2,
+          },
+          parentId: "attachments-1",
+          timestamp: "1970-01-01T00:00:00.002Z",
+          type: "message",
+        },
+        {
+          id: "old-assistant",
+          message: {content: [{text: "Looks good.", type: "text"}], id: "old-assistant-message", role: "assistant", timestamp: 3},
+          parentId: "old-user",
+          timestamp: "1970-01-01T00:00:00.003Z",
+          type: "message",
+        },
+        {
+          firstKeptEntryId: "recent-user",
+          id: "compaction-1",
+          parentId: "old-assistant",
+          summary: "Compacted summary.",
+          timestamp: "1970-01-01T00:00:00.004Z",
+          tokensBefore: 1000,
+          type: "compaction",
+        },
+        {
+          id: "recent-user",
+          message: {content: [{text: "Continue", type: "text"}], id: "recent-user-message", role: "user", timestamp: 5},
+          parentId: "compaction-1",
+          timestamp: "1970-01-01T00:00:00.005Z",
+          type: "message",
+        },
+      ],
+      sessionContext: {
+        messages: [{content: [{text: "Compacted summary.", type: "text"}], id: "summary-1", role: "user", timestamp: 4}],
+        model: {modelId: "claude-sonnet", provider: "anthropic"},
+        thinkingLevel: "high",
+      },
+      sessions: [session({path: sessionPath})],
+    });
+
+    const result = await runWithSessions(
+      piSdk,
+      Effect.gen(function* () {
+        const sessions = yield* SessionsService;
+        return yield* sessions.get("session-1");
+      })
+    );
+
+    expect(result.turns[0]?.userMessage).toMatchObject({
+      attachments: [{contentBase64: "aW1hZ2UtYnl0ZXM=", id: "image-1", mime: "image/png", name: "diagram.png", size: 12}],
+      content: "Review this diagram",
+    });
+  });
+
   it("lists available prompt models after refreshing provider credentials and model metadata", async () => {
     const piSdk = makePiSdk();
 
