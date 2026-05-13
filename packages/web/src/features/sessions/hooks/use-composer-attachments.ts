@@ -8,7 +8,9 @@ import {
   formatAttachmentSize,
   MAX_SESSION_ATTACHMENT_BYTES,
   MAX_SESSION_ATTACHMENTS,
+  UnsupportedAttachmentTypeError,
 } from "@/features/sessions/lib/attachments/session-attachments";
+import {showToast} from "@/components/ui/toast-manager";
 
 export type ComposerAttachmentDropZoneProps = Pick<HTMLAttributes<HTMLDivElement>, "onDragEnter" | "onDragLeave" | "onDragOver" | "onDrop">;
 
@@ -17,7 +19,6 @@ export interface ComposerAttachmentsController {
   readonly attachments: readonly AgentSessionAttachment[];
   readonly clear: () => void;
   readonly dropZoneProps: ComposerAttachmentDropZoneProps;
-  readonly error: string | null;
   readonly isDraggingFiles: boolean;
   readonly isProcessing: boolean;
   readonly remove: (attachmentId: string) => void;
@@ -26,7 +27,7 @@ export interface ComposerAttachmentsController {
 
 interface ProcessFilesResult {
   readonly attachments: readonly AgentSessionAttachment[];
-  readonly error: string | null;
+  readonly errors: readonly string[];
 }
 
 function hasDraggedFiles(event: DragEvent<HTMLElement>): boolean {
@@ -35,6 +36,10 @@ function hasDraggedFiles(event: DragEvent<HTMLElement>): boolean {
 
 function attachmentLimitMessage(): string {
   return `Attach up to ${MAX_SESSION_ATTACHMENTS} files.`;
+}
+
+function attachmentReadFailureMessage(file: File): string {
+  return `Could not read ${file.name}.`;
 }
 
 function attachmentSizeMessage(file: File): string {
@@ -54,7 +59,6 @@ export function useComposerAttachments(input: UseComposerAttachmentsInput): Comp
   const {disabled, imageSupported} = input;
 
   const [attachments, setAttachments] = useState<readonly AgentSessionAttachment[]>([]);
-  const [error, setError] = useState<string | null>(null);
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
 
   const dragDepthRef = useRef(0);
@@ -78,24 +82,23 @@ export function useComposerAttachments(input: UseComposerAttachmentsInput): Comp
         try {
           nextAttachments.push(await fileToSessionAttachment(file));
         } catch (cause) {
-          errors.push(cause instanceof Error ? cause.message : `Failed to read ${file.name}.`);
+          errors.push(cause instanceof UnsupportedAttachmentTypeError ? cause.message : attachmentReadFailureMessage(file));
         }
       }
 
-      return {attachments: nextAttachments, error: errors.at(0) ?? null};
+      return {attachments: nextAttachments, errors};
     },
     onSuccess: (result) => {
       if (result.attachments.length > 0) {
         setAttachments((current) => [...current, ...result.attachments]);
       }
 
-      setError(result.error);
+      for (const error of result.errors) {
+        showToast("Attachment not added", error);
+      }
     },
-    onError: (cause) => {
-      setError(cause instanceof Error ? cause.message : "Failed to read attachments.");
-    },
-    onMutate: () => {
-      setError(null);
+    onError: () => {
+      showToast("Attachment not added", "Failed to read attachments.");
     },
   });
 
@@ -103,24 +106,21 @@ export function useComposerAttachments(input: UseComposerAttachmentsInput): Comp
 
   const clear = (): void => {
     setAttachments([]);
-    setError(null);
   };
 
   const remove = (attachmentId: string): void => {
     setAttachments((current) => current.filter((attachment) => attachment.id !== attachmentId));
-    setError(null);
   };
 
   const removeUnsupportedImages = (): void => {
     setAttachments((current) => current.filter((attachment) => !attachmentRequiresImageCapability(attachment)));
-    setError(null);
   };
 
   const addFiles = (files: readonly File[]): void => {
     if (disabled || isProcessing || files.length === 0) return;
 
     if (attachments.length + files.length > MAX_SESSION_ATTACHMENTS) {
-      setError(attachmentLimitMessage());
+      showToast("Attachment not added", attachmentLimitMessage());
       return;
     }
 
@@ -170,7 +170,6 @@ export function useComposerAttachments(input: UseComposerAttachmentsInput): Comp
       onDragOver: handleDragOver,
       onDrop: handleDrop,
     },
-    error,
     isDraggingFiles,
     isProcessing,
     remove,

@@ -106,7 +106,6 @@ function SessionComposerAttachments() {
       )}
 
       {attachments.isProcessing && <p className="px-1 pb-2 text-xs text-neutral-500">Preparing files...</p>}
-      {attachments.error && <p className="px-1 pb-2 text-xs text-red-300">{attachments.error}</p>}
     </>
   );
 }

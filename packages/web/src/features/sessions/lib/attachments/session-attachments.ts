@@ -6,6 +6,13 @@ export const MAX_SESSION_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 
 export {fileRequiresImageCapability, SESSION_ATTACHMENT_ACCEPT} from "@/features/sessions/lib/attachments/attachment-classification";
 
+export class UnsupportedAttachmentTypeError extends Error {
+  constructor(fileName: string) {
+    super(`${fileName} is not a supported attachment type.`);
+    this.name = "UnsupportedAttachmentTypeError";
+  }
+}
+
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
   const chunkSize = 0x8000;
@@ -45,7 +52,7 @@ export async function fileToSessionAttachment(file: File): Promise<AgentSessionA
   const mime = attachmentMime(file, buffer);
 
   if (!mime) {
-    throw new Error(`${file.name} is not a supported attachment type.`);
+    throw new UnsupportedAttachmentTypeError(file.name);
   }
 
   return {
