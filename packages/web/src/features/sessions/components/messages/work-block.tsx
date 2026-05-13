@@ -61,7 +61,7 @@ export default function WorkBlock(props: WorkBlockProps) {
         {item.events.map((event) => (
           <WorkEvent event={event} key={event.id} live={item.live} />
         ))}
-        <MessageActions copyText={copyText} />
+        {!item.live && <MessageActions copyText={copyText} />}
       </section>
     );
   }
