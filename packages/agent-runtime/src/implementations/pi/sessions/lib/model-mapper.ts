@@ -46,7 +46,7 @@ function getThinkingLevelOptions(model: Model<Api>): AgentModelDetails["thinking
 export function toAgentModelDetails(model: Model<Api>, providerDisplayName: string): AgentModelDetails {
   return {
     capabilities: {
-      images: true,
+      images: model.input.includes("image"),
       reasoning: model.reasoning === true,
       toolCalls: true,
     },

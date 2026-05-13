@@ -24,6 +24,11 @@ function model(overrides: Partial<Model<Api>>): Model<Api> {
 }
 
 describe("toAgentModelDetails", () => {
+  it("maps image capability from model input modalities", () => {
+    expect(toAgentModelDetails(model({input: ["text"]}), "OpenAI Codex").capabilities.images).toBe(false);
+    expect(toAgentModelDetails(model({input: ["text", "image"]}), "OpenAI Codex").capabilities.images).toBe(true);
+  });
+
   it("deduplicates thinking levels that map to the same native value", () => {
     const details = toAgentModelDetails(
       model({
