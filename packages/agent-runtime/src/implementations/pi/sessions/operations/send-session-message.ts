@@ -57,10 +57,12 @@ export function sendSessionMessage(input: AgentSessionMessageSendPayload) {
               const models = piSdk.modelRegistry.getAvailable();
               const selectedModel = models.find((model) => model.provider === input.model.providerId && model.id === input.model.id);
               if (!selectedModel) throw new Error("Selected model is not available.");
+              const attachmentNames = input.attachments.map((attachment) => attachment.name);
 
               let needsTitleGeneration = sessionManager.getSessionName() === undefined;
               if (needsTitleGeneration) {
                 const title = await generateSessionTitle({
+                  attachmentNames,
                   message: input.message,
                   model: selectedModel,
                   modelRegistry: piSdk.modelRegistry,

@@ -13,9 +13,16 @@ Rules:
 const sessionTitleMaxTokens = 256;
 
 interface GenerateSessionTitleInput {
+  attachmentNames?: readonly string[];
   message: string;
   model: Parameters<typeof completeSimple>[0];
   modelRegistry: ModelRegistry;
+}
+
+function titlePrompt(input: {attachmentNames?: readonly string[]; message: string}): string {
+  if (!input.attachmentNames?.length) return input.message;
+
+  return `${input.message}\n\nAttached files:\n${input.attachmentNames.map((name) => `- ${name}`).join("\n")}`;
 }
 
 export async function generateSessionTitle(input: GenerateSessionTitleInput): Promise<string> {
@@ -25,7 +32,7 @@ export async function generateSessionTitle(input: GenerateSessionTitleInput): Pr
   const response = await completeSimple(
     input.model,
     {
-      messages: [{content: input.message, role: "user", timestamp: Date.now()}],
+      messages: [{content: titlePrompt(input), role: "user", timestamp: Date.now()}],
       systemPrompt: sessionTitleSystemPrompt,
     },
     {
