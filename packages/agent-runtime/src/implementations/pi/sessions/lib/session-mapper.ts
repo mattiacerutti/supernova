@@ -154,10 +154,11 @@ export function normalizePiSessionTurns(entries: readonly SessionEntry[], fallba
     switch (message.role) {
       case "user": {
         const content = partsToText(message.content);
-        if (content.length === 0) break;
-        flush();
         const attachments = entry.parentId ? attachmentsByParent.get(entry.parentId) : undefined;
-        currentUser = {attachments: userAttachments(message.content, attachments), content, id, timestamp};
+        const normalizedAttachments = userAttachments(message.content, attachments);
+        if (content.length === 0 && !normalizedAttachments?.length) break;
+        flush();
+        currentUser = {attachments: normalizedAttachments, content, id, timestamp};
         break;
       }
       case "assistant": {

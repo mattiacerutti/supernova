@@ -261,6 +261,40 @@ describe("sendSessionMessage", () => {
     });
   });
 
+  it("emits attachment-only submissions as user turns", async () => {
+    const harness = makePiSessionsHarness({
+      prompt: async (message, context) => {
+        context.messages.push(
+          {content: [{text: message, type: "text"}, ...(context.promptOptions?.images ?? [])], id: "live-user", role: "user", timestamp: 1},
+          ...context.pendingCustomMessages,
+          {content: [{text: "Reviewed attachment.", type: "text"}], id: "live-assistant", role: "assistant", timestamp: 2}
+        );
+      },
+    });
+
+    const events = await Effect.runPromise(
+      harness.sendMessage({
+        attachments: [imageAttachment],
+        message: "",
+        model: {id: "claude-sonnet", providerId: "anthropic"},
+        sessionId: "session-1",
+      })
+    );
+
+    expect(events.at(-1)).toMatchObject({
+      turns: [
+        {
+          events: [{content: "Reviewed attachment.", type: "assistant"}],
+          userMessage: {
+            attachments: [{contentBase64: "aW1hZ2UtYnl0ZXM=", id: "image-1", mime: "image/png", name: "diagram.png", size: 12}],
+            content: "",
+          },
+        },
+      ],
+      type: "done",
+    });
+  });
+
   it("filters unsupported attachments and skips missing bytes for model input", async () => {
     const textWithoutBytes = {id: "text-empty", mime: "text/plain", name: "empty.txt", size: 0};
     const imageWithoutBytes = {id: "image-empty", mime: "image/png", name: "empty.png", size: 0};

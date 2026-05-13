@@ -346,4 +346,62 @@ describe("normalizePiSessionTurns", () => {
       {contentBase64: "c2Vjb25kLWltYWdl", id: "image-2", mime: "image/jpeg", name: "second.jpg", size: 13},
     ]);
   });
+
+  it("keeps attachment-only user messages", () => {
+    const turns = normalizePiSessionTurns(
+      [
+        {
+          customType: "pi-desktop.attachments",
+          data: {attachments: [{id: "image-1", kind: "image", mime: "image/png", name: "diagram.png", order: 0, size: 12}]},
+          id: "attachments-1",
+          parentId: null,
+          timestamp: "1970-01-01T00:00:00.001Z",
+          type: "custom",
+        },
+        {
+          id: "user-1",
+          message: {
+            content: [
+              {text: "", type: "text"},
+              {data: "aW1hZ2UtYnl0ZXM=", mimeType: "image/png", type: "image"},
+            ],
+            id: "user-message-1",
+            role: "user",
+            timestamp: 2,
+          } as AgentSession["messages"][number],
+          parentId: "attachments-1",
+          timestamp: "1970-01-01T00:00:00.002Z",
+          type: "message",
+        },
+        {
+          id: "assistant-1",
+          message: {
+            api: "anthropic",
+            content: [{text: "Reviewed.", type: "text"}],
+            id: "assistant-message-1",
+            model: "claude-sonnet",
+            provider: "anthropic",
+            role: "assistant",
+            stopReason: "stop",
+            timestamp: 3,
+            usage: {cacheRead: 0, cacheWrite: 0, cost: {cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0}, input: 0, output: 0, totalTokens: 0},
+          } as AgentSession["messages"][number],
+          parentId: "user-1",
+          timestamp: "1970-01-01T00:00:00.003Z",
+          type: "message",
+        },
+      ],
+      model
+    );
+
+    expect(turns).toMatchObject([
+      {
+        events: [{content: "Reviewed.", type: "assistant"}],
+        userMessage: {
+          attachments: [{contentBase64: "aW1hZ2UtYnl0ZXM=", id: "image-1", mime: "image/png", name: "diagram.png", size: 12}],
+          content: "",
+        },
+      },
+    ]);
+  });
 });
