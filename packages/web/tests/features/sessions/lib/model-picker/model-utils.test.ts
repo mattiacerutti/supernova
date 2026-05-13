@@ -4,7 +4,7 @@ import {resolveThinkingLevel} from "@/features/sessions/lib/model-picker/model-u
 
 function model(thinkingLevels: AgentModelDetails["thinkingLevels"]): AgentModelDetails {
   return {
-    capabilities: {images: false, reasoning: true, toolCalls: true},
+    capabilities: {images: false, reasoning: true},
     id: "claude-sonnet",
     name: "Claude Sonnet",
     providerId: "anthropic",

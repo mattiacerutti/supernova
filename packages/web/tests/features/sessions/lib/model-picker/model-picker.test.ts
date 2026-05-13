@@ -5,7 +5,7 @@ import {modelKey} from "@/features/sessions/lib/model-picker/model-utils";
 
 function model(overrides: Pick<AgentModelDetails, "id" | "name" | "providerId" | "providerName"> & Partial<AgentModelDetails>): AgentModelDetails {
   return {
-    capabilities: {images: false, reasoning: true, toolCalls: true},
+    capabilities: {images: false, reasoning: true},
     thinkingLevels: [],
     ...overrides,
   };

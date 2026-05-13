@@ -24,8 +24,6 @@ export const AgentModelCapabilities = Schema.Struct({
   images: Schema.Boolean,
   /** Whether the model supports explicit thinking or reasoning modes. */
   reasoning: Schema.Boolean,
-  /** Whether the model can request tool calls. */
-  toolCalls: Schema.Boolean,
 });
 
 /** Rich model metadata used to populate model selection UI. */

@@ -48,7 +48,6 @@ export function toAgentModelDetails(model: Model<Api>, providerDisplayName: stri
     capabilities: {
       images: model.input.includes("image"),
       reasoning: model.reasoning === true,
-      toolCalls: true,
     },
     id: model.id,
     name: model.name,
