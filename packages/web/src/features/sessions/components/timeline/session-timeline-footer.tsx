@@ -19,7 +19,7 @@ export default function SessionTimelineFooter(props: SessionTimelineFooterProps)
           <SessionTimelineRow item={item} />
         </SessionTimelineItemFrame>
       ))}
-      <div className="mx-auto w-full max-w-3xl px-5 pb-8 md:px-8">
+      <div className="mx-auto w-full max-w-3xl px-5 pb-6 md:px-8">
         {isStreaming && (
           <div className="relative w-fit text-sm text-neutral-600">
             <span>Thinking</span>
