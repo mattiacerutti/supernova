@@ -1,6 +1,7 @@
 import type {AgentSessionAssistantTurnEvent, AgentSessionReasoningTurnEvent, AgentSessionToolTurnEvent, AgentSessionTurn} from "@pi-desktop/contracts/sessions/schemas";
 import {describe, expect, it} from "vitest";
-import {formatDuration, turnsToRenderItems} from "@/features/sessions/lib/session-render-items";
+import {buildSessionTimeline} from "@/features/sessions/lib/session-timeline/build-session-timeline";
+import {formatDuration} from "@/features/sessions/lib/session-timeline/work-timeline-items";
 
 const model = {id: "claude-sonnet", providerId: "anthropic", thinkingLevel: "high"};
 
@@ -32,54 +33,57 @@ function turn(overrides: Partial<AgentSessionTurn>): AgentSessionTurn {
   };
 }
 
-describe("turnsToRenderItems", () => {
+describe("buildSessionTimeline", () => {
   it("groups consecutive reasoning and tool activity into work blocks with user-facing durations", () => {
-    const items = turnsToRenderItems(
-      [
+    const timeline = buildSessionTimeline({
+      live: false,
+      liveTurn: null,
+      turns: [
         turn({
           events: [reasoningEvent("reasoning-1", 1), toolEvent("tool-1", 3, "bash"), assistantEvent("assistant-1", 6), toolEvent("tool-2", 7)],
         }),
       ],
-      false
-    );
+    });
 
-    expect(items).toMatchObject([
+    expect(timeline.liveItems).toEqual([]);
+    expect(timeline.committedItems).toMatchObject([
       {message: {content: "Ship it"}, type: "user"},
-      {collapsible: true, durationMs: 5000, events: [{type: "reasoning"}, {tool: {name: "bash"}, type: "tool"}], id: "work-0", live: false, type: "work"},
+      {collapsible: true, durationMs: 5000, events: [{type: "reasoning"}, {tool: {name: "bash"}, type: "tool"}], id: "work:turn-1:0", live: false, type: "work"},
       {event: {content: "assistant assistant-1", type: "assistant"}, live: false, type: "assistant"},
-      {collapsible: true, durationMs: 3000, events: [{tool: {name: "read"}, type: "tool"}], id: "work-1", live: false, type: "work"},
+      {collapsible: true, durationMs: 3000, events: [{tool: {name: "read"}, type: "tool"}], id: "work:turn-1:1", live: false, type: "work"},
     ]);
   });
 
   it("keeps reasoning and tool-only turns expanded when there is no assistant response", () => {
-    const items = turnsToRenderItems(
-      [
+    const timeline = buildSessionTimeline({
+      live: false,
+      liveTurn: null,
+      turns: [
         turn({
           events: [reasoningEvent("reasoning-1", 1), toolEvent("tool-1", 3, "bash")],
         }),
       ],
-      false
-    );
+    });
 
-    expect(items).toMatchObject([
+    expect(timeline.committedItems).toMatchObject([
       {message: {content: "Ship it"}, type: "user"},
       {collapsible: false, events: [{type: "reasoning"}, {tool: {name: "bash"}, type: "tool"}], live: false, type: "work"},
     ]);
   });
 
   it("marks only the active stream output and trailing work as live", () => {
-    const items = turnsToRenderItems(
-      [
-        turn({
-          completedAt: undefined,
-          events: [assistantEvent("assistant-1", 1), toolEvent("tool-1", 3)],
-          status: "streaming",
-        }),
-      ],
-      true
-    );
+    const timeline = buildSessionTimeline({
+      live: true,
+      liveTurn: turn({
+        completedAt: undefined,
+        events: [assistantEvent("assistant-1", 1), toolEvent("tool-1", 3)],
+        status: "streaming",
+      }),
+      turns: [],
+    });
 
-    expect(items).toMatchObject([
+    expect(timeline.committedItems).toEqual([]);
+    expect(timeline.liveItems).toMatchObject([
       {type: "user"},
       {event: {id: "assistant-1"}, live: true, type: "assistant"},
       {collapsible: true, events: [{id: "tool-1"}], live: true, type: "work"},

@@ -1,6 +1,6 @@
 import MessageContent from "@/features/sessions/components/messages/message-content";
 import MessageActions from "@/features/sessions/components/messages/message-actions";
-import type {SessionAssistantEvent} from "@/features/sessions/types/session-render-item";
+import type {SessionAssistantEvent} from "@/features/sessions/types/session-timeline-item";
 
 interface AssistantMessageProps {
   event: SessionAssistantEvent;

@@ -3,9 +3,8 @@ import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import MessageActions from "@/features/sessions/components/messages/message-actions";
 import MessageContent from "@/features/sessions/components/messages/message-content";
-import {formatDuration, getWorkIconName} from "@/features/sessions/lib/session-render-items";
-import type {SessionWorkEvent} from "@/features/sessions/types/session-render-item";
-import type {WorkSessionRenderItem} from "@/features/sessions/types/session-render-item";
+import {formatDuration, getWorkIconName} from "@/features/sessions/lib/session-timeline/work-timeline-items";
+import type {SessionWorkEvent, WorkSessionTimelineItem} from "@/features/sessions/types/session-timeline-item";
 import {cn} from "@/lib/cn";
 
 function WorkEvent(props: {event: SessionWorkEvent; live: boolean}) {
@@ -34,10 +33,10 @@ function WorkEvent(props: {event: SessionWorkEvent; live: boolean}) {
 }
 
 interface WorkBlockProps {
-  item: WorkSessionRenderItem;
+  item: WorkSessionTimelineItem;
 }
 
-function workCopyText(events: SessionWorkEvent[]): string {
+function workCopyText(events: readonly SessionWorkEvent[]): string {
   return events
     .filter((event) => event.type === "reasoning")
     .map((event) => event.content)

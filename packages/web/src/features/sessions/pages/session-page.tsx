@@ -5,7 +5,7 @@ import ThinkingLevelPicker from "@/features/sessions/components/composer/pickers
 import SessionComposer from "@/features/sessions/components/composer/session-composer";
 import SessionComposerSkeleton from "@/features/sessions/components/composer/session-composer-skeleton";
 import SessionLayout from "@/features/sessions/components/session-layout";
-import SessionTimeline from "@/features/sessions/components/session-timeline";
+import SessionTimeline from "@/features/sessions/components/timeline/session-timeline";
 import SessionTitleText from "@/features/sessions/components/session-title-text";
 import {useSession} from "@/features/sessions/hooks/api/use-session";
 import {useSessionModels} from "@/features/sessions/hooks/api/use-session-models";
@@ -170,9 +170,9 @@ function SessionConversation(props: SessionConversationProps) {
       timeline={
         <SessionTimeline
           isStreaming={isStreaming}
-          items={stream.committedRenderItems}
+          items={stream.committedTimelineItems}
           listRef={stream.listRef}
-          liveItems={stream.liveRenderItems}
+          liveItems={stream.liveTimelineItems}
           streamError={stream.streamError}
         />
       }

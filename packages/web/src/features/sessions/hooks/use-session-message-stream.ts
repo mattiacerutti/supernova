@@ -2,16 +2,16 @@ import type {AgentModelReference, AgentSessionAttachment, AgentSessionTurn} from
 import type {LegendListRef} from "@legendapp/list/react";
 import {useQueryClient} from "@tanstack/react-query";
 import {useRef} from "react";
+import {buildSessionTimeline} from "@/features/sessions/lib/session-timeline/build-session-timeline";
 import {useSessionStreamStore} from "@/features/sessions/stores/session-stream-store";
 import type {SessionStreamStatus} from "@/features/sessions/stores/session-stream-store";
-import {turnsToRenderItems} from "@/features/sessions/lib/session-render-items";
-import type {SessionRenderItem} from "@/features/sessions/types/session-render-item";
+import type {SessionTimelineItem} from "@/features/sessions/types/session-timeline-item";
 import {useAgentRpcClient} from "@/rpc/use-agent-rpc-client";
 
 interface UseSessionMessageStreamResult {
-  committedRenderItems: readonly SessionRenderItem[];
+  committedTimelineItems: readonly SessionTimelineItem[];
   listRef: React.RefObject<LegendListRef | null>;
-  liveRenderItems: readonly SessionRenderItem[];
+  liveTimelineItems: readonly SessionTimelineItem[];
   stopStreaming: () => void;
   streamError: string | null;
   streamStatus: SessionStreamStatus;
@@ -39,8 +39,7 @@ export function useSessionMessageStream(input: UseSessionMessageStreamInput): Us
   const isStreaming = streamStatus !== "idle";
   const baseTurns = stream?.turns ?? sessionTurns;
   const streamTurn = stream?.turn ?? null;
-  const committedRenderItems = turnsToRenderItems(baseTurns, false);
-  const liveRenderItems = streamTurn ? turnsToRenderItems([streamTurn], isStreaming) : [];
+  const timeline = buildSessionTimeline({live: isStreaming, liveTurn: streamTurn, turns: baseTurns});
 
   const submitMessage = (message: string, attachments: readonly AgentSessionAttachment[]): void => {
     if (isStreaming) return;
@@ -62,9 +61,9 @@ export function useSessionMessageStream(input: UseSessionMessageStreamInput): Us
   };
 
   return {
-    committedRenderItems,
+    committedTimelineItems: timeline.committedItems,
     listRef: messagesListRef,
-    liveRenderItems,
+    liveTimelineItems: timeline.liveItems,
     stopStreaming,
     streamError: stream?.error ?? null,
     streamStatus,

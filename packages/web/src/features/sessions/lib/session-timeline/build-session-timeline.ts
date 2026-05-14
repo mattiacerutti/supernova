@@ -1,0 +1,60 @@
+import type {AgentSessionTurn} from "@pi-desktop/contracts/sessions/schemas";
+import {workDuration} from "@/features/sessions/lib/session-timeline/work-timeline-items";
+import type {SessionTimelineItem, SessionTimelineItems, SessionWorkEvent} from "@/features/sessions/types/session-timeline-item";
+
+interface BuildSessionTimelineInput {
+  readonly live: boolean;
+  readonly liveTurn: AgentSessionTurn | null;
+  readonly turns: readonly AgentSessionTurn[];
+}
+
+function turnToTimelineItems(turn: AgentSessionTurn, live: boolean): SessionTimelineItem[] {
+  const items: SessionTimelineItem[] = [];
+  const hasAssistantResponse = turn.events.some((event) => event.type === "assistant" && event.content.trim().length > 0);
+
+  let workEvents: SessionWorkEvent[] = [];
+  let workIndex = 0;
+
+  const flushWork = (workLive: boolean, completedAt?: string): void => {
+    if (workEvents.length === 0) return;
+
+    items.push({
+      collapsible: hasAssistantResponse,
+      durationMs: workDuration(workEvents, completedAt),
+      events: workEvents,
+      id: `work:${turn.id}:${workIndex}`,
+      live: workLive,
+      spacing: "work",
+      turnId: turn.id,
+      type: "work",
+    });
+
+    workIndex += 1;
+    workEvents = [];
+  };
+
+  items.push({id: `user:${turn.userMessage.id}`, message: turn.userMessage, spacing: "message", turnId: turn.id, type: "user"});
+
+  for (const event of turn.events) {
+    if (event.type === "tool" || event.type === "reasoning") {
+      workEvents.push(event);
+      continue;
+    }
+
+    flushWork(false, event.timestamp);
+    items.push({event, id: `assistant:${event.id}`, live, spacing: "message", turnId: turn.id, type: "assistant"});
+  }
+
+  flushWork(turn.status === "streaming" && live, turn.completedAt);
+
+  return items;
+}
+
+export function buildSessionTimeline(input: BuildSessionTimelineInput): SessionTimelineItems {
+  const {live, liveTurn, turns} = input;
+
+  return {
+    committedItems: turns.flatMap((turn) => turnToTimelineItems(turn, false)),
+    liveItems: liveTurn ? turnToTimelineItems(liveTurn, live) : [],
+  };
+}
