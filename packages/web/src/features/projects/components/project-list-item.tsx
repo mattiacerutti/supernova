@@ -1,5 +1,6 @@
 import {useState} from "react";
 import type {MouseEvent} from "react";
+import {flushSync} from "react-dom";
 import {useLocation, useNavigate} from "@tanstack/react-router";
 import {useQueryClient} from "@tanstack/react-query";
 import Button from "@/components/ui/button";
@@ -19,6 +20,22 @@ import {cn} from "@/lib/cn";
 
 const INITIAL_SESSION_LIMIT = 5;
 const SESSION_LIMIT_INCREMENT = 5;
+
+function getSessionReorderViewTransitionName(sessionId: string): string {
+  const transitionName = `project-session-${sessionId}`;
+  return CSS.escape ? CSS.escape(transitionName) : transitionName.replace(/[^a-zA-Z0-9_-]/g, "-");
+}
+
+function updateWithSessionReorderTransition(update: () => void): void {
+  if (!document.startViewTransition) {
+    update();
+    return;
+  }
+
+  document.startViewTransition(() => {
+    flushSync(update);
+  });
+}
 
 interface ProjectListItemProps {
   expanded: boolean;
@@ -86,7 +103,7 @@ export default function ProjectListItem(props: ProjectListItemProps) {
 
   const handleToggleSessionPinned = (event: MouseEvent<HTMLButtonElement>, sessionId: string): void => {
     event.stopPropagation();
-    toggleSessionPinned(project.id, sessionId);
+    updateWithSessionReorderTransition(() => toggleSessionPinned(project.id, sessionId));
   };
 
   const handleArchiveSession = (event: MouseEvent<HTMLButtonElement>, sessionId: string): void => {
@@ -221,6 +238,7 @@ export default function ProjectListItem(props: ProjectListItemProps) {
                     onMouseLeave={() => handleSessionMouseLeave(session.id)}
                     onPointerDown={() => handlePrefetchSession(session.id)}
                     onPointerEnter={() => handlePrefetchSession(session.id)}
+                    style={{viewTransitionName: getSessionReorderViewTransitionName(session.id)}}
                   >
                     <Button
                       as="div"
