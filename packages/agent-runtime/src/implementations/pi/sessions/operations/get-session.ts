@@ -3,7 +3,7 @@ import {AgentSessionLoadError} from "@pi-desktop/contracts/sessions/procedures";
 import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
 import {toPiSessionSummary} from "@pi-desktop/agent-runtime/implementations/pi/projects/pi-session-mapper";
 import {findSessionById} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-resolver";
-import {normalizePiSessionTurns} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-mapper";
+import {buildPiSessionTurns} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-turns-builder";
 
 export function getSession(sessionId: string) {
   return Effect.gen(function* () {
@@ -24,7 +24,7 @@ export function getSession(sessionId: string) {
           model,
           projectPath: sessionInfo.cwd,
           title: summary.title,
-          turns: model ? normalizePiSessionTurns(branch, model) : [],
+          turns: model ? buildPiSessionTurns(branch, model) : [],
           updatedAt: summary.updatedAt,
         };
       },

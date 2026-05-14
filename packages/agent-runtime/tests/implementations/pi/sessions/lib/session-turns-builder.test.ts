@@ -1,5 +1,5 @@
 import {describe, expect, it} from "vitest";
-import {normalizePiSessionTurns} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-mapper";
+import {buildPiSessionTurns} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-turns-builder";
 import type {AgentModelReference} from "@pi-desktop/contracts/sessions/schemas";
 import type {AgentSession, SessionEntry} from "@mariozechner/pi-coding-agent";
 
@@ -24,13 +24,13 @@ function piEntries(messages: unknown[]): SessionEntry[] {
   });
 }
 
-function expectTurnEvents(turn: ReturnType<typeof normalizePiSessionTurns>[number] | undefined, events: Array<Record<string, unknown>>): void {
+function expectTurnEvents(turn: ReturnType<typeof buildPiSessionTurns>[number] | undefined, events: Array<Record<string, unknown>>): void {
   expect(turn?.events).toMatchObject(events);
 }
 
-describe("normalizePiSessionTurns", () => {
+describe("buildPiSessionTurns", () => {
   it("groups a user request, reasoning, tool result, and assistant response into one model-attributed turn", () => {
-    const turns = normalizePiSessionTurns(
+    const turns = buildPiSessionTurns(
       piEntries([
         {content: [{text: "Fix the tests", type: "text"}], id: "user-1", role: "user", timestamp: 1},
         {
@@ -71,7 +71,7 @@ describe("normalizePiSessionTurns", () => {
   });
 
   it("updates a pending tool call when it is the first event in the turn", () => {
-    const turns = normalizePiSessionTurns(
+    const turns = buildPiSessionTurns(
       piEntries([
         {content: [{text: "Run tests", type: "text"}], id: "user-1", role: "user", timestamp: 1},
         {
@@ -95,7 +95,7 @@ describe("normalizePiSessionTurns", () => {
   });
 
   it("preserves assistant content order while replacing completed tool calls in place", () => {
-    const turns = normalizePiSessionTurns(
+    const turns = buildPiSessionTurns(
       piEntries([
         {content: [{text: "Inspect and fix", type: "text"}], id: "user-1", role: "user", timestamp: 1},
         {
@@ -128,7 +128,7 @@ describe("normalizePiSessionTurns", () => {
   });
 
   it("maps assistant errors into error turns", () => {
-    const turns = normalizePiSessionTurns(
+    const turns = buildPiSessionTurns(
       piEntries([
         {content: [{text: "Fix it", type: "text"}], id: "user-1", role: "user", timestamp: 1},
         {content: [], errorMessage: "Model failed", id: "assistant-1", role: "assistant", timestamp: 2},
@@ -141,7 +141,7 @@ describe("normalizePiSessionTurns", () => {
   });
 
   it("does not render user-initiated aborts as assistant errors", () => {
-    const turns = normalizePiSessionTurns(
+    const turns = buildPiSessionTurns(
       piEntries([
         {content: [{text: "Fix it", type: "text"}], id: "user-1", role: "user", timestamp: 1},
         {
@@ -161,7 +161,7 @@ describe("normalizePiSessionTurns", () => {
   });
 
   it("ignores compaction and custom entries while preserving raw branch messages", () => {
-    const turns = normalizePiSessionTurns(
+    const turns = buildPiSessionTurns(
       [
         ...piEntries([
           {content: [{text: "First request", type: "text"}], id: "user-1", role: "user", timestamp: 1},
@@ -269,7 +269,7 @@ describe("normalizePiSessionTurns", () => {
       },
     ];
 
-    const turns = normalizePiSessionTurns(entries, model);
+    const turns = buildPiSessionTurns(entries, model);
 
     expect(turns).toMatchObject([
       {
@@ -337,7 +337,7 @@ describe("normalizePiSessionTurns", () => {
       },
     ];
 
-    const turns = normalizePiSessionTurns(entries, model);
+    const turns = buildPiSessionTurns(entries, model);
 
     expect(turns[0]?.userMessage.attachments).toEqual([
       {id: "text-1", mime: "text/plain", name: "notes.txt", size: 10},
@@ -348,7 +348,7 @@ describe("normalizePiSessionTurns", () => {
   });
 
   it("keeps attachment-only user messages", () => {
-    const turns = normalizePiSessionTurns(
+    const turns = buildPiSessionTurns(
       [
         {
           customType: "pi-desktop.attachments",
@@ -401,6 +401,25 @@ describe("normalizePiSessionTurns", () => {
           attachments: [{contentBase64: "aW1hZ2UtYnl0ZXM=", id: "image-1", mime: "image/png", name: "diagram.png", size: 12}],
           content: "",
         },
+      },
+    ]);
+  });
+
+  it("ignores assistant and tool result entries before the first user message", () => {
+    const turns = buildPiSessionTurns(
+      piEntries([
+        {content: [{text: "orphan response", type: "text"}], id: "assistant-1", role: "assistant", timestamp: 1},
+        {content: [{text: "orphan tool output", type: "text"}], id: "tool-1", role: "toolResult", timestamp: 2, toolCallId: "call-1", toolName: "bash"},
+        {content: [{text: "Real request", type: "text"}], id: "user-1", role: "user", timestamp: 3},
+        {content: [{text: "Real response", type: "text"}], id: "assistant-2", role: "assistant", timestamp: 4},
+      ]),
+      model
+    );
+
+    expect(turns).toMatchObject([
+      {
+        events: [{content: "Real response", type: "assistant"}],
+        userMessage: {content: "Real request"},
       },
     ]);
   });

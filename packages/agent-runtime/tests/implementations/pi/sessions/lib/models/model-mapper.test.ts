@@ -1,5 +1,5 @@
 import type {Api, Model} from "@mariozechner/pi-ai";
-import {toAgentModelDetails} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/model-mapper";
+import {toAgentModelDetails} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/models/model-mapper";
 import {describe, expect, it} from "vitest";
 
 function model(overrides: Partial<Model<Api>>): Model<Api> {

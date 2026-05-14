@@ -1,15 +1,38 @@
-import type {AgentSession} from "@mariozechner/pi-coding-agent";
+import type {AgentSession, SessionEntry} from "@mariozechner/pi-coding-agent";
 import {Effect, Queue, Stream} from "effect";
 import type {AgentSessionMessageSendPayload, AgentSessionStreamEvent} from "@pi-desktop/contracts/sessions/procedures";
 import type {AgentSessionSummary} from "@pi-desktop/contracts/sessions/schemas";
 import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
-import {generateSessionTitle} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-title-generator";
-import {toPiThinkingLevel} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/thinking-levels";
+import type {PiSdkServiceShape, PiSessionInfo} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
+import {
+  ATTACHMENTS_CUSTOM_TYPE,
+  TEXT_ATTACHMENTS_CUSTOM_TYPE,
+  prepareSessionAttachments,
+} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/attachments/session-attachments";
+import type {PreparedSessionAttachments} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/attachments/session-attachments";
 import {findSessionById} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-resolver";
-import {createSyntheticBranchEntries, normalizePiSessionTurns} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-mapper";
-import {ATTACHMENTS_CUSTOM_TYPE, TEXT_ATTACHMENTS_CUSTOM_TYPE, prepareSessionAttachments} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-attachments";
+import {generateSessionTitle} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-title-generator";
+import {createLiveBranchEntries} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/turns/live-branch-entries";
+import {buildPiSessionTurns} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-turns-builder";
+import {toPiThinkingLevel} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/models/thinking-levels";
 
 type PiAgentMessage = AgentSession["messages"][number];
+type PiSessionManager = ReturnType<PiSdkServiceShape["SessionManager"]["open"]>;
+type PiModel = ReturnType<PiSdkServiceShape["modelRegistry"]["getAvailable"]>[number];
+
+type OpenedSession = {
+  readonly sessionInfo: PiSessionInfo;
+  readonly sessionManager: PiSessionManager;
+  readonly model: PiModel;
+  readonly titleWasGenerated: boolean;
+};
+
+type PromptContext = OpenedSession & {
+  readonly attachments: PreparedSessionAttachments;
+  readonly baseBranch: readonly SessionEntry[];
+  readonly baseMessageCount: number;
+  readonly baseParentId: string | null;
+};
 
 export function sendSessionMessage(input: AgentSessionMessageSendPayload) {
   return Stream.unwrap(
@@ -18,164 +41,201 @@ export function sendSessionMessage(input: AgentSessionMessageSendPayload) {
 
       return Stream.callback<AgentSessionStreamEvent>((queue) =>
         Effect.gen(function* () {
-          const emit = (event: AgentSessionStreamEvent): void => {
-            Queue.offerUnsafe(queue, event);
-          };
+          const runner = new SendSessionMessageRunner({
+            emit: (event) => Queue.offerUnsafe(queue, event),
+            end: () => Queue.endUnsafe(queue),
+            input,
+            piSdk,
+          });
 
-          let cancelled = false;
-          let activeSession: AgentSession | undefined;
-          let unsubscribe: (() => void) | undefined;
-          let releasePromise: Promise<void> | undefined;
-
-          const release = async (abort: boolean): Promise<void> => {
-            cancelled ||= abort;
-            if (!activeSession && !unsubscribe) return;
-            if (releasePromise) return releasePromise;
-
-            releasePromise = (async () => {
-              if (abort) await activeSession?.abort().catch(() => undefined);
-              unsubscribe?.();
-              activeSession?.dispose();
-            })();
-
-            return releasePromise;
-          };
-
-          const throwIfCancelled = (): void => {
-            if (cancelled) throw new Error("Stream was cancelled.");
-          };
-
-          yield* Effect.addFinalizer(() => Effect.promise(() => release(true)));
-
-          void (async () => {
-            try {
-              const sessionInfo = await findSessionById(piSdk, input.sessionId);
-              throwIfCancelled();
-
-              const sessionManager = piSdk.SessionManager.open(sessionInfo.path);
-
-              const models = piSdk.modelRegistry.getAvailable();
-              const selectedModel = models.find((model) => model.provider === input.model.providerId && model.id === input.model.id);
-              if (!selectedModel) throw new Error("Selected model is not available.");
-              const attachmentNames = input.attachments.map((attachment) => attachment.name);
-
-              let needsTitleGeneration = sessionManager.getSessionName() === undefined;
-              if (needsTitleGeneration) {
-                const title = await generateSessionTitle({
-                  attachmentNames,
-                  message: input.message,
-                  model: selectedModel,
-                  modelRegistry: piSdk.modelRegistry,
-                }).catch(() => input.message);
-
-                sessionManager.appendSessionInfo(title);
-              }
-              throwIfCancelled();
-
-              const {session} = await piSdk.createAgentSession({
-                authStorage: piSdk.authStorage,
-                cwd: sessionInfo.cwd,
-                modelRegistry: piSdk.modelRegistry,
-                sessionManager,
-              });
-              activeSession = session;
-              throwIfCancelled();
-
-              await session.setModel(selectedModel);
-              session.setThinkingLevel(toPiThinkingLevel(input.model.thinkingLevel));
-
-              const attachments = prepareSessionAttachments(input.attachments);
-
-              // UI history comes from the persisted branch at rest; live stream state comes from Pi's in-memory messages.
-              const baseBranch = sessionManager.getBranch();
-              const baseMessageCount = session.messages.length;
-              const baseParentId = baseBranch.at(-1)?.id ?? null;
-
-              emit({turns: normalizePiSessionTurns(baseBranch, input.model), type: "ready"});
-
-              if (attachments.metadata.length > 0) {
-                sessionManager.appendCustomEntry(ATTACHMENTS_CUSTOM_TYPE, {attachments: attachments.metadata});
-              }
-
-              if (attachments.textContent) {
-                await session.sendCustomMessage(
-                  {
-                    content: attachments.textContent,
-                    customType: TEXT_ATTACHMENTS_CUSTOM_TYPE,
-                    display: false,
-                    details: {attachmentIds: attachments.metadata.filter((attachment) => attachment.kind === "text").map((attachment) => attachment.id)},
-                  },
-                  {deliverAs: "nextTurn"}
-                );
-              }
-
-              const currentLiveMessages = (message?: PiAgentMessage): readonly PiAgentMessage[] => {
-                const messages = session.messages.slice(baseMessageCount);
-                if (!message || messages.some((m) => m === message)) return messages;
-                // Include Pi's in-progress streaming message before it is finalized into session.messages.
-                return [...messages, message];
-              };
-
-              const emitMessages = (messages: readonly PiAgentMessage[]): void => {
-                const syntheticEntries = createSyntheticBranchEntries({attachmentMetadata: {attachments: attachments.metadata}, messages, parentId: baseParentId});
-                // Stream updates represent one active prompt, so the synthetic delta should normalize to one turn.
-                const [turn] = normalizePiSessionTurns(syntheticEntries, input.model);
-                if (!turn) return;
-
-                const title = sessionManager.getSessionName();
-
-                if (needsTitleGeneration && title) {
-                  needsTitleGeneration = false;
-                  const sessionSummary: AgentSessionSummary = {
-                    id: sessionInfo.id,
-                    title,
-                    updatedAt: new Date().toISOString(),
-                  };
-                  emit({session: sessionSummary, turn: {...turn, status: "streaming"}, type: "turn"});
-                  return;
-                }
-
-                emit({turn: {...turn, status: "streaming"}, type: "turn"});
-              };
-
-              unsubscribe = session.subscribe((event) => {
-                switch (event.type) {
-                  case "message_update":
-                  case "message_end": {
-                    if ("message" in event) {
-                      emitMessages(currentLiveMessages(event.message));
-                    }
-                    break;
-                  }
-                  case "tool_execution_start":
-                  case "tool_execution_end": {
-                    emitMessages(currentLiveMessages());
-                    break;
-                  }
-                }
-              });
-
-              try {
-                await session.prompt(input.message, attachments.images.length > 0 ? {images: attachments.images} : undefined);
-                const liveMessages = session.messages.slice(baseMessageCount);
-                // Avoid reading getBranch() here: Pi persistence may still lag behind prompt completion.
-                const syntheticEntries = createSyntheticBranchEntries({attachmentMetadata: {attachments: attachments.metadata}, messages: liveMessages, parentId: baseParentId});
-                const finalTurns = normalizePiSessionTurns([...baseBranch, ...syntheticEntries], input.model);
-                emit({turns: finalTurns, type: "done"});
-              } finally {
-                await release(false);
-              }
-            } catch (cause) {
-              if (cancelled) return;
-              const error = cause instanceof Error ? cause.message : "Failed to send message.";
-              emit({error, type: "error"});
-            } finally {
-              await release(cancelled);
-              Queue.endUnsafe(queue);
-            }
-          })();
+          yield* Effect.addFinalizer(() => Effect.promise(() => runner.release({abort: true})));
+          runner.start();
         })
       );
     })
   );
+}
+
+class SendSessionMessageRunner {
+  private readonly emit: (event: AgentSessionStreamEvent) => void;
+  private readonly end: () => void;
+  private readonly input: AgentSessionMessageSendPayload;
+  private readonly piSdk: PiSdkServiceShape;
+  private activeSession: AgentSession | undefined;
+  private cancelled = false;
+  private emittedGeneratedTitle = false;
+  private releasePromise: Promise<void> | undefined;
+  private unsubscribe: (() => void) | undefined;
+
+  constructor(input: {emit: (event: AgentSessionStreamEvent) => void; end: () => void; input: AgentSessionMessageSendPayload; piSdk: PiSdkServiceShape}) {
+    this.emit = input.emit;
+    this.end = input.end;
+    this.input = input.input;
+    this.piSdk = input.piSdk;
+  }
+
+  start(): void {
+    void this.run();
+  }
+
+  async release(input: {abort: boolean}): Promise<void> {
+    this.cancelled ||= input.abort;
+    if (!this.activeSession && !this.unsubscribe) return;
+    if (this.releasePromise) return this.releasePromise;
+
+    this.releasePromise = (async () => {
+      if (input.abort) await this.activeSession?.abort().catch(() => undefined);
+      this.unsubscribe?.();
+      this.activeSession?.dispose();
+    })();
+
+    return this.releasePromise;
+  }
+
+  private async run(): Promise<void> {
+    try {
+      const openedSession = await this.openSession();
+      const context = await this.preparePromptContext(openedSession);
+
+      this.emit({turns: buildPiSessionTurns(context.baseBranch, this.input.model), type: "ready"});
+      await this.appendAttachmentContext(context);
+      this.subscribeToLiveUpdates(context);
+      await this.promptAndEmitFinalTurns(context);
+    } catch (cause) {
+      if (!this.cancelled) this.emit({error: cause instanceof Error ? cause.message : "Failed to send message.", type: "error"});
+    } finally {
+      await this.release({abort: this.cancelled});
+      this.end();
+    }
+  }
+
+  private async openSession(): Promise<OpenedSession> {
+    const sessionInfo = await findSessionById(this.piSdk, this.input.sessionId);
+    this.throwIfCancelled();
+
+    const sessionManager = this.piSdk.SessionManager.open(sessionInfo.path);
+    const model = this.findSelectedModel();
+    const titleWasGenerated = await this.ensureSessionTitle(sessionManager, model);
+
+    this.throwIfCancelled();
+    return {model, sessionInfo, sessionManager, titleWasGenerated};
+  }
+
+  private findSelectedModel(): PiModel {
+    const model = this.piSdk.modelRegistry.getAvailable().find((candidate) => candidate.provider === this.input.model.providerId && candidate.id === this.input.model.id);
+    if (!model) throw new Error("Selected model is not available.");
+    return model;
+  }
+
+  private async ensureSessionTitle(sessionManager: PiSessionManager, model: PiModel): Promise<boolean> {
+    if (sessionManager.getSessionName() !== undefined) return false;
+
+    const title = await generateSessionTitle({
+      attachmentNames: this.input.attachments.map((attachment) => attachment.name),
+      message: this.input.message,
+      model,
+      modelRegistry: this.piSdk.modelRegistry,
+    }).catch(() => this.input.message);
+
+    sessionManager.appendSessionInfo(title);
+    return true;
+  }
+
+  private async preparePromptContext(openedSession: OpenedSession): Promise<PromptContext> {
+    const {session} = await this.piSdk.createAgentSession({
+      authStorage: this.piSdk.authStorage,
+      cwd: openedSession.sessionInfo.cwd,
+      modelRegistry: this.piSdk.modelRegistry,
+      sessionManager: openedSession.sessionManager,
+    });
+    this.activeSession = session;
+    this.throwIfCancelled();
+
+    await session.setModel(openedSession.model);
+    session.setThinkingLevel(toPiThinkingLevel(this.input.model.thinkingLevel));
+
+    const baseBranch = openedSession.sessionManager.getBranch();
+    return {
+      ...openedSession,
+      attachments: prepareSessionAttachments(this.input.attachments),
+      baseBranch,
+      baseMessageCount: session.messages.length,
+      baseParentId: baseBranch.at(-1)?.id ?? null,
+    };
+  }
+
+  private async appendAttachmentContext(context: PromptContext): Promise<void> {
+    if (context.attachments.metadata.length > 0) {
+      context.sessionManager.appendCustomEntry(ATTACHMENTS_CUSTOM_TYPE, {attachments: context.attachments.metadata});
+    }
+
+    if (!context.attachments.textContent) return;
+
+    await this.activeSession?.sendCustomMessage(
+      {
+        content: context.attachments.textContent,
+        customType: TEXT_ATTACHMENTS_CUSTOM_TYPE,
+        details: {attachmentIds: context.attachments.metadata.filter((attachment) => attachment.kind === "text").map((attachment) => attachment.id)},
+        display: false,
+      },
+      {deliverAs: "nextTurn"}
+    );
+  }
+
+  private subscribeToLiveUpdates(context: PromptContext): void {
+    this.unsubscribe = this.activeSession?.subscribe((event) => {
+      switch (event.type) {
+        case "message_update":
+        case "message_end":
+          if ("message" in event) this.emitLiveTurn(context, this.liveMessages(context, event.message));
+          break;
+        case "tool_execution_start":
+        case "tool_execution_end":
+          this.emitLiveTurn(context, this.liveMessages(context));
+          break;
+      }
+    });
+  }
+
+  private async promptAndEmitFinalTurns(context: PromptContext): Promise<void> {
+    try {
+      await this.activeSession?.prompt(this.input.message, context.attachments.images.length > 0 ? {images: context.attachments.images} : undefined);
+      const liveEntries = this.liveBranchEntries(context, this.activeSession?.messages.slice(context.baseMessageCount) ?? []);
+      this.emit({turns: buildPiSessionTurns([...context.baseBranch, ...liveEntries], this.input.model), type: "done"});
+    } finally {
+      await this.release({abort: false});
+    }
+  }
+
+  private emitLiveTurn(context: PromptContext, messages: readonly PiAgentMessage[]): void {
+    const [turn] = buildPiSessionTurns(this.liveBranchEntries(context, messages), this.input.model);
+    if (!turn) return;
+
+    const session = this.titleSummary(context);
+    this.emit(session ? {session, turn: {...turn, status: "streaming"}, type: "turn"} : {turn: {...turn, status: "streaming"}, type: "turn"});
+  }
+
+  private liveMessages(context: PromptContext, message?: PiAgentMessage): readonly PiAgentMessage[] {
+    const messages = this.activeSession?.messages.slice(context.baseMessageCount) ?? [];
+    if (!message || messages.some((candidate) => candidate === message)) return messages;
+    return [...messages, message];
+  }
+
+  private liveBranchEntries(context: PromptContext, messages: readonly PiAgentMessage[]): SessionEntry[] {
+    return createLiveBranchEntries({attachmentMetadata: {attachments: context.attachments.metadata}, messages, parentId: context.baseParentId});
+  }
+
+  private titleSummary(context: PromptContext): AgentSessionSummary | undefined {
+    if (!context.titleWasGenerated || this.emittedGeneratedTitle) return;
+
+    const title = context.sessionManager.getSessionName();
+    if (!title) return;
+
+    this.emittedGeneratedTitle = true;
+    return {id: context.sessionInfo.id, title, updatedAt: new Date().toISOString()};
+  }
+
+  private throwIfCancelled(): void {
+    if (this.cancelled) throw new Error("Stream was cancelled.");
+  }
 }

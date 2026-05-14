@@ -1,7 +1,7 @@
 import {Effect} from "effect";
 import {AgentSessionModelsListError} from "@pi-desktop/contracts/sessions/procedures";
 import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
-import {toAgentModelDetails} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/model-mapper";
+import {toAgentModelDetails} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/models/model-mapper";
 
 export function listSessionModels() {
   return Effect.gen(function* () {
