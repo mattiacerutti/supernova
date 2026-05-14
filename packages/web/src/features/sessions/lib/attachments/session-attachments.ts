@@ -56,7 +56,7 @@ export async function fileToSessionAttachment(file: File): Promise<AgentSessionA
   }
 
   return {
-    id: `${file.name}-${file.size}-${file.lastModified}-${Math.random().toString(36).slice(2)}`,
+    id: `att_${crypto.randomUUID()}`,
     mime,
     name: file.name,
     size: file.size,

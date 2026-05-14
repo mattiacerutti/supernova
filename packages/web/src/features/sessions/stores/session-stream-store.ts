@@ -53,8 +53,8 @@ interface SessionStreamStoreState {
   readonly stopStream: (sessionId: string) => void;
 }
 
-function createStreamId(sessionId: string): string {
-  return `${sessionId}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+function createStreamId(): string {
+  return `stream_${crypto.randomUUID()}`;
 }
 
 function attachmentMetadata(attachments: readonly AgentSessionAttachment[]): AgentSessionAttachment[] | undefined {
@@ -76,11 +76,11 @@ function attachmentMetadata(attachments: readonly AgentSessionAttachment[]): Age
 function createInitialStreamTurn(input: {attachments: readonly AgentSessionAttachment[]; message: string; model: AgentModelReference}): AgentSessionTurn {
   const timestamp = new Date().toISOString();
 
-  const localMessage: AgentSessionUserMessage = {attachments: attachmentMetadata(input.attachments), content: input.message, id: `local-${Date.now()}`, timestamp};
+  const localMessage: AgentSessionUserMessage = {attachments: attachmentMetadata(input.attachments), content: input.message, id: `msg_${crypto.randomUUID()}`, timestamp};
 
   return {
     events: [],
-    id: `turn-${localMessage.id}`,
+    id: localMessage.id,
     model: input.model,
     startedAt: timestamp,
     status: "streaming",
@@ -192,7 +192,7 @@ export const useSessionStreamStore = create<SessionStreamStoreState>()((set, get
       const current = get().streams[sessionId];
       if (current?.status === "streaming" || current?.status === "stopping") return;
 
-      const streamId = createStreamId(sessionId);
+      const streamId = createStreamId();
       const turn = createInitialStreamTurn({attachments, message, model});
 
       // Optimistically append the user's message before the RPC stream has fully

@@ -10,16 +10,10 @@ export function sessionTurn(input: {events: AgentSessionTurnEvent[]; model: Agen
   return {
     completedAt: events.at(-1)?.timestamp,
     events,
-    id: `turn-${userMessage.id}`,
+    id: userMessage.id,
     model,
     startedAt: userMessage.timestamp,
     status: sessionTurnStatus(events, streaming),
     userMessage,
   };
-}
-
-export function markLastTurnStreaming(turns: readonly AgentSessionTurn[]): AgentSessionTurn[] {
-  const lastTurn = turns.at(-1);
-  if (!lastTurn || lastTurn.status !== "completed") return [...turns];
-  return [...turns.slice(0, -1), {...lastTurn, status: "streaming"}];
 }

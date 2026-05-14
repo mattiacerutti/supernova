@@ -13,12 +13,14 @@ describe("createLiveBranchEntries", () => {
       {api: "anthropic", content: [{text: "Done", type: "text"}], model: "claude-sonnet", provider: "anthropic", role: "assistant", stopReason: "stop", timestamp: 2, usage},
     ];
 
-    const entries = createLiveBranchEntries({messages, parentId: "base-entry"});
+    const entries = createLiveBranchEntries({messages, parentId: "base-entry", sessionId: "session-1"});
 
     expect(entries).toMatchObject([
-      {id: "synthetic-0-user", message: messages[0], parentId: "base-entry", timestamp: "1970-01-01T00:00:00.001Z", type: "message"},
-      {id: "synthetic-1-assistant", message: messages[1], parentId: "synthetic-0-user", timestamp: "1970-01-01T00:00:00.002Z", type: "message"},
+      {message: messages[0], parentId: "base-entry", timestamp: "1970-01-01T00:00:00.001Z", type: "message"},
+      {message: messages[1], parentId: entries[0]?.id, timestamp: "1970-01-01T00:00:00.002Z", type: "message"},
     ]);
+    expect(createLiveBranchEntries({messages, parentId: "base-entry", sessionId: "session-1"}).map((entry) => entry.id)).toEqual(entries.map((entry) => entry.id));
+    expect(createLiveBranchEntries({messages, parentId: "other-entry", sessionId: "session-1"}).map((entry) => entry.id)).not.toEqual(entries.map((entry) => entry.id));
   });
 
   it("prepends attachment metadata and converts custom messages to custom message entries", () => {
@@ -35,13 +37,13 @@ describe("createLiveBranchEntries", () => {
       attachmentMetadata: {attachments: [{id: "text-1", kind: "text", mime: "text/plain", name: "notes.txt", order: 0, size: 10}]},
       messages: [customMessage],
       parentId: null,
+      sessionId: "session-1",
     });
 
     expect(entries).toMatchObject([
       {
         customType: "pi-desktop.attachments",
         data: {attachments: [{id: "text-1", kind: "text", mime: "text/plain", name: "notes.txt", order: 0, size: 10}]},
-        id: "synthetic-attachments",
         parentId: null,
         timestamp: "1970-01-01T00:00:00.005Z",
         type: "custom",
@@ -51,8 +53,7 @@ describe("createLiveBranchEntries", () => {
         customType: "pi-desktop.text-attachments",
         details: {attachmentIds: ["text-1"]},
         display: false,
-        id: "synthetic-0-custom",
-        parentId: "synthetic-attachments",
+        parentId: entries[0]?.id,
         timestamp: "1970-01-01T00:00:00.005Z",
         type: "custom_message",
       },

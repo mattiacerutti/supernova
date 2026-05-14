@@ -8,6 +8,7 @@ import type {
   AgentSessionUserMessage,
 } from "@pi-desktop/contracts/sessions/schemas";
 import {sessionTurn} from "@pi-desktop/agent-runtime/implementations/shared/session-turns";
+import {generateStableId} from "@pi-desktop/agent-runtime/implementations/shared/id-generator";
 import {ATTACHMENTS_CUSTOM_TYPE} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/attachments/session-attachments";
 import type {SessionAttachmentMetadata} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/attachments/session-attachments";
 import {piContentToText, piUserAttachments} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/turns/message-content";
@@ -52,22 +53,24 @@ class PiTurnDraft {
     let eventWasAdded = false;
 
     for (const [partIndex, part] of message.content.entries()) {
+      const id = generateStableId("evt", [entry.id, partIndex.toString(), part.type]);
+
       switch (part.type) {
         case "thinking":
           if (part.thinking.length > 0) {
-            this.events.push({content: part.thinking, id: `${entry.id}-reasoning-${partIndex}`, timestamp: entry.timestamp, type: "reasoning"});
+            this.events.push({content: part.thinking, id, timestamp: entry.timestamp, type: "reasoning"});
             eventWasAdded = true;
           }
           break;
         case "text":
           if (part.text.length > 0) {
-            this.events.push({content: part.text, id: `${entry.id}-text-${partIndex}`, timestamp: entry.timestamp, type: "assistant"});
+            this.events.push({content: part.text, id, timestamp: entry.timestamp, type: "assistant"});
             eventWasAdded = true;
           }
           break;
         case "toolCall": {
           const toolEvent: AgentSessionToolTurnEvent = {
-            id: `${entry.id}-tool-${partIndex}-${part.id}`,
+            id,
             timestamp: entry.timestamp,
             tool: {input: part.arguments, name: part.name, status: "pending", summary: piToolSummary(part.name)},
             type: "tool",
@@ -81,7 +84,7 @@ class PiTurnDraft {
     }
 
     if (error) {
-      this.events.push({content: "", error, id: `${entry.id}-error`, timestamp: entry.timestamp, type: "assistant"});
+      this.events.push({content: "", error, id: generateStableId("evt", [entry.id, message.content.length.toString(), "error"]), timestamp: entry.timestamp, type: "assistant"});
       eventWasAdded = true;
     }
 
@@ -98,7 +101,7 @@ class PiTurnDraft {
       status: message.isError ? "error" : "completed",
       summary: piToolSummary(message.toolName),
     };
-    const toolEvent: AgentSessionToolTurnEvent = {id: entry.id, timestamp: entry.timestamp, tool: completedTool, type: "tool"};
+    const toolEvent: AgentSessionToolTurnEvent = {id: generateStableId("evt", [entry.id, "toolResult"]), timestamp: entry.timestamp, tool: completedTool, type: "tool"};
     const existingTool = this.toolEventIndexes.get(message.toolCallId);
 
     if (!existingTool) {

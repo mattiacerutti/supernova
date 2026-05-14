@@ -49,7 +49,7 @@ describe("buildPiSessionTurns", () => {
 
     expect(turns).toHaveLength(1);
     expect(turns[0]).toMatchObject({
-      id: "turn-entry-0",
+      id: "entry-0",
       model,
       status: "completed",
       userMessage: {content: "Fix the tests", id: "entry-0"},
@@ -125,6 +125,29 @@ describe("buildPiSessionTurns", () => {
       {tool: {input: {command: "bun test"}, name: "bash", output: "passed", status: "completed"}, type: "tool"},
       {content: "The tests are green.", type: "assistant"},
     ]);
+  });
+
+  it("keeps projected turn and event ids stable across rebuilds", () => {
+    const entries = piEntries([
+      {content: [{text: "Inspect and fix", type: "text"}], id: "user-1", role: "user", timestamp: 1},
+      {
+        content: [
+          {thinking: "I should inspect the project first.", type: "thinking"},
+          {text: "I'll check the files.", type: "text"},
+          {arguments: {path: "package.json"}, id: "call-1", name: "read", type: "toolCall"},
+        ],
+        id: "assistant-1",
+        role: "assistant",
+        timestamp: 2,
+      },
+      {content: [{text: "package contents", type: "text"}], id: "tool-1", role: "toolResult", timestamp: 3, toolCallId: "call-1", toolName: "read"},
+    ]);
+
+    const firstBuild = buildPiSessionTurns(entries, model);
+    const secondBuild = buildPiSessionTurns(entries, model);
+
+    expect(secondBuild.map((turn) => turn.id)).toEqual(firstBuild.map((turn) => turn.id));
+    expect(secondBuild.flatMap((turn) => turn.events.map((event) => event.id))).toEqual(firstBuild.flatMap((turn) => turn.events.map((event) => event.id)));
   });
 
   it("maps assistant errors into error turns", () => {

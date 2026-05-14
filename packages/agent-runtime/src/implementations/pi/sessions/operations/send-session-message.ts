@@ -222,7 +222,7 @@ class SendSessionMessageRunner {
   }
 
   private liveBranchEntries(context: PromptContext, messages: readonly PiAgentMessage[]): SessionEntry[] {
-    return createLiveBranchEntries({attachmentMetadata: {attachments: context.attachments.metadata}, messages, parentId: context.baseParentId});
+    return createLiveBranchEntries({attachmentMetadata: {attachments: context.attachments.metadata}, messages, parentId: context.baseParentId, sessionId: context.sessionInfo.id});
   }
 
   private titleSummary(context: PromptContext): AgentSessionSummary | undefined {

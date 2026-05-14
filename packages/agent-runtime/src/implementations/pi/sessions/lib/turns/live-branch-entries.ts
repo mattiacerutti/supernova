@@ -1,4 +1,5 @@
 import type {AgentSession, SessionEntry} from "@mariozechner/pi-coding-agent";
+import {generateStableId} from "@pi-desktop/agent-runtime/implementations/shared/id-generator";
 import {ATTACHMENTS_CUSTOM_TYPE} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/attachments/session-attachments";
 import type {SessionAttachmentMetadata} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/attachments/session-attachments";
 
@@ -8,12 +9,14 @@ export function createLiveBranchEntries(input: {
   attachmentMetadata?: {attachments: readonly SessionAttachmentMetadata[]};
   messages: readonly PiAgentMessage[];
   parentId: string | null;
+  sessionId: string;
 }): SessionEntry[] {
   let parentId = input.parentId;
+  let nextId = 0;
   const entries: SessionEntry[] = [];
 
   if (input.attachmentMetadata?.attachments.length) {
-    const id = "synthetic-attachments";
+    const id = generateStableId("live", [input.sessionId, input.parentId ?? "root", (nextId++).toString()]);
     entries.push({
       customType: ATTACHMENTS_CUSTOM_TYPE,
       data: input.attachmentMetadata,
@@ -25,8 +28,8 @@ export function createLiveBranchEntries(input: {
     parentId = id;
   }
 
-  for (const [index, message] of input.messages.entries()) {
-    const id = `synthetic-${index}-${message.role}`;
+  for (const message of input.messages) {
+    const id = generateStableId("live", [input.sessionId, input.parentId ?? "root", (nextId++).toString()]);
 
     if (message.role === "custom") {
       entries.push({
