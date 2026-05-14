@@ -1,13 +1,13 @@
 import {useState} from "react";
 import type {FormEvent} from "react";
-import type {AgentProvider} from "@pi-desktop/contracts/providers/schemas";
+import type {Provider} from "@pi-desktop/contracts/providers/schemas";
 import Button from "@/components/ui/button";
 import Input from "@/components/ui/input";
 import {useSetProviderApiKey} from "@/features/settings/hooks/api/auth/use-set-provider-api-key";
 
 interface ProviderApiKeyContentProps {
   onClose: () => void;
-  provider?: AgentProvider;
+  provider?: Provider;
 }
 
 export default function ProviderApiKeyContent(props: ProviderApiKeyContentProps) {

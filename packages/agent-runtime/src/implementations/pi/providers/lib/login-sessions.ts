@@ -1,4 +1,4 @@
-import type {AgentProviderLoginInputKind, AgentProviderLoginSession} from "@pi-desktop/contracts/providers/schemas";
+import type {ProviderLoginInputKind, ProviderLoginSession} from "@pi-desktop/contracts/providers/schemas";
 
 interface LoginWaiter {
   reject: (error: Error) => void;
@@ -10,7 +10,7 @@ export interface LoginSessionState {
   abortController: AbortController;
   authUrl?: string;
   error?: string;
-  inputKind?: AgentProviderLoginInputKind;
+  inputKind?: ProviderLoginInputKind;
   instructions?: string;
   loginSessionId: string;
   placeholder?: string;
@@ -18,7 +18,7 @@ export interface LoginSessionState {
   prompt?: string;
   providerId: string;
   providerName: string;
-  status: AgentProviderLoginSession["status"];
+  status: ProviderLoginSession["status"];
   waiter?: LoginWaiter;
 }
 
@@ -30,7 +30,7 @@ export function getLoginSessionState(loginSessionId: string): LoginSessionState 
   return session;
 }
 
-export function toLoginSession(state: LoginSessionState): AgentProviderLoginSession {
+export function toLoginSession(state: LoginSessionState): ProviderLoginSession {
   return {
     allowEmptyInput: state.allowEmptyInput,
     authUrl: state.authUrl,

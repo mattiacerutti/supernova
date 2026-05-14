@@ -1,12 +1,12 @@
-import type {AgentSessionTurn} from "@pi-desktop/contracts/sessions/schemas";
+import type {SessionTurn} from "@pi-desktop/contracts/sessions/schemas";
 
-export function completeInterruptedTurn(turn: AgentSessionTurn): AgentSessionTurn {
+export function completeInterruptedTurn(turn: SessionTurn): SessionTurn {
   const completedAt = turn.completedAt ?? turn.events.at(-1)?.timestamp ?? new Date().toISOString();
 
   return {...turn, completedAt, status: "completed"};
 }
 
-export function upsertInterruptedTurn(turns: readonly AgentSessionTurn[], turn: AgentSessionTurn): readonly AgentSessionTurn[] {
+export function upsertInterruptedTurn(turns: readonly SessionTurn[], turn: SessionTurn): readonly SessionTurn[] {
   const completedTurn = completeInterruptedTurn(turn);
   const turnIndex = turns.findIndex((candidate) => candidate.id === completedTurn.id);
 

@@ -1,40 +1,40 @@
 import * as Rpc from "effect/unstable/rpc/Rpc";
 import {
-  AgentSessionCreateError,
-  AgentSessionCreatePayload,
-  AgentSessionCreateResult,
-  AgentSessionGetPayload,
-  AgentSessionGetResult,
-  AgentSessionLoadError,
-  AgentSessionMessageSendPayload,
-  AgentSessionModelsListError,
-  AgentSessionModelsListPayload,
-  AgentSessionModelsListResult,
-  AgentSessionStreamEvent,
+  SessionCreateError,
+  SessionCreatePayload,
+  SessionCreateResult,
+  SessionGetPayload,
+  SessionGetResult,
+  SessionLoadError,
+  SessionMessageSendPayload,
+  SessionModelsListError,
+  SessionModelsListPayload,
+  SessionModelsListResult,
+  SessionStreamEvent,
 } from "@pi-desktop/contracts/sessions/procedures";
 
-export const AgentSessionGetRpc = Rpc.make("getSession", {
-  error: AgentSessionLoadError,
-  payload: AgentSessionGetPayload,
-  success: AgentSessionGetResult,
+export const SessionGetRpc = Rpc.make("getSession", {
+  error: SessionLoadError,
+  payload: SessionGetPayload,
+  success: SessionGetResult,
 });
 
-export const AgentSessionCreateRpc = Rpc.make("createSession", {
-  error: AgentSessionCreateError,
-  payload: AgentSessionCreatePayload,
-  success: AgentSessionCreateResult,
+export const SessionCreateRpc = Rpc.make("createSession", {
+  error: SessionCreateError,
+  payload: SessionCreatePayload,
+  success: SessionCreateResult,
 });
 
-export const AgentSessionModelsListRpc = Rpc.make("listSessionModels", {
-  error: AgentSessionModelsListError,
-  payload: AgentSessionModelsListPayload,
-  success: AgentSessionModelsListResult,
+export const SessionModelsListRpc = Rpc.make("listSessionModels", {
+  error: SessionModelsListError,
+  payload: SessionModelsListPayload,
+  success: SessionModelsListResult,
 });
 
-export const AgentSessionMessageSendRpc = Rpc.make("sendSessionMessage", {
-  payload: AgentSessionMessageSendPayload,
+export const SessionMessageSendRpc = Rpc.make("sendSessionMessage", {
+  payload: SessionMessageSendPayload,
   stream: true,
-  success: AgentSessionStreamEvent,
+  success: SessionStreamEvent,
 });
 
-export const AgentSessionRpcs = [AgentSessionGetRpc, AgentSessionCreateRpc, AgentSessionModelsListRpc, AgentSessionMessageSendRpc] as const;
+export const SessionRpcs = [SessionGetRpc, SessionCreateRpc, SessionModelsListRpc, SessionMessageSendRpc] as const;

@@ -1,4 +1,4 @@
-import type {AgentSessionAttachment} from "@pi-desktop/contracts/sessions/schemas";
+import type {SessionAttachment} from "@pi-desktop/contracts/sessions/schemas";
 import type {ChangeEvent, ClipboardEvent, KeyboardEvent, ReactNode} from "react";
 import {createContext, useContext, useRef, useState} from "react";
 import Icon from "@/components/ui/icon";
@@ -55,7 +55,7 @@ interface SessionComposerRootProps {
   readonly children: ReactNode;
   readonly disabled: boolean;
   readonly onInterrupt?: () => void;
-  readonly onSubmit: (message: string, attachments: readonly AgentSessionAttachment[]) => void;
+  readonly onSubmit: (message: string, attachments: readonly SessionAttachment[]) => void;
   readonly streamStatus?: "idle" | "streaming" | "stopping";
 }
 

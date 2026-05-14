@@ -1,5 +1,5 @@
 import {Effect} from "effect";
-import {AgentProviderLoginError} from "@pi-desktop/contracts/providers/procedures";
+import {ProviderLoginError} from "@pi-desktop/contracts/providers/procedures";
 import {getLoginSessionState, toLoginSession} from "@pi-desktop/agent-runtime/implementations/pi/providers/lib/login-sessions";
 import {errorMessage} from "@pi-desktop/agent-runtime/implementations/pi/providers/lib/provider-errors";
 
@@ -13,6 +13,6 @@ export function cancelProviderLogin(loginSessionId: string) {
       session.status = "cancelled";
       return toLoginSession(session);
     },
-    catch: (cause) => new AgentProviderLoginError({cause, message: errorMessage(cause, "Failed to cancel provider login.")}),
+    catch: (cause) => new ProviderLoginError({cause, message: errorMessage(cause, "Failed to cancel provider login.")}),
   });
 }

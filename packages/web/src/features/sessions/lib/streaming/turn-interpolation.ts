@@ -1,4 +1,4 @@
-import type {AgentSessionTurn} from "@pi-desktop/contracts/sessions/schemas";
+import type {SessionTurn} from "@pi-desktop/contracts/sessions/schemas";
 
 const STREAM_BACKLOG_CATCHUP_RATE = 8;
 export const STREAM_FRAME_MAX_DELTA_MS = 34;
@@ -21,7 +21,7 @@ function revealText(current: string | undefined, target: string | undefined, ela
   return target.slice(0, Math.min(target.length, nextLength));
 }
 
-function interpolateStreamTurns(current: readonly AgentSessionTurn[], target: readonly AgentSessionTurn[], elapsedMs: number) {
+function interpolateStreamTurns(current: readonly SessionTurn[], target: readonly SessionTurn[], elapsedMs: number) {
   let done = true;
   let changed = current.length !== target.length;
 
@@ -52,7 +52,7 @@ function interpolateStreamTurns(current: readonly AgentSessionTurn[], target: re
   return {changed, done, turns};
 }
 
-export function interpolateStreamTurn(current: AgentSessionTurn | null, target: AgentSessionTurn, elapsedMs: number) {
+export function interpolateStreamTurn(current: SessionTurn | null, target: SessionTurn, elapsedMs: number) {
   const result = interpolateStreamTurns(current ? [current] : [], [target], elapsedMs);
   return {changed: result.changed, done: result.done, turn: result.turns[0] ?? target};
 }

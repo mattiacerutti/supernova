@@ -1,13 +1,13 @@
-import type {AgentSessionAttachment} from "@pi-desktop/contracts/sessions/schemas";
+import type {SessionAttachment} from "@pi-desktop/contracts/sessions/schemas";
 import Icon from "@/components/ui/icon";
 import {formatAttachmentType} from "@/features/sessions/lib/attachments/session-attachments";
 
 interface ComposerAttachmentPreviewProps {
-  readonly attachment: AgentSessionAttachment;
+  readonly attachment: SessionAttachment;
   readonly onRemove: (attachmentId: string) => void;
 }
 
-function attachmentImageUrl(attachment: AgentSessionAttachment): string | undefined {
+function attachmentImageUrl(attachment: SessionAttachment): string | undefined {
   if (!attachment.mime.startsWith("image/") || !attachment.contentBase64) return undefined;
 
   return `data:${attachment.mime};base64,${attachment.contentBase64}`;

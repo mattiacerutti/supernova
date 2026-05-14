@@ -1,4 +1,4 @@
-import type {AgentSessionToolTurnEvent} from "@pi-desktop/contracts/sessions/schemas";
+import type {SessionToolTurnEvent} from "@pi-desktop/contracts/sessions/schemas";
 import type {SessionWorkEvent} from "@/features/sessions/types/session-timeline-item";
 
 export function workDuration(events: readonly SessionWorkEvent[], completedAt: string | undefined): number | undefined {
@@ -15,6 +15,6 @@ export function formatDuration(durationMs: number | undefined): string {
   return `${Math.max(1, Math.round(durationMs / 1000))}s`;
 }
 
-export function getWorkIconName(event: AgentSessionToolTurnEvent): "folder" | "server" {
+export function getWorkIconName(event: SessionToolTurnEvent): "folder" | "server" {
   return event.tool?.name === "bash" ? "server" : "folder";
 }

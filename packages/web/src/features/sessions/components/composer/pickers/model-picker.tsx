@@ -1,4 +1,4 @@
-import type {AgentModelDetails} from "@pi-desktop/contracts/sessions/schemas";
+import type {ModelDetails} from "@pi-desktop/contracts/sessions/schemas";
 import type {MouseEvent} from "react";
 import {useRef, useState} from "react";
 import Button from "@/components/ui/button";
@@ -12,7 +12,7 @@ import {cn} from "@/lib/cn";
 
 interface ModelPickerProps {
   disabled: boolean;
-  models: readonly AgentModelDetails[];
+  models: readonly ModelDetails[];
   modelsLoading: boolean;
   onModelChange: (value: string) => void;
   selectedModelKey: string;

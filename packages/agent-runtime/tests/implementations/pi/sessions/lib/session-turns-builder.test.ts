@@ -1,9 +1,9 @@
 import {describe, expect, it} from "vitest";
 import {buildPiSessionTurns} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-turns-builder";
-import type {AgentModelReference} from "@pi-desktop/contracts/sessions/schemas";
+import type {ModelReference} from "@pi-desktop/contracts/sessions/schemas";
 import type {AgentSession, SessionEntry} from "@mariozechner/pi-coding-agent";
 
-const model: AgentModelReference = {id: "claude-sonnet", providerId: "anthropic", thinkingLevel: "high"};
+const model: ModelReference = {id: "claude-sonnet", providerId: "anthropic", thinkingLevel: "high"};
 
 function piEntries(messages: unknown[]): SessionEntry[] {
   let parentId: string | null = null;

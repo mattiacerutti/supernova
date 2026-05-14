@@ -3,8 +3,8 @@ import {readdir, stat} from "node:fs/promises";
 import {homedir} from "node:os";
 import {basename, dirname, isAbsolute, join} from "node:path";
 import {Effect} from "effect";
-import {AgentFolderSuggestionsListError} from "@pi-desktop/contracts/folders/procedures";
-import type {AgentFolderSuggestion} from "@pi-desktop/contracts/folders/schemas";
+import {FolderSuggestionsListError} from "@pi-desktop/contracts/folders/procedures";
+import type {FolderSuggestion} from "@pi-desktop/contracts/folders/schemas";
 import {expandHomePath, resolveFolderPath} from "@pi-desktop/agent-runtime/implementations/filesystem/folders/lib/folder-paths";
 
 const MAX_SUGGESTIONS = 200;
@@ -47,7 +47,7 @@ async function readFolderPathType(path: string): Promise<"directory" | "file" | 
   return folderStat.isDirectory() ? "directory" : "file";
 }
 
-async function listLocalFolderSuggestions(query: string): Promise<AgentFolderSuggestion[]> {
+async function listLocalFolderSuggestions(query: string): Promise<FolderSuggestion[]> {
   const parsedQuery = parseFolderQuery(query);
   const childDirectories = await readChildDirectories(parsedQuery.baseDir);
 
@@ -74,7 +74,7 @@ export function listFolderSuggestions(query: string) {
       };
     },
     catch: (cause) =>
-      new AgentFolderSuggestionsListError({
+      new FolderSuggestionsListError({
         cause,
         message: cause instanceof Error ? cause.message : "Failed to list folder suggestions.",
       }),

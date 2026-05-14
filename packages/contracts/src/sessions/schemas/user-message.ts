@@ -1,7 +1,7 @@
 import {Schema} from "effect";
 
 /** Serializable attachment persisted with a user-authored message. Content bytes are not included. */
-export const AgentSessionAttachment = Schema.Struct({
+export const SessionAttachment = Schema.Struct({
   /** Stable client-generated attachment identifier. */
   id: Schema.String,
   /** Original file name selected by the user. */
@@ -15,16 +15,16 @@ export const AgentSessionAttachment = Schema.Struct({
 });
 
 /** User-authored message that starts a session turn. */
-export const AgentSessionUserMessage = Schema.Struct({
+export const SessionUserMessage = Schema.Struct({
   /** Stable message identifier. */
   id: Schema.String,
   /** Client files attached to this user message. Content bytes are not persisted here. */
-  attachments: Schema.optional(Schema.Array(AgentSessionAttachment)),
+  attachments: Schema.optional(Schema.Array(SessionAttachment)),
   /** User-authored text content. */
   content: Schema.String,
   /** ISO timestamp for when the message was sent or created. */
   timestamp: Schema.optional(Schema.String),
 });
 
-export type AgentSessionAttachment = typeof AgentSessionAttachment.Type;
-export type AgentSessionUserMessage = typeof AgentSessionUserMessage.Type;
+export type SessionAttachment = typeof SessionAttachment.Type;
+export type SessionUserMessage = typeof SessionUserMessage.Type;

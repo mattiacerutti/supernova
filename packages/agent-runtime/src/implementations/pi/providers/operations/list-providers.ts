@@ -1,11 +1,11 @@
 import {Effect} from "effect";
-import {AgentProvidersListError} from "@pi-desktop/contracts/providers/procedures";
-import type {AgentProviderAuthSource, AgentProvider} from "@pi-desktop/contracts/providers/schemas";
+import {ProvidersListError} from "@pi-desktop/contracts/providers/procedures";
+import type {ProviderAuthSource, Provider} from "@pi-desktop/contracts/providers/schemas";
 import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
 import {EXTERNAL_AUTH_PROVIDERS} from "@pi-desktop/agent-runtime/implementations/pi/providers/constants";
 import {errorMessage} from "@pi-desktop/agent-runtime/implementations/pi/providers/lib/provider-errors";
 
-function normalizeSource(source: string | undefined): AgentProviderAuthSource | undefined {
+function normalizeSource(source: string | undefined): ProviderAuthSource | undefined {
   switch (source) {
     case "stored":
     case "runtime":
@@ -36,7 +36,7 @@ export function listProviders() {
 
         return Array.from(providerIds)
           .filter((providerId) => !EXTERNAL_AUTH_PROVIDERS.has(providerId))
-          .map<AgentProvider>((providerId) => {
+          .map<Provider>((providerId) => {
             const status = piSdk.modelRegistry.getProviderAuthStatus(providerId);
             return {
               id: providerId,
@@ -50,7 +50,7 @@ export function listProviders() {
           })
           .sort((left, right) => left.name.localeCompare(right.name));
       },
-      catch: (cause) => new AgentProvidersListError({cause, message: errorMessage(cause, "Failed to list providers.")}),
+      catch: (cause) => new ProvidersListError({cause, message: errorMessage(cause, "Failed to list providers.")}),
     });
   });
 }

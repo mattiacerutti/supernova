@@ -1,7 +1,7 @@
 import type {AgentSession, SessionEntry} from "@mariozechner/pi-coding-agent";
 import {Effect, Queue, Stream} from "effect";
-import type {AgentSessionMessageSendPayload, AgentSessionStreamEvent} from "@pi-desktop/contracts/sessions/procedures";
-import type {AgentSessionSummary} from "@pi-desktop/contracts/sessions/schemas";
+import type {SessionMessageSendPayload, SessionStreamEvent} from "@pi-desktop/contracts/sessions/procedures";
+import type {SessionSummary} from "@pi-desktop/contracts/sessions/schemas";
 import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
 import type {PiSdkServiceShape, PiSessionInfo} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
 import {
@@ -34,12 +34,12 @@ type PromptContext = OpenedSession & {
   readonly baseParentId: string | null;
 };
 
-export function sendSessionMessage(input: AgentSessionMessageSendPayload) {
+export function sendSessionMessage(input: SessionMessageSendPayload) {
   return Stream.unwrap(
     Effect.gen(function* () {
       const piSdk = yield* PiSdkService;
 
-      return Stream.callback<AgentSessionStreamEvent>((queue) =>
+      return Stream.callback<SessionStreamEvent>((queue) =>
         Effect.gen(function* () {
           const runner = new SendSessionMessageRunner({
             emit: (event) => Queue.offerUnsafe(queue, event),
@@ -57,9 +57,9 @@ export function sendSessionMessage(input: AgentSessionMessageSendPayload) {
 }
 
 class SendSessionMessageRunner {
-  private readonly emit: (event: AgentSessionStreamEvent) => void;
+  private readonly emit: (event: SessionStreamEvent) => void;
   private readonly end: () => void;
-  private readonly input: AgentSessionMessageSendPayload;
+  private readonly input: SessionMessageSendPayload;
   private readonly piSdk: PiSdkServiceShape;
   private activeSession: AgentSession | undefined;
   private cancelled = false;
@@ -67,7 +67,7 @@ class SendSessionMessageRunner {
   private releasePromise: Promise<void> | undefined;
   private unsubscribe: (() => void) | undefined;
 
-  constructor(input: {emit: (event: AgentSessionStreamEvent) => void; end: () => void; input: AgentSessionMessageSendPayload; piSdk: PiSdkServiceShape}) {
+  constructor(input: {emit: (event: SessionStreamEvent) => void; end: () => void; input: SessionMessageSendPayload; piSdk: PiSdkServiceShape}) {
     this.emit = input.emit;
     this.end = input.end;
     this.input = input.input;
@@ -225,7 +225,7 @@ class SendSessionMessageRunner {
     return createLiveBranchEntries({attachmentMetadata: {attachments: context.attachments.metadata}, messages, parentId: context.baseParentId, sessionId: context.sessionInfo.id});
   }
 
-  private titleSummary(context: PromptContext): AgentSessionSummary | undefined {
+  private titleSummary(context: PromptContext): SessionSummary | undefined {
     if (!context.titleWasGenerated || this.emittedGeneratedTitle) return;
 
     const title = context.sessionManager.getSessionName();

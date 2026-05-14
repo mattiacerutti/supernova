@@ -1,17 +1,17 @@
 import {Schema} from "effect";
 
-export const AgentFolderCreatePayload = Schema.Struct({
+export const FolderCreatePayload = Schema.Struct({
   path: Schema.String,
 });
 
-export const AgentFolderCreateResult = Schema.Struct({
+export const FolderCreateResult = Schema.Struct({
   path: Schema.String,
 });
 
-export class AgentFolderCreateError extends Schema.TaggedErrorClass<AgentFolderCreateError>()("AgentFolderCreateError", {
+export class FolderCreateError extends Schema.TaggedErrorClass<FolderCreateError>()("FolderCreateError", {
   cause: Schema.optional(Schema.Defect),
   message: Schema.String,
 }) {}
 
-export type AgentFolderCreatePayload = typeof AgentFolderCreatePayload.Type;
-export type AgentFolderCreateResult = typeof AgentFolderCreateResult.Type;
+export type FolderCreatePayload = typeof FolderCreatePayload.Type;
+export type FolderCreateResult = typeof FolderCreateResult.Type;

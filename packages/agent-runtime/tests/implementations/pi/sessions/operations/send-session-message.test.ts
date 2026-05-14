@@ -4,7 +4,7 @@ import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk"
 import type {PiSessionInfo} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
 import {PiSessionsLive} from "@pi-desktop/agent-runtime/implementations/pi/sessions/pi-sessions-live";
 import {SessionsService} from "@pi-desktop/agent-runtime/services/sessions/sessions-service";
-import type {AgentSessionMessageSendPayload, AgentSessionStreamEvent} from "@pi-desktop/contracts/sessions/procedures";
+import type {SessionMessageSendPayload, SessionStreamEvent} from "@pi-desktop/contracts/sessions/procedures";
 
 //TODO: Refactor these tests, they are awful
 
@@ -28,13 +28,13 @@ const imageAttachment = {contentBase64: "aW1hZ2UtYnl0ZXM=", id: "image-1", mime:
 const textAttachment = {contentBase64: "VGhpcyBpcyBhIHRleHQgZmlsZS4=", id: "text-1", mime: "text/plain", name: "notes.txt", size: 20};
 const ignoredAttachment = {contentBase64: "YmluYXJ5", id: "binary-1", mime: "application/octet-stream", name: "archive.bin", size: 6};
 
-async function collectEvents(stream: Stream.Stream<AgentSessionStreamEvent>): Promise<AgentSessionStreamEvent[]> {
-  const events: AgentSessionStreamEvent[] = [];
+async function collectEvents(stream: Stream.Stream<SessionStreamEvent>): Promise<SessionStreamEvent[]> {
+  const events: SessionStreamEvent[] = [];
   await Effect.runPromise(Stream.runForEach(stream, (event) => Effect.sync(() => events.push(event))));
   return events;
 }
 
-async function waitForEvent(events: readonly AgentSessionStreamEvent[]): Promise<void> {
+async function waitForEvent(events: readonly SessionStreamEvent[]): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const startedAt = Date.now();
     const poll = (): void => {
@@ -142,7 +142,7 @@ function makePiSessionsHarness(input?: {
 
   const sessionsLive = PiSessionsLive.pipe(Layer.provide(Layer.succeed(PiSdkService, piSdk as never)));
 
-  const sendMessage = (messageInput: Omit<AgentSessionMessageSendPayload, "attachments"> & {attachments?: AgentSessionMessageSendPayload["attachments"]}) =>
+  const sendMessage = (messageInput: Omit<SessionMessageSendPayload, "attachments"> & {attachments?: SessionMessageSendPayload["attachments"]}) =>
     Effect.gen(function* () {
       const sessions = yield* SessionsService;
       return yield* Effect.promise(() => collectEvents(sessions.sendMessage({attachments: [], ...messageInput})));
@@ -542,7 +542,7 @@ describe("sendSessionMessage", () => {
         await promptBlocker;
       },
     });
-    const events: AgentSessionStreamEvent[] = [];
+    const events: SessionStreamEvent[] = [];
 
     const streamPromise = Effect.runPromise(
       Effect.gen(function* () {
@@ -721,7 +721,7 @@ describe("sendSessionMessage", () => {
         await promptBlocker;
       },
     });
-    const events: AgentSessionStreamEvent[] = [];
+    const events: SessionStreamEvent[] = [];
 
     const program = Effect.gen(function* () {
       const sessions = yield* SessionsService;

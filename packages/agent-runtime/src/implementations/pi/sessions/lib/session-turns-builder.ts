@@ -1,11 +1,11 @@
 import type {AgentSession, CustomEntry, SessionEntry, SessionMessageEntry} from "@mariozechner/pi-coding-agent";
 import type {
-  AgentModelReference,
-  AgentSessionTool,
-  AgentSessionToolTurnEvent,
-  AgentSessionTurn,
-  AgentSessionTurnEvent,
-  AgentSessionUserMessage,
+  ModelReference,
+  SessionTool,
+  SessionToolTurnEvent,
+  SessionTurn,
+  SessionTurnEvent,
+  SessionUserMessage,
 } from "@pi-desktop/contracts/sessions/schemas";
 import {sessionTurn} from "@pi-desktop/agent-runtime/implementations/shared/session-turns";
 import {generateStableId} from "@pi-desktop/agent-runtime/implementations/shared/id-generator";
@@ -37,11 +37,11 @@ function isToolResultEntry(entry: SessionMessageEntry): entry is PiMessageEntry<
 }
 
 class PiTurnDraft {
-  private readonly userMessage: AgentSessionUserMessage;
-  private readonly events: AgentSessionTurnEvent[] = [];
-  private readonly toolEventIndexes = new Map<string, {event: AgentSessionToolTurnEvent; index: number}>();
+  private readonly userMessage: SessionUserMessage;
+  private readonly events: SessionTurnEvent[] = [];
+  private readonly toolEventIndexes = new Map<string, {event: SessionToolTurnEvent; index: number}>();
 
-  public constructor(userMessage: AgentSessionUserMessage) {
+  public constructor(userMessage: SessionUserMessage) {
     this.userMessage = userMessage;
   }
 
@@ -69,7 +69,7 @@ class PiTurnDraft {
           }
           break;
         case "toolCall": {
-          const toolEvent: AgentSessionToolTurnEvent = {
+          const toolEvent: SessionToolTurnEvent = {
             id,
             timestamp: entry.timestamp,
             tool: {input: part.arguments, name: part.name, status: "pending", summary: piToolSummary(part.name)},
@@ -94,14 +94,14 @@ class PiTurnDraft {
   public addToolResultEntry(entry: PiMessageEntry<"toolResult">): boolean {
     const message = entry.message;
     const output = piContentToText(message.content);
-    const completedTool: AgentSessionTool = {
+    const completedTool: SessionTool = {
       error: message.isError ? output : undefined,
       name: message.toolName,
       output: message.isError ? undefined : output,
       status: message.isError ? "error" : "completed",
       summary: piToolSummary(message.toolName),
     };
-    const toolEvent: AgentSessionToolTurnEvent = {id: generateStableId("evt", [entry.id, "toolResult"]), timestamp: entry.timestamp, tool: completedTool, type: "tool"};
+    const toolEvent: SessionToolTurnEvent = {id: generateStableId("evt", [entry.id, "toolResult"]), timestamp: entry.timestamp, tool: completedTool, type: "tool"};
     const existingTool = this.toolEventIndexes.get(message.toolCallId);
 
     if (!existingTool) {
@@ -119,18 +119,18 @@ class PiTurnDraft {
     return true;
   }
 
-  public toTurn(model: AgentModelReference): AgentSessionTurn {
+  public toTurn(model: ModelReference): SessionTurn {
     return sessionTurn({events: this.events, model, userMessage: this.userMessage});
   }
 }
 
 class PiSessionTurnBuilder {
-  private readonly fallbackModel: AgentModelReference;
-  private readonly turns: AgentSessionTurn[] = [];
+  private readonly fallbackModel: ModelReference;
+  private readonly turns: SessionTurn[] = [];
   private readonly attachmentsByParent = new Map<string, readonly SessionAttachmentMetadata[]>();
   private currentTurn: PiTurnDraft | undefined;
 
-  public constructor(fallbackModel: AgentModelReference) {
+  public constructor(fallbackModel: ModelReference) {
     this.fallbackModel = fallbackModel;
   }
 
@@ -156,7 +156,7 @@ class PiSessionTurnBuilder {
     return false;
   }
 
-  public toTurns(): AgentSessionTurn[] {
+  public toTurns(): SessionTurn[] {
     if (!this.currentTurn) return [...this.turns];
     return [...this.turns, this.currentTurn.toTurn(this.fallbackModel)];
   }
@@ -181,7 +181,7 @@ class PiSessionTurnBuilder {
   }
 }
 
-export function buildPiSessionTurns(entries: readonly SessionEntry[], fallbackModel: AgentModelReference): AgentSessionTurn[] {
+export function buildPiSessionTurns(entries: readonly SessionEntry[], fallbackModel: ModelReference): SessionTurn[] {
   const builder = new PiSessionTurnBuilder(fallbackModel);
 
   for (const entry of entries) {

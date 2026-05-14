@@ -1,4 +1,4 @@
-import type {AgentThinkingLevelOption} from "@pi-desktop/contracts/sessions/schemas";
+import type {ThinkingLevelOption} from "@pi-desktop/contracts/sessions/schemas";
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import Menu, {MenuItem} from "@/components/ui/menu";
@@ -8,7 +8,7 @@ interface ThinkingLevelPickerProps {
   onThinkingLevelChange: (value: string) => void;
   selectedThinkingLabel: string;
   selectedThinkingLevel: string | undefined;
-  thinkingLevels: readonly AgentThinkingLevelOption[];
+  thinkingLevels: readonly ThinkingLevelOption[];
 }
 
 export default function ThinkingLevelPicker(props: ThinkingLevelPickerProps) {

@@ -1,4 +1,4 @@
-import type {AgentSessionDetails} from "@pi-desktop/contracts/sessions/schemas";
+import type {SessionDetails} from "@pi-desktop/contracts/sessions/schemas";
 import type {AppEnvironment} from "@/app/app-environment";
 import ModelPicker from "@/features/sessions/components/composer/pickers/model-picker";
 import ThinkingLevelPicker from "@/features/sessions/components/composer/pickers/thinking-level-picker";
@@ -68,7 +68,7 @@ function SessionLoading(props: SessionLoadingProps) {
 
 interface SessionConversationProps {
   appEnvironment: AppEnvironment;
-  session: AgentSessionDetails;
+  session: SessionDetails;
 }
 
 function SessionConversation(props: SessionConversationProps) {

@@ -1,4 +1,4 @@
-import type {AgentSessionUserMessage} from "@pi-desktop/contracts/sessions/schemas";
+import type {SessionUserMessage} from "@pi-desktop/contracts/sessions/schemas";
 import MessageAttachmentPreview from "@/features/sessions/components/attachments/message-attachment-preview";
 import MessageActions from "@/features/sessions/components/messages/message-actions";
 import {cn} from "@/lib/cn";
@@ -25,7 +25,7 @@ function UserMessageContent(props: {children: string}) {
 }
 
 interface UserMessageProps {
-  message: AgentSessionUserMessage;
+  message: SessionUserMessage;
 }
 
 export default function UserMessage(props: UserMessageProps) {

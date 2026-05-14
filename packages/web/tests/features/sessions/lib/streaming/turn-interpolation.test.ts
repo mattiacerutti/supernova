@@ -1,10 +1,10 @@
-import type {AgentSessionAssistantTurnEvent, AgentSessionToolTurnEvent, AgentSessionTurn} from "@pi-desktop/contracts/sessions/schemas";
+import type {SessionAssistantTurnEvent, SessionToolTurnEvent, SessionTurn} from "@pi-desktop/contracts/sessions/schemas";
 import {describe, expect, it} from "vitest";
 import {interpolateStreamTurn, STREAM_FRAME_MAX_DELTA_MS} from "@/features/sessions/lib/streaming/turn-interpolation";
 
 const model = {id: "gpt-5.1", providerId: "openai", thinkingLevel: "high"};
 
-function assistantEvent(overrides: Partial<AgentSessionAssistantTurnEvent>): AgentSessionAssistantTurnEvent {
+function assistantEvent(overrides: Partial<SessionAssistantTurnEvent>): SessionAssistantTurnEvent {
   return {
     content: "",
     id: "assistant-1",
@@ -14,7 +14,7 @@ function assistantEvent(overrides: Partial<AgentSessionAssistantTurnEvent>): Age
   };
 }
 
-function toolEvent(overrides: Partial<AgentSessionToolTurnEvent>): AgentSessionToolTurnEvent {
+function toolEvent(overrides: Partial<SessionToolTurnEvent>): SessionToolTurnEvent {
   return {
     id: "tool-1",
     timestamp: "2026-01-01T00:00:01.000Z",
@@ -24,7 +24,7 @@ function toolEvent(overrides: Partial<AgentSessionToolTurnEvent>): AgentSessionT
   };
 }
 
-function turn(overrides: Partial<AgentSessionTurn>): AgentSessionTurn {
+function turn(overrides: Partial<SessionTurn>): SessionTurn {
   return {
     events: [],
     id: "turn-1",

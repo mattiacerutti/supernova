@@ -1,15 +1,15 @@
 import {Schema} from "effect";
-import {AgentModelDetails} from "../schemas";
+import {ModelDetails} from "../schemas";
 
-export const AgentSessionModelsListPayload = Schema.Void;
+export const SessionModelsListPayload = Schema.Void;
 
 /** Result payload for listing models available to session prompts. */
-export const AgentSessionModelsListResult = Schema.Array(AgentModelDetails);
+export const SessionModelsListResult = Schema.Array(ModelDetails);
 
-export class AgentSessionModelsListError extends Schema.TaggedErrorClass<AgentSessionModelsListError>()("AgentSessionModelsListError", {
+export class SessionModelsListError extends Schema.TaggedErrorClass<SessionModelsListError>()("SessionModelsListError", {
   cause: Schema.optional(Schema.Defect),
   message: Schema.String,
 }) {}
 
-export type AgentSessionModelsListPayload = typeof AgentSessionModelsListPayload.Type;
-export type AgentSessionModelsListResult = typeof AgentSessionModelsListResult.Type;
+export type SessionModelsListPayload = typeof SessionModelsListPayload.Type;
+export type SessionModelsListResult = typeof SessionModelsListResult.Type;

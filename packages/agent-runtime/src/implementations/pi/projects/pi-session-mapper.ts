@@ -1,5 +1,5 @@
 import type {SessionInfo} from "@mariozechner/pi-coding-agent";
-import type {AgentSessionSummary} from "@pi-desktop/contracts/sessions/schemas";
+import type {SessionSummary} from "@pi-desktop/contracts/sessions/schemas";
 
 export type PiSessionInfo = Pick<SessionInfo, "cwd" | "firstMessage" | "id" | "modified" | "name">;
 
@@ -13,7 +13,7 @@ function toSessionTitle(session: PiSessionInfo): string {
   return "Untitled session";
 }
 
-export function toPiSessionSummary(session: PiSessionInfo): AgentSessionSummary {
+export function toPiSessionSummary(session: PiSessionInfo): SessionSummary {
   return {
     id: session.id,
     title: toSessionTitle(session),
@@ -21,6 +21,6 @@ export function toPiSessionSummary(session: PiSessionInfo): AgentSessionSummary 
   };
 }
 
-export function mapPiSessionsToSummaries(sessions: PiSessionInfo[]): AgentSessionSummary[] {
+export function mapPiSessionsToSummaries(sessions: PiSessionInfo[]): SessionSummary[] {
   return sessions.map(toPiSessionSummary).toSorted((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime());
 }

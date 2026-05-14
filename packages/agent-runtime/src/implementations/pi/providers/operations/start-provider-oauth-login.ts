@@ -1,7 +1,7 @@
 import {randomUUID} from "node:crypto";
 import {Effect} from "effect";
-import {AgentProviderLoginError} from "@pi-desktop/contracts/providers/procedures";
-import type {AgentProviderLoginInputKind} from "@pi-desktop/contracts/providers/schemas";
+import {ProviderLoginError} from "@pi-desktop/contracts/providers/procedures";
+import type {ProviderLoginInputKind} from "@pi-desktop/contracts/providers/schemas";
 import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
 import type {PiSdkServiceShape} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
 import {loginSessions, toLoginSession} from "@pi-desktop/agent-runtime/implementations/pi/providers/lib/login-sessions";
@@ -14,7 +14,7 @@ interface OAuthPrompt {
   placeholder?: string;
 }
 
-function waitForInput(state: LoginSessionState, kind: AgentProviderLoginInputKind, prompt: OAuthPrompt): Promise<string> {
+function waitForInput(state: LoginSessionState, kind: ProviderLoginInputKind, prompt: OAuthPrompt): Promise<string> {
   return new Promise((resolve, reject) => {
     state.status = "waiting_input";
     state.inputKind = kind;
@@ -81,7 +81,7 @@ export function startProviderOAuthLogin(providerId: string) {
         void runOAuthLogin(piSdk, session);
         return toLoginSession(session);
       },
-      catch: (cause) => new AgentProviderLoginError({cause, message: errorMessage(cause, "Failed to start provider login.")}),
+      catch: (cause) => new ProviderLoginError({cause, message: errorMessage(cause, "Failed to start provider login.")}),
     });
   });
 }

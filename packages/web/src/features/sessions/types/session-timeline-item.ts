@@ -1,7 +1,7 @@
-import type {AgentSessionTurnEvent, AgentSessionUserMessage} from "@pi-desktop/contracts/sessions/schemas";
+import type {SessionTurnEvent, SessionUserMessage} from "@pi-desktop/contracts/sessions/schemas";
 
-export type SessionAssistantEvent = Extract<AgentSessionTurnEvent, {type: "assistant"}>;
-export type SessionWorkEvent = Extract<AgentSessionTurnEvent, {type: "reasoning" | "tool"}>;
+export type SessionAssistantEvent = Extract<SessionTurnEvent, {type: "assistant"}>;
+export type SessionWorkEvent = Extract<SessionTurnEvent, {type: "reasoning" | "tool"}>;
 
 interface SessionTimelineItemBase {
   readonly id: string;
@@ -17,7 +17,7 @@ export interface AssistantSessionTimelineItem extends SessionTimelineItemBase {
 }
 
 export interface UserSessionTimelineItem extends SessionTimelineItemBase {
-  readonly message: AgentSessionUserMessage;
+  readonly message: SessionUserMessage;
   readonly spacing: "message";
   readonly type: "user";
 }

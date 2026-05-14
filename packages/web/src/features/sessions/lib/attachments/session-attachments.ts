@@ -1,4 +1,4 @@
-import type {AgentSessionAttachment} from "@pi-desktop/contracts/sessions/schemas";
+import type {SessionAttachment} from "@pi-desktop/contracts/sessions/schemas";
 import {attachmentMime, fileExtension} from "@/features/sessions/lib/attachments/attachment-classification";
 
 export const MAX_SESSION_ATTACHMENTS = 10;
@@ -47,7 +47,7 @@ export function formatAttachmentSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-export async function fileToSessionAttachment(file: File): Promise<AgentSessionAttachment> {
+export async function fileToSessionAttachment(file: File): Promise<SessionAttachment> {
   const buffer = await file.arrayBuffer();
   const mime = attachmentMime(file, buffer);
 

@@ -1,4 +1,4 @@
-import type {AgentSessionAssistantTurnEvent, AgentSessionReasoningTurnEvent, AgentSessionToolTurnEvent, AgentSessionTurn} from "@pi-desktop/contracts/sessions/schemas";
+import type {SessionAssistantTurnEvent, SessionReasoningTurnEvent, SessionToolTurnEvent, SessionTurn} from "@pi-desktop/contracts/sessions/schemas";
 import {describe, expect, it} from "vitest";
 import {buildSessionTimeline} from "@/features/sessions/lib/session-timeline/build-session-timeline";
 import {formatDuration} from "@/features/sessions/lib/session-timeline/work-timeline-items";
@@ -9,19 +9,19 @@ function timestamp(second: number): string {
   return `2026-01-01T00:00:${second.toString().padStart(2, "0")}.000Z`;
 }
 
-function reasoningEvent(id: string, second: number): AgentSessionReasoningTurnEvent {
+function reasoningEvent(id: string, second: number): SessionReasoningTurnEvent {
   return {content: `reasoning ${id}`, id, timestamp: timestamp(second), type: "reasoning"};
 }
 
-function toolEvent(id: string, second: number, name = "read"): AgentSessionToolTurnEvent {
+function toolEvent(id: string, second: number, name = "read"): SessionToolTurnEvent {
   return {id, timestamp: timestamp(second), tool: {name, status: "completed", summary: "Used tool"}, type: "tool"};
 }
 
-function assistantEvent(id: string, second: number): AgentSessionAssistantTurnEvent {
+function assistantEvent(id: string, second: number): SessionAssistantTurnEvent {
   return {content: `assistant ${id}`, id, timestamp: timestamp(second), type: "assistant"};
 }
 
-function turn(overrides: Partial<AgentSessionTurn>): AgentSessionTurn {
+function turn(overrides: Partial<SessionTurn>): SessionTurn {
   return {
     completedAt: timestamp(10),
     events: [],

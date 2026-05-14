@@ -1,23 +1,23 @@
 import * as Rpc from "effect/unstable/rpc/Rpc";
 import {
-  AgentFolderCreateError,
-  AgentFolderCreatePayload,
-  AgentFolderCreateResult,
-  AgentFolderSuggestionsListError,
-  AgentFolderSuggestionsListPayload,
-  AgentFolderSuggestionsListResult,
+  FolderCreateError,
+  FolderCreatePayload,
+  FolderCreateResult,
+  FolderSuggestionsListError,
+  FolderSuggestionsListPayload,
+  FolderSuggestionsListResult,
 } from "@pi-desktop/contracts/folders/procedures";
 
-export const AgentFolderCreateRpc = Rpc.make("createFolder", {
-  error: AgentFolderCreateError,
-  payload: AgentFolderCreatePayload,
-  success: AgentFolderCreateResult,
+export const FolderCreateRpc = Rpc.make("createFolder", {
+  error: FolderCreateError,
+  payload: FolderCreatePayload,
+  success: FolderCreateResult,
 });
 
-export const AgentFolderSuggestionsListRpc = Rpc.make("listFolderSuggestions", {
-  error: AgentFolderSuggestionsListError,
-  payload: AgentFolderSuggestionsListPayload,
-  success: AgentFolderSuggestionsListResult,
+export const FolderSuggestionsListRpc = Rpc.make("listFolderSuggestions", {
+  error: FolderSuggestionsListError,
+  payload: FolderSuggestionsListPayload,
+  success: FolderSuggestionsListResult,
 });
 
-export const AgentFolderRpcs = [AgentFolderCreateRpc, AgentFolderSuggestionsListRpc] as const;
+export const FolderRpcs = [FolderCreateRpc, FolderSuggestionsListRpc] as const;

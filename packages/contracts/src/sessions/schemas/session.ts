@@ -1,25 +1,25 @@
 import {Schema} from "effect";
-import {AgentModelReference} from "./model";
-import {AgentSessionTurn} from "./turn";
+import {ModelReference} from "./model";
+import {SessionTurn} from "./turn";
 
 /** Full session transcript and metadata. */
-export const AgentSessionDetails = Schema.Struct({
+export const SessionDetails = Schema.Struct({
   /** Stable session identifier. */
   id: Schema.String,
   /** Human-readable session title. */
   title: Schema.String,
   /** Current session model configuration, when the runtime exposes one. */
-  model: Schema.optional(AgentModelReference),
+  model: Schema.optional(ModelReference),
   /** Absolute path of the project/workspace associated with the session. */
   projectPath: Schema.String,
   /** Ordered session transcript represented as turns. */
-  turns: Schema.Array(AgentSessionTurn),
+  turns: Schema.Array(SessionTurn),
   /** ISO timestamp for the last session update. */
   updatedAt: Schema.String,
 });
 
 /** Minimal session metadata used when listing sessions. */
-export const AgentSessionSummary = Schema.Struct({
+export const SessionSummary = Schema.Struct({
   /** Stable session identifier. */
   id: Schema.String,
   /** Human-readable session title. */
@@ -28,5 +28,5 @@ export const AgentSessionSummary = Schema.Struct({
   updatedAt: Schema.String,
 });
 
-export type AgentSessionDetails = typeof AgentSessionDetails.Type;
-export type AgentSessionSummary = typeof AgentSessionSummary.Type;
+export type SessionDetails = typeof SessionDetails.Type;
+export type SessionSummary = typeof SessionSummary.Type;

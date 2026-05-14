@@ -1,6 +1,6 @@
 import {mkdir} from "node:fs/promises";
 import {Effect} from "effect";
-import {AgentFolderCreateError} from "@pi-desktop/contracts/folders/procedures";
+import {FolderCreateError} from "@pi-desktop/contracts/folders/procedures";
 import {resolveFolderPath} from "@pi-desktop/agent-runtime/implementations/filesystem/folders/lib/folder-paths";
 
 export function createFolder(path: string) {
@@ -11,7 +11,7 @@ export function createFolder(path: string) {
       return {path: resolvedPath};
     },
     catch: (cause) =>
-      new AgentFolderCreateError({
+      new FolderCreateError({
         cause,
         message: cause instanceof Error ? cause.message : "Failed to create folder.",
       }),

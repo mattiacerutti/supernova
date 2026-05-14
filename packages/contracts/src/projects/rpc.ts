@@ -1,23 +1,23 @@
 import * as Rpc from "effect/unstable/rpc/Rpc";
 import {
-  AgentProjectSessionArchiveError,
-  AgentProjectSessionArchivePayload,
-  AgentProjectSessionArchiveResult,
-  AgentProjectSessionsListError,
-  AgentProjectSessionsListPayload,
-  AgentProjectSessionsListResult,
+  ProjectSessionArchiveError,
+  ProjectSessionArchivePayload,
+  ProjectSessionArchiveResult,
+  ProjectSessionsListError,
+  ProjectSessionsListPayload,
+  ProjectSessionsListResult,
 } from "@pi-desktop/contracts/projects/procedures";
 
-export const AgentProjectSessionsListRpc = Rpc.make("listProjectSessions", {
-  error: AgentProjectSessionsListError,
-  payload: AgentProjectSessionsListPayload,
-  success: AgentProjectSessionsListResult,
+export const ProjectSessionsListRpc = Rpc.make("listProjectSessions", {
+  error: ProjectSessionsListError,
+  payload: ProjectSessionsListPayload,
+  success: ProjectSessionsListResult,
 });
 
-export const AgentProjectSessionArchiveRpc = Rpc.make("archiveProjectSession", {
-  error: AgentProjectSessionArchiveError,
-  payload: AgentProjectSessionArchivePayload,
-  success: AgentProjectSessionArchiveResult,
+export const ProjectSessionArchiveRpc = Rpc.make("archiveProjectSession", {
+  error: ProjectSessionArchiveError,
+  payload: ProjectSessionArchivePayload,
+  success: ProjectSessionArchiveResult,
 });
 
-export const AgentProjectRpcs = [AgentProjectSessionsListRpc, AgentProjectSessionArchiveRpc] as const;
+export const ProjectRpcs = [ProjectSessionsListRpc, ProjectSessionArchiveRpc] as const;

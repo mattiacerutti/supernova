@@ -1,7 +1,7 @@
 import type {DragEvent, HTMLAttributes} from "react";
 import {useRef, useState} from "react";
 import {useMutation} from "@tanstack/react-query";
-import type {AgentSessionAttachment} from "@pi-desktop/contracts/sessions/schemas";
+import type {SessionAttachment} from "@pi-desktop/contracts/sessions/schemas";
 import {
   fileRequiresImageCapability,
   fileToSessionAttachment,
@@ -16,7 +16,7 @@ export type ComposerAttachmentDropZoneProps = Pick<HTMLAttributes<HTMLDivElement
 
 export interface ComposerAttachmentsController {
   readonly addFiles: (files: readonly File[]) => void;
-  readonly attachments: readonly AgentSessionAttachment[];
+  readonly attachments: readonly SessionAttachment[];
   readonly clear: () => void;
   readonly dropZoneProps: ComposerAttachmentDropZoneProps;
   readonly isDraggingFiles: boolean;
@@ -26,7 +26,7 @@ export interface ComposerAttachmentsController {
 }
 
 interface ProcessFilesResult {
-  readonly attachments: readonly AgentSessionAttachment[];
+  readonly attachments: readonly SessionAttachment[];
   readonly errors: readonly string[];
 }
 
@@ -46,7 +46,7 @@ function attachmentSizeMessage(file: File): string {
   return `${file.name} exceeds the ${formatAttachmentSize(MAX_SESSION_ATTACHMENT_BYTES)} attachment limit.`;
 }
 
-function attachmentRequiresImageCapability(attachment: AgentSessionAttachment): boolean {
+function attachmentRequiresImageCapability(attachment: SessionAttachment): boolean {
   return attachment.mime.startsWith("image/");
 }
 
@@ -58,14 +58,14 @@ interface UseComposerAttachmentsInput {
 export function useComposerAttachments(input: UseComposerAttachmentsInput): ComposerAttachmentsController {
   const {disabled, imageSupported} = input;
 
-  const [attachments, setAttachments] = useState<readonly AgentSessionAttachment[]>([]);
+  const [attachments, setAttachments] = useState<readonly SessionAttachment[]>([]);
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
 
   const dragDepthRef = useRef(0);
 
   const processFilesMutation = useMutation({
     mutationFn: async (files: readonly File[]): Promise<ProcessFilesResult> => {
-      const nextAttachments: AgentSessionAttachment[] = [];
+      const nextAttachments: SessionAttachment[] = [];
       const errors: string[] = [];
 
       for (const file of files) {

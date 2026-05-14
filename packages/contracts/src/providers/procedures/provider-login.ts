@@ -1,32 +1,32 @@
 import {Schema} from "effect";
-import {AgentProviderLoginSession} from "../schemas";
+import {ProviderLoginSession} from "../schemas";
 
-export const AgentProviderOAuthLoginStartPayload = Schema.Struct({
+export const ProviderOAuthLoginStartPayload = Schema.Struct({
   providerId: Schema.String,
 });
 
-export const AgentProviderLoginSessionGetPayload = Schema.Struct({
+export const ProviderLoginSessionGetPayload = Schema.Struct({
   loginSessionId: Schema.String,
 });
 
-export const AgentProviderLoginInputSubmitPayload = Schema.Struct({
+export const ProviderLoginInputSubmitPayload = Schema.Struct({
   input: Schema.String,
   loginSessionId: Schema.String,
 });
 
-export const AgentProviderLoginCancelPayload = Schema.Struct({
+export const ProviderLoginCancelPayload = Schema.Struct({
   loginSessionId: Schema.String,
 });
 
-export const AgentProviderLoginResult = AgentProviderLoginSession;
+export const ProviderLoginResult = ProviderLoginSession;
 
-export class AgentProviderLoginError extends Schema.TaggedErrorClass<AgentProviderLoginError>()("AgentProviderLoginError", {
+export class ProviderLoginError extends Schema.TaggedErrorClass<ProviderLoginError>()("ProviderLoginError", {
   cause: Schema.optional(Schema.Defect),
   message: Schema.String,
 }) {}
 
-export type AgentProviderOAuthLoginStartPayload = typeof AgentProviderOAuthLoginStartPayload.Type;
-export type AgentProviderLoginSessionGetPayload = typeof AgentProviderLoginSessionGetPayload.Type;
-export type AgentProviderLoginInputSubmitPayload = typeof AgentProviderLoginInputSubmitPayload.Type;
-export type AgentProviderLoginCancelPayload = typeof AgentProviderLoginCancelPayload.Type;
-export type AgentProviderLoginResult = typeof AgentProviderLoginResult.Type;
+export type ProviderOAuthLoginStartPayload = typeof ProviderOAuthLoginStartPayload.Type;
+export type ProviderLoginSessionGetPayload = typeof ProviderLoginSessionGetPayload.Type;
+export type ProviderLoginInputSubmitPayload = typeof ProviderLoginInputSubmitPayload.Type;
+export type ProviderLoginCancelPayload = typeof ProviderLoginCancelPayload.Type;
+export type ProviderLoginResult = typeof ProviderLoginResult.Type;

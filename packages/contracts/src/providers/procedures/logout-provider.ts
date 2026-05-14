@@ -1,17 +1,17 @@
 import {Schema} from "effect";
 
-export const AgentProviderLogoutPayload = Schema.Struct({
+export const ProviderLogoutPayload = Schema.Struct({
   providerId: Schema.String,
 });
 
-export const AgentProviderLogoutResult = Schema.Struct({
+export const ProviderLogoutResult = Schema.Struct({
   providerId: Schema.String,
 });
 
-export class AgentProviderLogoutError extends Schema.TaggedErrorClass<AgentProviderLogoutError>()("AgentProviderLogoutError", {
+export class ProviderLogoutError extends Schema.TaggedErrorClass<ProviderLogoutError>()("ProviderLogoutError", {
   cause: Schema.optional(Schema.Defect),
   message: Schema.String,
 }) {}
 
-export type AgentProviderLogoutPayload = typeof AgentProviderLogoutPayload.Type;
-export type AgentProviderLogoutResult = typeof AgentProviderLogoutResult.Type;
+export type ProviderLogoutPayload = typeof ProviderLogoutPayload.Type;
+export type ProviderLogoutResult = typeof ProviderLogoutResult.Type;

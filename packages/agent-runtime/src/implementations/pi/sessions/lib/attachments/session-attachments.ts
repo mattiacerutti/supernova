@@ -1,5 +1,5 @@
 import type {ImageContent} from "@mariozechner/pi-ai";
-import type {AgentSessionAttachment} from "@pi-desktop/contracts/sessions/schemas";
+import type {SessionAttachment} from "@pi-desktop/contracts/sessions/schemas";
 
 export const ATTACHMENTS_CUSTOM_TYPE = "pi-desktop.attachments";
 export const TEXT_ATTACHMENTS_CUSTOM_TYPE = "pi-desktop.text-attachments";
@@ -40,7 +40,7 @@ function textAttachmentBlock(input: {attachment: SessionAttachmentMetadata; cont
   return `  <attachment id="${escapeXml(attachment.id)}" name="${escapeXml(attachment.name)}" mime="${escapeXml(attachment.mime)}" size="${attachment.size}">\n${escapeXml(content)}\n  </attachment>`;
 }
 
-export function prepareSessionAttachments(attachments: readonly AgentSessionAttachment[]): PreparedSessionAttachments {
+export function prepareSessionAttachments(attachments: readonly SessionAttachment[]): PreparedSessionAttachments {
   const images: ImageContent[] = [];
   const metadata: SessionAttachmentMetadata[] = [];
   const textAttachments: Array<{attachment: SessionAttachmentMetadata; content: string}> = [];

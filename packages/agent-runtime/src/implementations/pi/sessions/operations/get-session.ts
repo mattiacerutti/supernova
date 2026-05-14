@@ -1,5 +1,5 @@
 import {Effect} from "effect";
-import {AgentSessionLoadError} from "@pi-desktop/contracts/sessions/procedures";
+import {SessionLoadError} from "@pi-desktop/contracts/sessions/procedures";
 import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
 import {toPiSessionSummary} from "@pi-desktop/agent-runtime/implementations/pi/projects/pi-session-mapper";
 import {findSessionById} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-resolver";
@@ -28,7 +28,7 @@ export function getSession(sessionId: string) {
           updatedAt: summary.updatedAt,
         };
       },
-      catch: (cause) => new AgentSessionLoadError({cause, message: cause instanceof Error ? cause.message : "Failed to load session."}),
+      catch: (cause) => new SessionLoadError({cause, message: cause instanceof Error ? cause.message : "Failed to load session."}),
     });
   });
 }

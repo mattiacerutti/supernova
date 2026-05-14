@@ -1,5 +1,5 @@
 import {Effect} from "effect";
-import {AgentProviderApiKeySetError} from "@pi-desktop/contracts/providers/procedures";
+import {ProviderApiKeySetError} from "@pi-desktop/contracts/providers/procedures";
 import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
 import {errorMessage} from "@pi-desktop/agent-runtime/implementations/pi/providers/lib/provider-errors";
 
@@ -16,7 +16,7 @@ export function setProviderApiKey(providerId: string, apiKey: string) {
         piSdk.modelRegistry.refresh();
         return {providerId};
       },
-      catch: (cause) => new AgentProviderApiKeySetError({cause, message: errorMessage(cause, "Failed to save provider API key.")}),
+      catch: (cause) => new ProviderApiKeySetError({cause, message: errorMessage(cause, "Failed to save provider API key.")}),
     });
   });
 }

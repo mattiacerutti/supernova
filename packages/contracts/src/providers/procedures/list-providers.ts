@@ -1,14 +1,14 @@
 import {Schema} from "effect";
-import {AgentProvider} from "../schemas";
+import {Provider} from "../schemas";
 
-export const AgentProvidersListPayload = Schema.Void;
+export const ProvidersListPayload = Schema.Void;
 
-export const AgentProvidersListResult = Schema.Array(AgentProvider);
+export const ProvidersListResult = Schema.Array(Provider);
 
-export class AgentProvidersListError extends Schema.TaggedErrorClass<AgentProvidersListError>()("AgentProvidersListError", {
+export class ProvidersListError extends Schema.TaggedErrorClass<ProvidersListError>()("ProvidersListError", {
   cause: Schema.optional(Schema.Defect),
   message: Schema.String,
 }) {}
 
-export type AgentProvidersListPayload = typeof AgentProvidersListPayload.Type;
-export type AgentProvidersListResult = typeof AgentProvidersListResult.Type;
+export type ProvidersListPayload = typeof ProvidersListPayload.Type;
+export type ProvidersListResult = typeof ProvidersListResult.Type;

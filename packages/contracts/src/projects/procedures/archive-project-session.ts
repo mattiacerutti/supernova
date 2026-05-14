@@ -1,19 +1,19 @@
 import {Schema} from "effect";
 
-export const AgentProjectSessionArchivePayload = Schema.Struct({
+export const ProjectSessionArchivePayload = Schema.Struct({
   projectPath: Schema.String,
   sessionId: Schema.String,
 });
 
-export const AgentProjectSessionArchiveResult = Schema.Struct({
+export const ProjectSessionArchiveResult = Schema.Struct({
   projectPath: Schema.String,
   sessionId: Schema.String,
 });
 
-export class AgentProjectSessionArchiveError extends Schema.TaggedErrorClass<AgentProjectSessionArchiveError>()("AgentProjectSessionArchiveError", {
+export class ProjectSessionArchiveError extends Schema.TaggedErrorClass<ProjectSessionArchiveError>()("ProjectSessionArchiveError", {
   cause: Schema.optional(Schema.Defect),
   message: Schema.String,
 }) {}
 
-export type AgentProjectSessionArchivePayload = typeof AgentProjectSessionArchivePayload.Type;
-export type AgentProjectSessionArchiveResult = typeof AgentProjectSessionArchiveResult.Type;
+export type ProjectSessionArchivePayload = typeof ProjectSessionArchivePayload.Type;
+export type ProjectSessionArchiveResult = typeof ProjectSessionArchiveResult.Type;

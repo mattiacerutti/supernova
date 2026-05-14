@@ -1,11 +1,11 @@
-import type {AgentModelReference, AgentSessionTurn, AgentSessionTurnEvent, AgentSessionUserMessage} from "@pi-desktop/contracts/sessions/schemas";
+import type {ModelReference, SessionTurn, SessionTurnEvent, SessionUserMessage} from "@pi-desktop/contracts/sessions/schemas";
 
-export function sessionTurnStatus(events: readonly AgentSessionTurnEvent[], streaming = false): AgentSessionTurn["status"] {
+export function sessionTurnStatus(events: readonly SessionTurnEvent[], streaming = false): SessionTurn["status"] {
   if (events.some((event) => (event.type === "assistant" && Boolean(event.error)) || (event.type === "tool" && event.tool?.status === "error"))) return "error";
   return streaming ? "streaming" : "completed";
 }
 
-export function sessionTurn(input: {events: AgentSessionTurnEvent[]; model: AgentModelReference; streaming?: boolean; userMessage: AgentSessionUserMessage}): AgentSessionTurn {
+export function sessionTurn(input: {events: SessionTurnEvent[]; model: ModelReference; streaming?: boolean; userMessage: SessionUserMessage}): SessionTurn {
   const {events, model, streaming, userMessage} = input;
   return {
     completedAt: events.at(-1)?.timestamp,

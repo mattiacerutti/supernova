@@ -1,8 +1,8 @@
-import type {AgentModelDetails} from "@pi-desktop/contracts/sessions/schemas";
+import type {ModelDetails} from "@pi-desktop/contracts/sessions/schemas";
 import {describe, expect, it} from "vitest";
 import {resolveThinkingLevel} from "@/features/sessions/lib/model-picker/model-utils";
 
-function model(thinkingLevels: AgentModelDetails["thinkingLevels"]): AgentModelDetails {
+function model(thinkingLevels: ModelDetails["thinkingLevels"]): ModelDetails {
   return {
     capabilities: {images: false, reasoning: true},
     id: "claude-sonnet",

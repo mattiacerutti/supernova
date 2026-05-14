@@ -1,22 +1,22 @@
 import {Schema} from "effect";
-import {AgentFolderQueryPathType, AgentFolderSuggestion} from "../schemas";
+import {FolderQueryPathType, FolderSuggestion} from "../schemas";
 
-export const AgentFolderSuggestionsListPayload = Schema.Struct({
+export const FolderSuggestionsListPayload = Schema.Struct({
   query: Schema.String,
 });
 
-export const AgentFolderSuggestionsListResult = Schema.Struct({
+export const FolderSuggestionsListResult = Schema.Struct({
   homePath: Schema.String,
   query: Schema.String,
   queryPath: Schema.String,
-  queryPathType: AgentFolderQueryPathType,
-  suggestions: Schema.Array(AgentFolderSuggestion),
+  queryPathType: FolderQueryPathType,
+  suggestions: Schema.Array(FolderSuggestion),
 });
 
-export class AgentFolderSuggestionsListError extends Schema.TaggedErrorClass<AgentFolderSuggestionsListError>()("AgentFolderSuggestionsListError", {
+export class FolderSuggestionsListError extends Schema.TaggedErrorClass<FolderSuggestionsListError>()("FolderSuggestionsListError", {
   cause: Schema.optional(Schema.Defect),
   message: Schema.String,
 }) {}
 
-export type AgentFolderSuggestionsListPayload = typeof AgentFolderSuggestionsListPayload.Type;
-export type AgentFolderSuggestionsListResult = typeof AgentFolderSuggestionsListResult.Type;
+export type FolderSuggestionsListPayload = typeof FolderSuggestionsListPayload.Type;
+export type FolderSuggestionsListResult = typeof FolderSuggestionsListResult.Type;

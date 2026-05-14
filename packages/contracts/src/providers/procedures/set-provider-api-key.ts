@@ -1,18 +1,18 @@
 import {Schema} from "effect";
 
-export const AgentProviderApiKeySetPayload = Schema.Struct({
+export const ProviderApiKeySetPayload = Schema.Struct({
   apiKey: Schema.String,
   providerId: Schema.String,
 });
 
-export const AgentProviderApiKeySetResult = Schema.Struct({
+export const ProviderApiKeySetResult = Schema.Struct({
   providerId: Schema.String,
 });
 
-export class AgentProviderApiKeySetError extends Schema.TaggedErrorClass<AgentProviderApiKeySetError>()("AgentProviderApiKeySetError", {
+export class ProviderApiKeySetError extends Schema.TaggedErrorClass<ProviderApiKeySetError>()("ProviderApiKeySetError", {
   cause: Schema.optional(Schema.Defect),
   message: Schema.String,
 }) {}
 
-export type AgentProviderApiKeySetPayload = typeof AgentProviderApiKeySetPayload.Type;
-export type AgentProviderApiKeySetResult = typeof AgentProviderApiKeySetResult.Type;
+export type ProviderApiKeySetPayload = typeof ProviderApiKeySetPayload.Type;
+export type ProviderApiKeySetResult = typeof ProviderApiKeySetResult.Type;

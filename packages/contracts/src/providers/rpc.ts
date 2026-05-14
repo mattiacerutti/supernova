@@ -1,70 +1,70 @@
 import * as Rpc from "effect/unstable/rpc/Rpc";
 import {
-  AgentProviderApiKeySetError,
-  AgentProviderApiKeySetPayload,
-  AgentProviderApiKeySetResult,
-  AgentProviderLoginError,
-  AgentProviderLoginCancelPayload,
-  AgentProviderLoginInputSubmitPayload,
-  AgentProviderLoginResult,
-  AgentProviderLoginSessionGetPayload,
-  AgentProviderLogoutError,
-  AgentProviderLogoutPayload,
-  AgentProviderLogoutResult,
-  AgentProvidersListError,
-  AgentProvidersListPayload,
-  AgentProvidersListResult,
-  AgentProviderOAuthLoginStartPayload,
+  ProviderApiKeySetError,
+  ProviderApiKeySetPayload,
+  ProviderApiKeySetResult,
+  ProviderLoginError,
+  ProviderLoginCancelPayload,
+  ProviderLoginInputSubmitPayload,
+  ProviderLoginResult,
+  ProviderLoginSessionGetPayload,
+  ProviderLogoutError,
+  ProviderLogoutPayload,
+  ProviderLogoutResult,
+  ProvidersListError,
+  ProvidersListPayload,
+  ProvidersListResult,
+  ProviderOAuthLoginStartPayload,
 } from "@pi-desktop/contracts/providers/procedures";
 
-export const AgentProvidersListRpc = Rpc.make("listProviders", {
-  error: AgentProvidersListError,
-  payload: AgentProvidersListPayload,
-  success: AgentProvidersListResult,
+export const ProvidersListRpc = Rpc.make("listProviders", {
+  error: ProvidersListError,
+  payload: ProvidersListPayload,
+  success: ProvidersListResult,
 });
 
-export const AgentProviderApiKeySetRpc = Rpc.make("setProviderApiKey", {
-  error: AgentProviderApiKeySetError,
-  payload: AgentProviderApiKeySetPayload,
-  success: AgentProviderApiKeySetResult,
+export const ProviderApiKeySetRpc = Rpc.make("setProviderApiKey", {
+  error: ProviderApiKeySetError,
+  payload: ProviderApiKeySetPayload,
+  success: ProviderApiKeySetResult,
 });
 
-export const AgentProviderOAuthLoginStartRpc = Rpc.make("startProviderOAuthLogin", {
-  error: AgentProviderLoginError,
-  payload: AgentProviderOAuthLoginStartPayload,
-  success: AgentProviderLoginResult,
+export const ProviderOAuthLoginStartRpc = Rpc.make("startProviderOAuthLogin", {
+  error: ProviderLoginError,
+  payload: ProviderOAuthLoginStartPayload,
+  success: ProviderLoginResult,
 });
 
-export const AgentProviderLoginSessionGetRpc = Rpc.make("getProviderLoginSession", {
-  error: AgentProviderLoginError,
-  payload: AgentProviderLoginSessionGetPayload,
-  success: AgentProviderLoginResult,
+export const ProviderLoginSessionGetRpc = Rpc.make("getProviderLoginSession", {
+  error: ProviderLoginError,
+  payload: ProviderLoginSessionGetPayload,
+  success: ProviderLoginResult,
 });
 
-export const AgentProviderLoginInputSubmitRpc = Rpc.make("submitProviderLoginInput", {
-  error: AgentProviderLoginError,
-  payload: AgentProviderLoginInputSubmitPayload,
-  success: AgentProviderLoginResult,
+export const ProviderLoginInputSubmitRpc = Rpc.make("submitProviderLoginInput", {
+  error: ProviderLoginError,
+  payload: ProviderLoginInputSubmitPayload,
+  success: ProviderLoginResult,
 });
 
-export const AgentProviderLoginCancelRpc = Rpc.make("cancelProviderLogin", {
-  error: AgentProviderLoginError,
-  payload: AgentProviderLoginCancelPayload,
-  success: AgentProviderLoginResult,
+export const ProviderLoginCancelRpc = Rpc.make("cancelProviderLogin", {
+  error: ProviderLoginError,
+  payload: ProviderLoginCancelPayload,
+  success: ProviderLoginResult,
 });
 
-export const AgentProviderLogoutRpc = Rpc.make("logoutProvider", {
-  error: AgentProviderLogoutError,
-  payload: AgentProviderLogoutPayload,
-  success: AgentProviderLogoutResult,
+export const ProviderLogoutRpc = Rpc.make("logoutProvider", {
+  error: ProviderLogoutError,
+  payload: ProviderLogoutPayload,
+  success: ProviderLogoutResult,
 });
 
-export const AgentProviderRpcs = [
-  AgentProvidersListRpc,
-  AgentProviderApiKeySetRpc,
-  AgentProviderOAuthLoginStartRpc,
-  AgentProviderLoginSessionGetRpc,
-  AgentProviderLoginInputSubmitRpc,
-  AgentProviderLoginCancelRpc,
-  AgentProviderLogoutRpc,
+export const ProviderRpcs = [
+  ProvidersListRpc,
+  ProviderApiKeySetRpc,
+  ProviderOAuthLoginStartRpc,
+  ProviderLoginSessionGetRpc,
+  ProviderLoginInputSubmitRpc,
+  ProviderLoginCancelRpc,
+  ProviderLogoutRpc,
 ] as const;

@@ -1,11 +1,11 @@
 import {Schema} from "effect";
 
-export const AgentFolderSuggestion = Schema.Struct({
+export const FolderSuggestion = Schema.Struct({
   name: Schema.String,
   path: Schema.String,
 });
 
-export const AgentFolderQueryPathType = Schema.Union([Schema.Literal("directory"), Schema.Literal("file"), Schema.Literal("missing")]);
+export const FolderQueryPathType = Schema.Union([Schema.Literal("directory"), Schema.Literal("file"), Schema.Literal("missing")]);
 
-export type AgentFolderSuggestion = typeof AgentFolderSuggestion.Type;
-export type AgentFolderQueryPathType = typeof AgentFolderQueryPathType.Type;
+export type FolderSuggestion = typeof FolderSuggestion.Type;
+export type FolderQueryPathType = typeof FolderQueryPathType.Type;

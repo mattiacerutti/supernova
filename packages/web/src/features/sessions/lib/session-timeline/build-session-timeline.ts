@@ -1,14 +1,14 @@
-import type {AgentSessionTurn} from "@pi-desktop/contracts/sessions/schemas";
+import type {SessionTurn} from "@pi-desktop/contracts/sessions/schemas";
 import {workDuration} from "@/features/sessions/lib/session-timeline/work-timeline-items";
 import type {SessionTimelineItem, SessionTimelineItems, SessionWorkEvent} from "@/features/sessions/types/session-timeline-item";
 
 interface BuildSessionTimelineInput {
   readonly live: boolean;
-  readonly liveTurn: AgentSessionTurn | null;
-  readonly turns: readonly AgentSessionTurn[];
+  readonly liveTurn: SessionTurn | null;
+  readonly turns: readonly SessionTurn[];
 }
 
-function turnToTimelineItems(turn: AgentSessionTurn, live: boolean): SessionTimelineItem[] {
+function turnToTimelineItems(turn: SessionTurn, live: boolean): SessionTimelineItem[] {
   const items: SessionTimelineItem[] = [];
   const hasAssistantResponse = turn.events.some((event) => event.type === "assistant" && event.content.trim().length > 0);
 

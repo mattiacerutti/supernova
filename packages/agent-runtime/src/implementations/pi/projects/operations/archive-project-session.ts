@@ -2,7 +2,7 @@ import {existsSync} from "node:fs";
 import {mkdir, rename} from "node:fs/promises";
 import {basename, dirname, join} from "node:path";
 import {Effect} from "effect";
-import {AgentProjectSessionArchiveError} from "@pi-desktop/contracts/projects/procedures";
+import {ProjectSessionArchiveError} from "@pi-desktop/contracts/projects/procedures";
 import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
 
 const ARCHIVE_DIR_NAME = "archive";
@@ -27,7 +27,7 @@ export function archiveProjectSession(projectPath: string, sessionId: string) {
         return {projectPath, sessionId};
       },
       catch: (cause) =>
-        new AgentProjectSessionArchiveError({
+        new ProjectSessionArchiveError({
           cause,
           message: cause instanceof Error ? cause.message : "Failed to archive project session.",
         }),

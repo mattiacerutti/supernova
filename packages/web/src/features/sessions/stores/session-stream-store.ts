@@ -1,14 +1,14 @@
 import type {QueryClient} from "@tanstack/react-query";
-import type {AgentSessionStreamEvent} from "@pi-desktop/contracts/sessions/procedures";
+import type {SessionStreamEvent} from "@pi-desktop/contracts/sessions/procedures";
 import type {
-  AgentModelReference,
-  AgentSessionAttachment,
-  AgentSessionDetails,
-  AgentSessionSummary,
-  AgentSessionTurn,
-  AgentSessionUserMessage,
+  ModelReference,
+  SessionAttachment,
+  SessionDetails,
+  SessionSummary,
+  SessionTurn,
+  SessionUserMessage,
 } from "@pi-desktop/contracts/sessions/schemas";
-import type {AgentProjectSessionsListResult} from "@pi-desktop/contracts/projects/procedures";
+import type {ProjectSessionsListResult} from "@pi-desktop/contracts/projects/procedures";
 import {create} from "zustand";
 import {Effect, Stream} from "effect";
 import {listProjectSessionsQueryKey} from "@/features/projects/hooks/api/use-list-project-sessions";
@@ -25,9 +25,9 @@ export interface SessionStreamState {
   /** Unique per-send token. Async callbacks use this to avoid mutating a newer stream for the same session. */
   readonly streamId: string;
   /** Currently streaming turn, kept separate from committed turns until the runtime confirms completion. */
-  readonly turn: AgentSessionTurn | null;
+  readonly turn: SessionTurn | null;
   /** Last committed transcript snapshot used as the base while optimistic streaming UI is active. */
-  readonly turns: readonly AgentSessionTurn[];
+  readonly turns: readonly SessionTurn[];
 }
 
 interface SessionStreamEntry extends SessionStreamState {
@@ -36,14 +36,14 @@ interface SessionStreamEntry extends SessionStreamState {
 }
 
 interface StartSessionStreamInput {
-  readonly attachments: readonly AgentSessionAttachment[];
+  readonly attachments: readonly SessionAttachment[];
   readonly message: string;
-  readonly model: AgentModelReference;
+  readonly model: ModelReference;
   readonly projectPath: string;
   readonly queryClient: QueryClient;
   readonly rpcClient: AgentRpcClientApi;
   readonly sessionId: string;
-  readonly sessionTurns: readonly AgentSessionTurn[];
+  readonly sessionTurns: readonly SessionTurn[];
 }
 
 interface SessionStreamStoreState {
@@ -57,7 +57,7 @@ function createStreamId(): string {
   return `stream_${crypto.randomUUID()}`;
 }
 
-function attachmentMetadata(attachments: readonly AgentSessionAttachment[]): AgentSessionAttachment[] | undefined {
+function attachmentMetadata(attachments: readonly SessionAttachment[]): SessionAttachment[] | undefined {
   if (attachments.length === 0) return undefined;
 
   return attachments.map((attachment) => ({
@@ -73,10 +73,10 @@ function attachmentMetadata(attachments: readonly AgentSessionAttachment[]): Age
  * Creates an optimistic local turn immediately so the user message appears before
  * the server emits the canonical turn snapshot.
  */
-function createInitialStreamTurn(input: {attachments: readonly AgentSessionAttachment[]; message: string; model: AgentModelReference}): AgentSessionTurn {
+function createInitialStreamTurn(input: {attachments: readonly SessionAttachment[]; message: string; model: ModelReference}): SessionTurn {
   const timestamp = new Date().toISOString();
 
-  const localMessage: AgentSessionUserMessage = {attachments: attachmentMetadata(input.attachments), content: input.message, id: `msg_${crypto.randomUUID()}`, timestamp};
+  const localMessage: SessionUserMessage = {attachments: attachmentMetadata(input.attachments), content: input.message, id: `msg_${crypto.randomUUID()}`, timestamp};
 
   return {
     events: [],
@@ -93,11 +93,11 @@ function createInitialStreamTurn(input: {attachments: readonly AgentSessionAttac
  * query and the project session list in sync so sidebar/title UI updates without
  * waiting for a refetch.
  */
-function applySessionSummary(input: {projectPath: string; queryClient: QueryClient; sessionId: string; summary: AgentSessionSummary}): void {
+function applySessionSummary(input: {projectPath: string; queryClient: QueryClient; sessionId: string; summary: SessionSummary}): void {
   const {projectPath, queryClient, sessionId, summary} = input;
 
-  queryClient.setQueryData<AgentSessionDetails>(sessionQueryKey(sessionId), (session) => (session ? {...session, title: summary.title, updatedAt: summary.updatedAt} : session));
-  queryClient.setQueriesData<AgentProjectSessionsListResult>({queryKey: listProjectSessionsQueryKey(projectPath)}, (result) => {
+  queryClient.setQueryData<SessionDetails>(sessionQueryKey(sessionId), (session) => (session ? {...session, title: summary.title, updatedAt: summary.updatedAt} : session));
+  queryClient.setQueriesData<ProjectSessionsListResult>({queryKey: listProjectSessionsQueryKey(projectPath)}, (result) => {
     if (!result) return result;
 
     const sessionExists = result.sessions.some((session) => session.id === sessionId);
@@ -110,9 +110,9 @@ function applySessionSummary(input: {projectPath: string; queryClient: QueryClie
 }
 
 /** Writes the latest canonical transcript into React Query. */
-function applyDoneTurns(input: {queryClient: QueryClient; sessionId: string; turns: readonly AgentSessionTurn[]}): void {
+function applyDoneTurns(input: {queryClient: QueryClient; sessionId: string; turns: readonly SessionTurn[]}): void {
   const {queryClient, sessionId, turns} = input;
-  queryClient.setQueryData<AgentSessionDetails>(sessionQueryKey(sessionId), (session) => (session ? {...session, turns} : session));
+  queryClient.setQueryData<SessionDetails>(sessionQueryKey(sessionId), (session) => (session ? {...session, turns} : session));
 }
 
 export const useSessionStreamStore = create<SessionStreamStoreState>()((set, get) => {
@@ -154,7 +154,7 @@ export const useSessionStreamStore = create<SessionStreamStoreState>()((set, get
   };
 
   /** Applies server stream events to both transient stream state and cached session data. */
-  const handleStreamEvent = (input: {event: AgentSessionStreamEvent; projectPath: string; queryClient: QueryClient; sessionId: string; streamId: string}): void => {
+  const handleStreamEvent = (input: {event: SessionStreamEvent; projectPath: string; queryClient: QueryClient; sessionId: string; streamId: string}): void => {
     const {event, projectPath, queryClient, sessionId, streamId} = input;
 
     switch (event.type) {

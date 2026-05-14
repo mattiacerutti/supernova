@@ -1,6 +1,6 @@
 import {Schema} from "effect";
 
-export const AgentProviderLoginStatus = Schema.Union([
+export const ProviderLoginStatus = Schema.Union([
   Schema.Literal("pending"),
   Schema.Literal("waiting_input"),
   Schema.Literal("authenticating"),
@@ -9,13 +9,13 @@ export const AgentProviderLoginStatus = Schema.Union([
   Schema.Literal("cancelled"),
 ]);
 
-export const AgentProviderLoginInputKind = Schema.Union([Schema.Literal("prompt"), Schema.Literal("manual_code")]);
+export const ProviderLoginInputKind = Schema.Union([Schema.Literal("prompt"), Schema.Literal("manual_code")]);
 
-export const AgentProviderLoginSession = Schema.Struct({
+export const ProviderLoginSession = Schema.Struct({
   allowEmptyInput: Schema.optional(Schema.Boolean),
   authUrl: Schema.optional(Schema.String),
   error: Schema.optional(Schema.String),
-  inputKind: Schema.optional(AgentProviderLoginInputKind),
+  inputKind: Schema.optional(ProviderLoginInputKind),
   instructions: Schema.optional(Schema.String),
   loginSessionId: Schema.String,
   placeholder: Schema.optional(Schema.String),
@@ -23,9 +23,9 @@ export const AgentProviderLoginSession = Schema.Struct({
   prompt: Schema.optional(Schema.String),
   providerId: Schema.String,
   providerName: Schema.String,
-  status: AgentProviderLoginStatus,
+  status: ProviderLoginStatus,
 });
 
-export type AgentProviderLoginStatus = typeof AgentProviderLoginStatus.Type;
-export type AgentProviderLoginInputKind = typeof AgentProviderLoginInputKind.Type;
-export type AgentProviderLoginSession = typeof AgentProviderLoginSession.Type;
+export type ProviderLoginStatus = typeof ProviderLoginStatus.Type;
+export type ProviderLoginInputKind = typeof ProviderLoginInputKind.Type;
+export type ProviderLoginSession = typeof ProviderLoginSession.Type;

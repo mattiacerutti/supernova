@@ -1,10 +1,10 @@
-import type {AgentProvider} from "@pi-desktop/contracts/providers/schemas";
+import type {Provider} from "@pi-desktop/contracts/providers/schemas";
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import {cn} from "@/lib/cn";
 import {useState} from "react";
 
-function getProviderSourceLabel(provider: AgentProvider): string | undefined {
+function getProviderSourceLabel(provider: Provider): string | undefined {
   if (!provider.connected) return undefined;
   if (provider.source === "stored") return "Connected";
   if (provider.sourceLabel) return provider.sourceLabel;
@@ -14,10 +14,10 @@ function getProviderSourceLabel(provider: AgentProvider): string | undefined {
 }
 
 interface ProviderRowProps {
-  provider: AgentProvider;
+  provider: Provider;
   isFirst: boolean;
-  onConnect: (provider: AgentProvider) => void;
-  onDisconnect: (provider: AgentProvider) => Promise<void>;
+  onConnect: (provider: Provider) => void;
+  onDisconnect: (provider: Provider) => Promise<void>;
 }
 
 export default function ProviderRow(props: ProviderRowProps) {
