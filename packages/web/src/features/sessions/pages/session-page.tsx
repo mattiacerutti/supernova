@@ -167,7 +167,15 @@ function SessionConversation(props: SessionConversationProps) {
           </SessionComposer.Toolbar>
         </SessionComposer.Root>
       }
-      timeline={<SessionTimeline isStreaming={isStreaming} items={stream.renderItems} listRef={stream.listRef} streamError={stream.streamError} />}
+      timeline={
+        <SessionTimeline
+          isStreaming={isStreaming}
+          items={stream.committedRenderItems}
+          listRef={stream.listRef}
+          liveItems={stream.liveRenderItems}
+          streamError={stream.streamError}
+        />
+      }
       title={<SessionTitleText className="block truncate" title={session.title} />}
     />
   );

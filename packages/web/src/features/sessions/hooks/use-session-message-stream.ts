@@ -9,8 +9,9 @@ import type {SessionRenderItem} from "@/features/sessions/types/session-render-i
 import {useAgentRpcClient} from "@/rpc/use-agent-rpc-client";
 
 interface UseSessionMessageStreamResult {
-  renderItems: readonly SessionRenderItem[];
+  committedRenderItems: readonly SessionRenderItem[];
   listRef: React.RefObject<LegendListRef | null>;
+  liveRenderItems: readonly SessionRenderItem[];
   stopStreaming: () => void;
   streamError: string | null;
   streamStatus: SessionStreamStatus;
@@ -38,7 +39,8 @@ export function useSessionMessageStream(input: UseSessionMessageStreamInput): Us
   const isStreaming = streamStatus !== "idle";
   const baseTurns = stream?.turns ?? sessionTurns;
   const streamTurn = stream?.turn ?? null;
-  const renderItems = [...turnsToRenderItems(baseTurns, false), ...(streamTurn ? turnsToRenderItems([streamTurn], isStreaming) : [])];
+  const committedRenderItems = turnsToRenderItems(baseTurns, false);
+  const liveRenderItems = streamTurn ? turnsToRenderItems([streamTurn], isStreaming) : [];
 
   const submitMessage = (message: string, attachments: readonly AgentSessionAttachment[]): void => {
     if (isStreaming) return;
@@ -60,8 +62,9 @@ export function useSessionMessageStream(input: UseSessionMessageStreamInput): Us
   };
 
   return {
-    renderItems,
+    committedRenderItems,
     listRef: messagesListRef,
+    liveRenderItems,
     stopStreaming,
     streamError: stream?.error ?? null,
     streamStatus,
