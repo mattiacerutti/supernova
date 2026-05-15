@@ -225,6 +225,27 @@ describe("sendSessionMessage", () => {
     expect(harness.sendCustomMessage).not.toHaveBeenCalled();
   });
 
+  it("persists selected user message content parts without changing the Pi prompt", async () => {
+    const harness = makePiSessionsHarness();
+    const contentParts = [
+      {text: "Read ", type: "text" as const},
+      {id: "part-1", kind: "file" as const, title: "file.ts", type: "reference" as const, value: "@src/file.ts"},
+    ];
+
+    const events = await Effect.runPromise(
+      harness.sendMessage({
+        contentParts,
+        message: "Read @src/file.ts",
+        model: {id: "claude-sonnet", providerId: "anthropic"},
+        sessionId: "session-1",
+      })
+    );
+
+    expect(harness.promptCalls[0]).toEqual({message: "Read @src/file.ts", options: undefined});
+    expect(harness.appendCustomEntry).toHaveBeenCalledWith("pi-desktop.user-message-content-parts", {contentParts});
+    expect(events.at(-1)).toMatchObject({turns: [{userMessage: {content: "Read @src/file.ts", contentParts}}], type: "done"});
+  });
+
   it("sends text attachments through hidden custom messages without mutating user text", async () => {
     const harness = makePiSessionsHarness({
       prompt: async (message, context) => {

@@ -6,6 +6,7 @@ import type {
   SessionDetails,
   SessionSummary,
   SessionTurn,
+  SessionUserMessageContentPart,
   SessionUserMessage,
 } from "@pi-desktop/contracts/sessions/schemas";
 import type {ProjectSessionsListResult} from "@pi-desktop/contracts/projects/procedures";
@@ -37,6 +38,7 @@ interface SessionStreamEntry extends SessionStreamState {
 
 interface StartSessionStreamInput {
   readonly attachments: readonly SessionAttachment[];
+  readonly contentParts: readonly SessionUserMessageContentPart[];
   readonly message: string;
   readonly model: ModelReference;
   readonly projectPath: string;
@@ -73,10 +75,21 @@ function attachmentMetadata(attachments: readonly SessionAttachment[]): SessionA
  * Creates an optimistic local turn immediately so the user message appears before
  * the server emits the canonical turn snapshot.
  */
-function createInitialStreamTurn(input: {attachments: readonly SessionAttachment[]; message: string; model: ModelReference}): SessionTurn {
+function createInitialStreamTurn(input: {
+  attachments: readonly SessionAttachment[];
+  contentParts: readonly SessionUserMessageContentPart[];
+  message: string;
+  model: ModelReference;
+}): SessionTurn {
   const timestamp = new Date().toISOString();
 
-  const localMessage: SessionUserMessage = {attachments: attachmentMetadata(input.attachments), content: input.message, id: `msg_${crypto.randomUUID()}`, timestamp};
+  const localMessage: SessionUserMessage = {
+    attachments: attachmentMetadata(input.attachments),
+    content: input.message,
+    contentParts: input.contentParts.length > 0 ? input.contentParts : undefined,
+    id: `msg_${crypto.randomUUID()}`,
+    timestamp,
+  };
 
   return {
     events: [],
@@ -188,12 +201,12 @@ export const useSessionStreamStore = create<SessionStreamStoreState>()((set, get
   return {
     streams: {},
     startStream: (input) => {
-      const {attachments, message, model, projectPath, queryClient, rpcClient, sessionId, sessionTurns} = input;
+      const {attachments, contentParts, message, model, projectPath, queryClient, rpcClient, sessionId, sessionTurns} = input;
       const current = get().streams[sessionId];
       if (current?.status === "streaming" || current?.status === "stopping") return;
 
       const streamId = createStreamId();
-      const turn = createInitialStreamTurn({attachments, message, model});
+      const turn = createInitialStreamTurn({attachments, contentParts, message, model});
 
       // Optimistically append the user's message before the RPC stream has fully
       // initialized. The next `ready` event will replace `turns` with runtime data.
@@ -208,7 +221,7 @@ export const useSessionStreamStore = create<SessionStreamStoreState>()((set, get
       // transcript snapshots; Zustand owns the transient live turn and fiber.
       void rpcClient
         .fork((rpc) =>
-          rpc.sendSessionMessage({attachments, message, model, sessionId}).pipe(
+          rpc.sendSessionMessage({attachments, contentParts, message, model, sessionId}).pipe(
             Stream.runForEach((event) => Effect.sync(() => handleStreamEvent({event, projectPath, queryClient, sessionId, streamId}))),
             Effect.catch((cause: unknown) => Effect.sync(() => failStream(sessionId, streamId, cause))),
             Effect.ensuring(Effect.sync(() => finishStream(sessionId, streamId, queryClient)))

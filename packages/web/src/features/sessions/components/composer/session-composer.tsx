@@ -1,21 +1,40 @@
-import type {SessionAttachment} from "@pi-desktop/contracts/sessions/schemas";
-import type {ChangeEvent, ClipboardEvent, KeyboardEvent, ReactNode} from "react";
+import type {SessionAttachment, SessionUserMessageContentPart} from "@pi-desktop/contracts/sessions/schemas";
+import Document from "@tiptap/extension-document";
+import HardBreak from "@tiptap/extension-hard-break";
+import History from "@tiptap/extension-history";
+import Paragraph from "@tiptap/extension-paragraph";
+import Text from "@tiptap/extension-text";
+import {useEditor} from "@tiptap/react";
+import type {ChangeEvent, ClipboardEvent, ReactNode} from "react";
 import {createContext, useContext, useRef, useState} from "react";
 import Icon from "@/components/ui/icon";
 import IconButton from "@/components/ui/icon-button";
 import ComposerAttachmentPreview from "@/features/sessions/components/attachments/composer-attachment-preview";
+import ComposerEditor from "@/features/sessions/components/composer/editor/composer-editor";
+import {editorToContentParts, textFromComposerContentParts, trimComposerContentParts} from "@/features/sessions/lib/composer/composer-content-parts";
 import type {ComposerAttachmentsController} from "@/features/sessions/hooks/use-composer-attachments";
 import {SESSION_ATTACHMENT_ACCEPT} from "@/features/sessions/lib/attachments/session-attachments";
+import type {ComposerSuggestionMatch} from "@/features/sessions/types/composer-suggestion";
+import {cn} from "@/lib/cn";
+import {createSuggestionExtension} from "@/features/sessions/lib/composer/composer-suggestions";
+import {Node} from "@tiptap/core";
+import {ReactNodeViewRenderer} from "@tiptap/react";
+import ComposerReference from "@/features/sessions/components/composer/editor/composer-reference";
+
+type ComposerClipboardEvent = ClipboardEvent<HTMLElement> | globalThis.ClipboardEvent;
 
 interface SessionComposerContextValue {
   readonly attachmentDisabled: boolean;
   readonly attachments: ComposerAttachmentsController;
   readonly canInterrupt: boolean;
   readonly canSubmit: boolean;
+  readonly suggestionMatch: ComposerSuggestionMatch | null;
   readonly draft: string;
+  readonly editor: ReturnType<typeof useEditor>;
   readonly inputDisabled: boolean;
   readonly isStreaming: boolean;
   readonly onInterrupt?: () => void;
+  readonly setSuggestionMatch: (match: ComposerSuggestionMatch | null) => void;
   readonly setDraft: (draft: string) => void;
   readonly streamStatus: "idle" | "streaming" | "stopping";
   readonly submit: () => void;
@@ -34,11 +53,14 @@ function useSessionComposerContext(): SessionComposerContextValue {
 // Helpers
 // -----------------------------------------------------------------------------
 
-function clipboardFiles(event: ClipboardEvent<HTMLTextAreaElement>): File[] {
-  const files = Array.from(event.clipboardData.files);
+function clipboardFiles(event: ComposerClipboardEvent): File[] {
+  const clipboardData = event.clipboardData;
+  if (!clipboardData) return [];
+
+  const files = Array.from(clipboardData.files);
   if (files.length > 0) return files;
 
-  return Array.from(event.clipboardData.items).flatMap((item) => {
+  return Array.from(clipboardData.items).flatMap((item) => {
     if (item.kind !== "file") return [];
 
     const file = item.getAsFile();
@@ -50,18 +72,49 @@ function clipboardFiles(event: ClipboardEvent<HTMLTextAreaElement>): File[] {
 // Root
 // -----------------------------------------------------------------------------
 
+// TipTap node for message content references (e.g. files, skills)
+const ComposerReferenceNode = Node.create({
+  addAttributes() {
+    return {
+      id: {default: ""},
+      kind: {default: ""},
+      subtitle: {default: undefined},
+      title: {default: ""},
+      value: {default: ""},
+    };
+  },
+  addNodeView() {
+    return ReactNodeViewRenderer(ComposerReference);
+  },
+  atom: true,
+  group: "inline",
+  inline: true,
+  name: "composerReference",
+  parseHTML() {
+    return [{tag: "span[data-composer-reference]"}];
+  },
+  renderHTML({HTMLAttributes}) {
+    return ["span", {"data-composer-reference": "", ...HTMLAttributes}];
+  },
+  renderText({node}) {
+    return String(node.attrs.value ?? "");
+  },
+  selectable: false,
+});
+
 interface SessionComposerRootProps {
   readonly attachments: ComposerAttachmentsController;
   readonly children: ReactNode;
   readonly disabled: boolean;
   readonly onInterrupt?: () => void;
-  readonly onSubmit: (message: string, attachments: readonly SessionAttachment[]) => void;
+  readonly onSubmit: (message: string, attachments: readonly SessionAttachment[], contentParts: readonly SessionUserMessageContentPart[]) => void;
   readonly streamStatus?: "idle" | "streaming" | "stopping";
 }
 
 function SessionComposerRoot(props: SessionComposerRootProps) {
   const {attachments, children, disabled, onInterrupt, onSubmit, streamStatus = "idle"} = props;
   const [draft, setDraft] = useState("");
+  const [suggestionMatch, setSuggestionMatch] = useState<ComposerSuggestionMatch | null>(null);
 
   const isStreaming = streamStatus !== "idle";
   const inputDisabled = disabled || isStreaming;
@@ -69,20 +122,58 @@ function SessionComposerRoot(props: SessionComposerRootProps) {
   const canInterrupt = streamStatus === "streaming";
   const attachmentDisabled = inputDisabled || attachments.isProcessing;
 
+  const editor = useEditor(
+    {
+      editable: !inputDisabled,
+      editorProps: {
+        attributes: {
+          class: cn(
+            "max-h-48 min-h-10 w-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent p-1 text-sm leading-5 text-neutral-200 outline-none",
+            inputDisabled && "cursor-default opacity-60"
+          ),
+        },
+      },
+      extensions: [Document, Paragraph, Text, HardBreak, History, ComposerReferenceNode, createSuggestionExtension(setSuggestionMatch)],
+      onUpdate: ({editor: currentEditor}) => {
+        setDraft(currentEditor.getText());
+      },
+    },
+    [inputDisabled]
+  );
+
   const submit = (): void => {
     if (!canSubmit) return;
 
-    onSubmit(draft.trim(), attachments.attachments);
+    const trimmedContentParts = trimComposerContentParts(editor ? editorToContentParts(editor) : []);
+    const message = textFromComposerContentParts(trimmedContentParts) || draft.trim();
+    const contentParts = trimmedContentParts.some((part) => part.type === "reference") ? trimmedContentParts : [];
+    onSubmit(message, attachments.attachments, contentParts);
+    editor?.commands.clearContent();
     setDraft("");
     attachments.clear();
   };
 
   return (
     <SessionComposerContext.Provider
-      value={{attachmentDisabled, attachments, canInterrupt, canSubmit, draft, inputDisabled, isStreaming, onInterrupt, setDraft, streamStatus, submit}}
+      value={{
+        attachmentDisabled,
+        attachments,
+        canInterrupt,
+        canSubmit,
+        suggestionMatch,
+        draft,
+        editor,
+        inputDisabled,
+        isStreaming,
+        onInterrupt,
+        setSuggestionMatch,
+        setDraft,
+        streamStatus,
+        submit,
+      }}
     >
       <div className="px-4 pb-4 md:px-6">
-        <div className="mx-auto max-w-3xl rounded-3xl corner-superellipse/1.3 bg-[#2b2b2b] px-3 py-2 ring-1 ring-white/6 shadow-md">{children}</div>
+        <div className="relative mx-auto max-w-3xl rounded-3xl corner-superellipse/1.3 bg-[#2b2b2b] px-3 py-2 ring-1 ring-white/6 shadow-md">{children}</div>
       </div>
     </SessionComposerContext.Provider>
   );
@@ -120,15 +211,9 @@ interface SessionComposerInputProps {
 
 function SessionComposerInput(props: SessionComposerInputProps) {
   const {placeholder = "Ask for follow-up changes"} = props;
-  const {attachmentDisabled, attachments, draft, inputDisabled, setDraft, submit} = useSessionComposerContext();
+  const {attachmentDisabled, attachments, draft, editor, setSuggestionMatch, submit, suggestionMatch} = useSessionComposerContext();
 
-  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
-    if (event.key !== "Enter" || event.shiftKey) return;
-    event.preventDefault();
-    submit();
-  };
-
-  const handlePaste = (event: ClipboardEvent<HTMLTextAreaElement>): void => {
+  const handlePaste = (event: ComposerClipboardEvent): void => {
     const files = clipboardFiles(event);
     if (files.length === 0) return;
 
@@ -139,16 +224,17 @@ function SessionComposerInput(props: SessionComposerInputProps) {
   };
 
   return (
-    <textarea
-      className="max-h-48 min-h-10 w-full resize-none overflow-y-auto bg-transparent p-1 text-sm text-neutral-200 outline-none field-sizing-content placeholder:text-md placeholder:font-light placeholder:text-white/25"
-      disabled={inputDisabled}
-      onChange={(event) => setDraft(event.target.value)}
-      onKeyDown={handleKeyDown}
-      onPaste={handlePaste}
-      placeholder={placeholder}
-      rows={1}
-      value={draft}
-    />
+    <div className="relative -mx-3 px-3">
+      <ComposerEditor
+        suggestionMatch={suggestionMatch}
+        editor={editor}
+        onSuggestionMatchChange={setSuggestionMatch}
+        onPaste={handlePaste}
+        onSubmit={submit}
+        placeholder={placeholder}
+        value={draft}
+      />
+    </div>
   );
 }
 

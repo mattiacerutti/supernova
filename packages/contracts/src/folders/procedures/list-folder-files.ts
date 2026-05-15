@@ -1,0 +1,19 @@
+import {Schema} from "effect";
+import {FolderFile} from "@pi-desktop/contracts/folders/schemas";
+
+export const FolderFilesListPayload = Schema.Struct({
+  query: Schema.String,
+});
+
+export const FolderFilesListResult = Schema.Struct({
+  items: Schema.Array(FolderFile),
+  query: Schema.String,
+});
+
+export class FolderFilesListError extends Schema.TaggedErrorClass<FolderFilesListError>()("FolderFilesListError", {
+  cause: Schema.optional(Schema.Defect),
+  message: Schema.String,
+}) {}
+
+export type FolderFilesListPayload = typeof FolderFilesListPayload.Type;
+export type FolderFilesListResult = typeof FolderFilesListResult.Type;

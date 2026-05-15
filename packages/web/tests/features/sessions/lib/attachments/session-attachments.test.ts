@@ -15,14 +15,14 @@ describe("session attachments", () => {
     const attachment = await fileToSessionAttachment(testFile({content: ["hello"], name: "notes.md", type: "text/markdown"}));
 
     expect(attachment).toMatchObject({contentBase64: "aGVsbG8=", mime: "text/plain", name: "notes.md", size: 5});
-    expect(attachment.id).toContain("notes.md-5-1-");
+    expect(attachment.id).toMatch(/^att_[0-9a-f-]+$/);
   });
 
   test("creates an image attachment payload with image MIME and original bytes", async () => {
     const attachment = await fileToSessionAttachment(testFile({content: [new Uint8Array([1, 2, 3])], name: "image.png", type: "image/png"}));
 
     expect(attachment).toMatchObject({contentBase64: "AQID", mime: "image/png", name: "image.png", size: 3});
-    expect(attachment.id).toContain("image.png-3-1-");
+    expect(attachment.id).toMatch(/^att_[0-9a-f-]+$/);
   });
 
   test("rejects unsupported binary files", async () => {

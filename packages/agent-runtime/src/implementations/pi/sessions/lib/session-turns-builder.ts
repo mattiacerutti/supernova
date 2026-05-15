@@ -6,6 +6,7 @@ import type {
   SessionTurn,
   SessionTurnEvent,
   SessionUserMessage,
+  SessionUserMessageContentPart,
 } from "@pi-desktop/contracts/sessions/schemas";
 import {sessionTurn} from "@pi-desktop/agent-runtime/implementations/shared/session-turns";
 import {generateStableId} from "@pi-desktop/agent-runtime/implementations/shared/id-generator";
@@ -13,6 +14,7 @@ import {ATTACHMENTS_CUSTOM_TYPE} from "@pi-desktop/agent-runtime/implementations
 import type {SessionAttachmentMetadata} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/attachments/session-attachments";
 import {piContentToText, piUserAttachments} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/turns/message-content";
 import {piToolSummary} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/turns/tool-events";
+import {USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE, validContentPartsForMessage} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/user-message-content-parts";
 
 function isMessageEntry(entry: SessionEntry): entry is SessionMessageEntry {
   return entry.type === "message";
@@ -20,6 +22,10 @@ function isMessageEntry(entry: SessionEntry): entry is SessionMessageEntry {
 
 function isAttachmentsEntry(entry: SessionEntry): entry is CustomEntry<{attachments: SessionAttachmentMetadata[]}> {
   return entry.type === "custom" && entry.customType === ATTACHMENTS_CUSTOM_TYPE;
+}
+
+function isContentPartsEntry(entry: SessionEntry): entry is CustomEntry<{contentParts: SessionUserMessageContentPart[]}> {
+  return entry.type === "custom" && entry.customType === USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE;
 }
 
 type PiMessageEntry<Role extends AgentSession["messages"][number]["role"]> = SessionMessageEntry & {message: Extract<AgentSession["messages"][number], {role: Role}>};
@@ -128,6 +134,8 @@ class PiSessionTurnBuilder {
   private readonly fallbackModel: ModelReference;
   private readonly turns: SessionTurn[] = [];
   private readonly attachmentsByParent = new Map<string, readonly SessionAttachmentMetadata[]>();
+  private readonly contentPartsByParent = new Map<string, readonly SessionUserMessageContentPart[]>();
+  private readonly parentByEntryId = new Map<string, string | null>();
   private currentTurn: PiTurnDraft | undefined;
 
   public constructor(fallbackModel: ModelReference) {
@@ -135,11 +143,18 @@ class PiSessionTurnBuilder {
   }
 
   public addEntry(entry: SessionEntry): boolean {
+    this.parentByEntryId.set(entry.id, entry.parentId);
+
     if (isAttachmentsEntry(entry)) {
       this.attachmentsByParent.set(
         entry.id,
         [...(entry.data?.attachments ?? [])].sort((a, b) => a.order - b.order)
       );
+      return true;
+    }
+
+    if (isContentPartsEntry(entry)) {
+      this.contentPartsByParent.set(entry.id, entry.data?.contentParts ?? []);
       return true;
     }
 
@@ -164,14 +179,26 @@ class PiSessionTurnBuilder {
   private startUserTurn(entry: PiMessageEntry<"user">): boolean {
     const content = piContentToText(entry.message.content);
 
-    const attachments = entry.parentId ? this.attachmentsByParent.get(entry.parentId) : undefined;
+    const attachments = this.findParentMetadata(entry.parentId, this.attachmentsByParent);
+    const contentParts = validContentPartsForMessage(content, this.findParentMetadata(entry.parentId, this.contentPartsByParent));
     const normalizedAttachments = piUserAttachments(entry.message.content, attachments);
 
     if (content.length === 0 && !normalizedAttachments?.length) return false;
 
     this.completeCurrentTurn();
-    this.currentTurn = new PiTurnDraft({attachments: normalizedAttachments, content, id: entry.id, timestamp: entry.timestamp});
+    this.currentTurn = new PiTurnDraft({attachments: normalizedAttachments, content, contentParts, id: entry.id, timestamp: entry.timestamp});
     return true;
+  }
+
+  private findParentMetadata<T>(parentId: string | null, metadataByParent: ReadonlyMap<string, readonly T[]>): readonly T[] | undefined {
+    let currentParentId = parentId;
+    while (currentParentId) {
+      const metadata = metadataByParent.get(currentParentId);
+      if (metadata) return metadata;
+      currentParentId = this.parentByEntryId.get(currentParentId) ?? null;
+    }
+
+    return undefined;
   }
 
   private completeCurrentTurn(): void {

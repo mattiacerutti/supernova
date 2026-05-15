@@ -15,6 +15,7 @@ import {generateSessionTitle} from "@pi-desktop/agent-runtime/implementations/pi
 import {createLiveBranchEntries} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/turns/live-branch-entries";
 import {buildPiSessionTurns} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-turns-builder";
 import {toPiThinkingLevel} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/models/thinking-levels";
+import {USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE, validContentPartsForMessage} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/user-message-content-parts";
 
 type PiAgentMessage = AgentSession["messages"][number];
 type PiSessionManager = ReturnType<PiSdkServiceShape["SessionManager"]["open"]>;
@@ -98,7 +99,7 @@ class SendSessionMessageRunner {
       const context = await this.preparePromptContext(openedSession);
 
       this.emit({turns: buildPiSessionTurns(context.baseBranch, this.input.model), type: "ready"});
-      await this.appendAttachmentContext(context);
+      await this.appendUserMessageContext(context);
       this.subscribeToLiveUpdates(context);
       await this.promptAndEmitFinalTurns(context);
     } catch (cause) {
@@ -164,9 +165,14 @@ class SendSessionMessageRunner {
     };
   }
 
-  private async appendAttachmentContext(context: PromptContext): Promise<void> {
+  private async appendUserMessageContext(context: PromptContext): Promise<void> {
     if (context.attachments.metadata.length > 0) {
       context.sessionManager.appendCustomEntry(ATTACHMENTS_CUSTOM_TYPE, {attachments: context.attachments.metadata});
+    }
+
+    const contentParts = validContentPartsForMessage(this.input.message, this.input.contentParts);
+    if (contentParts) {
+      context.sessionManager.appendCustomEntry(USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE, {contentParts});
     }
 
     if (!context.attachments.textContent) return;
@@ -222,7 +228,13 @@ class SendSessionMessageRunner {
   }
 
   private liveBranchEntries(context: PromptContext, messages: readonly PiAgentMessage[]): SessionEntry[] {
-    return createLiveBranchEntries({attachmentMetadata: {attachments: context.attachments.metadata}, messages, parentId: context.baseParentId, sessionId: context.sessionInfo.id});
+    return createLiveBranchEntries({
+      attachmentMetadata: {attachments: context.attachments.metadata},
+      contentPartsMetadata: {contentParts: validContentPartsForMessage(this.input.message, this.input.contentParts) ?? []},
+      messages,
+      parentId: context.baseParentId,
+      sessionId: context.sessionInfo.id,
+    });
   }
 
   private titleSummary(context: PromptContext): SessionSummary | undefined {

@@ -1,8 +1,9 @@
 import {Schema} from "effect";
-import {ModelReference, SessionAttachment, SessionSummary, SessionTurn} from "../schemas";
+import {ModelReference, SessionAttachment, SessionSummary, SessionTurn, SessionUserMessageContentPart} from "../schemas";
 
 export const SessionMessageSendPayload = Schema.Struct({
   attachments: Schema.Array(SessionAttachment),
+  contentParts: Schema.optional(Schema.Array(SessionUserMessageContentPart)),
   message: Schema.String,
   model: ModelReference,
   sessionId: Schema.String,

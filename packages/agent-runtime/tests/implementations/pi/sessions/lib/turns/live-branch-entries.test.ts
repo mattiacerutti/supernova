@@ -59,4 +59,26 @@ describe("createLiveBranchEntries", () => {
       },
     ]);
   });
+
+  it("prepends selected user message content parts after attachment metadata", () => {
+    const userMessage = {content: [{text: "Read @src/file.ts", type: "text"}], role: "user", timestamp: 1} satisfies PiAgentMessage;
+    const contentParts = [
+      {text: "Read ", type: "text" as const},
+      {id: "part-1", kind: "file" as const, title: "file.ts", type: "reference" as const, value: "@src/file.ts"},
+    ];
+
+    const entries = createLiveBranchEntries({
+      attachmentMetadata: {attachments: [{id: "text-1", kind: "text", mime: "text/plain", name: "notes.txt", order: 0, size: 10}]},
+      contentPartsMetadata: {contentParts},
+      messages: [userMessage],
+      parentId: null,
+      sessionId: "session-1",
+    });
+
+    expect(entries).toMatchObject([
+      {customType: "pi-desktop.attachments", parentId: null, type: "custom"},
+      {customType: "pi-desktop.user-message-content-parts", data: {contentParts}, parentId: entries[0]?.id, type: "custom"},
+      {message: userMessage, parentId: entries[1]?.id, type: "message"},
+    ]);
+  });
 });

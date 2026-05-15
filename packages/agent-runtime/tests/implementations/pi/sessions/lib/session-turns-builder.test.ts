@@ -428,6 +428,68 @@ describe("buildPiSessionTurns", () => {
     ]);
   });
 
+  it("reconstructs selected reference content parts from branch entries", () => {
+    const entries: SessionEntry[] = [
+      {
+        customType: "pi-desktop.user-message-content-parts",
+        data: {
+          contentParts: [
+            {text: "Read ", type: "text"},
+            {id: "part-1", kind: "file", title: "file.ts", type: "reference", value: "@src/file.ts"},
+          ],
+        },
+        id: "content-parts-1",
+        parentId: null,
+        timestamp: "1970-01-01T00:00:00.001Z",
+        type: "custom",
+      },
+      {
+        id: "user-1",
+        message: {content: [{text: "Read @src/file.ts", type: "text"}], id: "user-message-1", role: "user", timestamp: 2} as AgentSession["messages"][number],
+        parentId: "content-parts-1",
+        timestamp: "1970-01-01T00:00:00.002Z",
+        type: "message",
+      },
+      {
+        id: "assistant-1",
+        message: {content: [{text: "Read it.", type: "text"}], id: "assistant-message-1", role: "assistant", timestamp: 3} as unknown as AgentSession["messages"][number],
+        parentId: "user-1",
+        timestamp: "1970-01-01T00:00:00.003Z",
+        type: "message",
+      },
+    ];
+
+    expect(buildPiSessionTurns(entries, model)[0]?.userMessage).toMatchObject({
+      content: "Read @src/file.ts",
+      contentParts: [
+        {text: "Read ", type: "text"},
+        {id: "part-1", kind: "file", title: "file.ts", type: "reference", value: "@src/file.ts"},
+      ],
+    });
+  });
+
+  it("ignores reference content parts that do not match user message text", () => {
+    const entries: SessionEntry[] = [
+      {
+        customType: "pi-desktop.user-message-content-parts",
+        data: {contentParts: [{id: "part-1", kind: "file", title: "file.ts", type: "reference", value: "@src/file.ts"}]},
+        id: "content-parts-1",
+        parentId: null,
+        timestamp: "1970-01-01T00:00:00.001Z",
+        type: "custom",
+      },
+      {
+        id: "user-1",
+        message: {content: [{text: "Read something else", type: "text"}], id: "user-message-1", role: "user", timestamp: 2} as AgentSession["messages"][number],
+        parentId: "content-parts-1",
+        timestamp: "1970-01-01T00:00:00.002Z",
+        type: "message",
+      },
+    ];
+
+    expect(buildPiSessionTurns(entries, model)[0]?.userMessage.contentParts).toBeUndefined();
+  });
+
   it("ignores assistant and tool result entries before the first user message", () => {
     const turns = buildPiSessionTurns(
       piEntries([

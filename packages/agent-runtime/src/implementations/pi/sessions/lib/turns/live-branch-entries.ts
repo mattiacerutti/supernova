@@ -1,12 +1,15 @@
 import type {AgentSession, SessionEntry} from "@mariozechner/pi-coding-agent";
 import {generateStableId} from "@pi-desktop/agent-runtime/implementations/shared/id-generator";
+import type {SessionUserMessageContentPart} from "@pi-desktop/contracts/sessions/schemas";
 import {ATTACHMENTS_CUSTOM_TYPE} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/attachments/session-attachments";
 import type {SessionAttachmentMetadata} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/attachments/session-attachments";
+import {USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/user-message-content-parts";
 
 type PiAgentMessage = AgentSession["messages"][number];
 
 export function createLiveBranchEntries(input: {
   attachmentMetadata?: {attachments: readonly SessionAttachmentMetadata[]};
+  contentPartsMetadata?: {contentParts: readonly SessionUserMessageContentPart[]};
   messages: readonly PiAgentMessage[];
   parentId: string | null;
   sessionId: string;
@@ -20,6 +23,19 @@ export function createLiveBranchEntries(input: {
     entries.push({
       customType: ATTACHMENTS_CUSTOM_TYPE,
       data: input.attachmentMetadata,
+      id,
+      parentId,
+      timestamp: new Date(input.messages[0]?.timestamp ?? Date.now()).toISOString(),
+      type: "custom",
+    });
+    parentId = id;
+  }
+
+  if (input.contentPartsMetadata?.contentParts.length) {
+    const id = generateStableId("live", [input.sessionId, input.parentId ?? "root", (nextId++).toString()]);
+    entries.push({
+      customType: USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE,
+      data: input.contentPartsMetadata,
       id,
       parentId,
       timestamp: new Date(input.messages[0]?.timestamp ?? Date.now()).toISOString(),

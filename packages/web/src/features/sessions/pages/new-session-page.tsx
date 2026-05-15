@@ -13,6 +13,7 @@ import {useModelPickerStore} from "@/features/sessions/stores/model-picker-store
 import {useSessionModelsStore} from "@/features/sessions/stores/session-models-store";
 import {useSessionStreamStore} from "@/features/sessions/stores/session-stream-store";
 import {useAgentRpcClient} from "@/rpc/use-agent-rpc-client";
+import type {SessionUserMessageContentPart} from "@pi-desktop/contracts/sessions/schemas";
 
 interface NewSessionPageProps {
   projectName: string;
@@ -67,7 +68,7 @@ export default function NewSessionPage(props: NewSessionPageProps) {
     setLastThinkingLevel(value);
   };
 
-  const handleSubmit = (message: string, attachments: typeof composerAttachments.attachments): void => {
+  const handleSubmit = (message: string, attachments: typeof composerAttachments.attachments, contentParts: readonly SessionUserMessageContentPart[]): void => {
     if (!selectedModel) return;
 
     createSessionMutation.mutate(
@@ -78,7 +79,7 @@ export default function NewSessionPage(props: NewSessionPageProps) {
           setSessionModel(session.id, modelReference);
           recordRecentModel(resolvedModelKey);
           setLastThinkingLevel(resolvedThinkingLevel);
-          startStream({attachments, message, model: modelReference, projectPath, queryClient, rpcClient, sessionId: session.id, sessionTurns: session.turns});
+          startStream({attachments, contentParts, message, model: modelReference, projectPath, queryClient, rpcClient, sessionId: session.id, sessionTurns: session.turns});
           void navigate({params: {sessionId: session.id}, to: "/session/$sessionId"});
         },
       }
