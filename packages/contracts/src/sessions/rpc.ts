@@ -3,6 +3,9 @@ import {
   SessionCreateError,
   SessionCreatePayload,
   SessionCreateResult,
+  SessionComposerSuggestionsListError,
+  SessionComposerSuggestionsListPayload,
+  SessionComposerSuggestionsListResult,
   SessionGetPayload,
   SessionGetResult,
   SessionLoadError,
@@ -31,10 +34,16 @@ export const SessionModelsListRpc = Rpc.make("listSessionModels", {
   success: SessionModelsListResult,
 });
 
+export const SessionComposerSuggestionsListRpc = Rpc.make("listSessionComposerSuggestions", {
+  error: SessionComposerSuggestionsListError,
+  payload: SessionComposerSuggestionsListPayload,
+  success: SessionComposerSuggestionsListResult,
+});
+
 export const SessionMessageSendRpc = Rpc.make("sendSessionMessage", {
   payload: SessionMessageSendPayload,
   stream: true,
   success: SessionStreamEvent,
 });
 
-export const SessionRpcs = [SessionGetRpc, SessionCreateRpc, SessionModelsListRpc, SessionMessageSendRpc] as const;
+export const SessionRpcs = [SessionGetRpc, SessionCreateRpc, SessionModelsListRpc, SessionComposerSuggestionsListRpc, SessionMessageSendRpc] as const;

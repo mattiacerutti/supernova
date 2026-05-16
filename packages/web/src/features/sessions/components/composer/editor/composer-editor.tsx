@@ -53,13 +53,14 @@ interface ComposerEditorProps {
   readonly onPaste: (event: ClipboardEvent<HTMLElement> | globalThis.ClipboardEvent) => void;
   readonly onSubmit: () => void;
   readonly placeholder: string;
+  readonly projectPath: string;
   readonly value: string;
 }
 
 export default function ComposerEditor(props: ComposerEditorProps) {
-  const {className, editor, onPaste, onSubmit, onSuggestionMatchChange, placeholder, suggestionMatch, value} = props;
+  const {className, editor, onPaste, onSubmit, onSuggestionMatchChange, placeholder, projectPath, suggestionMatch, value} = props;
 
-  const suggestionQuery = useComposerSuggestions(suggestionMatch);
+  const suggestionQuery = useComposerSuggestions(projectPath, suggestionMatch);
 
   const suggestionOpen = Boolean(suggestionMatch);
 

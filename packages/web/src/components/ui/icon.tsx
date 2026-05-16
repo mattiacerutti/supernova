@@ -37,6 +37,7 @@ export type IconName =
   | "server"
   | "settings"
   | "shield"
+  | "skill"
   | "star"
   | "star-filled"
   | "stop"
@@ -85,6 +86,7 @@ const icons: Record<IconName, string> = {
   server: "lucide:server",
   settings: "lucide:settings",
   shield: "lucide:shield",
+  skill: "mingcute:tool-line",
   star: "lucide:star",
   "star-filled": "iconoir:star-solid",
   stop: "material-symbols:stop-rounded",

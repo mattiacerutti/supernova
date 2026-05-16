@@ -34,10 +34,11 @@ function contentPartsMatchMessage(message: SessionUserMessage): boolean {
 
 function ReferenceContentPart(props: {part: Extract<NonNullable<SessionUserMessage["contentParts"]>[number], {type: "reference"}>}) {
   const {part} = props;
+  const iconName = part.kind === "skill" ? "skill" : part.value.endsWith("/") ? "folder" : "file";
 
   return (
-    <span className="mx-0.5 inline whitespace-nowrap align-baseline text-sky-300">
-      {part.kind === "file" && <Icon className="mr-1 inline-block size-[1em] align-[-0.13em] text-sky-300" name="file" size="xs" />}
+    <span className="mx-1 inline-flex items-baseline gap-1 whitespace-nowrap align-baseline leading-[inherit] text-sky-300">
+      <Icon className="relative top-px size-[1em] text-sky-300" name={iconName} size="xs" />
       <span>{part.title}</span>
     </span>
   );

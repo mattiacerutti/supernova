@@ -5,10 +5,17 @@ import Icon from "@/components/ui/icon";
 export default function ComposerReference(props: NodeViewProps) {
   const title = String(props.node.attrs.title ?? "");
   const kind = String(props.node.attrs.kind ?? "");
+  const value = String(props.node.attrs.value ?? "");
+  const iconName = kind === "skill" ? "skill" : value.endsWith("/") ? "folder" : "file";
 
   return (
-    <NodeViewWrapper as="span" className="mx-0.5 inline select-none whitespace-nowrap align-baseline leading-[inherit] text-sky-400" contentEditable={false} spellCheck={false}>
-      {kind === "file" && <Icon className="mr-1 inline-block size-[1em] align-[-0.13em] text-sky-300" name="file" size="xs" />}
+    <NodeViewWrapper
+      as="span"
+      className="mx-1 inline-flex select-none items-baseline gap-1 whitespace-nowrap align-baseline leading-[inherit] text-sky-300"
+      contentEditable={false}
+      spellCheck={false}
+    >
+      <Icon className="relative top-px size-[1em] text-sky-300" name={iconName} size="xs" />
       <span>{title}</span>
     </NodeViewWrapper>
   );

@@ -3,6 +3,42 @@ import {Node} from "@tiptap/core";
 import type {ComposerSuggestionMatch, ComposerSuggestionTriggerKind} from "@/features/sessions/types/composer-suggestion";
 import {PluginKey} from "@tiptap/pm/state";
 import {Suggestion} from "@tiptap/suggestion";
+import type {SuggestionOptions} from "@tiptap/suggestion";
+
+function isTokenBoundary(value: string | undefined): boolean {
+  return value === undefined || /\s/.test(value);
+}
+
+export function findComposerSuggestionMatch(input: {char: string; startOfLine: boolean}): NonNullable<SuggestionOptions["findSuggestionMatch"]> {
+  return ({$position}) => {
+    const text = $position.parent.textBetween(0, $position.parent.content.size, "\n", "\n");
+    const cursor = $position.parentOffset;
+
+    let tokenStart = cursor;
+    while (tokenStart > 0 && !isTokenBoundary(text[tokenStart - 1])) {
+      tokenStart -= 1;
+    }
+
+    if (text[tokenStart] !== input.char) return null;
+    if (input.startOfLine && tokenStart !== 0) return null;
+    if (!input.startOfLine && tokenStart > 0 && ![" ", "\n"].includes(text[tokenStart - 1] ?? "")) return null;
+
+    let tokenEnd = cursor;
+    while (tokenEnd < text.length && !isTokenBoundary(text[tokenEnd])) {
+      tokenEnd += 1;
+    }
+
+    const query = text.slice(tokenStart + input.char.length, tokenEnd);
+    const from = $position.start() + tokenStart;
+    const to = $position.start() + tokenEnd;
+
+    return {
+      query,
+      range: {from, to},
+      text: text.slice(tokenStart, tokenEnd),
+    };
+  };
+}
 
 function createSuggestionPlugin(input: {
   char: string;
@@ -18,6 +54,7 @@ function createSuggestionPlugin(input: {
     allowedPrefixes: startOfLine ? null : [" ", "\n"],
     char,
     editor,
+    findSuggestionMatch: findComposerSuggestionMatch({char, startOfLine}),
     items: () => [],
     pluginKey: new PluginKey(pluginKey),
     render: () => ({

@@ -1,8 +1,16 @@
 import {Context, Effect} from "effect";
-import type {FolderCreateError, FolderSuggestionsListError, FolderCreateResult, FolderSuggestionsListResult} from "@pi-desktop/contracts/folders/procedures";
+import type {
+  FolderCreateError,
+  FolderCreateResult,
+  FolderFilesListError,
+  FolderFilesListResult,
+  FolderSuggestionsListError,
+  FolderSuggestionsListResult,
+} from "@pi-desktop/contracts/folders/procedures";
 
 export interface FoldersServiceShape {
   readonly create: (path: string) => Effect.Effect<FolderCreateResult, FolderCreateError>;
+  readonly listFiles: (projectPath: string, query: string) => Effect.Effect<FolderFilesListResult, FolderFilesListError>;
   readonly listSuggestions: (query: string) => Effect.Effect<FolderSuggestionsListResult, FolderSuggestionsListError>;
 }
 

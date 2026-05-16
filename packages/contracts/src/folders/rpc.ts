@@ -3,6 +3,9 @@ import {
   FolderCreateError,
   FolderCreatePayload,
   FolderCreateResult,
+  FolderFilesListError,
+  FolderFilesListPayload,
+  FolderFilesListResult,
   FolderSuggestionsListError,
   FolderSuggestionsListPayload,
   FolderSuggestionsListResult,
@@ -20,4 +23,10 @@ export const FolderSuggestionsListRpc = Rpc.make("listFolderSuggestions", {
   success: FolderSuggestionsListResult,
 });
 
-export const FolderRpcs = [FolderCreateRpc, FolderSuggestionsListRpc] as const;
+export const FolderFilesListRpc = Rpc.make("listFolderFiles", {
+  error: FolderFilesListError,
+  payload: FolderFilesListPayload,
+  success: FolderFilesListResult,
+});
+
+export const FolderRpcs = [FolderCreateRpc, FolderSuggestionsListRpc, FolderFilesListRpc] as const;

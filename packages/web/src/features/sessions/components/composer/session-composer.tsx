@@ -34,6 +34,7 @@ interface SessionComposerContextValue {
   readonly inputDisabled: boolean;
   readonly isStreaming: boolean;
   readonly onInterrupt?: () => void;
+  readonly projectPath: string;
   readonly setSuggestionMatch: (match: ComposerSuggestionMatch | null) => void;
   readonly setDraft: (draft: string) => void;
   readonly streamStatus: "idle" | "streaming" | "stopping";
@@ -108,11 +109,12 @@ interface SessionComposerRootProps {
   readonly disabled: boolean;
   readonly onInterrupt?: () => void;
   readonly onSubmit: (message: string, attachments: readonly SessionAttachment[], contentParts: readonly SessionUserMessageContentPart[]) => void;
+  readonly projectPath: string;
   readonly streamStatus?: "idle" | "streaming" | "stopping";
 }
 
 function SessionComposerRoot(props: SessionComposerRootProps) {
-  const {attachments, children, disabled, onInterrupt, onSubmit, streamStatus = "idle"} = props;
+  const {attachments, children, disabled, onInterrupt, onSubmit, projectPath, streamStatus = "idle"} = props;
   const [draft, setDraft] = useState("");
   const [suggestionMatch, setSuggestionMatch] = useState<ComposerSuggestionMatch | null>(null);
 
@@ -166,6 +168,7 @@ function SessionComposerRoot(props: SessionComposerRootProps) {
         inputDisabled,
         isStreaming,
         onInterrupt,
+        projectPath,
         setSuggestionMatch,
         setDraft,
         streamStatus,
@@ -211,7 +214,7 @@ interface SessionComposerInputProps {
 
 function SessionComposerInput(props: SessionComposerInputProps) {
   const {placeholder = "Ask for follow-up changes"} = props;
-  const {attachmentDisabled, attachments, draft, editor, setSuggestionMatch, submit, suggestionMatch} = useSessionComposerContext();
+  const {attachmentDisabled, attachments, draft, editor, projectPath, setSuggestionMatch, submit, suggestionMatch} = useSessionComposerContext();
 
   const handlePaste = (event: ComposerClipboardEvent): void => {
     const files = clipboardFiles(event);
@@ -232,6 +235,7 @@ function SessionComposerInput(props: SessionComposerInputProps) {
         onPaste={handlePaste}
         onSubmit={submit}
         placeholder={placeholder}
+        projectPath={projectPath}
         value={draft}
       />
     </div>

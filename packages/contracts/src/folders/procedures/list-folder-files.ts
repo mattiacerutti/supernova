@@ -2,6 +2,7 @@ import {Schema} from "effect";
 import {FolderFile} from "@pi-desktop/contracts/folders/schemas";
 
 export const FolderFilesListPayload = Schema.Struct({
+  projectPath: Schema.String,
   query: Schema.String,
 });
 

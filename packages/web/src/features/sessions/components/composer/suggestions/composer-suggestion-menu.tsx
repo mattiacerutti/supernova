@@ -42,7 +42,8 @@ function suggestionSections(items: readonly ComposerSuggestionItem[]): readonly 
 function SuggestionIcon(props: {readonly item: ComposerSuggestionItem}) {
   const {item} = props;
 
-  if (item.kind === "file") return <Icon className="shrink-0 text-neutral-500" name="file" size="xs" />;
+  if (item.kind === "file") return <Icon className="shrink-0 text-neutral-500" name={item.path.endsWith("/") ? "folder" : "file"} size="xs" />;
+  if (item.kind === "skill") return <Icon className="shrink-0 text-neutral-500" name="skill" size="xs" />;
 
   return <span className="w-3 shrink-0 text-center text-xs font-medium text-neutral-500">{item.kind.slice(0, 1).toUpperCase()}</span>;
 }
@@ -69,9 +70,9 @@ function ComposerSuggestionItemRow(props: ComposerSuggestionItemRowProps) {
         variant="bare"
       >
         <SuggestionIcon item={item} />
-        <span className="min-w-0 flex-1 truncate text-sm">
-          <span className="font-medium text-neutral-200">{item.title}</span>
-          {detail && <span className="pl-2 text-neutral-500">{detail}</span>}
+        <span className="flex min-w-0 flex-1 items-baseline gap-2 text-sm">
+          <span className="shrink-0 font-medium text-neutral-300">{item.title}</span>
+          {detail && <span className="min-w-0 flex-1 truncate text-neutral-500">{detail}</span>}
         </span>
       </Button>
     </div>
@@ -85,6 +86,8 @@ export default function ComposerSuggestionMenu(props: ComposerSuggestionMenuProp
   const [selectionSource, setSelectionSource] = useState<"keyboard" | "mouse">("keyboard");
   const items = query.data ?? [];
   const sections = suggestionSections(items);
+  const showLoadingPanel = open && query.isLoading;
+  const showSettledPanel = open && !query.isLoading && (query.isError || items.length > 0 || query.isSuccess);
   const highlightedIndex = items.length === 0 ? -1 : Math.min(activeSuggestionIndex, items.length - 1);
   const activeSuggestion = highlightedIndex >= 0 ? items[highlightedIndex] : undefined;
   const visibleHighlightIndex = hoveredSuggestionIndex ?? highlightedIndex;
@@ -125,15 +128,20 @@ export default function ComposerSuggestionMenu(props: ComposerSuggestionMenuProp
 
   return (
     <div className="relative" onKeyDownCapture={handleKeyDownCapture}>
-      {open && (
+      {showLoadingPanel && (
+        <div className="absolute -inset-x-3 bottom-full z-40 mb-4 opacity-100 delay-200 starting:opacity-0">
+          <div className="max-h-64 overflow-y-auto rounded-2xl border border-white/10 bg-neutral-800/95 p-1 text-neutral-200 backdrop-blur-3xl">
+            <p className="px-3 py-2 text-sm text-neutral-600">Loading suggestions...</p>
+          </div>
+        </div>
+      )}
+      {showSettledPanel && (
         <div className="absolute -inset-x-3 bottom-full z-40 mb-4">
           <div className="max-h-64 overflow-y-auto rounded-2xl border border-white/10 bg-neutral-800/95 p-1 text-neutral-200 backdrop-blur-3xl">
-            {query.isLoading && <p className="px-3 py-2 text-sm text-neutral-600">Loading suggestions...</p>}
             {query.isError && <p className="px-3 py-2 text-sm text-red-400">{query.error instanceof Error ? query.error.message : "Unable to load suggestions."}</p>}
-            {!query.isLoading && !query.isError && items.length === 0 && <p className="px-3 py-2 text-sm text-neutral-600">No items</p>}
+            {!query.isError && items.length === 0 && <p className="px-3 py-2 text-sm text-neutral-600">No items</p>}
 
-            {!query.isLoading &&
-              !query.isError &&
+            {!query.isError &&
               sections.map((section) => (
                 <div className="pb-1" key={section.title}>
                   <p className="px-3 pb-1 pt-2 text-xs font-medium text-neutral-600">{section.title}</p>

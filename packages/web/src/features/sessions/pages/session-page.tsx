@@ -138,6 +138,7 @@ function SessionConversation(props: SessionConversationProps) {
           disabled={composerDisabled}
           onInterrupt={stream.stopStreaming}
           onSubmit={stream.submitMessage}
+          projectPath={session.projectPath}
           streamStatus={stream.streamStatus}
         >
           <SessionComposer.Attachments />

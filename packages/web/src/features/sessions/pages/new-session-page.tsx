@@ -93,7 +93,7 @@ export default function NewSessionPage(props: NewSessionPageProps) {
           What should we build in <i>{projectName}</i>?
         </h1>
         {createSessionMutation.error && <p className="mb-4 text-center text-sm text-red-300">Unable to create the session.</p>}
-        <SessionComposer.Root attachments={composerAttachments} disabled={composerDisabled} onSubmit={handleSubmit}>
+        <SessionComposer.Root attachments={composerAttachments} disabled={composerDisabled} onSubmit={handleSubmit} projectPath={projectPath}>
           <SessionComposer.Attachments />
           <SessionComposer.Input placeholder="Ask anything." />
           <SessionComposer.Toolbar>
