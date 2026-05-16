@@ -55,7 +55,7 @@ export default function Menu(props: MenuProps) {
           <BaseMenu.Popup
             className={cn(
               "min-w-45 rounded-xl border border-white/10 bg-neutral-800/95 p-1 text-neutral-200 shadow-2xl shadow-black/35 backdrop-blur-3xl outline-none",
-              "origin-(--transform-origin) translate-y-0 scale-100 opacity-100 transition-[opacity,scale,translate] duration-200 ease-out data-closed:translate-y-1 data-closed:scale-[0.985] data-closed:opacity-0 data-ending-style:translate-y-1 data-ending-style:scale-[0.985] data-ending-style:opacity-0 data-starting-style:translate-y-1 data-starting-style:scale-[0.985] data-starting-style:opacity-0",
+              "origin-(--transform-origin) translate-y-0 scale-100 transform-gpu opacity-100 will-change-[opacity,transform] transition-[opacity,scale,translate] duration-200 ease-out data-closed:translate-y-1 data-closed:scale-[0.985] data-closed:opacity-0 data-ending-style:translate-y-1 data-ending-style:scale-[0.985] data-ending-style:opacity-0 data-starting-style:translate-y-1 data-starting-style:scale-[0.985] data-starting-style:opacity-0",
               className
             )}
           >
