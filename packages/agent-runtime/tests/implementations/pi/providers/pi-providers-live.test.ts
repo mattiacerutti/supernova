@@ -58,7 +58,7 @@ async function waitUntil(assertion: () => void): Promise<void> {
   throw lastError;
 }
 
-describe("PiProvidersLive", () => {
+describe("managing Pi provider authentication", () => {
   afterEach(() => {
     loginSessions.clear();
     vi.restoreAllMocks();

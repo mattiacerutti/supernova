@@ -74,7 +74,7 @@ function runWithSessions<A, E>(piSdk: PiSdkServiceShape, effect: Effect.Effect<A
   return Effect.runPromise(effect.pipe(Effect.provide(PiSessionsLive.pipe(Layer.provide(Layer.succeed(PiSdkService, piSdk))))));
 }
 
-describe("PiSessionsLive", () => {
+describe("loading and creating Pi session details", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });

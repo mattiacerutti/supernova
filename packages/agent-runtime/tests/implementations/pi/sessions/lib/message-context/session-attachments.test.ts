@@ -1,7 +1,7 @@
 import {describe, expect, it} from "vitest";
 import {prepareAttachments} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/message-context/attachments";
 
-describe("prepareSessionAttachments", () => {
+describe("preparing Pi message attachments", () => {
   it("classifies supported attachments, preserves original order in metadata, and sends image bytes as Pi image blocks", () => {
     const attachments = prepareAttachments([
       {contentBase64: "aW1hZ2U=", id: "image-1", mime: "image/png", name: "diagram.png", size: 12},

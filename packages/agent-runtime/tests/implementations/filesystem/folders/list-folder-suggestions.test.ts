@@ -5,7 +5,7 @@ import {Effect} from "effect";
 import {describe, expect, it} from "vitest";
 import {listFolderSuggestions} from "@pi-desktop/agent-runtime/implementations/filesystem/folders/operations/list-folder-suggestions";
 
-describe("listFolderSuggestions", () => {
+describe("suggesting local folders", () => {
   it("suggests matching child directories for an absolute path query while ignoring hidden folders and files", async () => {
     const tempDir = await mkdtemp(join(tmpdir(), "pi-desktop-folders-"));
     await mkdir(join(tempDir, "alpha"));

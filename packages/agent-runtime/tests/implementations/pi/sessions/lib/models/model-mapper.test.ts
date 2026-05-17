@@ -23,7 +23,7 @@ function model(overrides: Partial<Model<Api>>): Model<Api> {
   };
 }
 
-describe("toAgentModelDetails", () => {
+describe("mapping Pi models to agent model details", () => {
   it("maps image capability from model input modalities", () => {
     expect(toAgentModelDetails(model({input: ["text"]}), "OpenAI Codex").capabilities.images).toBe(false);
     expect(toAgentModelDetails(model({input: ["text", "image"]}), "OpenAI Codex").capabilities.images).toBe(true);

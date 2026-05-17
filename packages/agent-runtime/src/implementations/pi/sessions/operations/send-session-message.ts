@@ -4,14 +4,13 @@ import type {SessionMessageSendPayload, SessionStreamEvent} from "@pi-desktop/co
 import type {SessionSummary} from "@pi-desktop/contracts/sessions/schemas";
 import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
 import type {PiSdkServiceShape, PiSessionInfo} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
-import {ATTACHMENTS_CUSTOM_TYPE, TEXT_ATTACHMENTS_CUSTOM_TYPE, prepareAttachments} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/message-context/attachments";
-import type {Attachments} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/message-context/attachments";
+import type {PreparedSendMessageContext} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/message-context/send-message-context";
+import {prepareSendMessageContext} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/message-context/send-message-context";
 import {findSessionById} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-resolver";
 import {generateSessionTitle} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-title-generator";
 import {createLiveBranchEntries} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/turns/live-branch-entries";
 import {buildPiSessionTurns} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-turns-builder";
 import {toPiThinkingLevel} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/models/thinking-levels";
-import {USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE, validContentParts} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/message-context/content-parts";
 
 type PiAgentMessage = AgentSession["messages"][number];
 type PiSessionManager = ReturnType<PiSdkServiceShape["SessionManager"]["open"]>;
@@ -25,10 +24,10 @@ type OpenedSession = {
 };
 
 type PromptContext = OpenedSession & {
-  readonly attachments: Attachments;
   readonly baseBranch: readonly SessionEntry[];
   readonly baseMessageCount: number;
   readonly baseParentId: string | null;
+  readonly messageContext: PreparedSendMessageContext;
 };
 
 export function sendSessionMessage(input: SessionMessageSendPayload) {
@@ -154,34 +153,21 @@ class SendSessionMessageRunner {
     const baseBranch = openedSession.sessionManager.getBranch();
     return {
       ...openedSession,
-      attachments: prepareAttachments(this.input.attachments),
       baseBranch,
       baseMessageCount: session.messages.length,
       baseParentId: baseBranch.at(-1)?.id ?? null,
+      messageContext: prepareSendMessageContext(this.input),
     };
   }
 
   private async appendUserMessageContext(context: PromptContext): Promise<void> {
-    if (context.attachments.metadata.length > 0) {
-      context.sessionManager.appendCustomEntry(ATTACHMENTS_CUSTOM_TYPE, {attachments: context.attachments.metadata});
+    for (const entry of context.messageContext.customEntries) {
+      context.sessionManager.appendCustomEntry(entry.customType, entry.data);
     }
 
-    const contentParts = validContentParts(this.input.message, this.input.contentParts);
-    if (contentParts) {
-      context.sessionManager.appendCustomEntry(USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE, {contentParts});
-    }
+    if (!context.messageContext.textAttachmentMessage) return;
 
-    if (!context.attachments.textContent) return;
-
-    await this.activeSession?.sendCustomMessage(
-      {
-        content: context.attachments.textContent,
-        customType: TEXT_ATTACHMENTS_CUSTOM_TYPE,
-        details: {attachmentIds: context.attachments.metadata.filter((attachment) => attachment.kind === "text").map((attachment) => attachment.id)},
-        display: false,
-      },
-      {deliverAs: "nextTurn"}
-    );
+    await this.activeSession?.sendCustomMessage(context.messageContext.textAttachmentMessage, {deliverAs: "nextTurn"});
   }
 
   private subscribeToLiveUpdates(context: PromptContext): void {
@@ -201,7 +187,8 @@ class SendSessionMessageRunner {
 
   private async promptAndEmitFinalTurns(context: PromptContext): Promise<void> {
     try {
-      await this.activeSession?.prompt(this.input.message, context.attachments.images.length > 0 ? {images: context.attachments.images} : undefined);
+      const images = context.messageContext.attachments.images;
+      await this.activeSession?.prompt(this.input.message, images.length > 0 ? {images} : undefined);
       const liveEntries = this.liveBranchEntries(context, this.activeSession?.messages.slice(context.baseMessageCount) ?? []);
       this.emit({turns: buildPiSessionTurns([...context.baseBranch, ...liveEntries], this.input.model), type: "done"});
     } finally {
@@ -225,8 +212,8 @@ class SendSessionMessageRunner {
 
   private liveBranchEntries(context: PromptContext, messages: readonly PiAgentMessage[]): SessionEntry[] {
     return createLiveBranchEntries({
-      attachmentMetadata: {attachments: context.attachments.metadata},
-      contentPartsMetadata: {contentParts: validContentParts(this.input.message, this.input.contentParts) ?? []},
+      attachmentMetadata: {attachments: context.messageContext.attachments.metadata},
+      contentPartsMetadata: {contentParts: context.messageContext.contentParts},
       messages,
       parentId: context.baseParentId,
       sessionId: context.sessionInfo.id,

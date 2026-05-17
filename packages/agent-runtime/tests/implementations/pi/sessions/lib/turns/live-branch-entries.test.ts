@@ -6,7 +6,7 @@ type PiAgentMessage = AgentSession["messages"][number];
 
 const usage = {cacheRead: 0, cacheWrite: 0, cost: {cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0}, input: 0, output: 0, totalTokens: 0};
 
-describe("createLiveBranchEntries", () => {
+describe("creating live Pi branch entries", () => {
   it("creates a parent-linked branch delta for live Pi messages", () => {
     const messages: PiAgentMessage[] = [
       {content: [{text: "Fix it", type: "text"}], role: "user", timestamp: 1},

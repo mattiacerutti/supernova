@@ -33,7 +33,7 @@ function runWithProjects<A, E>(piSdk: PiSdkServiceShape, effect: Effect.Effect<A
   return Effect.runPromise(effect.pipe(Effect.provide(PiProjectsLive.pipe(Layer.provide(Layer.succeed(PiSdkService, piSdk))))));
 }
 
-describe("PiProjectsLive", () => {
+describe("listing and archiving Pi project sessions", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });

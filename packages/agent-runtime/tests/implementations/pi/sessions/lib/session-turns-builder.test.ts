@@ -28,7 +28,7 @@ function expectTurnEvents(turn: ReturnType<typeof buildPiSessionTurns>[number] |
   expect(turn?.events).toMatchObject(events);
 }
 
-describe("buildPiSessionTurns", () => {
+describe("projecting Pi branch entries into session turns", () => {
   it("groups a user request, reasoning, tool result, and assistant response into one model-attributed turn", () => {
     const turns = buildPiSessionTurns(
       piEntries([

@@ -6,7 +6,7 @@ import {describe, expect, it} from "vitest";
 import {createFolder} from "@pi-desktop/agent-runtime/implementations/filesystem/folders/operations/create-folder";
 import {listFolderSuggestions} from "@pi-desktop/agent-runtime/implementations/filesystem/folders/operations/list-folder-suggestions";
 
-describe("folder status and creation", () => {
+describe("creating local workspace folders", () => {
   it("creates nested folders recursively", async () => {
     const tempDir = await mkdtemp(join(tmpdir(), "pi-desktop-folder-create-"));
     const folderPath = join(tempDir, "nested", "project");
