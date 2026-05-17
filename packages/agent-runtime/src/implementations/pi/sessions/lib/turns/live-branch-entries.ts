@@ -1,9 +1,9 @@
 import type {AgentSession, SessionEntry} from "@mariozechner/pi-coding-agent";
 import {generateStableId} from "@pi-desktop/agent-runtime/implementations/shared/id-generator";
 import type {SessionUserMessageContentPart} from "@pi-desktop/contracts/sessions/schemas";
-import {ATTACHMENTS_CUSTOM_TYPE} from "@/implementations/pi/sessions/lib/message-context/attachments";
-import type {AttachmentMetadata} from "@/implementations/pi/sessions/lib/message-context/attachments";
-import {USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE} from "@/implementations/pi/sessions/lib/message-context/content-parts";
+import {ATTACHMENTS_CUSTOM_TYPE} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/message-context/attachments";
+import type {AttachmentMetadata} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/message-context/attachments";
+import {USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/message-context/content-parts";
 
 type PiAgentMessage = AgentSession["messages"][number];
 

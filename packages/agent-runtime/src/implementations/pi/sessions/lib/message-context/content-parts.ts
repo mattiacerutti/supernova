@@ -8,5 +8,5 @@ export function validContentParts(content: string, contentParts: readonly Sessio
 
   const extractedContent = contentParts.map((part) => (part.type === "text" ? part.text : part.value)).join("");
 
-  return extractedContent === content ? contentParts : [];
+  return extractedContent === content ? contentParts : undefined;
 }

@@ -4,14 +4,14 @@ import type {SessionMessageSendPayload, SessionStreamEvent} from "@pi-desktop/co
 import type {SessionSummary} from "@pi-desktop/contracts/sessions/schemas";
 import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
 import type {PiSdkServiceShape, PiSessionInfo} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
-import {ATTACHMENTS_CUSTOM_TYPE, TEXT_ATTACHMENTS_CUSTOM_TYPE, prepareAttachments} from "@/implementations/pi/sessions/lib/message-context/attachments";
-import type {Attachments} from "@/implementations/pi/sessions/lib/message-context/attachments";
+import {ATTACHMENTS_CUSTOM_TYPE, TEXT_ATTACHMENTS_CUSTOM_TYPE, prepareAttachments} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/message-context/attachments";
+import type {Attachments} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/message-context/attachments";
 import {findSessionById} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-resolver";
 import {generateSessionTitle} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-title-generator";
 import {createLiveBranchEntries} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/turns/live-branch-entries";
 import {buildPiSessionTurns} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-turns-builder";
 import {toPiThinkingLevel} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/models/thinking-levels";
-import {USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE, validContentParts} from "@/implementations/pi/sessions/lib/message-context/content-parts";
+import {USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE, validContentParts} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/message-context/content-parts";
 
 type PiAgentMessage = AgentSession["messages"][number];
 type PiSessionManager = ReturnType<PiSdkServiceShape["SessionManager"]["open"]>;
