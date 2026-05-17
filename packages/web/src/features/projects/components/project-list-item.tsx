@@ -115,7 +115,16 @@ export default function ProjectListItem(props: ProjectListItemProps) {
     }
 
     setConfirmingArchiveSessionId(null);
-    archiveProjectSessionMutation.mutate({projectPath: project.path, sessionId});
+    archiveProjectSessionMutation.mutate(
+      {projectPath: project.path, sessionId},
+      {
+        onSuccess: () => {
+          if (location.pathname === `/session/${sessionId}`) {
+            void navigate({replace: true, search: {projectId: project.id}, to: "/session/new"});
+          }
+        },
+      }
+    );
   };
 
   const handleOpenSession = (sessionId: string): void => {
