@@ -90,6 +90,10 @@ Other repositories may also be present in `.context/`; inspect the directory whe
 - Favor readability over micro-optimizations: straightforward control flow, early returns, and clear naming. Extract constants for magic numbers/strings and keep inline styles minimal (lean on classes or computed style helpers).
 - Use `import type` for types; keep strings double-quoted and favor `const` over `let`.
 - Use kebab-case for files and folders.
+- Read files in full before making wide-ranging changes, before editing files you have not already fully inspected, and when the user asks you to investigate or audit something. Do not rely only on search snippets for broad changes.
+- Single-line helper functions with a single call site are forbidden; inline them instead.
+- Always ask before removing functionality or code that appears to be intentional
+- Do not preserve backward compatibility unless the user explicitly asks for it
 
 ### Core Priorities
 
@@ -110,3 +114,7 @@ Long term maintainability is a core priority. If you add new functionality, firs
 - Never include TypeScript file extensions in imports (`.ts` or `.tsx`).
 - Do not create local `index.ts` barrel files.
 - Keep logging minimal and purposeful; remove noisy debug output when not needed.
+
+### User override
+
+If the user instructions conflict with rules set out here, ask for confirmation that they want to override the rules. Only then execute their instructions.
