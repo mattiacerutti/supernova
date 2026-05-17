@@ -4,28 +4,24 @@ import type {SessionAttachment} from "@pi-desktop/contracts/sessions/schemas";
 export const ATTACHMENTS_CUSTOM_TYPE = "pi-desktop.attachments";
 export const TEXT_ATTACHMENTS_CUSTOM_TYPE = "pi-desktop.text-attachments";
 
-export type SupportedAttachmentKind = "image" | "text";
+export type AttachmentKind = "image" | "text";
 
-export interface SessionAttachmentMetadata {
+export interface AttachmentMetadata {
   readonly id: string;
-  readonly kind: SupportedAttachmentKind;
+  readonly kind: AttachmentKind;
   readonly mime: string;
   readonly name: string;
   readonly order: number;
   readonly size: number;
 }
 
-export interface SessionAttachmentMetadataData {
-  readonly attachments: readonly SessionAttachmentMetadata[];
-}
-
-export interface PreparedSessionAttachments {
+export interface Attachments {
   readonly images: ImageContent[];
-  readonly metadata: SessionAttachmentMetadata[];
+  readonly metadata: AttachmentMetadata[];
   readonly textContent: string | undefined;
 }
 
-function attachmentKind(mime: string): SupportedAttachmentKind | undefined {
+function attachmentKind(mime: string): AttachmentKind | undefined {
   if (mime.startsWith("image/")) return "image";
   if (mime.startsWith("text/")) return "text";
   return undefined;
@@ -35,21 +31,21 @@ function escapeXml(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&apos;");
 }
 
-function textAttachmentBlock(input: {attachment: SessionAttachmentMetadata; content: string}): string {
+function textAttachmentBlock(input: {attachment: AttachmentMetadata; content: string}): string {
   const {attachment, content} = input;
   return `  <attachment id="${escapeXml(attachment.id)}" name="${escapeXml(attachment.name)}" mime="${escapeXml(attachment.mime)}" size="${attachment.size}">\n${escapeXml(content)}\n  </attachment>`;
 }
 
-export function prepareSessionAttachments(attachments: readonly SessionAttachment[]): PreparedSessionAttachments {
+export function prepareAttachments(attachments: readonly SessionAttachment[]): Attachments {
   const images: ImageContent[] = [];
-  const metadata: SessionAttachmentMetadata[] = [];
-  const textAttachments: Array<{attachment: SessionAttachmentMetadata; content: string}> = [];
+  const metadata: AttachmentMetadata[] = [];
+  const textAttachments: Array<{attachment: AttachmentMetadata; content: string}> = [];
 
   for (const [order, attachment] of attachments.entries()) {
     const kind = attachmentKind(attachment.mime);
     if (!kind) continue;
 
-    const attachmentMetadata: SessionAttachmentMetadata = {
+    const attachmentMetadata: AttachmentMetadata = {
       id: attachment.id,
       kind,
       mime: attachment.mime,

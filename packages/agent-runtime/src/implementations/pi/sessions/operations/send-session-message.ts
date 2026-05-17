@@ -4,18 +4,14 @@ import type {SessionMessageSendPayload, SessionStreamEvent} from "@pi-desktop/co
 import type {SessionSummary} from "@pi-desktop/contracts/sessions/schemas";
 import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
 import type {PiSdkServiceShape, PiSessionInfo} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
-import {
-  ATTACHMENTS_CUSTOM_TYPE,
-  TEXT_ATTACHMENTS_CUSTOM_TYPE,
-  prepareSessionAttachments,
-} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/attachments/session-attachments";
-import type {PreparedSessionAttachments} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/attachments/session-attachments";
+import {ATTACHMENTS_CUSTOM_TYPE, TEXT_ATTACHMENTS_CUSTOM_TYPE, prepareAttachments} from "@/implementations/pi/sessions/lib/message-context/attachments";
+import type {Attachments} from "@/implementations/pi/sessions/lib/message-context/attachments";
 import {findSessionById} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-resolver";
 import {generateSessionTitle} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-title-generator";
 import {createLiveBranchEntries} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/turns/live-branch-entries";
 import {buildPiSessionTurns} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-turns-builder";
 import {toPiThinkingLevel} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/models/thinking-levels";
-import {USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE, validContentPartsForMessage} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/user-message-content-parts";
+import {USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE, validContentParts} from "@/implementations/pi/sessions/lib/message-context/content-parts";
 
 type PiAgentMessage = AgentSession["messages"][number];
 type PiSessionManager = ReturnType<PiSdkServiceShape["SessionManager"]["open"]>;
@@ -29,7 +25,7 @@ type OpenedSession = {
 };
 
 type PromptContext = OpenedSession & {
-  readonly attachments: PreparedSessionAttachments;
+  readonly attachments: Attachments;
   readonly baseBranch: readonly SessionEntry[];
   readonly baseMessageCount: number;
   readonly baseParentId: string | null;
@@ -158,7 +154,7 @@ class SendSessionMessageRunner {
     const baseBranch = openedSession.sessionManager.getBranch();
     return {
       ...openedSession,
-      attachments: prepareSessionAttachments(this.input.attachments),
+      attachments: prepareAttachments(this.input.attachments),
       baseBranch,
       baseMessageCount: session.messages.length,
       baseParentId: baseBranch.at(-1)?.id ?? null,
@@ -170,7 +166,7 @@ class SendSessionMessageRunner {
       context.sessionManager.appendCustomEntry(ATTACHMENTS_CUSTOM_TYPE, {attachments: context.attachments.metadata});
     }
 
-    const contentParts = validContentPartsForMessage(this.input.message, this.input.contentParts);
+    const contentParts = validContentParts(this.input.message, this.input.contentParts);
     if (contentParts) {
       context.sessionManager.appendCustomEntry(USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE, {contentParts});
     }
@@ -230,7 +226,7 @@ class SendSessionMessageRunner {
   private liveBranchEntries(context: PromptContext, messages: readonly PiAgentMessage[]): SessionEntry[] {
     return createLiveBranchEntries({
       attachmentMetadata: {attachments: context.attachments.metadata},
-      contentPartsMetadata: {contentParts: validContentPartsForMessage(this.input.message, this.input.contentParts) ?? []},
+      contentPartsMetadata: {contentParts: validContentParts(this.input.message, this.input.contentParts) ?? []},
       messages,
       parentId: context.baseParentId,
       sessionId: context.sessionInfo.id,

@@ -10,17 +10,17 @@ import type {
 } from "@pi-desktop/contracts/sessions/schemas";
 import {sessionTurn} from "@pi-desktop/agent-runtime/implementations/shared/session-turns";
 import {generateStableId} from "@pi-desktop/agent-runtime/implementations/shared/id-generator";
-import {ATTACHMENTS_CUSTOM_TYPE} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/attachments/session-attachments";
-import type {SessionAttachmentMetadata} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/attachments/session-attachments";
+import {ATTACHMENTS_CUSTOM_TYPE} from "@/implementations/pi/sessions/lib/message-context/attachments";
+import type {AttachmentMetadata} from "@/implementations/pi/sessions/lib/message-context/attachments";
 import {piContentToText, piUserAttachments} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/turns/message-content";
 import {piToolSummary} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/turns/tool-events";
-import {USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE, validContentPartsForMessage} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/user-message-content-parts";
+import {USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE, validContentParts} from "@/implementations/pi/sessions/lib/message-context/content-parts";
 
 function isMessageEntry(entry: SessionEntry): entry is SessionMessageEntry {
   return entry.type === "message";
 }
 
-function isAttachmentsEntry(entry: SessionEntry): entry is CustomEntry<{attachments: SessionAttachmentMetadata[]}> {
+function isAttachmentsEntry(entry: SessionEntry): entry is CustomEntry<{attachments: AttachmentMetadata[]}> {
   return entry.type === "custom" && entry.customType === ATTACHMENTS_CUSTOM_TYPE;
 }
 
@@ -133,7 +133,7 @@ class PiTurnDraft {
 class PiSessionTurnBuilder {
   private readonly fallbackModel: ModelReference;
   private readonly turns: SessionTurn[] = [];
-  private readonly attachmentsByParent = new Map<string, readonly SessionAttachmentMetadata[]>();
+  private readonly attachmentsByParent = new Map<string, readonly AttachmentMetadata[]>();
   private readonly contentPartsByParent = new Map<string, readonly SessionUserMessageContentPart[]>();
   private readonly parentByEntryId = new Map<string, string | null>();
   private currentTurn: PiTurnDraft | undefined;
@@ -180,7 +180,7 @@ class PiSessionTurnBuilder {
     const content = piContentToText(entry.message.content);
 
     const attachments = this.findParentMetadata(entry.parentId, this.attachmentsByParent);
-    const contentParts = validContentPartsForMessage(content, this.findParentMetadata(entry.parentId, this.contentPartsByParent));
+    const contentParts = validContentParts(content, this.findParentMetadata(entry.parentId, this.contentPartsByParent));
     const normalizedAttachments = piUserAttachments(entry.message.content, attachments);
 
     if (content.length === 0 && !normalizedAttachments?.length) return false;

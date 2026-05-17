@@ -1,9 +1,9 @@
 import {describe, expect, it} from "vitest";
-import {prepareSessionAttachments} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/attachments/session-attachments";
+import {prepareAttachments} from "@/implementations/pi/sessions/lib/message-context/attachments";
 
 describe("prepareSessionAttachments", () => {
   it("classifies supported attachments, preserves original order in metadata, and sends image bytes as Pi image blocks", () => {
-    const attachments = prepareSessionAttachments([
+    const attachments = prepareAttachments([
       {contentBase64: "aW1hZ2U=", id: "image-1", mime: "image/png", name: "diagram.png", size: 12},
       {contentBase64: "YmluYXJ5", id: "binary-1", mime: "application/octet-stream", name: "archive.bin", size: 6},
       {contentBase64: "bm90ZXM=", id: "text-1", mime: "text/plain", name: "notes.txt", size: 20},
@@ -22,7 +22,7 @@ describe("prepareSessionAttachments", () => {
   });
 
   it("escapes text attachment XML attributes and content", () => {
-    const attachments = prepareSessionAttachments([
+    const attachments = prepareAttachments([
       {contentBase64: Buffer.from("Use <tag> & 'quote'").toString("base64"), id: "text-1", mime: "text/plain", name: "a&b<'\".txt", size: 10},
     ]);
 

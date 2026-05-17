@@ -1,6 +1,6 @@
 import type {ImageContent, TextContent} from "@mariozechner/pi-ai";
 import type {SessionAttachment} from "@pi-desktop/contracts/sessions/schemas";
-import type {SessionAttachmentMetadata} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/attachments/session-attachments";
+import type {AttachmentMetadata} from "@/implementations/pi/sessions/lib/message-context/attachments";
 
 export function piContentToText(content: string | (TextContent | ImageContent)[]): string {
   if (typeof content === "string") return content;
@@ -11,10 +11,7 @@ export function piContentToText(content: string | (TextContent | ImageContent)[]
     .join("\n");
 }
 
-export function piUserAttachments(
-  content: string | (TextContent | ImageContent)[],
-  metadata: readonly SessionAttachmentMetadata[] | undefined
-): SessionAttachment[] | undefined {
+export function piUserAttachments(content: string | (TextContent | ImageContent)[], metadata: readonly AttachmentMetadata[] | undefined): SessionAttachment[] | undefined {
   if (!metadata?.length) return;
 
   const images = typeof content === "string" ? [] : content.filter((part): part is ImageContent => part.type === "image");
