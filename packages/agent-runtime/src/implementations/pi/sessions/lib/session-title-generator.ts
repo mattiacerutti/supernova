@@ -1,5 +1,5 @@
-import type {ModelRegistry} from "@mariozechner/pi-coding-agent";
-import {completeSimple} from "@mariozechner/pi-ai";
+import type {ModelRegistry} from "@earendil-works/pi-coding-agent";
+import {completeSimple} from "@earendil-works/pi-ai";
 
 const sessionTitleSystemPrompt = `Generate a concise title for this coding session based on the user's first message.
 

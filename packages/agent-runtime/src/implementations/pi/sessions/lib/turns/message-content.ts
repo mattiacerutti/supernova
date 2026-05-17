@@ -1,4 +1,4 @@
-import type {ImageContent, TextContent} from "@mariozechner/pi-ai";
+import type {ImageContent, TextContent} from "@earendil-works/pi-ai";
 import type {SessionAttachment} from "@pi-desktop/contracts/sessions/schemas";
 import type {AttachmentMetadata} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/message-context/attachments";
 

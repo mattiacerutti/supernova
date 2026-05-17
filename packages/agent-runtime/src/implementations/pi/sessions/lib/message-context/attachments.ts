@@ -1,4 +1,4 @@
-import type {ImageContent} from "@mariozechner/pi-ai";
+import type {ImageContent} from "@earendil-works/pi-ai";
 import type {SessionAttachment} from "@pi-desktop/contracts/sessions/schemas";
 
 export const ATTACHMENTS_CUSTOM_TYPE = "pi-desktop.attachments";

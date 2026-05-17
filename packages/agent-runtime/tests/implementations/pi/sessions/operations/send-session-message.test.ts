@@ -1,4 +1,4 @@
-import type {AgentSession, SessionEntry} from "@mariozechner/pi-coding-agent";
+import type {AgentSession, SessionEntry} from "@earendil-works/pi-coding-agent";
 import {Effect, Fiber, Layer, Stream} from "effect";
 import {describe, expect, it, vi} from "vitest";
 import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";

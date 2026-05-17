@@ -1,4 +1,4 @@
-import type {AgentSession} from "@mariozechner/pi-coding-agent";
+import type {AgentSession} from "@earendil-works/pi-coding-agent";
 import {describe, expect, it} from "vitest";
 import {createLiveBranchEntries} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/turns/live-branch-entries";
 

@@ -1,4 +1,4 @@
-import type {AgentSession, CustomEntry, SessionEntry, SessionMessageEntry} from "@mariozechner/pi-coding-agent";
+import type {AgentSession, CustomEntry, SessionEntry, SessionMessageEntry} from "@earendil-works/pi-coding-agent";
 import type {
   ModelReference,
   SessionTool,

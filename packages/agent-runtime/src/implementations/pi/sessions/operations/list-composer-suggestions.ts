@@ -1,6 +1,6 @@
 import {basename} from "node:path";
-import {DefaultResourceLoader, getAgentDir, SettingsManager} from "@mariozechner/pi-coding-agent";
-import type {PromptTemplate, Skill} from "@mariozechner/pi-coding-agent";
+import {DefaultResourceLoader, getAgentDir, SettingsManager} from "@earendil-works/pi-coding-agent";
+import type {PromptTemplate, Skill} from "@earendil-works/pi-coding-agent";
 import {Effect} from "effect";
 import {matchSorter} from "match-sorter";
 import {SessionComposerSuggestionsListError} from "@pi-desktop/contracts/sessions/procedures";

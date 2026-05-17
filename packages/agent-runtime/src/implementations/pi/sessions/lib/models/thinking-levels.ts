@@ -1,4 +1,4 @@
-import type {AgentSession} from "@mariozechner/pi-coding-agent";
+import type {AgentSession} from "@earendil-works/pi-coding-agent";
 
 type PiAgentThinkingLevel = Parameters<AgentSession["setThinkingLevel"]>[0];
 

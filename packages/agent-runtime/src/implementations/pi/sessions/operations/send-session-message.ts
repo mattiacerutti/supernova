@@ -1,4 +1,4 @@
-import type {AgentSession, SessionEntry} from "@mariozechner/pi-coding-agent";
+import type {AgentSession, SessionEntry} from "@earendil-works/pi-coding-agent";
 import {Effect, Queue, Stream} from "effect";
 import type {SessionMessageSendPayload, SessionStreamEvent} from "@pi-desktop/contracts/sessions/procedures";
 import type {SessionSummary} from "@pi-desktop/contracts/sessions/schemas";

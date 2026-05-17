@@ -1,5 +1,5 @@
-import {AuthStorage, createAgentSession, ModelRegistry, SessionManager} from "@mariozechner/pi-coding-agent";
-import type {SessionInfo} from "@mariozechner/pi-coding-agent";
+import {AuthStorage, createAgentSession, ModelRegistry, SessionManager} from "@earendil-works/pi-coding-agent";
+import type {SessionInfo} from "@earendil-works/pi-coding-agent";
 import {Context, Layer} from "effect";
 
 export const authStorage = AuthStorage.create();

@@ -1,4 +1,4 @@
-import type {AgentSession, SessionEntry} from "@mariozechner/pi-coding-agent";
+import type {AgentSession, SessionEntry} from "@earendil-works/pi-coding-agent";
 import {generateStableId} from "@pi-desktop/agent-runtime/implementations/shared/id-generator";
 import type {SessionUserMessageContentPart} from "@pi-desktop/contracts/sessions/schemas";
 import {ATTACHMENTS_CUSTOM_TYPE} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/message-context/attachments";

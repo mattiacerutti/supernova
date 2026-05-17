@@ -57,7 +57,7 @@ Desktop:
 - Electron
 
 Agent:
-- @mariozechner/pi-coding-agent
+- @earendil-works/pi-coding-agent
 
 Architecture:
 - Effect (for services / runtime composition)

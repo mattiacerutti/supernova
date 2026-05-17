@@ -1,7 +1,7 @@
 import {describe, expect, it} from "vitest";
 import {buildPiSessionTurns} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-turns-builder";
 import type {ModelReference} from "@pi-desktop/contracts/sessions/schemas";
-import type {AgentSession, SessionEntry} from "@mariozechner/pi-coding-agent";
+import type {AgentSession, SessionEntry} from "@earendil-works/pi-coding-agent";
 
 const model: ModelReference = {id: "claude-sonnet", providerId: "anthropic", thinkingLevel: "high"};
 

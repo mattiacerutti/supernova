@@ -1,4 +1,4 @@
-import type {AgentSession} from "@mariozechner/pi-coding-agent";
+import type {AgentSession} from "@earendil-works/pi-coding-agent";
 import type {SessionMessageSendPayload} from "@pi-desktop/contracts/sessions/procedures";
 import type {SessionUserMessageContentPart} from "@pi-desktop/contracts/sessions/schemas";
 import {ATTACHMENTS_CUSTOM_TYPE, TEXT_ATTACHMENTS_CUSTOM_TYPE, prepareAttachments} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/message-context/attachments";
