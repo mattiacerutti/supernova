@@ -6,7 +6,7 @@ import {
   ProjectSessionsListError,
   ProjectSessionsListPayload,
   ProjectSessionsListResult,
-} from "@pi-desktop/contracts/projects/procedures";
+} from "@supernova/contracts/projects/procedures";
 
 export const ProjectSessionsListRpc = Rpc.make("listProjectSessions", {
   error: ProjectSessionsListError,

@@ -1,4 +1,4 @@
-import type {ModelDetails, ModelReference} from "@pi-desktop/contracts/sessions/schemas";
+import type {ModelDetails, ModelReference} from "@supernova/contracts/sessions/schemas";
 
 const thinkingLevelRank: Record<string, number> = {
   off: 0,

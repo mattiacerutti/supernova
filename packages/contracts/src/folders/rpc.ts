@@ -9,7 +9,7 @@ import {
   FolderSuggestionsListError,
   FolderSuggestionsListPayload,
   FolderSuggestionsListResult,
-} from "@pi-desktop/contracts/folders/procedures";
+} from "@supernova/contracts/folders/procedures";
 
 export const FolderCreateRpc = Rpc.make("createFolder", {
   error: FolderCreateError,

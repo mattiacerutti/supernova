@@ -3,10 +3,10 @@ import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {Effect, Layer} from "effect";
 import {afterEach, describe, expect, it, vi} from "vitest";
-import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
-import type {PiSdkServiceShape, PiSessionInfo} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
-import {PiSessionsLive} from "@pi-desktop/agent-runtime/implementations/pi/sessions/pi-sessions-live";
-import {SessionsService} from "@pi-desktop/agent-runtime/services/sessions/sessions-service";
+import {PiSdkService} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
+import type {PiSdkServiceShape, PiSessionInfo} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
+import {PiSessionsLive} from "@supernova/agent-runtime/implementations/pi/sessions/pi-sessions-live";
+import {SessionsService} from "@supernova/agent-runtime/services/sessions/sessions-service";
 
 function session(overrides: Partial<PiSessionInfo>): PiSessionInfo {
   return {
@@ -80,7 +80,7 @@ describe("loading and creating Pi session details", () => {
   });
 
   it("creates a new session file and returns an empty session details payload", async () => {
-    const tempDir = await mkdtemp(join(tmpdir(), "pi-desktop-session-"));
+    const tempDir = await mkdtemp(join(tmpdir(), "supernova-session-"));
     const sessionFile = join(tempDir, "created-session.jsonl");
     const piSdk = makePiSdk({createdSessionFile: sessionFile});
 
@@ -97,7 +97,7 @@ describe("loading and creating Pi session details", () => {
   });
 
   it("loads raw branch history instead of compacted LLM context messages", async () => {
-    const sessionPath = join(await mkdtemp(join(tmpdir(), "pi-desktop-loaded-session-")), "session-1.jsonl");
+    const sessionPath = join(await mkdtemp(join(tmpdir(), "supernova-loaded-session-")), "session-1.jsonl");
     await writeFile(sessionPath, "{}\n");
     const piSdk = makePiSdk({
       branch: [
@@ -172,12 +172,12 @@ describe("loading and creating Pi session details", () => {
   });
 
   it("loads attachment metadata and image previews from compacted raw branch history", async () => {
-    const sessionPath = join(await mkdtemp(join(tmpdir(), "pi-desktop-loaded-attachments-")), "session-1.jsonl");
+    const sessionPath = join(await mkdtemp(join(tmpdir(), "supernova-loaded-attachments-")), "session-1.jsonl");
     await writeFile(sessionPath, "{}\n");
     const piSdk = makePiSdk({
       branch: [
         {
-          customType: "pi-desktop.attachments",
+          customType: "supernova.attachments",
           data: {attachments: [{id: "image-1", kind: "image", mime: "image/png", name: "diagram.png", order: 0, size: 12}]},
           id: "attachments-1",
           parentId: null,

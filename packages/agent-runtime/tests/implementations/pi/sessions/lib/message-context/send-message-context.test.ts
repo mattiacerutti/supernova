@@ -1,5 +1,5 @@
 import {describe, expect, it} from "vitest";
-import {prepareSendMessageContext} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/message-context/send-message-context";
+import {prepareSendMessageContext} from "@supernova/agent-runtime/implementations/pi/sessions/lib/message-context/send-message-context";
 import {imageAttachment, ignoredAttachment, textAttachment} from "@tests/implementations/pi/sessions/pi-session-test-utils";
 
 describe("preparing Pi send-message context", () => {
@@ -18,8 +18,8 @@ describe("preparing Pi send-message context", () => {
     });
 
     expect(context.customEntries).toEqual([
-      {customType: "pi-desktop.attachments", data: {attachments: [{id: "image-1", kind: "image", mime: "image/png", name: "diagram.png", order: 0, size: 12}]}},
-      {customType: "pi-desktop.user-message-content-parts", data: {contentParts}},
+      {customType: "supernova.attachments", data: {attachments: [{id: "image-1", kind: "image", mime: "image/png", name: "diagram.png", order: 0, size: 12}]}},
+      {customType: "supernova.user-message-content-parts", data: {contentParts}},
     ]);
   });
 
@@ -33,7 +33,7 @@ describe("preparing Pi send-message context", () => {
 
     expect(context.textAttachmentMessage).toMatchObject({
       content: '<attachments>\n  <attachment id="text-1" name="notes.txt" mime="text/plain" size="20">\nThis is a text file.\n  </attachment>\n</attachments>',
-      customType: "pi-desktop.text-attachments",
+      customType: "supernova.text-attachments",
       details: {attachmentIds: ["text-1"]},
       display: false,
     });

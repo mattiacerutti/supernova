@@ -1,4 +1,4 @@
-import type {SessionTurnEvent, SessionUserMessage} from "@pi-desktop/contracts/sessions/schemas";
+import type {SessionTurnEvent, SessionUserMessage} from "@supernova/contracts/sessions/schemas";
 
 export type SessionAssistantEvent = Extract<SessionTurnEvent, {type: "assistant"}>;
 export type SessionWorkEvent = Extract<SessionTurnEvent, {type: "reasoning" | "tool"}>;

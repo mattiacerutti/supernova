@@ -1,4 +1,4 @@
-import {AgentRpcGroup} from "@pi-desktop/contracts";
+import {AgentRpcGroup} from "@supernova/contracts";
 import {Effect, Exit, Fiber, Layer, ManagedRuntime, Scope} from "effect";
 import {RpcClient, RpcSerialization} from "effect/unstable/rpc";
 import * as Socket from "effect/unstable/socket/Socket";

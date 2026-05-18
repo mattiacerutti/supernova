@@ -3,7 +3,7 @@ import {tmpdir} from "node:os";
 import {join} from "node:path";
 
 export async function createProjectFixture(): Promise<string> {
-  const tempDir = await mkdtemp(join(tmpdir(), "pi-desktop-folder-files-"));
+  const tempDir = await mkdtemp(join(tmpdir(), "supernova-folder-files-"));
   await mkdir(join(tempDir, ".git"));
   await mkdir(join(tempDir, ".config"));
   await mkdir(join(tempDir, "features", "feature-one", "operations"), {recursive: true});

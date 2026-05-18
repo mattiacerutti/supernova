@@ -15,7 +15,7 @@ import {
   ProvidersListPayload,
   ProvidersListResult,
   ProviderOAuthLoginStartPayload,
-} from "@pi-desktop/contracts/providers/procedures";
+} from "@supernova/contracts/providers/procedures";
 
 export const ProvidersListRpc = Rpc.make("listProviders", {
   error: ProvidersListError,

@@ -1,6 +1,6 @@
 import {Effect} from "effect";
 import {describe, expect, it} from "vitest";
-import {listFolderFiles} from "@pi-desktop/agent-runtime/implementations/filesystem/folders/operations/list-folder-files";
+import {listFolderFiles} from "@supernova/agent-runtime/implementations/filesystem/folders/operations/list-folder-files";
 import {createProjectFixture} from "@tests/implementations/filesystem/folders/folder-test-utils";
 
 describe("listing workspace file references", () => {

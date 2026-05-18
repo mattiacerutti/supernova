@@ -3,9 +3,9 @@ import {readdir, stat} from "node:fs/promises";
 import {homedir} from "node:os";
 import {basename, dirname, isAbsolute, join} from "node:path";
 import {Effect} from "effect";
-import {FolderSuggestionsListError} from "@pi-desktop/contracts/folders/procedures";
-import type {FolderSuggestion} from "@pi-desktop/contracts/folders/schemas";
-import {expandHomePath, resolveFolderPath} from "@pi-desktop/agent-runtime/implementations/filesystem/folders/lib/folder-paths";
+import {FolderSuggestionsListError} from "@supernova/contracts/folders/procedures";
+import type {FolderSuggestion} from "@supernova/contracts/folders/schemas";
+import {expandHomePath, resolveFolderPath} from "@supernova/agent-runtime/implementations/filesystem/folders/lib/folder-paths";
 
 const MAX_SUGGESTIONS = 200;
 

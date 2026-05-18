@@ -1,7 +1,7 @@
 import {Effect} from "effect";
-import {ProviderLogoutError} from "@pi-desktop/contracts/providers/procedures";
-import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
-import {errorMessage} from "@pi-desktop/agent-runtime/implementations/pi/providers/lib/provider-errors";
+import {ProviderLogoutError} from "@supernova/contracts/providers/procedures";
+import {PiSdkService} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
+import {errorMessage} from "@supernova/agent-runtime/implementations/pi/providers/lib/provider-errors";
 
 export function logoutProvider(providerId: string) {
   return Effect.gen(function* () {

@@ -1,4 +1,4 @@
-import type {SessionUserMessage} from "@pi-desktop/contracts/sessions/schemas";
+import type {SessionUserMessage} from "@supernova/contracts/sessions/schemas";
 import Icon from "@/components/ui/icon";
 import MessageAttachmentPreview from "@/features/sessions/components/attachments/message-attachment-preview";
 import MessageActions from "@/features/sessions/components/messages/message-actions";

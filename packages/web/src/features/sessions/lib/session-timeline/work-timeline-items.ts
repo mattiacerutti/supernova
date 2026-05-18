@@ -1,4 +1,4 @@
-import type {SessionToolTurnEvent} from "@pi-desktop/contracts/sessions/schemas";
+import type {SessionToolTurnEvent} from "@supernova/contracts/sessions/schemas";
 import type {SessionWorkEvent} from "@/features/sessions/types/session-timeline-item";
 
 export function workDuration(events: readonly SessionWorkEvent[], completedAt: string | undefined): number | undefined {

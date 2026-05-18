@@ -1,13 +1,13 @@
 {
-  "name": "@pi-desktop/server",
+  "name": "@supernova/server",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "bin": {
-    "pi-desktop-server": "./dist/cli.js"
+    "supernova-server": "./dist/cli.js"
   },
   "scripts": {
-    "dev": "PI_DESKTOP_SERVER_DEV=1 bun --watch src/bootstrap.ts",
+    "dev": "SUPERNOVA_SERVER_DEV=1 bun --watch src/bootstrap.ts",
     "start": "node dist/cli.js",
     "build": "rm -rf dist && bun build src/cli.ts src/bootstrap.ts --target node --outdir dist && cp -R ../../packages/web/dist dist/client",
     "lint": "eslint .",
@@ -17,9 +17,9 @@
   "dependencies": {
     "@effect/platform-node": "4.0.0-beta.60",
     "@hono/node-server": "^1.19.6",
-    "@pi-desktop/agent-runtime": "workspace:*",
-    "@pi-desktop/contracts": "workspace:*",
-    "@pi-desktop/web": "workspace:*",
+    "@supernova/agent-runtime": "workspace:*",
+    "@supernova/contracts": "workspace:*",
+    "@supernova/web": "workspace:*",
     "commander": "^14.0.2",
     "effect": "4.0.0-beta.60",
     "hono": "^4.11.2"

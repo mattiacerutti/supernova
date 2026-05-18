@@ -6,7 +6,7 @@ import type {
   FolderFilesListResult,
   FolderSuggestionsListError,
   FolderSuggestionsListResult,
-} from "@pi-desktop/contracts/folders/procedures";
+} from "@supernova/contracts/folders/procedures";
 
 export interface FoldersServiceShape {
   readonly create: (path: string) => Effect.Effect<FolderCreateResult, FolderCreateError>;
@@ -14,4 +14,4 @@ export interface FoldersServiceShape {
   readonly listSuggestions: (query: string) => Effect.Effect<FolderSuggestionsListResult, FolderSuggestionsListError>;
 }
 
-export class FoldersService extends Context.Service<FoldersService, FoldersServiceShape>()("pi-desktop/agent-runtime/FoldersService") {}
+export class FoldersService extends Context.Service<FoldersService, FoldersServiceShape>()("supernova/agent-runtime/FoldersService") {}

@@ -1,4 +1,4 @@
-import type {SessionReasoningTurnEvent, SessionTurn} from "@pi-desktop/contracts/sessions/schemas";
+import type {SessionReasoningTurnEvent, SessionTurn} from "@supernova/contracts/sessions/schemas";
 import {describe, expect, it} from "vitest";
 import {upsertInterruptedTurn} from "@/features/sessions/lib/streaming/interrupted-turns";
 

@@ -1,8 +1,8 @@
-import type {ModelReference} from "@pi-desktop/contracts/sessions/schemas";
+import type {ModelReference} from "@supernova/contracts/sessions/schemas";
 import {create} from "zustand";
 import {persist} from "zustand/middleware";
 
-const SESSION_MODEL_SELECTION_STORAGE_KEY = "pi-desktop-session-model-selection";
+const SESSION_MODEL_SELECTION_STORAGE_KEY = "supernova-session-model-selection";
 
 interface SessionModelsState {
   readonly models: Record<string, ModelReference>;

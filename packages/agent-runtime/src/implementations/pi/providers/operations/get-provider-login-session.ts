@@ -1,7 +1,7 @@
 import {Effect} from "effect";
-import {ProviderLoginError} from "@pi-desktop/contracts/providers/procedures";
-import {getLoginSessionState, toLoginSession} from "@pi-desktop/agent-runtime/implementations/pi/providers/lib/login-sessions";
-import {errorMessage} from "@pi-desktop/agent-runtime/implementations/pi/providers/lib/provider-errors";
+import {ProviderLoginError} from "@supernova/contracts/providers/procedures";
+import {getLoginSessionState, toLoginSession} from "@supernova/agent-runtime/implementations/pi/providers/lib/login-sessions";
+import {errorMessage} from "@supernova/agent-runtime/implementations/pi/providers/lib/provider-errors";
 
 export function getProviderLoginSession(loginSessionId: string) {
   return Effect.try({

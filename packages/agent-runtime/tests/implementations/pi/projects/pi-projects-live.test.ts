@@ -3,10 +3,10 @@ import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {Effect, Layer} from "effect";
 import {afterEach, describe, expect, it, vi} from "vitest";
-import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
-import type {PiSdkServiceShape, PiSessionInfo} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
-import {PiProjectsLive} from "@pi-desktop/agent-runtime/implementations/pi/projects/pi-projects-live";
-import {ProjectsService} from "@pi-desktop/agent-runtime/services/projects/projects-service";
+import {PiSdkService} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
+import type {PiSdkServiceShape, PiSessionInfo} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
+import {PiProjectsLive} from "@supernova/agent-runtime/implementations/pi/projects/pi-projects-live";
+import {ProjectsService} from "@supernova/agent-runtime/services/projects/projects-service";
 
 function session(overrides: Partial<PiSessionInfo>): PiSessionInfo {
   return {
@@ -66,7 +66,7 @@ describe("listing and archiving Pi project sessions", () => {
   });
 
   it("archives a session by moving the backing session file into an archive directory", async () => {
-    const tempDir = await mkdtemp(join(tmpdir(), "pi-desktop-agent-runtime-"));
+    const tempDir = await mkdtemp(join(tmpdir(), "supernova-agent-runtime-"));
     const sessionPath = join(tempDir, "session-1.jsonl");
     await writeFile(sessionPath, "{}\n");
     const piSdk = makePiSdk([session({id: "session-1", path: sessionPath})]);

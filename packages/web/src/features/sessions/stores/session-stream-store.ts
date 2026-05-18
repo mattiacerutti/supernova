@@ -1,5 +1,5 @@
 import type {QueryClient} from "@tanstack/react-query";
-import type {SessionStreamEvent} from "@pi-desktop/contracts/sessions/procedures";
+import type {SessionStreamEvent} from "@supernova/contracts/sessions/procedures";
 import type {
   ModelReference,
   SessionAttachment,
@@ -8,8 +8,8 @@ import type {
   SessionTurn,
   SessionUserMessageContentPart,
   SessionUserMessage,
-} from "@pi-desktop/contracts/sessions/schemas";
-import type {ProjectSessionsListResult} from "@pi-desktop/contracts/projects/procedures";
+} from "@supernova/contracts/sessions/schemas";
+import type {ProjectSessionsListResult} from "@supernova/contracts/projects/procedures";
 import {create} from "zustand";
 import {Effect, Stream} from "effect";
 import {listProjectSessionsQueryKey} from "@/features/projects/hooks/api/use-list-project-sessions";

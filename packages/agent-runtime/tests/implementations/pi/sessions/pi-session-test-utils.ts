@@ -1,8 +1,8 @@
 import type {AgentSession, SessionEntry} from "@earendil-works/pi-coding-agent";
 import {Effect, Stream} from "effect";
-import type {PiSessionInfo} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
-import type {SessionStreamEvent} from "@pi-desktop/contracts/sessions/procedures";
-import type {ModelReference} from "@pi-desktop/contracts/sessions/schemas";
+import type {PiSessionInfo} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
+import type {SessionStreamEvent} from "@supernova/contracts/sessions/procedures";
+import type {ModelReference} from "@supernova/contracts/sessions/schemas";
 
 export const selectedPiModel = {id: "claude-sonnet", name: "Claude Sonnet", provider: "anthropic", reasoning: true};
 export const selectedModelReference: ModelReference = {id: "claude-sonnet", providerId: "anthropic", thinkingLevel: "high"};

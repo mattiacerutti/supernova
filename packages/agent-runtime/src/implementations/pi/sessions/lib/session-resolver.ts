@@ -1,4 +1,4 @@
-import type {PiSdkServiceShape} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
+import type {PiSdkServiceShape} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
 
 export async function findSessionById(piSdk: PiSdkServiceShape, sessionId: string) {
   const sessions = await piSdk.SessionManager.listAll();

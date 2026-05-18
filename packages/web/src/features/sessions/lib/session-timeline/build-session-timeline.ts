@@ -1,4 +1,4 @@
-import type {SessionTurn} from "@pi-desktop/contracts/sessions/schemas";
+import type {SessionTurn} from "@supernova/contracts/sessions/schemas";
 import {workDuration} from "@/features/sessions/lib/session-timeline/work-timeline-items";
 import type {SessionTimelineItem, SessionTimelineItems, SessionWorkEvent} from "@/features/sessions/types/session-timeline-item";
 

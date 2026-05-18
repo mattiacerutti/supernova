@@ -1,5 +1,5 @@
 {
-  "name": "@pi-desktop/web",
+  "name": "@supernova/web",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -16,7 +16,7 @@
     "@base-ui/react": "^1.4.1",
     "@iconify/react": "^6.0.2",
     "@legendapp/list": "3.0.0-beta.44",
-    "@pi-desktop/contracts": "workspace:*",
+    "@supernova/contracts": "workspace:*",
     "@tanstack/react-query": "^5.90.0",
     "@tanstack/react-router": "^1.169.1",
     "@tanstack/react-virtual": "^3.13.24",

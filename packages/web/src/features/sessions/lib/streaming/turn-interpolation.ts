@@ -1,4 +1,4 @@
-import type {SessionTurn} from "@pi-desktop/contracts/sessions/schemas";
+import type {SessionTurn} from "@supernova/contracts/sessions/schemas";
 
 const STREAM_BACKLOG_CATCHUP_RATE = 8;
 export const STREAM_FRAME_MAX_DELTA_MS = 34;

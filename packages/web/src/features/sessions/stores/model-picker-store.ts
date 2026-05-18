@@ -1,7 +1,7 @@
 import {create} from "zustand";
 import {persist} from "zustand/middleware";
 
-const MODEL_PICKER_STORAGE_KEY = "pi-desktop-model-picker";
+const MODEL_PICKER_STORAGE_KEY = "supernova-model-picker";
 const MAX_RECENT_MODELS = 5;
 
 interface ModelPickerState {

@@ -1,4 +1,4 @@
-import type {SessionAssistantTurnEvent, SessionReasoningTurnEvent, SessionToolTurnEvent, SessionTurn} from "@pi-desktop/contracts/sessions/schemas";
+import type {SessionAssistantTurnEvent, SessionReasoningTurnEvent, SessionToolTurnEvent, SessionTurn} from "@supernova/contracts/sessions/schemas";
 import {describe, expect, it} from "vitest";
 import {buildSessionTimeline} from "@/features/sessions/lib/session-timeline/build-session-timeline";
 import {formatDuration} from "@/features/sessions/lib/session-timeline/work-timeline-items";

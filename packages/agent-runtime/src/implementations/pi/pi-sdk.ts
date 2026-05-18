@@ -14,7 +14,7 @@ export interface PiSdkServiceShape {
   readonly SessionManager: typeof SessionManager;
 }
 
-export class PiSdkService extends Context.Service<PiSdkService, PiSdkServiceShape>()("pi-desktop/agent-runtime/PiSdkService") {}
+export class PiSdkService extends Context.Service<PiSdkService, PiSdkServiceShape>()("supernova/agent-runtime/PiSdkService") {}
 
 export const PiSdkLive = Layer.succeed(PiSdkService, {
   authStorage,

@@ -1,4 +1,4 @@
-import type {SessionAttachment} from "@pi-desktop/contracts/sessions/schemas";
+import type {SessionAttachment} from "@supernova/contracts/sessions/schemas";
 import Icon from "@/components/ui/icon";
 import {formatAttachmentType} from "@/features/sessions/lib/attachments/session-attachments";
 

@@ -1,5 +1,5 @@
 import {Schema} from "effect";
-import {FolderFile} from "@pi-desktop/contracts/folders/schemas";
+import {FolderFile} from "@supernova/contracts/folders/schemas";
 
 export const FolderFilesListPayload = Schema.Struct({
   projectPath: Schema.String,

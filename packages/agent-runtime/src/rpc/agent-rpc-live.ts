@@ -1,9 +1,9 @@
-import {AgentRpcGroup} from "@pi-desktop/contracts";
+import {AgentRpcGroup} from "@supernova/contracts";
 import {Effect} from "effect";
-import {FoldersService} from "@pi-desktop/agent-runtime/services/folders/folders-service";
-import {ProvidersService} from "@pi-desktop/agent-runtime/services/providers/providers-service";
-import {ProjectsService} from "@pi-desktop/agent-runtime/services/projects/projects-service";
-import {SessionsService} from "@pi-desktop/agent-runtime/services/sessions/sessions-service";
+import {FoldersService} from "@supernova/agent-runtime/services/folders/folders-service";
+import {ProvidersService} from "@supernova/agent-runtime/services/providers/providers-service";
+import {ProjectsService} from "@supernova/agent-runtime/services/projects/projects-service";
+import {SessionsService} from "@supernova/agent-runtime/services/sessions/sessions-service";
 
 export const AgentRpcLive = AgentRpcGroup.toLayer(
   Effect.gen(function* () {

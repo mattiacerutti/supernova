@@ -1,8 +1,8 @@
 import {Effect, Layer} from "effect";
-import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
-import {ProjectsService} from "@pi-desktop/agent-runtime/services/projects/projects-service";
-import {archiveProjectSession} from "@pi-desktop/agent-runtime/implementations/pi/projects/operations/archive-project-session";
-import {listProjectSessions} from "@pi-desktop/agent-runtime/implementations/pi/projects/operations/list-project-sessions";
+import {PiSdkService} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
+import {ProjectsService} from "@supernova/agent-runtime/services/projects/projects-service";
+import {archiveProjectSession} from "@supernova/agent-runtime/implementations/pi/projects/operations/archive-project-session";
+import {listProjectSessions} from "@supernova/agent-runtime/implementations/pi/projects/operations/list-project-sessions";
 
 export const PiProjectsLive = Layer.effect(
   ProjectsService,

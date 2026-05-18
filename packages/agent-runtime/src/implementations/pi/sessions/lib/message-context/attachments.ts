@@ -1,8 +1,8 @@
 import type {ImageContent} from "@earendil-works/pi-ai";
-import type {SessionAttachment} from "@pi-desktop/contracts/sessions/schemas";
+import type {SessionAttachment} from "@supernova/contracts/sessions/schemas";
 
-export const ATTACHMENTS_CUSTOM_TYPE = "pi-desktop.attachments";
-export const TEXT_ATTACHMENTS_CUSTOM_TYPE = "pi-desktop.text-attachments";
+export const ATTACHMENTS_CUSTOM_TYPE = "supernova.attachments";
+export const TEXT_ATTACHMENTS_CUSTOM_TYPE = "supernova.text-attachments";
 
 export type AttachmentKind = "image" | "text";
 

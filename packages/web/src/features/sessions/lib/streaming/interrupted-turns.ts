@@ -1,4 +1,4 @@
-import type {SessionTurn} from "@pi-desktop/contracts/sessions/schemas";
+import type {SessionTurn} from "@supernova/contracts/sessions/schemas";
 
 export function completeInterruptedTurn(turn: SessionTurn): SessionTurn {
   const completedAt = turn.completedAt ?? turn.events.at(-1)?.timestamp ?? new Date().toISOString();

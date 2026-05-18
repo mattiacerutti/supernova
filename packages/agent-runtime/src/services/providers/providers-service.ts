@@ -7,8 +7,8 @@ import type {
   ProviderApiKeySetResult,
   ProviderLogoutResult,
   ProvidersListResult,
-} from "@pi-desktop/contracts/providers/procedures";
-import type {ProviderLoginSession} from "@pi-desktop/contracts/providers/schemas";
+} from "@supernova/contracts/providers/procedures";
+import type {ProviderLoginSession} from "@supernova/contracts/providers/schemas";
 
 export interface ProvidersServiceShape {
   readonly list: () => Effect.Effect<ProvidersListResult, ProvidersListError>;
@@ -20,4 +20,4 @@ export interface ProvidersServiceShape {
   readonly submitLoginInput: (loginSessionId: string, input: string) => Effect.Effect<ProviderLoginSession, ProviderLoginError>;
 }
 
-export class ProvidersService extends Context.Service<ProvidersService, ProvidersServiceShape>()("pi-desktop/agent-runtime/ProvidersService") {}
+export class ProvidersService extends Context.Service<ProvidersService, ProvidersServiceShape>()("supernova/agent-runtime/ProvidersService") {}

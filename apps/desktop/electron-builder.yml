@@ -1,5 +1,5 @@
-appId: dev.pi-desktop.app
-productName: Pi Desktop
+appId: dev.supernova.app
+productName: Supernova
 directories:
   buildResources: build
 files:
@@ -13,9 +13,9 @@ extraResources:
   - from: ../server/dist
     to: server
 win:
-  executableName: pi-desktop
+  executableName: supernova
 nsis:
-  artifactName: pi-desktop-${version}-setup.${ext}
+  artifactName: supernova-${version}-setup.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
@@ -28,7 +28,7 @@ mac:
     - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
   notarize: false
 dmg:
-  artifactName: pi-desktop-${version}.${ext}
+  artifactName: supernova-${version}.${ext}
 linux:
   target:
     - AppImage
@@ -37,7 +37,7 @@ linux:
   maintainer: electronjs.org
   category: Utility
 appImage:
-  artifactName: pi-desktop-${version}.${ext}
+  artifactName: supernova-${version}.${ext}
 npmRebuild: false
 publish:
   provider: generic

@@ -1,16 +1,16 @@
 import type {AgentSession, SessionEntry} from "@earendil-works/pi-coding-agent";
 import {Effect, Queue, Stream} from "effect";
-import type {SessionMessageSendPayload, SessionStreamEvent} from "@pi-desktop/contracts/sessions/procedures";
-import type {SessionSummary} from "@pi-desktop/contracts/sessions/schemas";
-import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
-import type {PiSdkServiceShape, PiSessionInfo} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
-import type {PreparedSendMessageContext} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/message-context/send-message-context";
-import {prepareSendMessageContext} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/message-context/send-message-context";
-import {findSessionById} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-resolver";
-import {generateSessionTitle} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-title-generator";
-import {createLiveBranchEntries} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/turns/live-branch-entries";
-import {buildPiSessionTurns} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-turns-builder";
-import {toPiThinkingLevel} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/models/thinking-levels";
+import type {SessionMessageSendPayload, SessionStreamEvent} from "@supernova/contracts/sessions/procedures";
+import type {SessionSummary} from "@supernova/contracts/sessions/schemas";
+import {PiSdkService} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
+import type {PiSdkServiceShape, PiSessionInfo} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
+import type {PreparedSendMessageContext} from "@supernova/agent-runtime/implementations/pi/sessions/lib/message-context/send-message-context";
+import {prepareSendMessageContext} from "@supernova/agent-runtime/implementations/pi/sessions/lib/message-context/send-message-context";
+import {findSessionById} from "@supernova/agent-runtime/implementations/pi/sessions/lib/session-resolver";
+import {generateSessionTitle} from "@supernova/agent-runtime/implementations/pi/sessions/lib/session-title-generator";
+import {createLiveBranchEntries} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns/live-branch-entries";
+import {buildPiSessionTurns} from "@supernova/agent-runtime/implementations/pi/sessions/lib/session-turns-builder";
+import {toPiThinkingLevel} from "@supernova/agent-runtime/implementations/pi/sessions/lib/models/thinking-levels";
 
 type PiAgentMessage = AgentSession["messages"][number];
 type PiSessionManager = ReturnType<PiSdkServiceShape["SessionManager"]["open"]>;

@@ -1,4 +1,4 @@
-import type {SessionAttachment, SessionUserMessageContentPart} from "@pi-desktop/contracts/sessions/schemas";
+import type {SessionAttachment, SessionUserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 import Document from "@tiptap/extension-document";
 import HardBreak from "@tiptap/extension-hard-break";
 import History from "@tiptap/extension-history";

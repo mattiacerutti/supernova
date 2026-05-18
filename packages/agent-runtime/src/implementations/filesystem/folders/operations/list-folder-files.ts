@@ -3,8 +3,8 @@ import {stat} from "node:fs/promises";
 import {basename, dirname, join} from "node:path";
 import {promisify} from "node:util";
 import {Effect} from "effect";
-import {FolderFilesListError} from "@pi-desktop/contracts/folders/procedures";
-import type {FolderFile} from "@pi-desktop/contracts/folders/schemas";
+import {FolderFilesListError} from "@supernova/contracts/folders/procedures";
+import type {FolderFile} from "@supernova/contracts/folders/schemas";
 
 const execFilePromise = promisify(execFile);
 const FD_MAX_RESULTS = 100;

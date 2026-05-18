@@ -1,12 +1,12 @@
 import {randomUUID} from "node:crypto";
 import {Effect} from "effect";
-import {ProviderLoginError} from "@pi-desktop/contracts/providers/procedures";
-import type {ProviderLoginInputKind} from "@pi-desktop/contracts/providers/schemas";
-import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
-import type {PiSdkServiceShape} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
-import {loginSessions, toLoginSession} from "@pi-desktop/agent-runtime/implementations/pi/providers/lib/login-sessions";
-import type {LoginSessionState} from "@pi-desktop/agent-runtime/implementations/pi/providers/lib/login-sessions";
-import {errorMessage} from "@pi-desktop/agent-runtime/implementations/pi/providers/lib/provider-errors";
+import {ProviderLoginError} from "@supernova/contracts/providers/procedures";
+import type {ProviderLoginInputKind} from "@supernova/contracts/providers/schemas";
+import {PiSdkService} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
+import type {PiSdkServiceShape} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
+import {loginSessions, toLoginSession} from "@supernova/agent-runtime/implementations/pi/providers/lib/login-sessions";
+import type {LoginSessionState} from "@supernova/agent-runtime/implementations/pi/providers/lib/login-sessions";
+import {errorMessage} from "@supernova/agent-runtime/implementations/pi/providers/lib/provider-errors";
 
 interface OAuthPrompt {
   allowEmpty?: boolean;

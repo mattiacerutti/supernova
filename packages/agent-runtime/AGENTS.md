@@ -3,7 +3,7 @@
 ## File structure
 
 - Keep Effect service tags and service interfaces in `src/services/<domain>`.
-- Keep serializable domain contracts, schemas, and RPC definitions in `@pi-desktop/contracts`; do not duplicate them in this package.
+- Keep serializable domain contracts, schemas, and RPC definitions in `@supernova/contracts`; do not duplicate them in this package.
 - Keep runtime/provider-specific implementations in `src/implementations/<runtime>/<domain>` such as `src/implementations/pi/sessions` or `src/implementations/filesystem/folders`.
 - Keep live layer files named `*-live.ts` and focused on wiring service methods to implementation functions.
 - Keep service operation implementations in an `operations` folder when a service has multiple non-trivial methods.
@@ -33,4 +33,4 @@
 
 ## Imports
 
-- Use package imports for source imports that must work from dependent packages, e.g. `@pi-desktop/agent-runtime/...`.
+- Use package imports for source imports that must work from dependent packages, e.g. `@supernova/agent-runtime/...`.

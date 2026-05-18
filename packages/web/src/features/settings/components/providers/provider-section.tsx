@@ -1,4 +1,4 @@
-import type {Provider} from "@pi-desktop/contracts/providers/schemas";
+import type {Provider} from "@supernova/contracts/providers/schemas";
 import ProviderRow from "@/features/settings/components/providers/provider-row";
 
 interface ProviderSectionProps {

@@ -1,9 +1,9 @@
 import type {AgentSession} from "@earendil-works/pi-coding-agent";
-import type {SessionMessageSendPayload} from "@pi-desktop/contracts/sessions/procedures";
-import type {SessionUserMessageContentPart} from "@pi-desktop/contracts/sessions/schemas";
-import {ATTACHMENTS_CUSTOM_TYPE, TEXT_ATTACHMENTS_CUSTOM_TYPE, prepareAttachments} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/message-context/attachments";
-import type {Attachments} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/message-context/attachments";
-import {USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE, validContentParts} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/message-context/content-parts";
+import type {SessionMessageSendPayload} from "@supernova/contracts/sessions/procedures";
+import type {SessionUserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import {ATTACHMENTS_CUSTOM_TYPE, TEXT_ATTACHMENTS_CUSTOM_TYPE, prepareAttachments} from "@supernova/agent-runtime/implementations/pi/sessions/lib/message-context/attachments";
+import type {Attachments} from "@supernova/agent-runtime/implementations/pi/sessions/lib/message-context/attachments";
+import {USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE, validContentParts} from "@supernova/agent-runtime/implementations/pi/sessions/lib/message-context/content-parts";
 
 type PiCustomMessage = Extract<AgentSession["messages"][number], {role: "custom"}>;
 

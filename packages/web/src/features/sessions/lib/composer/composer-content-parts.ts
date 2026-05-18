@@ -1,4 +1,4 @@
-import type {SessionUserMessageContentPart, SessionUserMessageReferencePart} from "@pi-desktop/contracts/sessions/schemas";
+import type {SessionUserMessageContentPart, SessionUserMessageReferencePart} from "@supernova/contracts/sessions/schemas";
 import type {Editor, JSONContent} from "@tiptap/react";
 
 function contentPartValue(part: SessionUserMessageContentPart): string {

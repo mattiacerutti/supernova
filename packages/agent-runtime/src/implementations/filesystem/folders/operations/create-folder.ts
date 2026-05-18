@@ -1,7 +1,7 @@
 import {mkdir} from "node:fs/promises";
 import {Effect} from "effect";
-import {FolderCreateError} from "@pi-desktop/contracts/folders/procedures";
-import {resolveFolderPath} from "@pi-desktop/agent-runtime/implementations/filesystem/folders/lib/folder-paths";
+import {FolderCreateError} from "@supernova/contracts/folders/procedures";
+import {resolveFolderPath} from "@supernova/agent-runtime/implementations/filesystem/folders/lib/folder-paths";
 
 export function createFolder(path: string) {
   return Effect.tryPromise({

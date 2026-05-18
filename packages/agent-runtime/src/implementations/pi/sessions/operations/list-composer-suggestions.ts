@@ -3,9 +3,9 @@ import {DefaultResourceLoader, getAgentDir, SettingsManager} from "@earendil-wor
 import type {PromptTemplate, Skill} from "@earendil-works/pi-coding-agent";
 import {Effect} from "effect";
 import {matchSorter} from "match-sorter";
-import {SessionComposerSuggestionsListError} from "@pi-desktop/contracts/sessions/procedures";
-import type {SessionComposerSuggestionItem, SessionComposerSuggestionTriggerKind} from "@pi-desktop/contracts/sessions/procedures";
-import {generateStableId} from "@pi-desktop/agent-runtime/implementations/shared/id-generator";
+import {SessionComposerSuggestionsListError} from "@supernova/contracts/sessions/procedures";
+import type {SessionComposerSuggestionItem, SessionComposerSuggestionTriggerKind} from "@supernova/contracts/sessions/procedures";
+import {generateStableId} from "@supernova/agent-runtime/implementations/shared/id-generator";
 
 const MAX_SUGGESTIONS = 50;
 

@@ -1,4 +1,4 @@
-import type {ThinkingLevelOption} from "@pi-desktop/contracts/sessions/schemas";
+import type {ThinkingLevelOption} from "@supernova/contracts/sessions/schemas";
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import Menu, {MenuItem} from "@/components/ui/menu";

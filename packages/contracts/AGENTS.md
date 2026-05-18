@@ -11,9 +11,9 @@
 
 - Add an `index.ts` barrel file in every `schemas` folder.
 - Add an `index.ts` barrel file in every `procedures` folder.
-- Import shared domain schemas from `@pi-desktop/contracts/<domain>/schemas`.
-- Import RPC procedure contracts from `@pi-desktop/contracts/<domain>/procedures`.
-- Import RPC definitions from `@pi-desktop/contracts/<domain>/rpc`.
+- Import shared domain schemas from `@supernova/contracts/<domain>/schemas`.
+- Import RPC procedure contracts from `@supernova/contracts/<domain>/procedures`.
+- Import RPC definitions from `@supernova/contracts/<domain>/rpc`.
 
 ## Schema Organization
 

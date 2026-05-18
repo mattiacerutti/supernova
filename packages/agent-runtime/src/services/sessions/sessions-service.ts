@@ -10,8 +10,8 @@ import type {
   SessionModelsListError,
   SessionStreamEvent,
   SessionModelsListResult,
-} from "@pi-desktop/contracts/sessions/procedures";
-import type {SessionDetails} from "@pi-desktop/contracts/sessions/schemas";
+} from "@supernova/contracts/sessions/procedures";
+import type {SessionDetails} from "@supernova/contracts/sessions/schemas";
 
 export interface SessionsServiceShape {
   readonly create: (projectPath: string) => Effect.Effect<SessionDetails, SessionCreateError>;
@@ -25,4 +25,4 @@ export interface SessionsServiceShape {
   readonly sendMessage: (input: SessionMessageSendPayload) => Stream.Stream<SessionStreamEvent>;
 }
 
-export class SessionsService extends Context.Service<SessionsService, SessionsServiceShape>()("pi-desktop/agent-runtime/SessionsService") {}
+export class SessionsService extends Context.Service<SessionsService, SessionsServiceShape>()("supernova/agent-runtime/SessionsService") {}

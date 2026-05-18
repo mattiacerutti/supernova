@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This project (`pi-desktop`) is a desktop GUI for interacting with a Pi-based coding agent.
+This project (`supernova`) is a desktop GUI for interacting with a Pi-based coding agent.
 
 The goal is to build a **custom, opinionated user interface** for agent-driven coding workflows without reimplementing the agent itself.
 
@@ -27,7 +27,7 @@ packages/contracts      → Shared Effect schemas, RPC definitions, and domain c
 
 ```text
 Standalone server:
-user terminal → pi-desktop-server → server owns runtime/filesystem/workspaces → browser connects to server URL
+user terminal → supernova-server → server owns runtime/filesystem/workspaces → browser connects to server URL
 
 Desktop app:
 Electron app → spawns bundled server → server owns runtime/filesystem/workspaces → BrowserWindow loads server URL
@@ -109,8 +109,8 @@ Long term maintainability is a core priority. If you add new functionality, firs
 
 ### Imports and logging
 
-- Prefer package or path aliases (`@/...`, `@assets/...`, `@pi-desktop/...`) over deep relative imports. Never use relative path imports (`./...` or `../...`).
-- Follow package-specific import guidance when it is more precise, such as using `@pi-desktop/agent-runtime/...` for source imports that must typecheck from dependent packages.
+- Prefer package or path aliases (`@/...`, `@assets/...`, `@supernova/...`) over deep relative imports. Never use relative path imports (`./...` or `../...`).
+- Follow package-specific import guidance when it is more precise, such as using `@supernova/agent-runtime/...` for source imports that must typecheck from dependent packages.
 - Never include TypeScript file extensions in imports (`.ts` or `.tsx`).
 - Do not create local `index.ts` barrel files.
 - Keep logging minimal and purposeful; remove noisy debug output when not needed.

@@ -1,5 +1,5 @@
 import {Schema} from "effect";
-import {SessionSummary} from "@pi-desktop/contracts/sessions/schemas";
+import {SessionSummary} from "@supernova/contracts/sessions/schemas";
 
 export const ProjectSessionsListPayload = Schema.Struct({
   cursor: Schema.optional(Schema.String),

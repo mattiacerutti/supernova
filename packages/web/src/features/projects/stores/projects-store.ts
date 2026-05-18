@@ -1,7 +1,7 @@
 import {create} from "zustand";
 import {persist} from "zustand/middleware";
 
-const PROJECTS_STORAGE_KEY = "pi-desktop-projects";
+const PROJECTS_STORAGE_KEY = "supernova-projects";
 
 export interface StoredProject {
   readonly id: string;

@@ -1,7 +1,7 @@
 import {Effect} from "effect";
-import {ProjectSessionsListError} from "@pi-desktop/contracts/projects/procedures";
-import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
-import {mapPiSessionsToSummaries} from "@pi-desktop/agent-runtime/implementations/pi/projects/pi-session-mapper";
+import {ProjectSessionsListError} from "@supernova/contracts/projects/procedures";
+import {PiSdkService} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
+import {mapPiSessionsToSummaries} from "@supernova/agent-runtime/implementations/pi/projects/pi-session-mapper";
 
 const DEFAULT_SESSION_LIST_LIMIT = 5;
 

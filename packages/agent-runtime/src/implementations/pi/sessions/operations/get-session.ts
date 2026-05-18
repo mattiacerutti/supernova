@@ -1,9 +1,9 @@
 import {Effect} from "effect";
-import {SessionLoadError} from "@pi-desktop/contracts/sessions/procedures";
-import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
-import {toPiSessionSummary} from "@pi-desktop/agent-runtime/implementations/pi/projects/pi-session-mapper";
-import {findSessionById} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-resolver";
-import {buildPiSessionTurns} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-turns-builder";
+import {SessionLoadError} from "@supernova/contracts/sessions/procedures";
+import {PiSdkService} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
+import {toPiSessionSummary} from "@supernova/agent-runtime/implementations/pi/projects/pi-session-mapper";
+import {findSessionById} from "@supernova/agent-runtime/implementations/pi/sessions/lib/session-resolver";
+import {buildPiSessionTurns} from "@supernova/agent-runtime/implementations/pi/sessions/lib/session-turns-builder";
 
 export function getSession(sessionId: string) {
   return Effect.gen(function* () {

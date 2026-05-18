@@ -1,6 +1,6 @@
-import type {SessionUserMessageContentPart} from "@pi-desktop/contracts/sessions/schemas";
+import type {SessionUserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 
-export const USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE = "pi-desktop.user-message-content-parts";
+export const USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE = "supernova.user-message-content-parts";
 
 /** Validates that the provided content parts match the actual content string. */
 export function validContentParts(content: string, contentParts: readonly SessionUserMessageContentPart[] | undefined): readonly SessionUserMessageContentPart[] | undefined {

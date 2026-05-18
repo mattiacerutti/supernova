@@ -1,4 +1,4 @@
-import type {ProviderLoginInputKind, ProviderLoginSession} from "@pi-desktop/contracts/providers/schemas";
+import type {ProviderLoginInputKind, ProviderLoginSession} from "@supernova/contracts/providers/schemas";
 
 interface LoginWaiter {
   reject: (error: Error) => void;

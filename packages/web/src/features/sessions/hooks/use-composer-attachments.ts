@@ -1,7 +1,7 @@
 import type {DragEvent, HTMLAttributes} from "react";
 import {useRef, useState} from "react";
 import {useMutation} from "@tanstack/react-query";
-import type {SessionAttachment} from "@pi-desktop/contracts/sessions/schemas";
+import type {SessionAttachment} from "@supernova/contracts/sessions/schemas";
 import {
   fileRequiresImageCapability,
   fileToSessionAttachment,

@@ -7,14 +7,14 @@ import type {
   SessionTurnEvent,
   SessionUserMessage,
   SessionUserMessageContentPart,
-} from "@pi-desktop/contracts/sessions/schemas";
-import {sessionTurn} from "@pi-desktop/agent-runtime/implementations/shared/session-turns";
-import {generateStableId} from "@pi-desktop/agent-runtime/implementations/shared/id-generator";
-import {ATTACHMENTS_CUSTOM_TYPE} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/message-context/attachments";
-import type {AttachmentMetadata} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/message-context/attachments";
-import {piContentToText, piUserAttachments} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/turns/message-content";
-import {piToolSummary} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/turns/tool-events";
-import {USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE, validContentParts} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/message-context/content-parts";
+} from "@supernova/contracts/sessions/schemas";
+import {sessionTurn} from "@supernova/agent-runtime/implementations/shared/session-turns";
+import {generateStableId} from "@supernova/agent-runtime/implementations/shared/id-generator";
+import {ATTACHMENTS_CUSTOM_TYPE} from "@supernova/agent-runtime/implementations/pi/sessions/lib/message-context/attachments";
+import type {AttachmentMetadata} from "@supernova/agent-runtime/implementations/pi/sessions/lib/message-context/attachments";
+import {piContentToText, piUserAttachments} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns/message-content";
+import {piToolSummary} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns/tool-events";
+import {USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE, validContentParts} from "@supernova/agent-runtime/implementations/pi/sessions/lib/message-context/content-parts";
 
 function isMessageEntry(entry: SessionEntry): entry is SessionMessageEntry {
   return entry.type === "message";

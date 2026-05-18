@@ -6,8 +6,8 @@ import {join} from "path";
 import {electronApp, optimizer} from "@electron-toolkit/utils";
 import installExtension, {REACT_DEVELOPER_TOOLS} from "electron-devtools-installer";
 
-declare const PI_DESKTOP_IS_DEV: boolean;
-declare const PI_DESKTOP_SERVER_ENTRY: string;
+declare const SUPERNOVA_IS_DEV: boolean;
+declare const SUPERNOVA_SERVER_ENTRY: string;
 
 let mainWindow: BrowserWindow | undefined;
 let server: SpawnedServer | undefined;
@@ -34,7 +34,7 @@ function registerDesktopIpc(): void {
 }
 
 async function createWindow(): Promise<void> {
-  if (!PI_DESKTOP_IS_DEV) {
+  if (!SUPERNOVA_IS_DEV) {
     server ??= await startServerProcess({
       host: "127.0.0.1",
       port: 0,
@@ -55,7 +55,7 @@ async function createWindow(): Promise<void> {
     },
   });
 
-  if (PI_DESKTOP_IS_DEV) {
+  if (SUPERNOVA_IS_DEV) {
     mainWindow.webContents.openDevTools({mode: "detach"});
   }
 
@@ -80,7 +80,7 @@ async function createWindow(): Promise<void> {
 }
 
 async function installDevToolsExtensions(): Promise<void> {
-  if (!PI_DESKTOP_IS_DEV) return;
+  if (!SUPERNOVA_IS_DEV) return;
 
   try {
     await installExtension(REACT_DEVELOPER_TOOLS);
@@ -90,8 +90,8 @@ async function installDevToolsExtensions(): Promise<void> {
 }
 
 function resolveRendererUrl(): string {
-  if (PI_DESKTOP_IS_DEV) return DEV_WEB_URL;
-  if (!server) throw new Error("Pi Desktop server is not available.");
+  if (SUPERNOVA_IS_DEV) return DEV_WEB_URL;
+  if (!server) throw new Error("Supernova server is not available.");
   return server.url;
 }
 
@@ -119,9 +119,9 @@ function startServerProcess(options: {host: string; port: number}): Promise<Spaw
   const child = spawn(resolveServerCommand(), args, {
     env: {
       ...process.env,
-      PI_DESKTOP_SERVER_HOST: options.host,
-      PI_DESKTOP_SERVER_PORT: String(options.port),
-      PI_DESKTOP_SERVER_DEV: "0",
+      SUPERNOVA_SERVER_HOST: options.host,
+      SUPERNOVA_SERVER_PORT: String(options.port),
+      SUPERNOVA_SERVER_DEV: "0",
       ...(app.isPackaged ? {ELECTRON_RUN_AS_NODE: "1"} : {}),
     },
   });
@@ -132,7 +132,7 @@ function startServerProcess(options: {host: string; port: number}): Promise<Spaw
     const timeout = setTimeout(() => {
       settled = true;
       child.kill();
-      reject(new Error("Timed out waiting for Pi Desktop server to start"));
+      reject(new Error("Timed out waiting for Supernova server to start"));
     }, 10_000);
 
     child.once("error", (error) => {
@@ -147,13 +147,13 @@ function startServerProcess(options: {host: string; port: number}): Promise<Spaw
       settled = true;
       clearTimeout(timeout);
       const details = stderr.trim() ? `\n${stderr.trim()}` : "";
-      reject(new Error(`Pi Desktop server exited before startup (code=${code ?? "null"}, signal=${signal ?? "null"})${details}`));
+      reject(new Error(`Supernova server exited before startup (code=${code ?? "null"}, signal=${signal ?? "null"})${details}`));
     });
 
     child.stdout.on("data", (chunk: Buffer) => {
       const output = chunk.toString("utf8");
       process.stdout.write(output);
-      const match = output.match(/^PI_DESKTOP_SERVER_URL=(.+)$/m);
+      const match = output.match(/^SUPERNOVA_SERVER_URL=(.+)$/m);
       const url = match?.[1];
       if (!url) return;
 
@@ -170,7 +170,7 @@ function startServerProcess(options: {host: string; port: number}): Promise<Spaw
 }
 
 function failStartup(error: unknown): void {
-  console.error("Failed to start Pi Desktop.", error);
+  console.error("Failed to start Supernova.", error);
   app.exit(1);
 }
 
@@ -179,14 +179,14 @@ function resolveServerCommand(): string {
 }
 
 function resolveServerEntry(): string {
-  return app.isPackaged ? join(process.resourcesPath, "server", "bootstrap.js") : PI_DESKTOP_SERVER_ENTRY;
+  return app.isPackaged ? join(process.resourcesPath, "server", "bootstrap.js") : SUPERNOVA_SERVER_ENTRY;
 }
 
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
-  electronApp.setAppUserModelId("dev.pi-desktop.app");
+  electronApp.setAppUserModelId("dev.supernova.app");
 
   app.on("browser-window-created", (_, window) => {
     optimizer.watchWindowShortcuts(window);

@@ -1,10 +1,10 @@
 import {Effect, Layer} from "effect";
 import {afterEach, describe, expect, it, vi} from "vitest";
-import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
-import type {PiSdkServiceShape} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
-import {loginSessions} from "@pi-desktop/agent-runtime/implementations/pi/providers/lib/login-sessions";
-import {PiProvidersLive} from "@pi-desktop/agent-runtime/implementations/pi/providers/pi-providers-live";
-import {ProvidersService} from "@pi-desktop/agent-runtime/services/providers/providers-service";
+import {PiSdkService} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
+import type {PiSdkServiceShape} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
+import {loginSessions} from "@supernova/agent-runtime/implementations/pi/providers/lib/login-sessions";
+import {PiProvidersLive} from "@supernova/agent-runtime/implementations/pi/providers/pi-providers-live";
+import {ProvidersService} from "@supernova/agent-runtime/services/providers/providers-service";
 
 interface OAuthLoginOptions {
   readonly onAuth: (info: {instructions?: string; url: string}) => void;

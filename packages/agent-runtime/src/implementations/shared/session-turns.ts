@@ -1,4 +1,4 @@
-import type {ModelReference, SessionTurn, SessionTurnEvent, SessionUserMessage} from "@pi-desktop/contracts/sessions/schemas";
+import type {ModelReference, SessionTurn, SessionTurnEvent, SessionUserMessage} from "@supernova/contracts/sessions/schemas";
 
 export function sessionTurnStatus(events: readonly SessionTurnEvent[], streaming = false): SessionTurn["status"] {
   if (events.some((event) => (event.type === "assistant" && Boolean(event.error)) || (event.type === "tool" && event.tool?.status === "error"))) return "error";

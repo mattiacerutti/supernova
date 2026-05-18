@@ -1,4 +1,4 @@
-import type {ModelDetails} from "@pi-desktop/contracts/sessions/schemas";
+import type {ModelDetails} from "@supernova/contracts/sessions/schemas";
 import {describe, expect, it} from "vitest";
 import {resolveThinkingLevel} from "@/features/sessions/lib/model-picker/model-utils";
 

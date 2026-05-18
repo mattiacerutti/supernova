@@ -6,8 +6,8 @@ import * as NodeSocketServer from "@effect/platform-node/NodeSocketServer";
 import {createAdaptorServer} from "@hono/node-server";
 import type {ServerType} from "@hono/node-server";
 import {serveStatic} from "@hono/node-server/serve-static";
-import {AgentRpcGroup} from "@pi-desktop/contracts";
-import {AgentRpcLive, AgentRuntimeServicesLive} from "@pi-desktop/agent-runtime";
+import {AgentRpcGroup} from "@supernova/contracts";
+import {AgentRpcLive, AgentRuntimeServicesLive} from "@supernova/agent-runtime";
 import {Effect, Exit, Fiber, Layer, Scope} from "effect";
 import {RpcSerialization, RpcServer} from "effect/unstable/rpc";
 import {Hono} from "hono";
@@ -89,7 +89,7 @@ export function startServer(options: StartServerOptions): Promise<RunningServer>
       if (settled) return;
       settled = true;
       void closeServer(server, scope, fiber);
-      reject(new Error("Timed out waiting for Pi Desktop server to start"));
+      reject(new Error("Timed out waiting for Supernova server to start"));
     }, 10_000);
 
     server.once("error", (error) => {

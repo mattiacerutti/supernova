@@ -2,8 +2,8 @@ import {existsSync} from "node:fs";
 import {mkdir, rename} from "node:fs/promises";
 import {basename, dirname, join} from "node:path";
 import {Effect} from "effect";
-import {ProjectSessionArchiveError} from "@pi-desktop/contracts/projects/procedures";
-import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
+import {ProjectSessionArchiveError} from "@supernova/contracts/projects/procedures";
+import {PiSdkService} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
 
 const ARCHIVE_DIR_NAME = "archive";
 

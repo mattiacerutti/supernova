@@ -1,6 +1,6 @@
 import {getSupportedThinkingLevels} from "@earendil-works/pi-ai";
 import type {Api, Model, ModelThinkingLevel} from "@earendil-works/pi-ai";
-import type {ModelDetails} from "@pi-desktop/contracts/sessions/schemas";
+import type {ModelDetails} from "@supernova/contracts/sessions/schemas";
 
 const thinkingLevelLabels: Record<ModelThinkingLevel, string> = {
   high: "High",

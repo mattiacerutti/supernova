@@ -1,4 +1,4 @@
-import type {ModelDetails} from "@pi-desktop/contracts/sessions/schemas";
+import type {ModelDetails} from "@supernova/contracts/sessions/schemas";
 import type {MouseEvent} from "react";
 import {useRef, useState} from "react";
 import Button from "@/components/ui/button";

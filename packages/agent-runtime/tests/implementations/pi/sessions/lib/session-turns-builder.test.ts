@@ -1,6 +1,6 @@
 import {describe, expect, it} from "vitest";
-import {buildPiSessionTurns} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/session-turns-builder";
-import type {ModelReference} from "@pi-desktop/contracts/sessions/schemas";
+import {buildPiSessionTurns} from "@supernova/agent-runtime/implementations/pi/sessions/lib/session-turns-builder";
+import type {ModelReference} from "@supernova/contracts/sessions/schemas";
 import type {AgentSession, SessionEntry} from "@earendil-works/pi-coding-agent";
 
 const model: ModelReference = {id: "claude-sonnet", providerId: "anthropic", thinkingLevel: "high"};
@@ -199,7 +199,7 @@ describe("projecting Pi branch entries into session turns", () => {
           tokensBefore: 1000,
           type: "compaction",
         },
-        {customType: "pi-desktop.test", id: "custom-1", parentId: "compaction-1", timestamp: "1970-01-01T00:00:04.000Z", type: "custom"},
+        {customType: "supernova.test", id: "custom-1", parentId: "compaction-1", timestamp: "1970-01-01T00:00:04.000Z", type: "custom"},
         {
           id: "entry-2",
           message: {content: [{text: "Second request", type: "text"}], id: "user-2", role: "user", timestamp: 5} as AgentSession["messages"][number],
@@ -237,7 +237,7 @@ describe("projecting Pi branch entries into session turns", () => {
   it("reconstructs attachment metadata and image previews from branch entries", () => {
     const entries: SessionEntry[] = [
       {
-        customType: "pi-desktop.attachments",
+        customType: "supernova.attachments",
         data: {
           attachments: [
             {id: "image-1", kind: "image", mime: "image/png", name: "diagram.png", order: 0, size: 12},
@@ -266,7 +266,7 @@ describe("projecting Pi branch entries into session turns", () => {
       },
       {
         content: "<attachments>text content for the model</attachments>",
-        customType: "pi-desktop.text-attachments",
+        customType: "supernova.text-attachments",
         display: false,
         id: "text-attachments-1",
         parentId: "user-1",
@@ -311,7 +311,7 @@ describe("projecting Pi branch entries into session turns", () => {
   it("preserves mixed attachment order while matching multiple image previews by image order", () => {
     const entries: SessionEntry[] = [
       {
-        customType: "pi-desktop.attachments",
+        customType: "supernova.attachments",
         data: {
           attachments: [
             {id: "text-1", kind: "text", mime: "text/plain", name: "notes.txt", order: 0, size: 10},
@@ -374,7 +374,7 @@ describe("projecting Pi branch entries into session turns", () => {
     const turns = buildPiSessionTurns(
       [
         {
-          customType: "pi-desktop.attachments",
+          customType: "supernova.attachments",
           data: {attachments: [{id: "image-1", kind: "image", mime: "image/png", name: "diagram.png", order: 0, size: 12}]},
           id: "attachments-1",
           parentId: null,
@@ -431,7 +431,7 @@ describe("projecting Pi branch entries into session turns", () => {
   it("reconstructs selected reference content parts from branch entries", () => {
     const entries: SessionEntry[] = [
       {
-        customType: "pi-desktop.user-message-content-parts",
+        customType: "supernova.user-message-content-parts",
         data: {
           contentParts: [
             {text: "Read ", type: "text"},
@@ -471,7 +471,7 @@ describe("projecting Pi branch entries into session turns", () => {
   it("ignores reference content parts that do not match user message text", () => {
     const entries: SessionEntry[] = [
       {
-        customType: "pi-desktop.user-message-content-parts",
+        customType: "supernova.user-message-content-parts",
         data: {contentParts: [{id: "part-1", kind: "file", title: "file.ts", type: "reference", value: "@src/file.ts"}]},
         id: "content-parts-1",
         parentId: null,

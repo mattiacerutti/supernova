@@ -1,9 +1,9 @@
 import {Effect} from "effect";
-import {ProvidersListError} from "@pi-desktop/contracts/providers/procedures";
-import type {ProviderAuthSource, Provider} from "@pi-desktop/contracts/providers/schemas";
-import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
-import {EXTERNAL_AUTH_PROVIDERS} from "@pi-desktop/agent-runtime/implementations/pi/providers/constants";
-import {errorMessage} from "@pi-desktop/agent-runtime/implementations/pi/providers/lib/provider-errors";
+import {ProvidersListError} from "@supernova/contracts/providers/procedures";
+import type {ProviderAuthSource, Provider} from "@supernova/contracts/providers/schemas";
+import {PiSdkService} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
+import {EXTERNAL_AUTH_PROVIDERS} from "@supernova/agent-runtime/implementations/pi/providers/constants";
+import {errorMessage} from "@supernova/agent-runtime/implementations/pi/providers/lib/provider-errors";
 
 function normalizeSource(source: string | undefined): ProviderAuthSource | undefined {
   switch (source) {

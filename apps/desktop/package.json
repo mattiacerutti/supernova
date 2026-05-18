@@ -1,5 +1,5 @@
 {
-  "name": "@pi-desktop/desktop",
+  "name": "@supernova/desktop",
   "private": true,
   "version": "0.0.0",
   "main": "./out/main/index.js",
@@ -21,7 +21,7 @@
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config-ts": "^3.1.0",
-    "@pi-desktop/server": "workspace:*",
+    "@supernova/server": "workspace:*",
     "@types/node": "^22.19.1",
     "electron": "^39.2.6",
     "electron-devtools-installer": "^4.0.0",

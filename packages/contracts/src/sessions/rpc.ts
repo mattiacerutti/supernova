@@ -14,7 +14,7 @@ import {
   SessionModelsListPayload,
   SessionModelsListResult,
   SessionStreamEvent,
-} from "@pi-desktop/contracts/sessions/procedures";
+} from "@supernova/contracts/sessions/procedures";
 
 export const SessionGetRpc = Rpc.make("getSession", {
   error: SessionLoadError,

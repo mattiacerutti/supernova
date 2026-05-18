@@ -1,5 +1,5 @@
 import {describe, expect, it} from "vitest";
-import {prepareAttachments} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/message-context/attachments";
+import {prepareAttachments} from "@supernova/agent-runtime/implementations/pi/sessions/lib/message-context/attachments";
 
 describe("preparing Pi message attachments", () => {
   it("classifies supported attachments, preserves original order in metadata, and sends image bytes as Pi image blocks", () => {

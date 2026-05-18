@@ -1,7 +1,7 @@
 import {writeFile} from "node:fs/promises";
 import {Effect} from "effect";
-import {SessionCreateError} from "@pi-desktop/contracts/sessions/procedures";
-import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
+import {SessionCreateError} from "@supernova/contracts/sessions/procedures";
+import {PiSdkService} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
 
 export function createSession(projectPath: string) {
   return Effect.gen(function* () {

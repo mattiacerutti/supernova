@@ -1,11 +1,11 @@
 import type {AgentSession, SessionEntry} from "@earendil-works/pi-coding-agent";
 import {Effect, Fiber, Layer, Stream} from "effect";
 import {describe, expect, it, vi} from "vitest";
-import {PiSdkService} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
-import type {PiSessionInfo} from "@pi-desktop/agent-runtime/implementations/pi/pi-sdk";
-import {PiSessionsLive} from "@pi-desktop/agent-runtime/implementations/pi/sessions/pi-sessions-live";
-import {SessionsService} from "@pi-desktop/agent-runtime/services/sessions/sessions-service";
-import type {SessionMessageSendPayload, SessionStreamEvent} from "@pi-desktop/contracts/sessions/procedures";
+import {PiSdkService} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
+import type {PiSessionInfo} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
+import {PiSessionsLive} from "@supernova/agent-runtime/implementations/pi/sessions/pi-sessions-live";
+import {SessionsService} from "@supernova/agent-runtime/services/sessions/sessions-service";
+import type {SessionMessageSendPayload, SessionStreamEvent} from "@supernova/contracts/sessions/procedures";
 import {
   collectEvents,
   imageAttachment,
@@ -205,7 +205,7 @@ describe("sending messages through Pi sessions", () => {
       message: "Review this image",
       options: {images: [{data: "aW1hZ2UtYnl0ZXM=", mimeType: "image/png", type: "image"}]},
     });
-    expect(harness.appendCustomEntry).toHaveBeenCalledWith("pi-desktop.attachments", {
+    expect(harness.appendCustomEntry).toHaveBeenCalledWith("supernova.attachments", {
       attachments: [{id: "image-1", kind: "image", mime: "image/png", name: "diagram.png", order: 0, size: 12}],
     });
     expect(harness.appendCustomEntry.mock.calls[0]?.[1]).not.toHaveProperty("attachments.0.contentBase64");
@@ -229,7 +229,7 @@ describe("sending messages through Pi sessions", () => {
     );
 
     expect(harness.promptCalls[0]).toEqual({message: "Read @src/file.ts", options: undefined});
-    expect(harness.appendCustomEntry).toHaveBeenCalledWith("pi-desktop.user-message-content-parts", {contentParts});
+    expect(harness.appendCustomEntry).toHaveBeenCalledWith("supernova.user-message-content-parts", {contentParts});
     expect(events.at(-1)).toMatchObject({turns: [{userMessage: {content: "Read @src/file.ts", contentParts}}], type: "done"});
   });
 
@@ -262,7 +262,7 @@ describe("sending messages through Pi sessions", () => {
     expect(harness.sendCustomMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         content: '<attachments>\n  <attachment id="text-1" name="notes.txt" mime="text/plain" size="20">\nThis is a text file.\n  </attachment>\n</attachments>',
-        customType: "pi-desktop.text-attachments",
+        customType: "supernova.text-attachments",
         display: false,
       }),
       {deliverAs: "nextTurn"}
@@ -310,7 +310,7 @@ describe("sending messages through Pi sessions", () => {
   it("passes prepared attachment context through ready, live, and done snapshots", async () => {
     const branch: SessionEntry[] = [
       {
-        customType: "pi-desktop.attachments",
+        customType: "supernova.attachments",
         data: {attachments: [{id: "old-image", kind: "image", mime: "image/jpeg", name: "old.jpg", order: 0, size: 9}]},
         id: "old-attachments",
         parentId: null,

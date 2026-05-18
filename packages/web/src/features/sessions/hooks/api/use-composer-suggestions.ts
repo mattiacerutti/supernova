@@ -1,6 +1,6 @@
-import type {FolderFile} from "@pi-desktop/contracts/folders/schemas";
+import type {FolderFile} from "@supernova/contracts/folders/schemas";
 import {useQuery} from "@tanstack/react-query";
-import type {SessionComposerSuggestionItem} from "@pi-desktop/contracts/sessions/procedures";
+import type {SessionComposerSuggestionItem} from "@supernova/contracts/sessions/procedures";
 import {Effect} from "effect";
 import type {
   ComposerFileReferenceSuggestionItem,

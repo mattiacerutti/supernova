@@ -1,6 +1,6 @@
 import type {AgentSession} from "@earendil-works/pi-coding-agent";
 import {describe, expect, it} from "vitest";
-import {createLiveBranchEntries} from "@pi-desktop/agent-runtime/implementations/pi/sessions/lib/turns/live-branch-entries";
+import {createLiveBranchEntries} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns/live-branch-entries";
 
 type PiAgentMessage = AgentSession["messages"][number];
 
@@ -26,7 +26,7 @@ describe("creating live Pi branch entries", () => {
   it("prepends attachment metadata and converts custom messages to custom message entries", () => {
     const customMessage = {
       content: "hidden context",
-      customType: "pi-desktop.text-attachments",
+      customType: "supernova.text-attachments",
       details: {attachmentIds: ["text-1"]},
       display: false,
       role: "custom",
@@ -42,7 +42,7 @@ describe("creating live Pi branch entries", () => {
 
     expect(entries).toMatchObject([
       {
-        customType: "pi-desktop.attachments",
+        customType: "supernova.attachments",
         data: {attachments: [{id: "text-1", kind: "text", mime: "text/plain", name: "notes.txt", order: 0, size: 10}]},
         parentId: null,
         timestamp: "1970-01-01T00:00:00.005Z",
@@ -50,7 +50,7 @@ describe("creating live Pi branch entries", () => {
       },
       {
         content: "hidden context",
-        customType: "pi-desktop.text-attachments",
+        customType: "supernova.text-attachments",
         details: {attachmentIds: ["text-1"]},
         display: false,
         parentId: entries[0]?.id,
@@ -76,8 +76,8 @@ describe("creating live Pi branch entries", () => {
     });
 
     expect(entries).toMatchObject([
-      {customType: "pi-desktop.attachments", parentId: null, type: "custom"},
-      {customType: "pi-desktop.user-message-content-parts", data: {contentParts}, parentId: entries[0]?.id, type: "custom"},
+      {customType: "supernova.attachments", parentId: null, type: "custom"},
+      {customType: "supernova.user-message-content-parts", data: {contentParts}, parentId: entries[0]?.id, type: "custom"},
       {message: userMessage, parentId: entries[1]?.id, type: "message"},
     ]);
   });

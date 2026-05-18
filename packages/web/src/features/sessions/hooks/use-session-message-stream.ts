@@ -1,4 +1,4 @@
-import type {ModelReference, SessionAttachment, SessionTurn, SessionUserMessageContentPart} from "@pi-desktop/contracts/sessions/schemas";
+import type {ModelReference, SessionAttachment, SessionTurn, SessionUserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 import type {LegendListRef} from "@legendapp/list/react";
 import {useQueryClient} from "@tanstack/react-query";
 import {useRef} from "react";

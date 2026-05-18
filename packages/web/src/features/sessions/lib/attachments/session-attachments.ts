@@ -1,4 +1,4 @@
-import type {SessionAttachment} from "@pi-desktop/contracts/sessions/schemas";
+import type {SessionAttachment} from "@supernova/contracts/sessions/schemas";
 import {attachmentMime, fileExtension} from "@/features/sessions/lib/attachments/attachment-classification";
 
 export const MAX_SESSION_ATTACHMENTS = 10;

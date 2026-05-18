@@ -2,7 +2,7 @@ import type {SidebarAction} from "@/features/sidebar/types/sidebar";
 import {create} from "zustand";
 import {createJSONStorage, persist} from "zustand/middleware";
 
-const SIDEBAR_SECTIONS_STORAGE_KEY = "pi-desktop-sidebar-sections";
+const SIDEBAR_SECTIONS_STORAGE_KEY = "supernova-sidebar-sections";
 const EXPANDED_PROJECTS_STORAGE_VALUE_KEY = "expandedProjects";
 const DEFAULT_SIDEBAR_WIDTH = 288;
 const MIN_SIDEBAR_WIDTH = 240;

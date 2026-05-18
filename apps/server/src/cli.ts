@@ -11,8 +11,8 @@ function parsePort(value: string): number {
 }
 
 const program = new Command()
-  .name("pi-desktop-server")
-  .description("Start the Pi Desktop server.")
+  .name("supernova-server")
+  .description("Start the Supernova server.")
   .option("--host <host>", "Host to bind", DEFAULT_HOST)
   .option("--port <port>", "Port to bind", parsePort, DEFAULT_PORT)
   .showHelpAfterError();
@@ -22,4 +22,4 @@ program.parse();
 const options = program.opts<{host: string; port: number}>();
 const server = await startServer({host: options.host, port: options.port});
 
-console.log(`Pi Desktop server listening at ${server.url}`);
+console.log(`Supernova server listening at ${server.url}`);

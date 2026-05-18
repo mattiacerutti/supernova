@@ -1,4 +1,4 @@
-import type {Provider} from "@pi-desktop/contracts/providers/schemas";
+import type {Provider} from "@supernova/contracts/providers/schemas";
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import {cn} from "@/lib/cn";
