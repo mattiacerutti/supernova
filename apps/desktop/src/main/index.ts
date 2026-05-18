@@ -1,7 +1,7 @@
 import {spawn} from "node:child_process";
 import type {ChildProcessWithoutNullStreams} from "node:child_process";
 import type {BrowserWindowConstructorOptions} from "electron";
-import {app, shell, BrowserWindow, ipcMain} from "electron";
+import {app, shell, BrowserWindow, ipcMain, nativeImage} from "electron";
 import {join} from "path";
 import {electronApp, optimizer} from "@electron-toolkit/utils";
 import installExtension, {REACT_DEVELOPER_TOOLS} from "electron-devtools-installer";
@@ -44,8 +44,10 @@ async function createWindow(): Promise<void> {
   mainWindow = new BrowserWindow({
     width: 1100,
     height: 780,
+    title: "Supernova",
     show: false,
     autoHideMenuBar: true,
+    icon: iconPath(),
     ...windowChromeOptions(),
     webPreferences: {
       preload: join(__dirname, "../preload/index.js"),
@@ -111,6 +113,21 @@ function windowChromeOptions(): Pick<
     vibrancy: "fullscreen-ui",
     visualEffectState: "active",
   };
+}
+
+function iconsDir(): string {
+  return app.isPackaged ? join(process.resourcesPath, "icons") : join(__dirname, "../../resources/icons");
+}
+
+function iconPath(): string {
+  return join(iconsDir(), "icon.png");
+}
+
+function setDockIcon(): void {
+  if (process.platform !== "darwin") return;
+
+  const icon = nativeImage.createFromPath(join(iconsDir(), "dock.png"));
+  if (!icon.isEmpty()) app.dock?.setIcon(icon);
 }
 
 function startServerProcess(options: {host: string; port: number}): Promise<SpawnedServer> {
@@ -186,7 +203,9 @@ function resolveServerEntry(): string {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
+  app.setName("Supernova");
   electronApp.setAppUserModelId("dev.supernova.app");
+  setDockIcon();
 
   app.on("browser-window-created", (_, window) => {
     optimizer.watchWindowShortcuts(window);

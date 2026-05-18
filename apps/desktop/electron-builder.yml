@@ -1,7 +1,7 @@
 appId: dev.supernova.app
 productName: Supernova
 directories:
-  buildResources: build
+  buildResources: resources
 files:
   - "!**/.vscode/*"
   - "!src/*"
@@ -10,17 +10,21 @@ files:
   - "!{.env,.env.*,.npmrc,pnpm-lock.yaml}"
   - "!tsconfig.json"
 extraResources:
+  - from: resources/icons
+    to: icons
   - from: ../server/dist
     to: server
 win:
   executableName: supernova
+  icon: icons/icon.ico
 nsis:
   artifactName: supernova-${version}-setup.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
 mac:
-  entitlementsInherit: build/entitlements.mac.plist
+  icon: icons/icon.icon
+  entitlementsInherit: resources/entitlements.mac.plist
   extendInfo:
     - NSCameraUsageDescription: Application requests access to the device's camera.
     - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
@@ -28,8 +32,10 @@ mac:
     - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
   notarize: false
 dmg:
+  icon: icons/icon.icns
   artifactName: supernova-${version}.${ext}
 linux:
+  icon: icons
   target:
     - AppImage
     - snap
