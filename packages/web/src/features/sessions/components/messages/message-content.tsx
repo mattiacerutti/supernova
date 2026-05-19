@@ -2,53 +2,44 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {Suspense, isValidElement, use, useState} from "react";
 import type {ComponentProps, ReactNode} from "react";
-import {codeToHtml} from "shiki";
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import {segmentStreamingMessage} from "@/features/sessions/lib/streaming/message-segments";
+import {CODE_HIGHLIGHT_THEMES, getCachedHighlightedCode, highlightCode} from "@/lib/code-highlighting";
 import {cn} from "@/lib/cn";
-
-const highlightedCodeCache = new Map<string, Promise<string>>();
 
 function languageFromClassName(className: string | undefined): string | undefined {
   return className?.match(/language-([^\s]+)/)?.[1];
 }
 
-function normalizedLanguage(language?: string): string {
-  if (!language) return "text";
-  if (language === "sh") return "bash";
-  if (language === "yml") return "yaml";
-  return language;
-}
-
-function highlightedCodeHtml(code: string, language?: string): Promise<string> {
-  const resolvedLanguage = normalizedLanguage(language);
-  const cacheKey = `${resolvedLanguage}:${code}`;
-  const cached = highlightedCodeCache.get(cacheKey);
-  if (cached) return cached;
-
-  const highlighted = codeToHtml(code, {
-    lang: resolvedLanguage,
-    theme: "github-dark",
-  }).catch(() =>
-    codeToHtml(code, {
-      lang: "text",
-      theme: "github-dark",
-    })
-  );
-  highlightedCodeCache.set(cacheKey, highlighted);
-  return highlighted;
-}
-
 function HighlightedCode(props: {code: string; language?: string}) {
   const {code, language} = props;
-  const html = use(highlightedCodeHtml(code, language));
+  const theme = CODE_HIGHLIGHT_THEMES.dark;
+  const cachedHtml = getCachedHighlightedCode({code, language, theme});
+
+  if (cachedHtml) {
+    return <div className="session-markdown-shiki" dangerouslySetInnerHTML={{__html: cachedHtml}} />;
+  }
+
+  const html = use(highlightCode({code, language, theme}));
 
   return <div className="session-markdown-shiki" dangerouslySetInnerHTML={{__html: html}} />;
 }
 
+function PlainCode(props: {code: string}) {
+  const {code} = props;
+
+  return (
+    <div className="session-markdown-shiki">
+      <pre>
+        <code>{code}</code>
+      </pre>
+    </div>
+  );
+}
+
 function CodeBlock(props: {children: ReactNode; code: string; language?: string}) {
-  const {children, code, language} = props;
+  const {code, language} = props;
   const [copied, setCopied] = useState(false);
 
   const handleCopy = (): void => {
@@ -71,7 +62,7 @@ function CodeBlock(props: {children: ReactNode; code: string; language?: string}
           {copied ? "Copied" : "Copy"}
         </Button>
       </div>
-      <Suspense fallback={<pre className="overflow-x-auto p-3 text-[13px] leading-6 text-neutral-200">{children}</pre>}>
+      <Suspense fallback={<PlainCode code={code} />}>
         <HighlightedCode code={code} language={language} />
       </Suspense>
     </div>

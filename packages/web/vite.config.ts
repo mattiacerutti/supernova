@@ -23,6 +23,9 @@ export default defineConfig({
     },
     strictPort: true,
   },
+  optimizeDeps: {
+    include: ["@pierre/diffs"],
+  },
   resolve: {
     alias: {
       "@": resolve(__dirname, "src"),
