@@ -1,5 +1,15 @@
-import {Icon as IconifyIcon} from "@iconify/react";
-import type {IconProps as IconifyIconProps} from "@iconify/react";
+import {icons as cuidaIcons} from "@iconify-json/cuida";
+import {icons as fluentIcons} from "@iconify-json/fluent";
+import {icons as iconoirIcons} from "@iconify-json/iconoir";
+import {icons as lucideIcons} from "@iconify-json/lucide";
+import {icons as materialSymbolsIcons} from "@iconify-json/material-symbols";
+import {icons as mdiIcons} from "@iconify-json/mdi";
+import {icons as mingcuteIcons} from "@iconify-json/mingcute";
+import {icons as stashIcons} from "@iconify-json/stash";
+import {icons as tablerIcons} from "@iconify-json/tabler";
+import {Icon as IconifyIcon} from "@iconify/react/offline";
+import type {IconProps as IconifyIconProps} from "@iconify/react/offline";
+import {getIconData} from "@iconify/utils";
 
 import {cn} from "@/lib/cn";
 
@@ -52,50 +62,58 @@ interface IconProps extends Omit<IconifyIconProps, "children" | "icon" | "size">
   size?: "lg" | "md" | "sm" | "xs";
 }
 
-const icons: Record<IconName, string> = {
-  archive: "lucide:archive",
-  "arrow-down": "lucide:arrow-down",
-  "arrow-left": "lucide:arrow-left",
-  "arrow-right": "lucide:arrow-right",
-  check: "lucide:check",
-  "chevron-down": "lucide:chevron-down",
-  "chevron-right": "lucide:chevron-right",
-  copy: "lucide:copy",
-  edit: "cuida:edit-outline",
-  file: "lucide:file",
-  filter: "lucide:list-filter",
-  folder: "cuida:folder-outline",
-  "folder-open": "fluent:folder-open-24-regular",
-  "folder-plus": "mdi:create-new-folder-outline",
-  gauge: "lucide:gauge",
-  "git-branch": "lucide:git-branch",
-  image: "lucide:image",
-  key: "lucide:key-round",
-  loader: "lucide:loader-circle",
-  maximize: "lucide:maximize-2",
-  "more-horizontal": "lucide:more-horizontal",
-  "new-session": "cuida:edit-outline",
-  "panel-left": "tabler:layout-sidebar",
-  "panel-top": "lucide:panel-top",
-  paperclip: "lucide:paperclip",
-  pin: "fluent:pin-12-regular",
-  plus: "lucide:plus",
-  "rectangle-horizontal": "lucide:rectangle-horizontal",
-  search: "lucide:search",
-  send: "stash:arrow-up-solid",
-  server: "lucide:server",
-  settings: "lucide:settings",
-  shield: "lucide:shield",
-  skill: "mingcute:tool-line",
-  star: "lucide:star",
-  "star-filled": "iconoir:star-solid",
-  stop: "material-symbols:stop-rounded",
-  sun: "lucide:sun",
-  trash: "lucide:trash-2",
-  user: "lucide:user",
-  workflow: "lucide:workflow",
-  x: "lucide:x",
-};
+function getStaticIcon(collection: Parameters<typeof getIconData>[0], name: string): IconifyIconProps["icon"] {
+  const icon = getIconData(collection, name);
+
+  if (!icon) throw new Error(`Missing static icon data for ${collection.prefix}:${name}`);
+
+  return icon;
+}
+
+const icons = {
+  archive: getStaticIcon(lucideIcons, "archive"),
+  "arrow-down": getStaticIcon(lucideIcons, "arrow-down"),
+  "arrow-left": getStaticIcon(lucideIcons, "arrow-left"),
+  "arrow-right": getStaticIcon(lucideIcons, "arrow-right"),
+  check: getStaticIcon(lucideIcons, "check"),
+  "chevron-down": getStaticIcon(lucideIcons, "chevron-down"),
+  "chevron-right": getStaticIcon(lucideIcons, "chevron-right"),
+  copy: getStaticIcon(lucideIcons, "copy"),
+  edit: getStaticIcon(cuidaIcons, "edit-outline"),
+  file: getStaticIcon(lucideIcons, "file"),
+  filter: getStaticIcon(lucideIcons, "list-filter"),
+  folder: getStaticIcon(cuidaIcons, "folder-outline"),
+  "folder-open": getStaticIcon(fluentIcons, "folder-open-24-regular"),
+  "folder-plus": getStaticIcon(mdiIcons, "create-new-folder-outline"),
+  gauge: getStaticIcon(lucideIcons, "gauge"),
+  "git-branch": getStaticIcon(lucideIcons, "git-branch"),
+  image: getStaticIcon(lucideIcons, "image"),
+  key: getStaticIcon(lucideIcons, "key-round"),
+  loader: getStaticIcon(lucideIcons, "loader-circle"),
+  maximize: getStaticIcon(lucideIcons, "maximize-2"),
+  "more-horizontal": getStaticIcon(lucideIcons, "more-horizontal"),
+  "new-session": getStaticIcon(cuidaIcons, "edit-outline"),
+  "panel-left": getStaticIcon(tablerIcons, "layout-sidebar"),
+  "panel-top": getStaticIcon(lucideIcons, "panel-top"),
+  paperclip: getStaticIcon(lucideIcons, "paperclip"),
+  pin: getStaticIcon(fluentIcons, "pin-12-regular"),
+  plus: getStaticIcon(lucideIcons, "plus"),
+  "rectangle-horizontal": getStaticIcon(lucideIcons, "rectangle-horizontal"),
+  search: getStaticIcon(lucideIcons, "search"),
+  send: getStaticIcon(stashIcons, "arrow-up-solid"),
+  server: getStaticIcon(lucideIcons, "server"),
+  settings: getStaticIcon(lucideIcons, "settings"),
+  shield: getStaticIcon(lucideIcons, "shield"),
+  skill: getStaticIcon(mingcuteIcons, "tool-line"),
+  star: getStaticIcon(lucideIcons, "star"),
+  "star-filled": getStaticIcon(iconoirIcons, "star-solid"),
+  stop: getStaticIcon(materialSymbolsIcons, "stop-rounded"),
+  sun: getStaticIcon(lucideIcons, "sun"),
+  trash: getStaticIcon(lucideIcons, "trash-2"),
+  user: getStaticIcon(lucideIcons, "user"),
+  workflow: getStaticIcon(lucideIcons, "workflow"),
+  x: getStaticIcon(lucideIcons, "x"),
+} satisfies Record<IconName, IconifyIconProps["icon"]>;
 
 const sizeClasses: Record<NonNullable<IconProps["size"]>, string> = {
   xs: "size-3.5",
