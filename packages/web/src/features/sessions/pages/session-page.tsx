@@ -89,9 +89,9 @@ function SessionConversation(props: SessionConversationProps) {
 
   const selectedThinkingLevel = storedSessionModel?.thinkingLevel ?? session.model?.thinkingLevel;
   const selectedModelReference = selectedModel ? selectionFromModel(selectedModel, resolveThinkingLevel(selectedModel, selectedThinkingLevel)) : undefined;
-  const selectedModelName = modelsPending ? "Loading models" : (selectedModel?.name ?? "No model");
+
   const thinkingLevels = selectedModel?.thinkingLevels ?? [];
-  const selectedThinkingLabel = thinkingLevels.find((level) => level.value === selectedModelReference?.thinkingLevel)?.label ?? "No reasoning";
+  const selectedThinkingLabel = thinkingLevels.find((level) => level.value === selectedModelReference?.thinkingLevel)?.label ?? "Reasoning";
 
   const composerDisabled = modelsPending || !selectedModelReference;
   const imageSupported = selectedModel?.capabilities.images === true;
@@ -133,40 +133,39 @@ function SessionConversation(props: SessionConversationProps) {
       attachmentDropOverlayVisible={composerAttachments.isDraggingFiles}
       attachmentDropZoneProps={composerAttachments.dropZoneProps}
       composer={
-        <SessionComposer.Root
-          attachments={composerAttachments}
-          disabled={composerDisabled}
-          onInterrupt={stream.stopStreaming}
-          onSubmit={stream.submitMessage}
-          projectPath={session.projectPath}
-          streamStatus={stream.streamStatus}
-        >
-          <SessionComposer.Attachments />
-          <SessionComposer.Input />
-          <SessionComposer.Toolbar>
-            <SessionComposer.AttachButton />
-            <SessionComposer.ActionGroup>
-              <div className="flex gap-2">
-                <ModelPicker
-                  disabled={composerDisabled || isStreaming}
-                  models={availableModels}
-                  modelsLoading={modelsPending}
-                  onModelChange={handleModelChange}
-                  selectedModelKey={selectedModelKey}
-                  selectedModelName={selectedModelName}
-                />
-                <ThinkingLevelPicker
-                  disabled={composerDisabled || isStreaming}
-                  onThinkingLevelChange={handleThinkingLevelChange}
-                  selectedThinkingLabel={selectedThinkingLabel}
-                  selectedThinkingLevel={selectedModelReference?.thinkingLevel}
-                  thinkingLevels={thinkingLevels}
-                />
-              </div>
-              <SessionComposer.SubmitButton />
-            </SessionComposer.ActionGroup>
-          </SessionComposer.Toolbar>
-        </SessionComposer.Root>
+        modelsPending ? (
+          <SessionComposerSkeleton />
+        ) : (
+          <SessionComposer.Root
+            attachments={composerAttachments}
+            disabled={composerDisabled}
+            onInterrupt={stream.stopStreaming}
+            onSubmit={stream.submitMessage}
+            projectPath={session.projectPath}
+            streamStatus={stream.streamStatus}
+          >
+            <SessionComposer.Attachments />
+            <SessionComposer.Input />
+            <SessionComposer.Toolbar>
+              <SessionComposer.AttachButton />
+              <SessionComposer.ActionGroup>
+                <div className="flex gap-2">
+                  <ModelPicker selectedModel={selectedModel} disabled={composerDisabled || isStreaming} models={availableModels} onModelChange={handleModelChange} />
+                  {thinkingLevels.length > 0 && (
+                    <ThinkingLevelPicker
+                      disabled={composerDisabled || isStreaming}
+                      onThinkingLevelChange={handleThinkingLevelChange}
+                      selectedThinkingLabel={selectedThinkingLabel}
+                      selectedThinkingLevel={selectedModelReference?.thinkingLevel}
+                      thinkingLevels={thinkingLevels}
+                    />
+                  )}
+                </div>
+                <SessionComposer.SubmitButton />
+              </SessionComposer.ActionGroup>
+            </SessionComposer.Toolbar>
+          </SessionComposer.Root>
+        )
       }
       timeline={
         <SessionTimeline

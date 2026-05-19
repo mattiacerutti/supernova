@@ -28,8 +28,8 @@ export default function SessionComposerSkeleton() {
 
           <div className="flex min-w-0 items-center gap-4">
             <div className="flex gap-2" aria-hidden="true">
-              <span className="h-7 w-28 animate-pulse rounded-full bg-white/10" />
-              <span className="h-7 w-20 animate-pulse rounded-full bg-white/10" />
+              <span className="h-5 w-28 animate-pulse rounded-xl corner-superellipse/1.3 bg-white/10" />
+              <span className="h-5 w-20 animate-pulse rounded-xl corner-superellipse/1.3 bg-white/10" />
             </div>
             <IconButton
               label="Send message"

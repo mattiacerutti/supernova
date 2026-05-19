@@ -2,6 +2,7 @@ import {useNavigate} from "@tanstack/react-router";
 import {useQueryClient} from "@tanstack/react-query";
 import {useState} from "react";
 import SessionComposer from "@/features/sessions/components/composer/session-composer";
+import SessionComposerSkeleton from "@/features/sessions/components/composer/session-composer-skeleton";
 import AttachmentDropOverlay from "@/features/sessions/components/attachments/attachment-drop-overlay";
 import ModelPicker from "@/features/sessions/components/composer/pickers/model-picker";
 import ThinkingLevelPicker from "@/features/sessions/components/composer/pickers/thinking-level-picker";
@@ -27,8 +28,10 @@ export default function NewSessionPage(props: NewSessionPageProps) {
   const queryClient = useQueryClient();
   const rpcClient = useAgentRpcClient();
   const createSessionMutation = useCreateSession();
+
   const {data: models, isPending: modelsPending} = useSessionModels();
   const availableModels = models ?? [];
+
   const startStream = useSessionStreamStore((state) => state.startStream);
   const setSessionModel = useSessionModelsStore((state) => state.setSessionModel);
   const recordRecentModel = useModelPickerStore((state) => state.recordRecentModel);
@@ -38,15 +41,18 @@ export default function NewSessionPage(props: NewSessionPageProps) {
 
   const [selectedModelKey, setSelectedModelKey] = useState("");
   const [selectedThinkingLevel, setSelectedThinkingLevel] = useState<string | undefined>(undefined);
+
   const defaultModelKey =
     recentModelKeys.find((key) => availableModels.some((model) => modelKey(model.providerId, model.id) === key)) ??
     (availableModels[0] ? modelKey(availableModels[0].providerId, availableModels[0].id) : "");
+
   const resolvedModelKey = selectedModelKey || defaultModelKey;
   const selectedModel = availableModels.find((model) => modelKey(model.providerId, model.id) === resolvedModelKey);
   const resolvedThinkingLevel = selectedModel ? resolveThinkingLevel(selectedModel, selectedThinkingLevel ?? lastThinkingLevel) : undefined;
-  const selectedModelName = modelsPending ? "Loading models" : (selectedModel?.name ?? "No model");
+
   const thinkingLevels = selectedModel?.thinkingLevels ?? [];
-  const selectedThinkingLabel = thinkingLevels.find((level) => level.value === resolvedThinkingLevel)?.label ?? "No reasoning";
+  const selectedThinkingLabel = thinkingLevels.find((level) => level.value === resolvedThinkingLevel)?.label ?? "Reasoning";
+
   const composerDisabled = createSessionMutation.isPending || modelsPending || !selectedModel;
   const imageSupported = selectedModel?.capabilities.images === true;
   const composerAttachments = useComposerAttachments({disabled: composerDisabled, imageSupported});
@@ -93,33 +99,32 @@ export default function NewSessionPage(props: NewSessionPageProps) {
           What should we build in <i>{projectName}</i>?
         </h1>
         {createSessionMutation.error && <p className="mb-4 text-center text-sm text-red-300">Unable to create the session.</p>}
-        <SessionComposer.Root attachments={composerAttachments} disabled={composerDisabled} onSubmit={handleSubmit} projectPath={projectPath}>
-          <SessionComposer.Attachments />
-          <SessionComposer.Input placeholder="Ask anything." />
-          <SessionComposer.Toolbar>
-            <SessionComposer.AttachButton />
-            <SessionComposer.ActionGroup>
-              <div className="flex gap-2">
-                <ModelPicker
-                  disabled={composerDisabled}
-                  models={availableModels}
-                  modelsLoading={modelsPending}
-                  onModelChange={handleModelChange}
-                  selectedModelKey={resolvedModelKey}
-                  selectedModelName={selectedModelName}
-                />
-                <ThinkingLevelPicker
-                  disabled={composerDisabled}
-                  onThinkingLevelChange={handleThinkingLevelChange}
-                  selectedThinkingLabel={selectedThinkingLabel}
-                  selectedThinkingLevel={resolvedThinkingLevel}
-                  thinkingLevels={thinkingLevels}
-                />
-              </div>
-              <SessionComposer.SubmitButton />
-            </SessionComposer.ActionGroup>
-          </SessionComposer.Toolbar>
-        </SessionComposer.Root>
+        {modelsPending ? (
+          <SessionComposerSkeleton />
+        ) : (
+          <SessionComposer.Root attachments={composerAttachments} disabled={composerDisabled} onSubmit={handleSubmit} projectPath={projectPath}>
+            <SessionComposer.Attachments />
+            <SessionComposer.Input placeholder="Ask anything." />
+            <SessionComposer.Toolbar>
+              <SessionComposer.AttachButton />
+              <SessionComposer.ActionGroup>
+                <div className="flex gap-2">
+                  <ModelPicker selectedModel={selectedModel} disabled={composerDisabled} models={availableModels} onModelChange={handleModelChange} />
+                  {thinkingLevels.length > 0 && (
+                    <ThinkingLevelPicker
+                      disabled={composerDisabled}
+                      onThinkingLevelChange={handleThinkingLevelChange}
+                      selectedThinkingLabel={selectedThinkingLabel}
+                      selectedThinkingLevel={resolvedThinkingLevel}
+                      thinkingLevels={thinkingLevels}
+                    />
+                  )}
+                </div>
+                <SessionComposer.SubmitButton />
+              </SessionComposer.ActionGroup>
+            </SessionComposer.Toolbar>
+          </SessionComposer.Root>
+        )}
       </div>
       {composerAttachments.isDraggingFiles && <AttachmentDropOverlay />}
     </div>
