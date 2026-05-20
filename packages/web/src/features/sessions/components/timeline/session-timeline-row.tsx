@@ -1,7 +1,7 @@
 import {memo} from "react";
-import AssistantMessage from "@/features/sessions/components/messages/assistant-message";
-import UserMessage from "@/features/sessions/components/messages/user-message";
-import WorkBlock from "@/features/sessions/components/messages/work/work-block";
+import AssistantMessage from "@/features/sessions/components/timeline/items/assistant-message";
+import UserMessage from "@/features/sessions/components/timeline/items/user-message";
+import AssistantWork from "@/features/sessions/components/timeline/items/assistant-work";
 import type {SessionTimelineItem} from "@/features/sessions/types/session-timeline-item";
 
 interface SessionTimelineRowProps {
@@ -17,7 +17,7 @@ const SessionTimelineRow = memo(function SessionTimelineRow(props: SessionTimeli
     case "assistant":
       return <AssistantMessage event={item.event} live={item.live} />;
     case "work":
-      return <WorkBlock item={item} />;
+      return <AssistantWork item={item} />;
   }
 });
 

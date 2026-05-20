@@ -90,6 +90,7 @@ function bytesLookLikeText(bytes: Uint8Array): boolean {
   return controlByteCount / bytes.length <= 0.3;
 }
 
+/** Returns whether a file should require a selected model with image support. */
 export function fileRequiresImageCapability(file: File): boolean {
   const mime = normalizedMimeType(file.type);
   if (acceptedImageMimeTypes.includes(mime)) return true;
@@ -98,6 +99,7 @@ export function fileRequiresImageCapability(file: File): boolean {
   return Boolean(fallbackMime) && (!mime || mime === "application/octet-stream");
 }
 
+/** Resolves the attachment MIME type from browser metadata, extension fallback, and text sniffing. */
 export function attachmentMime(file: File, buffer: ArrayBuffer): string | undefined {
   const mime = normalizedMimeType(file.type);
   if (acceptedImageMimeTypes.includes(mime)) return mime;

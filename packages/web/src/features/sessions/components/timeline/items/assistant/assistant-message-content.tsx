@@ -4,7 +4,7 @@ import {Suspense, isValidElement, use, useState} from "react";
 import type {ComponentProps, ReactNode} from "react";
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
-import TranscriptBlock from "@/features/sessions/components/messages/transcript-block";
+import ContentPanel from "@/features/sessions/components/timeline/items/assistant/content-panel";
 import {segmentStreamingMessage} from "@/features/sessions/lib/streaming/message-segments";
 import {CODE_HIGHLIGHT_THEMES, getCachedHighlightedCode, highlightCode} from "@/lib/code-highlighting";
 import {cn} from "@/lib/cn";
@@ -51,7 +51,7 @@ function CodeBlock(props: {children: ReactNode; code: string; language?: string}
   };
 
   return (
-    <TranscriptBlock className="group/code my-4 p-2.5" scrollable={false}>
+    <ContentPanel className="group/code my-4 p-2.5" scrollable={false}>
       <div className="mb-1.5 flex items-center justify-between font-sans text-sm text-neutral-500">
         <span>{language ?? "text"}</span>
         <Button
@@ -66,18 +66,18 @@ function CodeBlock(props: {children: ReactNode; code: string; language?: string}
       <Suspense fallback={<PlainCode code={code} />}>
         <HighlightedCode code={code} language={language} />
       </Suspense>
-    </TranscriptBlock>
+    </ContentPanel>
   );
 }
 
-interface MessageContentProps {
+interface AssistantMessageContentProps {
   children: string;
   className?: string;
   mode?: "markdown" | "text";
   streaming?: boolean;
 }
 
-export default function MessageContent(props: MessageContentProps) {
+export default function AssistantMessageContent(props: AssistantMessageContentProps) {
   const {children, className, mode = "markdown", streaming = false} = props;
 
   if (streaming) {
@@ -86,9 +86,9 @@ export default function MessageContent(props: MessageContentProps) {
     return (
       <div className="space-y-3">
         {segments.map((segment, index) => (
-          <MessageContent className={className} key={`${segment.mode}-${index}-${segment.text.length}`} mode={segment.mode}>
+          <AssistantMessageContent className={className} key={`${segment.mode}-${index}-${segment.text.length}`} mode={segment.mode}>
             {segment.text}
-          </MessageContent>
+          </AssistantMessageContent>
         ))}
       </div>
     );

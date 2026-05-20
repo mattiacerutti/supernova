@@ -2,7 +2,7 @@ import type {ModelReference, SessionAttachment, SessionTurn, SessionUserMessageC
 import type {LegendListRef} from "@legendapp/list/react";
 import {useQueryClient} from "@tanstack/react-query";
 import {useRef} from "react";
-import {buildSessionTimeline} from "@/features/sessions/lib/session-timeline/build-session-timeline";
+import {buildSessionTimeline} from "@/features/sessions/lib/timeline/build-session-timeline";
 import {useSessionStreamStore} from "@/features/sessions/stores/session-stream-store";
 import type {SessionStreamStatus} from "@/features/sessions/stores/session-stream-store";
 import type {SessionTimelineItem} from "@/features/sessions/types/session-timeline-item";

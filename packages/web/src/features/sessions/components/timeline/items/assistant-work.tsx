@@ -1,15 +1,21 @@
 import {useState} from "react";
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
-import MessageActions from "@/features/sessions/components/messages/message-actions";
-import MessageContent from "@/features/sessions/components/messages/message-content";
-import ToolEvent from "@/features/sessions/components/messages/work/tool-event";
-import type {ToolDetailMode} from "@/features/sessions/components/messages/work/tool-event";
-import {formatDuration} from "@/features/sessions/lib/session-timeline/work-timeline-items";
+import MessageActions from "@/features/sessions/components/timeline/items/actions/message-actions";
+import AssistantMessageContent from "@/features/sessions/components/timeline/items/assistant/assistant-message-content";
+import ToolEvent from "@/features/sessions/components/timeline/items/assistant/tools/tool-event";
+import type {ToolDetailMode} from "@/features/sessions/components/timeline/items/assistant/tools/tool-event";
+import {formatDuration} from "@/features/sessions/lib/timeline/work-timeline-items";
 import type {SessionWorkEvent, WorkSessionTimelineItem} from "@/features/sessions/types/session-timeline-item";
 import {cn} from "@/lib/cn";
 
-function WorkEvent(props: {event: SessionWorkEvent; live: boolean; toolDetailMode: ToolDetailMode}) {
+interface WorkEventProps {
+  event: SessionWorkEvent;
+  live: boolean;
+  toolDetailMode: ToolDetailMode;
+}
+
+function WorkEvent(props: WorkEventProps) {
   const {event, live, toolDetailMode} = props;
 
   if (event.type === "tool") {
@@ -19,9 +25,9 @@ function WorkEvent(props: {event: SessionWorkEvent; live: boolean; toolDetailMod
   if (event.type === "reasoning") {
     return (
       <div className="text-neutral-200">
-        <MessageContent className="text-neutral-300" streaming={live}>
+        <AssistantMessageContent className="text-neutral-300" streaming={live}>
           {event.content}
-        </MessageContent>
+        </AssistantMessageContent>
       </div>
     );
   }
@@ -29,23 +35,23 @@ function WorkEvent(props: {event: SessionWorkEvent; live: boolean; toolDetailMod
   return null;
 }
 
-interface WorkBlockProps {
-  item: WorkSessionTimelineItem;
-}
-
-function workCopyText(events: readonly SessionWorkEvent[]): string {
+function generateCopyableText(events: readonly SessionWorkEvent[]): string {
   return events
     .filter((event) => event.type === "reasoning")
     .map((event) => event.content)
     .join("\n\n");
 }
 
-export default function WorkBlock(props: WorkBlockProps) {
+interface AssistantWorkProps {
+  item: WorkSessionTimelineItem;
+}
+
+export default function AssistantWork(props: AssistantWorkProps) {
   const {item} = props;
   const [expanded, setExpanded] = useState(false);
 
   const showExpanded = item.live || expanded;
-  const copyText = item.collapsible ? "" : workCopyText(item.events);
+  const copyText = item.collapsible ? "" : generateCopyableText(item.events);
 
   const handleToggle = (): void => {
     setExpanded((currentExpanded) => !currentExpanded);

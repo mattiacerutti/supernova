@@ -5,10 +5,12 @@ function contentPartValue(part: SessionUserMessageContentPart): string {
   return part.type === "text" ? part.text : part.value;
 }
 
+/** Converts mixed text/reference composer parts into their plain text representation. */
 export function textFromComposerContentParts(parts: readonly SessionUserMessageContentPart[]): string {
   return parts.map(contentPartValue).join("");
 }
 
+/** Trims only leading and trailing text while preserving reference parts and internal spacing. */
 export function trimComposerContentParts(parts: readonly SessionUserMessageContentPart[]): readonly SessionUserMessageContentPart[] {
   return parts
     .map((part, index): SessionUserMessageContentPart => {

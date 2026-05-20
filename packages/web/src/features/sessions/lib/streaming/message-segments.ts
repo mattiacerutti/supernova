@@ -26,6 +26,7 @@ function findOpenFenceStart(text: string): number | undefined {
   return open?.start;
 }
 
+/** Splits streaming text so stable Markdown can render while unstable trailing text stays plain. */
 export function segmentStreamingMessage(text: string): StreamingMessageSegment[] {
   if (!text) return [];
 

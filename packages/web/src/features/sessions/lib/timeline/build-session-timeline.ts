@@ -1,5 +1,5 @@
 import type {SessionTurn} from "@supernova/contracts/sessions/schemas";
-import {workDuration} from "@/features/sessions/lib/session-timeline/work-timeline-items";
+import {workDuration} from "@/features/sessions/lib/timeline/work-timeline-items";
 import type {SessionTimelineItem, SessionTimelineItems, SessionWorkEvent} from "@/features/sessions/types/session-timeline-item";
 
 interface BuildSessionTimelineInput {
@@ -50,6 +50,7 @@ function turnToTimelineItems(turn: SessionTurn, live: boolean): SessionTimelineI
   return items;
 }
 
+/** Builds committed and live timeline item groups from raw session turns. */
 export function buildSessionTimeline(input: BuildSessionTimelineInput): SessionTimelineItems {
   const {live, liveTurn, turns} = input;
 

@@ -9,6 +9,7 @@ function isTokenBoundary(value: string | undefined): boolean {
   return value === undefined || /\s/.test(value);
 }
 
+/** Creates a TipTap suggestion matcher that expands from the cursor to token boundaries. */
 export function findComposerSuggestionMatch(input: {char: string; startOfLine: boolean}): NonNullable<SuggestionOptions["findSuggestionMatch"]> {
   return ({$position}) => {
     const text = $position.parent.textBetween(0, $position.parent.content.size, "\n", "\n");
@@ -80,11 +81,7 @@ function createSuggestionPlugin(input: {
   });
 }
 
-/**
- * Creates a TipTap extension for handling suggestion functionality.
- * @param onMatch - Callback function to handle a suggestion match.
- * @returns The created TipTap extension.
- */
+/** Creates the TipTap extension that reports file, skill, and slash-command suggestion matches. */
 export function createSuggestionExtension(onMatch: (match: ComposerSuggestionMatch | null) => void) {
   return Node.create({
     addProseMirrorPlugins() {

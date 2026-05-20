@@ -5,8 +5,8 @@ import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import IconButton from "@/components/ui/icon-button";
 import Menu from "@/components/ui/menu";
-import {getModelPickerSections} from "@/features/sessions/lib/model-picker/model-picker";
-import {modelKey} from "@/features/sessions/lib/model-picker/model-utils";
+import {getModelPickerSections} from "@/features/sessions/lib/composer/model-picker/model-picker";
+import {modelKey} from "@/features/sessions/lib/composer/model-picker/model-utils";
 import {useModelPickerStore} from "@/features/sessions/stores/model-picker-store";
 import {cn} from "@/lib/cn";
 

@@ -78,6 +78,7 @@ code,
 }
 `;
 
+/** Creates Pierre diff viewer options styled to match Supernova's dark UI. */
 export function generateDiffOptions<T>(): FileDiffOptions<T> {
   return {
     diffIndicators: "bars",

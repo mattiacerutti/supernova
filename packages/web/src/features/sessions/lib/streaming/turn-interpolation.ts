@@ -52,6 +52,7 @@ function interpolateStreamTurns(current: readonly SessionTurn[], target: readonl
   return {changed, done, turns};
 }
 
+/** Reveals streamed assistant text toward the latest turn snapshot without delaying tool events. */
 export function interpolateStreamTurn(current: SessionTurn | null, target: SessionTurn, elapsedMs: number) {
   const result = interpolateStreamTurns(current ? [current] : [], [target], elapsedMs);
   return {changed: result.changed, done: result.done, turn: result.turns[0] ?? target};

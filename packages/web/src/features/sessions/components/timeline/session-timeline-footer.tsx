@@ -1,6 +1,5 @@
 import SessionTimelineItemFrame from "@/features/sessions/components/timeline/session-timeline-item-frame";
 import SessionTimelineRow from "@/features/sessions/components/timeline/session-timeline-row";
-import {getSessionTimelineItemKey} from "@/features/sessions/lib/session-timeline/session-timeline-keys";
 import type {SessionTimelineItem} from "@/features/sessions/types/session-timeline-item";
 
 interface SessionTimelineFooterProps {
@@ -15,7 +14,7 @@ export default function SessionTimelineFooter(props: SessionTimelineFooterProps)
   return (
     <>
       {liveItems.map((item) => (
-        <SessionTimelineItemFrame item={item} key={getSessionTimelineItemKey(item)}>
+        <SessionTimelineItemFrame item={item} key={item.id}>
           <SessionTimelineRow item={item} />
         </SessionTimelineItemFrame>
       ))}

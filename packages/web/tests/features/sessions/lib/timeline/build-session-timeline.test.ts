@@ -1,7 +1,7 @@
 import type {SessionAssistantTurnEvent, SessionReasoningTurnEvent, SessionToolTurnEvent, SessionTurn} from "@supernova/contracts/sessions/schemas";
 import {describe, expect, it} from "vitest";
-import {buildSessionTimeline} from "@/features/sessions/lib/session-timeline/build-session-timeline";
-import {formatDuration} from "@/features/sessions/lib/session-timeline/work-timeline-items";
+import {buildSessionTimeline} from "@/features/sessions/lib/timeline/build-session-timeline";
+import {formatDuration} from "@/features/sessions/lib/timeline/work-timeline-items";
 
 const model = {id: "claude-sonnet", providerId: "anthropic", thinkingLevel: "high"};
 

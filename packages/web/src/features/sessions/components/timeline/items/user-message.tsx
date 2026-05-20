@@ -1,9 +1,11 @@
 import type {SessionUserMessage} from "@supernova/contracts/sessions/schemas";
 import Icon from "@/components/ui/icon";
 import MessageAttachmentPreview from "@/features/sessions/components/attachments/message-attachment-preview";
-import MessageActions from "@/features/sessions/components/messages/message-actions";
+import MessageActions from "@/features/sessions/components/timeline/items/actions/message-actions";
 import {textFromComposerContentParts} from "@/features/sessions/lib/composer/composer-content-parts";
 import {cn} from "@/lib/cn";
+
+// TODO: Review these components and possibly refactor
 
 function UserMessageContent(props: {children: string}) {
   const {children} = props;

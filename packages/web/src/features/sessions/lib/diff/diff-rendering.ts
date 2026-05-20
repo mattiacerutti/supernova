@@ -17,6 +17,7 @@ function buildParsedDiffCacheKey(input: {patch: string; path: string | undefined
   return `${input.path ?? "unknown"}:${input.patch.length}:${hash}`;
 }
 
+/** Parses a unified patch into Pierre diff metadata, caching both valid and invalid results. */
 export function parseFileEditPatch(input: {patch: string; path: string | undefined}): FileDiffMetadata | undefined {
   const cacheKey = buildParsedDiffCacheKey(input);
   const cached = parsedDiffCache.get(cacheKey);

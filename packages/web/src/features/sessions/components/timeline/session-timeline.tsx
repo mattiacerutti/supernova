@@ -7,7 +7,6 @@ import IconButton from "@/components/ui/icon-button";
 import SessionTimelineFooter from "@/features/sessions/components/timeline/session-timeline-footer";
 import SessionTimelineItemFrame from "@/features/sessions/components/timeline/session-timeline-item-frame";
 import SessionTimelineRow from "@/features/sessions/components/timeline/session-timeline-row";
-import {getSessionTimelineItemKey} from "@/features/sessions/lib/session-timeline/session-timeline-keys";
 import type {SessionTimelineItem} from "@/features/sessions/types/session-timeline-item";
 
 type AutoFollowState = "following" | "leaving" | "detached";
@@ -166,7 +165,7 @@ export default function SessionTimeline(props: SessionTimelineProps) {
           data={items}
           estimatedItemSize={140}
           initialScrollAtEnd
-          keyExtractor={getSessionTimelineItemKey}
+          keyExtractor={(item) => item.id}
           ListFooterComponent={
             <div ref={handleLiveTailRef}>
               <SessionTimelineFooter isStreaming={isStreaming} liveItems={liveItems} streamError={streamError} />

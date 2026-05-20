@@ -9,7 +9,7 @@ import ThinkingLevelPicker from "@/features/sessions/components/composer/pickers
 import {useCreateSession} from "@/features/sessions/hooks/api/use-create-session";
 import {useSessionModels} from "@/features/sessions/hooks/api/use-session-models";
 import {useComposerAttachments} from "@/features/sessions/hooks/use-composer-attachments";
-import {modelKey, resolveThinkingLevel, selectionFromModel} from "@/features/sessions/lib/model-picker/model-utils";
+import {modelKey, resolveThinkingLevel, selectionFromModel} from "@/features/sessions/lib/composer/model-picker/model-utils";
 import {useModelPickerStore} from "@/features/sessions/stores/model-picker-store";
 import {useSessionModelsStore} from "@/features/sessions/stores/session-models-store";
 import {useSessionStreamStore} from "@/features/sessions/stores/session-stream-store";

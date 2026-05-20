@@ -1,7 +1,7 @@
 import type {ModelDetails} from "@supernova/contracts/sessions/schemas";
 import {describe, expect, it} from "vitest";
-import {getModelPickerSections} from "@/features/sessions/lib/model-picker/model-picker";
-import {modelKey} from "@/features/sessions/lib/model-picker/model-utils";
+import {getModelPickerSections} from "@/features/sessions/lib/composer/model-picker/model-picker";
+import {modelKey} from "@/features/sessions/lib/composer/model-picker/model-utils";
 
 function model(overrides: Pick<ModelDetails, "id" | "name" | "providerId" | "providerName"> & Partial<ModelDetails>): ModelDetails {
   return {

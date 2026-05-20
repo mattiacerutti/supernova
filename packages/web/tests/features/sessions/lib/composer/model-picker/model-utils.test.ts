@@ -1,6 +1,6 @@
 import type {ModelDetails} from "@supernova/contracts/sessions/schemas";
 import {describe, expect, it} from "vitest";
-import {resolveThinkingLevel} from "@/features/sessions/lib/model-picker/model-utils";
+import {resolveThinkingLevel} from "@/features/sessions/lib/composer/model-picker/model-utils";
 
 function model(thinkingLevels: ModelDetails["thinkingLevels"]): ModelDetails {
   return {

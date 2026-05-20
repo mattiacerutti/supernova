@@ -25,6 +25,7 @@ export function selectionFromModel(model: ModelDetails, thinkingLevel: string | 
   };
 }
 
+/** Chooses the preferred thinking level when supported, otherwise the closest ranked fallback. */
 export function resolveThinkingLevel(model: ModelDetails, preferredThinkingLevel: string | undefined): string | undefined {
   const [first, ...rest] = model.thinkingLevels;
   if (first === undefined) return undefined;
