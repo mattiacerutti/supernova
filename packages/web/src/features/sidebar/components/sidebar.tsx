@@ -1,4 +1,4 @@
-import {Link} from "@tanstack/react-router";
+import {Link, useLocation} from "@tanstack/react-router";
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import IconButton from "@/components/ui/icon-button";
@@ -16,10 +16,13 @@ import {sidebarActions} from "@/features/sidebar/stores/sidebar-store";
 
 export default function Sidebar() {
   const {expandProject, expandedProjects, isPinnedCollapsed, isProjectsCollapsed, togglePinnedCollapsed, toggleProject, toggleProjectsCollapsed} = useSidebarSections();
+  const location = useLocation();
 
   const projects = useProjectList();
   const pinnedProjects = projects.filter((project) => project.pinned);
   const regularProjects = projects.filter((project) => !project.pinned);
+
+  const activeSessionId = location.pathname.startsWith("/session/") && location.pathname !== "/session/new" ? location.pathname.slice("/session/".length) : "";
 
   const [openProjectDialogOpen, setOpenProjectDialogOpen] = useState(false);
 
@@ -85,7 +88,7 @@ export default function Sidebar() {
             >
               <ul className="overflow-hidden pb-3">
                 {pinnedProjects.map((project) => (
-                  <ProjectListItem expanded={expandedProjects.has(project.id)} key={project.id} onToggle={toggleProject} project={project} />
+                  <ProjectListItem activeSessionId={activeSessionId} expanded={expandedProjects.has(project.id)} key={project.id} onToggle={toggleProject} project={project} />
                 ))}
               </ul>
             </div>
@@ -122,7 +125,7 @@ export default function Sidebar() {
           <ul className="overflow-hidden">
             {regularProjects.length === 0 && <li className="px-2 py-1 text-sm text-neutral-600">Add a project to get started.</li>}
             {regularProjects.map((project) => (
-              <ProjectListItem expanded={expandedProjects.has(project.id)} key={project.id} onToggle={toggleProject} project={project} />
+              <ProjectListItem activeSessionId={activeSessionId} expanded={expandedProjects.has(project.id)} key={project.id} onToggle={toggleProject} project={project} />
             ))}
           </ul>
         </div>

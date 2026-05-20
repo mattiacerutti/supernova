@@ -12,17 +12,16 @@ export function listProjectSessionsQueryKey(projectPath: string) {
 
 interface UseListProjectSessionsOptions {
   cursor?: string;
-  enabled: boolean;
   limit?: number;
   projectPath: string;
 }
 
 export function useListProjectSessions(options: UseListProjectSessionsOptions) {
-  const {cursor, enabled, limit, projectPath} = options;
+  const {cursor, limit, projectPath} = options;
 
   return useQuery(
     eq.queryOptions({
-      enabled: enabled && projectPath.length > 0,
+      enabled: projectPath.length > 0,
       placeholderData: (previousData) => previousData,
       queryFn: () =>
         Effect.gen(function* () {

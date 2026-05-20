@@ -1,8 +1,8 @@
-import {useState} from "react";
+import {useCallback, useRef, useState} from "react";
 import type {MouseEvent} from "react";
-import {flushSync} from "react-dom";
 import {useLocation, useNavigate} from "@tanstack/react-router";
 import {useQueryClient} from "@tanstack/react-query";
+import {autoAnimate} from "@formkit/auto-animate";
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import IconButton from "@/components/ui/icon-button";
@@ -21,35 +21,21 @@ import {cn} from "@/lib/cn";
 const INITIAL_SESSION_LIMIT = 5;
 const SESSION_LIMIT_INCREMENT = 5;
 
-function getSessionReorderViewTransitionName(sessionId: string): string {
-  const transitionName = `project-session-${sessionId}`;
-  return CSS.escape ? CSS.escape(transitionName) : transitionName.replace(/[^a-zA-Z0-9_-]/g, "-");
-}
-
-function updateWithSessionReorderTransition(update: () => void): void {
-  if (!document.startViewTransition) {
-    update();
-    return;
-  }
-
-  document.startViewTransition(() => {
-    flushSync(update);
-  });
-}
-
 interface ProjectListItemProps {
+  activeSessionId: string;
   expanded: boolean;
   project: ProjectListProject;
   onToggle: (projectId: string) => void;
 }
 
 export default function ProjectListItem(props: ProjectListItemProps) {
-  const {expanded, onToggle, project} = props;
+  const {activeSessionId, expanded, onToggle, project} = props;
 
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
   const [loadedSessionLimit, setLoadedSessionLimit] = useState(INITIAL_SESSION_LIMIT);
   const [visibleSessionLimit, setVisibleSessionLimit] = useState(INITIAL_SESSION_LIMIT);
   const [confirmingArchiveSessionId, setConfirmingArchiveSessionId] = useState<string | null>(null);
+  const animatedSessionListsRef = useRef(new WeakSet<HTMLElement>());
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -69,7 +55,7 @@ export default function ProjectListItem(props: ProjectListItemProps) {
     renaming,
     startRenaming,
   } = useRenameProject({projectId: project.id, projectName: project.name});
-  const sessionsQuery = useListProjectSessions({enabled: expanded, limit: loadedSessionLimit, projectPath: project.path});
+  const sessionsQuery = useListProjectSessions({limit: loadedSessionLimit, projectPath: project.path});
 
   const sessions =
     sessionsQuery.data?.sessions
@@ -80,13 +66,19 @@ export default function ProjectListItem(props: ProjectListItemProps) {
         updatedAt: formatUpdatedAt(session.updatedAt),
       }))
       .toSorted((left, right) => Number(right.pinned) - Number(left.pinned)) ?? [];
+
+  const activeSession = sessions.find((session) => session.id === activeSessionId);
+
   const visibleSessions = sessions.slice(0, visibleSessionLimit);
+  const displayedSessions = expanded ? visibleSessions : activeSession ? [activeSession] : [];
+  const sessionsExpanded = expanded || activeSession != null;
 
   const hasSessions = sessions.length > 0;
   const hasHiddenLoadedSessions = sessions.length > visibleSessionLimit;
   const canShowLessSessions = visibleSessionLimit > INITIAL_SESSION_LIMIT;
-  const canShowMoreSessions = hasHiddenLoadedSessions || !!sessionsQuery.data?.hasMore;
-  const canShowLessAtEnd = canShowLessSessions && !canShowMoreSessions;
+  const canShowMoreSessions = expanded && (hasHiddenLoadedSessions || !!sessionsQuery.data?.hasMore);
+  const canShowLessAtEnd = expanded && canShowLessSessions && !canShowMoreSessions;
+  const isLoadingMoreSessions = sessionsQuery.isFetching && sessions.length < loadedSessionLimit;
   const canOpenInFinder = window.desktopShell?.platform === "darwin";
 
   const handleToggle = (): void => {
@@ -103,7 +95,7 @@ export default function ProjectListItem(props: ProjectListItemProps) {
 
   const handleToggleSessionPinned = (event: MouseEvent<HTMLButtonElement>, sessionId: string): void => {
     event.stopPropagation();
-    updateWithSessionReorderTransition(() => toggleSessionPinned(project.id, sessionId));
+    toggleSessionPinned(project.id, sessionId);
   };
 
   const handleArchiveSession = (event: MouseEvent<HTMLButtonElement>, sessionId: string): void => {
@@ -161,6 +153,15 @@ export default function ProjectListItem(props: ProjectListItemProps) {
   const handleShowLessSessions = (): void => {
     setVisibleSessionLimit(INITIAL_SESSION_LIMIT);
   };
+
+  const attachSessionListAutoAnimateRef = useCallback((node: HTMLElement | null): void => {
+    if (!node || animatedSessionListsRef.current.has(node)) return;
+    autoAnimate(node, {
+      duration: 180,
+      easing: "ease-out",
+    });
+    animatedSessionListsRef.current.add(node);
+  }, []);
 
   return (
     <li>
@@ -221,102 +222,96 @@ export default function ProjectListItem(props: ProjectListItemProps) {
         </div>
       </Button>
 
-      <div
-        className="grid grid-rows-[0fr] opacity-0 origin-top transition-[grid-template-rows,opacity,transform] duration-320 ease-in-out data-[expanded=true]:grid-rows-[1fr] data-[expanded=true]:opacity-100"
-        data-expanded={expanded}
-      >
-        <div className="overflow-hidden py-0.5">
-          {sessionsQuery.isPending && (
-            <span className="ml-10 inline-flex items-center justify-start gap-2 px-0 py-1 text-sm text-neutral-600">
-              Loading sessions
-              <span className="size-2.5 animate-spin rounded-full border border-neutral-600 border-t-neutral-300" aria-hidden="true" />
-            </span>
-          )}
-          {sessionsQuery.error != null && <p className="px-8 py-1 text-sm text-red-400">Unable to load sessions.</p>}
-          {hasSessions && (
-            <ul className="space-y-0.5">
-              {visibleSessions.map((session) => {
-                const confirmingArchive = confirmingArchiveSessionId === session.id;
-                const sessionStream = sessionStreams[session.id];
-                const sessionStreaming = sessionStream?.status === "streaming" || sessionStream?.status === "stopping";
+      <div className={cn("overflow-hidden", sessionsExpanded && "py-0.5")}>
+        {expanded && sessionsQuery.isPending && (
+          <span className="ml-10 inline-flex items-center justify-start gap-2 px-0 py-1 text-sm text-neutral-600">
+            Loading sessions
+            <span className="size-2.5 animate-spin rounded-full border border-neutral-600 border-t-neutral-300" aria-hidden="true" />
+          </span>
+        )}
+        {expanded && sessionsQuery.error != null && <p className="px-8 py-1 text-sm text-red-400">Unable to load sessions.</p>}
+        <ul className="flex flex-col gap-0.5" ref={attachSessionListAutoAnimateRef}>
+          {displayedSessions.map((session) => {
+            const confirmingArchive = confirmingArchiveSessionId === session.id;
+            const selected = location.pathname === `/session/${session.id}`;
+            const sessionStream = sessionStreams[session.id];
+            const sessionStreaming = sessionStream?.status === "streaming" || sessionStream?.status === "stopping";
 
-                return (
-                  <li
-                    key={session.id}
-                    onFocusCapture={() => handlePrefetchSession(session.id)}
-                    onMouseLeave={() => handleSessionMouseLeave(session.id)}
-                    onPointerDown={() => handlePrefetchSession(session.id)}
-                    onPointerEnter={() => handlePrefetchSession(session.id)}
-                    style={{viewTransitionName: getSessionReorderViewTransitionName(session.id)}}
+            return (
+              <li
+                key={session.id}
+                onFocusCapture={() => handlePrefetchSession(session.id)}
+                onMouseLeave={() => handleSessionMouseLeave(session.id)}
+                onPointerDown={() => handlePrefetchSession(session.id)}
+                onPointerEnter={() => handlePrefetchSession(session.id)}
+              >
+                <Button
+                  as="div"
+                  className={cn("group/session flex w-full items-center gap-2 py-1.5 pl-2 pr-1 text-left", selected && "bg-white/8 text-neutral-200")}
+                  onClick={() => handleOpenSession(session.id)}
+                  variant="primary"
+                >
+                  <IconButton
+                    className={cn("size-4 shrink-0", !session.pinned && "invisible group-hover/session:visible")}
+                    label={session.pinned ? "Unpin session" : "Pin session"}
+                    onClick={(event) => handleToggleSessionPinned(event, session.id)}
                   >
-                    <Button
-                      as="div"
-                      className={cn(
-                        "group/session flex w-full items-center gap-2 py-1.5 pl-2 pr-1 text-left",
-                        location.pathname === `/session/${session.id}` && "bg-white/8 text-neutral-200"
+                    <Icon name="pin" size="xs" />
+                  </IconButton>
+                  <SessionTitleText className="min-w-0 flex-1 truncate text-sm" title={session.title} />
+                  <span className="grid w-12 shrink-0 place-items-center justify-items-end">
+                    <span className="col-start-1 row-start-1 w-full justify-self-end pr-1.5 text-right text-xs text-neutral-500 group-hover/session:invisible">
+                      {sessionStreaming ? (
+                        <span className="inline-block size-2 animate-spin rounded-full border border-neutral-600 border-t-neutral-300" aria-label="Session streaming" />
+                      ) : (
+                        session.updatedAt
                       )}
-                      onClick={() => handleOpenSession(session.id)}
-                      variant="primary"
+                    </span>
+                    <IconButton
+                      className={cn(
+                        "col-start-1 row-start-1 size-5 disabled:cursor-not-allowed disabled:opacity-50",
+                        confirmingArchive
+                          ? "rounded-xl corner-superellipse/1.3 bg-red-500/25 text-red-500 hover:bg-red-500/35 hover:text-red-400"
+                          : "invisible group-hover/session:visible"
+                      )}
+                      disabled={archiveProjectSessionMutation.isPending}
+                      label={confirmingArchive ? "Confirm archive session" : "Archive session"}
+                      onClick={(event) => handleArchiveSession(event, session.id)}
                     >
-                      <IconButton
-                        className={cn("size-4 shrink-0", !session.pinned && "invisible group-hover/session:visible")}
-                        label={session.pinned ? "Unpin session" : "Pin session"}
-                        onClick={(event) => handleToggleSessionPinned(event, session.id)}
-                      >
-                        <Icon name="pin" size="xs" />
-                      </IconButton>
-                      <SessionTitleText className="min-w-0 flex-1 truncate text-sm" title={session.title} />
-                      <span className="grid w-12 shrink-0 place-items-center justify-items-end">
-                        <span className="col-start-1 row-start-1 w-full justify-self-end pr-1.5 text-right text-xs text-neutral-500 group-hover/session:invisible">
-                          {sessionStreaming ? (
-                            <span className="inline-block size-2 animate-spin rounded-full border border-neutral-600 border-t-neutral-300" aria-label="Session streaming" />
-                          ) : (
-                            session.updatedAt
-                          )}
-                        </span>
-                        <IconButton
-                          className={cn(
-                            "col-start-1 row-start-1 size-5 disabled:cursor-not-allowed disabled:opacity-50",
-                            confirmingArchive
-                              ? "rounded-xl corner-superellipse/1.3 bg-red-500/25 text-red-500 hover:bg-red-500/35 hover:text-red-400"
-                              : "invisible group-hover/session:visible"
-                          )}
-                          disabled={archiveProjectSessionMutation.isPending}
-                          label={confirmingArchive ? "Confirm archive session" : "Archive session"}
-                          onClick={(event) => handleArchiveSession(event, session.id)}
-                        >
-                          <Icon name={confirmingArchive ? "x" : "archive"} size="xs" />
-                        </IconButton>
-                      </span>
-                    </Button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+                      <Icon name={confirmingArchive ? "x" : "archive"} size="xs" />
+                    </IconButton>
+                  </span>
+                </Button>
+              </li>
+            );
+          })}
 
           {canShowMoreSessions && (
-            <Button className="ml-8 inline-flex items-center justify-start gap-2 py-1 text-xs" disabled={sessionsQuery.isFetching} onClick={handleLoadMoreSessions} variant="ghost">
-              Show more
-              <span className="grid size-2.5 place-items-center" aria-hidden="true">
-                <span
-                  className={cn(
-                    "size-2.5 rounded-full border border-neutral-600 border-t-neutral-300 opacity-0 transition-opacity duration-100",
-                    sessionsQuery.isFetching && "animate-spin opacity-100 delay-150"
-                  )}
-                />
-              </span>
-            </Button>
+            <li>
+              <Button className="ml-8 inline-flex items-center justify-start gap-2 py-1 text-xs" disabled={isLoadingMoreSessions} onClick={handleLoadMoreSessions} variant="ghost">
+                Show more
+                <span className="grid size-2.5 place-items-center" aria-hidden="true">
+                  <span
+                    className={cn(
+                      "size-2.5 rounded-full border border-neutral-600 border-t-neutral-300 opacity-0 transition-opacity duration-100",
+                      isLoadingMoreSessions && "animate-spin opacity-100 delay-150"
+                    )}
+                  />
+                </span>
+              </Button>
+            </li>
           )}
 
           {canShowLessAtEnd && (
-            <Button className="ml-8 justify-start px-0 py-1 text-xs" onClick={handleShowLessSessions} variant="ghost">
-              Show less
-            </Button>
+            <li>
+              <Button className="ml-8 justify-start px-0 py-1 text-xs" onClick={handleShowLessSessions} variant="ghost">
+                Show less
+              </Button>
+            </li>
           )}
+        </ul>
 
-          {!sessionsQuery.isPending && sessionsQuery.error == null && !hasSessions && <p className="px-8 py-1 text-sm text-neutral-600">No sessions</p>}
-        </div>
+        {expanded && !sessionsQuery.isPending && sessionsQuery.error == null && !hasSessions && <p className="px-8 py-1 text-sm text-neutral-600">No sessions</p>}
       </div>
     </li>
   );
