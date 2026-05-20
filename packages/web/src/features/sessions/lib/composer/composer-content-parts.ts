@@ -5,6 +5,18 @@ function contentPartValue(part: SessionUserMessageContentPart): string {
   return part.type === "text" ? part.text : part.value;
 }
 
+function pushTextContentPart(parts: SessionUserMessageContentPart[], text: string): void {
+  if (!text) return;
+
+  const previous = parts.at(-1);
+  if (previous?.type === "text") {
+    parts[parts.length - 1] = {...previous, text: `${previous.text}${text}`};
+    return;
+  }
+
+  parts.push({text, type: "text"});
+}
+
 /** Converts mixed text/reference composer parts into their plain text representation. */
 export function textFromComposerContentParts(parts: readonly SessionUserMessageContentPart[]): string {
   return parts.map(contentPartValue).join("");
@@ -39,18 +51,6 @@ export function createReferenceNode(part: SessionUserMessageReferencePart): JSON
     } satisfies ReferenceNodeAttributes,
     type: "composerReference",
   };
-}
-
-function pushTextContentPart(parts: SessionUserMessageContentPart[], text: string): void {
-  if (!text) return;
-
-  const previous = parts.at(-1);
-  if (previous?.type === "text") {
-    parts[parts.length - 1] = {...previous, text: `${previous.text}${text}`};
-    return;
-  }
-
-  parts.push({text, type: "text"});
 }
 
 /**

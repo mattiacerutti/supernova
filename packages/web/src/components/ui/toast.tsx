@@ -6,25 +6,6 @@ import {cn} from "@/lib/cn";
 
 type ToastObject = ReturnType<typeof Toast.useToastManager>["toasts"][number];
 
-interface ToastProviderProps {
-  readonly children: ReactNode;
-}
-
-export default function ToastProvider(props: ToastProviderProps) {
-  const {children} = props;
-
-  return (
-    <Toast.Provider toastManager={toastManager}>
-      {children}
-      <Toast.Portal>
-        <Toast.Viewport className="fixed top-auto right-4 bottom-4 z-80 mx-auto flex w-62.5 sm:right-8 sm:bottom-8 sm:w-75">
-          <ToastList />
-        </Toast.Viewport>
-      </Toast.Portal>
-    </Toast.Provider>
-  );
-}
-
 function ToastList() {
   const {toasts} = Toast.useToastManager();
 
@@ -100,5 +81,24 @@ function ToastItem(props: {readonly toast: ToastObject}) {
         {/* row 2 / column 2 intentionally empty */}
       </div>
     </Toast.Root>
+  );
+}
+
+interface ToastProviderProps {
+  readonly children: ReactNode;
+}
+
+export default function ToastProvider(props: ToastProviderProps) {
+  const {children} = props;
+
+  return (
+    <Toast.Provider toastManager={toastManager}>
+      {children}
+      <Toast.Portal>
+        <Toast.Viewport className="fixed top-auto right-4 bottom-4 z-80 mx-auto flex w-62.5 sm:right-8 sm:bottom-8 sm:w-75">
+          <ToastList />
+        </Toast.Viewport>
+      </Toast.Portal>
+    </Toast.Provider>
   );
 }

@@ -5,14 +5,6 @@ export type ButtonVariant = "bare" | "ghost" | "primary";
 export type ButtonSize = "lg" | "md" | "none" | "sm";
 export type ButtonShape = "default" | "icon";
 
-export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  as?: "button" | "div";
-  children: ReactNode;
-  shape?: ButtonShape;
-  size?: ButtonSize;
-  variant?: ButtonVariant;
-}
-
 const variantClasses: Record<ButtonVariant, string> = {
   bare: "cursor-pointer disabled:cursor-default disabled:opacity-50",
   ghost: "cursor-pointer text-neutral-400 hover:text-neutral-100 disabled:cursor-default disabled:opacity-50 disabled:hover:text-neutral-400 [&_svg]:text-current",
@@ -33,6 +25,14 @@ const iconSizeClasses: Record<ButtonSize, string> = {
   none: "",
   sm: "grid size-6 place-items-center",
 };
+
+export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  as?: "button" | "div";
+  children: ReactNode;
+  shape?: ButtonShape;
+  size?: ButtonSize;
+  variant?: ButtonVariant;
+}
 
 export default function Button(props: ButtonProps) {
   const {as = "button", children, className, onClick, onKeyDown, shape = "default", size = "none", type = "button", variant = "bare", ...buttonProps} = props;

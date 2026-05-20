@@ -29,16 +29,6 @@ function formatSuggestionPath(displayPath: string, homePath: string | undefined)
   };
 }
 
-interface OpenProjectDialogProps {
-  activeSuggestionIndex: number;
-  onActiveSuggestionIndexChange: Dispatch<SetStateAction<number>>;
-  onClose: () => void;
-  onOpenProject: (projectPath: string) => void;
-  onProjectPathChange: (projectPath: string) => void;
-  open: boolean;
-  projectPath: string;
-}
-
 interface SuggestionItemProps {
   highlighted: boolean;
   homePath: string | undefined;
@@ -78,6 +68,16 @@ function SuggestionItem(props: SuggestionItemProps) {
       </Button>
     </div>
   );
+}
+
+interface OpenProjectDialogProps {
+  activeSuggestionIndex: number;
+  onActiveSuggestionIndexChange: Dispatch<SetStateAction<number>>;
+  onClose: () => void;
+  onOpenProject: (projectPath: string) => void;
+  onProjectPathChange: (projectPath: string) => void;
+  open: boolean;
+  projectPath: string;
 }
 
 export default function OpenProjectDialog(props: OpenProjectDialogProps) {

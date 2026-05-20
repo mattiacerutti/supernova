@@ -7,6 +7,12 @@ import {cn} from "@/lib/cn";
 
 // TODO: Review these components and possibly refactor
 
+function contentPartsMatchMessage(message: SessionUserMessage): boolean {
+  const contentParts = message.contentParts;
+  if (!contentParts?.length) return false;
+  return textFromComposerContentParts(contentParts) === message.content;
+}
+
 function UserMessageContent(props: {children: string}) {
   const {children} = props;
   const parts = children.split(/(`[^`]+`)/g);
@@ -26,12 +32,6 @@ function UserMessageContent(props: {children: string}) {
       })}
     </span>
   );
-}
-
-function contentPartsMatchMessage(message: SessionUserMessage): boolean {
-  const contentParts = message.contentParts;
-  if (!contentParts?.length) return false;
-  return textFromComposerContentParts(contentParts) === message.content;
 }
 
 function ReferenceContentPart(props: {part: Extract<NonNullable<SessionUserMessage["contentParts"]>[number], {type: "reference"}>}) {

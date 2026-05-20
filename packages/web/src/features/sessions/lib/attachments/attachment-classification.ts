@@ -58,11 +58,6 @@ const acceptedTextExtensions = [
 
 export const SESSION_ATTACHMENT_ACCEPT = [...acceptedImageMimeTypes, "text/*", ...textMimeTypes, ...acceptedTextExtensions.map((extension) => `.${extension}`)].join(",");
 
-export function fileExtension(name: string): string {
-  const extension = name.split(".").pop();
-  return extension && extension !== name ? extension.toLowerCase() : "";
-}
-
 function normalizedMimeType(type: string): string {
   return type.split(";", 1)[0]?.trim().toLowerCase() ?? "";
 }
@@ -88,6 +83,11 @@ function bytesLookLikeText(bytes: Uint8Array): boolean {
   }
 
   return controlByteCount / bytes.length <= 0.3;
+}
+
+export function fileExtension(name: string): string {
+  const extension = name.split(".").pop();
+  return extension && extension !== name ? extension.toLowerCase() : "";
 }
 
 /** Returns whether a file should require a selected model with image support. */

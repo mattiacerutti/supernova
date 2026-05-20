@@ -16,31 +16,6 @@ import {modelKey, resolveThinkingLevel, selectionFromModel, selectionKey} from "
 import {useModelPickerStore} from "@/features/sessions/stores/model-picker-store";
 import {useSessionModelsStore} from "@/features/sessions/stores/session-models-store";
 
-interface SessionPageProps {
-  appEnvironment: AppEnvironment;
-  sessionId: string;
-}
-
-export default function SessionPage(props: SessionPageProps) {
-  const {appEnvironment, sessionId} = props;
-
-  const sessionQuery = useSession(sessionId);
-
-  if (sessionQuery.isPending) {
-    return <SessionLoading appEnvironment={appEnvironment} sessionId={sessionId} />;
-  }
-
-  if (sessionQuery.error || !sessionQuery.data) {
-    return (
-      <div className="grid flex-1 place-items-center px-6 py-10">
-        <p className="text-sm text-red-300">Unable to load this session.</p>
-      </div>
-    );
-  }
-
-  return <SessionConversation appEnvironment={appEnvironment} session={sessionQuery.data} />;
-}
-
 interface SessionLoadingProps {
   readonly appEnvironment: AppEnvironment;
   readonly sessionId: string;
@@ -179,4 +154,29 @@ function SessionConversation(props: SessionConversationProps) {
       title={<SessionTitleText className="block truncate" title={session.title} />}
     />
   );
+}
+
+interface SessionPageProps {
+  appEnvironment: AppEnvironment;
+  sessionId: string;
+}
+
+export default function SessionPage(props: SessionPageProps) {
+  const {appEnvironment, sessionId} = props;
+
+  const sessionQuery = useSession(sessionId);
+
+  if (sessionQuery.isPending) {
+    return <SessionLoading appEnvironment={appEnvironment} sessionId={sessionId} />;
+  }
+
+  if (sessionQuery.error || !sessionQuery.data) {
+    return (
+      <div className="grid flex-1 place-items-center px-6 py-10">
+        <p className="text-sm text-red-300">Unable to load this session.</p>
+      </div>
+    );
+  }
+
+  return <SessionConversation appEnvironment={appEnvironment} session={sessionQuery.data} />;
 }

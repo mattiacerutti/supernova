@@ -23,9 +23,18 @@
 ## Components and hooks
 
 - Default-export UI components as `export default function Component(props: ComponentProps) { ... }`; define handlers as `const handleX = () => {}` inside the component.
+- If a component has a named props type or interface, place that type directly above the component declaration.
+- In files with multiple components and helpers, order declarations from top to bottom as helpers, non-exported components, then exported component.
 - Prefer shared components before creating feature-local variants; only fork when the shared version cannot be extended cleanly.
 - When you need to render conditional UI, prefer `condition && <Component />` over `condition ? <Component /> : null`.
 - Keep components in separate files unless they are small, deeply related implementation details of the parent component.
+
+## Lib functions
+
+- In `lib` files, order function declarations from top to bottom as non-exported functions, then exported functions.
+- If a lib function takes a named `Options` input type or interface, place that type directly above the function declaration.
+- Add a small TSDoc comment to exported lib functions.
+- Add a small TSDoc comment to non-exported lib functions when their behavior is not trivial.
 
 ## RPC hooks
 

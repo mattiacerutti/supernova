@@ -9,38 +9,6 @@ function isTokenBoundary(value: string | undefined): boolean {
   return value === undefined || /\s/.test(value);
 }
 
-/** Creates a TipTap suggestion matcher that expands from the cursor to token boundaries. */
-export function findComposerSuggestionMatch(input: {char: string; startOfLine: boolean}): NonNullable<SuggestionOptions["findSuggestionMatch"]> {
-  return ({$position}) => {
-    const text = $position.parent.textBetween(0, $position.parent.content.size, "\n", "\n");
-    const cursor = $position.parentOffset;
-
-    let tokenStart = cursor;
-    while (tokenStart > 0 && !isTokenBoundary(text[tokenStart - 1])) {
-      tokenStart -= 1;
-    }
-
-    if (text[tokenStart] !== input.char) return null;
-    if (input.startOfLine && tokenStart !== 0) return null;
-    if (!input.startOfLine && tokenStart > 0 && ![" ", "\n"].includes(text[tokenStart - 1] ?? "")) return null;
-
-    let tokenEnd = cursor;
-    while (tokenEnd < text.length && !isTokenBoundary(text[tokenEnd])) {
-      tokenEnd += 1;
-    }
-
-    const query = text.slice(tokenStart + input.char.length, tokenEnd);
-    const from = $position.start() + tokenStart;
-    const to = $position.start() + tokenEnd;
-
-    return {
-      query,
-      range: {from, to},
-      text: text.slice(tokenStart, tokenEnd),
-    };
-  };
-}
-
 function createSuggestionPlugin(input: {
   char: string;
   editor: Editor;
@@ -79,6 +47,38 @@ function createSuggestionPlugin(input: {
     }),
     startOfLine,
   });
+}
+
+/** Creates a TipTap suggestion matcher that expands from the cursor to token boundaries. */
+export function findComposerSuggestionMatch(input: {char: string; startOfLine: boolean}): NonNullable<SuggestionOptions["findSuggestionMatch"]> {
+  return ({$position}) => {
+    const text = $position.parent.textBetween(0, $position.parent.content.size, "\n", "\n");
+    const cursor = $position.parentOffset;
+
+    let tokenStart = cursor;
+    while (tokenStart > 0 && !isTokenBoundary(text[tokenStart - 1])) {
+      tokenStart -= 1;
+    }
+
+    if (text[tokenStart] !== input.char) return null;
+    if (input.startOfLine && tokenStart !== 0) return null;
+    if (!input.startOfLine && tokenStart > 0 && ![" ", "\n"].includes(text[tokenStart - 1] ?? "")) return null;
+
+    let tokenEnd = cursor;
+    while (tokenEnd < text.length && !isTokenBoundary(text[tokenEnd])) {
+      tokenEnd += 1;
+    }
+
+    const query = text.slice(tokenStart + input.char.length, tokenEnd);
+    const from = $position.start() + tokenStart;
+    const to = $position.start() + tokenEnd;
+
+    return {
+      query,
+      range: {from, to},
+      text: text.slice(tokenStart, tokenEnd),
+    };
+  };
 }
 
 /** Creates the TipTap extension that reports file, skill, and slash-command suggestion matches. */

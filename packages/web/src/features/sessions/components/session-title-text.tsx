@@ -2,13 +2,13 @@ import type {AnimationEvent} from "react";
 import {useState} from "react";
 import {cn} from "@/lib/cn";
 
-interface SessionTitleTextProps {
-  readonly className?: string;
+interface SessionTitleRevealState {
+  readonly revealingTitle: string | null;
   readonly title: string;
 }
 
-interface SessionTitleRevealState {
-  readonly revealingTitle: string | null;
+interface SessionTitleTextProps {
+  readonly className?: string;
   readonly title: string;
 }
 

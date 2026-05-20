@@ -2,15 +2,15 @@ import type {SessionAttachment} from "@supernova/contracts/sessions/schemas";
 import Icon from "@/components/ui/icon";
 import {formatAttachmentType} from "@/features/sessions/lib/attachments/session-attachments";
 
-interface ComposerAttachmentPreviewProps {
-  readonly attachment: SessionAttachment;
-  readonly onRemove: (attachmentId: string) => void;
-}
-
 function attachmentImageUrl(attachment: SessionAttachment): string | undefined {
   if (!attachment.mime.startsWith("image/") || !attachment.contentBase64) return undefined;
 
   return `data:${attachment.mime};base64,${attachment.contentBase64}`;
+}
+
+interface ComposerAttachmentPreviewProps {
+  readonly attachment: SessionAttachment;
+  readonly onRemove: (attachmentId: string) => void;
 }
 
 export default function ComposerAttachmentPreview(props: ComposerAttachmentPreviewProps) {

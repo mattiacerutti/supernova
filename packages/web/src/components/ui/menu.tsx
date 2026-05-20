@@ -5,6 +5,35 @@ import {cn} from "@/lib/cn";
 
 type MenuTriggerProps = Omit<ComponentProps<typeof Button>, "children">;
 
+interface MenuItemProps extends ComponentProps<typeof BaseMenu.Item> {
+  icon?: ReactNode;
+  trailing?: ReactNode;
+}
+
+export function MenuItem(props: MenuItemProps) {
+  const {children, className, icon, onClick, trailing, ...itemProps} = props;
+
+  const handleClick: NonNullable<ComponentProps<typeof BaseMenu.Item>["onClick"]> = (event) => {
+    event.stopPropagation();
+    onClick?.(event);
+  };
+
+  return (
+    <BaseMenu.Item
+      className={cn(
+        "flex cursor-pointer items-center gap-2.5 rounded-xl corner-superellipse/1.3 px-2 py-1.5 text-left text-sm leading-5 outline-none transition-colors hover:bg-white/8 data-disabled:cursor-default data-disabled:opacity-45 data-highlighted:bg-white/8",
+        className
+      )}
+      onClick={handleClick}
+      {...itemProps}
+    >
+      {icon && <span className="flex h-5 w-3 shrink-0 items-center justify-center text-neutral-300">{icon}</span>}
+      <span className="min-w-0 flex-1 truncate leading-5">{children}</span>
+      {trailing && <span className="ml-auto flex h-5 shrink-0 items-center justify-center text-neutral-300">{trailing}</span>}
+    </BaseMenu.Item>
+  );
+}
+
 interface MenuProps {
   align?: ComponentProps<typeof BaseMenu.Positioner>["align"];
   alignOffset?: ComponentProps<typeof BaseMenu.Positioner>["alignOffset"];
@@ -16,11 +45,6 @@ interface MenuProps {
   sideOffset?: ComponentProps<typeof BaseMenu.Positioner>["sideOffset"];
   trigger: (triggerProps: MenuTriggerProps) => ReactElement;
   triggerLabel: string;
-}
-
-interface MenuItemProps extends ComponentProps<typeof BaseMenu.Item> {
-  icon?: ReactNode;
-  trailing?: ReactNode;
 }
 
 export default function Menu(props: MenuProps) {
@@ -64,29 +88,5 @@ export default function Menu(props: MenuProps) {
         </BaseMenu.Positioner>
       </BaseMenu.Portal>
     </BaseMenu.Root>
-  );
-}
-
-export function MenuItem(props: MenuItemProps) {
-  const {children, className, icon, onClick, trailing, ...itemProps} = props;
-
-  const handleClick: NonNullable<ComponentProps<typeof BaseMenu.Item>["onClick"]> = (event) => {
-    event.stopPropagation();
-    onClick?.(event);
-  };
-
-  return (
-    <BaseMenu.Item
-      className={cn(
-        "flex cursor-pointer items-center gap-2.5 rounded-xl corner-superellipse/1.3 px-2 py-1.5 text-left text-sm leading-5 outline-none transition-colors hover:bg-white/8 data-disabled:cursor-default data-disabled:opacity-45 data-highlighted:bg-white/8",
-        className
-      )}
-      onClick={handleClick}
-      {...itemProps}
-    >
-      {icon && <span className="flex h-5 w-3 shrink-0 items-center justify-center text-neutral-300">{icon}</span>}
-      <span className="min-w-0 flex-1 truncate leading-5">{children}</span>
-      {trailing && <span className="ml-auto flex h-5 shrink-0 items-center justify-center text-neutral-300">{trailing}</span>}
-    </BaseMenu.Item>
   );
 }

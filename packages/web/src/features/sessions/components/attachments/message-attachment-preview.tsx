@@ -2,14 +2,14 @@ import type {SessionAttachment} from "@supernova/contracts/sessions/schemas";
 import Icon from "@/components/ui/icon";
 import {formatAttachmentType} from "@/features/sessions/lib/attachments/session-attachments";
 
-interface MessageAttachmentPreviewProps {
-  readonly attachment: SessionAttachment;
-}
-
 function attachmentImageUrl(attachment: SessionAttachment): string | undefined {
   if (!attachment.mime.startsWith("image/") || !attachment.contentBase64) return undefined;
 
   return `data:${attachment.mime};base64,${attachment.contentBase64}`;
+}
+
+interface MessageAttachmentPreviewProps {
+  readonly attachment: SessionAttachment;
 }
 
 export default function MessageAttachmentPreview(props: MessageAttachmentPreviewProps) {

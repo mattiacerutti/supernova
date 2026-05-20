@@ -9,6 +9,13 @@ import {formatDuration} from "@/features/sessions/lib/timeline/work-timeline-ite
 import type {SessionWorkEvent, WorkSessionTimelineItem} from "@/features/sessions/types/session-timeline-item";
 import {cn} from "@/lib/cn";
 
+function generateCopyableText(events: readonly SessionWorkEvent[]): string {
+  return events
+    .filter((event) => event.type === "reasoning")
+    .map((event) => event.content)
+    .join("\n\n");
+}
+
 interface WorkEventProps {
   event: SessionWorkEvent;
   live: boolean;
@@ -33,13 +40,6 @@ function WorkEvent(props: WorkEventProps) {
   }
 
   return null;
-}
-
-function generateCopyableText(events: readonly SessionWorkEvent[]): string {
-  return events
-    .filter((event) => event.type === "reasoning")
-    .map((event) => event.content)
-    .join("\n\n");
 }
 
 interface AssistantWorkProps {

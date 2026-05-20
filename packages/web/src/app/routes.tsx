@@ -5,6 +5,14 @@ import SettingsPage from "@/features/settings/pages/settings-page";
 import NewSessionPage from "@/features/sessions/pages/new-session-page";
 import SessionPage from "@/features/sessions/pages/session-page";
 
+function EmptySessionState() {
+  return (
+    <div className="grid flex-1 place-items-center px-6 py-10">
+      <p className="text-sm text-neutral-600">Select a session or start a new one.</p>
+    </div>
+  );
+}
+
 export function RootRoute() {
   return <Outlet />;
 }
@@ -38,14 +46,6 @@ export function NewSessionRoute() {
   if (!project) return <EmptySessionState />;
 
   return <NewSessionPage projectName={project.name} projectPath={project.path} />;
-}
-
-function EmptySessionState() {
-  return (
-    <div className="grid flex-1 place-items-center px-6 py-10">
-      <p className="text-sm text-neutral-600">Select a session or start a new one.</p>
-    </div>
-  );
 }
 
 export function SettingsRoute() {

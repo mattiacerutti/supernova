@@ -6,23 +6,6 @@ import Icon from "@/components/ui/icon";
 import type {ComposerSuggestionItem} from "@/features/sessions/types/composer-suggestion";
 import {cn} from "@/lib/cn";
 
-interface ComposerSuggestionMenuProps {
-  readonly children: ReactNode;
-  readonly onSelect: (item: ComposerSuggestionItem) => void;
-  readonly onSubmit: () => void;
-  readonly open: boolean;
-  readonly query: UseQueryResult<readonly ComposerSuggestionItem[]>;
-}
-
-interface ComposerSuggestionItemRowProps {
-  readonly highlighted: boolean;
-  readonly item: ComposerSuggestionItem;
-  readonly onHoverEnd: () => void;
-  readonly onPointerHover: () => void;
-  readonly onSelect: () => void;
-  readonly shouldScrollIntoView: boolean;
-}
-
 interface ComposerSuggestionSection {
   readonly items: readonly (ComposerSuggestionItem & {readonly index: number})[];
   readonly title: string;
@@ -46,6 +29,15 @@ function SuggestionIcon(props: {readonly item: ComposerSuggestionItem}) {
   if (item.kind === "skill") return <Icon className="shrink-0 text-neutral-500" name="skill" size="xs" />;
 
   return <span className="w-3 shrink-0 text-center text-xs font-medium text-neutral-500">{item.kind.slice(0, 1).toUpperCase()}</span>;
+}
+
+interface ComposerSuggestionItemRowProps {
+  readonly highlighted: boolean;
+  readonly item: ComposerSuggestionItem;
+  readonly onHoverEnd: () => void;
+  readonly onPointerHover: () => void;
+  readonly onSelect: () => void;
+  readonly shouldScrollIntoView: boolean;
 }
 
 function ComposerSuggestionItemRow(props: ComposerSuggestionItemRowProps) {
@@ -77,6 +69,14 @@ function ComposerSuggestionItemRow(props: ComposerSuggestionItemRowProps) {
       </Button>
     </div>
   );
+}
+
+interface ComposerSuggestionMenuProps {
+  readonly children: ReactNode;
+  readonly onSelect: (item: ComposerSuggestionItem) => void;
+  readonly onSubmit: () => void;
+  readonly open: boolean;
+  readonly query: UseQueryResult<readonly ComposerSuggestionItem[]>;
 }
 
 export default function ComposerSuggestionMenu(props: ComposerSuggestionMenuProps) {

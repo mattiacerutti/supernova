@@ -57,11 +57,6 @@ export type IconName =
   | "workflow"
   | "x";
 
-interface IconProps extends Omit<IconifyIconProps, "children" | "icon" | "size"> {
-  name: IconName;
-  size?: "lg" | "md" | "sm" | "xs";
-}
-
 function getStaticIcon(collection: Parameters<typeof getIconData>[0], name: string): IconifyIconProps["icon"] {
   const icon = getIconData(collection, name);
 
@@ -121,6 +116,11 @@ const sizeClasses: Record<NonNullable<IconProps["size"]>, string> = {
   md: "size-5",
   lg: "size-6",
 };
+
+interface IconProps extends Omit<IconifyIconProps, "children" | "icon" | "size"> {
+  name: IconName;
+  size?: "lg" | "md" | "sm" | "xs";
+}
 
 export default function Icon(props: IconProps) {
   const {className, name, size = "md", ...iconProps} = props;
