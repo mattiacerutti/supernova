@@ -30,9 +30,11 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 *.tsbuildinfo
 *.local
 
+# generated desktop icons
+apps/desktop/resources/icons
+
 # IntelliJ based IDEs
 .idea
 
 # Finder (MacOS) folder config
 .DS_Store
-.context/
