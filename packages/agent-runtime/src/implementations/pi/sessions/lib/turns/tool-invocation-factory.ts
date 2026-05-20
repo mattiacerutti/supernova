@@ -11,23 +11,28 @@ import type {
   ReadToolInput,
 } from "@earendil-works/pi-coding-agent";
 import type {ImageContent, TextContent} from "@earendil-works/pi-ai";
-import type {
+import {
   CommandToolInput,
-  CommandToolResult,
-  CustomToolInput,
-  CustomToolResult,
-  FileEditToolInput,
-  FileEditToolResult,
-  FileFindToolInput,
-  FileFindToolResult,
-  FileListToolInput,
-  FileListToolResult,
-  FileReadToolInput,
-  FileReadToolResult,
-  SessionTool,
-  ToolStatus,
+  type CommandToolResult,
+  type CustomToolInput,
+  type CustomToolResult,
+  FileEditToolInput as FileEditToolInputSchema,
+  type FileEditToolInput,
+  type FileEditToolResult,
+  FileFindToolInput as FileFindToolInputSchema,
+  type FileFindToolInput,
+  type FileFindToolResult,
+  FileListToolInput as FileListToolInputSchema,
+  type FileListToolInput,
+  type FileListToolResult,
+  FileReadToolInput as FileReadToolInputSchema,
+  type FileReadToolInput,
+  type FileReadToolResult,
+  type SessionTool,
+  type ToolStatus,
 } from "@supernova/contracts/sessions/schemas";
 import {piContentToText} from "./message-content";
+import {Option, Schema} from "effect";
 
 type PiToolOutput = string | readonly (TextContent | ImageContent)[];
 
@@ -95,8 +100,8 @@ class BashPiToolInvocation extends PiToolInvocation<BashToolInput, BashToolDetai
   }
 
   protected override createInput(input: Partial<BashToolInput>): CommandToolInput | undefined {
-    if (!input.command) return undefined;
-    return {command: input.command, timeoutMs: input.timeout};
+    const candidate = {command: input.command, timeoutMs: input.timeout} satisfies Partial<CommandToolInput>;
+    return Schema.decodeUnknownOption(CommandToolInput)(candidate).pipe(Option.getOrUndefined);
   }
 
   protected createResult(completion: PiToolCompletion<BashToolDetails>): CommandToolResult {
@@ -111,8 +116,8 @@ class ReadPiToolInvocation extends PiToolInvocation<ReadToolInput, ReadToolDetai
   }
 
   protected createInput(input: Partial<ReadToolInput>): FileReadToolInput | undefined {
-    if (!input.path) return undefined;
-    return {limit: input.limit, offset: input.offset, path: input.path};
+    const candidate = {limit: input.limit, offset: input.offset, path: input.path} satisfies Partial<FileReadToolInput>;
+    return Schema.decodeUnknownOption(FileReadToolInputSchema)(candidate).pipe(Option.getOrUndefined);
   }
 
   protected createResult(completion: PiToolCompletion<ReadToolDetails>): FileReadToolResult {
@@ -127,7 +132,8 @@ class ListPiToolInvocation extends PiToolInvocation<LsToolInput, LsToolDetails, 
   }
 
   protected createInput(input: Partial<LsToolInput>): FileListToolInput | undefined {
-    return {limit: input.limit, path: input.path};
+    const candidate = {limit: input.limit, path: input.path} satisfies Partial<FileListToolInput>;
+    return Schema.decodeUnknownOption(FileListToolInputSchema)(candidate).pipe(Option.getOrUndefined);
   }
 
   protected createResult(completion: PiToolCompletion<LsToolDetails>): FileListToolResult {
@@ -142,8 +148,8 @@ class EditPiToolInvocation extends PiToolInvocation<EditToolInput, EditToolDetai
   }
 
   protected createInput(input: Partial<EditToolInput>): FileEditToolInput | undefined {
-    if (!input.path || !input.edits) return undefined;
-    return {path: input.path, replacements: input.edits};
+    const candidate = {path: input.path, replacements: input.edits} satisfies Partial<FileEditToolInput>;
+    return Schema.decodeUnknownOption(FileEditToolInputSchema)(candidate).pipe(Option.getOrUndefined);
   }
 
   protected createResult(completion: PiToolCompletion<EditToolDetails>): FileEditToolResult {
@@ -157,8 +163,8 @@ class FindPiToolInvocation extends PiToolInvocation<FindToolInput, FindToolDetai
   }
 
   protected createInput(input: Partial<FindToolInput>): FileFindToolInput | undefined {
-    if (!input.pattern) return undefined;
-    return {limit: input.limit, path: input.path, pattern: input.pattern};
+    const candidate = {limit: input.limit, path: input.path, pattern: input.pattern} satisfies Partial<FileFindToolInput>;
+    return Schema.decodeUnknownOption(FileFindToolInputSchema)(candidate).pipe(Option.getOrUndefined);
   }
 
   protected createResult(completion: PiToolCompletion<FindToolDetails>): FileFindToolResult {

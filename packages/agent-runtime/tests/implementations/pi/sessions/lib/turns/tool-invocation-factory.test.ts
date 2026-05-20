@@ -1,12 +1,49 @@
+import {Schema} from "effect";
 import {describe, expect, it} from "vitest";
 import {PiToolInvocationFactory} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns/tool-invocation-factory";
+import {SessionTool} from "@supernova/contracts/sessions/schemas";
+import type {SessionTool as SessionToolType} from "@supernova/contracts/sessions/schemas";
+
+function expectSessionTool(value: SessionToolType): void {
+  expect(() => Schema.decodeUnknownSync(SessionTool)(value)).not.toThrow();
+}
 
 describe("PiToolInvocationFactory", () => {
   it("omits incomplete streaming input for tools with required fields", () => {
-    expect(PiToolInvocationFactory.create("bash", {}).toSessionTool()).toEqual({kind: "command", status: "pending"});
-    expect(PiToolInvocationFactory.create("read", {}).toSessionTool()).toEqual({kind: "file-read", status: "pending"});
-    expect(PiToolInvocationFactory.create("edit", {path: "src/app.ts"}).toSessionTool()).toEqual({kind: "file-edit", status: "pending"});
-    expect(PiToolInvocationFactory.create("find", {}).toSessionTool()).toEqual({kind: "file-find", status: "pending"});
+    const tools = [
+      PiToolInvocationFactory.create("bash", {}).toSessionTool(),
+      PiToolInvocationFactory.create("bash", {timeout: 1_000}).toSessionTool(),
+      PiToolInvocationFactory.create("bash", {command: 42}).toSessionTool(),
+      PiToolInvocationFactory.create("read", {}).toSessionTool(),
+      PiToolInvocationFactory.create("read", {limit: 20}).toSessionTool(),
+      PiToolInvocationFactory.create("read", {path: 42}).toSessionTool(),
+      PiToolInvocationFactory.create("edit", {path: "src/app.ts"}).toSessionTool(),
+      PiToolInvocationFactory.create("edit", {edits: [{newText: "new", oldText: "old"}]}).toSessionTool(),
+      PiToolInvocationFactory.create("edit", {edits: [{oldText: "old"}], path: "src/app.ts"}).toSessionTool(),
+      PiToolInvocationFactory.create("edit", {edits: [{newText: "new"}], path: "src/app.ts"}).toSessionTool(),
+      PiToolInvocationFactory.create("edit", {edits: "[]", path: "src/app.ts"}).toSessionTool(),
+      PiToolInvocationFactory.create("find", {}).toSessionTool(),
+      PiToolInvocationFactory.create("find", {path: "src"}).toSessionTool(),
+      PiToolInvocationFactory.create("find", {pattern: 42}).toSessionTool(),
+    ];
+
+    expect(tools).toEqual([
+      {kind: "command", status: "pending"},
+      {kind: "command", status: "pending"},
+      {kind: "command", status: "pending"},
+      {kind: "file-read", status: "pending"},
+      {kind: "file-read", status: "pending"},
+      {kind: "file-read", status: "pending"},
+      {kind: "file-edit", status: "pending"},
+      {kind: "file-edit", status: "pending"},
+      {kind: "file-edit", status: "pending"},
+      {kind: "file-edit", status: "pending"},
+      {kind: "file-edit", status: "pending"},
+      {kind: "file-find", status: "pending"},
+      {kind: "file-find", status: "pending"},
+      {kind: "file-find", status: "pending"},
+    ]);
+    tools.forEach(expectSessionTool);
   });
 
   it("projects complete tool inputs into provider-agnostic session tool input", () => {
@@ -32,6 +69,17 @@ describe("PiToolInvocationFactory", () => {
     });
   });
 
+  it("keeps schema-valid optional-only inputs for tools without required fields", () => {
+    const pendingList = PiToolInvocationFactory.create("ls", {}).toSessionTool();
+
+    expect(pendingList).toEqual({
+      input: {limit: undefined, path: undefined},
+      kind: "file-list",
+      status: "pending",
+    });
+    expectSessionTool(pendingList);
+  });
+
   it("maps completed and failed command results", () => {
     const completed = PiToolInvocationFactory.create("bash", {command: "printf '42\\n'"});
     completed.complete({details: {truncation: {truncated: true}}, isError: false, output: [{text: "42\n", type: "text"}]});
@@ -42,6 +90,7 @@ describe("PiToolInvocationFactory", () => {
       result: {output: "42\n", truncated: true},
       status: "completed",
     });
+    expectSessionTool(completed.toSessionTool());
 
     const failed = PiToolInvocationFactory.create("bash", {command: "exit 1"});
     failed.complete({details: undefined, isError: true, output: [{text: "failed", type: "text"}]});
@@ -52,6 +101,7 @@ describe("PiToolInvocationFactory", () => {
       kind: "command",
       status: "error",
     });
+    expectSessionTool(failed.toSessionTool());
   });
 
   it("maps custom tools without provider-specific names", () => {
@@ -64,5 +114,6 @@ describe("PiToolInvocationFactory", () => {
       result: {data: {extra: true}, output: "done"},
       status: "completed",
     });
+    expectSessionTool(invocation.toSessionTool());
   });
 });
