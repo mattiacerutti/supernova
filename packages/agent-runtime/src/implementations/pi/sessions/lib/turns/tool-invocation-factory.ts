@@ -9,6 +9,7 @@ import type {
   LsToolInput,
   ReadToolDetails,
   ReadToolInput,
+  WriteToolInput,
 } from "@earendil-works/pi-coding-agent";
 import type {ImageContent, TextContent} from "@earendil-works/pi-ai";
 import {
@@ -28,9 +29,13 @@ import {
   FileReadToolInput as FileReadToolInputSchema,
   type FileReadToolInput,
   type FileReadToolResult,
+  FileWriteToolInput as FileWriteToolInputSchema,
+  type FileWriteToolInput,
+  type FileWriteToolResult,
   type SessionTool,
   type ToolStatus,
 } from "@supernova/contracts/sessions/schemas";
+import {fileContentToNewFilePatch, piEditDiffToPatch} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns/edit-patch";
 import {piContentToText} from "./message-content";
 import {Option, Schema} from "effect";
 
@@ -153,7 +158,22 @@ class EditPiToolInvocation extends PiToolInvocation<EditToolInput, EditToolDetai
   }
 
   protected createResult(completion: PiToolCompletion<EditToolDetails>): FileEditToolResult {
-    return {diff: completion.details?.diff, firstChangedLine: completion.details?.firstChangedLine};
+    return {patch: piEditDiffToPatch({diff: completion.details?.diff, firstChangedLine: completion.details?.firstChangedLine, path: this.input?.path})};
+  }
+}
+
+class WritePiToolInvocation extends PiToolInvocation<WriteToolInput, undefined, FileWriteToolInput, FileWriteToolResult> {
+  public constructor(input: Partial<WriteToolInput> | undefined) {
+    super("write", "file-write", input);
+  }
+
+  protected createInput(input: Partial<WriteToolInput>): FileWriteToolInput | undefined {
+    const candidate = {content: input.content, path: input.path} satisfies Partial<FileWriteToolInput>;
+    return Schema.decodeUnknownOption(FileWriteToolInputSchema)(candidate).pipe(Option.getOrUndefined);
+  }
+
+  protected createResult(): FileWriteToolResult {
+    return {patch: fileContentToNewFilePatch({content: this.input?.content, path: this.input?.path})};
   }
 }
 
@@ -199,6 +219,8 @@ export class PiToolInvocationFactory {
         return new ListPiToolInvocation(input);
       case "edit":
         return new EditPiToolInvocation(input);
+      case "write":
+        return new WritePiToolInvocation(input);
       case "find":
         return new FindPiToolInvocation(input);
       default:

@@ -53,8 +53,18 @@ export const FileEditToolInput = Schema.Struct({
 
 /** Result data produced by a file edit tool. */
 export const FileEditToolResult = Schema.Struct({
-  diff: Schema.optional(Schema.String),
-  firstChangedLine: Schema.optional(Schema.Number),
+  patch: Schema.String,
+});
+
+/** Input for writing a full file. */
+export const FileWriteToolInput = Schema.Struct({
+  content: Schema.String,
+  path: Schema.String,
+});
+
+/** Result data produced by a file write tool. */
+export const FileWriteToolResult = Schema.Struct({
+  patch: Schema.String,
 });
 
 /** Input for finding files by path or name pattern. */
@@ -102,6 +112,7 @@ export const SessionTool = Schema.Union([
   ...sessionToolStates("file-read", FileReadToolInput, FileReadToolResult),
   ...sessionToolStates("file-list", FileListToolInput, FileListToolResult),
   ...sessionToolStates("file-edit", FileEditToolInput, FileEditToolResult),
+  ...sessionToolStates("file-write", FileWriteToolInput, FileWriteToolResult),
   ...sessionToolStates("file-find", FileFindToolInput, FileFindToolResult),
   ...sessionToolStates("custom", CustomToolInput, CustomToolResult),
 ]);
@@ -115,6 +126,8 @@ export type FileListToolInput = typeof FileListToolInput.Type;
 export type FileListToolResult = typeof FileListToolResult.Type;
 export type FileEditToolInput = typeof FileEditToolInput.Type;
 export type FileEditToolResult = typeof FileEditToolResult.Type;
+export type FileWriteToolInput = typeof FileWriteToolInput.Type;
+export type FileWriteToolResult = typeof FileWriteToolResult.Type;
 export type FileFindToolInput = typeof FileFindToolInput.Type;
 export type FileFindToolResult = typeof FileFindToolResult.Type;
 export type CustomToolInput = typeof CustomToolInput.Type;

@@ -122,7 +122,7 @@ describe("projecting Pi branch entries into session turns", () => {
         tool: {
           input: {path: "button.tsx", replacements: [{newText: "primary", oldText: "ghost"}]},
           kind: "file-edit",
-          result: {diff: "-1 ghost\n+1 primary", firstChangedLine: 1},
+          result: {patch: "--- a/button.tsx\n+++ b/button.tsx\n@@ -1,1 +1,1 @@\n-ghost\n+primary"},
           status: "completed",
         },
         type: "tool",
