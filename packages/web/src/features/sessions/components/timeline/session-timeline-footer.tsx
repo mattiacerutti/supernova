@@ -28,7 +28,7 @@ export default function SessionTimelineFooter(props: SessionTimelineFooterProps)
             </span>
           </div>
         )}
-        {streamError && <p className="rounded-lg border border-red-500/15 bg-red-500/10 px-3 py-2 text-xs text-red-300">{streamError}</p>}
+        {streamError && <p className="text-sm text-red-300">{streamError}</p>}
       </div>
     </>
   );

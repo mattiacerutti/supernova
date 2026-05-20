@@ -53,7 +53,7 @@ export default function WorkBlock(props: WorkBlockProps) {
 
   if (item.live || !item.collapsible) {
     return (
-      <section className="group/message space-y-3">
+      <section className="group/message flex flex-col gap-5">
         {item.events.map((event) => (
           <WorkEvent event={event} key={event.id} live={item.live} toolDetailMode="visible" />
         ))}
@@ -63,9 +63,9 @@ export default function WorkBlock(props: WorkBlockProps) {
   }
 
   return (
-    <section className="space-y-3">
+    <section className="space-y-2">
       <Button
-        className="group inline-flex w-fit select-none gap-1.5 px-0 py-0 text-sm text-neutral-500 hover:text-neutral-400 items-center 0"
+        className="group inline-flex w-fit select-none gap-1.5 px-0 py-0 text-sm text-neutral-500 hover:text-neutral-400 items-center "
         onClick={handleToggle}
         variant="ghost"
       >
@@ -74,20 +74,13 @@ export default function WorkBlock(props: WorkBlockProps) {
       </Button>
       <div className="h-px bg-white/7" />
       <div
-        className="grid grid-rows-[0fr] opacity-0 will-change-[grid-template-rows,opacity] transition-[grid-template-rows,opacity] duration-300 ease-in-out data-[expanded=true]:grid-rows-[1fr] data-[expanded=true]:opacity-100"
+        className="grid grid-rows-[0fr] opacity-0 will-change-[grid-template-rows,opacity] transition-[grid-template-rows,opacity] duration-300 ease-in-out data-[expanded=true]:grid-rows-[1fr] data-[expanded=true]:opacity-100 data-[expanded=true]:mt-2"
         data-expanded={showExpanded}
       >
-        <div className="overflow-hidden">
-          {item.events.map((event, index) => {
-            const previousEvent = item.events[index - 1];
-            const compactSpacing = previousEvent?.type === "tool" && event.type === "tool";
-
-            return (
-              <div className={cn(index > 0 && !compactSpacing && "mt-3")} key={event.id}>
-                <WorkEvent event={event} live={false} toolDetailMode="collapsible" />
-              </div>
-            );
-          })}
+        <div className="overflow-hidden flex flex-col gap-3 mt-1">
+          {item.events.map((event) => (
+            <WorkEvent event={event} live={false} toolDetailMode="collapsible" key={event.id} />
+          ))}
         </div>
       </div>
     </section>

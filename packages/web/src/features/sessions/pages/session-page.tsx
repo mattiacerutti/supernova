@@ -33,7 +33,7 @@ export default function SessionPage(props: SessionPageProps) {
   if (sessionQuery.error || !sessionQuery.data) {
     return (
       <div className="grid flex-1 place-items-center px-6 py-10">
-        <p className="rounded-lg border border-red-500/15 bg-red-500/10 px-3 py-2 text-xs text-red-300">Unable to load this session.</p>
+        <p className="text-sm text-red-300">Unable to load this session.</p>
       </div>
     );
   }

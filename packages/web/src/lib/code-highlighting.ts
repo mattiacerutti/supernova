@@ -7,7 +7,7 @@ const MAX_HIGHLIGHT_CACHE_ENTRIES = 500;
 const MAX_HIGHLIGHT_CACHE_MEMORY_BYTES = 50 * 1024 * 1024;
 
 export const CODE_HIGHLIGHT_THEMES = {
-  dark: "pierre-dark",
+  dark: "github-dark",
   light: "pierre-light",
 } as const;
 

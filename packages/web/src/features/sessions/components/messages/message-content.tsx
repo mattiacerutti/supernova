@@ -4,6 +4,7 @@ import {Suspense, isValidElement, use, useState} from "react";
 import type {ComponentProps, ReactNode} from "react";
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
+import TranscriptBlock from "@/features/sessions/components/messages/transcript-block";
 import {segmentStreamingMessage} from "@/features/sessions/lib/streaming/message-segments";
 import {CODE_HIGHLIGHT_THEMES, getCachedHighlightedCode, highlightCode} from "@/lib/code-highlighting";
 import {cn} from "@/lib/cn";
@@ -50,9 +51,9 @@ function CodeBlock(props: {children: ReactNode; code: string; language?: string}
   };
 
   return (
-    <div className="group/code my-4 overflow-hidden rounded-xl border border-white/8 bg-[#111111]">
-      <div className="flex h-9 items-center justify-between border-b border-white/7 bg-white/3 px-3">
-        <span className="font-mono text-xs text-neutral-500">{language ?? "text"}</span>
+    <TranscriptBlock className="group/code my-4 p-2.5" scrollable={false}>
+      <div className="mb-1.5 flex items-center justify-between font-sans text-sm text-neutral-500">
+        <span>{language ?? "text"}</span>
         <Button
           className="inline-flex w-auto items-center gap-1.5 px-2 py-1 text-xs text-neutral-500 opacity-0 hover:text-neutral-200 group-hover/code:opacity-100 focus-visible:opacity-100"
           onClick={handleCopy}
@@ -65,7 +66,7 @@ function CodeBlock(props: {children: ReactNode; code: string; language?: string}
       <Suspense fallback={<PlainCode code={code} />}>
         <HighlightedCode code={code} language={language} />
       </Suspense>
-    </div>
+    </TranscriptBlock>
   );
 }
 

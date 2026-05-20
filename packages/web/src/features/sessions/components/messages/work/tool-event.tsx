@@ -1,17 +1,16 @@
 import {useState} from "react";
+import type {ReactNode} from "react";
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
+import TranscriptBlock from "@/features/sessions/components/messages/transcript-block";
 import {getWorkIconName, getWorkSummary} from "@/features/sessions/lib/session-timeline/work-timeline-items";
 import type {SessionWorkEvent} from "@/features/sessions/types/session-timeline-item";
 import {cn} from "@/lib/cn";
+import type {SessionTool} from "@supernova/contracts/sessions/schemas";
 
 export type ToolDetailMode = "collapsible" | "visible";
 
 type ToolEvent = Extract<SessionWorkEvent, {type: "tool"}>;
-type SessionTool = NonNullable<ToolEvent["tool"]>;
-
-const codeBlockClassName = "max-h-72 overflow-auto whitespace-pre-wrap wrap-break-word rounded-xl border border-white/8 bg-black/30 p-3 font-mono text-xs leading-relaxed";
-const detailTextClassName = "min-w-0 wrap-break-word text-sm text-neutral-500";
 
 function fileName(path: string | undefined): string {
   if (!path) return "unknown file";
@@ -22,41 +21,24 @@ function formatJson(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
 
-function renderOutput(output: string | undefined, fallback: string, truncated?: boolean) {
-  const content = output && output.length > 0 ? output : fallback;
+function CodeBlock(props: {children: ReactNode; className?: string}) {
+  const {children, className} = props;
 
-  return (
-    <div className="space-y-1.5">
-      <pre className={cn(codeBlockClassName, output && output.length > 0 ? "text-neutral-300" : "text-neutral-500")}>{content}</pre>
-      {truncated && <p className={detailTextClassName}>Output was truncated.</p>}
-    </div>
-  );
+  return <TranscriptBlock className={cn("p-3 font-mono", className)}>{children}</TranscriptBlock>;
 }
 
-//TODO: Review UI
-function DefaultToolDetails(props: {tool: Extract<SessionTool, {kind: "custom" | "file-edit"}>}) {
-  const {tool} = props;
+function DetailText(props: {children: ReactNode; className?: string}) {
+  const {children, className} = props;
+  return <p className={cn("min-w-0 wrap-break-word text-sm leading-none text-neutral-500", className)}>{children}</p>;
+}
 
-  if (tool.kind === "file-edit") {
-    const path = tool.input?.path;
-    const replacementCount = tool.input?.replacements.length ?? 0;
-    return (
-      <div className="space-y-2">
-        <p className={detailTextClassName}>
-          edited <span className="font-mono text-neutral-400">{fileName(path)}</span> with {replacementCount} {replacementCount === 1 ? "replacement" : "replacements"}
-        </p>
-        {path && <p className={detailTextClassName}>{path}</p>}
-        {tool.status === "completed" && renderOutput(tool.result.diff, "Edit completed.")}
-        {tool.status === "error" && <pre className={cn(codeBlockClassName, "text-neutral-500")}>{tool.error}</pre>}
-      </div>
-    );
-  }
+function DefaultToolDetails(props: {tool: SessionTool}) {
+  const {tool} = props;
 
   return (
     <div className="space-y-2">
-      {tool.input && <pre className={cn(codeBlockClassName, "text-neutral-300")}>{formatJson(tool.input)}</pre>}
-      {tool.status === "completed" && renderOutput(tool.result.output, tool.result.data ? formatJson(tool.result.data) : "Tool completed.")}
-      {tool.status === "error" && <pre className={cn(codeBlockClassName, "text-neutral-500")}>{tool.error}</pre>}
+      {tool.input && <CodeBlock>{formatJson(tool.input)}</CodeBlock>}
+      {tool.status === "error" && <DetailText className="text-red-300">{tool.error}</DetailText>}
     </div>
   );
 }
@@ -72,14 +54,16 @@ function CommandToolDetails(props: {tool: Extract<SessionTool, {kind: "command"}
   const hasOutput = output !== undefined && output.length > 0;
 
   return (
-    <div className="rounded-xl border border-white/8 bg-white/6 p-2.5 font-mono text-sm leading-relaxed text-neutral-300 flex flex-col gap-1.5">
-      <div className="mb-1.5 font-sans text-sm text-neutral-500 flex justify-between items-center">
+    <CodeBlock className="p-0 text-sm">
+      <div className="sticky top-0 z-10 flex items-center justify-between bg-neutral-800 px-2.5 pb-1.5 pt-2.5 font-sans text-sm text-neutral-500">
         <span>Shell</span>
       </div>
-      <pre className="whitespace-pre-wrap wrap-break-word text-neutral-200">$ {tool.input.command}</pre>
-      {hasOutput && <pre className={cn("whitespace-pre-wrap wrap-break-word", tool.status === "error" ? "text-red-300" : "text-neutral-400")}>{output}</pre>}
-      {tool.status === "completed" && tool.result.truncated && <p className={cn(detailTextClassName, "mt-2 font-sans")}>Output was truncated.</p>}
-    </div>
+      <div className="flex flex-col gap-1.5 px-2.5 pb-2.5">
+        <pre className="whitespace-pre-wrap wrap-break-word text-neutral-200">$ {tool.input.command}</pre>
+        {hasOutput && <pre className={cn("whitespace-pre-wrap wrap-break-word", tool.status === "error" ? "text-red-300" : "text-neutral-400")}>{output}</pre>}
+        {tool.status === "completed" && tool.result.truncated && <DetailText className="mt-2 font-sans">Output was truncated.</DetailText>}
+      </div>
+    </CodeBlock>
   );
 }
 
@@ -94,45 +78,12 @@ function ReadToolDetails(props: {tool: Extract<SessionTool, {kind: "file-read"}>
 
   return (
     <div className="space-y-2">
-      <p className={detailTextClassName}>
+      <DetailText>
         Read {fileName(path)}
         {lineWindow.length > 0 && <span> ({lineWindow})</span>}
-      </p>
-      {tool.status === "completed" && tool.result.truncated && <p className={detailTextClassName}>Read output was truncated.</p>}
-      {tool.status === "error" && <pre className={cn(codeBlockClassName, "text-neutral-500")}>{tool.error}</pre>}
-    </div>
-  );
-}
-
-//TODO: Review UI
-function ListToolDetails(props: {tool: Extract<SessionTool, {kind: "file-list"}>}) {
-  const {tool} = props;
-  const path = tool.input?.path ?? ".";
-
-  return (
-    <div className="space-y-2">
-      <p className={detailTextClassName}>
-        listed <span className="font-mono text-neutral-400">{path}</span>
-      </p>
-      {tool.status === "completed" && renderOutput(tool.result.entries, "No entries returned.", tool.result.truncated)}
-      {tool.status === "error" && <pre className={cn(codeBlockClassName, "text-neutral-500")}>{tool.error}</pre>}
-    </div>
-  );
-}
-
-//TODO: Review UI
-function FindToolDetails(props: {tool: Extract<SessionTool, {kind: "file-find"}>}) {
-  const {tool} = props;
-  const path = tool.input?.path ?? ".";
-  const pattern = tool.input?.pattern ?? "unknown pattern";
-
-  return (
-    <div className="space-y-2">
-      <p className={detailTextClassName}>
-        searched <span className="font-mono text-neutral-400">{path}</span> for <span className="font-mono text-neutral-400">{pattern}</span>
-      </p>
-      {tool.status === "completed" && renderOutput(tool.result.matches, "No matches returned.", tool.result.truncated)}
-      {tool.status === "error" && <pre className={cn(codeBlockClassName, "text-neutral-500")}>{tool.error}</pre>}
+      </DetailText>
+      {tool.status === "completed" && tool.result.truncated && <DetailText>Read output was truncated.</DetailText>}
+      {tool.status === "error" && <DetailText className="text-red-300">{tool.error}</DetailText>}
     </div>
   );
 }
@@ -140,18 +91,15 @@ function FindToolDetails(props: {tool: Extract<SessionTool, {kind: "file-find"}>
 function ToolDetails(props: {tool: SessionTool | undefined}) {
   const {tool} = props;
 
-  if (!tool) return <p className={detailTextClassName}>Tool details are unavailable.</p>;
+  if (!tool) return <DetailText>Tool details are unavailable.</DetailText>;
 
   switch (tool.kind) {
     case "command":
       return <CommandToolDetails tool={tool} />;
     case "file-read":
       return <ReadToolDetails tool={tool} />;
-    case "file-list":
-      return <ListToolDetails tool={tool} />;
-    case "file-find":
-      return <FindToolDetails tool={tool} />;
-    //TODO: Need diff UI for file-edit tools
+    // NOTE: Readonly tools such as list and find are supported but never exposed to the agent by Pi, so we don't have a custom UI yet.
+    // TODO: Need diff UI for file-edit tools
     default:
       return <DefaultToolDetails tool={tool} />;
   }
@@ -182,7 +130,7 @@ export default function ToolEvent(props: {event: ToolEvent; mode: ToolDetailMode
   );
 
   return (
-    <div className="min-w-0 space-y-2 text-sm">
+    <div className="min-w-0 text-sm">
       {mode === "collapsible" ? (
         <Button
           aria-expanded={showDetails}
@@ -191,20 +139,21 @@ export default function ToolEvent(props: {event: ToolEvent; mode: ToolDetailMode
           variant="ghost"
         >
           {title}
-          <Icon className={cn("mt-0.5 transition-transform duration-160 ease-out", showDetails && "rotate-90")} name="chevron-right" size="xs" />
+          <Icon className={cn("transition-transform duration-160 ease-out", showDetails && "rotate-90")} name="chevron-right" size="xs" />
         </Button>
       ) : (
         <div className="flex min-w-0 items-start gap-2 text-neutral-600">{title}</div>
       )}
       <div
         className={cn(
-          "min-w-0 pt-1",
-          mode === "collapsible" &&
-            "grid grid-rows-[0fr] opacity-0 will-change-[grid-template-rows,opacity] transition-[grid-template-rows,opacity] duration-240 ease-in-out data-[expanded=true]:grid-rows-[1fr] data-[expanded=true]:opacity-100"
+          "min-w-0 ",
+          mode === "collapsible"
+            ? "grid grid-rows-[0fr] opacity-0 will-change-[grid-template-rows,opacity] transition-[grid-template-rows,opacity] duration-240 ease-in-out data-[expanded=true]:grid-rows-[1fr] data-[expanded=true]:opacity-100 data-[expanded=true]:mt-2"
+            : "mt-2"
         )}
         data-expanded={showDetails}
       >
-        <div className="min-w-0 overflow-hidden">
+        <div className="min-w-0 overflow-hidden ">
           <ToolDetails tool={event.tool} />
         </div>
       </div>
