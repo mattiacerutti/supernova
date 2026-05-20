@@ -64,7 +64,7 @@ describe("projecting Pi branch entries into session turns", () => {
         type: "assistant",
       },
       {
-        tool: {name: "bash", output: "typecheck passed", status: "completed", summary: "Ran command"},
+        tool: {kind: "command", result: {output: "typecheck passed"}, status: "completed"},
         type: "tool",
       },
     ]);
@@ -88,7 +88,43 @@ describe("projecting Pi branch entries into session turns", () => {
     expectTurnEvents(turns[0], [
       {
         durationMs: 3,
-        tool: {input: {command: "bun test"}, name: "bash", output: "passed", status: "completed", summary: "Ran command"},
+        tool: {input: {command: "bun test"}, kind: "command", result: {output: "passed"}, status: "completed"},
+        type: "tool",
+      },
+    ]);
+  });
+
+  it("maps edit tool details into the completed tool result", () => {
+    const turns = buildPiSessionTurns(
+      piEntries([
+        {content: [{text: "Edit the button", type: "text"}], id: "user-1", role: "user", timestamp: 1},
+        {
+          content: [{arguments: {edits: [{newText: "primary", oldText: "ghost"}], path: "button.tsx"}, id: "call-1", name: "edit", type: "toolCall"}],
+          id: "assistant-1",
+          role: "assistant",
+          timestamp: 2,
+        },
+        {
+          content: [{text: "Successfully replaced 1 block(s) in button.tsx.", type: "text"}],
+          details: {diff: "-1 ghost\n+1 primary", firstChangedLine: 1},
+          id: "tool-1",
+          role: "toolResult",
+          timestamp: 3,
+          toolCallId: "call-1",
+          toolName: "edit",
+        },
+      ]),
+      model
+    );
+
+    expectTurnEvents(turns[0], [
+      {
+        tool: {
+          input: {path: "button.tsx", replacements: [{newText: "primary", oldText: "ghost"}]},
+          kind: "file-edit",
+          result: {diff: "-1 ghost\n+1 primary", firstChangedLine: 1},
+          status: "completed",
+        },
         type: "tool",
       },
     ]);
@@ -120,9 +156,9 @@ describe("projecting Pi branch entries into session turns", () => {
     expectTurnEvents(turns[0], [
       {content: "I should inspect the project first.", type: "reasoning"},
       {content: "I'll check the files.", type: "assistant"},
-      {tool: {input: {path: "package.json"}, name: "read", output: "package contents", status: "completed"}, type: "tool"},
+      {tool: {input: {path: "package.json"}, kind: "file-read", result: {content: "package contents"}, status: "completed"}, type: "tool"},
       {content: "Now I know what to run.", type: "reasoning"},
-      {tool: {input: {command: "bun test"}, name: "bash", output: "passed", status: "completed"}, type: "tool"},
+      {tool: {input: {command: "bun test"}, kind: "command", result: {output: "passed"}, status: "completed"}, type: "tool"},
       {content: "The tests are green.", type: "assistant"},
     ]);
   });

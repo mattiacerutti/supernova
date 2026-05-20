@@ -2,7 +2,7 @@ import type {ImageContent, TextContent} from "@earendil-works/pi-ai";
 import type {SessionAttachment} from "@supernova/contracts/sessions/schemas";
 import type {AttachmentMetadata} from "@supernova/agent-runtime/implementations/pi/sessions/lib/message-context/attachments";
 
-export function piContentToText(content: string | (TextContent | ImageContent)[]): string {
+export function piContentToText(content: string | readonly (TextContent | ImageContent)[]): string {
   if (typeof content === "string") return content;
 
   return content
@@ -11,7 +11,7 @@ export function piContentToText(content: string | (TextContent | ImageContent)[]
     .join("\n");
 }
 
-export function piUserAttachments(content: string | (TextContent | ImageContent)[], metadata: readonly AttachmentMetadata[] | undefined): SessionAttachment[] | undefined {
+export function piUserAttachments(content: string | readonly (TextContent | ImageContent)[], metadata: readonly AttachmentMetadata[] | undefined): SessionAttachment[] | undefined {
   if (!metadata?.length) return;
 
   const images = typeof content === "string" ? [] : content.filter((part): part is ImageContent => part.type === "image");

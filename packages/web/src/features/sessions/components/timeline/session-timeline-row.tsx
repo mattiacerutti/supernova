@@ -1,7 +1,7 @@
 import {memo} from "react";
 import AssistantMessage from "@/features/sessions/components/messages/assistant-message";
 import UserMessage from "@/features/sessions/components/messages/user-message";
-import WorkBlock from "@/features/sessions/components/messages/work-block";
+import WorkBlock from "@/features/sessions/components/messages/work/work-block";
 import type {SessionTimelineItem} from "@/features/sessions/types/session-timeline-item";
 
 interface SessionTimelineRowProps {

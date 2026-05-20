@@ -18,7 +18,7 @@ function toolEvent(overrides: Partial<SessionToolTurnEvent>): SessionToolTurnEve
   return {
     id: "tool-1",
     timestamp: "2026-01-01T00:00:01.000Z",
-    tool: {name: "bash", status: "running", summary: "Ran command"},
+    tool: {kind: "command", status: "pending"},
     type: "tool",
     ...overrides,
   };
@@ -66,8 +66,8 @@ describe("interpolateStreamTurn", () => {
   });
 
   it("applies tool updates atomically instead of interpolating tool state", () => {
-    const current = turn({events: [toolEvent({tool: {name: "bash", status: "running", summary: "Ran command"}})]});
-    const target = turn({events: [toolEvent({tool: {name: "bash", output: "passed", status: "completed", summary: "Ran command"}})]});
+    const current = turn({events: [toolEvent({tool: {kind: "command", status: "pending"}})]});
+    const target = turn({events: [toolEvent({tool: {kind: "command", result: {output: "passed", truncated: false}, status: "completed"}})]});
 
     expect(interpolateStreamTurn(current, target, STREAM_FRAME_MAX_DELTA_MS)).toEqual({changed: true, done: true, turn: target});
   });

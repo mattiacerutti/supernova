@@ -1,19 +1,12 @@
 import type {AgentSession, CustomEntry, SessionEntry, SessionMessageEntry} from "@earendil-works/pi-coding-agent";
-import type {
-  ModelReference,
-  SessionTool,
-  SessionToolTurnEvent,
-  SessionTurn,
-  SessionTurnEvent,
-  SessionUserMessage,
-  SessionUserMessageContentPart,
-} from "@supernova/contracts/sessions/schemas";
+import type {ModelReference, SessionToolTurnEvent, SessionTurn, SessionTurnEvent, SessionUserMessage, SessionUserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 import {sessionTurn} from "@supernova/agent-runtime/implementations/shared/session-turns";
 import {generateStableId} from "@supernova/agent-runtime/implementations/shared/id-generator";
 import {ATTACHMENTS_CUSTOM_TYPE} from "@supernova/agent-runtime/implementations/pi/sessions/lib/message-context/attachments";
 import type {AttachmentMetadata} from "@supernova/agent-runtime/implementations/pi/sessions/lib/message-context/attachments";
 import {piContentToText, piUserAttachments} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns/message-content";
-import {piToolSummary} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns/tool-events";
+import {PiToolInvocationFactory} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns/tool-invocation-factory";
+import type {PiToolInvocation} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns/tool-invocation-factory";
 import {USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE, validContentParts} from "@supernova/agent-runtime/implementations/pi/sessions/lib/message-context/content-parts";
 
 function isMessageEntry(entry: SessionEntry): entry is SessionMessageEntry {
@@ -45,7 +38,7 @@ function isToolResultEntry(entry: SessionMessageEntry): entry is PiMessageEntry<
 class PiTurnDraft {
   private readonly userMessage: SessionUserMessage;
   private readonly events: SessionTurnEvent[] = [];
-  private readonly toolEventIndexes = new Map<string, {event: SessionToolTurnEvent; index: number}>();
+  private readonly toolEventIndexes = new Map<string, {event: SessionToolTurnEvent; index: number; invocation: PiToolInvocation}>();
 
   public constructor(userMessage: SessionUserMessage) {
     this.userMessage = userMessage;
@@ -75,13 +68,14 @@ class PiTurnDraft {
           }
           break;
         case "toolCall": {
+          const invocation = PiToolInvocationFactory.create(part.name, part.arguments);
           const toolEvent: SessionToolTurnEvent = {
             id,
             timestamp: entry.timestamp,
-            tool: {input: part.arguments, name: part.name, status: "pending", summary: piToolSummary(part.name)},
+            tool: invocation.toSessionTool(),
             type: "tool",
           };
-          this.toolEventIndexes.set(part.id, {event: toolEvent, index: this.events.length});
+          this.toolEventIndexes.set(part.id, {event: toolEvent, index: this.events.length, invocation});
           this.events.push(toolEvent);
           eventWasAdded = true;
           break;
@@ -99,16 +93,15 @@ class PiTurnDraft {
 
   public addToolResultEntry(entry: PiMessageEntry<"toolResult">): boolean {
     const message = entry.message;
-    const output = piContentToText(message.content);
-    const completedTool: SessionTool = {
-      error: message.isError ? output : undefined,
-      name: message.toolName,
-      output: message.isError ? undefined : output,
-      status: message.isError ? "error" : "completed",
-      summary: piToolSummary(message.toolName),
-    };
-    const toolEvent: SessionToolTurnEvent = {id: generateStableId("evt", [entry.id, "toolResult"]), timestamp: entry.timestamp, tool: completedTool, type: "tool"};
+    const completion = {details: message.details, isError: Boolean(message.isError), output: message.content};
+
     const existingTool = this.toolEventIndexes.get(message.toolCallId);
+    const invocation = existingTool?.invocation ?? PiToolInvocationFactory.create(message.toolName, undefined);
+
+    invocation.complete(completion);
+
+    const completedTool = invocation.toSessionTool();
+    const toolEvent: SessionToolTurnEvent = {id: generateStableId("evt", [entry.id, "toolResult"]), timestamp: entry.timestamp, tool: completedTool, type: "tool"};
 
     if (!existingTool) {
       this.events.push(toolEvent);
@@ -120,7 +113,7 @@ class PiTurnDraft {
       durationMs: new Date(entry.timestamp).getTime() - new Date(existingTool.event.timestamp).getTime(),
       id: existingTool.event.id,
       timestamp: existingTool.event.timestamp,
-      tool: {...completedTool, input: existingTool.event.tool?.input},
+      tool: completedTool,
     };
     return true;
   }

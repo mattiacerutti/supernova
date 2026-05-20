@@ -16,5 +16,24 @@ export function formatDuration(durationMs: number | undefined): string {
 }
 
 export function getWorkIconName(event: SessionToolTurnEvent): "folder" | "server" {
-  return event.tool?.name === "bash" ? "server" : "folder";
+  return event.tool?.kind === "command" ? "server" : "folder";
+}
+
+export function getWorkSummary(event: SessionToolTurnEvent): string {
+  const pending = event.tool?.status === "pending";
+
+  switch (event.tool?.kind) {
+    case "command":
+      return pending ? "Running command" : "Ran command";
+    case "file-read":
+      return pending ? "Reading file" : "Read file";
+    case "file-list":
+      return pending ? "Listing files" : "Listed files";
+    case "file-edit":
+      return pending ? "Editing file" : "Edited file";
+    case "file-find":
+      return pending ? "Exploring files" : "Explored files";
+    default:
+      return pending ? "Running tool" : "Ran tool";
+  }
 }

@@ -175,7 +175,7 @@ describe("sending messages through Pi sessions", () => {
           events: [
             {content: "Checking the workspace", type: "reasoning"},
             {content: "Done.", type: "assistant"},
-            {tool: {name: "bash", status: "completed", summary: "Ran command"}, type: "tool"},
+            {tool: {kind: "command", status: "completed"}, type: "tool"},
           ],
           model: {id: "claude-sonnet", providerId: "anthropic", thinkingLevel: "high"},
           status: "completed",
