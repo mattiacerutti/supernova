@@ -67,6 +67,10 @@ function ReadToolDetails(props: {tool: Extract<SessionTool, {kind: "file-read"}>
     tool.input?.limit !== undefined ? ` to ${tool.input.limit}` : undefined,
   ].filter(Boolean);
 
+  if (tool.status === "completed" && lineWindow.length === 0 && !tool.result.truncated) {
+    return null;
+  }
+
   return (
     <div className="space-y-2">
       <DetailText>{lineWindow.length > 0 && <span>{lineWindow}</span>}</DetailText>
@@ -105,12 +109,12 @@ export default function ToolDetails(props: {tool: SessionTool | undefined}): Rea
 
   switch (tool.kind) {
     case "command":
-      return <CommandToolDetails tool={tool} />;
+      return CommandToolDetails({tool});
     case "file-read":
-      return <ReadToolDetails tool={tool} />;
+      return ReadToolDetails({tool});
     case "file-edit":
     case "file-write":
-      return <FileMutationToolDetails tool={tool} />;
+      return FileMutationToolDetails({tool});
     // NOTE: Readonly tools such as list and find are supported but never exposed to the agent by Pi, so we don't have a custom UI yet.
     default:
       return <DefaultToolDetails tool={tool} />;
