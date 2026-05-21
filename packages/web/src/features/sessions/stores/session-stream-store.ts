@@ -1,6 +1,6 @@
 import type {QueryClient} from "@tanstack/react-query";
-import type {SessionStreamEvent} from "@supernova/contracts/sessions/procedures";
-import type {ModelReference, SessionDetails, SessionSummary, SessionTurn, SessionUserMessageContentPart, SessionUserMessage} from "@supernova/contracts/sessions/schemas";
+import type {SendMessageEvent} from "@supernova/contracts/sessions/procedures";
+import type {ModelReference, Session, SessionSummary, Turn, UserMessageContentPart, UserMessage} from "@supernova/contracts/sessions/schemas";
 import type {ProjectSessionsListResult} from "@supernova/contracts/projects/procedures";
 import {create} from "zustand";
 import {Effect, Stream} from "effect";
@@ -18,9 +18,9 @@ export interface SessionStreamState {
   /** Unique per-send token. Async callbacks use this to avoid mutating a newer stream for the same session. */
   readonly streamId: string;
   /** Currently streaming turn, kept separate from committed turns until the runtime confirms completion. */
-  readonly turn: SessionTurn | null;
+  readonly turn: Turn | null;
   /** Last committed transcript snapshot used as the base while optimistic streaming UI is active. */
-  readonly turns: readonly SessionTurn[];
+  readonly turns: readonly Turn[];
 }
 
 interface SessionStreamEntry extends SessionStreamState {
@@ -29,13 +29,13 @@ interface SessionStreamEntry extends SessionStreamState {
 }
 
 interface StartSessionStreamInput {
-  readonly contentParts: readonly SessionUserMessageContentPart[];
+  readonly contentParts: readonly UserMessageContentPart[];
   readonly model: ModelReference;
   readonly projectPath: string;
   readonly queryClient: QueryClient;
   readonly rpcClient: AgentRpcClientApi;
   readonly sessionId: string;
-  readonly sessionTurns: readonly SessionTurn[];
+  readonly sessionTurns: readonly Turn[];
 }
 
 interface SessionStreamStoreState {
@@ -53,10 +53,10 @@ function createStreamId(): string {
  * Creates an optimistic local turn immediately so the user message appears before
  * the server emits the canonical turn snapshot.
  */
-function createInitialStreamTurn(input: {contentParts: readonly SessionUserMessageContentPart[]; model: ModelReference}): SessionTurn {
+function createInitialStreamTurn(input: {contentParts: readonly UserMessageContentPart[]; model: ModelReference}): Turn {
   const timestamp = new Date().toISOString();
 
-  const localMessage: SessionUserMessage = {
+  const localMessage: UserMessage = {
     contentParts: input.contentParts,
     id: `msg_${crypto.randomUUID()}`,
     timestamp,
@@ -80,7 +80,7 @@ function createInitialStreamTurn(input: {contentParts: readonly SessionUserMessa
 function applySessionSummary(input: {projectPath: string; queryClient: QueryClient; sessionId: string; summary: SessionSummary}): void {
   const {projectPath, queryClient, sessionId, summary} = input;
 
-  queryClient.setQueryData<SessionDetails>(sessionQueryKey(sessionId), (session) => (session ? {...session, title: summary.title, updatedAt: summary.updatedAt} : session));
+  queryClient.setQueryData<Session>(sessionQueryKey(sessionId), (session) => (session ? {...session, title: summary.title, updatedAt: summary.updatedAt} : session));
   queryClient.setQueriesData<ProjectSessionsListResult>({queryKey: listProjectSessionsQueryKey(projectPath)}, (result) => {
     if (!result) return result;
 
@@ -94,9 +94,9 @@ function applySessionSummary(input: {projectPath: string; queryClient: QueryClie
 }
 
 /** Writes the latest canonical transcript into React Query. */
-function applyDoneTurns(input: {queryClient: QueryClient; sessionId: string; turns: readonly SessionTurn[]}): void {
+function applyDoneTurns(input: {queryClient: QueryClient; sessionId: string; turns: readonly Turn[]}): void {
   const {queryClient, sessionId, turns} = input;
-  queryClient.setQueryData<SessionDetails>(sessionQueryKey(sessionId), (session) => (session ? {...session, turns} : session));
+  queryClient.setQueryData<Session>(sessionQueryKey(sessionId), (session) => (session ? {...session, turns} : session));
 }
 
 export const useSessionStreamStore = create<SessionStreamStoreState>()((set, get) => {
@@ -138,7 +138,7 @@ export const useSessionStreamStore = create<SessionStreamStoreState>()((set, get
   };
 
   /** Applies server stream events to both transient stream state and cached session data. */
-  const handleStreamEvent = (input: {event: SessionStreamEvent; projectPath: string; queryClient: QueryClient; sessionId: string; streamId: string}): void => {
+  const handleStreamEvent = (input: {event: SendMessageEvent; projectPath: string; queryClient: QueryClient; sessionId: string; streamId: string}): void => {
     const {event, projectPath, queryClient, sessionId, streamId} = input;
 
     switch (event.type) {
@@ -192,7 +192,7 @@ export const useSessionStreamStore = create<SessionStreamStoreState>()((set, get
       // transcript snapshots; Zustand owns the transient live turn and fiber.
       void rpcClient
         .fork((rpc) =>
-          rpc.sendSessionMessage({contentParts, model, sessionId}).pipe(
+          rpc.sendMessage({contentParts, model, sessionId}).pipe(
             Stream.runForEach((event) => Effect.sync(() => handleStreamEvent({event, projectPath, queryClient, sessionId, streamId}))),
             Effect.catch((cause: unknown) => Effect.sync(() => failStream(sessionId, streamId, cause))),
             Effect.ensuring(Effect.sync(() => finishStream(sessionId, streamId, queryClient)))

@@ -1,10 +1,10 @@
 import {Schema} from "effect";
 import {ModelReference} from "./model";
-import {SessionTool} from "./tool";
-import {SessionUserMessage} from "./user-message";
+import {Tool} from "./tool";
+import {UserMessage} from "./user-message";
 
 /** Assistant response content produced during a turn. */
-export const SessionAssistantTurnEvent = Schema.Struct({
+export const AssistantTurnEvent = Schema.Struct({
   /** Stable event identifier. */
   id: Schema.String,
   /** Assistant-visible response text. */
@@ -19,7 +19,7 @@ export const SessionAssistantTurnEvent = Schema.Struct({
 });
 
 /** Internal reasoning or thinking content produced by the model during a turn. */
-export const SessionReasoningTurnEvent = Schema.Struct({
+export const ReasoningTurnEvent = Schema.Struct({
   /** Stable event identifier. */
   id: Schema.String,
   /** Reasoning text emitted by the model. */
@@ -32,7 +32,7 @@ export const SessionReasoningTurnEvent = Schema.Struct({
 });
 
 /** Tool invocation event produced during a turn. */
-export const SessionToolTurnEvent = Schema.Struct({
+export const ToolTurnEvent = Schema.Struct({
   /** Stable event identifier. */
   id: Schema.String,
   /** Event duration in milliseconds, when provided by the runtime. */
@@ -40,15 +40,15 @@ export const SessionToolTurnEvent = Schema.Struct({
   /** ISO timestamp for when the event started or was created. */
   timestamp: Schema.String,
   /** Tool metadata, input, output, and status. */
-  tool: Schema.optional(SessionTool),
+  tool: Schema.optional(Tool),
   type: Schema.Literal("tool"),
 });
 
 /** Any non-user event that can occur within a session turn. */
-export const SessionTurnEvent = Schema.Union([SessionAssistantTurnEvent, SessionReasoningTurnEvent, SessionToolTurnEvent]);
+export const TurnEvent = Schema.Union([AssistantTurnEvent, ReasoningTurnEvent, ToolTurnEvent]);
 
 /** A single user request and all agent activity produced in response. */
-export const SessionTurn = Schema.Struct({
+export const Turn = Schema.Struct({
   /** Stable turn identifier. */
   id: Schema.String,
   /** Current lifecycle state of the turn. */
@@ -56,17 +56,17 @@ export const SessionTurn = Schema.Struct({
   /** Model configuration used for this turn. */
   model: ModelReference,
   /** User message that initiated the turn. */
-  userMessage: SessionUserMessage,
+  userMessage: UserMessage,
   /** Ordered assistant, reasoning, and tool events produced for the turn. */
-  events: Schema.Array(SessionTurnEvent),
+  events: Schema.Array(TurnEvent),
   /** ISO timestamp for when the turn started. */
   startedAt: Schema.optional(Schema.String),
   /** ISO timestamp for when the turn completed or errored, when known. */
   completedAt: Schema.optional(Schema.String),
 });
 
-export type SessionAssistantTurnEvent = typeof SessionAssistantTurnEvent.Type;
-export type SessionReasoningTurnEvent = typeof SessionReasoningTurnEvent.Type;
-export type SessionToolTurnEvent = typeof SessionToolTurnEvent.Type;
-export type SessionTurn = typeof SessionTurn.Type;
-export type SessionTurnEvent = typeof SessionTurnEvent.Type;
+export type AssistantTurnEvent = typeof AssistantTurnEvent.Type;
+export type ReasoningTurnEvent = typeof ReasoningTurnEvent.Type;
+export type ToolTurnEvent = typeof ToolTurnEvent.Type;
+export type Turn = typeof Turn.Type;
+export type TurnEvent = typeof TurnEvent.Type;

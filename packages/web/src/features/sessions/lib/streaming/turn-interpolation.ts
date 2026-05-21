@@ -1,4 +1,4 @@
-import type {SessionTurn} from "@supernova/contracts/sessions/schemas";
+import type {Turn} from "@supernova/contracts/sessions/schemas";
 
 const STREAM_BACKLOG_CATCHUP_RATE = 8;
 export const STREAM_FRAME_MAX_DELTA_MS = 34;
@@ -21,7 +21,7 @@ function revealText(current: string | undefined, target: string | undefined, ela
   return target.slice(0, Math.min(target.length, nextLength));
 }
 
-function interpolateStreamTurns(current: readonly SessionTurn[], target: readonly SessionTurn[], elapsedMs: number) {
+function interpolateStreamTurns(current: readonly Turn[], target: readonly Turn[], elapsedMs: number) {
   let done = true;
   let changed = current.length !== target.length;
 
@@ -53,7 +53,7 @@ function interpolateStreamTurns(current: readonly SessionTurn[], target: readonl
 }
 
 /** Reveals streamed assistant text toward the latest turn snapshot without delaying tool events. */
-export function interpolateStreamTurn(current: SessionTurn | null, target: SessionTurn, elapsedMs: number) {
+export function interpolateStreamTurn(current: Turn | null, target: Turn, elapsedMs: number) {
   const result = interpolateStreamTurns(current ? [current] : [], [target], elapsedMs);
   return {changed: result.changed, done: result.done, turn: result.turns[0] ?? target};
 }

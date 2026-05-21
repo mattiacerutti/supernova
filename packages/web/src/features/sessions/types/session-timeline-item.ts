@@ -1,7 +1,7 @@
-import type {SessionTurnEvent, SessionUserMessage} from "@supernova/contracts/sessions/schemas";
+import type {TurnEvent, UserMessage} from "@supernova/contracts/sessions/schemas";
 
-export type SessionAssistantEvent = Extract<SessionTurnEvent, {type: "assistant"}>;
-export type SessionWorkEvent = Extract<SessionTurnEvent, {type: "reasoning" | "tool"}>;
+export type SessionAssistantEvent = Extract<TurnEvent, {type: "assistant"}>;
+export type SessionWorkEvent = Extract<TurnEvent, {type: "reasoning" | "tool"}>;
 
 interface SessionTimelineItemBase {
   readonly id: string;
@@ -17,7 +17,7 @@ export interface AssistantSessionTimelineItem extends SessionTimelineItemBase {
 }
 
 export interface UserSessionTimelineItem extends SessionTimelineItemBase {
-  readonly message: SessionUserMessage;
+  readonly message: UserMessage;
   readonly spacing: "message";
   readonly type: "user";
 }

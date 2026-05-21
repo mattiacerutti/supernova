@@ -5,7 +5,7 @@ export const ProviderOAuthLoginStartPayload = Schema.Struct({
   providerId: Schema.String,
 });
 
-export const ProviderLoginSessionGetPayload = Schema.Struct({
+export const ProviderLoginGetSessionPayload = Schema.Struct({
   loginSessionId: Schema.String,
 });
 
@@ -26,7 +26,7 @@ export class ProviderLoginError extends Schema.TaggedErrorClass<ProviderLoginErr
 }) {}
 
 export type ProviderOAuthLoginStartPayload = typeof ProviderOAuthLoginStartPayload.Type;
-export type ProviderLoginSessionGetPayload = typeof ProviderLoginSessionGetPayload.Type;
+export type ProviderLoginGetSessionPayload = typeof ProviderLoginGetSessionPayload.Type;
 export type ProviderLoginInputSubmitPayload = typeof ProviderLoginInputSubmitPayload.Type;
 export type ProviderLoginCancelPayload = typeof ProviderLoginCancelPayload.Type;
 export type ProviderLoginResult = typeof ProviderLoginResult.Type;

@@ -1,4 +1,4 @@
-import type {SessionAssistantTurnEvent, SessionReasoningTurnEvent, SessionToolTurnEvent, SessionTurn} from "@supernova/contracts/sessions/schemas";
+import type {AssistantTurnEvent, ReasoningTurnEvent, ToolTurnEvent, Turn} from "@supernova/contracts/sessions/schemas";
 import {describe, expect, it} from "vitest";
 import {buildSessionTimeline} from "@/features/sessions/lib/timeline/build-session-timeline";
 import {formatDuration} from "@/features/sessions/lib/timeline/work-timeline-items";
@@ -9,19 +9,19 @@ function timestamp(second: number): string {
   return `2026-01-01T00:00:${second.toString().padStart(2, "0")}.000Z`;
 }
 
-function reasoningEvent(id: string, second: number): SessionReasoningTurnEvent {
+function reasoningEvent(id: string, second: number): ReasoningTurnEvent {
   return {content: `reasoning ${id}`, id, timestamp: timestamp(second), type: "reasoning"};
 }
 
-function toolEvent(id: string, second: number, kind: "command" | "file-read" = "file-read"): SessionToolTurnEvent {
+function toolEvent(id: string, second: number, kind: "command" | "file-read" = "file-read"): ToolTurnEvent {
   return {id, timestamp: timestamp(second), tool: {kind, status: "pending"}, type: "tool"};
 }
 
-function assistantEvent(id: string, second: number): SessionAssistantTurnEvent {
+function assistantEvent(id: string, second: number): AssistantTurnEvent {
   return {content: `assistant ${id}`, id, timestamp: timestamp(second), type: "assistant"};
 }
 
-function turn(overrides: Partial<SessionTurn>): SessionTurn {
+function turn(overrides: Partial<Turn>): Turn {
   return {
     completedAt: timestamp(10),
     events: [],

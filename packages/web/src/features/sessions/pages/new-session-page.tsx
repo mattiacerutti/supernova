@@ -14,7 +14,7 @@ import {useModelPickerStore} from "@/features/sessions/stores/model-picker-store
 import {useSessionModelsStore} from "@/features/sessions/stores/session-models-store";
 import {useSessionStreamStore} from "@/features/sessions/stores/session-stream-store";
 import {useAgentRpcClient} from "@/rpc/use-agent-rpc-client";
-import type {SessionUserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 
 interface NewSessionPageProps {
   projectName: string;
@@ -74,7 +74,7 @@ export default function NewSessionPage(props: NewSessionPageProps) {
     setLastThinkingLevel(value);
   };
 
-  const handleSubmit = (contentParts: readonly SessionUserMessageContentPart[]): void => {
+  const handleSubmit = (contentParts: readonly UserMessageContentPart[]): void => {
     if (!selectedModel) return;
 
     createSessionMutation.mutate(

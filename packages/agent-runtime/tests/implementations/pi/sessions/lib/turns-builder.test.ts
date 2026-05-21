@@ -1,5 +1,5 @@
 import {describe, expect, it} from "vitest";
-import {buildPiSessionTurns} from "@supernova/agent-runtime/implementations/pi/sessions/lib/session-turns-builder";
+import {buildPiTurns} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns-builder";
 import type {ModelReference} from "@supernova/contracts/sessions/schemas";
 import type {AgentSession, SessionEntry} from "@earendil-works/pi-coding-agent";
 
@@ -44,13 +44,13 @@ function piEntries(messages: unknown[]): SessionEntry[] {
   return entries;
 }
 
-function expectTurnEvents(turn: ReturnType<typeof buildPiSessionTurns>[number] | undefined, events: Array<Record<string, unknown>>): void {
+function expectTurnEvents(turn: ReturnType<typeof buildPiTurns>[number] | undefined, events: Array<Record<string, unknown>>): void {
   expect(turn?.events).toMatchObject(events);
 }
 
 describe("projecting Pi branch entries into session turns", () => {
   it("groups a user request, reasoning, tool result, and assistant response into one model-attributed turn", () => {
-    const turns = buildPiSessionTurns(
+    const turns = buildPiTurns(
       piEntries([
         {content: [{text: "Fix the tests", type: "text"}], id: "user-1", role: "user", timestamp: 1},
         {
@@ -91,7 +91,7 @@ describe("projecting Pi branch entries into session turns", () => {
   });
 
   it("updates a pending tool call when it is the first event in the turn", () => {
-    const turns = buildPiSessionTurns(
+    const turns = buildPiTurns(
       piEntries([
         {content: [{text: "Run tests", type: "text"}], id: "user-1", role: "user", timestamp: 1},
         {
@@ -115,7 +115,7 @@ describe("projecting Pi branch entries into session turns", () => {
   });
 
   it("maps edit tool details into the completed tool result", () => {
-    const turns = buildPiSessionTurns(
+    const turns = buildPiTurns(
       piEntries([
         {content: [{text: "Edit the button", type: "text"}], id: "user-1", role: "user", timestamp: 1},
         {
@@ -151,7 +151,7 @@ describe("projecting Pi branch entries into session turns", () => {
   });
 
   it("preserves assistant content order while replacing completed tool calls in place", () => {
-    const turns = buildPiSessionTurns(
+    const turns = buildPiTurns(
       piEntries([
         {content: [{text: "Inspect and fix", type: "text"}], id: "user-1", role: "user", timestamp: 1},
         {
@@ -199,15 +199,15 @@ describe("projecting Pi branch entries into session turns", () => {
       {content: [{text: "package contents", type: "text"}], id: "tool-1", role: "toolResult", timestamp: 3, toolCallId: "call-1", toolName: "read"},
     ]);
 
-    const firstBuild = buildPiSessionTurns(entries, model);
-    const secondBuild = buildPiSessionTurns(entries, model);
+    const firstBuild = buildPiTurns(entries, model);
+    const secondBuild = buildPiTurns(entries, model);
 
     expect(secondBuild.map((turn) => turn.id)).toEqual(firstBuild.map((turn) => turn.id));
     expect(secondBuild.flatMap((turn) => turn.events.map((event) => event.id))).toEqual(firstBuild.flatMap((turn) => turn.events.map((event) => event.id)));
   });
 
   it("maps assistant errors into error turns", () => {
-    const turns = buildPiSessionTurns(
+    const turns = buildPiTurns(
       piEntries([
         {content: [{text: "Fix it", type: "text"}], id: "user-1", role: "user", timestamp: 1},
         {content: [], errorMessage: "Model failed", id: "assistant-1", role: "assistant", timestamp: 2},
@@ -220,7 +220,7 @@ describe("projecting Pi branch entries into session turns", () => {
   });
 
   it("does not render user-initiated aborts as assistant errors", () => {
-    const turns = buildPiSessionTurns(
+    const turns = buildPiTurns(
       piEntries([
         {content: [{text: "Fix it", type: "text"}], id: "user-1", role: "user", timestamp: 1},
         {
@@ -240,7 +240,7 @@ describe("projecting Pi branch entries into session turns", () => {
   });
 
   it("ignores compaction and custom entries while preserving raw branch messages", () => {
-    const turns = buildPiSessionTurns(
+    const turns = buildPiTurns(
       [
         ...piEntries([
           {content: [{text: "First request", type: "text"}], id: "user-1", role: "user", timestamp: 1},
@@ -348,7 +348,7 @@ describe("projecting Pi branch entries into session turns", () => {
       },
     ];
 
-    const turns = buildPiSessionTurns(entries, model);
+    const turns = buildPiTurns(entries, model);
 
     expect(turns).toMatchObject([
       {
@@ -416,7 +416,7 @@ describe("projecting Pi branch entries into session turns", () => {
       },
     ];
 
-    const turns = buildPiSessionTurns(entries, model);
+    const turns = buildPiTurns(entries, model);
 
     expect(turns[0]?.userMessage.contentParts).toEqual([
       {id: "text-1", kind: "text", mime: "text/plain", name: "notes.txt", size: 10, type: "attachment"},
@@ -427,7 +427,7 @@ describe("projecting Pi branch entries into session turns", () => {
   });
 
   it("keeps attachment-only user messages", () => {
-    const turns = buildPiSessionTurns(
+    const turns = buildPiTurns(
       [
         {
           customType: "supernova.user-message-content-parts",
@@ -514,7 +514,7 @@ describe("projecting Pi branch entries into session turns", () => {
       },
     ];
 
-    expect(buildPiSessionTurns(entries, model)[0]?.userMessage).toMatchObject({
+    expect(buildPiTurns(entries, model)[0]?.userMessage).toMatchObject({
       contentParts: [
         {text: "Read ", type: "text"},
         {id: "part-1", kind: "file", name: "file.ts", type: "reference", value: "@src/file.ts"},
@@ -546,13 +546,13 @@ describe("projecting Pi branch entries into session turns", () => {
       },
     ];
 
-    expect(buildPiSessionTurns(entries, model)[0]?.userMessage).toMatchObject({
+    expect(buildPiTurns(entries, model)[0]?.userMessage).toMatchObject({
       contentParts: [{id: "part-1", kind: "file", name: "file.ts", type: "reference", value: "@src/file.ts"}],
     });
   });
 
   it("ignores assistant and tool result entries before the first user message", () => {
-    const turns = buildPiSessionTurns(
+    const turns = buildPiTurns(
       piEntries([
         {content: [{text: "orphan response", type: "text"}], id: "assistant-1", role: "assistant", timestamp: 1},
         {content: [{text: "orphan tool output", type: "text"}], id: "tool-1", role: "toolResult", timestamp: 2, toolCallId: "call-1", toolName: "bash"},

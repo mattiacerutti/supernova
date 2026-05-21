@@ -1,4 +1,4 @@
-import type {ModelReference, SessionTurn, SessionUserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {ModelReference, Turn, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 import type {LegendListRef} from "@legendapp/list/react";
 import {useQueryClient} from "@tanstack/react-query";
 import {useRef} from "react";
@@ -15,13 +15,13 @@ interface UseSessionMessageStreamResult {
   stopStreaming: () => void;
   streamError: string | null;
   streamStatus: SessionStreamStatus;
-  submitMessage: (contentParts: readonly SessionUserMessageContentPart[]) => void;
+  submitMessage: (contentParts: readonly UserMessageContentPart[]) => void;
 }
 
 interface UseSessionMessageStreamInput {
   projectPath: string;
   sessionId: string;
-  sessionTurns: readonly SessionTurn[];
+  sessionTurns: readonly Turn[];
   modelReference: ModelReference | undefined;
 }
 
@@ -41,7 +41,7 @@ export function useSessionMessageStream(input: UseSessionMessageStreamInput): Us
   const streamTurn = stream?.turn ?? null;
   const timeline = buildSessionTimeline({live: isStreaming, liveTurn: streamTurn, turns: baseTurns});
 
-  const submitMessage = (contentParts: readonly SessionUserMessageContentPart[]): void => {
+  const submitMessage = (contentParts: readonly UserMessageContentPart[]): void => {
     if (isStreaming) return;
 
     if (!modelReference) {

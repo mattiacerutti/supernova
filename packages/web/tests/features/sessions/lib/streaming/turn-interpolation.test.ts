@@ -1,10 +1,10 @@
-import type {SessionAssistantTurnEvent, SessionToolTurnEvent, SessionTurn} from "@supernova/contracts/sessions/schemas";
+import type {AssistantTurnEvent, ToolTurnEvent, Turn} from "@supernova/contracts/sessions/schemas";
 import {describe, expect, it} from "vitest";
 import {interpolateStreamTurn, STREAM_FRAME_MAX_DELTA_MS} from "@/features/sessions/lib/streaming/turn-interpolation";
 
 const model = {id: "gpt-5.1", providerId: "openai", thinkingLevel: "high"};
 
-function assistantEvent(overrides: Partial<SessionAssistantTurnEvent>): SessionAssistantTurnEvent {
+function assistantEvent(overrides: Partial<AssistantTurnEvent>): AssistantTurnEvent {
   return {
     content: "",
     id: "assistant-1",
@@ -14,7 +14,7 @@ function assistantEvent(overrides: Partial<SessionAssistantTurnEvent>): SessionA
   };
 }
 
-function toolEvent(overrides: Partial<SessionToolTurnEvent>): SessionToolTurnEvent {
+function toolEvent(overrides: Partial<ToolTurnEvent>): ToolTurnEvent {
   return {
     id: "tool-1",
     timestamp: "2026-01-01T00:00:01.000Z",
@@ -24,7 +24,7 @@ function toolEvent(overrides: Partial<SessionToolTurnEvent>): SessionToolTurnEve
   };
 }
 
-function turn(overrides: Partial<SessionTurn>): SessionTurn {
+function turn(overrides: Partial<Turn>): Turn {
   return {
     events: [],
     id: "turn-1",

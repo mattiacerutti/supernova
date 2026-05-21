@@ -1,49 +1,49 @@
 import * as Rpc from "effect/unstable/rpc/Rpc";
 import {
-  SessionCreateError,
-  SessionCreatePayload,
-  SessionCreateResult,
-  SessionComposerSuggestionsListError,
-  SessionComposerSuggestionsListPayload,
-  SessionComposerSuggestionsListResult,
-  SessionGetPayload,
-  SessionGetResult,
-  SessionLoadError,
-  SessionMessageSendPayload,
-  SessionModelsListError,
-  SessionModelsListPayload,
-  SessionModelsListResult,
-  SessionStreamEvent,
+  CreateSessionError,
+  CreateSessionPayload,
+  CreateSessionResult,
+  ListComposerSuggestionsError,
+  ListComposerSuggestionsPayload,
+  ListComposerSuggestionsResult,
+  GetSessionPayload,
+  GetSessionResult,
+  LoadSessionError,
+  SendMessagePayload,
+  ListModelsError,
+  ListModelsPayload,
+  ListModelsResult,
+  SendMessageEvent,
 } from "@supernova/contracts/sessions/procedures";
 
-export const SessionGetRpc = Rpc.make("getSession", {
-  error: SessionLoadError,
-  payload: SessionGetPayload,
-  success: SessionGetResult,
+export const GetSessionRpc = Rpc.make("getSession", {
+  error: LoadSessionError,
+  payload: GetSessionPayload,
+  success: GetSessionResult,
 });
 
-export const SessionCreateRpc = Rpc.make("createSession", {
-  error: SessionCreateError,
-  payload: SessionCreatePayload,
-  success: SessionCreateResult,
+export const CreateSessionRpc = Rpc.make("createSession", {
+  error: CreateSessionError,
+  payload: CreateSessionPayload,
+  success: CreateSessionResult,
 });
 
-export const SessionModelsListRpc = Rpc.make("listSessionModels", {
-  error: SessionModelsListError,
-  payload: SessionModelsListPayload,
-  success: SessionModelsListResult,
+export const ListModelsRpc = Rpc.make("listModels", {
+  error: ListModelsError,
+  payload: ListModelsPayload,
+  success: ListModelsResult,
 });
 
-export const SessionComposerSuggestionsListRpc = Rpc.make("listSessionComposerSuggestions", {
-  error: SessionComposerSuggestionsListError,
-  payload: SessionComposerSuggestionsListPayload,
-  success: SessionComposerSuggestionsListResult,
+export const ListComposerSuggestionsRpc = Rpc.make("listComposerSuggestions", {
+  error: ListComposerSuggestionsError,
+  payload: ListComposerSuggestionsPayload,
+  success: ListComposerSuggestionsResult,
 });
 
-export const SessionMessageSendRpc = Rpc.make("sendSessionMessage", {
-  payload: SessionMessageSendPayload,
+export const SendMessageRpc = Rpc.make("sendMessage", {
+  payload: SendMessagePayload,
   stream: true,
-  success: SessionStreamEvent,
+  success: SendMessageEvent,
 });
 
-export const SessionRpcs = [SessionGetRpc, SessionCreateRpc, SessionModelsListRpc, SessionComposerSuggestionsListRpc, SessionMessageSendRpc] as const;
+export const SessionRpcs = [GetSessionRpc, CreateSessionRpc, ListModelsRpc, ListComposerSuggestionsRpc, SendMessageRpc] as const;

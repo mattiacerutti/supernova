@@ -1,12 +1,12 @@
 import {Schema} from "effect";
 
-export const SessionUserMessageAttachmentKind = Schema.Union([Schema.Literal("image"), Schema.Literal("text")]);
+export const UserMessageAttachmentKind = Schema.Union([Schema.Literal("image"), Schema.Literal("text")]);
 
-export const SessionUserMessageAttachmentPart = Schema.Struct({
+export const UserMessageAttachmentPart = Schema.Struct({
   contentBase64: Schema.optional(Schema.String),
   /** Stable client-generated attachment identifier. */
   id: Schema.String,
-  kind: SessionUserMessageAttachmentKind,
+  kind: UserMessageAttachmentKind,
   /** Original file name selected by the user. */
   name: Schema.String,
   /** Attachment MIME type used by the backend and UI to interpret the file content. */
@@ -16,37 +16,37 @@ export const SessionUserMessageAttachmentPart = Schema.Struct({
   type: Schema.Literal("attachment"),
 });
 
-export const SessionUserMessageTextContentPart = Schema.Struct({
+export const UserMessageTextPart = Schema.Struct({
   text: Schema.String,
   type: Schema.Literal("text"),
 });
 
-export const SessionUserMessageReferenceKind = Schema.Union([Schema.Literal("file"), Schema.Literal("skill")]);
+export const UserMessageReferenceKind = Schema.Union([Schema.Literal("file"), Schema.Literal("skill")]);
 
-export const SessionUserMessageReferencePart = Schema.Struct({
+export const UserMessageReferencePart = Schema.Struct({
   id: Schema.String,
-  kind: SessionUserMessageReferenceKind,
+  kind: UserMessageReferenceKind,
   name: Schema.String,
   type: Schema.Literal("reference"),
   value: Schema.String,
 });
 
-export const SessionUserMessageContentPart = Schema.Union([SessionUserMessageTextContentPart, SessionUserMessageReferencePart, SessionUserMessageAttachmentPart]);
+export const UserMessageContentPart = Schema.Union([UserMessageTextPart, UserMessageReferencePart, UserMessageAttachmentPart]);
 
 /** User-authored message that starts a session turn. */
-export const SessionUserMessage = Schema.Struct({
+export const UserMessage = Schema.Struct({
   /** Stable message identifier. */
   id: Schema.String,
   /** Structured user-authored content, including references and attachments. */
-  contentParts: Schema.Array(SessionUserMessageContentPart),
+  contentParts: Schema.Array(UserMessageContentPart),
   /** ISO timestamp for when the message was sent or created. */
   timestamp: Schema.optional(Schema.String),
 });
 
-export type SessionUserMessageAttachmentKind = typeof SessionUserMessageAttachmentKind.Type;
-export type SessionUserMessageAttachmentPart = typeof SessionUserMessageAttachmentPart.Type;
-export type SessionUserMessageTextContentPart = typeof SessionUserMessageTextContentPart.Type;
-export type SessionUserMessageReferenceKind = typeof SessionUserMessageReferenceKind.Type;
-export type SessionUserMessageReferencePart = typeof SessionUserMessageReferencePart.Type;
-export type SessionUserMessageContentPart = typeof SessionUserMessageContentPart.Type;
-export type SessionUserMessage = typeof SessionUserMessage.Type;
+export type UserMessageAttachmentKind = typeof UserMessageAttachmentKind.Type;
+export type UserMessageAttachmentPart = typeof UserMessageAttachmentPart.Type;
+export type UserMessageTextPart = typeof UserMessageTextPart.Type;
+export type UserMessageReferenceKind = typeof UserMessageReferenceKind.Type;
+export type UserMessageReferencePart = typeof UserMessageReferencePart.Type;
+export type UserMessageContentPart = typeof UserMessageContentPart.Type;
+export type UserMessage = typeof UserMessage.Type;

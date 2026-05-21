@@ -3,8 +3,8 @@ import {DefaultResourceLoader, getAgentDir, SettingsManager} from "@earendil-wor
 import type {PromptTemplate, Skill} from "@earendil-works/pi-coding-agent";
 import {Effect} from "effect";
 import {matchSorter} from "match-sorter";
-import {SessionComposerSuggestionsListError} from "@supernova/contracts/sessions/procedures";
-import type {SessionComposerSuggestionItem, SessionComposerSuggestionTriggerKind} from "@supernova/contracts/sessions/procedures";
+import {ListComposerSuggestionsError} from "@supernova/contracts/sessions/procedures";
+import type {ComposerSuggestionItem, ComposerSuggestionTriggerKind} from "@supernova/contracts/sessions/procedures";
 import {generateStableId} from "@supernova/agent-runtime/implementations/shared/id-generator";
 
 const MAX_SUGGESTIONS = 50;
@@ -28,7 +28,7 @@ function rankItems<T>(items: readonly T[], query: string, keys: readonly ((item:
   return matchSorter(items, normalizedQuery, {keys}).slice(0, MAX_SUGGESTIONS);
 }
 
-function skillSuggestion(skill: Skill): SessionComposerSuggestionItem {
+function skillSuggestion(skill: Skill): ComposerSuggestionItem {
   return {
     id: generateStableId("skl", [skill.name, skill.filePath]),
     kind: "skill",
@@ -38,7 +38,7 @@ function skillSuggestion(skill: Skill): SessionComposerSuggestionItem {
   };
 }
 
-function promptSuggestion(template: PromptTemplate): SessionComposerSuggestionItem {
+function promptSuggestion(template: PromptTemplate): ComposerSuggestionItem {
   return {
     id: generateStableId("pmt", [template.name, template.filePath]),
     kind: "prompt-template",
@@ -48,7 +48,7 @@ function promptSuggestion(template: PromptTemplate): SessionComposerSuggestionIt
   };
 }
 
-async function listPiComposerSuggestions(projectPath: string, kind: SessionComposerSuggestionTriggerKind, query: string): Promise<SessionComposerSuggestionItem[]> {
+async function listPiComposerSuggestions(projectPath: string, kind: ComposerSuggestionTriggerKind, query: string): Promise<ComposerSuggestionItem[]> {
   const agentDir = getAgentDir();
   const resourceLoader = new DefaultResourceLoader({agentDir, cwd: projectPath, settingsManager: SettingsManager.create(projectPath, agentDir)});
   await resourceLoader.reload();
@@ -61,14 +61,14 @@ async function listPiComposerSuggestions(projectPath: string, kind: SessionCompo
   return rankItems(promptTemplates, query, [(template) => template.name, (template) => template.description, (template) => template.content]).map(promptSuggestion);
 }
 
-export function listComposerSuggestions(projectPath: string, kind: SessionComposerSuggestionTriggerKind, query: string) {
+export function listComposerSuggestions(projectPath: string, kind: ComposerSuggestionTriggerKind, query: string) {
   return Effect.tryPromise({
     try: async () => ({
       items: await listPiComposerSuggestions(projectPath, kind, query),
       query,
     }),
     catch: (cause) =>
-      new SessionComposerSuggestionsListError({
+      new ListComposerSuggestionsError({
         cause,
         message: cause instanceof Error ? cause.message : "Failed to list composer suggestions.",
       }),

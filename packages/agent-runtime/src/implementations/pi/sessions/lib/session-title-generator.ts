@@ -1,6 +1,6 @@
 import type {ModelRegistry} from "@earendil-works/pi-coding-agent";
 import {completeSimple} from "@earendil-works/pi-ai";
-import type {SessionUserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 
 const sessionTitleSystemPrompt = `Generate a concise title for this coding session based on the user's first message.
 
@@ -14,12 +14,12 @@ Rules:
 const sessionTitleMaxTokens = 256;
 
 interface GenerateSessionTitleInput {
-  contentParts: readonly SessionUserMessageContentPart[];
+  contentParts: readonly UserMessageContentPart[];
   model: Parameters<typeof completeSimple>[0];
   modelRegistry: ModelRegistry;
 }
 
-function titlePrompt(input: {contentParts: readonly SessionUserMessageContentPart[]}): string {
+function titlePrompt(input: {contentParts: readonly UserMessageContentPart[]}): string {
   return input.contentParts
     .map((part) => {
       if (part.type === "text") return part.text;

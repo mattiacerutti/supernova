@@ -1,6 +1,6 @@
 import type {AgentSession, CustomEntry, SessionEntry, SessionMessageEntry} from "@earendil-works/pi-coding-agent";
-import type {ModelReference, SessionToolTurnEvent, SessionTurn, SessionTurnEvent, SessionUserMessage} from "@supernova/contracts/sessions/schemas";
-import {sessionTurn} from "@supernova/agent-runtime/implementations/shared/session-turns";
+import type {ModelReference, ToolTurnEvent, Turn, TurnEvent, UserMessage} from "@supernova/contracts/sessions/schemas";
+import {createTurn} from "@supernova/agent-runtime/implementations/shared/turns";
 import {generateStableId} from "@supernova/agent-runtime/implementations/shared/id-generator";
 import {PiToolInvocationFactory} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns/tool-invocation-factory";
 import type {PiToolInvocation} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns/tool-invocation-factory";
@@ -10,7 +10,7 @@ function isMessageEntry(entry: SessionEntry): entry is SessionMessageEntry {
   return entry.type === "message";
 }
 
-function isContentPartsEntry(entry: SessionEntry): entry is CustomEntry<{readonly contentParts: SessionUserMessage["contentParts"]}> {
+function isContentPartsEntry(entry: SessionEntry): entry is CustomEntry<{readonly contentParts: UserMessage["contentParts"]}> {
   return entry.type === "custom" && entry.customType === USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE;
 }
 
@@ -29,11 +29,11 @@ function isToolResultEntry(entry: SessionMessageEntry): entry is PiMessageEntry<
 }
 
 class PiTurnDraft {
-  private readonly userMessage: SessionUserMessage;
-  private readonly events: SessionTurnEvent[] = [];
-  private readonly toolEventIndexes = new Map<string, {event: SessionToolTurnEvent; index: number; invocation: PiToolInvocation}>();
+  private readonly userMessage: UserMessage;
+  private readonly events: TurnEvent[] = [];
+  private readonly toolEventIndexes = new Map<string, {event: ToolTurnEvent; index: number; invocation: PiToolInvocation}>();
 
-  public constructor(userMessage: SessionUserMessage) {
+  public constructor(userMessage: UserMessage) {
     this.userMessage = userMessage;
   }
 
@@ -62,10 +62,10 @@ class PiTurnDraft {
           break;
         case "toolCall": {
           const invocation = PiToolInvocationFactory.create(part.name, part.arguments);
-          const toolEvent: SessionToolTurnEvent = {
+          const toolEvent: ToolTurnEvent = {
             id,
             timestamp: entry.timestamp,
-            tool: invocation.toSessionTool(),
+            tool: invocation.toTool(),
             type: "tool",
           };
           this.toolEventIndexes.set(part.id, {event: toolEvent, index: this.events.length, invocation});
@@ -93,8 +93,8 @@ class PiTurnDraft {
 
     invocation.complete(completion);
 
-    const completedTool = invocation.toSessionTool();
-    const toolEvent: SessionToolTurnEvent = {id: generateStableId("evt", [entry.id, "toolResult"]), timestamp: entry.timestamp, tool: completedTool, type: "tool"};
+    const completedTool = invocation.toTool();
+    const toolEvent: ToolTurnEvent = {id: generateStableId("evt", [entry.id, "toolResult"]), timestamp: entry.timestamp, tool: completedTool, type: "tool"};
 
     if (!existingTool) {
       this.events.push(toolEvent);
@@ -111,15 +111,15 @@ class PiTurnDraft {
     return true;
   }
 
-  public toTurn(model: ModelReference): SessionTurn {
-    return sessionTurn({events: this.events, model, userMessage: this.userMessage});
+  public toTurn(model: ModelReference): Turn {
+    return createTurn({events: this.events, model, userMessage: this.userMessage});
   }
 }
 
-class PiSessionTurnBuilder {
+class PiTurnBuilder {
   private readonly fallbackModel: ModelReference;
-  private readonly turns: SessionTurn[] = [];
-  private readonly contentPartsByParent = new Map<string, {readonly contentParts: SessionUserMessage["contentParts"]}>();
+  private readonly turns: Turn[] = [];
+  private readonly contentPartsByParent = new Map<string, {readonly contentParts: UserMessage["contentParts"]}>();
   private readonly parentByEntryId = new Map<string, string | null>();
   private currentTurn: PiTurnDraft | undefined;
 
@@ -148,7 +148,7 @@ class PiSessionTurnBuilder {
     return false;
   }
 
-  public toTurns(): SessionTurn[] {
+  public toTurns(): Turn[] {
     if (!this.currentTurn) return [...this.turns];
     return [...this.turns, this.currentTurn.toTurn(this.fallbackModel)];
   }
@@ -184,8 +184,8 @@ class PiSessionTurnBuilder {
   }
 }
 
-export function buildPiSessionTurns(entries: readonly SessionEntry[], fallbackModel: ModelReference): SessionTurn[] {
-  const builder = new PiSessionTurnBuilder(fallbackModel);
+export function buildPiTurns(entries: readonly SessionEntry[], fallbackModel: ModelReference): Turn[] {
+  const builder = new PiTurnBuilder(fallbackModel);
 
   for (const entry of entries) {
     builder.addEntry(entry);

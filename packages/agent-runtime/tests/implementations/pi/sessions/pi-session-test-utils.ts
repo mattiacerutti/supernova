@@ -1,7 +1,7 @@
 import type {AgentSession, SessionEntry} from "@earendil-works/pi-coding-agent";
 import {Effect, Stream} from "effect";
 import type {PiSessionInfo} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
-import type {SessionStreamEvent} from "@supernova/contracts/sessions/procedures";
+import type {SendMessageEvent} from "@supernova/contracts/sessions/procedures";
 import type {ModelReference} from "@supernova/contracts/sessions/schemas";
 
 export const selectedPiModel = {id: "claude-sonnet", name: "Claude Sonnet", provider: "anthropic", reasoning: true};
@@ -65,8 +65,8 @@ export function piEntries(messages: readonly AgentSession["messages"][number][])
   });
 }
 
-export async function collectEvents(stream: Stream.Stream<SessionStreamEvent>): Promise<SessionStreamEvent[]> {
-  const events: SessionStreamEvent[] = [];
+export async function collectEvents(stream: Stream.Stream<SendMessageEvent>): Promise<SendMessageEvent[]> {
+  const events: SendMessageEvent[] = [];
   await Effect.runPromise(Stream.runForEach(stream, (event) => Effect.sync(() => events.push(event))));
   return events;
 }

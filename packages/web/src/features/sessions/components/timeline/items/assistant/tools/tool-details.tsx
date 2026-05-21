@@ -3,9 +3,9 @@ import DiffViewer from "@/features/sessions/components/diffs/diff-viewer";
 import ContentPanel from "@/features/sessions/components/timeline/items/assistant/content-panel";
 import {parseFileEditPatch} from "@/features/sessions/lib/diff/diff-rendering";
 import {cn} from "@/lib/cn";
-import type {SessionTool} from "@supernova/contracts/sessions/schemas";
+import type {Tool} from "@supernova/contracts/sessions/schemas";
 
-type FileMutationTool = Extract<SessionTool, {kind: "file-edit" | "file-write"}>;
+type FileMutationTool = Extract<Tool, {kind: "file-edit" | "file-write"}>;
 
 function fileName(path: string): string {
   return path.split("/").filter(Boolean).at(-1) ?? path;
@@ -20,7 +20,7 @@ function DetailText(props: {children: ReactNode; className?: string}) {
   return <p className={cn("min-w-0 wrap-break-word text-sm leading-none text-neutral-500", className)}>{children}</p>;
 }
 
-function DefaultToolDetails(props: {tool: SessionTool}) {
+function DefaultToolDetails(props: {tool: Tool}) {
   const {tool} = props;
 
   return (
@@ -31,7 +31,7 @@ function DefaultToolDetails(props: {tool: SessionTool}) {
   );
 }
 
-function CommandToolDetails(props: {tool: Extract<SessionTool, {kind: "command"}>}) {
+function CommandToolDetails(props: {tool: Extract<Tool, {kind: "command"}>}) {
   const {tool} = props;
 
   if (tool.input === undefined) {
@@ -55,7 +55,7 @@ function CommandToolDetails(props: {tool: Extract<SessionTool, {kind: "command"}
   );
 }
 
-function ReadToolDetails(props: {tool: Extract<SessionTool, {kind: "file-read"}>}) {
+function ReadToolDetails(props: {tool: Extract<Tool, {kind: "file-read"}>}) {
   const {tool} = props;
 
   if (tool.input === undefined) {
@@ -102,7 +102,7 @@ function FileMutationToolDetails(props: {tool: FileMutationTool}) {
   );
 }
 
-export default function ToolDetails(props: {tool: SessionTool | undefined}): ReactNode {
+export default function ToolDetails(props: {tool: Tool | undefined}): ReactNode {
   const {tool} = props;
 
   if (!tool) return <DetailText>Tool details are unavailable.</DetailText>;

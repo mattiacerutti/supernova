@@ -1,13 +1,13 @@
-import type {SessionUserMessageContentPart, SessionUserMessageReferencePart} from "@supernova/contracts/sessions/schemas";
+import type {UserMessageContentPart, UserMessageReferencePart} from "@supernova/contracts/sessions/schemas";
 import type {Editor, JSONContent} from "@tiptap/react";
 
-function contentPartValue(part: SessionUserMessageContentPart): string {
+function contentPartValue(part: UserMessageContentPart): string {
   if (part.type === "text") return part.text;
   if (part.type === "reference") return part.value;
   return part.name;
 }
 
-function pushTextContentPart(parts: SessionUserMessageContentPart[], text: string): void {
+function pushTextContentPart(parts: UserMessageContentPart[], text: string): void {
   if (!text) return;
 
   const previous = parts.at(-1);
@@ -20,14 +20,14 @@ function pushTextContentPart(parts: SessionUserMessageContentPart[], text: strin
 }
 
 /** Converts mixed text/reference composer parts into their plain text representation. */
-export function textFromComposerContentParts(parts: readonly SessionUserMessageContentPart[]): string {
+export function textFromComposerContentParts(parts: readonly UserMessageContentPart[]): string {
   return parts.map(contentPartValue).join("");
 }
 
 /** Trims only leading and trailing text while preserving reference parts and internal spacing. */
-export function trimComposerContentParts(parts: readonly SessionUserMessageContentPart[]): readonly SessionUserMessageContentPart[] {
+export function trimComposerContentParts(parts: readonly UserMessageContentPart[]): readonly UserMessageContentPart[] {
   return parts
-    .map((part, index): SessionUserMessageContentPart => {
+    .map((part, index): UserMessageContentPart => {
       if (part.type !== "text") return part;
 
       const startTrimmed = index === 0 ? part.text.trimStart() : part.text;
@@ -37,12 +37,12 @@ export function trimComposerContentParts(parts: readonly SessionUserMessageConte
     .filter((part) => part.type !== "text" || part.text.length > 0);
 }
 
-type ReferenceNodeAttributes = Omit<SessionUserMessageReferencePart, "type">;
+type ReferenceNodeAttributes = Omit<UserMessageReferencePart, "type">;
 
 /**
  * Creates a TipTap node representing a reference content part.
  */
-export function createReferenceNode(part: SessionUserMessageReferencePart): JSONContent {
+export function createReferenceNode(part: UserMessageReferencePart): JSONContent {
   return {
     attrs: {
       id: part.id,
@@ -57,8 +57,8 @@ export function createReferenceNode(part: SessionUserMessageReferencePart): JSON
 /**
  * Converts TipTap editor's content to an array of content parts.
  */
-export function editorToContentParts(editor: Editor): readonly SessionUserMessageContentPart[] {
-  const parts: SessionUserMessageContentPart[] = [];
+export function editorToContentParts(editor: Editor): readonly UserMessageContentPart[] {
+  const parts: UserMessageContentPart[] = [];
 
   editor.state.doc.descendants((node) => {
     if (node.type.name === "text") {

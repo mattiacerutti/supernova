@@ -1,4 +1,4 @@
-import type {SessionUserMessageAttachmentPart} from "@supernova/contracts/sessions/schemas";
+import type {UserMessageAttachmentPart} from "@supernova/contracts/sessions/schemas";
 import {attachmentMime, fileExtension} from "@/features/sessions/lib/attachments/attachment-classification";
 
 export const MAX_SESSION_ATTACHMENTS = 10;
@@ -41,7 +41,7 @@ export function formatAttachmentType(attachment: {mime: string; name: string}): 
   );
 }
 
-function attachmentKind(mime: string): SessionUserMessageAttachmentPart["kind"] | undefined {
+function attachmentKind(mime: string): UserMessageAttachmentPart["kind"] | undefined {
   if (mime.startsWith("image/")) return "image";
   if (mime.startsWith("text/")) return "text";
   return undefined;
@@ -55,7 +55,7 @@ export function formatAttachmentSize(bytes: number): string {
 }
 
 /** Converts a browser File into the serializable attachment content part sent with user messages. */
-export async function fileToSessionAttachmentPart(file: File): Promise<SessionUserMessageAttachmentPart> {
+export async function fileToSessionAttachmentPart(file: File): Promise<UserMessageAttachmentPart> {
   const buffer = await file.arrayBuffer();
   const mime = attachmentMime(file, buffer);
   const kind = mime ? attachmentKind(mime) : undefined;

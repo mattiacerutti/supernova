@@ -1,4 +1,4 @@
-import type {SessionUserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 import Document from "@tiptap/extension-document";
 import HardBreak from "@tiptap/extension-hard-break";
 import History from "@tiptap/extension-history";
@@ -107,7 +107,7 @@ interface SessionComposerRootProps {
   readonly children: ReactNode;
   readonly disabled: boolean;
   readonly onInterrupt?: () => void;
-  readonly onSubmit: (contentParts: readonly SessionUserMessageContentPart[]) => void;
+  readonly onSubmit: (contentParts: readonly UserMessageContentPart[]) => void;
   readonly projectPath: string;
   readonly streamStatus?: "idle" | "streaming" | "stopping";
 }

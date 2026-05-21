@@ -1,4 +1,4 @@
-import type {SessionUserMessage} from "@supernova/contracts/sessions/schemas";
+import type {UserMessage as UserMessageModel} from "@supernova/contracts/sessions/schemas";
 import Icon from "@/components/ui/icon";
 import MessageAttachmentPreview from "@/features/sessions/components/attachments/message-attachment-preview";
 import MessageActions from "@/features/sessions/components/timeline/items/actions/message-actions";
@@ -28,7 +28,7 @@ function UserMessageContent(props: {children: string}) {
   );
 }
 
-function ReferenceContentPart(props: {part: Extract<NonNullable<SessionUserMessage["contentParts"]>[number], {type: "reference"}>}) {
+function ReferenceContentPart(props: {part: Extract<NonNullable<UserMessageModel["contentParts"]>[number], {type: "reference"}>}) {
   const {part} = props;
   const iconName = part.kind === "skill" ? "skill" : part.value.endsWith("/") ? "folder" : "file";
 
@@ -40,7 +40,7 @@ function ReferenceContentPart(props: {part: Extract<NonNullable<SessionUserMessa
   );
 }
 
-function UserMessageStructuredContent(props: {message: SessionUserMessage}) {
+function UserMessageStructuredContent(props: {message: UserMessageModel}) {
   const {message} = props;
 
   return (
@@ -55,7 +55,7 @@ function UserMessageStructuredContent(props: {message: SessionUserMessage}) {
 }
 
 interface UserMessageProps {
-  message: SessionUserMessage;
+  message: UserMessageModel;
 }
 
 export default function UserMessage(props: UserMessageProps) {

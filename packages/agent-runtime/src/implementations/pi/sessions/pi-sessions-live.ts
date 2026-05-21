@@ -4,8 +4,8 @@ import {SessionsService} from "@supernova/agent-runtime/services/sessions/sessio
 import {createSession} from "@supernova/agent-runtime/implementations/pi/sessions/operations/create-session";
 import {getSession} from "@supernova/agent-runtime/implementations/pi/sessions/operations/get-session";
 import {listComposerSuggestions} from "@supernova/agent-runtime/implementations/pi/sessions/operations/list-composer-suggestions";
-import {listSessionModels} from "@supernova/agent-runtime/implementations/pi/sessions/operations/list-session-models";
-import {sendSessionMessage} from "@supernova/agent-runtime/implementations/pi/sessions/operations/send-session-message";
+import {listModels} from "@supernova/agent-runtime/implementations/pi/sessions/operations/list-models";
+import {sendMessage} from "@supernova/agent-runtime/implementations/pi/sessions/operations/send-message";
 
 export const PiSessionsLive = Layer.effect(
   SessionsService,
@@ -16,8 +16,8 @@ export const PiSessionsLive = Layer.effect(
       create: (projectPath) => createSession(projectPath).pipe(Effect.provideService(PiSdkService, piSdk)),
       get: (sessionId) => getSession(sessionId).pipe(Effect.provideService(PiSdkService, piSdk)),
       listComposerSuggestions: listComposerSuggestions,
-      listModels: () => listSessionModels().pipe(Effect.provideService(PiSdkService, piSdk)),
-      sendMessage: (input) => sendSessionMessage(input).pipe(Stream.provideService(PiSdkService, piSdk)),
+      listModels: () => listModels().pipe(Effect.provideService(PiSdkService, piSdk)),
+      sendMessage: (input) => sendMessage(input).pipe(Stream.provideService(PiSdkService, piSdk)),
     };
   })
 );

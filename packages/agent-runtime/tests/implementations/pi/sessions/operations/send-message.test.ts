@@ -8,7 +8,7 @@ import {PiSdkService} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
 import type {PiSessionInfo} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
 import {PiSessionsLive} from "@supernova/agent-runtime/implementations/pi/sessions/pi-sessions-live";
 import {SessionsService} from "@supernova/agent-runtime/services/sessions/sessions-service";
-import type {SessionMessageSendPayload, SessionStreamEvent} from "@supernova/contracts/sessions/procedures";
+import type {SendMessagePayload, SendMessageEvent} from "@supernova/contracts/sessions/procedures";
 import {collectEvents, imageAttachment, piAgentMessage, piSessionInfo, selectedPiModel, textAttachment, waitUntil} from "@tests/implementations/pi/sessions/pi-session-test-utils";
 
 type PiSessionEvent =
@@ -124,8 +124,8 @@ function makePiSessionsHarness(input?: {
   const sessionsLive = PiSessionsLive.pipe(Layer.provide(Layer.succeed(PiSdkService, piSdk as never)));
 
   const sendMessage = (
-    messageInput: Omit<SessionMessageSendPayload, "contentParts"> & {
-      readonly contentParts?: SessionMessageSendPayload["contentParts"];
+    messageInput: Omit<SendMessagePayload, "contentParts"> & {
+      readonly contentParts?: SendMessagePayload["contentParts"];
       readonly message?: string;
     }
   ) =>
@@ -482,7 +482,7 @@ describe("sending messages through Pi sessions", () => {
         await promptBlocker;
       },
     });
-    const events: SessionStreamEvent[] = [];
+    const events: SendMessageEvent[] = [];
 
     const streamPromise = Effect.runPromise(
       Effect.gen(function* () {
@@ -642,7 +642,7 @@ describe("cleaning up interrupted Pi message streams", () => {
         await promptBlocker;
       },
     });
-    const events: SessionStreamEvent[] = [];
+    const events: SendMessageEvent[] = [];
 
     const program = Effect.gen(function* () {
       const sessions = yield* SessionsService;

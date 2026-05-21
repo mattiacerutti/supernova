@@ -1,10 +1,10 @@
 import type {ReactNode} from "react";
 import Icon from "@/components/ui/icon";
 import type {SessionWorkEvent} from "@/features/sessions/types/session-timeline-item";
-import type {SessionTool} from "@supernova/contracts/sessions/schemas";
+import type {Tool} from "@supernova/contracts/sessions/schemas";
 
 type ToolEvent = Extract<SessionWorkEvent, {type: "tool"}>;
-type FileMutationTool = Extract<SessionTool, {kind: "file-edit" | "file-write"}>;
+type FileMutationTool = Extract<Tool, {kind: "file-edit" | "file-write"}>;
 
 function fileName(path: string): string {
   return path.split("/").filter(Boolean).at(-1) ?? path;
@@ -38,7 +38,7 @@ function ToolTitleRow(props: {children: ReactNode; icon: "folder" | "server"}) {
   );
 }
 
-function DefaultToolTitle(props: {tool: SessionTool | undefined}) {
+function DefaultToolTitle(props: {tool: Tool | undefined}) {
   const {tool} = props;
 
   return (
@@ -48,7 +48,7 @@ function DefaultToolTitle(props: {tool: SessionTool | undefined}) {
   );
 }
 
-function CommandToolTitle(props: {tool: Extract<SessionTool, {kind: "command"}>}) {
+function CommandToolTitle(props: {tool: Extract<Tool, {kind: "command"}>}) {
   const {tool} = props;
 
   return (
@@ -58,7 +58,7 @@ function CommandToolTitle(props: {tool: Extract<SessionTool, {kind: "command"}>}
   );
 }
 
-function ReadToolTitle(props: {tool: Extract<SessionTool, {kind: "file-read"}>}) {
+function ReadToolTitle(props: {tool: Extract<Tool, {kind: "file-read"}>}) {
   const {tool} = props;
 
   const name = tool.input?.path ? ` ${fileName(tool.input.path)}` : "a file";
@@ -72,7 +72,7 @@ function ReadToolTitle(props: {tool: Extract<SessionTool, {kind: "file-read"}>})
   );
 }
 
-function ListToolTitle(props: {tool: Extract<SessionTool, {kind: "file-list"}>}) {
+function ListToolTitle(props: {tool: Extract<Tool, {kind: "file-list"}>}) {
   const {tool} = props;
 
   return (
@@ -106,7 +106,7 @@ function FileMutationToolTitle(props: {tool: FileMutationTool}) {
   );
 }
 
-function FindToolTitle(props: {tool: Extract<SessionTool, {kind: "file-find"}>}) {
+function FindToolTitle(props: {tool: Extract<Tool, {kind: "file-find"}>}) {
   const {tool} = props;
 
   return (

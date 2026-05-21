@@ -1,9 +1,9 @@
 import type {ImageContent, TextContent} from "@earendil-works/pi-ai";
-import type {SessionUserMessageAttachmentPart, SessionUserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {UserMessageAttachmentPart, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 
 export const USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE = "supernova.user-message-content-parts";
 
-export function contentFromParts(contentParts: readonly SessionUserMessageContentPart[]): string {
+export function contentFromParts(contentParts: readonly UserMessageContentPart[]): string {
   return contentParts
     .map((part) => {
       if (part.type === "text") return part.text;
@@ -13,16 +13,16 @@ export function contentFromParts(contentParts: readonly SessionUserMessageConten
     .join("");
 }
 
-export function imageContentFromParts(contentParts: readonly SessionUserMessageContentPart[]): ImageContent[] {
+export function imageContentFromParts(contentParts: readonly UserMessageContentPart[]): ImageContent[] {
   return contentParts
-    .filter((part): part is SessionUserMessageAttachmentPart => part.type === "attachment" && part.kind === "image" && Boolean(part.contentBase64))
+    .filter((part): part is UserMessageAttachmentPart => part.type === "attachment" && part.kind === "image" && Boolean(part.contentBase64))
     .map((part) => ({data: part.contentBase64 ?? "", mimeType: part.mime, type: "image"}));
 }
 
 export function enrichContentPartsWithImages(input: {
   readonly content: string | readonly (TextContent | ImageContent)[];
-  readonly contentParts: readonly SessionUserMessageContentPart[];
-}): readonly SessionUserMessageContentPart[] {
+  readonly contentParts: readonly UserMessageContentPart[];
+}): readonly UserMessageContentPart[] {
   if (typeof input.content === "string") return input.contentParts;
 
   const images = input.content.filter((part): part is ImageContent => part.type === "image");

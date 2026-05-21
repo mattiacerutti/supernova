@@ -107,7 +107,7 @@ function sessionToolStates<const Kind extends string, const Input extends Schema
 }
 
 /** Provider-agnostic tool metadata and result data for a session turn. */
-export const SessionTool = Schema.Union([
+export const Tool = Schema.Union([
   ...sessionToolStates("command", CommandToolInput, CommandToolResult),
   ...sessionToolStates("file-read", FileReadToolInput, FileReadToolResult),
   ...sessionToolStates("file-list", FileListToolInput, FileListToolResult),
@@ -132,4 +132,4 @@ export type FileFindToolInput = typeof FileFindToolInput.Type;
 export type FileFindToolResult = typeof FileFindToolResult.Type;
 export type CustomToolInput = typeof CustomToolInput.Type;
 export type CustomToolResult = typeof CustomToolResult.Type;
-export type SessionTool = typeof SessionTool.Type;
+export type Tool = typeof Tool.Type;

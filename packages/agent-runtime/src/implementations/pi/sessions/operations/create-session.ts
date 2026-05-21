@@ -1,6 +1,6 @@
 import {writeFile} from "node:fs/promises";
 import {Effect} from "effect";
-import {SessionCreateError} from "@supernova/contracts/sessions/procedures";
+import {CreateSessionError} from "@supernova/contracts/sessions/procedures";
 import {PiSdkService} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
 
 export function createSession(projectPath: string) {
@@ -25,7 +25,7 @@ export function createSession(projectPath: string) {
           updatedAt: header.timestamp,
         };
       },
-      catch: (cause) => new SessionCreateError({cause, message: cause instanceof Error ? cause.message : "Failed to create session."}),
+      catch: (cause) => new CreateSessionError({cause, message: cause instanceof Error ? cause.message : "Failed to create session."}),
     });
   });
 }

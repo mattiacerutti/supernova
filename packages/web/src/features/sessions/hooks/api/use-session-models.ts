@@ -8,7 +8,7 @@ export function useSessionModels() {
       queryFn: () =>
         Effect.gen(function* () {
           const rpc = yield* AgentRpcProtocolClientService;
-          return yield* rpc.listSessionModels();
+          return yield* rpc.listModels();
         }),
       queryKey: ["session", "models"] as const,
     })

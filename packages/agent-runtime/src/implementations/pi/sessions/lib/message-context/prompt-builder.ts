@@ -1,23 +1,23 @@
 import {readFile} from "node:fs/promises";
 import {DefaultResourceLoader, getAgentDir, SettingsManager} from "@earendil-works/pi-coding-agent";
 import type {Skill} from "@earendil-works/pi-coding-agent";
-import type {SessionUserMessageAttachmentPart, SessionUserMessageContentPart, SessionUserMessageReferencePart} from "@supernova/contracts/sessions/schemas";
+import type {UserMessageAttachmentPart, UserMessageContentPart, UserMessageReferencePart} from "@supernova/contracts/sessions/schemas";
 import {contentFromParts} from "@supernova/agent-runtime/implementations/pi/sessions/lib/message-context/content-parts";
 
 function escapeXml(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&apos;");
 }
 
-function textAttachmentBlock(attachment: SessionUserMessageAttachmentPart): string | undefined {
+function textAttachmentBlock(attachment: UserMessageAttachmentPart): string | undefined {
   if (!attachment.contentBase64) return;
 
   const content = Buffer.from(attachment.contentBase64, "base64").toString("utf8");
   return `<attachment id="${escapeXml(attachment.id)}" name="${escapeXml(attachment.name)}" mime="${escapeXml(attachment.mime)}" size="${attachment.size}">\n${escapeXml(content)}\n</attachment>`;
 }
 
-function textAttachmentBlocks(contentParts: readonly SessionUserMessageContentPart[]): string[] {
+function textAttachmentBlocks(contentParts: readonly UserMessageContentPart[]): string[] {
   return contentParts
-    .filter((part): part is SessionUserMessageAttachmentPart => part.type === "attachment" && part.kind === "text")
+    .filter((part): part is UserMessageAttachmentPart => part.type === "attachment" && part.kind === "text")
     .map(textAttachmentBlock)
     .filter((block): block is string => Boolean(block));
 }
@@ -27,8 +27,8 @@ async function skillBlock(skill: Skill): Promise<string> {
   return [`<skill>`, `<name>${skill.name}</name>`, `<path>${skill.filePath}</path>`, content.trim(), `</skill>`].join("\n");
 }
 
-async function skillBlocks(input: {contentParts: readonly SessionUserMessageContentPart[]; projectPath: string}): Promise<string[]> {
-  const skillReferences = input.contentParts.filter((part): part is SessionUserMessageReferencePart => part.type === "reference" && part.kind === "skill");
+async function skillBlocks(input: {contentParts: readonly UserMessageContentPart[]; projectPath: string}): Promise<string[]> {
+  const skillReferences = input.contentParts.filter((part): part is UserMessageReferencePart => part.type === "reference" && part.kind === "skill");
   if (skillReferences.length === 0) return [];
 
   const agentDir = getAgentDir();
@@ -53,7 +53,7 @@ async function skillBlocks(input: {contentParts: readonly SessionUserMessageCont
   return blocks;
 }
 
-export async function buildPrompt(input: {contentParts: readonly SessionUserMessageContentPart[]; projectPath: string}): Promise<string> {
+export async function buildPrompt(input: {contentParts: readonly UserMessageContentPart[]; projectPath: string}): Promise<string> {
   const content = contentFromParts(input.contentParts);
 
   const skills = await skillBlocks(input);

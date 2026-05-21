@@ -1,12 +1,12 @@
 import type {AgentSession, SessionEntry} from "@earendil-works/pi-coding-agent";
-import type {SessionUserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 import {generateStableId} from "@supernova/agent-runtime/implementations/shared/id-generator";
 import {USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE} from "@supernova/agent-runtime/implementations/pi/sessions/lib/message-context/content-parts";
 
 type PiAgentMessage = AgentSession["messages"][number];
 
 export function createLiveBranchEntries(input: {
-  contentPartsMetadata?: {readonly contentParts: readonly SessionUserMessageContentPart[]};
+  contentPartsMetadata?: {readonly contentParts: readonly UserMessageContentPart[]};
   messages: readonly PiAgentMessage[];
   parentId: string | null;
   sessionId: string;

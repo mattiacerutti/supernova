@@ -1,4 +1,4 @@
-import type {SessionDetails} from "@supernova/contracts/sessions/schemas";
+import type {Session} from "@supernova/contracts/sessions/schemas";
 import type {AppEnvironment} from "@/app/app-environment";
 import ModelPicker from "@/features/sessions/components/composer/pickers/model-picker";
 import ThinkingLevelPicker from "@/features/sessions/components/composer/pickers/thinking-level-picker";
@@ -43,7 +43,7 @@ function SessionLoading(props: SessionLoadingProps) {
 
 interface SessionConversationProps {
   appEnvironment: AppEnvironment;
-  session: SessionDetails;
+  session: Session;
 }
 
 function SessionConversation(props: SessionConversationProps) {

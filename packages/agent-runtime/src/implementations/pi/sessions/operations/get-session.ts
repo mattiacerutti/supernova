@@ -1,9 +1,9 @@
 import {Effect} from "effect";
-import {SessionLoadError} from "@supernova/contracts/sessions/procedures";
+import {LoadSessionError} from "@supernova/contracts/sessions/procedures";
 import {PiSdkService} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
 import {toPiSessionSummary} from "@supernova/agent-runtime/implementations/pi/projects/pi-session-mapper";
 import {findSessionById} from "@supernova/agent-runtime/implementations/pi/sessions/lib/session-resolver";
-import {buildPiSessionTurns} from "@supernova/agent-runtime/implementations/pi/sessions/lib/session-turns-builder";
+import {buildPiTurns} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns-builder";
 
 export function getSession(sessionId: string) {
   return Effect.gen(function* () {
@@ -24,11 +24,11 @@ export function getSession(sessionId: string) {
           model,
           projectPath: sessionInfo.cwd,
           title: summary.title,
-          turns: model ? buildPiSessionTurns(branch, model) : [],
+          turns: model ? buildPiTurns(branch, model) : [],
           updatedAt: summary.updatedAt,
         };
       },
-      catch: (cause) => new SessionLoadError({cause, message: cause instanceof Error ? cause.message : "Failed to load session."}),
+      catch: (cause) => new LoadSessionError({cause, message: cause instanceof Error ? cause.message : "Failed to load session."}),
     });
   });
 }

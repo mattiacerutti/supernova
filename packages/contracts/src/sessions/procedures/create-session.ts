@@ -1,16 +1,16 @@
 import {Schema} from "effect";
-import {SessionDetails} from "../schemas";
+import {Session} from "../schemas";
 
-export const SessionCreatePayload = Schema.Struct({
+export const CreateSessionPayload = Schema.Struct({
   projectPath: Schema.String,
 });
 
-export const SessionCreateResult = SessionDetails;
+export const CreateSessionResult = Session;
 
-export class SessionCreateError extends Schema.TaggedErrorClass<SessionCreateError>()("SessionCreateError", {
+export class CreateSessionError extends Schema.TaggedErrorClass<CreateSessionError>()("CreateSessionError", {
   cause: Schema.optional(Schema.Defect),
   message: Schema.String,
 }) {}
 
-export type SessionCreatePayload = typeof SessionCreatePayload.Type;
-export type SessionCreateResult = typeof SessionCreateResult.Type;
+export type CreateSessionPayload = typeof CreateSessionPayload.Type;
+export type CreateSessionResult = typeof CreateSessionResult.Type;

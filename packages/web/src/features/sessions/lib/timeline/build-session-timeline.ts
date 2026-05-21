@@ -1,14 +1,14 @@
-import type {SessionTurn} from "@supernova/contracts/sessions/schemas";
+import type {Turn} from "@supernova/contracts/sessions/schemas";
 import {workDuration} from "@/features/sessions/lib/timeline/work-timeline-items";
 import type {SessionTimelineItem, SessionTimelineItems, SessionWorkEvent} from "@/features/sessions/types/session-timeline-item";
 
 interface BuildSessionTimelineInput {
   readonly live: boolean;
-  readonly liveTurn: SessionTurn | null;
-  readonly turns: readonly SessionTurn[];
+  readonly liveTurn: Turn | null;
+  readonly turns: readonly Turn[];
 }
 
-function turnToTimelineItems(turn: SessionTurn, live: boolean): SessionTimelineItem[] {
+function turnToTimelineItems(turn: Turn, live: boolean): SessionTimelineItem[] {
   const items: SessionTimelineItem[] = [];
   const hasAssistantResponse = turn.events.some((event) => event.type === "assistant" && event.content.trim().length > 0);
 

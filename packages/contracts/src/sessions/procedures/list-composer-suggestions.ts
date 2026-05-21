@@ -1,8 +1,8 @@
 import {Schema} from "effect";
 
-export const SessionComposerSuggestionTriggerKind = Schema.Union([Schema.Literal("skill"), Schema.Literal("slash")]);
+export const ComposerSuggestionTriggerKind = Schema.Union([Schema.Literal("skill"), Schema.Literal("slash")]);
 
-export const SessionComposerSkillSuggestionItem = Schema.Struct({
+export const ComposerSkillSuggestionItem = Schema.Struct({
   id: Schema.String,
   kind: Schema.Literal("skill"),
   name: Schema.String,
@@ -10,7 +10,7 @@ export const SessionComposerSkillSuggestionItem = Schema.Struct({
   title: Schema.String,
 });
 
-export const SessionComposerPromptTemplateSuggestionItem = Schema.Struct({
+export const ComposerPromptTemplateSuggestionItem = Schema.Struct({
   id: Schema.String,
   kind: Schema.Literal("prompt-template"),
   prompt: Schema.String,
@@ -18,27 +18,27 @@ export const SessionComposerPromptTemplateSuggestionItem = Schema.Struct({
   title: Schema.String,
 });
 
-export const SessionComposerSuggestionItem = Schema.Union([SessionComposerPromptTemplateSuggestionItem, SessionComposerSkillSuggestionItem]);
+export const ComposerSuggestionItem = Schema.Union([ComposerPromptTemplateSuggestionItem, ComposerSkillSuggestionItem]);
 
-export const SessionComposerSuggestionsListPayload = Schema.Struct({
-  kind: SessionComposerSuggestionTriggerKind,
+export const ListComposerSuggestionsPayload = Schema.Struct({
+  kind: ComposerSuggestionTriggerKind,
   projectPath: Schema.String,
   query: Schema.String,
 });
 
-export const SessionComposerSuggestionsListResult = Schema.Struct({
-  items: Schema.Array(SessionComposerSuggestionItem),
+export const ListComposerSuggestionsResult = Schema.Struct({
+  items: Schema.Array(ComposerSuggestionItem),
   query: Schema.String,
 });
 
-export class SessionComposerSuggestionsListError extends Schema.TaggedErrorClass<SessionComposerSuggestionsListError>()("SessionComposerSuggestionsListError", {
+export class ListComposerSuggestionsError extends Schema.TaggedErrorClass<ListComposerSuggestionsError>()("ListComposerSuggestionsError", {
   cause: Schema.optional(Schema.Defect),
   message: Schema.String,
 }) {}
 
-export type SessionComposerSuggestionTriggerKind = typeof SessionComposerSuggestionTriggerKind.Type;
-export type SessionComposerSkillSuggestionItem = typeof SessionComposerSkillSuggestionItem.Type;
-export type SessionComposerPromptTemplateSuggestionItem = typeof SessionComposerPromptTemplateSuggestionItem.Type;
-export type SessionComposerSuggestionItem = typeof SessionComposerSuggestionItem.Type;
-export type SessionComposerSuggestionsListPayload = typeof SessionComposerSuggestionsListPayload.Type;
-export type SessionComposerSuggestionsListResult = typeof SessionComposerSuggestionsListResult.Type;
+export type ComposerSuggestionTriggerKind = typeof ComposerSuggestionTriggerKind.Type;
+export type ComposerSkillSuggestionItem = typeof ComposerSkillSuggestionItem.Type;
+export type ComposerPromptTemplateSuggestionItem = typeof ComposerPromptTemplateSuggestionItem.Type;
+export type ComposerSuggestionItem = typeof ComposerSuggestionItem.Type;
+export type ListComposerSuggestionsPayload = typeof ListComposerSuggestionsPayload.Type;
+export type ListComposerSuggestionsResult = typeof ListComposerSuggestionsResult.Type;

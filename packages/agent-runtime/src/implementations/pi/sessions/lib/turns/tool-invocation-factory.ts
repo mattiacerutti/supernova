@@ -32,7 +32,7 @@ import {
   FileWriteToolInput as FileWriteToolInputSchema,
   type FileWriteToolInput,
   type FileWriteToolResult,
-  type SessionTool,
+  type Tool,
   type ToolStatus,
 } from "@supernova/contracts/sessions/schemas";
 import {fileContentToNewFilePatch, piEditDiffToPatch} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns/edit-patch";
@@ -57,7 +57,7 @@ export interface PiToolCompletion<TDetails> {
 
 export abstract class PiToolInvocation<TPiInput = unknown, TPiDetails = unknown, TInput = unknown, TResult = unknown> {
   public readonly name: string;
-  protected readonly kind: SessionTool["kind"];
+  protected readonly kind: Tool["kind"];
 
   protected status: ToolStatus = "pending";
   protected error: string | undefined;
@@ -65,7 +65,7 @@ export abstract class PiToolInvocation<TPiInput = unknown, TPiDetails = unknown,
   protected readonly input: TInput | undefined;
   protected result: TResult | undefined;
 
-  protected constructor(name: string, kind: SessionTool["kind"], input: Partial<TPiInput> | undefined) {
+  protected constructor(name: string, kind: Tool["kind"], input: Partial<TPiInput> | undefined) {
     this.kind = kind;
     this.name = name;
 
@@ -87,11 +87,11 @@ export abstract class PiToolInvocation<TPiInput = unknown, TPiDetails = unknown,
     this.result = this.createResult(completion);
   }
 
-  public toSessionTool(): SessionTool {
+  public toTool(): Tool {
     const base = {input: this.input, kind: this.kind} as const;
-    if (this.status === "error") return {...base, error: this.errorMessage(), status: "error"} as SessionTool;
-    if (this.status === "completed") return {...base, result: this.completedResult(), status: "completed"} as SessionTool;
-    return {...base, status: "pending"} as SessionTool;
+    if (this.status === "error") return {...base, error: this.errorMessage(), status: "error"} as Tool;
+    if (this.status === "completed") return {...base, result: this.completedResult(), status: "completed"} as Tool;
+    return {...base, status: "pending"} as Tool;
   }
 
   protected abstract createResult(completion: PiToolCompletion<TPiDetails>): TResult;

@@ -1,6 +1,6 @@
 import type {AgentSession, SessionEntry} from "@earendil-works/pi-coding-agent";
 import {Effect, Queue, Stream} from "effect";
-import type {SessionMessageSendPayload, SessionStreamEvent} from "@supernova/contracts/sessions/procedures";
+import type {SendMessagePayload, SendMessageEvent} from "@supernova/contracts/sessions/procedures";
 import type {SessionSummary} from "@supernova/contracts/sessions/schemas";
 import {PiSdkService} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
 import type {PiSdkServiceShape, PiSessionInfo} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
@@ -9,7 +9,7 @@ import {prepareSendMessageContext} from "@supernova/agent-runtime/implementation
 import {findSessionById} from "@supernova/agent-runtime/implementations/pi/sessions/lib/session-resolver";
 import {generateSessionTitle} from "@supernova/agent-runtime/implementations/pi/sessions/lib/session-title-generator";
 import {createLiveBranchEntries} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns/live-branch-entries";
-import {buildPiSessionTurns} from "@supernova/agent-runtime/implementations/pi/sessions/lib/session-turns-builder";
+import {buildPiTurns} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns-builder";
 import {toPiThinkingLevel} from "@supernova/agent-runtime/implementations/pi/sessions/lib/models/thinking-levels";
 
 type PiAgentMessage = AgentSession["messages"][number];
@@ -30,14 +30,14 @@ type PromptContext = OpenedSession & {
   readonly messageContext: SendMessageContext;
 };
 
-export function sendSessionMessage(input: SessionMessageSendPayload) {
+export function sendMessage(input: SendMessagePayload) {
   return Stream.unwrap(
     Effect.gen(function* () {
       const piSdk = yield* PiSdkService;
 
-      return Stream.callback<SessionStreamEvent>((queue) =>
+      return Stream.callback<SendMessageEvent>((queue) =>
         Effect.gen(function* () {
-          const runner = new SendSessionMessageRunner({
+          const runner = new SendMessageRunner({
             emit: (event) => Queue.offerUnsafe(queue, event),
             end: () => Queue.endUnsafe(queue),
             input,
@@ -52,10 +52,10 @@ export function sendSessionMessage(input: SessionMessageSendPayload) {
   );
 }
 
-class SendSessionMessageRunner {
-  private readonly emit: (event: SessionStreamEvent) => void;
+class SendMessageRunner {
+  private readonly emit: (event: SendMessageEvent) => void;
   private readonly end: () => void;
-  private readonly input: SessionMessageSendPayload;
+  private readonly input: SendMessagePayload;
   private readonly piSdk: PiSdkServiceShape;
   private activeSession: AgentSession | undefined;
   private cancelled = false;
@@ -63,7 +63,7 @@ class SendSessionMessageRunner {
   private releasePromise: Promise<void> | undefined;
   private unsubscribe: (() => void) | undefined;
 
-  constructor(input: {emit: (event: SessionStreamEvent) => void; end: () => void; input: SessionMessageSendPayload; piSdk: PiSdkServiceShape}) {
+  constructor(input: {emit: (event: SendMessageEvent) => void; end: () => void; input: SendMessagePayload; piSdk: PiSdkServiceShape}) {
     this.emit = input.emit;
     this.end = input.end;
     this.input = input.input;
@@ -93,7 +93,7 @@ class SendSessionMessageRunner {
       const openedSession = await this.openSession();
       const context = await this.preparePromptContext(openedSession);
 
-      this.emit({turns: buildPiSessionTurns(context.baseBranch, this.input.model), type: "ready"});
+      this.emit({turns: buildPiTurns(context.baseBranch, this.input.model), type: "ready"});
       await this.appendUserMessageContext(context);
       this.subscribeToLiveUpdates(context);
       await this.promptAndEmitFinalTurns(context);
@@ -185,14 +185,14 @@ class SendSessionMessageRunner {
       const images = context.messageContext.images;
       await this.activeSession?.prompt(context.messageContext.prompt, images.length > 0 ? {images: [...images]} : undefined);
       const liveEntries = this.liveBranchEntries(context, this.activeSession?.messages.slice(context.baseMessageCount) ?? []);
-      this.emit({turns: buildPiSessionTurns([...context.baseBranch, ...liveEntries], this.input.model), type: "done"});
+      this.emit({turns: buildPiTurns([...context.baseBranch, ...liveEntries], this.input.model), type: "done"});
     } finally {
       await this.release({abort: false});
     }
   }
 
   private emitLiveTurn(context: PromptContext, messages: readonly PiAgentMessage[]): void {
-    const [turn] = buildPiSessionTurns(this.liveBranchEntries(context, messages), this.input.model);
+    const [turn] = buildPiTurns(this.liveBranchEntries(context, messages), this.input.model);
     if (!turn) return;
 
     const session = this.titleSummary(context);

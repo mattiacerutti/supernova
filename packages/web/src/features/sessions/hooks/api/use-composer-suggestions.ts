@@ -1,6 +1,6 @@
 import type {FolderFile} from "@supernova/contracts/folders/schemas";
 import {useQuery} from "@tanstack/react-query";
-import type {SessionComposerSuggestionItem} from "@supernova/contracts/sessions/procedures";
+import type {ComposerSuggestionItem as ContractComposerSuggestionItem} from "@supernova/contracts/sessions/procedures";
 import {Effect} from "effect";
 import type {
   ComposerFileReferenceSuggestionItem,
@@ -24,7 +24,7 @@ function fileSuggestion(item: FolderFile): ComposerFileReferenceSuggestionItem {
   };
 }
 
-function resourceSuggestion(item: SessionComposerSuggestionItem): ComposerPromptTemplateSuggestionItem | ComposerSkillSuggestionItem {
+function resourceSuggestion(item: ContractComposerSuggestionItem): ComposerPromptTemplateSuggestionItem | ComposerSkillSuggestionItem {
   return item;
 }
 
@@ -52,7 +52,7 @@ export function useComposerSuggestions(projectPath: string, match: ComposerSugge
             return result.items.map(fileSuggestion) satisfies ComposerSuggestionItem[];
           }
 
-          const result = yield* rpc.listSessionComposerSuggestions({kind: match.kind, projectPath, query: match.query});
+          const result = yield* rpc.listComposerSuggestions({kind: match.kind, projectPath, query: match.query});
           const suggestions = result.items.map(resourceSuggestion);
 
           if (match.kind === "slash") {

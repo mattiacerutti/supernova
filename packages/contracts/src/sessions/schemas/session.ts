@@ -1,9 +1,9 @@
 import {Schema} from "effect";
 import {ModelReference} from "./model";
-import {SessionTurn} from "./turn";
+import {Turn} from "./turn";
 
 /** Full session transcript and metadata. */
-export const SessionDetails = Schema.Struct({
+export const Session = Schema.Struct({
   /** Stable session identifier. */
   id: Schema.String,
   /** Human-readable session title. */
@@ -13,7 +13,7 @@ export const SessionDetails = Schema.Struct({
   /** Absolute path of the project/workspace associated with the session. */
   projectPath: Schema.String,
   /** Ordered session transcript represented as turns. */
-  turns: Schema.Array(SessionTurn),
+  turns: Schema.Array(Turn),
   /** ISO timestamp for the last session update. */
   updatedAt: Schema.String,
 });
@@ -28,5 +28,5 @@ export const SessionSummary = Schema.Struct({
   updatedAt: Schema.String,
 });
 
-export type SessionDetails = typeof SessionDetails.Type;
+export type Session = typeof Session.Type;
 export type SessionSummary = typeof SessionSummary.Type;

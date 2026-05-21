@@ -1,14 +1,14 @@
-import type {SessionReasoningTurnEvent, SessionTurn} from "@supernova/contracts/sessions/schemas";
+import type {ReasoningTurnEvent, Turn} from "@supernova/contracts/sessions/schemas";
 import {describe, expect, it} from "vitest";
 import {upsertInterruptedTurn} from "@/features/sessions/lib/streaming/interrupted-turns";
 
 const model = {id: "claude-sonnet", providerId: "anthropic", thinkingLevel: "high"};
 
-function reasoningEvent(id: string, second: number): SessionReasoningTurnEvent {
+function reasoningEvent(id: string, second: number): ReasoningTurnEvent {
   return {content: `reasoning ${id}`, id, timestamp: `2026-01-01T00:00:0${second}.000Z`, type: "reasoning"};
 }
 
-function turn(overrides: Partial<SessionTurn>): SessionTurn {
+function turn(overrides: Partial<Turn>): Turn {
   return {
     events: [],
     id: "turn-1",
