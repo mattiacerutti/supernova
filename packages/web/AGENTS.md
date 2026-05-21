@@ -29,13 +29,6 @@
 - When you need to render conditional UI, prefer `condition && <Component />` over `condition ? <Component /> : null`.
 - Keep components in separate files unless they are small, deeply related implementation details of the parent component.
 
-## Lib functions
-
-- In `lib` files, order function declarations from top to bottom as non-exported functions, then exported functions.
-- If a lib function takes a named `Options` input type or interface, place that type directly above the function declaration.
-- Add a small TSDoc comment to exported lib functions.
-- Add a small TSDoc comment to non-exported lib functions when their behavior is not trivial.
-
 ## RPC hooks
 
 - Use `effect-query` for RPC-backed React Query hooks.

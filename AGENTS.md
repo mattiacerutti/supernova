@@ -95,6 +95,15 @@ Other repositories may also be present in `.context/`; inspect the directory whe
 - Always ask before removing functionality or code that appears to be intentional
 - Do not preserve backward compatibility unless the user explicitly asks for it
 
+### Implementation Logic
+
+Keep procedure logic, shared helpers, mappers, resolvers, factories, builders, classes, state holders, and lifecycle coordinators easy to scan and understand. Use these rules by role, not by folder name; an implementation file under `operations` can need them just as much as one under `lib`.
+
+- Order function declarations from top to bottom as non-exported functions, then exported functions.
+- If a function uses a named `Options` input type or interface for its arguments, then place it directly above the function that uses it.
+- Add small TSDoc comments to exported functions, exported classes, and public methods on exported classes.
+- Add small TSDoc comments to non-exported functions, classes, and methods when their behavior is not trivial.
+
 ### Core Priorities
 
 1. Performance first.
