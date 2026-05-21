@@ -1,4 +1,7 @@
 import type {AgentSession, SessionEntry} from "@earendil-works/pi-coding-agent";
+import {mkdir, mkdtemp, writeFile} from "node:fs/promises";
+import {tmpdir} from "node:os";
+import {join} from "node:path";
 import {Effect, Fiber, Layer, Stream} from "effect";
 import {describe, expect, it, vi} from "vitest";
 import {PiSdkService} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
@@ -6,16 +9,7 @@ import type {PiSessionInfo} from "@supernova/agent-runtime/implementations/pi/pi
 import {PiSessionsLive} from "@supernova/agent-runtime/implementations/pi/sessions/pi-sessions-live";
 import {SessionsService} from "@supernova/agent-runtime/services/sessions/sessions-service";
 import type {SessionMessageSendPayload, SessionStreamEvent} from "@supernova/contracts/sessions/procedures";
-import {
-  collectEvents,
-  imageAttachment,
-  ignoredAttachment,
-  piAgentMessage,
-  piSessionInfo,
-  selectedPiModel,
-  textAttachment,
-  waitUntil,
-} from "@tests/implementations/pi/sessions/pi-session-test-utils";
+import {collectEvents, imageAttachment, piAgentMessage, piSessionInfo, selectedPiModel, textAttachment, waitUntil} from "@tests/implementations/pi/sessions/pi-session-test-utils";
 
 type PiSessionEvent =
   | {readonly assistantMessageEvent: {readonly delta: string; readonly type: "thinking_delta"}; readonly message: AgentSession["messages"][number]; readonly type: "message_update"}
@@ -129,10 +123,16 @@ function makePiSessionsHarness(input?: {
 
   const sessionsLive = PiSessionsLive.pipe(Layer.provide(Layer.succeed(PiSdkService, piSdk as never)));
 
-  const sendMessage = (messageInput: Omit<SessionMessageSendPayload, "attachments"> & {readonly attachments?: SessionMessageSendPayload["attachments"]}) =>
+  const sendMessage = (
+    messageInput: Omit<SessionMessageSendPayload, "contentParts"> & {
+      readonly contentParts?: SessionMessageSendPayload["contentParts"];
+      readonly message?: string;
+    }
+  ) =>
     Effect.gen(function* () {
       const sessions = yield* SessionsService;
-      return yield* Effect.promise(() => collectEvents(sessions.sendMessage({attachments: [], ...messageInput})));
+      const {message, ...input} = messageInput;
+      return yield* Effect.promise(() => collectEvents(sessions.sendMessage({contentParts: message ? [{text: message, type: "text"}] : [], ...input})));
     }).pipe(Effect.provide(sessionsLive));
 
   return {
@@ -179,7 +179,7 @@ describe("sending messages through Pi sessions", () => {
           ],
           model: {id: "claude-sonnet", providerId: "anthropic", thinkingLevel: "high"},
           status: "completed",
-          userMessage: {content: "Fix it"},
+          userMessage: {contentParts: [{text: "Fix it", type: "text"}]},
         },
       ],
       type: "done",
@@ -194,8 +194,7 @@ describe("sending messages through Pi sessions", () => {
 
     await Effect.runPromise(
       harness.sendMessage({
-        attachments: [imageAttachment],
-        message: "Review this image",
+        contentParts: [{text: "Review this image", type: "text"}, imageAttachment],
         model: {id: "claude-sonnet", providerId: "anthropic"},
         sessionId: "session-1",
       })
@@ -205,10 +204,12 @@ describe("sending messages through Pi sessions", () => {
       message: "Review this image",
       options: {images: [{data: "aW1hZ2UtYnl0ZXM=", mimeType: "image/png", type: "image"}]},
     });
-    expect(harness.appendCustomEntry).toHaveBeenCalledWith("supernova.attachments", {
-      attachments: [{id: "image-1", kind: "image", mime: "image/png", name: "diagram.png", order: 0, size: 12}],
+    expect(harness.appendCustomEntry).toHaveBeenCalledWith("supernova.user-message-content-parts", {
+      contentParts: [
+        {text: "Review this image", type: "text"},
+        {contentBase64: undefined, id: "image-1", kind: "image", mime: "image/png", name: "diagram.png", size: 12, type: "attachment"},
+      ],
     });
-    expect(harness.appendCustomEntry.mock.calls[0]?.[1]).not.toHaveProperty("attachments.0.contentBase64");
     expect(harness.sendCustomMessage).not.toHaveBeenCalled();
   });
 
@@ -216,13 +217,12 @@ describe("sending messages through Pi sessions", () => {
     const harness = makePiSessionsHarness();
     const contentParts = [
       {text: "Read ", type: "text" as const},
-      {id: "part-1", kind: "file" as const, title: "file.ts", type: "reference" as const, value: "@src/file.ts"},
+      {id: "part-1", kind: "file" as const, name: "file.ts", type: "reference" as const, value: "@src/file.ts"},
     ];
 
     const events = await Effect.runPromise(
       harness.sendMessage({
         contentParts,
-        message: "Read @src/file.ts",
         model: {id: "claude-sonnet", providerId: "anthropic"},
         sessionId: "session-1",
       })
@@ -230,15 +230,40 @@ describe("sending messages through Pi sessions", () => {
 
     expect(harness.promptCalls[0]).toEqual({message: "Read @src/file.ts", options: undefined});
     expect(harness.appendCustomEntry).toHaveBeenCalledWith("supernova.user-message-content-parts", {contentParts});
-    expect(events.at(-1)).toMatchObject({turns: [{userMessage: {content: "Read @src/file.ts", contentParts}}], type: "done"});
+    expect(events.at(-1)).toMatchObject({turns: [{userMessage: {contentParts}}], type: "done"});
   });
 
-  it("sends text attachments as hidden next-turn context without mutating user text", async () => {
+  it("appends selected skill content to the Pi prompt while displaying the authored message", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "supernova-skill-"));
+    const skillDir = join(projectPath, ".agents", "skills", "demo");
+    await mkdir(skillDir, {recursive: true});
+    await writeFile(join(skillDir, "SKILL.md"), "---\nname: demo\ndescription: demo skill\n---\n\nUse the word cobalt.\n");
+
+    const harness = makePiSessionsHarness({sessions: [{...piSessionInfo, cwd: projectPath}]});
+    const contentParts = [
+      {text: "Use ", type: "text" as const},
+      {id: "part-1", kind: "skill" as const, name: "Demo", type: "reference" as const, value: "demo"},
+      {text: " please", type: "text" as const},
+    ];
+
+    const events = await Effect.runPromise(
+      harness.sendMessage({
+        contentParts,
+        model: {id: "claude-sonnet", providerId: "anthropic"},
+        sessionId: "session-1",
+      })
+    );
+
+    expect(harness.promptCalls[0]?.message).toContain("Use demo please\n\n<skill>\n<name>demo</name>");
+    expect(harness.promptCalls[0]?.message).toContain("Use the word cobalt.");
+    expect(events.at(-1)).toMatchObject({turns: [{userMessage: {contentParts}}], type: "done"});
+  });
+
+  it("appends text attachments to the prompt without sending hidden custom messages", async () => {
     const harness = makePiSessionsHarness({
       prompt: async (message, context) => {
         context.messages.push(
           piAgentMessage({content: [{text: message, type: "text"}], id: "live-user", role: "user", timestamp: 1}),
-          ...context.pendingCustomMessages,
           piAgentMessage({
             content: [{text: "Read it.", type: "text"}],
             id: "live-assistant",
@@ -251,24 +276,26 @@ describe("sending messages through Pi sessions", () => {
 
     const events = await Effect.runPromise(
       harness.sendMessage({
-        attachments: [textAttachment],
-        message: "Use the notes",
+        contentParts: [{text: "Use the notes", type: "text"}, textAttachment],
         model: {id: "claude-sonnet", providerId: "anthropic"},
         sessionId: "session-1",
       })
     );
 
-    expect(harness.promptCalls[0]).toEqual({message: "Use the notes", options: undefined});
-    expect(harness.sendCustomMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        content: '<attachments>\n  <attachment id="text-1" name="notes.txt" mime="text/plain" size="20">\nThis is a text file.\n  </attachment>\n</attachments>',
-        customType: "supernova.text-attachments",
-        display: false,
-      }),
-      {deliverAs: "nextTurn"}
-    );
+    expect(harness.promptCalls[0]?.message).toContain('Use the notes\n\n<attachment id="text-1"');
+    expect(harness.promptCalls[0]?.message).toContain("This is a text file.");
+    expect(harness.sendCustomMessage).not.toHaveBeenCalled();
     expect(events.at(-1)).toMatchObject({
-      turns: [{userMessage: {attachments: [{id: "text-1", mime: "text/plain", name: "notes.txt", size: 20}], content: "Use the notes"}}],
+      turns: [
+        {
+          userMessage: {
+            contentParts: [
+              {text: "Use the notes", type: "text"},
+              {id: "text-1", kind: "text", mime: "text/plain", name: "notes.txt", size: 20, type: "attachment"},
+            ],
+          },
+        },
+      ],
       type: "done",
     });
   });
@@ -286,8 +313,7 @@ describe("sending messages through Pi sessions", () => {
 
     const events = await Effect.runPromise(
       harness.sendMessage({
-        attachments: [imageAttachment],
-        message: "",
+        contentParts: [imageAttachment],
         model: {id: "claude-sonnet", providerId: "anthropic"},
         sessionId: "session-1",
       })
@@ -298,8 +324,7 @@ describe("sending messages through Pi sessions", () => {
         {
           events: [{content: "Reviewed attachment.", type: "assistant"}],
           userMessage: {
-            attachments: [{contentBase64: "aW1hZ2UtYnl0ZXM=", id: "image-1", mime: "image/png", name: "diagram.png", size: 12}],
-            content: "",
+            contentParts: [{contentBase64: "aW1hZ2UtYnl0ZXM=", id: "image-1", kind: "image", mime: "image/png", name: "diagram.png", size: 12, type: "attachment"}],
           },
         },
       ],
@@ -307,12 +332,12 @@ describe("sending messages through Pi sessions", () => {
     });
   });
 
-  it("passes prepared attachment context through ready, live, and done snapshots", async () => {
+  it("passes prepared content parts through ready, live, and done snapshots", async () => {
     const branch: SessionEntry[] = [
       {
-        customType: "supernova.attachments",
-        data: {attachments: [{id: "old-image", kind: "image", mime: "image/jpeg", name: "old.jpg", order: 0, size: 9}]},
-        id: "old-attachments",
+        customType: "supernova.user-message-content-parts",
+        data: {contentParts: [{id: "old-image", kind: "image", mime: "image/jpeg", name: "old.jpg", size: 9, type: "attachment"}]},
+        id: "old-content-parts",
         parentId: null,
         timestamp: "1970-01-01T00:00:00.001Z",
         type: "custom",
@@ -328,7 +353,7 @@ describe("sending messages through Pi sessions", () => {
           role: "user",
           timestamp: 1,
         }),
-        parentId: "old-attachments",
+        parentId: "old-content-parts",
         timestamp: "1970-01-01T00:00:00.001Z",
         type: "message",
       },
@@ -357,30 +382,29 @@ describe("sending messages through Pi sessions", () => {
 
     const events = await Effect.runPromise(
       harness.sendMessage({
-        attachments: [textAttachment, imageAttachment],
-        message: "New request",
+        contentParts: [{text: "New request", type: "text"}, textAttachment, imageAttachment],
         model: {id: "claude-sonnet", providerId: "anthropic"},
         sessionId: "session-1",
       })
     );
     const turnEvent = events.find((event) => event.type === "turn");
 
-    expect(events[0]).toMatchObject({turns: [{userMessage: {attachments: [{contentBase64: "b2xkLWltYWdl", id: "old-image"}], content: "Old request"}}], type: "ready"});
+    expect(events[0]).toMatchObject({turns: [{userMessage: {contentParts: [{contentBase64: "b2xkLWltYWdl", id: "old-image"}]}}], type: "ready"});
     expect(turnEvent).toMatchObject({
       turn: {
         status: "streaming",
         userMessage: {
-          attachments: [
-            {id: "text-1", mime: "text/plain", name: "notes.txt", size: 20},
-            {contentBase64: "aW1hZ2UtYnl0ZXM=", id: "image-1", mime: "image/png", name: "diagram.png", size: 12},
+          contentParts: [
+            {text: "New request", type: "text"},
+            {id: "text-1", kind: "text", mime: "text/plain", name: "notes.txt", size: 20, type: "attachment"},
+            {contentBase64: "aW1hZ2UtYnl0ZXM=", id: "image-1", kind: "image", mime: "image/png", name: "diagram.png", size: 12, type: "attachment"},
           ],
-          content: "New request",
         },
       },
       type: "turn",
     });
     expect(events.at(-1)).toMatchObject({
-      turns: [{userMessage: {content: "Old request"}}, {events: [{content: "Live response", type: "assistant"}], userMessage: {content: "New request"}}],
+      turns: [{userMessage: {contentParts: expect.any(Array)}}, {events: [{content: "Live response", type: "assistant"}], userMessage: {contentParts: expect.any(Array)}}],
       type: "done",
     });
   });
@@ -403,7 +427,7 @@ describe("sending messages through Pi sessions", () => {
     );
 
     expect(events[0]).toMatchObject({
-      turns: [{events: [{content: "Existing response", type: "assistant"}], userMessage: {content: "Existing request"}}],
+      turns: [{events: [{content: "Existing response", type: "assistant"}], userMessage: {contentParts: [{text: "Existing request", type: "text"}]}}],
       type: "ready",
     });
   });
@@ -430,8 +454,8 @@ describe("sending messages through Pi sessions", () => {
 
     expect(events.at(-1)).toMatchObject({
       turns: [
-        {events: [{content: "Existing response", type: "assistant"}], userMessage: {content: "Existing request"}},
-        {events: [{content: "Live response", type: "assistant"}], userMessage: {content: "New request"}},
+        {events: [{content: "Existing response", type: "assistant"}], userMessage: {contentParts: [{text: "Existing request", type: "text"}]}},
+        {events: [{content: "Live response", type: "assistant"}], userMessage: {contentParts: [{text: "New request", type: "text"}]}},
       ],
       type: "done",
     });
@@ -464,7 +488,11 @@ describe("sending messages through Pi sessions", () => {
       Effect.gen(function* () {
         const sessions = yield* SessionsService;
         yield* Stream.runForEach(
-          sessions.sendMessage({attachments: [], message: "Live request", model: {id: "claude-sonnet", providerId: "anthropic"}, sessionId: "session-1"}),
+          sessions.sendMessage({
+            contentParts: [{text: "Live request", type: "text"}],
+            model: {id: "claude-sonnet", providerId: "anthropic"},
+            sessionId: "session-1",
+          }),
           (event) =>
             Effect.sync(() => {
               events.push(event);
@@ -477,14 +505,14 @@ describe("sending messages through Pi sessions", () => {
     await turnSeen;
 
     expect(events[0]).toMatchObject({
-      turns: [{events: [{content: "Existing response", type: "assistant"}], userMessage: {content: "Existing request"}}],
+      turns: [{events: [{content: "Existing response", type: "assistant"}], userMessage: {contentParts: [{text: "Existing request", type: "text"}]}}],
       type: "ready",
     });
     expect(events.find((event) => event.type === "turn")).toMatchObject({
       turn: {
         events: [{content: "Working on it.", type: "reasoning"}],
         status: "streaming",
-        userMessage: {content: "Live request"},
+        userMessage: {contentParts: [{text: "Live request", type: "text"}]},
       },
       type: "turn",
     });
@@ -532,34 +560,34 @@ describe("sending messages through Pi sessions", () => {
       })
     );
 
-    expect(events.at(-1)).toMatchObject({turns: [{events: expect.any(Array), userMessage: {content: "Fix it"}}], type: "done"});
+    expect(events.at(-1)).toMatchObject({turns: [{events: expect.any(Array), userMessage: {contentParts: [{text: "Fix it", type: "text"}]}}], type: "done"});
   });
 
-  it("ignores unsupported attachments while preserving supported attachment order", async () => {
-    const textWithoutBytes = {id: "text-empty", mime: "text/plain", name: "empty.txt", size: 0};
-    const imageWithoutBytes = {id: "image-empty", mime: "image/png", name: "empty.png", size: 0};
+  it("preserves attachment content-part order while using only available bytes for model context", async () => {
+    const textWithoutBytes = {id: "text-empty", kind: "text" as const, mime: "text/plain", name: "empty.txt", size: 0, type: "attachment" as const};
+    const imageWithoutBytes = {id: "image-empty", kind: "image" as const, mime: "image/png", name: "empty.png", size: 0, type: "attachment" as const};
     const harness = makePiSessionsHarness();
 
     const events = await Effect.runPromise(
       harness.sendMessage({
-        attachments: [imageAttachment, ignoredAttachment, textAttachment, textWithoutBytes, imageWithoutBytes],
-        message: "Use supported files",
+        contentParts: [{text: "Use supported files", type: "text"}, imageAttachment, textAttachment, textWithoutBytes, imageWithoutBytes],
         model: {id: "claude-sonnet", providerId: "anthropic"},
         sessionId: "session-1",
       })
     );
 
     expect(harness.promptCalls[0]?.options).toEqual({images: [{data: "aW1hZ2UtYnl0ZXM=", mimeType: "image/png", type: "image"}]});
-    expect(harness.sendCustomMessage.mock.calls[0]?.[0]).toMatchObject({content: expect.stringContaining("This is a text file.")});
+    expect(harness.promptCalls[0]?.message).toContain("This is a text file.");
     expect(events.at(-1)).toMatchObject({
       turns: [
         {
           userMessage: {
-            attachments: [
-              {contentBase64: "aW1hZ2UtYnl0ZXM=", id: "image-1", mime: "image/png", name: "diagram.png", size: 12},
-              {id: "text-1", mime: "text/plain", name: "notes.txt", size: 20},
-              {id: "text-empty", mime: "text/plain", name: "empty.txt", size: 0},
-              {id: "image-empty", mime: "image/png", name: "empty.png", size: 0},
+            contentParts: [
+              {text: "Use supported files", type: "text"},
+              {contentBase64: "aW1hZ2UtYnl0ZXM=", id: "image-1", kind: "image", mime: "image/png", name: "diagram.png", size: 12, type: "attachment"},
+              {id: "text-1", kind: "text", mime: "text/plain", name: "notes.txt", size: 20, type: "attachment"},
+              {id: "text-empty", kind: "text", mime: "text/plain", name: "empty.txt", size: 0, type: "attachment"},
+              {id: "image-empty", kind: "image", mime: "image/png", name: "empty.png", size: 0, type: "attachment"},
             ],
           },
         },
@@ -618,8 +646,9 @@ describe("cleaning up interrupted Pi message streams", () => {
 
     const program = Effect.gen(function* () {
       const sessions = yield* SessionsService;
-      yield* Stream.runForEach(sessions.sendMessage({attachments: [], message: "Fix it", model: {id: "claude-sonnet", providerId: "anthropic"}, sessionId: "session-1"}), (event) =>
-        Effect.sync(() => events.push(event))
+      yield* Stream.runForEach(
+        sessions.sendMessage({contentParts: [{text: "Fix it", type: "text"}], model: {id: "claude-sonnet", providerId: "anthropic"}, sessionId: "session-1"}),
+        (event) => Effect.sync(() => events.push(event))
       );
     }).pipe(Effect.provide(harness.sessionsLive));
 
@@ -638,9 +667,17 @@ describe("cleaning up interrupted Pi message streams", () => {
 function baseBranch(): SessionEntry[] {
   return [
     {
+      customType: "supernova.user-message-content-parts",
+      data: {contentParts: [{text: "Existing request", type: "text"}]},
+      id: "base-content-parts",
+      parentId: null,
+      timestamp: "1970-01-01T00:00:00.001Z",
+      type: "custom",
+    },
+    {
       id: "base-user",
       message: piAgentMessage({content: [{text: "Existing request", type: "text"}], id: "base-user-message", role: "user", timestamp: 1}),
-      parentId: null,
+      parentId: "base-content-parts",
       timestamp: "1970-01-01T00:00:00.001Z",
       type: "message",
     },

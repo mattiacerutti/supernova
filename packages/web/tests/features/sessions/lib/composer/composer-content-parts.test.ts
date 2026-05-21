@@ -19,7 +19,7 @@ describe("composer content parts", () => {
     expect(
       textFromComposerContentParts([
         {text: "read ", type: "text"},
-        {id: "part-1", kind: "file", title: "file.ts", type: "reference", value: "@src/file.ts"},
+        {id: "part-1", kind: "file", name: "file.ts", type: "reference", value: "@src/file.ts"},
       ])
     ).toBe("read @src/file.ts");
   });
@@ -27,13 +27,13 @@ describe("composer content parts", () => {
   it("trims text around selected reference parts", () => {
     const parts = trimComposerContentParts([
       {text: "  read ", type: "text"},
-      {id: "part-1", kind: "file", title: "file.ts", type: "reference", value: "@src/file.ts"},
+      {id: "part-1", kind: "file", name: "file.ts", type: "reference", value: "@src/file.ts"},
       {text: "  ", type: "text"},
     ]);
 
     expect(parts).toEqual([
       {text: "read ", type: "text"},
-      {id: "part-1", kind: "file", title: "file.ts", type: "reference", value: "@src/file.ts"},
+      {id: "part-1", kind: "file", name: "file.ts", type: "reference", value: "@src/file.ts"},
     ]);
   });
 
@@ -46,8 +46,7 @@ describe("composer content parts", () => {
       createReferenceNode({
         id: "part-1",
         kind: "file",
-        subtitle: "src",
-        title: "file.ts",
+        name: "file.ts",
         type: "reference",
         value: "@src/file.ts",
       })
@@ -55,8 +54,7 @@ describe("composer content parts", () => {
       attrs: {
         id: "part-1",
         kind: "file",
-        subtitle: "src",
-        title: "file.ts",
+        name: "file.ts",
         value: "@src/file.ts",
       },
       type: "composerReference",
@@ -68,7 +66,7 @@ describe("composer content parts", () => {
       {text: "read", type: {name: "text"}},
       {text: " ", type: {name: "text"}},
       {
-        attrs: {id: "part-1", kind: "file", subtitle: "src", title: "file.ts", value: "@src/file.ts"},
+        attrs: {id: "part-1", kind: "file", name: "file.ts", value: "@src/file.ts"},
         type: {name: "composerReference"},
       },
       {type: {name: "hardBreak"}},
@@ -77,7 +75,7 @@ describe("composer content parts", () => {
 
     expect(editorToContentParts(editor)).toEqual([
       {text: "read ", type: "text"},
-      {id: "part-1", kind: "file", subtitle: "src", title: "file.ts", type: "reference", value: "@src/file.ts"},
+      {id: "part-1", kind: "file", name: "file.ts", type: "reference", value: "@src/file.ts"},
       {text: "\nplease", type: "text"},
     ]);
   });

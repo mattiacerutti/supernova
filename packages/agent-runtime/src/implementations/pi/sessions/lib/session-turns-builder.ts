@@ -1,23 +1,16 @@
 import type {AgentSession, CustomEntry, SessionEntry, SessionMessageEntry} from "@earendil-works/pi-coding-agent";
-import type {ModelReference, SessionToolTurnEvent, SessionTurn, SessionTurnEvent, SessionUserMessage, SessionUserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {ModelReference, SessionToolTurnEvent, SessionTurn, SessionTurnEvent, SessionUserMessage} from "@supernova/contracts/sessions/schemas";
 import {sessionTurn} from "@supernova/agent-runtime/implementations/shared/session-turns";
 import {generateStableId} from "@supernova/agent-runtime/implementations/shared/id-generator";
-import {ATTACHMENTS_CUSTOM_TYPE} from "@supernova/agent-runtime/implementations/pi/sessions/lib/message-context/attachments";
-import type {AttachmentMetadata} from "@supernova/agent-runtime/implementations/pi/sessions/lib/message-context/attachments";
-import {piContentToText, piUserAttachments} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns/message-content";
 import {PiToolInvocationFactory} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns/tool-invocation-factory";
 import type {PiToolInvocation} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns/tool-invocation-factory";
-import {USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE, validContentParts} from "@supernova/agent-runtime/implementations/pi/sessions/lib/message-context/content-parts";
+import {USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE, enrichContentPartsWithImages} from "@supernova/agent-runtime/implementations/pi/sessions/lib/message-context/content-parts";
 
 function isMessageEntry(entry: SessionEntry): entry is SessionMessageEntry {
   return entry.type === "message";
 }
 
-function isAttachmentsEntry(entry: SessionEntry): entry is CustomEntry<{attachments: AttachmentMetadata[]}> {
-  return entry.type === "custom" && entry.customType === ATTACHMENTS_CUSTOM_TYPE;
-}
-
-function isContentPartsEntry(entry: SessionEntry): entry is CustomEntry<{contentParts: SessionUserMessageContentPart[]}> {
+function isContentPartsEntry(entry: SessionEntry): entry is CustomEntry<{readonly contentParts: SessionUserMessage["contentParts"]}> {
   return entry.type === "custom" && entry.customType === USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE;
 }
 
@@ -126,8 +119,7 @@ class PiTurnDraft {
 class PiSessionTurnBuilder {
   private readonly fallbackModel: ModelReference;
   private readonly turns: SessionTurn[] = [];
-  private readonly attachmentsByParent = new Map<string, readonly AttachmentMetadata[]>();
-  private readonly contentPartsByParent = new Map<string, readonly SessionUserMessageContentPart[]>();
+  private readonly contentPartsByParent = new Map<string, {readonly contentParts: SessionUserMessage["contentParts"]}>();
   private readonly parentByEntryId = new Map<string, string | null>();
   private currentTurn: PiTurnDraft | undefined;
 
@@ -138,16 +130,8 @@ class PiSessionTurnBuilder {
   public addEntry(entry: SessionEntry): boolean {
     this.parentByEntryId.set(entry.id, entry.parentId);
 
-    if (isAttachmentsEntry(entry)) {
-      this.attachmentsByParent.set(
-        entry.id,
-        [...(entry.data?.attachments ?? [])].sort((a, b) => a.order - b.order)
-      );
-      return true;
-    }
-
     if (isContentPartsEntry(entry)) {
-      this.contentPartsByParent.set(entry.id, entry.data?.contentParts ?? []);
+      this.contentPartsByParent.set(entry.id, {contentParts: entry.data?.contentParts ?? []});
       return true;
     }
 
@@ -170,20 +154,19 @@ class PiSessionTurnBuilder {
   }
 
   private startUserTurn(entry: PiMessageEntry<"user">): boolean {
-    const content = piContentToText(entry.message.content);
-
-    const attachments = this.findParentMetadata(entry.parentId, this.attachmentsByParent);
-    const contentParts = validContentParts(content, this.findParentMetadata(entry.parentId, this.contentPartsByParent));
-    const normalizedAttachments = piUserAttachments(entry.message.content, attachments);
-
-    if (content.length === 0 && !normalizedAttachments?.length) return false;
+    const metadata = this.findParentMetadata(entry.parentId, this.contentPartsByParent);
+    if (!metadata?.contentParts.length) return false;
 
     this.completeCurrentTurn();
-    this.currentTurn = new PiTurnDraft({attachments: normalizedAttachments, content, contentParts, id: entry.id, timestamp: entry.timestamp});
+    this.currentTurn = new PiTurnDraft({
+      contentParts: enrichContentPartsWithImages({content: entry.message.content, contentParts: metadata.contentParts}),
+      id: entry.id,
+      timestamp: entry.timestamp,
+    });
     return true;
   }
 
-  private findParentMetadata<T>(parentId: string | null, metadataByParent: ReadonlyMap<string, readonly T[]>): readonly T[] | undefined {
+  private findParentMetadata<T>(parentId: string | null, metadataByParent: ReadonlyMap<string, T>): T | undefined {
     let currentParentId = parentId;
     while (currentParentId) {
       const metadata = metadataByParent.get(currentParentId);

@@ -1,54 +1,62 @@
 import {describe, expect, it} from "vitest";
 import {prepareSendMessageContext} from "@supernova/agent-runtime/implementations/pi/sessions/lib/message-context/send-message-context";
-import {imageAttachment, ignoredAttachment, textAttachment} from "@tests/implementations/pi/sessions/pi-session-test-utils";
+import {imageAttachment, textAttachment} from "@tests/implementations/pi/sessions/pi-session-test-utils";
 
 describe("preparing Pi send-message context", () => {
-  it("creates custom metadata entries for supported attachments and matching content parts", () => {
+  it("creates a single sanitized custom metadata entry for content parts", async () => {
     const contentParts = [
       {text: "Read ", type: "text" as const},
-      {id: "part-1", kind: "file" as const, title: "file.ts", type: "reference" as const, value: "@src/file.ts"},
+      {id: "part-1", kind: "file" as const, name: "file.ts", type: "reference" as const, value: "@src/file.ts"},
+      imageAttachment,
     ];
 
-    const context = prepareSendMessageContext({
-      attachments: [imageAttachment, ignoredAttachment],
-      contentParts,
-      message: "Read @src/file.ts",
-      model: {id: "claude-sonnet", providerId: "anthropic"},
-      sessionId: "session-1",
-    });
+    const context = await prepareSendMessageContext(
+      {
+        contentParts,
+        model: {id: "claude-sonnet", providerId: "anthropic"},
+        sessionId: "session-1",
+      },
+      {projectPath: process.cwd()}
+    );
 
     expect(context.customEntries).toEqual([
-      {customType: "supernova.attachments", data: {attachments: [{id: "image-1", kind: "image", mime: "image/png", name: "diagram.png", order: 0, size: 12}]}},
-      {customType: "supernova.user-message-content-parts", data: {contentParts}},
+      {
+        customType: "supernova.user-message-content-parts",
+        data: {
+          contentParts: [
+            {text: "Read ", type: "text"},
+            {id: "part-1", kind: "file", name: "file.ts", type: "reference", value: "@src/file.ts"},
+            {id: "image-1", kind: "image", mime: "image/png", name: "diagram.png", size: 12, type: "attachment"},
+          ],
+        },
+      },
     ]);
+    expect(context.images).toEqual([{data: "aW1hZ2UtYnl0ZXM=", mimeType: "image/png", type: "image"}]);
   });
 
-  it("creates a hidden next-turn custom message for text attachment content", () => {
-    const context = prepareSendMessageContext({
-      attachments: [textAttachment],
-      message: "Use the notes",
-      model: {id: "claude-sonnet", providerId: "anthropic"},
-      sessionId: "session-1",
-    });
+  it("appends text attachment content to the prompt", async () => {
+    const context = await prepareSendMessageContext(
+      {
+        contentParts: [{text: "Use the notes", type: "text"}, textAttachment],
+        model: {id: "claude-sonnet", providerId: "anthropic"},
+        sessionId: "session-1",
+      },
+      {projectPath: process.cwd()}
+    );
 
-    expect(context.textAttachmentMessage).toMatchObject({
-      content: '<attachments>\n  <attachment id="text-1" name="notes.txt" mime="text/plain" size="20">\nThis is a text file.\n  </attachment>\n</attachments>',
-      customType: "supernova.text-attachments",
-      details: {attachmentIds: ["text-1"]},
-      display: false,
-    });
+    expect(context.prompt).toBe('Use the notes\n\n<attachment id="text-1" name="notes.txt" mime="text/plain" size="20">\nThis is a text file.\n</attachment>');
   });
 
-  it("ignores content parts that do not reconstruct the sent message", () => {
-    const context = prepareSendMessageContext({
-      attachments: [],
-      contentParts: [{id: "part-1", kind: "file", title: "file.ts", type: "reference", value: "@src/file.ts"}],
-      message: "Read something else",
-      model: {id: "claude-sonnet", providerId: "anthropic"},
-      sessionId: "session-1",
-    });
+  it("derives display content from content parts", async () => {
+    const context = await prepareSendMessageContext(
+      {
+        contentParts: [{id: "part-1", kind: "file", name: "file.ts", type: "reference", value: "@src/file.ts"}],
+        model: {id: "claude-sonnet", providerId: "anthropic"},
+        sessionId: "session-1",
+      },
+      {projectPath: process.cwd()}
+    );
 
-    expect(context.contentParts).toEqual([]);
-    expect(context.customEntries).toEqual([]);
+    expect(context.prompt).toBe("@src/file.ts");
   });
 });

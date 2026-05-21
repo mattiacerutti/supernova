@@ -16,9 +16,24 @@ export const piSessionInfo = {
   path: "/sessions/session-1.jsonl",
 } as PiSessionInfo;
 
-export const imageAttachment = {contentBase64: "aW1hZ2UtYnl0ZXM=", id: "image-1", mime: "image/png", name: "diagram.png", size: 12};
-export const textAttachment = {contentBase64: "VGhpcyBpcyBhIHRleHQgZmlsZS4=", id: "text-1", mime: "text/plain", name: "notes.txt", size: 20};
-export const ignoredAttachment = {contentBase64: "YmluYXJ5", id: "binary-1", mime: "application/octet-stream", name: "archive.bin", size: 6};
+export const imageAttachment = {
+  contentBase64: "aW1hZ2UtYnl0ZXM=",
+  id: "image-1",
+  kind: "image" as const,
+  mime: "image/png",
+  name: "diagram.png",
+  size: 12,
+  type: "attachment" as const,
+};
+export const textAttachment = {
+  contentBase64: "VGhpcyBpcyBhIHRleHQgZmlsZS4=",
+  id: "text-1",
+  kind: "text" as const,
+  mime: "text/plain",
+  name: "notes.txt",
+  size: 20,
+  type: "attachment" as const,
+};
 
 export function piAgentMessage(input: unknown): AgentSession["messages"][number] {
   return input as AgentSession["messages"][number];

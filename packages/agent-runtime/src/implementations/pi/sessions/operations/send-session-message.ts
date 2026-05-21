@@ -4,7 +4,7 @@ import type {SessionMessageSendPayload, SessionStreamEvent} from "@supernova/con
 import type {SessionSummary} from "@supernova/contracts/sessions/schemas";
 import {PiSdkService} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
 import type {PiSdkServiceShape, PiSessionInfo} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
-import type {PreparedSendMessageContext} from "@supernova/agent-runtime/implementations/pi/sessions/lib/message-context/send-message-context";
+import type {SendMessageContext} from "@supernova/agent-runtime/implementations/pi/sessions/lib/message-context/send-message-context";
 import {prepareSendMessageContext} from "@supernova/agent-runtime/implementations/pi/sessions/lib/message-context/send-message-context";
 import {findSessionById} from "@supernova/agent-runtime/implementations/pi/sessions/lib/session-resolver";
 import {generateSessionTitle} from "@supernova/agent-runtime/implementations/pi/sessions/lib/session-title-generator";
@@ -27,7 +27,7 @@ type PromptContext = OpenedSession & {
   readonly baseBranch: readonly SessionEntry[];
   readonly baseMessageCount: number;
   readonly baseParentId: string | null;
-  readonly messageContext: PreparedSendMessageContext;
+  readonly messageContext: SendMessageContext;
 };
 
 export function sendSessionMessage(input: SessionMessageSendPayload) {
@@ -127,11 +127,10 @@ class SendSessionMessageRunner {
     if (sessionManager.getSessionName() !== undefined) return false;
 
     const title = await generateSessionTitle({
-      attachmentNames: this.input.attachments.map((attachment) => attachment.name),
-      message: this.input.message,
+      contentParts: this.input.contentParts,
       model,
       modelRegistry: this.piSdk.modelRegistry,
-    }).catch(() => this.input.message);
+    }).catch(() => "Unknown session");
 
     sessionManager.appendSessionInfo(title);
     return true;
@@ -156,7 +155,7 @@ class SendSessionMessageRunner {
       baseBranch,
       baseMessageCount: session.messages.length,
       baseParentId: baseBranch.at(-1)?.id ?? null,
-      messageContext: prepareSendMessageContext(this.input),
+      messageContext: await prepareSendMessageContext(this.input, {projectPath: openedSession.sessionInfo.cwd}),
     };
   }
 
@@ -164,10 +163,6 @@ class SendSessionMessageRunner {
     for (const entry of context.messageContext.customEntries) {
       context.sessionManager.appendCustomEntry(entry.customType, entry.data);
     }
-
-    if (!context.messageContext.textAttachmentMessage) return;
-
-    await this.activeSession?.sendCustomMessage(context.messageContext.textAttachmentMessage, {deliverAs: "nextTurn"});
   }
 
   private subscribeToLiveUpdates(context: PromptContext): void {
@@ -187,8 +182,8 @@ class SendSessionMessageRunner {
 
   private async promptAndEmitFinalTurns(context: PromptContext): Promise<void> {
     try {
-      const images = context.messageContext.attachments.images;
-      await this.activeSession?.prompt(this.input.message, images.length > 0 ? {images} : undefined);
+      const images = context.messageContext.images;
+      await this.activeSession?.prompt(context.messageContext.prompt, images.length > 0 ? {images: [...images]} : undefined);
       const liveEntries = this.liveBranchEntries(context, this.activeSession?.messages.slice(context.baseMessageCount) ?? []);
       this.emit({turns: buildPiSessionTurns([...context.baseBranch, ...liveEntries], this.input.model), type: "done"});
     } finally {
@@ -212,7 +207,6 @@ class SendSessionMessageRunner {
 
   private liveBranchEntries(context: PromptContext, messages: readonly PiAgentMessage[]): SessionEntry[] {
     return createLiveBranchEntries({
-      attachmentMetadata: {attachments: context.messageContext.attachments.metadata},
       contentPartsMetadata: {contentParts: context.messageContext.contentParts},
       messages,
       parentId: context.baseParentId,

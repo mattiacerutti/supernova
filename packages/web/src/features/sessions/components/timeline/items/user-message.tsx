@@ -7,12 +7,6 @@ import {cn} from "@/lib/cn";
 
 // TODO: Review these components and possibly refactor
 
-function contentPartsMatchMessage(message: SessionUserMessage): boolean {
-  const contentParts = message.contentParts;
-  if (!contentParts?.length) return false;
-  return textFromComposerContentParts(contentParts) === message.content;
-}
-
 function UserMessageContent(props: {children: string}) {
   const {children} = props;
   const parts = children.split(/(`[^`]+`)/g);
@@ -41,7 +35,7 @@ function ReferenceContentPart(props: {part: Extract<NonNullable<SessionUserMessa
   return (
     <span className="mx-1 inline-flex items-baseline gap-1 whitespace-nowrap align-baseline leading-[inherit] text-sky-300">
       <Icon className="relative top-px size-[1em] text-sky-300" name={iconName} size="xs" />
-      <span>{part.title}</span>
+      <span>{part.name}</span>
     </span>
   );
 }
@@ -49,12 +43,11 @@ function ReferenceContentPart(props: {part: Extract<NonNullable<SessionUserMessa
 function UserMessageStructuredContent(props: {message: SessionUserMessage}) {
   const {message} = props;
 
-  if (!contentPartsMatchMessage(message)) return <UserMessageContent>{message.content}</UserMessageContent>;
-
   return (
     <span className="whitespace-pre-wrap">
-      {message.contentParts?.map((part, index) => {
+      {message.contentParts.map((part, index) => {
         if (part.type === "text") return <UserMessageContent key={`text-${index}`}>{part.text}</UserMessageContent>;
+        if (part.type === "attachment") return null;
         return <ReferenceContentPart key={part.id} part={part} />;
       })}
     </span>
@@ -67,8 +60,9 @@ interface UserMessageProps {
 
 export default function UserMessage(props: UserMessageProps) {
   const {message} = props;
-  const hasContent = message.content.trim().length > 0;
-  const attachments = message.attachments ?? [];
+  const attachments = message.contentParts.filter((part) => part.type === "attachment");
+  const hasContent = message.contentParts.some((part) => part.type !== "attachment" && (part.type === "reference" || part.text.trim().length > 0));
+  const copyText = textFromComposerContentParts(message.contentParts);
 
   return (
     <article className="group/message flex justify-end">
@@ -84,7 +78,7 @@ export default function UserMessage(props: UserMessageProps) {
         <div className={cn("rounded-2xl corner-superellipse/1.3 bg-neutral-800 px-3.5 py-2 text-sm leading-relaxed text-neutral-200", !hasContent && "text-neutral-400")}>
           {hasContent ? <UserMessageStructuredContent message={message} /> : "(No content)"}
         </div>
-        <MessageActions align="end" copyText={message.content} />
+        <MessageActions align="end" copyText={copyText} />
       </div>
     </article>
   );

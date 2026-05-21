@@ -1,4 +1,4 @@
-import type {SessionAttachment} from "@supernova/contracts/sessions/schemas";
+import type {SessionUserMessageAttachmentPart} from "@supernova/contracts/sessions/schemas";
 import {attachmentMime, fileExtension} from "@/features/sessions/lib/attachments/attachment-classification";
 
 export const MAX_SESSION_ATTACHMENTS = 10;
@@ -41,6 +41,12 @@ export function formatAttachmentType(attachment: {mime: string; name: string}): 
   );
 }
 
+function attachmentKind(mime: string): SessionUserMessageAttachmentPart["kind"] | undefined {
+  if (mime.startsWith("image/")) return "image";
+  if (mime.startsWith("text/")) return "text";
+  return undefined;
+}
+
 export function formatAttachmentSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
@@ -48,20 +54,23 @@ export function formatAttachmentSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-/** Converts a browser File into the serializable attachment payload sent with user messages. */
-export async function fileToSessionAttachment(file: File): Promise<SessionAttachment> {
+/** Converts a browser File into the serializable attachment content part sent with user messages. */
+export async function fileToSessionAttachmentPart(file: File): Promise<SessionUserMessageAttachmentPart> {
   const buffer = await file.arrayBuffer();
   const mime = attachmentMime(file, buffer);
+  const kind = mime ? attachmentKind(mime) : undefined;
 
-  if (!mime) {
+  if (!mime || !kind) {
     throw new UnsupportedAttachmentTypeError(file.name);
   }
 
   return {
     id: `att_${crypto.randomUUID()}`,
+    kind,
     mime,
     name: file.name,
     size: file.size,
     contentBase64: arrayBufferToBase64(buffer),
+    type: "attachment",
   };
 }

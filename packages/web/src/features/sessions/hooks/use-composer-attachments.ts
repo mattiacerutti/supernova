@@ -1,10 +1,10 @@
 import type {DragEvent, HTMLAttributes} from "react";
 import {useRef, useState} from "react";
 import {useMutation} from "@tanstack/react-query";
-import type {SessionAttachment} from "@supernova/contracts/sessions/schemas";
+import type {SessionUserMessageAttachmentPart} from "@supernova/contracts/sessions/schemas";
 import {
   fileRequiresImageCapability,
-  fileToSessionAttachment,
+  fileToSessionAttachmentPart,
   formatAttachmentSize,
   MAX_SESSION_ATTACHMENT_BYTES,
   MAX_SESSION_ATTACHMENTS,
@@ -16,7 +16,7 @@ export type ComposerAttachmentDropZoneProps = Pick<HTMLAttributes<HTMLDivElement
 
 export interface ComposerAttachmentsController {
   readonly addFiles: (files: readonly File[]) => void;
-  readonly attachments: readonly SessionAttachment[];
+  readonly attachments: readonly SessionUserMessageAttachmentPart[];
   readonly clear: () => void;
   readonly dropZoneProps: ComposerAttachmentDropZoneProps;
   readonly isDraggingFiles: boolean;
@@ -26,7 +26,7 @@ export interface ComposerAttachmentsController {
 }
 
 interface ProcessFilesResult {
-  readonly attachments: readonly SessionAttachment[];
+  readonly attachments: readonly SessionUserMessageAttachmentPart[];
   readonly errors: readonly string[];
 }
 
@@ -46,7 +46,7 @@ function attachmentSizeMessage(file: File): string {
   return `${file.name} exceeds the ${formatAttachmentSize(MAX_SESSION_ATTACHMENT_BYTES)} attachment limit.`;
 }
 
-function attachmentRequiresImageCapability(attachment: SessionAttachment): boolean {
+function attachmentRequiresImageCapability(attachment: SessionUserMessageAttachmentPart): boolean {
   return attachment.mime.startsWith("image/");
 }
 
@@ -58,14 +58,14 @@ interface UseComposerAttachmentsInput {
 export function useComposerAttachments(input: UseComposerAttachmentsInput): ComposerAttachmentsController {
   const {disabled, imageSupported} = input;
 
-  const [attachments, setAttachments] = useState<readonly SessionAttachment[]>([]);
+  const [attachments, setAttachments] = useState<readonly SessionUserMessageAttachmentPart[]>([]);
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
 
   const dragDepthRef = useRef(0);
 
   const processFilesMutation = useMutation({
     mutationFn: async (files: readonly File[]): Promise<ProcessFilesResult> => {
-      const nextAttachments: SessionAttachment[] = [];
+      const nextAttachments: SessionUserMessageAttachmentPart[] = [];
       const errors: string[] = [];
 
       for (const file of files) {
@@ -80,7 +80,7 @@ export function useComposerAttachments(input: UseComposerAttachmentsInput): Comp
         }
 
         try {
-          nextAttachments.push(await fileToSessionAttachment(file));
+          nextAttachments.push(await fileToSessionAttachmentPart(file));
         } catch (cause) {
           errors.push(cause instanceof UnsupportedAttachmentTypeError ? cause.message : attachmentReadFailureMessage(file));
         }

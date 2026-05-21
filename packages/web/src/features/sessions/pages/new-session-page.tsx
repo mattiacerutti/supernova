@@ -74,7 +74,7 @@ export default function NewSessionPage(props: NewSessionPageProps) {
     setLastThinkingLevel(value);
   };
 
-  const handleSubmit = (message: string, attachments: typeof composerAttachments.attachments, contentParts: readonly SessionUserMessageContentPart[]): void => {
+  const handleSubmit = (contentParts: readonly SessionUserMessageContentPart[]): void => {
     if (!selectedModel) return;
 
     createSessionMutation.mutate(
@@ -85,7 +85,7 @@ export default function NewSessionPage(props: NewSessionPageProps) {
           setSessionModel(session.id, modelReference);
           recordRecentModel(resolvedModelKey);
           setLastThinkingLevel(resolvedThinkingLevel);
-          startStream({attachments, contentParts, message, model: modelReference, projectPath, queryClient, rpcClient, sessionId: session.id, sessionTurns: session.turns});
+          startStream({contentParts, model: modelReference, projectPath, queryClient, rpcClient, sessionId: session.id, sessionTurns: session.turns});
           void navigate({params: {sessionId: session.id}, to: "/session/$sessionId"});
         },
       }

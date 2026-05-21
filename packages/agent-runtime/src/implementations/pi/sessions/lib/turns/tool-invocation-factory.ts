@@ -36,10 +36,18 @@ import {
   type ToolStatus,
 } from "@supernova/contracts/sessions/schemas";
 import {fileContentToNewFilePatch, piEditDiffToPatch} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns/edit-patch";
-import {piContentToText} from "./message-content";
 import {Option, Schema} from "effect";
 
 type PiToolOutput = string | readonly (TextContent | ImageContent)[];
+
+function piContentToText(content: PiToolOutput): string {
+  if (typeof content === "string") return content;
+
+  return content
+    .map((part) => (part.type === "text" ? part.text : ""))
+    .filter(Boolean)
+    .join("\n");
+}
 
 export interface PiToolCompletion<TDetails> {
   readonly output: PiToolOutput;

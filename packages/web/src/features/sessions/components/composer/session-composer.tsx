@@ -1,4 +1,4 @@
-import type {SessionAttachment, SessionUserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {SessionUserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 import Document from "@tiptap/extension-document";
 import HardBreak from "@tiptap/extension-hard-break";
 import History from "@tiptap/extension-history";
@@ -11,7 +11,7 @@ import Icon from "@/components/ui/icon";
 import IconButton from "@/components/ui/icon-button";
 import ComposerAttachmentPreview from "@/features/sessions/components/attachments/composer-attachment-preview";
 import ComposerEditor from "@/features/sessions/components/composer/editor/composer-editor";
-import {editorToContentParts, textFromComposerContentParts, trimComposerContentParts} from "@/features/sessions/lib/composer/composer-content-parts";
+import {editorToContentParts, trimComposerContentParts} from "@/features/sessions/lib/composer/composer-content-parts";
 import type {ComposerAttachmentsController} from "@/features/sessions/hooks/use-composer-attachments";
 import {SESSION_ATTACHMENT_ACCEPT} from "@/features/sessions/lib/attachments/session-attachments";
 import type {ComposerSuggestionMatch} from "@/features/sessions/types/composer-suggestion";
@@ -79,8 +79,7 @@ const ComposerReferenceNode = Node.create({
     return {
       id: {default: ""},
       kind: {default: ""},
-      subtitle: {default: undefined},
-      title: {default: ""},
+      name: {default: ""},
       value: {default: ""},
     };
   },
@@ -108,7 +107,7 @@ interface SessionComposerRootProps {
   readonly children: ReactNode;
   readonly disabled: boolean;
   readonly onInterrupt?: () => void;
-  readonly onSubmit: (message: string, attachments: readonly SessionAttachment[], contentParts: readonly SessionUserMessageContentPart[]) => void;
+  readonly onSubmit: (contentParts: readonly SessionUserMessageContentPart[]) => void;
   readonly projectPath: string;
   readonly streamStatus?: "idle" | "streaming" | "stopping";
 }
@@ -147,9 +146,8 @@ function SessionComposerRoot(props: SessionComposerRootProps) {
     if (!canSubmit) return;
 
     const trimmedContentParts = trimComposerContentParts(editor ? editorToContentParts(editor) : []);
-    const message = textFromComposerContentParts(trimmedContentParts) || draft.trim();
-    const contentParts = trimmedContentParts.some((part) => part.type === "reference") ? trimmedContentParts : [];
-    onSubmit(message, attachments.attachments, contentParts);
+    const textContentParts = trimmedContentParts.length > 0 ? trimmedContentParts : draft.trim() ? [{text: draft.trim(), type: "text" as const}] : [];
+    onSubmit([...textContentParts, ...attachments.attachments]);
     editor?.commands.clearContent();
     setDraft("");
     attachments.clear();

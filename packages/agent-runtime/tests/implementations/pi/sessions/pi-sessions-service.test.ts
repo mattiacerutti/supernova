@@ -102,9 +102,17 @@ describe("loading and creating Pi session details", () => {
     const piSdk = makePiSdk({
       branch: [
         {
+          customType: "supernova.user-message-content-parts",
+          data: {contentParts: [{text: "Original request", type: "text"}]},
+          id: "old-content-parts",
+          parentId: null,
+          timestamp: "1970-01-01T00:00:00.001Z",
+          type: "custom",
+        },
+        {
           id: "old-user",
           message: {content: [{text: "Original request", type: "text"}], id: "old-user-message", role: "user", timestamp: 1},
-          parentId: null,
+          parentId: "old-content-parts",
           timestamp: "1970-01-01T00:00:00.001Z",
           type: "message",
         },
@@ -125,9 +133,17 @@ describe("loading and creating Pi session details", () => {
           type: "compaction",
         },
         {
+          customType: "supernova.user-message-content-parts",
+          data: {contentParts: [{text: "Recent request", type: "text"}]},
+          id: "recent-content-parts",
+          parentId: "compaction-1",
+          timestamp: "1970-01-01T00:00:00.004Z",
+          type: "custom",
+        },
+        {
           id: "recent-user",
           message: {content: [{text: "Recent request", type: "text"}], id: "recent-user-message", role: "user", timestamp: 4},
-          parentId: "compaction-1",
+          parentId: "recent-content-parts",
           timestamp: "1970-01-01T00:00:00.004Z",
           type: "message",
         },
@@ -165,21 +181,26 @@ describe("loading and creating Pi session details", () => {
       projectPath: "/workspace",
       title: "Fix it",
       turns: [
-        {events: [{content: "Original response", type: "assistant"}], userMessage: {content: "Original request"}},
-        {events: [{content: "Recent response", type: "assistant"}], userMessage: {content: "Recent request"}},
+        {events: [{content: "Original response", type: "assistant"}], userMessage: {contentParts: [{text: "Original request", type: "text"}]}},
+        {events: [{content: "Recent response", type: "assistant"}], userMessage: {contentParts: [{text: "Recent request", type: "text"}]}},
       ],
     });
   });
 
-  it("loads attachment metadata and image previews from compacted raw branch history", async () => {
+  it("loads attachment content parts and image previews from compacted raw branch history", async () => {
     const sessionPath = join(await mkdtemp(join(tmpdir(), "supernova-loaded-attachments-")), "session-1.jsonl");
     await writeFile(sessionPath, "{}\n");
     const piSdk = makePiSdk({
       branch: [
         {
-          customType: "supernova.attachments",
-          data: {attachments: [{id: "image-1", kind: "image", mime: "image/png", name: "diagram.png", order: 0, size: 12}]},
-          id: "attachments-1",
+          customType: "supernova.user-message-content-parts",
+          data: {
+            contentParts: [
+              {text: "Review this diagram", type: "text"},
+              {id: "image-1", kind: "image", mime: "image/png", name: "diagram.png", size: 12, type: "attachment"},
+            ],
+          },
+          id: "content-parts-1",
           parentId: null,
           timestamp: "1970-01-01T00:00:00.001Z",
           type: "custom",
@@ -195,7 +216,7 @@ describe("loading and creating Pi session details", () => {
             role: "user",
             timestamp: 2,
           },
-          parentId: "attachments-1",
+          parentId: "content-parts-1",
           timestamp: "1970-01-01T00:00:00.002Z",
           type: "message",
         },
@@ -240,8 +261,10 @@ describe("loading and creating Pi session details", () => {
     );
 
     expect(result.turns[0]?.userMessage).toMatchObject({
-      attachments: [{contentBase64: "aW1hZ2UtYnl0ZXM=", id: "image-1", mime: "image/png", name: "diagram.png", size: 12}],
-      content: "Review this diagram",
+      contentParts: [
+        {text: "Review this diagram", type: "text"},
+        {contentBase64: "aW1hZ2UtYnl0ZXM=", id: "image-1", kind: "image", mime: "image/png", name: "diagram.png", size: 12, type: "attachment"},
+      ],
     });
   });
 

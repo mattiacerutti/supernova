@@ -15,7 +15,7 @@ function turn(overrides: Partial<SessionTurn>): SessionTurn {
     model,
     startedAt: "2026-01-01T00:00:00.000Z",
     status: "streaming",
-    userMessage: {content: "Ship it", id: "user-1", timestamp: "2026-01-01T00:00:00.000Z"},
+    userMessage: {contentParts: [{text: "Ship it", type: "text"}], id: "user-1", timestamp: "2026-01-01T00:00:00.000Z"},
     ...overrides,
   };
 }

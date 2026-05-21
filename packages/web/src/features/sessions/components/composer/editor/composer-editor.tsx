@@ -22,8 +22,7 @@ function suggestionReferenceContent(item: ComposerSuggestionItem): JSONContent[]
     createReferenceNode({
       id: `part_${crypto.randomUUID()}`,
       kind: item.kind,
-      subtitle: item.subtitle,
-      title: item.title,
+      name: item.title,
       type: "reference",
       value,
     }),

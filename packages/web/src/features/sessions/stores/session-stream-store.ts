@@ -1,14 +1,6 @@
 import type {QueryClient} from "@tanstack/react-query";
 import type {SessionStreamEvent} from "@supernova/contracts/sessions/procedures";
-import type {
-  ModelReference,
-  SessionAttachment,
-  SessionDetails,
-  SessionSummary,
-  SessionTurn,
-  SessionUserMessageContentPart,
-  SessionUserMessage,
-} from "@supernova/contracts/sessions/schemas";
+import type {ModelReference, SessionDetails, SessionSummary, SessionTurn, SessionUserMessageContentPart, SessionUserMessage} from "@supernova/contracts/sessions/schemas";
 import type {ProjectSessionsListResult} from "@supernova/contracts/projects/procedures";
 import {create} from "zustand";
 import {Effect, Stream} from "effect";
@@ -37,9 +29,7 @@ interface SessionStreamEntry extends SessionStreamState {
 }
 
 interface StartSessionStreamInput {
-  readonly attachments: readonly SessionAttachment[];
   readonly contentParts: readonly SessionUserMessageContentPart[];
-  readonly message: string;
   readonly model: ModelReference;
   readonly projectPath: string;
   readonly queryClient: QueryClient;
@@ -59,34 +49,15 @@ function createStreamId(): string {
   return `stream_${crypto.randomUUID()}`;
 }
 
-function attachmentMetadata(attachments: readonly SessionAttachment[]): SessionAttachment[] | undefined {
-  if (attachments.length === 0) return undefined;
-
-  return attachments.map((attachment) => ({
-    id: attachment.id,
-    contentBase64: attachment.contentBase64,
-    mime: attachment.mime,
-    name: attachment.name,
-    size: attachment.size,
-  }));
-}
-
 /**
  * Creates an optimistic local turn immediately so the user message appears before
  * the server emits the canonical turn snapshot.
  */
-function createInitialStreamTurn(input: {
-  attachments: readonly SessionAttachment[];
-  contentParts: readonly SessionUserMessageContentPart[];
-  message: string;
-  model: ModelReference;
-}): SessionTurn {
+function createInitialStreamTurn(input: {contentParts: readonly SessionUserMessageContentPart[]; model: ModelReference}): SessionTurn {
   const timestamp = new Date().toISOString();
 
   const localMessage: SessionUserMessage = {
-    attachments: attachmentMetadata(input.attachments),
-    content: input.message,
-    contentParts: input.contentParts.length > 0 ? input.contentParts : undefined,
+    contentParts: input.contentParts,
     id: `msg_${crypto.randomUUID()}`,
     timestamp,
   };
@@ -201,12 +172,12 @@ export const useSessionStreamStore = create<SessionStreamStoreState>()((set, get
   return {
     streams: {},
     startStream: (input) => {
-      const {attachments, contentParts, message, model, projectPath, queryClient, rpcClient, sessionId, sessionTurns} = input;
+      const {contentParts, model, projectPath, queryClient, rpcClient, sessionId, sessionTurns} = input;
       const current = get().streams[sessionId];
       if (current?.status === "streaming" || current?.status === "stopping") return;
 
       const streamId = createStreamId();
-      const turn = createInitialStreamTurn({attachments, contentParts, message, model});
+      const turn = createInitialStreamTurn({contentParts, model});
 
       // Optimistically append the user's message before the RPC stream has fully
       // initialized. The next `ready` event will replace `turns` with runtime data.
@@ -221,7 +192,7 @@ export const useSessionStreamStore = create<SessionStreamStoreState>()((set, get
       // transcript snapshots; Zustand owns the transient live turn and fiber.
       void rpcClient
         .fork((rpc) =>
-          rpc.sendSessionMessage({attachments, contentParts, message, model, sessionId}).pipe(
+          rpc.sendSessionMessage({contentParts, model, sessionId}).pipe(
             Stream.runForEach((event) => Effect.sync(() => handleStreamEvent({event, projectPath, queryClient, sessionId, streamId}))),
             Effect.catch((cause: unknown) => Effect.sync(() => failStream(sessionId, streamId, cause))),
             Effect.ensuring(Effect.sync(() => finishStream(sessionId, streamId, queryClient)))

@@ -7,12 +7,30 @@ const model: ModelReference = {id: "claude-sonnet", providerId: "anthropic", thi
 
 function piEntries(messages: unknown[]): SessionEntry[] {
   let parentId: string | null = null;
+  let nextId = 0;
+  const entries: SessionEntry[] = [];
 
-  return messages.map((message, index) => {
+  for (const message of messages) {
     const timestamp =
       typeof message === "object" && message !== null && "timestamp" in message ? new Date(message.timestamp as string | number).toISOString() : new Date(0).toISOString();
+
+    if (typeof message === "object" && message !== null && "role" in message && message.role === "user" && "content" in message) {
+      const content = message.content as Array<{text?: string; type: string}>;
+      const contentParts = content.filter((part) => part.type === "text" && part.text).map((part) => ({text: part.text ?? "", type: "text" as const}));
+      const metadataEntry: SessionEntry = {
+        customType: "supernova.user-message-content-parts",
+        data: {contentParts},
+        id: `entry-${nextId++}`,
+        parentId,
+        timestamp,
+        type: "custom",
+      };
+      entries.push(metadataEntry);
+      parentId = metadataEntry.id;
+    }
+
     const entry: SessionEntry = {
-      id: `entry-${index}`,
+      id: `entry-${nextId++}`,
       message: message as AgentSession["messages"][number],
       parentId,
       timestamp,
@@ -20,8 +38,10 @@ function piEntries(messages: unknown[]): SessionEntry[] {
     };
 
     parentId = entry.id;
-    return entry;
-  });
+    entries.push(entry);
+  }
+
+  return entries;
 }
 
 function expectTurnEvents(turn: ReturnType<typeof buildPiSessionTurns>[number] | undefined, events: Array<Record<string, unknown>>): void {
@@ -49,10 +69,10 @@ describe("projecting Pi branch entries into session turns", () => {
 
     expect(turns).toHaveLength(1);
     expect(turns[0]).toMatchObject({
-      id: "entry-0",
+      id: "entry-1",
       model,
       status: "completed",
-      userMessage: {content: "Fix the tests", id: "entry-0"},
+      userMessage: {contentParts: [{text: "Fix the tests", type: "text"}], id: "entry-1"},
     });
     expectTurnEvents(turns[0], [
       {
@@ -237,9 +257,17 @@ describe("projecting Pi branch entries into session turns", () => {
         },
         {customType: "supernova.test", id: "custom-1", parentId: "compaction-1", timestamp: "1970-01-01T00:00:04.000Z", type: "custom"},
         {
+          customType: "supernova.user-message-content-parts",
+          data: {contentParts: [{text: "Second request", type: "text"}]},
+          id: "second-content-parts",
+          parentId: "custom-1",
+          timestamp: "1970-01-01T00:00:05.000Z",
+          type: "custom",
+        },
+        {
           id: "entry-2",
           message: {content: [{text: "Second request", type: "text"}], id: "user-2", role: "user", timestamp: 5} as AgentSession["messages"][number],
-          parentId: "custom-1",
+          parentId: "second-content-parts",
           timestamp: "1970-01-01T00:00:05.000Z",
           type: "message",
         },
@@ -265,22 +293,23 @@ describe("projecting Pi branch entries into session turns", () => {
     );
 
     expect(turns).toMatchObject([
-      {events: [{content: "First response", type: "assistant"}], userMessage: {content: "First request"}},
-      {events: [{content: "Second response", type: "assistant"}], userMessage: {content: "Second request"}},
+      {events: [{content: "First response", type: "assistant"}], userMessage: {contentParts: [{text: "First request", type: "text"}]}},
+      {events: [{content: "Second response", type: "assistant"}], userMessage: {contentParts: [{text: "Second request", type: "text"}]}},
     ]);
   });
 
-  it("reconstructs attachment metadata and image previews from branch entries", () => {
+  it("reconstructs attachment content parts and image previews from branch entries", () => {
     const entries: SessionEntry[] = [
       {
-        customType: "supernova.attachments",
+        customType: "supernova.user-message-content-parts",
         data: {
-          attachments: [
-            {id: "image-1", kind: "image", mime: "image/png", name: "diagram.png", order: 0, size: 12},
-            {id: "text-1", kind: "text", mime: "text/plain", name: "notes.txt", order: 1, size: 24},
+          contentParts: [
+            {text: "Review these files", type: "text"},
+            {id: "image-1", kind: "image", mime: "image/png", name: "diagram.png", size: 12, type: "attachment"},
+            {id: "text-1", kind: "text", mime: "text/plain", name: "notes.txt", size: 24, type: "attachment"},
           ],
         },
-        id: "attachments-1",
+        id: "content-parts-1",
         parentId: null,
         timestamp: "1970-01-01T00:00:00.001Z",
         type: "custom",
@@ -296,18 +325,9 @@ describe("projecting Pi branch entries into session turns", () => {
           role: "user",
           timestamp: 2,
         } as AgentSession["messages"][number],
-        parentId: "attachments-1",
+        parentId: "content-parts-1",
         timestamp: "1970-01-01T00:00:00.002Z",
         type: "message",
-      },
-      {
-        content: "<attachments>text content for the model</attachments>",
-        customType: "supernova.text-attachments",
-        display: false,
-        id: "text-attachments-1",
-        parentId: "user-1",
-        timestamp: "1970-01-01T00:00:00.003Z",
-        type: "custom_message",
       },
       {
         id: "assistant-1",
@@ -322,7 +342,7 @@ describe("projecting Pi branch entries into session turns", () => {
           timestamp: 4,
           usage: {cacheRead: 0, cacheWrite: 0, cost: {cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0}, input: 0, output: 0, totalTokens: 0},
         } as AgentSession["messages"][number],
-        parentId: "text-attachments-1",
+        parentId: "user-1",
         timestamp: "1970-01-01T00:00:00.004Z",
         type: "message",
       },
@@ -334,11 +354,11 @@ describe("projecting Pi branch entries into session turns", () => {
       {
         events: [{content: "Reviewed.", type: "assistant"}],
         userMessage: {
-          attachments: [
-            {contentBase64: "aW1hZ2UtYnl0ZXM=", id: "image-1", mime: "image/png", name: "diagram.png", size: 12},
-            {id: "text-1", mime: "text/plain", name: "notes.txt", size: 24},
+          contentParts: [
+            {text: "Review these files", type: "text"},
+            {contentBase64: "aW1hZ2UtYnl0ZXM=", id: "image-1", kind: "image", mime: "image/png", name: "diagram.png", size: 12, type: "attachment"},
+            {id: "text-1", kind: "text", mime: "text/plain", name: "notes.txt", size: 24, type: "attachment"},
           ],
-          content: "Review these files",
         },
       },
     ]);
@@ -347,16 +367,16 @@ describe("projecting Pi branch entries into session turns", () => {
   it("preserves mixed attachment order while matching multiple image previews by image order", () => {
     const entries: SessionEntry[] = [
       {
-        customType: "supernova.attachments",
+        customType: "supernova.user-message-content-parts",
         data: {
-          attachments: [
-            {id: "text-1", kind: "text", mime: "text/plain", name: "notes.txt", order: 0, size: 10},
-            {id: "image-1", kind: "image", mime: "image/png", name: "first.png", order: 1, size: 11},
-            {id: "text-2", kind: "text", mime: "text/markdown", name: "plan.md", order: 2, size: 12},
-            {id: "image-2", kind: "image", mime: "image/jpeg", name: "second.jpg", order: 3, size: 13},
+          contentParts: [
+            {id: "text-1", kind: "text", mime: "text/plain", name: "notes.txt", size: 10, type: "attachment"},
+            {id: "image-1", kind: "image", mime: "image/png", name: "first.png", size: 11, type: "attachment"},
+            {id: "text-2", kind: "text", mime: "text/markdown", name: "plan.md", size: 12, type: "attachment"},
+            {id: "image-2", kind: "image", mime: "image/jpeg", name: "second.jpg", size: 13, type: "attachment"},
           ],
         },
-        id: "attachments-1",
+        id: "content-parts-1",
         parentId: null,
         timestamp: "1970-01-01T00:00:00.001Z",
         type: "custom",
@@ -373,7 +393,7 @@ describe("projecting Pi branch entries into session turns", () => {
           role: "user",
           timestamp: 2,
         } as AgentSession["messages"][number],
-        parentId: "attachments-1",
+        parentId: "content-parts-1",
         timestamp: "1970-01-01T00:00:00.002Z",
         type: "message",
       },
@@ -398,11 +418,11 @@ describe("projecting Pi branch entries into session turns", () => {
 
     const turns = buildPiSessionTurns(entries, model);
 
-    expect(turns[0]?.userMessage.attachments).toEqual([
-      {id: "text-1", mime: "text/plain", name: "notes.txt", size: 10},
-      {contentBase64: "Zmlyc3QtaW1hZ2U=", id: "image-1", mime: "image/png", name: "first.png", size: 11},
-      {id: "text-2", mime: "text/markdown", name: "plan.md", size: 12},
-      {contentBase64: "c2Vjb25kLWltYWdl", id: "image-2", mime: "image/jpeg", name: "second.jpg", size: 13},
+    expect(turns[0]?.userMessage.contentParts).toEqual([
+      {id: "text-1", kind: "text", mime: "text/plain", name: "notes.txt", size: 10, type: "attachment"},
+      {contentBase64: "Zmlyc3QtaW1hZ2U=", id: "image-1", kind: "image", mime: "image/png", name: "first.png", size: 11, type: "attachment"},
+      {id: "text-2", kind: "text", mime: "text/markdown", name: "plan.md", size: 12, type: "attachment"},
+      {contentBase64: "c2Vjb25kLWltYWdl", id: "image-2", kind: "image", mime: "image/jpeg", name: "second.jpg", size: 13, type: "attachment"},
     ]);
   });
 
@@ -410,9 +430,9 @@ describe("projecting Pi branch entries into session turns", () => {
     const turns = buildPiSessionTurns(
       [
         {
-          customType: "supernova.attachments",
-          data: {attachments: [{id: "image-1", kind: "image", mime: "image/png", name: "diagram.png", order: 0, size: 12}]},
-          id: "attachments-1",
+          customType: "supernova.user-message-content-parts",
+          data: {contentParts: [{id: "image-1", kind: "image", mime: "image/png", name: "diagram.png", size: 12, type: "attachment"}]},
+          id: "content-parts-1",
           parentId: null,
           timestamp: "1970-01-01T00:00:00.001Z",
           type: "custom",
@@ -428,7 +448,7 @@ describe("projecting Pi branch entries into session turns", () => {
             role: "user",
             timestamp: 2,
           } as AgentSession["messages"][number],
-          parentId: "attachments-1",
+          parentId: "content-parts-1",
           timestamp: "1970-01-01T00:00:00.002Z",
           type: "message",
         },
@@ -457,8 +477,7 @@ describe("projecting Pi branch entries into session turns", () => {
       {
         events: [{content: "Reviewed.", type: "assistant"}],
         userMessage: {
-          attachments: [{contentBase64: "aW1hZ2UtYnl0ZXM=", id: "image-1", mime: "image/png", name: "diagram.png", size: 12}],
-          content: "",
+          contentParts: [{contentBase64: "aW1hZ2UtYnl0ZXM=", id: "image-1", kind: "image", mime: "image/png", name: "diagram.png", size: 12, type: "attachment"}],
         },
       },
     ]);
@@ -471,7 +490,7 @@ describe("projecting Pi branch entries into session turns", () => {
         data: {
           contentParts: [
             {text: "Read ", type: "text"},
-            {id: "part-1", kind: "file", title: "file.ts", type: "reference", value: "@src/file.ts"},
+            {id: "part-1", kind: "file", name: "file.ts", type: "reference", value: "@src/file.ts"},
           ],
         },
         id: "content-parts-1",
@@ -496,19 +515,18 @@ describe("projecting Pi branch entries into session turns", () => {
     ];
 
     expect(buildPiSessionTurns(entries, model)[0]?.userMessage).toMatchObject({
-      content: "Read @src/file.ts",
       contentParts: [
         {text: "Read ", type: "text"},
-        {id: "part-1", kind: "file", title: "file.ts", type: "reference", value: "@src/file.ts"},
+        {id: "part-1", kind: "file", name: "file.ts", type: "reference", value: "@src/file.ts"},
       ],
     });
   });
 
-  it("ignores reference content parts that do not match user message text", () => {
+  it("uses content parts as the display source when Pi persisted an expanded prompt", () => {
     const entries: SessionEntry[] = [
       {
         customType: "supernova.user-message-content-parts",
-        data: {contentParts: [{id: "part-1", kind: "file", title: "file.ts", type: "reference", value: "@src/file.ts"}]},
+        data: {contentParts: [{id: "part-1", kind: "file", name: "file.ts", type: "reference", value: "@src/file.ts"}]},
         id: "content-parts-1",
         parentId: null,
         timestamp: "1970-01-01T00:00:00.001Z",
@@ -516,14 +534,21 @@ describe("projecting Pi branch entries into session turns", () => {
       },
       {
         id: "user-1",
-        message: {content: [{text: "Read something else", type: "text"}], id: "user-message-1", role: "user", timestamp: 2} as AgentSession["messages"][number],
+        message: {
+          content: [{text: "@src/file.ts\n\n<skill>expanded context</skill>", type: "text"}],
+          id: "user-message-1",
+          role: "user",
+          timestamp: 2,
+        } as AgentSession["messages"][number],
         parentId: "content-parts-1",
         timestamp: "1970-01-01T00:00:00.002Z",
         type: "message",
       },
     ];
 
-    expect(buildPiSessionTurns(entries, model)[0]?.userMessage.contentParts).toBeUndefined();
+    expect(buildPiSessionTurns(entries, model)[0]?.userMessage).toMatchObject({
+      contentParts: [{id: "part-1", kind: "file", name: "file.ts", type: "reference", value: "@src/file.ts"}],
+    });
   });
 
   it("ignores assistant and tool result entries before the first user message", () => {
@@ -540,7 +565,7 @@ describe("projecting Pi branch entries into session turns", () => {
     expect(turns).toMatchObject([
       {
         events: [{content: "Real response", type: "assistant"}],
-        userMessage: {content: "Real request"},
+        userMessage: {contentParts: [{text: "Real request", type: "text"}]},
       },
     ]);
   });

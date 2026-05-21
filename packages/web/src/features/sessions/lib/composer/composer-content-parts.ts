@@ -2,7 +2,9 @@ import type {SessionUserMessageContentPart, SessionUserMessageReferencePart} fro
 import type {Editor, JSONContent} from "@tiptap/react";
 
 function contentPartValue(part: SessionUserMessageContentPart): string {
-  return part.type === "text" ? part.text : part.value;
+  if (part.type === "text") return part.text;
+  if (part.type === "reference") return part.value;
+  return part.name;
 }
 
 function pushTextContentPart(parts: SessionUserMessageContentPart[], text: string): void {
@@ -26,13 +28,13 @@ export function textFromComposerContentParts(parts: readonly SessionUserMessageC
 export function trimComposerContentParts(parts: readonly SessionUserMessageContentPart[]): readonly SessionUserMessageContentPart[] {
   return parts
     .map((part, index): SessionUserMessageContentPart => {
-      if (part.type === "reference") return part;
+      if (part.type !== "text") return part;
 
       const startTrimmed = index === 0 ? part.text.trimStart() : part.text;
       const text = index === parts.length - 1 ? startTrimmed.trimEnd() : startTrimmed;
       return {text, type: "text"};
     })
-    .filter((part) => part.type === "reference" || part.text.length > 0);
+    .filter((part) => part.type !== "text" || part.text.length > 0);
 }
 
 type ReferenceNodeAttributes = Omit<SessionUserMessageReferencePart, "type">;
@@ -45,8 +47,7 @@ export function createReferenceNode(part: SessionUserMessageReferencePart): JSON
     attrs: {
       id: part.id,
       kind: part.kind,
-      subtitle: part.subtitle,
-      title: part.title,
+      name: part.name,
       value: part.value,
     } satisfies ReferenceNodeAttributes,
     type: "composerReference",

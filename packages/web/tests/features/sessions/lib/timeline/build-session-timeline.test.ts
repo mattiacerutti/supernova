@@ -28,7 +28,7 @@ function turn(overrides: Partial<SessionTurn>): SessionTurn {
     id: "turn-1",
     model,
     status: "completed",
-    userMessage: {content: "Ship it", id: "user-1", timestamp: timestamp(0)},
+    userMessage: {contentParts: [{text: "Ship it", type: "text"}], id: "user-1", timestamp: timestamp(0)},
     ...overrides,
   };
 }
@@ -47,7 +47,7 @@ describe("buildSessionTimeline", () => {
 
     expect(timeline.liveItems).toEqual([]);
     expect(timeline.committedItems).toMatchObject([
-      {message: {content: "Ship it"}, type: "user"},
+      {message: {contentParts: [{text: "Ship it", type: "text"}]}, type: "user"},
       {collapsible: true, durationMs: 5000, events: [{type: "reasoning"}, {tool: {kind: "command"}, type: "tool"}], id: "work:turn-1:0", live: false, type: "work"},
       {event: {content: "assistant assistant-1", type: "assistant"}, live: false, type: "assistant"},
       {collapsible: true, durationMs: 3000, events: [{tool: {kind: "file-read"}, type: "tool"}], id: "work:turn-1:1", live: false, type: "work"},
@@ -66,7 +66,7 @@ describe("buildSessionTimeline", () => {
     });
 
     expect(timeline.committedItems).toMatchObject([
-      {message: {content: "Ship it"}, type: "user"},
+      {message: {contentParts: [{text: "Ship it", type: "text"}]}, type: "user"},
       {collapsible: false, events: [{type: "reasoning"}, {tool: {kind: "command"}, type: "tool"}], live: false, type: "work"},
     ]);
   });
