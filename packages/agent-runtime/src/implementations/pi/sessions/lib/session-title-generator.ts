@@ -19,6 +19,7 @@ interface GenerateSessionTitleInput {
   modelRegistry: ModelRegistry;
 }
 
+/** Creates the user prompt used for title generation from message content parts. */
 function titlePrompt(input: {contentParts: readonly UserMessageContentPart[]}): string {
   return input.contentParts
     .map((part) => {
@@ -30,6 +31,7 @@ function titlePrompt(input: {contentParts: readonly UserMessageContentPart[]}): 
     .trim();
 }
 
+/** Generates a concise display title for a new session from the first user message. */
 export async function generateSessionTitle(input: GenerateSessionTitleInput): Promise<string> {
   const requestAuth = await input.modelRegistry.getApiKeyAndHeaders(input.model);
   if (!requestAuth.ok) throw new Error("Failed to get API key and headers for the model.");

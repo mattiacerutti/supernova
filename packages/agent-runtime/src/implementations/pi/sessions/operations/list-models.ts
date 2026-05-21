@@ -3,6 +3,7 @@ import {ListModelsError} from "@supernova/contracts/sessions/procedures";
 import {PiSdkService} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
 import {toAgentModelDetails} from "@supernova/agent-runtime/implementations/pi/sessions/lib/models/model-mapper";
 
+/** Lists available Pi models mapped into shared model details. */
 export function listModels() {
   return Effect.gen(function* () {
     const piSdk = yield* PiSdkService;

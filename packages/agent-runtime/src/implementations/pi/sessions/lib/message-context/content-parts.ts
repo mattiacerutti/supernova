@@ -3,6 +3,7 @@ import type {UserMessageAttachmentPart, UserMessageContentPart} from "@supernova
 
 export const USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE = "supernova.user-message-content-parts";
 
+/** Converts user message content parts into the plain text prompt content sent to Pi. */
 export function contentFromParts(contentParts: readonly UserMessageContentPart[]): string {
   return contentParts
     .map((part) => {
@@ -13,12 +14,14 @@ export function contentFromParts(contentParts: readonly UserMessageContentPart[]
     .join("");
 }
 
+/** Extracts image attachments as Pi image content parts. */
 export function imageContentFromParts(contentParts: readonly UserMessageContentPart[]): ImageContent[] {
   return contentParts
     .filter((part): part is UserMessageAttachmentPart => part.type === "attachment" && part.kind === "image" && Boolean(part.contentBase64))
     .map((part) => ({data: part.contentBase64 ?? "", mimeType: part.mime, type: "image"}));
 }
 
+/** Restores Pi-returned image payloads onto stored user content parts. */
 export function enrichContentPartsWithImages(input: {
   readonly content: string | readonly (TextContent | ImageContent)[];
   readonly contentParts: readonly UserMessageContentPart[];

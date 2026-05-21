@@ -3,6 +3,7 @@ import {ProviderLoginError} from "@supernova/contracts/providers/procedures";
 import {getLoginSessionState, toLoginSession} from "@supernova/agent-runtime/implementations/pi/providers/lib/login-sessions";
 import {errorMessage} from "@supernova/agent-runtime/implementations/pi/providers/lib/provider-errors";
 
+/** Submits user input to a pending provider login session. */
 export function submitProviderLoginInput(loginSessionId: string, input: string) {
   return Effect.try({
     try: () => {

@@ -14,6 +14,7 @@ interface ParsedFolderQuery {
   readonly searchTerm: string;
 }
 
+/** Splits user folder input into a directory to scan and a child search term. */
 function parseFolderQuery(query: string): ParsedFolderQuery {
   const trimmedQuery = query.trim();
   if (trimmedQuery.length === 0) {
@@ -47,6 +48,7 @@ async function readFolderPathType(path: string): Promise<"directory" | "file" | 
   return folderStat.isDirectory() ? "directory" : "file";
 }
 
+/** Reads local child directories that match the folder-picker query. */
 async function listLocalFolderSuggestions(query: string): Promise<FolderSuggestion[]> {
   const parsedQuery = parseFolderQuery(query);
   const childDirectories = await readChildDirectories(parsedQuery.baseDir);
@@ -60,6 +62,8 @@ async function listLocalFolderSuggestions(query: string): Promise<FolderSuggesti
     .slice(0, MAX_SUGGESTIONS)
     .map((folderPath) => ({name: basename(folderPath), path: folderPath}));
 }
+
+/** Lists local folder suggestions and metadata for the folder picker. */
 export function listFolderSuggestions(query: string) {
   return Effect.tryPromise({
     try: async () => {

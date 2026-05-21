@@ -3,6 +3,7 @@ import {ProviderApiKeySetError} from "@supernova/contracts/providers/procedures"
 import {PiSdkService} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
 import {errorMessage} from "@supernova/agent-runtime/implementations/pi/providers/lib/provider-errors";
 
+/** Saves an API key for a provider and refreshes model auth state. */
 export function setProviderApiKey(providerId: string, apiKey: string) {
   return Effect.gen(function* () {
     const piSdk = yield* PiSdkService;

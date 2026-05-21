@@ -5,6 +5,7 @@ import {toPiSessionSummary} from "@supernova/agent-runtime/implementations/pi/pr
 import {findSessionById} from "@supernova/agent-runtime/implementations/pi/sessions/lib/session-resolver";
 import {buildPiTurns} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns-builder";
 
+/** Loads one Pi session and maps it into the shared session detail contract. */
 export function getSession(sessionId: string) {
   return Effect.gen(function* () {
     const piSdk = yield* PiSdkService;

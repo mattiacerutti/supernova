@@ -5,6 +5,7 @@ import {PiSdkService} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
 import {EXTERNAL_AUTH_PROVIDERS} from "@supernova/agent-runtime/implementations/pi/providers/constants";
 import {errorMessage} from "@supernova/agent-runtime/implementations/pi/providers/lib/provider-errors";
 
+/** Maps Pi provider auth source values into shared provider auth source values. */
 function normalizeSource(source: string | undefined): ProviderAuthSource | undefined {
   switch (source) {
     case "stored":
@@ -21,6 +22,7 @@ function normalizeSource(source: string | undefined): ProviderAuthSource | undef
   }
 }
 
+/** Lists configured and configurable Pi providers with auth metadata. */
 export function listProviders() {
   return Effect.gen(function* () {
     const piSdk = yield* PiSdkService;

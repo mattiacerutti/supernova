@@ -4,6 +4,7 @@ interface DisplayDiffLine {
   readonly marker: "+" | "-" | " ";
 }
 
+/** Parses a Pi display-diff line into structured patch data. */
 function parseDisplayDiffLine(line: string): DisplayDiffLine | "gap" | undefined {
   const marker = line.at(0);
   if (marker !== "+" && marker !== "-" && marker !== " ") return undefined;
@@ -17,6 +18,7 @@ function parseDisplayDiffLine(line: string): DisplayDiffLine | "gap" | undefined
   return {content: match[2] ?? "", lineNumber: Number.parseInt(match[1] ?? "1", 10), marker};
 }
 
+/** Builds a unified-diff hunk header from Pi display-diff line metadata. */
 function hunkHeader(lines: readonly DisplayDiffLine[], firstChangedLine: number | undefined): string {
   const firstOldLine = lines.find((line) => line.marker !== "+")?.lineNumber;
   const firstNewLine = lines.find((line) => line.marker !== "-")?.lineNumber;

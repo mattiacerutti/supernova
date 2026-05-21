@@ -22,11 +22,13 @@ function textAttachmentBlocks(contentParts: readonly UserMessageContentPart[]): 
     .filter((block): block is string => Boolean(block));
 }
 
+/** Loads a skill reference into the XML block added to the prompt. */
 async function skillBlock(skill: Skill): Promise<string> {
   const content = await readFile(skill.filePath, "utf8");
   return [`<skill>`, `<name>${skill.name}</name>`, `<path>${skill.filePath}</path>`, content.trim(), `</skill>`].join("\n");
 }
 
+/** Resolves referenced skills into prompt blocks, skipping missing or unreadable skills. */
 async function skillBlocks(input: {contentParts: readonly UserMessageContentPart[]; projectPath: string}): Promise<string[]> {
   const skillReferences = input.contentParts.filter((part): part is UserMessageReferencePart => part.type === "reference" && part.kind === "skill");
   if (skillReferences.length === 0) return [];
@@ -53,6 +55,7 @@ async function skillBlocks(input: {contentParts: readonly UserMessageContentPart
   return blocks;
 }
 
+/** Builds the full prompt sent to Pi from message text, skill references, and text attachments. */
 export async function buildPrompt(input: {contentParts: readonly UserMessageContentPart[]; projectPath: string}): Promise<string> {
   const content = contentFromParts(input.contentParts);
 

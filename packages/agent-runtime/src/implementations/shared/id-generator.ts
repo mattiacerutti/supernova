@@ -2,6 +2,7 @@ import {createHash} from "node:crypto";
 
 const ID_HASH_LENGTH = 16;
 
+/** Generates a deterministic short id from ordered input parts. */
 export function generateStableId(prefix: string, parts: readonly string[]): string {
   const hash = createHash("sha256");
 

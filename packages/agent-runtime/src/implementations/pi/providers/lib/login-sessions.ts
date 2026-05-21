@@ -24,12 +24,14 @@ export interface LoginSessionState {
 
 export const loginSessions = new Map<string, LoginSessionState>();
 
+/** Gets mutable login-session state or throws when the session is gone. */
 export function getLoginSessionState(loginSessionId: string): LoginSessionState {
   const session = loginSessions.get(loginSessionId);
   if (!session) throw new Error("Login session not found.");
   return session;
 }
 
+/** Maps internal login-session state to the shared provider login-session contract. */
 export function toLoginSession(state: LoginSessionState): ProviderLoginSession {
   return {
     allowEmptyInput: state.allowEmptyInput,

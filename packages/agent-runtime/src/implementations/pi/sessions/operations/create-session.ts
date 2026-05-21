@@ -3,6 +3,7 @@ import {Effect} from "effect";
 import {CreateSessionError} from "@supernova/contracts/sessions/procedures";
 import {PiSdkService} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
 
+/** Creates a new empty Pi session for a project. */
 export function createSession(projectPath: string) {
   return Effect.gen(function* () {
     const piSdk = yield* PiSdkService;

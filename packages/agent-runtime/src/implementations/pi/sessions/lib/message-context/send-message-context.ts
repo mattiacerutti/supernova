@@ -16,6 +16,7 @@ export interface SendMessageContext {
   readonly prompt: string;
 }
 
+/** Prepares the Pi prompt, image content, and persisted metadata for a send-message request. */
 export async function prepareSendMessageContext(input: SendMessagePayload, options: {projectPath: string}): Promise<SendMessageContext> {
   // Strip base64 content from attachments since it's persisted separately for images and not needed for other attachments types.
   const contentParts = input.contentParts.map((part) => (part.type === "attachment" ? {...part, contentBase64: undefined} : part));

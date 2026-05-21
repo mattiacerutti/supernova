@@ -14,6 +14,7 @@ export interface PiSdkServiceShape {
   readonly SessionManager: typeof SessionManager;
 }
 
+/** Effect service tag for the Pi SDK runtime dependencies. */
 export class PiSdkService extends Context.Service<PiSdkService, PiSdkServiceShape>()("supernova/agent-runtime/PiSdkService") {}
 
 export const PiSdkLive = Layer.succeed(PiSdkService, {

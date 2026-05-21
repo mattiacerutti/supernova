@@ -5,6 +5,7 @@ import {mapPiSessionsToSummaries} from "@supernova/agent-runtime/implementations
 
 const DEFAULT_SESSION_LIST_LIMIT = 5;
 
+/** Finds the page start after an optional cursor id. */
 function startIndexAfterCursor<T extends {id: string}>(items: readonly T[], cursor: string | undefined): number {
   if (!cursor) return 0;
 
@@ -12,6 +13,7 @@ function startIndexAfterCursor<T extends {id: string}>(items: readonly T[], curs
   return cursorIndex === -1 ? items.length : cursorIndex + 1;
 }
 
+/** Lists project sessions as a cursor-paginated newest-first page. */
 export function listProjectSessions(input: {cursor?: string; limit?: number; projectPath: string}) {
   return Effect.gen(function* () {
     const piSdk = yield* PiSdkService;

@@ -30,6 +30,7 @@ type PromptContext = OpenedSession & {
   readonly messageContext: SendMessageContext;
 };
 
+/** Streams one user message through Pi and emits normalized session events. */
 export function sendMessage(input: SendMessagePayload) {
   return Stream.unwrap(
     Effect.gen(function* () {
@@ -52,6 +53,7 @@ export function sendMessage(input: SendMessagePayload) {
   );
 }
 
+/** Owns the lifecycle for one streamed send-message request. */
 class SendMessageRunner {
   private readonly emit: (event: SendMessageEvent) => void;
   private readonly end: () => void;
@@ -70,10 +72,12 @@ class SendMessageRunner {
     this.piSdk = input.piSdk;
   }
 
+  /** Starts the asynchronous send-message lifecycle without blocking stream setup. */
   start(): void {
     void this.run();
   }
 
+  /** Releases Pi resources and optionally aborts the active generation. */
   async release(input: {abort: boolean}): Promise<void> {
     this.cancelled ||= input.abort;
     if (!this.activeSession && !this.unsubscribe) return;
@@ -88,6 +92,7 @@ class SendMessageRunner {
     return this.releasePromise;
   }
 
+  /** Runs the full send-message flow and guarantees stream cleanup. */
   private async run(): Promise<void> {
     try {
       const openedSession = await this.openSession();
@@ -105,6 +110,7 @@ class SendMessageRunner {
     }
   }
 
+  /** Opens the target session and ensures it has a display title. */
   private async openSession(): Promise<OpenedSession> {
     const sessionInfo = await findSessionById(this.piSdk, this.input.sessionId);
     this.throwIfCancelled();
@@ -123,6 +129,7 @@ class SendMessageRunner {
     return model;
   }
 
+  /** Generates and persists a fallback title for unnamed sessions. */
   private async ensureSessionTitle(sessionManager: PiSessionManager, model: PiModel): Promise<boolean> {
     if (sessionManager.getSessionName() !== undefined) return false;
 
@@ -136,6 +143,7 @@ class SendMessageRunner {
     return true;
   }
 
+  /** Creates the active Pi agent session and captures the stable branch baseline. */
   private async preparePromptContext(openedSession: OpenedSession): Promise<PromptContext> {
     const {session} = await this.piSdk.createAgentSession({
       authStorage: this.piSdk.authStorage,
@@ -165,6 +173,7 @@ class SendMessageRunner {
     }
   }
 
+  /** Subscribes to Pi live updates and emits interpolated streaming turns. */
   private subscribeToLiveUpdates(context: PromptContext): void {
     this.unsubscribe = this.activeSession?.subscribe((event) => {
       switch (event.type) {
@@ -180,6 +189,7 @@ class SendMessageRunner {
     });
   }
 
+  /** Sends the prompt to Pi and emits the final normalized turn list. */
   private async promptAndEmitFinalTurns(context: PromptContext): Promise<void> {
     try {
       const images = context.messageContext.images;
@@ -191,6 +201,7 @@ class SendMessageRunner {
     }
   }
 
+  /** Emits the current live branch as a single streaming turn. */
   private emitLiveTurn(context: PromptContext, messages: readonly PiAgentMessage[]): void {
     const [turn] = buildPiTurns(this.liveBranchEntries(context, messages), this.input.model);
     if (!turn) return;
@@ -199,12 +210,14 @@ class SendMessageRunner {
     this.emit(session ? {session, turn: {...turn, status: "streaming"}, type: "turn"} : {turn: {...turn, status: "streaming"}, type: "turn"});
   }
 
+  /** Returns Pi live messages, including event payload messages not yet reflected on the session. */
   private liveMessages(context: PromptContext, message?: PiAgentMessage): readonly PiAgentMessage[] {
     const messages = this.activeSession?.messages.slice(context.baseMessageCount) ?? [];
     if (!message || messages.some((candidate) => candidate === message)) return messages;
     return [...messages, message];
   }
 
+  /** Creates transient session entries for messages produced after the base branch snapshot. */
   private liveBranchEntries(context: PromptContext, messages: readonly PiAgentMessage[]): SessionEntry[] {
     return createLiveBranchEntries({
       contentPartsMetadata: {contentParts: context.messageContext.contentParts},
@@ -214,6 +227,7 @@ class SendMessageRunner {
     });
   }
 
+  /** Builds a one-time title update when this request generated the session title. */
   private titleSummary(context: PromptContext): SessionSummary | undefined {
     if (!context.titleWasGenerated || this.emittedGeneratedTitle) return;
 

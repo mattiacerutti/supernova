@@ -25,6 +25,7 @@ function waitForInput(state: LoginSessionState, kind: ProviderLoginInputKind, pr
   });
 }
 
+/** Runs the provider OAuth flow while mutating login-session state for polling clients. */
 async function runOAuthLogin(piSdk: PiSdkServiceShape, state: LoginSessionState): Promise<void> {
   try {
     await piSdk.authStorage.login(state.providerId, {
@@ -60,6 +61,7 @@ async function runOAuthLogin(piSdk: PiSdkServiceShape, state: LoginSessionState)
   }
 }
 
+/** Starts an asynchronous OAuth login session for a provider. */
 export function startProviderOAuthLogin(providerId: string) {
   return Effect.gen(function* () {
     const piSdk = yield* PiSdkService;

@@ -3,6 +3,7 @@ import type {SessionSummary} from "@supernova/contracts/sessions/schemas";
 
 export type PiSessionInfo = Pick<SessionInfo, "cwd" | "firstMessage" | "id" | "modified" | "name">;
 
+/** Chooses the best display title available for a Pi session. */
 function toSessionTitle(session: PiSessionInfo): string {
   const explicitName = session.name?.trim();
   if (explicitName) return explicitName;
@@ -13,6 +14,7 @@ function toSessionTitle(session: PiSessionInfo): string {
   return "Untitled session";
 }
 
+/** Maps Pi session metadata into a shared session summary. */
 export function toPiSessionSummary(session: PiSessionInfo): SessionSummary {
   return {
     id: session.id,
@@ -21,6 +23,7 @@ export function toPiSessionSummary(session: PiSessionInfo): SessionSummary {
   };
 }
 
+/** Maps and sorts Pi sessions as newest-first shared session summaries. */
 export function mapPiSessionsToSummaries(sessions: PiSessionInfo[]): SessionSummary[] {
   return sessions.map(toPiSessionSummary).toSorted((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime());
 }

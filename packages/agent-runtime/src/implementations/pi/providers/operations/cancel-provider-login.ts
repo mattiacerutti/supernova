@@ -3,6 +3,7 @@ import {ProviderLoginError} from "@supernova/contracts/providers/procedures";
 import {getLoginSessionState, toLoginSession} from "@supernova/agent-runtime/implementations/pi/providers/lib/login-sessions";
 import {errorMessage} from "@supernova/agent-runtime/implementations/pi/providers/lib/provider-errors";
 
+/** Cancels a pending provider login session. */
 export function cancelProviderLogin(loginSessionId: string) {
   return Effect.try({
     try: () => {

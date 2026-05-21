@@ -21,6 +21,7 @@ function promptTitle(template: PromptTemplate): string {
   return template.name || basename(template.filePath, ".md");
 }
 
+/** Ranks composer suggestion candidates against the user query. */
 function rankItems<T>(items: readonly T[], query: string, keys: readonly ((item: T) => string)[]): T[] {
   const normalizedQuery = query.trim();
   if (!normalizedQuery) return [...items].slice(0, MAX_SUGGESTIONS);
@@ -48,6 +49,7 @@ function promptSuggestion(template: PromptTemplate): ComposerSuggestionItem {
   };
 }
 
+/** Loads Pi resources and returns ranked composer suggestions for the trigger kind. */
 async function listPiComposerSuggestions(projectPath: string, kind: ComposerSuggestionTriggerKind, query: string): Promise<ComposerSuggestionItem[]> {
   const agentDir = getAgentDir();
   const resourceLoader = new DefaultResourceLoader({agentDir, cwd: projectPath, settingsManager: SettingsManager.create(projectPath, agentDir)});
@@ -61,6 +63,7 @@ async function listPiComposerSuggestions(projectPath: string, kind: ComposerSugg
   return rankItems(promptTemplates, query, [(template) => template.name, (template) => template.description, (template) => template.content]).map(promptSuggestion);
 }
 
+/** Lists skills or prompt templates for composer autocompletion. */
 export function listComposerSuggestions(projectPath: string, kind: ComposerSuggestionTriggerKind, query: string) {
   return Effect.tryPromise({
     try: async () => ({

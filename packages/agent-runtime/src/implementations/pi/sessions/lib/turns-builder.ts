@@ -28,6 +28,7 @@ function isToolResultEntry(entry: SessionMessageEntry): entry is PiMessageEntry<
   return entry.message.role === "toolResult";
 }
 
+/** Collects events for one user-started turn before finalizing it. */
 class PiTurnDraft {
   private readonly userMessage: UserMessage;
   private readonly events: TurnEvent[] = [];
@@ -37,6 +38,7 @@ class PiTurnDraft {
     this.userMessage = userMessage;
   }
 
+  /** Appends assistant content, reasoning, tool calls, and assistant errors as turn events. */
   public addAssistantEntry(entry: PiMessageEntry<"assistant">): boolean {
     const message = entry.message;
     const error = message.stopReason === "aborted" ? undefined : message.errorMessage;
@@ -84,6 +86,7 @@ class PiTurnDraft {
     return eventWasAdded;
   }
 
+  /** Completes a matching tool call event or appends an orphan tool result event. */
   public addToolResultEntry(entry: PiMessageEntry<"toolResult">): boolean {
     const message = entry.message;
     const completion = {details: message.details, isError: Boolean(message.isError), output: message.content};
@@ -111,11 +114,13 @@ class PiTurnDraft {
     return true;
   }
 
+  /** Finalizes the draft into a shared turn. */
   public toTurn(model: ModelReference): Turn {
     return createTurn({events: this.events, model, userMessage: this.userMessage});
   }
 }
 
+/** Builds ordered turns while preserving Pi parent/metadata relationships. */
 class PiTurnBuilder {
   private readonly fallbackModel: ModelReference;
   private readonly turns: Turn[] = [];
@@ -127,6 +132,7 @@ class PiTurnBuilder {
     this.fallbackModel = fallbackModel;
   }
 
+  /** Adds one Pi session entry to the current turn-building state. */
   public addEntry(entry: SessionEntry): boolean {
     this.parentByEntryId.set(entry.id, entry.parentId);
 
@@ -148,6 +154,7 @@ class PiTurnBuilder {
     return false;
   }
 
+  /** Returns completed turns plus the active in-progress turn, if any. */
   public toTurns(): Turn[] {
     if (!this.currentTurn) return [...this.turns];
     return [...this.turns, this.currentTurn.toTurn(this.fallbackModel)];
@@ -166,6 +173,7 @@ class PiTurnBuilder {
     return true;
   }
 
+  /** Walks parent links to find metadata associated with an ancestor entry. */
   private findParentMetadata<T>(parentId: string | null, metadataByParent: ReadonlyMap<string, T>): T | undefined {
     let currentParentId = parentId;
     while (currentParentId) {
@@ -184,6 +192,7 @@ class PiTurnBuilder {
   }
 }
 
+/** Builds normalized Supernova turns from Pi session entries. */
 export function buildPiTurns(entries: readonly SessionEntry[], fallbackModel: ModelReference): Turn[] {
   const builder = new PiTurnBuilder(fallbackModel);
 

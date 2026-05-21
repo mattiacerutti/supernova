@@ -49,12 +49,14 @@ function piContentToText(content: PiToolOutput): string {
     .join("\n");
 }
 
+/** Completion payload emitted by Pi when a tool invocation finishes. */
 export interface PiToolCompletion<TDetails> {
   readonly output: PiToolOutput;
   readonly details: TDetails | undefined;
   readonly isError: boolean;
 }
 
+/** Tracks one Pi tool invocation and maps it into the shared tool contract. */
 export abstract class PiToolInvocation<TPiInput = unknown, TPiDetails = unknown, TInput = unknown, TResult = unknown> {
   public readonly name: string;
   protected readonly kind: Tool["kind"];
@@ -77,6 +79,7 @@ export abstract class PiToolInvocation<TPiInput = unknown, TPiDetails = unknown,
     }
   }
 
+  /** Marks the tool invocation completed and stores its mapped result or error. */
   public complete(completion: PiToolCompletion<TPiDetails>): void {
     this.status = completion.isError ? "error" : "completed";
     if (completion.isError) {
@@ -87,6 +90,7 @@ export abstract class PiToolInvocation<TPiInput = unknown, TPiDetails = unknown,
     this.result = this.createResult(completion);
   }
 
+  /** Converts the invocation's current state into a serializable tool event payload. */
   public toTool(): Tool {
     const base = {input: this.input, kind: this.kind} as const;
     if (this.status === "error") return {...base, error: this.errorMessage(), status: "error"} as Tool;
@@ -216,6 +220,7 @@ class CustomPiToolInvocation extends PiToolInvocation<CustomToolInput, Record<st
   }
 }
 
+/** Creates Pi tool invocation mappers for known tools, falling back to custom tools. */
 export class PiToolInvocationFactory {
   public static create(toolName: string, input: Record<string, unknown> | undefined): PiToolInvocation {
     switch (toolName) {

@@ -11,6 +11,7 @@ const thinkingLevelLabels: Record<ModelThinkingLevel, string> = {
   xhigh: "Extra High",
 };
 
+/** Formats provider-native thinking levels into human-readable labels. */
 function formatNativeThinkingLabel(level: ModelThinkingLevel, nativeLevel: string | null | undefined): string {
   if (!nativeLevel) return thinkingLevelLabels[level];
 
@@ -21,6 +22,7 @@ function formatNativeThinkingLabel(level: ModelThinkingLevel, nativeLevel: strin
     .join(" ");
 }
 
+/** Returns deduplicated thinking-level options for a Pi model. */
 function getThinkingLevelOptions(model: Model<Api>): ModelDetails["thinkingLevels"] {
   // Pi exposes canonical thinking levels, but provider metadata can map several
   // of them to the same native value. Show only one option per native value so
@@ -43,6 +45,7 @@ function getThinkingLevelOptions(model: Model<Api>): ModelDetails["thinkingLevel
   return Array.from(deduped.values());
 }
 
+/** Maps a Pi model definition into the shared model details contract. */
 export function toAgentModelDetails(model: Model<Api>, providerDisplayName: string): ModelDetails {
   return {
     capabilities: {

@@ -7,6 +7,7 @@ import {PiSdkService} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
 
 const ARCHIVE_DIR_NAME = "archive";
 
+/** Archives a project session by moving its backing session file. */
 export function archiveProjectSession(projectPath: string, sessionId: string) {
   return Effect.gen(function* () {
     const piSdk = yield* PiSdkService;

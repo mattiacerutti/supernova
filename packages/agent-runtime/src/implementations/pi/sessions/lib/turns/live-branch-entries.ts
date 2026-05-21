@@ -5,6 +5,7 @@ import {USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE} from "@supernova/agent-runtime/i
 
 type PiAgentMessage = AgentSession["messages"][number];
 
+/** Creates transient Pi session entries for messages currently streaming on the live branch. */
 export function createLiveBranchEntries(input: {
   contentPartsMetadata?: {readonly contentParts: readonly UserMessageContentPart[]};
   messages: readonly PiAgentMessage[];
