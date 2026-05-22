@@ -1,11 +1,12 @@
 import {basename} from "node:path";
-import {DefaultResourceLoader, getAgentDir, SettingsManager} from "@earendil-works/pi-coding-agent";
 import type {PromptTemplate, Skill} from "@earendil-works/pi-coding-agent";
 import {Effect} from "effect";
 import {matchSorter} from "match-sorter";
 import {ListComposerSuggestionsError} from "@supernova/contracts/sessions/procedures";
 import type {ComposerSuggestionItem, ComposerSuggestionTriggerKind} from "@supernova/contracts/sessions/procedures";
 import {generateStableId} from "@supernova/agent-runtime/implementations/shared/id-generator";
+import {PiResourceCatalog} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-resource-catalog";
+import type {PiResourceCatalogShape} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-resource-catalog";
 
 const MAX_SUGGESTIONS = 50;
 
@@ -50,30 +51,36 @@ function promptSuggestion(template: PromptTemplate): ComposerSuggestionItem {
 }
 
 /** Loads Pi resources and returns ranked composer suggestions for the trigger kind. */
-async function listPiComposerSuggestions(projectPath: string, kind: ComposerSuggestionTriggerKind, query: string): Promise<ComposerSuggestionItem[]> {
-  const agentDir = getAgentDir();
-  const resourceLoader = new DefaultResourceLoader({agentDir, cwd: projectPath, settingsManager: SettingsManager.create(projectPath, agentDir)});
-  await resourceLoader.reload();
-
+async function listPiComposerSuggestions(
+  resourceCatalog: PiResourceCatalogShape,
+  projectPath: string,
+  kind: ComposerSuggestionTriggerKind,
+  query: string
+): Promise<ComposerSuggestionItem[]> {
   if (kind === "skill") {
-    return rankItems(resourceLoader.getSkills().skills, query, [(skill) => skill.name, (skill) => skill.description]).map(skillSuggestion);
+    const skills = await resourceCatalog.listSkills(projectPath);
+    return rankItems(skills, query, [(skill) => skill.name, (skill) => skill.description]).map(skillSuggestion);
   }
 
-  const promptTemplates = resourceLoader.getPrompts().prompts;
+  const promptTemplates = await resourceCatalog.listPromptTemplates(projectPath);
   return rankItems(promptTemplates, query, [(template) => template.name, (template) => template.description, (template) => template.content]).map(promptSuggestion);
 }
 
 /** Lists skills or prompt templates for composer autocompletion. */
 export function listComposerSuggestions(projectPath: string, kind: ComposerSuggestionTriggerKind, query: string) {
-  return Effect.tryPromise({
-    try: async () => ({
-      items: await listPiComposerSuggestions(projectPath, kind, query),
-      query,
-    }),
-    catch: (cause) =>
-      new ListComposerSuggestionsError({
-        cause,
-        message: cause instanceof Error ? cause.message : "Failed to list composer suggestions.",
+  return Effect.gen(function* () {
+    const resourceCatalog = yield* PiResourceCatalog;
+
+    return yield* Effect.tryPromise({
+      try: async () => ({
+        items: await listPiComposerSuggestions(resourceCatalog, projectPath, kind, query),
+        query,
       }),
+      catch: (cause) =>
+        new ListComposerSuggestionsError({
+          cause,
+          message: cause instanceof Error ? cause.message : "Failed to list composer suggestions.",
+        }),
+    });
   });
 }

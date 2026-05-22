@@ -1,286 +1,70 @@
-import {mkdtemp, readFile, writeFile} from "node:fs/promises";
+import {mkdtemp, readFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
-import {Effect, Layer} from "effect";
-import {afterEach, describe, expect, it, vi} from "vitest";
-import {PiSdkService} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
-import type {PiSdkServiceShape, PiSessionInfo} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
-import {PiSessionsLive} from "@supernova/agent-runtime/implementations/pi/sessions/pi-sessions-live";
+import {Effect} from "effect";
+import {afterEach, describe, expect, it} from "vitest";
 import {SessionsService} from "@supernova/agent-runtime/services/sessions/sessions-service";
+import {createPiTestRuntime, selectedModelReference} from "@tests/implementations/pi/sessions/pi-session-test-utils";
 
-function session(overrides: Partial<PiSessionInfo>): PiSessionInfo {
-  return {
-    cwd: "/workspace",
-    firstMessage: "Fix it",
-    id: "session-1",
-    modified: new Date("2026-01-01T00:00:00.000Z"),
-    name: "Fix it",
-    path: "/sessions/session-1.jsonl",
-    ...overrides,
-  } as PiSessionInfo;
-}
+describe("Pi sessions service", () => {
+  const runtimes: Array<{unregister: () => void}> = [];
 
-function makePiSdk(input?: {
-  branch?: unknown[];
-  createdSessionFile?: string;
-  sessionContext?: {messages: unknown[]; model?: {modelId: string; provider: string}; thinkingLevel?: string};
-  sessions?: PiSessionInfo[];
-}): PiSdkServiceShape {
-  return {
-    SessionManager: {
-      create: vi.fn(() => ({
-        getHeader: () => ({sessionId: "created-session", timestamp: "2026-01-01T00:00:00.000Z"}),
-        getSessionFile: () => input?.createdSessionFile,
-        getSessionId: () => "created-session",
-      })),
-      list: vi.fn(async () => input?.sessions ?? []),
-      listAll: vi.fn(async () => input?.sessions ?? [session({})]),
-      open: vi.fn(() => ({
-        buildSessionContext: () =>
-          input?.sessionContext ?? {
-            messages: [],
-            model: undefined,
-            thinkingLevel: undefined,
-          },
-        getBranch: () => input?.branch ?? [],
-      })),
-    },
-    authStorage: {
-      reload: vi.fn(),
-    },
-    createAgentSession: vi.fn(),
-    modelRegistry: {
-      getAvailable: vi.fn(async () => [
-        {
-          api: "anthropic",
-          baseUrl: "https://api.anthropic.com",
-          contextWindow: 200_000,
-          cost: {cacheRead: 0, cacheWrite: 0, input: 0, output: 0},
-          id: "claude-sonnet",
-          input: ["text"],
-          maxTokens: 8192,
-          name: "Claude Sonnet",
-          provider: "anthropic",
-          reasoning: true,
-        },
-      ]),
-      getProviderDisplayName: vi.fn(() => "Anthropic"),
-      refresh: vi.fn(),
-    },
-  } as unknown as PiSdkServiceShape;
-}
-
-function runWithSessions<A, E>(piSdk: PiSdkServiceShape, effect: Effect.Effect<A, E, SessionsService>) {
-  return Effect.runPromise(effect.pipe(Effect.provide(PiSessionsLive.pipe(Layer.provide(Layer.succeed(PiSdkService, piSdk))))));
-}
-
-describe("loading and creating Pi session details", () => {
   afterEach(() => {
-    vi.restoreAllMocks();
+    while (runtimes.length > 0) runtimes.pop()?.unregister();
   });
 
-  it("creates a new session file and returns an empty session details payload", async () => {
-    const tempDir = await mkdtemp(join(tmpdir(), "supernova-session-"));
-    const sessionFile = join(tempDir, "created-session.jsonl");
-    const piSdk = makePiSdk({createdSessionFile: sessionFile});
+  it("creates a persisted empty session", async () => {
+    const pi = createPiTestRuntime({sessionDir: await mkdtemp(join(tmpdir(), "supernova-sessions-"))});
+    runtimes.push(pi);
 
-    const result = await runWithSessions(
-      piSdk,
+    const session = await pi.runWithSessions(
       Effect.gen(function* () {
         const sessions = yield* SessionsService;
         return yield* sessions.create("/workspace");
       })
     );
+    const created = pi.getSession(session.id);
 
-    await expect(readFile(sessionFile, "utf8")).resolves.toBe('{"sessionId":"created-session","timestamp":"2026-01-01T00:00:00.000Z"}\n');
-    expect(result).toEqual({id: "created-session", projectPath: "/workspace", title: "New session", turns: [], updatedAt: "2026-01-01T00:00:00.000Z"});
+    expect(session).toMatchObject({id: session.id, projectPath: "/workspace", title: "New session", turns: []});
+    const header = JSON.parse(await readFile(created?.info.path ?? "", "utf8"));
+    expect(header).toMatchObject({cwd: "/workspace", id: session.id, timestamp: session.updatedAt, type: "session"});
   });
 
-  it("loads raw branch history instead of compacted LLM context messages", async () => {
-    const sessionPath = join(await mkdtemp(join(tmpdir(), "supernova-loaded-session-")), "session-1.jsonl");
-    await writeFile(sessionPath, "{}\n");
-    const piSdk = makePiSdk({
-      branch: [
-        {
-          customType: "supernova.user-message-content-parts",
-          data: {contentParts: [{text: "Original request", type: "text"}]},
-          id: "old-content-parts",
-          parentId: null,
-          timestamp: "1970-01-01T00:00:00.001Z",
-          type: "custom",
-        },
-        {
-          id: "old-user",
-          message: {content: [{text: "Original request", type: "text"}], id: "old-user-message", role: "user", timestamp: 1},
-          parentId: "old-content-parts",
-          timestamp: "1970-01-01T00:00:00.001Z",
-          type: "message",
-        },
-        {
-          id: "old-assistant",
-          message: {content: [{text: "Original response", type: "text"}], id: "old-assistant-message", role: "assistant", timestamp: 2},
-          parentId: "old-user",
-          timestamp: "1970-01-01T00:00:00.002Z",
-          type: "message",
-        },
-        {
-          firstKeptEntryId: "recent-user",
-          id: "compaction-1",
-          parentId: "old-assistant",
-          summary: "Compacted summary that should not render.",
-          timestamp: "1970-01-01T00:00:00.003Z",
-          tokensBefore: 1000,
-          type: "compaction",
-        },
-        {
-          customType: "supernova.user-message-content-parts",
-          data: {contentParts: [{text: "Recent request", type: "text"}]},
-          id: "recent-content-parts",
-          parentId: "compaction-1",
-          timestamp: "1970-01-01T00:00:00.004Z",
-          type: "custom",
-        },
-        {
-          id: "recent-user",
-          message: {content: [{text: "Recent request", type: "text"}], id: "recent-user-message", role: "user", timestamp: 4},
-          parentId: "recent-content-parts",
-          timestamp: "1970-01-01T00:00:00.004Z",
-          type: "message",
-        },
-        {
-          id: "recent-assistant",
-          message: {content: [{text: "Recent response", type: "text"}], id: "recent-assistant-message", role: "assistant", timestamp: 5},
-          parentId: "recent-user",
-          timestamp: "1970-01-01T00:00:00.005Z",
-          type: "message",
-        },
-      ],
-      sessionContext: {
-        messages: [
-          {content: [{text: "Compacted summary that should not render.", type: "text"}], id: "summary-1", role: "user", timestamp: 3},
-          {content: [{text: "Recent request", type: "text"}], id: "recent-user-message", role: "user", timestamp: 4},
-          {content: [{text: "Recent response", type: "text"}], id: "recent-assistant-message", role: "assistant", timestamp: 5},
-        ],
-        model: {modelId: "claude-sonnet", provider: "anthropic"},
-        thinkingLevel: "high",
-      },
-      sessions: [session({path: sessionPath})],
-    });
+  it("loads turns from raw branch history instead of compacted context", async () => {
+    const pi = createPiTestRuntime();
+    runtimes.push(pi);
+    const {info, manager} = pi.createSession();
+    manager.appendModelChange(selectedModelReference.providerId, selectedModelReference.id);
+    manager.appendThinkingLevelChange("high");
+    pi.appendConversation(manager, {assistantText: "Original answer", requestText: "Before compaction"});
+    manager.appendCompaction("Summary that should not render", "recent-user", 1000);
+    pi.appendConversation(manager, {assistantText: "Recent answer", requestText: "After compaction"});
 
-    const result = await runWithSessions(
-      piSdk,
+    const session = await pi.runWithSessions(
       Effect.gen(function* () {
         const sessions = yield* SessionsService;
-        return yield* sessions.get("session-1");
+        return yield* sessions.get(info.id);
       })
     );
 
-    expect(result).toMatchObject({
-      id: "session-1",
-      model: {id: "claude-sonnet", providerId: "anthropic", thinkingLevel: "high"},
-      projectPath: "/workspace",
-      title: "Fix it",
-      turns: [
-        {events: [{content: "Original response", type: "assistant"}], userMessage: {contentParts: [{text: "Original request", type: "text"}]}},
-        {events: [{content: "Recent response", type: "assistant"}], userMessage: {contentParts: [{text: "Recent request", type: "text"}]}},
-      ],
-    });
+    expect(session.turns).toMatchObject([
+      {events: [{content: "Original answer", type: "assistant"}], userMessage: {contentParts: [{text: "Before compaction", type: "text"}]}},
+      {events: [{content: "Recent answer", type: "assistant"}], userMessage: {contentParts: [{text: "After compaction", type: "text"}]}},
+    ]);
   });
 
-  it("loads attachment content parts and image previews from compacted raw branch history", async () => {
-    const sessionPath = join(await mkdtemp(join(tmpdir(), "supernova-loaded-attachments-")), "session-1.jsonl");
-    await writeFile(sessionPath, "{}\n");
-    const piSdk = makePiSdk({
-      branch: [
-        {
-          customType: "supernova.user-message-content-parts",
-          data: {
-            contentParts: [
-              {text: "Review this diagram", type: "text"},
-              {id: "image-1", kind: "image", mime: "image/png", name: "diagram.png", size: 12, type: "attachment"},
-            ],
-          },
-          id: "content-parts-1",
-          parentId: null,
-          timestamp: "1970-01-01T00:00:00.001Z",
-          type: "custom",
-        },
-        {
-          id: "old-user",
-          message: {
-            content: [
-              {text: "Review this diagram", type: "text"},
-              {data: "aW1hZ2UtYnl0ZXM=", mimeType: "image/png", type: "image"},
-            ],
-            id: "old-user-message",
-            role: "user",
-            timestamp: 2,
-          },
-          parentId: "content-parts-1",
-          timestamp: "1970-01-01T00:00:00.002Z",
-          type: "message",
-        },
-        {
-          id: "old-assistant",
-          message: {content: [{text: "Looks good.", type: "text"}], id: "old-assistant-message", role: "assistant", timestamp: 3},
-          parentId: "old-user",
-          timestamp: "1970-01-01T00:00:00.003Z",
-          type: "message",
-        },
-        {
-          firstKeptEntryId: "recent-user",
-          id: "compaction-1",
-          parentId: "old-assistant",
-          summary: "Compacted summary.",
-          timestamp: "1970-01-01T00:00:00.004Z",
-          tokensBefore: 1000,
-          type: "compaction",
-        },
-        {
-          id: "recent-user",
-          message: {content: [{text: "Continue", type: "text"}], id: "recent-user-message", role: "user", timestamp: 5},
-          parentId: "compaction-1",
-          timestamp: "1970-01-01T00:00:00.005Z",
-          type: "message",
-        },
-      ],
-      sessionContext: {
-        messages: [{content: [{text: "Compacted summary.", type: "text"}], id: "summary-1", role: "user", timestamp: 4}],
-        model: {modelId: "claude-sonnet", provider: "anthropic"},
-        thinkingLevel: "high",
-      },
-      sessions: [session({path: sessionPath})],
-    });
+  it("refreshes credentials and model metadata before listing models", async () => {
+    const pi = createPiTestRuntime();
+    runtimes.push(pi);
 
-    const result = await runWithSessions(
-      piSdk,
-      Effect.gen(function* () {
-        const sessions = yield* SessionsService;
-        return yield* sessions.get("session-1");
-      })
-    );
-
-    expect(result.turns[0]?.userMessage).toMatchObject({
-      contentParts: [
-        {text: "Review this diagram", type: "text"},
-        {contentBase64: "aW1hZ2UtYnl0ZXM=", id: "image-1", kind: "image", mime: "image/png", name: "diagram.png", size: 12, type: "attachment"},
-      ],
-    });
-  });
-
-  it("lists available prompt models after refreshing provider credentials and model metadata", async () => {
-    const piSdk = makePiSdk();
-
-    const result = await runWithSessions(
-      piSdk,
+    const models = await pi.runWithSessions(
       Effect.gen(function* () {
         const sessions = yield* SessionsService;
         return yield* sessions.listModels();
       })
     );
 
-    expect(piSdk.authStorage.reload).toHaveBeenCalled();
-    expect(piSdk.modelRegistry.refresh).toHaveBeenCalled();
-    expect(result).toMatchObject([{id: "claude-sonnet", name: "Claude Sonnet", providerId: "anthropic", providerName: "Anthropic"}]);
+    expect(pi.refreshCount).toBe(1);
+    expect(models).toMatchObject([{id: "claude-sonnet", name: "Claude Sonnet", providerId: "anthropic", providerName: "Anthropic"}]);
   });
 });

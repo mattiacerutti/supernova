@@ -1,19 +1,17 @@
 import {Effect} from "effect";
 import {LoadSessionError} from "@supernova/contracts/sessions/procedures";
-import {PiSdkService} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
 import {toPiSessionSummary} from "@supernova/agent-runtime/implementations/pi/projects/pi-session-mapper";
-import {findSessionById} from "@supernova/agent-runtime/implementations/pi/sessions/lib/session-resolver";
+import {PiSessionStore} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-session-store";
 import {buildPiTurns} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns-builder";
 
 /** Loads one Pi session and maps it into the shared session detail contract. */
 export function getSession(sessionId: string) {
   return Effect.gen(function* () {
-    const piSdk = yield* PiSdkService;
+    const sessionStore = yield* PiSessionStore;
 
     return yield* Effect.tryPromise({
       try: async () => {
-        const sessionInfo = await findSessionById(piSdk, sessionId);
-        const sessionManager = piSdk.SessionManager.open(sessionInfo.path);
+        const {info: sessionInfo, manager: sessionManager} = await sessionStore.openSessionById(sessionId);
         const sessionContext = sessionManager.buildSessionContext();
         const branch = sessionManager.getBranch();
         const summary = toPiSessionSummary(sessionInfo);

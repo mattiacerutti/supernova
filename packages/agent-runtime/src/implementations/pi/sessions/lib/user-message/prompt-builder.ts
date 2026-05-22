@@ -1,7 +1,6 @@
-import {readFile} from "node:fs/promises";
-import {DefaultResourceLoader, getAgentDir, SettingsManager} from "@earendil-works/pi-coding-agent";
 import type {Skill} from "@earendil-works/pi-coding-agent";
 import type {UserMessageAttachmentPart, UserMessageContentPart, UserMessageReferencePart} from "@supernova/contracts/sessions/schemas";
+import type {PiResourceCatalogShape} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-resource-catalog";
 import {contentFromParts} from "@supernova/agent-runtime/implementations/pi/sessions/lib/user-message/content-parts";
 
 function escapeXml(value: string): string {
@@ -23,21 +22,17 @@ function textAttachmentBlocks(contentParts: readonly UserMessageContentPart[]): 
 }
 
 /** Loads a skill reference into the XML block added to the prompt. */
-async function skillBlock(skill: Skill): Promise<string> {
-  const content = await readFile(skill.filePath, "utf8");
-  return [`<skill>`, `<name>${skill.name}</name>`, `<path>${skill.filePath}</path>`, content.trim(), `</skill>`].join("\n");
+async function skillBlock(input: {resourceCatalog: PiResourceCatalogShape; skill: Skill}): Promise<string> {
+  const content = await input.resourceCatalog.readSkillContent(input.skill);
+  return [`<skill>`, `<name>${input.skill.name}</name>`, `<path>${input.skill.filePath}</path>`, content.trim(), `</skill>`].join("\n");
 }
 
 /** Resolves referenced skills into prompt blocks, skipping missing or unreadable skills. */
-async function skillBlocks(input: {contentParts: readonly UserMessageContentPart[]; projectPath: string}): Promise<string[]> {
+async function skillBlocks(input: {contentParts: readonly UserMessageContentPart[]; projectPath: string; resourceCatalog: PiResourceCatalogShape}): Promise<string[]> {
   const skillReferences = input.contentParts.filter((part): part is UserMessageReferencePart => part.type === "reference" && part.kind === "skill");
   if (skillReferences.length === 0) return [];
 
-  const agentDir = getAgentDir();
-  const resourceLoader = new DefaultResourceLoader({agentDir, cwd: input.projectPath, settingsManager: SettingsManager.create(input.projectPath, agentDir)});
-  await resourceLoader.reload();
-
-  const skillsByName = new Map(resourceLoader.getSkills().skills.map((skill) => [skill.name, skill]));
+  const skillsByName = new Map((await input.resourceCatalog.listSkills(input.projectPath)).map((skill) => [skill.name, skill]));
   const seen = new Set<string>();
   const blocks: string[] = [];
 
@@ -45,7 +40,7 @@ async function skillBlocks(input: {contentParts: readonly UserMessageContentPart
     const skill = skillsByName.get(reference.value);
     if (!skill || seen.has(skill.filePath)) continue;
 
-    const block = await skillBlock(skill).catch(() => undefined);
+    const block = await skillBlock({resourceCatalog: input.resourceCatalog, skill}).catch(() => undefined);
     if (!block) continue;
 
     seen.add(skill.filePath);
@@ -56,7 +51,7 @@ async function skillBlocks(input: {contentParts: readonly UserMessageContentPart
 }
 
 /** Builds the full prompt sent to Pi from message text, skill references, and text attachments. */
-export async function buildPrompt(input: {contentParts: readonly UserMessageContentPart[]; projectPath: string}): Promise<string> {
+export async function buildPrompt(input: {contentParts: readonly UserMessageContentPart[]; projectPath: string; resourceCatalog: PiResourceCatalogShape}): Promise<string> {
   const content = contentFromParts(input.contentParts);
 
   const skills = await skillBlocks(input);

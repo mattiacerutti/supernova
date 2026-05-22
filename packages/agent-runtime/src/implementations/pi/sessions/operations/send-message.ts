@@ -2,19 +2,23 @@ import type {AgentSession, SessionEntry} from "@earendil-works/pi-coding-agent";
 import {Effect, Queue, Stream} from "effect";
 import type {SendMessagePayload, SendMessageEvent} from "@supernova/contracts/sessions/procedures";
 import type {SessionSummary} from "@supernova/contracts/sessions/schemas";
-import {PiSdkService} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
-import type {PiSdkServiceShape, PiSessionInfo} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
+import {PiAgentSessionFactory} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-agent-session-factory";
+import type {PiAgentSessionFactoryShape} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-agent-session-factory";
+import {PiModelCatalog} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-model-catalog";
+import type {PiModel, PiModelCatalogShape} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-model-catalog";
+import {PiResourceCatalog} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-resource-catalog";
+import type {PiResourceCatalogShape} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-resource-catalog";
+import {PiSessionStore} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-session-store";
+import type {PiSessionInfo, PiSessionManager, PiSessionStoreShape} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-session-store";
+import {PiSessionTitleGenerator} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-session-title-generator";
+import type {PiSessionTitleGeneratorShape} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-session-title-generator";
 import type {SendMessageContext} from "@supernova/agent-runtime/implementations/pi/sessions/lib/user-message/send-message-context";
 import {prepareSendMessageContext} from "@supernova/agent-runtime/implementations/pi/sessions/lib/user-message/send-message-context";
-import {findSessionById} from "@supernova/agent-runtime/implementations/pi/sessions/lib/session-resolver";
-import {generateSessionTitle} from "@supernova/agent-runtime/implementations/pi/sessions/lib/session-title-generator";
 import {createLiveBranchEntries} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns/live-branch-entries";
 import {buildPiTurns} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns-builder";
 import {toPiThinkingLevel} from "@supernova/agent-runtime/implementations/pi/sessions/lib/models/thinking-levels";
 
 type PiAgentMessage = AgentSession["messages"][number];
-type PiSessionManager = ReturnType<PiSdkServiceShape["SessionManager"]["open"]>;
-type PiModel = ReturnType<PiSdkServiceShape["modelRegistry"]["getAvailable"]>[number];
 
 type OpenedSession = {
   readonly sessionInfo: PiSessionInfo;
@@ -34,15 +38,23 @@ type PromptContext = OpenedSession & {
 export function sendMessage(input: SendMessagePayload) {
   return Stream.unwrap(
     Effect.gen(function* () {
-      const piSdk = yield* PiSdkService;
+      const agentSessionFactory = yield* PiAgentSessionFactory;
+      const modelCatalog = yield* PiModelCatalog;
+      const resourceCatalog = yield* PiResourceCatalog;
+      const sessionStore = yield* PiSessionStore;
+      const titleGenerator = yield* PiSessionTitleGenerator;
 
       return Stream.callback<SendMessageEvent>((queue) =>
         Effect.gen(function* () {
           const runner = new SendMessageRunner({
+            agentSessionFactory,
             emit: (event) => Queue.offerUnsafe(queue, event),
             end: () => Queue.endUnsafe(queue),
             input,
-            piSdk,
+            modelCatalog,
+            resourceCatalog,
+            sessionStore,
+            titleGenerator,
           });
 
           yield* Effect.addFinalizer(() => Effect.promise(() => runner.release({abort: true})));
@@ -58,18 +70,35 @@ class SendMessageRunner {
   private readonly emit: (event: SendMessageEvent) => void;
   private readonly end: () => void;
   private readonly input: SendMessagePayload;
-  private readonly piSdk: PiSdkServiceShape;
+  private readonly agentSessionFactory: PiAgentSessionFactoryShape;
+  private readonly modelCatalog: PiModelCatalogShape;
+  private readonly resourceCatalog: PiResourceCatalogShape;
+  private readonly sessionStore: PiSessionStoreShape;
+  private readonly titleGenerator: PiSessionTitleGeneratorShape;
   private activeSession: AgentSession | undefined;
   private cancelled = false;
   private emittedGeneratedTitle = false;
   private releasePromise: Promise<void> | undefined;
   private unsubscribe: (() => void) | undefined;
 
-  constructor(input: {emit: (event: SendMessageEvent) => void; end: () => void; input: SendMessagePayload; piSdk: PiSdkServiceShape}) {
+  constructor(input: {
+    agentSessionFactory: PiAgentSessionFactoryShape;
+    emit: (event: SendMessageEvent) => void;
+    end: () => void;
+    input: SendMessagePayload;
+    modelCatalog: PiModelCatalogShape;
+    resourceCatalog: PiResourceCatalogShape;
+    sessionStore: PiSessionStoreShape;
+    titleGenerator: PiSessionTitleGeneratorShape;
+  }) {
+    this.agentSessionFactory = input.agentSessionFactory;
     this.emit = input.emit;
     this.end = input.end;
     this.input = input.input;
-    this.piSdk = input.piSdk;
+    this.modelCatalog = input.modelCatalog;
+    this.resourceCatalog = input.resourceCatalog;
+    this.sessionStore = input.sessionStore;
+    this.titleGenerator = input.titleGenerator;
   }
 
   /** Starts the asynchronous send-message lifecycle without blocking stream setup. */
@@ -112,10 +141,9 @@ class SendMessageRunner {
 
   /** Opens the target session and ensures it has a display title. */
   private async openSession(): Promise<OpenedSession> {
-    const sessionInfo = await findSessionById(this.piSdk, this.input.sessionId);
+    const {info: sessionInfo, manager: sessionManager} = await this.sessionStore.openSessionById(this.input.sessionId);
     this.throwIfCancelled();
 
-    const sessionManager = this.piSdk.SessionManager.open(sessionInfo.path);
     const model = this.findSelectedModel();
     const titleWasGenerated = await this.ensureSessionTitle(sessionManager, model);
 
@@ -124,7 +152,7 @@ class SendMessageRunner {
   }
 
   private findSelectedModel(): PiModel {
-    const model = this.piSdk.modelRegistry.getAvailable().find((candidate) => candidate.provider === this.input.model.providerId && candidate.id === this.input.model.id);
+    const model = this.modelCatalog.getAvailableModels().find((candidate) => candidate.provider === this.input.model.providerId && candidate.id === this.input.model.id);
     if (!model) throw new Error("Selected model is not available.");
     return model;
   }
@@ -133,11 +161,12 @@ class SendMessageRunner {
   private async ensureSessionTitle(sessionManager: PiSessionManager, model: PiModel): Promise<boolean> {
     if (sessionManager.getSessionName() !== undefined) return false;
 
-    const title = await generateSessionTitle({
-      contentParts: this.input.contentParts,
-      model,
-      modelRegistry: this.piSdk.modelRegistry,
-    }).catch(() => "Unknown session");
+    const title = await this.titleGenerator
+      .generateSessionTitle({
+        contentParts: this.input.contentParts,
+        model,
+      })
+      .catch(() => "Unknown session");
 
     sessionManager.appendSessionInfo(title);
     return true;
@@ -145,10 +174,8 @@ class SendMessageRunner {
 
   /** Creates the active Pi agent session and captures the stable branch baseline. */
   private async preparePromptContext(openedSession: OpenedSession): Promise<PromptContext> {
-    const {session} = await this.piSdk.createAgentSession({
-      authStorage: this.piSdk.authStorage,
+    const {session} = await this.agentSessionFactory.createAgentSession({
       cwd: openedSession.sessionInfo.cwd,
-      modelRegistry: this.piSdk.modelRegistry,
       sessionManager: openedSession.sessionManager,
     });
     this.activeSession = session;
@@ -163,7 +190,7 @@ class SendMessageRunner {
       baseBranch,
       baseMessageCount: session.messages.length,
       baseParentId: baseBranch.at(-1)?.id ?? null,
-      messageContext: await prepareSendMessageContext(this.input, {projectPath: openedSession.sessionInfo.cwd}),
+      messageContext: await prepareSendMessageContext(this.input, {projectPath: openedSession.sessionInfo.cwd, resourceCatalog: this.resourceCatalog}),
     };
   }
 

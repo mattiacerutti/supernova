@@ -1,16 +1,16 @@
 import {writeFile} from "node:fs/promises";
 import {Effect} from "effect";
 import {CreateSessionError} from "@supernova/contracts/sessions/procedures";
-import {PiSdkService} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
+import {PiSessionStore} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-session-store";
 
 /** Creates a new empty Pi session for a project. */
 export function createSession(projectPath: string) {
   return Effect.gen(function* () {
-    const piSdk = yield* PiSdkService;
+    const sessionStore = yield* PiSessionStore;
 
     return yield* Effect.tryPromise({
       try: async () => {
-        const sessionManager = piSdk.SessionManager.create(projectPath);
+        const sessionManager = sessionStore.createSessionManager(projectPath);
         const sessionFile = sessionManager.getSessionFile();
         const header = sessionManager.getHeader();
 

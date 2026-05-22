@@ -1,18 +1,13 @@
 import type {Api, Model} from "@earendil-works/pi-ai";
-import {toAgentModelDetails} from "@supernova/agent-runtime/implementations/pi/sessions/lib/models/model-mapper";
 import {describe, expect, it} from "vitest";
+import {toAgentModelDetails} from "@supernova/agent-runtime/implementations/pi/sessions/lib/models/model-mapper";
 
 function model(overrides: Partial<Model<Api>>): Model<Api> {
   return {
     api: "openai-codex-responses",
     baseUrl: "https://chatgpt.com/backend-api",
     contextWindow: 272000,
-    cost: {
-      cacheRead: 0,
-      cacheWrite: 0,
-      input: 0,
-      output: 0,
-    },
+    cost: {cacheRead: 0, cacheWrite: 0, input: 0, output: 0},
     id: "test-model",
     input: ["text"],
     maxTokens: 128000,
@@ -23,13 +18,13 @@ function model(overrides: Partial<Model<Api>>): Model<Api> {
   };
 }
 
-describe("mapping Pi models to agent model details", () => {
-  it("maps image capability from model input modalities", () => {
+describe("mapping Pi models", () => {
+  it("exposes image capability only for image-capable models", () => {
     expect(toAgentModelDetails(model({input: ["text"]}), "OpenAI Codex").capabilities.images).toBe(false);
     expect(toAgentModelDetails(model({input: ["text", "image"]}), "OpenAI Codex").capabilities.images).toBe(true);
   });
 
-  it("deduplicates thinking levels that map to the same native value", () => {
+  it("deduplicates provider-native thinking levels while keeping canonical choices", () => {
     const details = toAgentModelDetails(
       model({
         id: "gpt-5.1-codex-mini",
@@ -46,34 +41,8 @@ describe("mapping Pi models to agent model details", () => {
     ]);
   });
 
-  it("keeps canonical levels when an earlier rung aliases to them", () => {
-    const details = toAgentModelDetails(
-      model({
-        id: "gpt-5.5",
-        name: "GPT-5.5",
-        thinkingLevelMap: {minimal: "low", xhigh: "xhigh"},
-      }),
-      "OpenAI Codex"
-    );
-
-    expect(details.thinkingLevels).toEqual([
-      {label: "Off", value: "off"},
-      {label: "Low", value: "low"},
-      {label: "Medium", value: "medium"},
-      {label: "High", value: "high"},
-      {label: "Xhigh", value: "xhigh"},
-    ]);
-  });
-
-  it("keeps non-Pi native aliases when there is no canonical Pi rung", () => {
-    const details = toAgentModelDetails(
-      model({
-        id: "claude-opus-4-6",
-        name: "Claude Opus 4.6",
-        thinkingLevelMap: {minimal: "low", xhigh: "max"},
-      }),
-      "Anthropic"
-    );
+  it("uses provider-native labels for aliases without a canonical rung", () => {
+    const details = toAgentModelDetails(model({thinkingLevelMap: {minimal: "low", xhigh: "max"}}), "Anthropic");
 
     expect(details.thinkingLevels).toEqual([
       {label: "Off", value: "off"},

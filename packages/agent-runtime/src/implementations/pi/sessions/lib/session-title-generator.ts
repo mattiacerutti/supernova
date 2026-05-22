@@ -1,5 +1,4 @@
-import type {ModelRegistry} from "@earendil-works/pi-coding-agent";
-import {completeSimple} from "@earendil-works/pi-ai";
+import type {AssistantMessage, Context} from "@earendil-works/pi-ai";
 import type {UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 
 const sessionTitleSystemPrompt = `Generate a concise title for this coding session based on the user's first message.
@@ -11,13 +10,7 @@ Rules:
 - Do not add punctuation at the end.
 - Use the language of the user's message.`;
 
-const sessionTitleMaxTokens = 256;
-
-interface GenerateSessionTitleInput {
-  contentParts: readonly UserMessageContentPart[];
-  model: Parameters<typeof completeSimple>[0];
-  modelRegistry: ModelRegistry;
-}
+export const sessionTitleMaxTokens = 256;
 
 /** Creates the user prompt used for title generation from message content parts. */
 function titlePrompt(input: {contentParts: readonly UserMessageContentPart[]}): string {
@@ -31,24 +24,16 @@ function titlePrompt(input: {contentParts: readonly UserMessageContentPart[]}): 
     .trim();
 }
 
-/** Generates a concise display title for a new session from the first user message. */
-export async function generateSessionTitle(input: GenerateSessionTitleInput): Promise<string> {
-  const requestAuth = await input.modelRegistry.getApiKeyAndHeaders(input.model);
-  if (!requestAuth.ok) throw new Error("Failed to get API key and headers for the model.");
+/** Creates the simple completion context used to generate a session title. */
+export function sessionTitleContext(input: {contentParts: readonly UserMessageContentPart[]}): Context {
+  return {
+    messages: [{content: titlePrompt(input), role: "user", timestamp: Date.now()}],
+    systemPrompt: sessionTitleSystemPrompt,
+  };
+}
 
-  const response = await completeSimple(
-    input.model,
-    {
-      messages: [{content: titlePrompt(input), role: "user", timestamp: Date.now()}],
-      systemPrompt: sessionTitleSystemPrompt,
-    },
-    {
-      apiKey: requestAuth.apiKey,
-      headers: requestAuth.headers,
-      maxTokens: sessionTitleMaxTokens,
-    }
-  );
-
+/** Normalizes a model response into a display title. */
+export function titleFromResponse(response: AssistantMessage): string {
   const title = response.content
     .filter((part): part is {type: "text"; text: string} => part.type === "text")
     .map((part) => part.text)

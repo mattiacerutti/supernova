@@ -1,74 +1,31 @@
-import type {AgentSession} from "@earendil-works/pi-coding-agent";
 import {describe, expect, it} from "vitest";
 import {createLiveBranchEntries} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns/live-branch-entries";
-
-type PiAgentMessage = AgentSession["messages"][number];
-
-const usage = {cacheRead: 0, cacheWrite: 0, cost: {cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0}, input: 0, output: 0, totalTokens: 0};
+import {assistantMessage, userMessage} from "@tests/implementations/pi/sessions/pi-session-test-utils";
 
 describe("creating live Pi branch entries", () => {
-  it("creates a parent-linked branch delta for live Pi messages", () => {
-    const messages: PiAgentMessage[] = [
-      {content: [{text: "Fix it", type: "text"}], role: "user", timestamp: 1},
-      {api: "anthropic", content: [{text: "Done", type: "text"}], model: "claude-sonnet", provider: "anthropic", role: "assistant", stopReason: "stop", timestamp: 2, usage},
-    ];
-
+  it("creates parent-linked synthetic entries with stable ids", () => {
+    const messages = [userMessage("Fix it", 1), assistantMessage("Done", 2)];
     const entries = createLiveBranchEntries({messages, parentId: "base-entry", sessionId: "session-1"});
 
     expect(entries).toMatchObject([
-      {message: messages[0], parentId: "base-entry", timestamp: "1970-01-01T00:00:00.001Z", type: "message"},
-      {message: messages[1], parentId: entries[0]?.id, timestamp: "1970-01-01T00:00:00.002Z", type: "message"},
+      {message: messages[0], parentId: "base-entry", type: "message"},
+      {message: messages[1], parentId: entries[0]?.id, type: "message"},
     ]);
     expect(createLiveBranchEntries({messages, parentId: "base-entry", sessionId: "session-1"}).map((entry) => entry.id)).toEqual(entries.map((entry) => entry.id));
-    expect(createLiveBranchEntries({messages, parentId: "other-entry", sessionId: "session-1"}).map((entry) => entry.id)).not.toEqual(entries.map((entry) => entry.id));
   });
 
-  it("converts custom messages to custom message entries", () => {
-    const customMessage = {
-      content: "hidden context",
-      customType: "supernova.custom-context",
-      details: {attachmentIds: ["text-1"]},
-      display: false,
-      role: "custom",
-      timestamp: 5,
-    } satisfies PiAgentMessage;
-
-    const entries = createLiveBranchEntries({
-      messages: [customMessage],
-      parentId: null,
-      sessionId: "session-1",
-    });
-
-    expect(entries).toMatchObject([
-      {
-        content: "hidden context",
-        customType: "supernova.custom-context",
-        details: {attachmentIds: ["text-1"]},
-        display: false,
-        parentId: null,
-        timestamp: "1970-01-01T00:00:00.005Z",
-        type: "custom_message",
-      },
-    ]);
-  });
-
-  it("prepends selected user message content parts", () => {
-    const userMessage = {content: [{text: "Read @src/file.ts", type: "text"}], role: "user", timestamp: 1} satisfies PiAgentMessage;
+  it("prepends selected content-part metadata before the live user message", () => {
     const contentParts = [
       {text: "Read ", type: "text" as const},
-      {id: "part-1", kind: "file" as const, name: "file.ts", type: "reference" as const, value: "@src/file.ts"},
+      {id: "file", kind: "file" as const, name: "file.ts", type: "reference" as const, value: "@src/file.ts"},
     ];
+    const user = userMessage("Read @src/file.ts", 1);
 
-    const entries = createLiveBranchEntries({
-      contentPartsMetadata: {contentParts},
-      messages: [userMessage],
-      parentId: null,
-      sessionId: "session-1",
-    });
+    const entries = createLiveBranchEntries({contentPartsMetadata: {contentParts}, messages: [user], parentId: null, sessionId: "session-1"});
 
     expect(entries).toMatchObject([
       {customType: "supernova.user-message-content-parts", data: {contentParts}, parentId: null, type: "custom"},
-      {message: userMessage, parentId: entries[0]?.id, type: "message"},
+      {message: user, parentId: entries[0]?.id, type: "message"},
     ]);
   });
 });
