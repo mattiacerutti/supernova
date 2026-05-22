@@ -2,7 +2,7 @@ import {mkdir, mkdtemp, writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {describe, expect, it} from "vitest";
-import {buildPrompt} from "@supernova/agent-runtime/implementations/pi/sessions/lib/message-context/prompt-builder";
+import {buildPrompt} from "@supernova/agent-runtime/implementations/pi/sessions/lib/user-message/prompt-builder";
 
 describe("building Pi user prompts", () => {
   it("renders text and references into the authored prompt", async () => {

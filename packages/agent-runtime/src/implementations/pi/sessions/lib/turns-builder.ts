@@ -4,7 +4,7 @@ import {createTurn} from "@supernova/agent-runtime/implementations/shared/turns"
 import {generateStableId} from "@supernova/agent-runtime/implementations/shared/id-generator";
 import {PiToolInvocationFactory} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns/tool-invocation-factory";
 import type {PiToolInvocation} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns/tool-invocation-factory";
-import {USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE, enrichContentPartsWithImages} from "@supernova/agent-runtime/implementations/pi/sessions/lib/message-context/content-parts";
+import {USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE, enrichContentPartsWithImages} from "@supernova/agent-runtime/implementations/pi/sessions/lib/user-message/content-parts";
 
 function isMessageEntry(entry: SessionEntry): entry is SessionMessageEntry {
   return entry.type === "message";

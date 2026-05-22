@@ -1,5 +1,5 @@
 import {describe, expect, it} from "vitest";
-import {prepareSendMessageContext} from "@supernova/agent-runtime/implementations/pi/sessions/lib/message-context/send-message-context";
+import {prepareSendMessageContext} from "@supernova/agent-runtime/implementations/pi/sessions/lib/user-message/send-message-context";
 import {imageAttachment, textAttachment} from "@tests/implementations/pi/sessions/pi-session-test-utils";
 
 describe("preparing Pi send-message context", () => {

@@ -2,7 +2,7 @@ import {readFile} from "node:fs/promises";
 import {DefaultResourceLoader, getAgentDir, SettingsManager} from "@earendil-works/pi-coding-agent";
 import type {Skill} from "@earendil-works/pi-coding-agent";
 import type {UserMessageAttachmentPart, UserMessageContentPart, UserMessageReferencePart} from "@supernova/contracts/sessions/schemas";
-import {contentFromParts} from "@supernova/agent-runtime/implementations/pi/sessions/lib/message-context/content-parts";
+import {contentFromParts} from "@supernova/agent-runtime/implementations/pi/sessions/lib/user-message/content-parts";
 
 function escapeXml(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&apos;");

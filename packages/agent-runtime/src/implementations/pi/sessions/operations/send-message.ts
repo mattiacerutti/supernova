@@ -4,8 +4,8 @@ import type {SendMessagePayload, SendMessageEvent} from "@supernova/contracts/se
 import type {SessionSummary} from "@supernova/contracts/sessions/schemas";
 import {PiSdkService} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
 import type {PiSdkServiceShape, PiSessionInfo} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
-import type {SendMessageContext} from "@supernova/agent-runtime/implementations/pi/sessions/lib/message-context/send-message-context";
-import {prepareSendMessageContext} from "@supernova/agent-runtime/implementations/pi/sessions/lib/message-context/send-message-context";
+import type {SendMessageContext} from "@supernova/agent-runtime/implementations/pi/sessions/lib/user-message/send-message-context";
+import {prepareSendMessageContext} from "@supernova/agent-runtime/implementations/pi/sessions/lib/user-message/send-message-context";
 import {findSessionById} from "@supernova/agent-runtime/implementations/pi/sessions/lib/session-resolver";
 import {generateSessionTitle} from "@supernova/agent-runtime/implementations/pi/sessions/lib/session-title-generator";
 import {createLiveBranchEntries} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns/live-branch-entries";
