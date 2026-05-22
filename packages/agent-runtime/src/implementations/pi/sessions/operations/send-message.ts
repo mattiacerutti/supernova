@@ -127,10 +127,14 @@ class SendMessageRunner {
       const openedSession = await this.openSession();
       const context = await this.preparePromptContext(openedSession);
 
-      this.emit({turns: buildPiTurns(context.baseBranch, this.input.model), type: "ready"});
-      await this.appendUserMessageContext(context);
+      // Emits the full base branch as initial turns, so the client has full context before live updates start.
+      const baseTurns = buildPiTurns(context.baseBranch, this.input.model);
+      this.emit({turns: baseTurns, type: "ready"});
+
       this.subscribeToLiveUpdates(context);
-      await this.promptAndEmitFinalTurns(context);
+
+      await this.appendCustomEntries(context);
+      await this.sendPrompt(context);
     } catch (cause) {
       if (!this.cancelled) this.emit({error: cause instanceof Error ? cause.message : "Failed to send message.", type: "error"});
     } finally {
@@ -194,58 +198,85 @@ class SendMessageRunner {
     };
   }
 
-  private async appendUserMessageContext(context: PromptContext): Promise<void> {
+  private async appendCustomEntries(context: PromptContext): Promise<void> {
     for (const entry of context.messageContext.customEntries) {
       context.sessionManager.appendCustomEntry(entry.customType, entry.data);
     }
   }
 
-  /** Subscribes to Pi live updates and emits interpolated streaming turns. */
+  /** Subscribes to Pi live updates and emits live turns */
   private subscribeToLiveUpdates(context: PromptContext): void {
     this.unsubscribe = this.activeSession?.subscribe((event) => {
       switch (event.type) {
         case "message_update":
         case "message_end":
-          if ("message" in event) this.emitLiveTurn(context, this.liveMessages(context, event.message));
+          const liveMessages = this.getLiveMessages(context, event.message);
+          this.emitLiveTurn(context, liveMessages);
           break;
         case "tool_execution_start":
         case "tool_execution_end":
-          this.emitLiveTurn(context, this.liveMessages(context));
+          this.emitLiveTurn(context, this.getLiveMessages(context));
           break;
       }
     });
   }
 
   /** Sends the prompt to Pi and emits the final normalized turn list. */
-  private async promptAndEmitFinalTurns(context: PromptContext): Promise<void> {
+  private async sendPrompt(context: PromptContext): Promise<void> {
     try {
       const images = context.messageContext.images;
       await this.activeSession?.prompt(context.messageContext.prompt, images.length > 0 ? {images: [...images]} : undefined);
-      const liveEntries = this.liveBranchEntries(context, this.activeSession?.messages.slice(context.baseMessageCount) ?? []);
-      this.emit({turns: buildPiTurns([...context.baseBranch, ...liveEntries], this.input.model), type: "done"});
+
+      // Even after the prompt has resolved, there may be messages that haven't been persisted yet in the session branch
+      // due to the timing of updates and file writes. To ensure the final emitted turn list is complete, we capture live messages one last time and build synthetic entries for them to feed into the turns builder.
+      const liveMessages = this.getLiveMessages(context);
+      const syntheticEntries = this.createLiveBranchEntries(context, liveMessages);
+
+      this.emit({turns: buildPiTurns([...context.baseBranch, ...syntheticEntries], this.input.model), type: "done"});
     } finally {
       await this.release({abort: false});
     }
   }
 
-  /** Emits the current live branch as a single streaming turn. */
-  private emitLiveTurn(context: PromptContext, messages: readonly PiAgentMessage[]): void {
-    const [turn] = buildPiTurns(this.liveBranchEntries(context, messages), this.input.model);
-    if (!turn) return;
-
-    const session = this.titleSummary(context);
-    this.emit(session ? {session, turn: {...turn, status: "streaming"}, type: "turn"} : {turn: {...turn, status: "streaming"}, type: "turn"});
-  }
-
-  /** Returns Pi live messages, including event payload messages not yet reflected on the session. */
-  private liveMessages(context: PromptContext, message?: PiAgentMessage): readonly PiAgentMessage[] {
+  /** Returns current live messages from the active session.
+   * If a message is provided, ensures it's included in the output even if it hasn't been captured by the session's messages array yet, which can happen for the currently streaming message due to timing of updates and event emissions.
+   */
+  private getLiveMessages(context: PromptContext, message?: PiAgentMessage): readonly PiAgentMessage[] {
     const messages = this.activeSession?.messages.slice(context.baseMessageCount) ?? [];
+
     if (!message || messages.some((candidate) => candidate === message)) return messages;
+
     return [...messages, message];
   }
 
-  /** Creates transient session entries for messages produced after the base branch snapshot. */
-  private liveBranchEntries(context: PromptContext, messages: readonly PiAgentMessage[]): SessionEntry[] {
+  /** Emits the current live branch as a single streaming turn. */
+  private emitLiveTurn(context: PromptContext, messages: readonly PiAgentMessage[]): void {
+    const syntheticEntries = this.createLiveBranchEntries(context, messages);
+    // We assume that messages we'll always be part of one and only one turn. Therefore, synthetic branches converted
+    // to turns should always have exactly one turn.
+    const [turn] = buildPiTurns(syntheticEntries, this.input.model);
+    if (!turn) return;
+
+    // Turn event optionally supports appending a session summary, which allows sending updated session metadata
+    // (e.g. title) to the client without needing a separate event. We take advantage of this to send the generated title as
+    // soon as it's available.
+    const session = this.sessionSummary(context);
+
+    const event = {
+      type: "turn",
+      turn: {...turn, status: "streaming"},
+      ...(session ? {session} : {}),
+    } satisfies SendMessageEvent;
+
+    this.emit(event);
+  }
+
+  // Synthetic entries creation is needed becuase, due to Pi's design, live messages have  a different shape from the
+  //  persisted branch entries. Since we don't want to duplicate the logic to convert Pi messages
+  // to our normalized turn format, we create synthetic entries that mirror the structure of branch entries from
+  // these messages, so they can be fed into the same turns builder.
+  /** Creates synthetic session entries for messages produced after the base branch snapshot. */
+  private createLiveBranchEntries(context: PromptContext, messages: readonly PiAgentMessage[]): SessionEntry[] {
     return createLiveBranchEntries({
       contentPartsMetadata: {contentParts: context.messageContext.contentParts},
       messages,
@@ -254,8 +285,8 @@ class SendMessageRunner {
     });
   }
 
-  /** Builds a one-time title update when this request generated the session title. */
-  private titleSummary(context: PromptContext): SessionSummary | undefined {
+  /** Builds a one-time session summary used to update the session's metadata. */
+  private sessionSummary(context: PromptContext): SessionSummary | undefined {
     if (!context.titleWasGenerated || this.emittedGeneratedTitle) return;
 
     const title = context.sessionManager.getSessionName();

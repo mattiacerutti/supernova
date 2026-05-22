@@ -192,7 +192,7 @@ class PiTurnBuilder {
   }
 }
 
-/** Builds normalized Supernova turns from Pi session entries. */
+/** Builds normalized turns from Pi session entries. */
 export function buildPiTurns(entries: readonly SessionEntry[], fallbackModel: ModelReference): Turn[] {
   const builder = new PiTurnBuilder(fallbackModel);
 
