@@ -4,7 +4,7 @@ import type {Editor, JSONContent} from "@tiptap/react";
 function contentPartValue(part: UserMessageContentPart): string {
   if (part.type === "text") return part.text;
   if (part.type === "reference") return part.value;
-  return part.name;
+  return "";
 }
 
 function pushTextContentPart(parts: UserMessageContentPart[], text: string): void {

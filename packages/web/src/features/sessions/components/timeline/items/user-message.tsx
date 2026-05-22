@@ -68,7 +68,7 @@ export default function UserMessage(props: UserMessageProps) {
     <article className="group/message flex justify-end">
       <div className="flex max-w-lg flex-col items-end gap-2">
         {attachments.length > 0 && (
-          <div className="flex flex-wrap justify-end gap-2">
+          <div className="flex flex-wrap items-end justify-end gap-2">
             {attachments.map((attachment) => (
               <MessageAttachmentPreview attachment={attachment} key={attachment.id} />
             ))}

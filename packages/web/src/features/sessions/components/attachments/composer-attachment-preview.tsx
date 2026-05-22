@@ -24,11 +24,11 @@ export default function ComposerAttachmentPreview(props: ComposerAttachmentPrevi
 
   if (imageUrl) {
     return (
-      <div className="relative overflow-hidden rounded-2xl corner-superellipse/1.4 bg-neutral-900 ring-1 ring-white/8">
-        <img alt={attachment.name} className="block max-h-32 max-w-52 object-cover" src={imageUrl} />
+      <div className="relative size-24 overflow-hidden rounded-2xl corner-superellipse/1.4 bg-neutral-900 ring-1 ring-white/8">
+        <img alt={attachment.name} className="block size-full object-cover object-center" src={imageUrl} />
         <button
           aria-label={`Remove ${attachment.name}`}
-          className="absolute right-1.5 top-1.5 grid size-5 place-items-center rounded-full bg-neutral-950/80 text-neutral-100 opacity-90 transition hover:bg-neutral-950 hover:text-white"
+          className="absolute right-1.5 top-1.5 grid size-5 cursor-pointer place-items-center rounded-full bg-neutral-100 text-neutral-950 opacity-90 transition hover:scale-105 hover:bg-white"
           onClick={handleRemove}
           type="button"
         >
@@ -53,7 +53,7 @@ export default function ComposerAttachmentPreview(props: ComposerAttachmentPrevi
 
       <button
         aria-label={`Remove ${attachment.name}`}
-        className="absolute right-2 top-2 grid size-6 place-items-center rounded-full bg-neutral-100 text-neutral-950 transition hover:bg-white"
+        className="absolute right-2 top-2 grid size-6 cursor-pointer place-items-center rounded-full bg-neutral-100 text-neutral-950 transition hover:scale-105 hover:bg-white"
         onClick={handleRemove}
         type="button"
       >
