@@ -1,3 +1,4 @@
+import {SettingsManager} from "@earendil-works/pi-coding-agent";
 import type {AgentSession} from "@earendil-works/pi-coding-agent";
 import {Context, Effect, Layer} from "effect";
 import {PiSdkService} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
@@ -16,13 +17,19 @@ export const PiAgentSessionFactoryLive = Layer.effect(
     const piSdk = yield* PiSdkService;
 
     return {
-      createAgentSession: ({cwd, sessionManager}) =>
-        piSdk.createAgentSession({
+      createAgentSession: async ({cwd, sessionManager}) => {
+        const resourceLoader = piSdk.createResourceLoader({projectPath: cwd});
+        await resourceLoader.reload();
+
+        return piSdk.createAgentSession({
           authStorage: piSdk.authStorage,
           cwd,
           modelRegistry: piSdk.modelRegistry,
+          resourceLoader,
           sessionManager,
-        }),
+          settingsManager: SettingsManager.inMemory(),
+        });
+      },
     };
   })
 );
