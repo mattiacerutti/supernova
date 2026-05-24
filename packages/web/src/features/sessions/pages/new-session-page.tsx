@@ -85,7 +85,7 @@ export default function NewSessionPage(props: NewSessionPageProps) {
           setSessionModel(session.id, modelReference);
           recordRecentModel(resolvedModelKey);
           setLastThinkingLevel(resolvedThinkingLevel);
-          startStream({contentParts, model: modelReference, projectPath, queryClient, rpcClient, sessionId: session.id, sessionTurns: session.turns});
+          startStream({contentParts, model: modelReference, queryClient, rpcClient, sessionId: session.id, sessionTurns: session.turns});
           void navigate({params: {sessionId: session.id}, to: "/session/$sessionId"});
         },
       }

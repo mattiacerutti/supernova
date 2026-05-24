@@ -2,7 +2,7 @@ import type {AgentSession, PromptTemplate, SessionEntry, Skill} from "@earendil-
 import {AuthStorage, createAgentSession, ModelRegistry, SessionManager, SettingsManager} from "@earendil-works/pi-coding-agent";
 import type {Api, FauxProviderRegistration} from "@earendil-works/pi-ai";
 import {fauxAssistantMessage, fauxText, fauxThinking, registerFauxProvider} from "@earendil-works/pi-ai";
-import {Effect, Layer, Stream} from "effect";
+import {Effect, Fiber, Layer, ManagedRuntime, Stream} from "effect";
 import {PiAgentSessionFactory} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-agent-session-factory";
 import type {PiAgentSessionFactoryShape} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-agent-session-factory";
 import {PiModelCatalog} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-model-catalog";
@@ -13,9 +13,11 @@ import {PiSessionStore} from "@supernova/agent-runtime/implementations/pi/sessio
 import type {PiSessionInfo, PiSessionManager, PiSessionStoreShape} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-session-store";
 import {PiSessionTitleGenerator} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-session-title-generator";
 import type {PiSessionTitleGeneratorShape} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-session-title-generator";
+import {SessionEventBusLive} from "@supernova/agent-runtime/implementations/pi/sessions/internal/session-event-bus";
+import {SessionRuntimeManagerLive} from "@supernova/agent-runtime/implementations/pi/sessions/internal/session-runtime-manager";
 import {PiSessionsFromInternal} from "@supernova/agent-runtime/implementations/pi/sessions/pi-sessions-live";
 import {SessionsService} from "@supernova/agent-runtime/services/sessions/sessions-service";
-import type {SendMessageEvent, SendMessagePayload} from "@supernova/contracts/sessions/procedures";
+import type {SendMessagePayload, SessionStreamEvent} from "@supernova/contracts/sessions/procedures";
 import type {ModelReference, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 
 export {fauxAssistantMessage, fauxText, fauxThinking};
@@ -120,8 +122,8 @@ export function appendConversation(manager: PiSessionManager, input?: {assistant
   manager.appendMessage(fauxAssistantMessage(assistantText, {timestamp: 2}));
 }
 
-export async function collectEvents(stream: Stream.Stream<SendMessageEvent>): Promise<SendMessageEvent[]> {
-  const events: SendMessageEvent[] = [];
+export async function collectEvents(stream: Stream.Stream<SessionStreamEvent>): Promise<SessionStreamEvent[]> {
+  const events: SessionStreamEvent[] = [];
   await Effect.runPromise(Stream.runForEach(stream, (event) => Effect.sync(() => events.push(event))));
   return events;
 }
@@ -164,7 +166,9 @@ function registerFauxModel(input: {authStorage: AuthStorage; faux: FauxProviderR
 
 export function createPiTestRuntime(input?: {
   readonly promptTemplates?: readonly PromptTemplate[];
+  readonly reopenManagers?: boolean;
   readonly sessionDir?: string;
+  readonly settings?: Parameters<typeof SettingsManager.inMemory>[0];
   readonly skillContentByPath?: Readonly<Record<string, string>>;
   readonly skills?: readonly Skill[];
 }) {
@@ -194,7 +198,7 @@ export function createPiTestRuntime(input?: {
         modelRegistry,
         noTools: "all",
         sessionManager,
-        settingsManager: SettingsManager.inMemory(),
+        settingsManager: SettingsManager.inMemory(input?.settings),
       }),
   };
   const sessionStore: PiSessionStoreShape = {
@@ -202,6 +206,9 @@ export function createPiTestRuntime(input?: {
     openSessionById: async (sessionId) => {
       const session = sessions.get(sessionId);
       if (!session) throw new Error("Session not found.");
+      const sessionFile = session.manager.getSessionFile();
+      if (input?.reopenManagers && input.sessionDir && sessionFile)
+        return {info: {...session.info, path: sessionFile}, manager: SessionManager.open(sessionFile, input.sessionDir)};
       return session;
     },
   };
@@ -234,16 +241,33 @@ export function createPiTestRuntime(input?: {
     Layer.succeed(PiSessionStore, sessionStore),
     Layer.succeed(PiSessionTitleGenerator, titleGenerator)
   );
-  const sessionsLive = PiSessionsFromInternal.pipe(Layer.provide(internalLive));
-  const runWithSessions = <A, E>(effect: Effect.Effect<A, E, SessionsService>) => Effect.runPromise(effect.pipe(Effect.provide(sessionsLive)));
-  const sendMessage = (messageInput: Omit<SendMessagePayload, "contentParts"> & {readonly contentParts?: SendMessagePayload["contentParts"]; readonly message?: string}) =>
-    runWithSessions(
+  const runtimeLive = SessionRuntimeManagerLive.pipe(Layer.provide(Layer.mergeAll(internalLive, SessionEventBusLive)));
+  const sessionsLive = PiSessionsFromInternal.pipe(Layer.provide(Layer.mergeAll(internalLive, SessionEventBusLive, runtimeLive)));
+  const runtime = ManagedRuntime.make(sessionsLive);
+  const runWithSessions = <A, E>(effect: Effect.Effect<A, E, SessionsService>) => runtime.runPromise(effect);
+  const sendMessage = async (messageInput: Omit<SendMessagePayload, "contentParts"> & {readonly contentParts?: SendMessagePayload["contentParts"]; readonly message?: string}) => {
+    const events: SessionStreamEvent[] = [];
+    const watcher = runtime.runFork(
+      Effect.gen(function* () {
+        const sessionsService = yield* SessionsService;
+        yield* Stream.runForEach(sessionsService.watchEvents(), (event) => Effect.sync(() => events.push(event)));
+      })
+    );
+    await waitUntil(() => {
+      if (!events.some((event) => event.type === "connected")) throw new Error("Stream did not connect.");
+    });
+
+    await runWithSessions(
       Effect.gen(function* () {
         const sessionsService = yield* SessionsService;
         const {message, ...payload} = messageInput;
-        return yield* Effect.promise(() => collectEvents(sessionsService.sendMessage({contentParts: message ? [{text: message, type: "text"}] : [], ...payload})));
+        yield* sessionsService.sendMessage({contentParts: message ? [{text: message, type: "text"}] : [], ...payload});
+        yield* Effect.sleep("300 millis");
       })
     );
+    await runtime.runPromise(Fiber.interrupt(watcher).pipe(Effect.ignore));
+    return events;
+  };
 
   return {
     appendConversation: (manager: PiSessionManager, options?: {assistantText?: string; requestText?: string}) => appendConversation(manager, options),
@@ -258,11 +282,15 @@ export function createPiTestRuntime(input?: {
     agentSessionFactory,
     modelCatalog,
     resourceCatalog,
+    runtime,
     sessionStore,
     sendMessage,
     sessionsLive,
     titleGenerator,
-    unregister: () => faux.unregister(),
+    unregister: () => {
+      runtime.dispose();
+      faux.unregister();
+    },
   };
 }
 

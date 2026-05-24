@@ -1,5 +1,7 @@
+export * from "./abort-session";
 export * from "./create-session";
 export * from "./get-session";
 export * from "./list-composer-suggestions";
 export * from "./list-models";
 export * from "./send-message";
+export * from "./watch-events";

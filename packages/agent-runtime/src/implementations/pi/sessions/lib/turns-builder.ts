@@ -1,10 +1,27 @@
-import type {AgentSession, CustomEntry, SessionEntry, SessionMessageEntry} from "@earendil-works/pi-coding-agent";
-import type {ModelReference, ToolTurnEvent, Turn, TurnEvent, UserMessage} from "@supernova/contracts/sessions/schemas";
+import type {CompactionEntry, CustomEntry, SessionEntry, SessionMessageEntry} from "@earendil-works/pi-coding-agent";
+import type {AssistantMessage, ToolResultMessage, UserMessage as PiUserMessage} from "@earendil-works/pi-ai";
+import type {CompactionTurnEvent, ModelReference, ToolTurnEvent, Turn, TurnEvent, UserMessage} from "@supernova/contracts/sessions/schemas";
 import {createTurn} from "@supernova/agent-runtime/implementations/shared/turns";
 import {generateStableId} from "@supernova/agent-runtime/implementations/shared/id-generator";
 import {PiToolInvocationFactory} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns/tool-invocation-factory";
 import type {PiToolInvocation} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns/tool-invocation-factory";
 import {USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE, enrichContentPartsWithImages} from "@supernova/agent-runtime/implementations/pi/sessions/lib/user-message/content-parts";
+
+type UserMessageEntry = SessionMessageEntry & {message: PiUserMessage};
+type AssistantMessageEntry = SessionMessageEntry & {message: AssistantMessage};
+type ToolResultMessageEntry = SessionMessageEntry & {message: ToolResultMessage};
+
+function isUserEntry(entry: SessionMessageEntry): entry is UserMessageEntry {
+  return entry.message.role === "user";
+}
+
+function isAssistantEntry(entry: SessionMessageEntry): entry is AssistantMessageEntry {
+  return entry.message.role === "assistant";
+}
+
+function isToolResultEntry(entry: SessionMessageEntry): entry is ToolResultMessageEntry {
+  return entry.message.role === "toolResult";
+}
 
 function isMessageEntry(entry: SessionEntry): entry is SessionMessageEntry {
   return entry.type === "message";
@@ -14,18 +31,8 @@ function isContentPartsEntry(entry: SessionEntry): entry is CustomEntry<{readonl
   return entry.type === "custom" && entry.customType === USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE;
 }
 
-type PiMessageEntry<Role extends AgentSession["messages"][number]["role"]> = SessionMessageEntry & {message: Extract<AgentSession["messages"][number], {role: Role}>};
-
-function isUserEntry(entry: SessionMessageEntry): entry is PiMessageEntry<"user"> {
-  return entry.message.role === "user";
-}
-
-function isAssistantEntry(entry: SessionMessageEntry): entry is PiMessageEntry<"assistant"> {
-  return entry.message.role === "assistant";
-}
-
-function isToolResultEntry(entry: SessionMessageEntry): entry is PiMessageEntry<"toolResult"> {
-  return entry.message.role === "toolResult";
+function isCompactionEntry(entry: SessionEntry): entry is CompactionEntry {
+  return entry.type === "compaction";
 }
 
 /** Collects events for one user-started turn before finalizing it. */
@@ -39,7 +46,7 @@ class PiTurnDraft {
   }
 
   /** Appends assistant content, reasoning, tool calls, and assistant errors as turn events. */
-  public addAssistantEntry(entry: PiMessageEntry<"assistant">): boolean {
+  public addAssistantEntry(entry: AssistantMessageEntry): boolean {
     const message = entry.message;
     const error = message.stopReason === "aborted" ? undefined : message.errorMessage;
     if (message.content.length === 0 && !error) return false;
@@ -87,7 +94,7 @@ class PiTurnDraft {
   }
 
   /** Completes a matching tool call event or appends an orphan tool result event. */
-  public addToolResultEntry(entry: PiMessageEntry<"toolResult">): boolean {
+  public addToolResultEntry(entry: ToolResultMessageEntry): boolean {
     const message = entry.message;
     const completion = {details: message.details, isError: Boolean(message.isError), output: message.content};
 
@@ -114,6 +121,25 @@ class PiTurnDraft {
     return true;
   }
 
+  /** Appends a context compaction event to the active turn. */
+  public addCompactionEntry(entry: CompactionEntry): boolean {
+    // Since compaction entry is not persisted until it is completed, a pending compaction entry
+    // is created by synthetically with no data.
+    const pending = entry.summary.length === 0 && entry.firstKeptEntryId.length === 0 && entry.tokensBefore === 0;
+
+    const event = {
+      id: entry.id,
+      status: pending ? "pending" : "completed",
+      ...(pending ? {} : {summary: entry.summary}),
+      timestamp: entry.timestamp,
+      type: "compaction",
+    } satisfies CompactionTurnEvent;
+
+    this.events.push(event);
+
+    return true;
+  }
+
   /** Finalizes the draft into a shared turn. */
   public toTurn(model: ModelReference): Turn {
     return createTurn({events: this.events, model, userMessage: this.userMessage});
@@ -124,9 +150,10 @@ class PiTurnDraft {
 class PiTurnBuilder {
   private readonly fallbackModel: ModelReference;
   private readonly turns: Turn[] = [];
-  private readonly contentPartsByParent = new Map<string, {readonly contentParts: UserMessage["contentParts"]}>();
-  private readonly parentByEntryId = new Map<string, string | null>();
   private currentTurn: PiTurnDraft | undefined;
+  private pendingContentParts: UserMessage["contentParts"] = [];
+
+  private pendingCompactionEntries: CompactionEntry[] = [];
 
   public constructor(fallbackModel: ModelReference) {
     this.fallbackModel = fallbackModel;
@@ -134,11 +161,19 @@ class PiTurnBuilder {
 
   /** Adds one Pi session entry to the current turn-building state. */
   public addEntry(entry: SessionEntry): boolean {
-    this.parentByEntryId.set(entry.id, entry.parentId);
-
     if (isContentPartsEntry(entry)) {
-      this.contentPartsByParent.set(entry.id, {contentParts: entry.data?.contentParts ?? []});
+      this.completeCurrentTurn();
+      this.pendingContentParts = [...(entry.data?.contentParts ?? [])];
       return true;
+    }
+
+    if (isCompactionEntry(entry)) {
+      if (!this.currentTurn) {
+        this.pendingCompactionEntries.push(entry);
+        return true;
+      }
+
+      return this.currentTurn.addCompactionEntry(entry);
     }
 
     if (!isMessageEntry(entry)) return false;
@@ -160,29 +195,21 @@ class PiTurnBuilder {
     return [...this.turns, this.currentTurn.toTurn(this.fallbackModel)];
   }
 
-  private startUserTurn(entry: PiMessageEntry<"user">): boolean {
-    const metadata = this.findParentMetadata(entry.parentId, this.contentPartsByParent);
-    if (!metadata?.contentParts.length) return false;
+  private startUserTurn(entry: UserMessageEntry): boolean {
+    if (this.pendingContentParts.length === 0) return false;
 
     this.completeCurrentTurn();
     this.currentTurn = new PiTurnDraft({
-      contentParts: enrichContentPartsWithImages({content: entry.message.content, contentParts: metadata.contentParts}),
+      contentParts: enrichContentPartsWithImages({content: entry.message.content, contentParts: this.pendingContentParts}),
       id: entry.id,
       timestamp: entry.timestamp,
     });
-    return true;
-  }
-
-  /** Walks parent links to find metadata associated with an ancestor entry. */
-  private findParentMetadata<T>(parentId: string | null, metadataByParent: ReadonlyMap<string, T>): T | undefined {
-    let currentParentId = parentId;
-    while (currentParentId) {
-      const metadata = metadataByParent.get(currentParentId);
-      if (metadata) return metadata;
-      currentParentId = this.parentByEntryId.get(currentParentId) ?? null;
+    this.pendingContentParts = [];
+    for (const entry of this.pendingCompactionEntries) {
+      this.currentTurn.addCompactionEntry(entry);
     }
-
-    return undefined;
+    this.pendingCompactionEntries = [];
+    return true;
   }
 
   private completeCurrentTurn(): void {

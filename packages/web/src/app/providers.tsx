@@ -1,7 +1,7 @@
 import {QueryClient, QueryClientProvider} from "@tanstack/react-query";
 import {useState} from "react";
 import ToastProvider from "@/components/ui/toast";
-import SessionStreamsProvider from "@/features/sessions/components/session-streams-provider";
+import SessionEventsProvider from "@/features/sessions/components/session-events-provider";
 import AgentRpcClientProvider from "@/rpc/agent-rpc-client-provider";
 
 interface AppProvidersProps {
@@ -15,9 +15,9 @@ export default function AppProviders(props: AppProvidersProps) {
   return (
     <AgentRpcClientProvider>
       <QueryClientProvider client={queryClient}>
-        <SessionStreamsProvider>
+        <SessionEventsProvider>
           <ToastProvider>{children}</ToastProvider>
-        </SessionStreamsProvider>
+        </SessionEventsProvider>
       </QueryClientProvider>
     </AgentRpcClientProvider>
   );

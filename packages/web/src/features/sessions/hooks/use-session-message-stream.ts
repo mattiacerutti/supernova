@@ -1,8 +1,8 @@
 import type {ModelReference, Turn, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 import type {LegendListRef} from "@legendapp/list/react";
 import {useQueryClient} from "@tanstack/react-query";
-import {useRef} from "react";
-import {buildSessionTimeline} from "@/features/sessions/lib/timeline/build-session-timeline";
+import {useMemo, useRef} from "react";
+import {buildCommittedTimelineItems, buildLiveTimelineItems} from "@/features/sessions/lib/timeline/build-session-timeline";
 import {useSessionStreamStore} from "@/features/sessions/stores/session-stream-store";
 import type {SessionStreamStatus} from "@/features/sessions/stores/session-stream-store";
 import type {SessionTimelineItem} from "@/features/sessions/types/session-timeline-item";
@@ -19,14 +19,13 @@ interface UseSessionMessageStreamResult {
 }
 
 interface UseSessionMessageStreamInput {
-  projectPath: string;
   sessionId: string;
   sessionTurns: readonly Turn[];
   modelReference: ModelReference | undefined;
 }
 
 export function useSessionMessageStream(input: UseSessionMessageStreamInput): UseSessionMessageStreamResult {
-  const {modelReference, projectPath, sessionId, sessionTurns} = input;
+  const {modelReference, sessionId, sessionTurns} = input;
   const queryClient = useQueryClient();
   const rpcClient = useAgentRpcClient();
   const messagesListRef = useRef<LegendListRef>(null);
@@ -38,8 +37,9 @@ export function useSessionMessageStream(input: UseSessionMessageStreamInput): Us
   const streamStatus = stream?.status ?? "idle";
   const isStreaming = streamStatus !== "idle";
   const baseTurns = stream?.turns ?? sessionTurns;
-  const streamTurn = stream?.turn ?? null;
-  const timeline = buildSessionTimeline({live: isStreaming, liveTurn: streamTurn, turns: baseTurns});
+  const streamTurn = stream?.liveTurn ?? null;
+  const committedTimelineItems = useMemo(() => buildCommittedTimelineItems(baseTurns), [baseTurns]);
+  const liveTimelineItems = useMemo(() => buildLiveTimelineItems({live: isStreaming, liveTurn: streamTurn}), [isStreaming, streamTurn]);
 
   const submitMessage = (contentParts: readonly UserMessageContentPart[]): void => {
     if (isStreaming) return;
@@ -50,20 +50,20 @@ export function useSessionMessageStream(input: UseSessionMessageStreamInput): Us
       return;
     }
 
-    startStream({contentParts, model: modelReference, projectPath, queryClient, rpcClient, sessionId, sessionTurns: baseTurns});
+    startStream({contentParts, model: modelReference, queryClient, rpcClient, sessionId, sessionTurns: baseTurns});
     window.requestAnimationFrame(() => {
       void messagesListRef.current?.scrollToEnd({animated: false});
     });
   };
 
   const stopStreaming = (): void => {
-    stopStream(sessionId);
+    stopStream({queryClient, rpcClient, sessionId});
   };
 
   return {
-    committedTimelineItems: timeline.committedItems,
+    committedTimelineItems,
     listRef: messagesListRef,
-    liveTimelineItems: timeline.liveItems,
+    liveTimelineItems,
     stopStreaming,
     streamError: stream?.error ?? null,
     streamStatus,

@@ -5,9 +5,13 @@ import {USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE} from "@supernova/agent-runtime/i
 
 type PiAgentMessage = AgentSession["messages"][number];
 
+function textFromContentParts(contentParts: readonly UserMessageContentPart[]): string {
+  return contentParts.map((part) => (part.type === "text" ? part.text : part.type === "reference" ? part.value : "")).join("");
+}
+
 /** Creates synthetic Pi session entries for messages currently streaming on the live branch. */
 export function createLiveBranchEntries(input: {
-  contentPartsMetadata?: {readonly contentParts: readonly UserMessageContentPart[]};
+  contentParts?: readonly UserMessageContentPart[];
   messages: readonly PiAgentMessage[];
   parentId: string | null;
   sessionId: string;
@@ -15,18 +19,35 @@ export function createLiveBranchEntries(input: {
   let parentId = input.parentId;
   let nextId = 0;
   const entries: SessionEntry[] = [];
+  const timestamp = new Date(input.messages[0]?.timestamp ?? Date.now()).toISOString();
 
-  if (input.contentPartsMetadata?.contentParts.length) {
+  if (input.contentParts?.length) {
     const id = generateStableId("live", [input.sessionId, input.parentId ?? "root", (nextId++).toString()]);
     entries.push({
       customType: USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE,
-      data: input.contentPartsMetadata,
+      data: {contentParts: input.contentParts},
       id,
       parentId,
-      timestamp: new Date(input.messages[0]?.timestamp ?? Date.now()).toISOString(),
+      timestamp,
       type: "custom",
     });
     parentId = id;
+
+    // Pre-prompt compaction can emit snapshots before Pi emits the submitted user message;
+    // add a synthetic anchor so the optimistic user turn stays visible during compaction.
+    if (!input.messages.some((message) => message.role === "user")) {
+      const messageId = generateStableId("live", [input.sessionId, input.parentId ?? "root", (nextId++).toString()]);
+
+      entries.push({
+        id: messageId,
+        message: {content: [{text: textFromContentParts(input.contentParts), type: "text"}], role: "user", timestamp: new Date(timestamp).getTime()},
+        parentId,
+        timestamp,
+        type: "message",
+      });
+
+      parentId = messageId;
+    }
   }
 
   for (const message of input.messages) {
@@ -42,6 +63,17 @@ export function createLiveBranchEntries(input: {
         parentId,
         timestamp: new Date(message.timestamp).toISOString(),
         type: "custom_message",
+      });
+    } else if (message.role === "compactionSummary") {
+      entries.push({
+        id,
+        parentId,
+        summary: message.summary,
+        timestamp: new Date(message.timestamp).toISOString(),
+        tokensBefore: message.tokensBefore,
+        // `compactionSummary` messages do not expose `firstKeptEntryId`; synthetic entries are display-only.
+        firstKeptEntryId: "",
+        type: "compaction",
       });
     } else {
       entries.push({

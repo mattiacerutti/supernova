@@ -31,7 +31,7 @@ function interpolateStreamTurns(current: readonly Turn[], target: readonly Turn[
 
     const events = targetTurn.events.map((targetEvent, eventIndex) => {
       const currentEvent = currentTurn.events[eventIndex]?.id === targetEvent.id ? currentTurn.events[eventIndex] : undefined;
-      if (!currentEvent || targetEvent.type === "tool") return targetEvent;
+      if (!currentEvent || targetEvent.type === "tool" || targetEvent.type === "compaction") return targetEvent;
       if (currentEvent.type !== targetEvent.type) return targetEvent;
 
       const content = revealText(currentEvent.content, targetEvent.content, elapsedMs) ?? "";

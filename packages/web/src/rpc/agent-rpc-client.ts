@@ -47,6 +47,7 @@ export interface AgentRpcClientApi {
 }
 
 export interface AgentRpcClientFiber {
+  readonly completed: Promise<void>;
   readonly interrupt: () => Promise<void>;
 }
 
@@ -92,6 +93,7 @@ class AgentRpcClient implements AgentRpcClientApi {
     const fiber = this.session.runtime.runFork(Effect.suspend(() => execute(client)));
 
     return {
+      completed: this.session.runtime.runPromise(Fiber.await(fiber).pipe(Effect.asVoid)),
       interrupt: () => this.session.runtime.runPromise(Fiber.interrupt(fiber).pipe(Effect.ignore)),
     };
   }

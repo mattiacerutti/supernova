@@ -81,7 +81,7 @@ describe("projecting Pi branch entries into session turns", () => {
     expect(aborted).toMatchObject([{events: [{content: "Stopping.", type: "reasoning"}], status: "completed"}]);
   });
 
-  it("ignores compaction summaries while preserving raw branch messages", () => {
+  it("adds compaction summaries to the turn that triggered them while preserving raw branch messages", () => {
     const entries: SessionEntry[] = [
       contentPartsEntry([{text: "First request", type: "text"}], {id: "first-content"}),
       messageEntry(userMessage("First request", 1), {id: "first-user", parentId: "first-content"}),
@@ -102,9 +102,89 @@ describe("projecting Pi branch entries into session turns", () => {
     ];
 
     expect(buildPiTurns(entries, selectedModelReference)).toMatchObject([
-      {events: [{content: "First response", type: "assistant"}], userMessage: {contentParts: [{text: "First request", type: "text"}]}},
+      {
+        events: [
+          {content: "First response", type: "assistant"},
+          {status: "completed", summary: "Compacted summary", type: "compaction"},
+        ],
+        userMessage: {contentParts: [{text: "First request", type: "text"}]},
+      },
       {events: [{content: "Second response", type: "assistant"}], userMessage: {contentParts: [{text: "Second request", type: "text"}]}},
     ]);
+  });
+
+  it("adds pre-user compaction events to the following user turn", () => {
+    const turns = buildPiTurns(
+      [
+        contentPartsEntry([{text: "First request", type: "text"}], {id: "content"}),
+        {
+          firstKeptEntryId: "kept-user",
+          id: "compaction-before-user",
+          parentId: "content",
+          summary: "Live summary",
+          timestamp: "1970-01-01T00:00:00.002Z",
+          tokensBefore: 1000,
+          type: "compaction",
+        },
+        messageEntry(userMessage("First request", 1), {id: "user", parentId: "compaction-before-user"}),
+        messageEntry(assistantMessage("First response", 2), {id: "assistant", parentId: "user"}),
+      ],
+      selectedModelReference
+    );
+
+    expect(turns).toMatchObject([
+      {
+        events: [
+          {id: "compaction-before-user", status: "completed", summary: "Live summary", type: "compaction"},
+          {content: "First response", type: "assistant"},
+        ],
+      },
+    ]);
+  });
+
+  it("keeps compaction events in order between other turn events", () => {
+    const turns = buildPiTurns(
+      [
+        contentPartsEntry([{text: "First request", type: "text"}], {id: "content"}),
+        messageEntry(userMessage("First request", 1), {id: "user", parentId: "content"}),
+        messageEntry(assistantMessage("Before compaction", 2), {id: "assistant-before", parentId: "user"}),
+        {
+          firstKeptEntryId: "user",
+          id: "compaction-between-events",
+          parentId: "assistant-before",
+          summary: "Compacted summary",
+          timestamp: "1970-01-01T00:00:00.003Z",
+          tokensBefore: 1000,
+          type: "compaction",
+        },
+        messageEntry(assistantMessage("After compaction", 4), {id: "assistant-after", parentId: "compaction-between-events"}),
+      ],
+      selectedModelReference
+    );
+
+    expect(turns).toMatchObject([
+      {
+        events: [
+          {content: "Before compaction", type: "assistant"},
+          {id: "compaction-between-events", status: "completed", summary: "Compacted summary", type: "compaction"},
+          {content: "After compaction", type: "assistant"},
+        ],
+        status: "completed",
+      },
+    ]);
+  });
+
+  it("maps empty synthetic compaction entries as pending events", () => {
+    const turns = buildPiTurns(
+      [
+        contentPartsEntry([{text: "First request", type: "text"}], {id: "content"}),
+        {firstKeptEntryId: "", id: "pending-compaction", parentId: "content", summary: "", timestamp: "1970-01-01T00:00:00.002Z", tokensBefore: 0, type: "compaction"},
+        messageEntry(userMessage("First request", 1), {id: "user", parentId: "pending-compaction"}),
+      ],
+      selectedModelReference
+    );
+
+    expect(turns).toMatchObject([{events: [{id: "pending-compaction", status: "pending", type: "compaction"}]}]);
   });
 
   it("uses stored content parts as the display source and restores image previews by image order", () => {

@@ -48,7 +48,13 @@ describe("Pi sessions service", () => {
     );
 
     expect(session.turns).toMatchObject([
-      {events: [{content: "Original answer", type: "assistant"}], userMessage: {contentParts: [{text: "Before compaction", type: "text"}]}},
+      {
+        events: [
+          {content: "Original answer", type: "assistant"},
+          {status: "completed", summary: "Summary that should not render", type: "compaction"},
+        ],
+        userMessage: {contentParts: [{text: "Before compaction", type: "text"}]},
+      },
       {events: [{content: "Recent answer", type: "assistant"}], userMessage: {contentParts: [{text: "After compaction", type: "text"}]}},
     ]);
   });

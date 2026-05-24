@@ -74,7 +74,6 @@ function SessionConversation(props: SessionConversationProps) {
 
   const stream = useSessionMessageStream({
     modelReference: selectedModelReference,
-    projectPath: session.projectPath,
     sessionId: session.id,
     sessionTurns: session.turns,
   });

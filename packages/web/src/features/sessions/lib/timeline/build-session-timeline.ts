@@ -41,6 +41,8 @@ function turnToTimelineItems(turn: Turn, live: boolean): SessionTimelineItem[] {
       continue;
     }
 
+    if (event.type === "compaction") continue;
+
     flushWork(false, event.timestamp);
     items.push({event, id: `assistant:${event.id}`, live, spacing: "message", turnId: turn.id, type: "assistant"});
   }
@@ -55,7 +57,18 @@ export function buildSessionTimeline(input: BuildSessionTimelineInput): SessionT
   const {live, liveTurn, turns} = input;
 
   return {
-    committedItems: turns.flatMap((turn) => turnToTimelineItems(turn, false)),
-    liveItems: liveTurn ? turnToTimelineItems(liveTurn, live) : [],
+    committedItems: buildCommittedTimelineItems(turns),
+    liveItems: buildLiveTimelineItems({live, liveTurn}),
   };
+}
+
+/** Builds timeline items for persisted turns. Callers can cache this by committed turn array identity. */
+export function buildCommittedTimelineItems(turns: readonly Turn[]): readonly SessionTimelineItem[] {
+  return turns.flatMap((turn) => turnToTimelineItems(turn, false));
+}
+
+/** Builds timeline items for the active turn only. */
+export function buildLiveTimelineItems(input: {readonly live: boolean; readonly liveTurn: Turn | null}): readonly SessionTimelineItem[] {
+  const {live, liveTurn} = input;
+  return liveTurn ? turnToTimelineItems(liveTurn, live) : [];
 }

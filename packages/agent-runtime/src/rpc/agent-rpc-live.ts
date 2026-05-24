@@ -13,6 +13,7 @@ export const AgentRpcLive = AgentRpcGroup.toLayer(
     const sessions = yield* SessionsService;
 
     return {
+      abortSession: ({sessionId}) => sessions.abortSession(sessionId),
       archiveProjectSession: ({projectPath, sessionId}) => projects.archiveSession(projectPath, sessionId),
       cancelProviderLogin: ({loginSessionId}) => providers.cancelLogin(loginSessionId),
       createFolder: ({path}) => folders.create(path),
@@ -30,6 +31,7 @@ export const AgentRpcLive = AgentRpcGroup.toLayer(
       sendMessage: (input) => sessions.sendMessage(input),
       startProviderOAuthLogin: ({providerId}) => providers.startOAuthLogin(providerId),
       submitProviderLoginInput: ({input, loginSessionId}) => providers.submitLoginInput(loginSessionId, input),
+      watchEvents: () => sessions.watchEvents(),
     };
   })
 );

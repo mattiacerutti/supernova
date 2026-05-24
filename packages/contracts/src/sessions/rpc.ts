@@ -13,7 +13,9 @@ import {
   ListModelsError,
   ListModelsPayload,
   ListModelsResult,
-  SendMessageEvent,
+  AbortSessionPayload,
+  WatchEventsPayload,
+  SessionStreamEvent,
 } from "@supernova/contracts/sessions/procedures";
 
 export const GetSessionRpc = Rpc.make("getSession", {
@@ -42,8 +44,16 @@ export const ListComposerSuggestionsRpc = Rpc.make("listComposerSuggestions", {
 
 export const SendMessageRpc = Rpc.make("sendMessage", {
   payload: SendMessagePayload,
-  stream: true,
-  success: SendMessageEvent,
 });
 
-export const SessionRpcs = [GetSessionRpc, CreateSessionRpc, ListModelsRpc, ListComposerSuggestionsRpc, SendMessageRpc] as const;
+export const AbortSessionRpc = Rpc.make("abortSession", {
+  payload: AbortSessionPayload,
+});
+
+export const WatchEventsRpc = Rpc.make("watchEvents", {
+  payload: WatchEventsPayload,
+  stream: true,
+  success: SessionStreamEvent,
+});
+
+export const SessionRpcs = [GetSessionRpc, CreateSessionRpc, ListModelsRpc, ListComposerSuggestionsRpc, SendMessageRpc, AbortSessionRpc, WatchEventsRpc] as const;

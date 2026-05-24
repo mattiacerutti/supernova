@@ -44,8 +44,23 @@ export const ToolTurnEvent = Schema.Struct({
   type: Schema.Literal("tool"),
 });
 
+/** Context compaction event produced during a turn. */
+export const CompactionTurnEvent = Schema.Struct({
+  /** Stable event identifier. */
+  id: Schema.String,
+  /** ISO timestamp for when the compaction started or was persisted. */
+  timestamp: Schema.String,
+  /** Current lifecycle state of the compaction. */
+  status: Schema.Union([Schema.Literal("pending"), Schema.Literal("completed"), Schema.Literal("error")]),
+  /** Generated compaction summary, when compaction completed successfully. */
+  summary: Schema.optional(Schema.String),
+  /** Compaction error, when compaction failed. */
+  error: Schema.optional(Schema.String),
+  type: Schema.Literal("compaction"),
+});
+
 /** Any non-user event that can occur within a session turn. */
-export const TurnEvent = Schema.Union([AssistantTurnEvent, ReasoningTurnEvent, ToolTurnEvent]);
+export const TurnEvent = Schema.Union([AssistantTurnEvent, ReasoningTurnEvent, ToolTurnEvent, CompactionTurnEvent]);
 
 /** A single user request and all agent activity produced in response. */
 export const Turn = Schema.Struct({
@@ -66,6 +81,7 @@ export const Turn = Schema.Struct({
 });
 
 export type AssistantTurnEvent = typeof AssistantTurnEvent.Type;
+export type CompactionTurnEvent = typeof CompactionTurnEvent.Type;
 export type ReasoningTurnEvent = typeof ReasoningTurnEvent.Type;
 export type ToolTurnEvent = typeof ToolTurnEvent.Type;
 export type Turn = typeof Turn.Type;

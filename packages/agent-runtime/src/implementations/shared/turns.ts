@@ -2,7 +2,15 @@ import type {ModelReference, Turn, TurnEvent, UserMessage} from "@supernova/cont
 
 /** Computes the aggregate status for a turn from its events. */
 export function turnStatus(events: readonly TurnEvent[], streaming = false): Turn["status"] {
-  if (events.some((event) => (event.type === "assistant" && Boolean(event.error)) || (event.type === "tool" && event.tool?.status === "error"))) return "error";
+  if (
+    events.some(
+      (event) =>
+        (event.type === "assistant" && Boolean(event.error)) ||
+        (event.type === "tool" && event.tool?.status === "error") ||
+        (event.type === "compaction" && event.status === "error")
+    )
+  )
+    return "error";
   return streaming ? "streaming" : "completed";
 }
 

@@ -8,8 +8,8 @@ import type {
   LoadSessionError,
   SendMessagePayload,
   ListModelsError,
-  SendMessageEvent,
   ListModelsResult,
+  SessionStreamEvent,
 } from "@supernova/contracts/sessions/procedures";
 import type {Session} from "@supernova/contracts/sessions/schemas";
 
@@ -22,7 +22,9 @@ export interface SessionsServiceShape {
     query: string
   ) => Effect.Effect<ListComposerSuggestionsResult, ListComposerSuggestionsError>;
   readonly listModels: () => Effect.Effect<ListModelsResult, ListModelsError>;
-  readonly sendMessage: (input: SendMessagePayload) => Stream.Stream<SendMessageEvent>;
+  readonly abortSession: (sessionId: string) => Effect.Effect<void>;
+  readonly sendMessage: (input: SendMessagePayload) => Effect.Effect<void>;
+  readonly watchEvents: () => Stream.Stream<SessionStreamEvent>;
 }
 
 export class SessionsService extends Context.Service<SessionsService, SessionsServiceShape>()("supernova/agent-runtime/SessionsService") {}
