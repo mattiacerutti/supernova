@@ -11,7 +11,7 @@ import {useSession} from "@/features/sessions/hooks/api/use-session";
 import {useSessionModels} from "@/features/sessions/hooks/api/use-session-models";
 import {useComposerAttachments} from "@/features/sessions/hooks/use-composer-attachments";
 import {useCachedSessionTitle} from "@/features/sessions/hooks/use-cached-session-title";
-import {useSessionMessageStream} from "@/features/sessions/hooks/use-session-message-stream";
+import {useSessionTimeline} from "@/features/sessions/hooks/use-session-timeline";
 import {modelKey, resolveThinkingLevel, selectionFromModel, selectionKey} from "@/features/sessions/lib/composer/model-picker/model-utils";
 import {useModelPickerStore} from "@/features/sessions/stores/model-picker-store";
 import {useSessionModelsStore} from "@/features/sessions/stores/session-models-store";
@@ -72,7 +72,7 @@ function SessionConversation(props: SessionConversationProps) {
   const imageSupported = selectedModel?.capabilities.images === true;
   const composerAttachments = useComposerAttachments({disabled: composerDisabled, imageSupported});
 
-  const stream = useSessionMessageStream({
+  const stream = useSessionTimeline({
     modelReference: selectedModelReference,
     sessionId: session.id,
     sessionTurns: session.turns,

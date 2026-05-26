@@ -1,5 +1,4 @@
 import {useNavigate} from "@tanstack/react-router";
-import {useQueryClient} from "@tanstack/react-query";
 import {useState} from "react";
 import SessionComposer from "@/features/sessions/components/composer/session-composer";
 import SessionComposerSkeleton from "@/features/sessions/components/composer/session-composer-skeleton";
@@ -12,7 +11,7 @@ import {useComposerAttachments} from "@/features/sessions/hooks/use-composer-att
 import {modelKey, resolveThinkingLevel, selectionFromModel} from "@/features/sessions/lib/composer/model-picker/model-utils";
 import {useModelPickerStore} from "@/features/sessions/stores/model-picker-store";
 import {useSessionModelsStore} from "@/features/sessions/stores/session-models-store";
-import {useSessionStreamStore} from "@/features/sessions/stores/session-stream-store";
+import {useSessionLiveStore} from "@/features/sessions/stores/session-live-store";
 import {useAgentRpcClient} from "@/rpc/use-agent-rpc-client";
 import type {UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 
@@ -25,14 +24,13 @@ export default function NewSessionPage(props: NewSessionPageProps) {
   const {projectName, projectPath} = props;
 
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const rpcClient = useAgentRpcClient();
   const createSessionMutation = useCreateSession();
 
   const {data: models, isPending: modelsPending} = useSessionModels();
   const availableModels = models ?? [];
 
-  const startStream = useSessionStreamStore((state) => state.startStream);
+  const sendMessage = useSessionLiveStore((state) => state.sendMessage);
   const setSessionModel = useSessionModelsStore((state) => state.setSessionModel);
   const recordRecentModel = useModelPickerStore((state) => state.recordRecentModel);
   const setLastThinkingLevel = useModelPickerStore((state) => state.setLastThinkingLevel);
@@ -85,7 +83,7 @@ export default function NewSessionPage(props: NewSessionPageProps) {
           setSessionModel(session.id, modelReference);
           recordRecentModel(resolvedModelKey);
           setLastThinkingLevel(resolvedThinkingLevel);
-          startStream({contentParts, model: modelReference, queryClient, rpcClient, sessionId: session.id, sessionTurns: session.turns});
+          sendMessage({contentParts, model: modelReference, rpcClient, sessionId: session.id});
           void navigate({params: {sessionId: session.id}, to: "/session/$sessionId"});
         },
       }

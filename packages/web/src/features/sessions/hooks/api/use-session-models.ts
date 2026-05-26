@@ -1,5 +1,6 @@
 import {useQuery} from "@tanstack/react-query";
-import {AgentRpcProtocolClientService, eq} from "@/rpc/effect-query";
+import {eq} from "@/rpc/effect-query";
+import {AgentRpcProtocolClientService} from "@/rpc/agent-rpc-client";
 import {Effect} from "effect";
 
 export function useSessionModels() {

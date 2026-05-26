@@ -1,6 +1,7 @@
 import {useQuery} from "@tanstack/react-query";
 import {Effect} from "effect";
-import {AgentRpcProtocolClientService, eq} from "@/rpc/effect-query";
+import {eq} from "@/rpc/effect-query";
+import {AgentRpcProtocolClientService} from "@/rpc/agent-rpc-client";
 
 export function sessionQueryKey(sessionId: string) {
   return ["session", sessionId] as const;

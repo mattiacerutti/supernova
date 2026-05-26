@@ -171,6 +171,7 @@ class ActiveTurn {
 
   private buildSnapshot(turns: readonly Turn[]): {session: Session} {
     const summary = toPiSessionSummary(this.sessionInfo);
+    const latestTurn = turns.at(-1);
 
     return {
       session: {
@@ -179,7 +180,7 @@ class ActiveTurn {
         projectPath: this.sessionInfo.cwd,
         title: this.sessionManager.getSessionName() ?? summary.title,
         turns,
-        updatedAt: summary.updatedAt,
+        updatedAt: latestTurn?.completedAt ?? latestTurn?.startedAt ?? summary.updatedAt,
       },
     };
   }

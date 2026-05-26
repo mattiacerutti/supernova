@@ -10,7 +10,8 @@ import type {
   ComposerSuggestionItem,
   ComposerSuggestionMatch,
 } from "@/features/sessions/types/composer-suggestion";
-import {AgentRpcProtocolClientService, eq} from "@/rpc/effect-query";
+import {eq} from "@/rpc/effect-query";
+import {AgentRpcProtocolClientService} from "@/rpc/agent-rpc-client";
 
 const CLIENT_SLASH_COMMAND_SUGGESTIONS: readonly ComposerSlashCommandSuggestionItem[] = [];
 

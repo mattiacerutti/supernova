@@ -1,15 +1,13 @@
-import {AgentRpcGroup} from "@supernova/contracts";
-import {createEffectQuery} from "effect-query";
-import {Context, Layer} from "effect";
-import {RpcClient} from "effect/unstable/rpc";
-import {createAgentRpcProtocolLayer} from "@/rpc/agent-rpc-client";
+import {createEffectQueryFromManagedRuntime} from "effect-query";
+import {Effect} from "effect";
+import type {ManagedRuntime} from "effect/ManagedRuntime";
+import {AgentRpcProtocolClientService, getSharedAgentRpcClient} from "@/rpc/agent-rpc-client";
 
-const makeAgentRpcProtocolClient = RpcClient.make(AgentRpcGroup);
-type AgentRpcClientFactory = typeof makeAgentRpcProtocolClient;
-export type AgentRpcProtocolClient = AgentRpcClientFactory extends import("effect").Effect.Effect<infer Client, unknown, unknown> ? Client : never;
+// effect-query only needs ManagedRuntime.runPromiseExit. Route it through the shared
+// reconnectable client so query hooks and imperative streams use one WebSocket.
+const sharedRpcRuntime = {
+  runPromiseExit: <TSuccess, TError>(effect: Effect.Effect<TSuccess, TError, AgentRpcProtocolClientService>, options?: {readonly signal?: AbortSignal | undefined}) =>
+    getSharedAgentRpcClient().runExit((client) => Effect.provideService(effect, AgentRpcProtocolClientService, client), options),
+} as ManagedRuntime<AgentRpcProtocolClientService, never>;
 
-export class AgentRpcProtocolClientService extends Context.Service<AgentRpcProtocolClientService, AgentRpcProtocolClient>()("supernova/web/AgentRpcProtocolClientService") {}
-
-const AgentRpcProtocolClientLive = Layer.effect(AgentRpcProtocolClientService)(makeAgentRpcProtocolClient).pipe(Layer.provide(createAgentRpcProtocolLayer()));
-
-export const eq = createEffectQuery(AgentRpcProtocolClientLive);
+export const eq = createEffectQueryFromManagedRuntime(sharedRpcRuntime);

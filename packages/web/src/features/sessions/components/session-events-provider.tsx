@@ -1,5 +1,5 @@
 import {useQueryClient} from "@tanstack/react-query";
-import {useSessionStreamStore} from "@/features/sessions/stores/session-stream-store";
+import {useSessionLiveStore} from "@/features/sessions/stores/session-live-store";
 import {useMountEffect} from "@/lib/use-mount-effect";
 import {useAgentRpcClient} from "@/rpc/use-agent-rpc-client";
 
@@ -11,13 +11,13 @@ export default function SessionEventsProvider(props: SessionEventsProviderProps)
   const {children} = props;
   const queryClient = useQueryClient();
   const rpcClient = useAgentRpcClient();
-  const connectEvents = useSessionStreamStore((state) => state.connectEvents);
-  const disconnectEvents = useSessionStreamStore((state) => state.disconnectEvents);
+  const connect = useSessionLiveStore((state) => state.connect);
+  const disconnect = useSessionLiveStore((state) => state.disconnect);
 
   useMountEffect(() => {
-    connectEvents({queryClient, rpcClient});
+    connect({queryClient, rpcClient});
     return () => {
-      disconnectEvents();
+      disconnect();
     };
   });
 

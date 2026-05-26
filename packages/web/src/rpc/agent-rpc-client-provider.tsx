@@ -1,7 +1,7 @@
-import {createAgentRpcClient} from "@/rpc/agent-rpc-client";
+import {getSharedAgentRpcClient} from "@/rpc/agent-rpc-client";
 import {AgentRpcClientContext} from "@/rpc/agent-rpc-client-context";
 
-const client = createAgentRpcClient();
+const client = getSharedAgentRpcClient();
 
 interface AgentRpcClientProviderProps {
   children: React.ReactNode;

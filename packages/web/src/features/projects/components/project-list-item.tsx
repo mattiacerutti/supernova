@@ -13,7 +13,7 @@ import {useListProjectSessions} from "@/features/projects/hooks/api/use-list-pro
 import {useRenameProject} from "@/features/projects/hooks/use-rename-project";
 import {useProjectsStore} from "@/features/projects/stores/projects-store";
 import {sessionQueryOptions} from "@/features/sessions/hooks/api/use-session";
-import {useSessionStreamStore} from "@/features/sessions/stores/session-stream-store";
+import {useSessionLiveStore} from "@/features/sessions/stores/session-live-store";
 import SessionTitleText from "@/features/sessions/components/session-title-text";
 import {formatUpdatedAt} from "@/features/projects/utils/format-updated-at";
 import {cn} from "@/lib/cn";
@@ -42,7 +42,7 @@ export default function ProjectListItem(props: ProjectListItemProps) {
   const removeProject = useProjectsStore((state) => state.removeProject);
   const toggleSessionPinned = useProjectsStore((state) => state.toggleSessionPinned);
   const toggleProjectPinned = useProjectsStore((state) => state.toggleProjectPinned);
-  const sessionStreams = useSessionStreamStore((state) => state.streams);
+  const sessionLiveStates = useSessionLiveStore((state) => state.sessions);
   const archiveProjectSessionMutation = useArchiveProjectSession();
   const {
     draftName,
@@ -63,9 +63,10 @@ export default function ProjectListItem(props: ProjectListItemProps) {
         id: session.id,
         pinned: project.pinnedSessionIds.includes(session.id),
         title: session.title,
+        timestamp: Date.parse(session.updatedAt),
         updatedAt: formatUpdatedAt(session.updatedAt),
       }))
-      .toSorted((left, right) => Number(right.pinned) - Number(left.pinned)) ?? [];
+      .toSorted((left, right) => Number(right.pinned) - Number(left.pinned) || right.timestamp - left.timestamp) ?? [];
 
   const activeSession = sessions.find((session) => session.id === activeSessionId);
 
@@ -234,8 +235,8 @@ export default function ProjectListItem(props: ProjectListItemProps) {
           {displayedSessions.map((session) => {
             const confirmingArchive = confirmingArchiveSessionId === session.id;
             const selected = location.pathname === `/session/${session.id}`;
-            const sessionStream = sessionStreams[session.id];
-            const sessionStreaming = sessionStream?.status === "streaming" || sessionStream?.status === "stopping";
+            const sessionLive = sessionLiveStates[session.id];
+            const sessionStreaming = sessionLive?.status === "streaming" || sessionLive?.status === "stopping";
 
             return (
               <li
