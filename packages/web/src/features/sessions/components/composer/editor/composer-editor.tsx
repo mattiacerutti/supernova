@@ -6,6 +6,7 @@ import {useComposerSuggestions} from "@/features/sessions/hooks/api/use-composer
 import type {ComposerSuggestionItem, ComposerSuggestionMatch} from "@/features/sessions/types/composer-suggestion";
 import {cn} from "@/lib/cn";
 import {createReferenceNode} from "@/features/sessions/lib/composer/composer-content-parts";
+import type {ClientSlashCommandActions} from "@/features/sessions/lib/composer/client-slash-commands";
 
 function suggestionText(item: ComposerSuggestionItem): string {
   if (item.kind !== "prompt-template") return "";
@@ -53,13 +54,14 @@ interface ComposerEditorProps {
   readonly onSubmit: () => void;
   readonly placeholder: string;
   readonly projectPath: string;
+  readonly slashCommandActions?: ClientSlashCommandActions;
   readonly value: string;
 }
 
 export default function ComposerEditor(props: ComposerEditorProps) {
-  const {className, editor, onPaste, onSubmit, onSuggestionMatchChange, placeholder, projectPath, suggestionMatch, value} = props;
+  const {className, editor, onPaste, onSubmit, onSuggestionMatchChange, placeholder, projectPath, slashCommandActions, suggestionMatch, value} = props;
 
-  const suggestionQuery = useComposerSuggestions(projectPath, suggestionMatch);
+  const suggestionQuery = useComposerSuggestions(projectPath, suggestionMatch, {slashCommandActions});
 
   const suggestionOpen = Boolean(suggestionMatch);
 

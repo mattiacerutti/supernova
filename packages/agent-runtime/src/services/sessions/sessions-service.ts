@@ -7,6 +7,7 @@ import type {
   ComposerSuggestionTriggerKind,
   LoadSessionError,
   SendMessagePayload,
+  CompactSessionPayload,
   ListModelsError,
   ListModelsResult,
   SessionStreamEvent,
@@ -23,6 +24,7 @@ export interface SessionsServiceShape {
   ) => Effect.Effect<ListComposerSuggestionsResult, ListComposerSuggestionsError>;
   readonly listModels: () => Effect.Effect<ListModelsResult, ListModelsError>;
   readonly abortSession: (sessionId: string) => Effect.Effect<void>;
+  readonly compactSession: (input: CompactSessionPayload) => Effect.Effect<void>;
   readonly sendMessage: (input: SendMessagePayload) => Effect.Effect<void>;
   readonly watchEvents: () => Stream.Stream<SessionStreamEvent>;
 }

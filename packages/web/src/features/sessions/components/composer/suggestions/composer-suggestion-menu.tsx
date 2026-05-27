@@ -27,6 +27,7 @@ function SuggestionIcon(props: {readonly item: ComposerSuggestionItem}) {
 
   if (item.kind === "file") return <Icon className="shrink-0 text-neutral-500" name={item.path.endsWith("/") ? "folder" : "file"} size="xs" />;
   if (item.kind === "skill") return <Icon className="shrink-0 text-neutral-500" name="skill" size="xs" />;
+  if (item.kind === "slash-command" && item.icon) return <Icon className="shrink-0 text-neutral-500" name={item.icon} size="xs" />;
 
   return <span className="w-3 shrink-0 text-center text-xs font-medium text-neutral-500">{item.kind.slice(0, 1).toUpperCase()}</span>;
 }

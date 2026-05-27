@@ -1,4 +1,5 @@
 export * from "./abort-session";
+export * from "./compact-session";
 export * from "./create-session";
 export * from "./get-session";
 export * from "./list-composer-suggestions";

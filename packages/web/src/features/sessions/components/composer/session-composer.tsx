@@ -17,6 +17,7 @@ import {SESSION_ATTACHMENT_ACCEPT} from "@/features/sessions/lib/attachments/ses
 import type {ComposerSuggestionMatch} from "@/features/sessions/types/composer-suggestion";
 import {cn} from "@/lib/cn";
 import {createSuggestionExtension} from "@/features/sessions/lib/composer/composer-suggestions";
+import type {ClientSlashCommandActions} from "@/features/sessions/lib/composer/client-slash-commands";
 import {Node} from "@tiptap/core";
 import {ReactNodeViewRenderer} from "@tiptap/react";
 import ComposerReference from "@/features/sessions/components/composer/editor/composer-reference";
@@ -37,6 +38,7 @@ interface SessionComposerContextValue {
   readonly projectPath: string;
   readonly setSuggestionMatch: (match: ComposerSuggestionMatch | null) => void;
   readonly setDraft: (draft: string) => void;
+  readonly slashCommandActions?: ClientSlashCommandActions;
   readonly streamStatus: "idle" | "streaming" | "stopping";
   readonly submit: () => void;
 }
@@ -109,11 +111,12 @@ interface SessionComposerRootProps {
   readonly onInterrupt?: () => void;
   readonly onSubmit: (contentParts: readonly UserMessageContentPart[]) => void;
   readonly projectPath: string;
+  readonly slashCommandActions?: ClientSlashCommandActions;
   readonly streamStatus?: "idle" | "streaming" | "stopping";
 }
 
 function SessionComposerRoot(props: SessionComposerRootProps) {
-  const {attachments, children, disabled, onInterrupt, onSubmit, projectPath, streamStatus = "idle"} = props;
+  const {attachments, children, disabled, onInterrupt, onSubmit, projectPath, slashCommandActions, streamStatus = "idle"} = props;
   const [draft, setDraft] = useState("");
   const [suggestionMatch, setSuggestionMatch] = useState<ComposerSuggestionMatch | null>(null);
 
@@ -169,6 +172,7 @@ function SessionComposerRoot(props: SessionComposerRootProps) {
         projectPath,
         setSuggestionMatch,
         setDraft,
+        slashCommandActions,
         streamStatus,
         submit,
       }}
@@ -212,7 +216,7 @@ interface SessionComposerInputProps {
 
 function SessionComposerInput(props: SessionComposerInputProps) {
   const {placeholder = "Ask for follow-up changes"} = props;
-  const {attachmentDisabled, attachments, draft, editor, projectPath, setSuggestionMatch, submit, suggestionMatch} = useSessionComposerContext();
+  const {attachmentDisabled, attachments, draft, editor, projectPath, setSuggestionMatch, slashCommandActions, submit, suggestionMatch} = useSessionComposerContext();
 
   const handlePaste = (event: ComposerClipboardEvent): void => {
     const files = clipboardFiles(event);
@@ -234,6 +238,7 @@ function SessionComposerInput(props: SessionComposerInputProps) {
         onSubmit={submit}
         placeholder={placeholder}
         projectPath={projectPath}
+        slashCommandActions={slashCommandActions}
         value={draft}
       />
     </div>

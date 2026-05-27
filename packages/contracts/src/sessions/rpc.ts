@@ -10,6 +10,7 @@ import {
   GetSessionResult,
   LoadSessionError,
   SendMessagePayload,
+  CompactSessionPayload,
   ListModelsError,
   ListModelsPayload,
   ListModelsResult,
@@ -50,10 +51,23 @@ export const AbortSessionRpc = Rpc.make("abortSession", {
   payload: AbortSessionPayload,
 });
 
+export const CompactSessionRpc = Rpc.make("compactSession", {
+  payload: CompactSessionPayload,
+});
+
 export const WatchEventsRpc = Rpc.make("watchEvents", {
   payload: WatchEventsPayload,
   stream: true,
   success: SessionStreamEvent,
 });
 
-export const SessionRpcs = [GetSessionRpc, CreateSessionRpc, ListModelsRpc, ListComposerSuggestionsRpc, SendMessageRpc, AbortSessionRpc, WatchEventsRpc] as const;
+export const SessionRpcs = [
+  GetSessionRpc,
+  CreateSessionRpc,
+  ListModelsRpc,
+  ListComposerSuggestionsRpc,
+  SendMessageRpc,
+  AbortSessionRpc,
+  CompactSessionRpc,
+  WatchEventsRpc,
+] as const;

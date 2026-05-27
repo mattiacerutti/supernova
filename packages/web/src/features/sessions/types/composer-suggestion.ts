@@ -1,3 +1,5 @@
+import type {IconName} from "@/components/ui/icon";
+
 export type ComposerSuggestionTriggerKind = "file" | "skill" | "slash";
 
 export interface ComposerSuggestionMatch {
@@ -33,6 +35,7 @@ export interface ComposerPromptTemplateSuggestionItem {
 }
 
 export interface ComposerSlashCommandSuggestionItem {
+  readonly icon?: IconName;
   readonly id: string;
   readonly kind: "slash-command";
   readonly onSelect: () => void;

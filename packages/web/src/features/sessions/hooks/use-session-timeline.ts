@@ -2,6 +2,7 @@ import type {ModelReference, Turn, UserMessageContentPart} from "@supernova/cont
 import type {LegendListRef} from "@legendapp/list/react";
 import {useMemo, useRef} from "react";
 import {buildCommittedTimelineItems, buildLiveTimelineItems} from "@/features/sessions/lib/timeline/build-session-timeline";
+import type {ClientSlashCommandActions} from "@/features/sessions/lib/composer/client-slash-commands";
 import {useSessionLiveStore} from "@/features/sessions/stores/session-live-store";
 import type {SessionLiveStatus} from "@/features/sessions/stores/session-live-store";
 import type {SessionTimelineItem} from "@/features/sessions/types/session-timeline-item";
@@ -12,6 +13,7 @@ interface UseSessionTimelineResult {
   listRef: React.RefObject<LegendListRef | null>;
   liveTimelineItems: readonly SessionTimelineItem[];
   streamCompacting: boolean;
+  slashCommandActions: ClientSlashCommandActions;
   stopStreaming: () => void;
   streamError: string | null;
   streamStatus: SessionLiveStatus;
@@ -31,6 +33,7 @@ export function useSessionTimeline(input: UseSessionTimelineInput): UseSessionTi
 
   const stream = useSessionLiveStore((state) => state.sessions[sessionId]);
   const abortSession = useSessionLiveStore((state) => state.abortSession);
+  const compactSession = useSessionLiveStore((state) => state.compactSession);
   const sendMessage = useSessionLiveStore((state) => state.sendMessage);
 
   const streamStatus = stream?.status ?? "idle";
@@ -58,12 +61,19 @@ export function useSessionTimeline(input: UseSessionTimelineInput): UseSessionTi
     abortSession({rpcClient, sessionId});
   };
 
+  const triggerCompaction = (): void => {
+    if (isStreaming || !modelReference) return;
+
+    compactSession({model: modelReference, rpcClient, sessionId});
+  };
+
   return {
     streamStatus,
     streamCompacting: stream?.compacting ?? false,
     streamError: stream?.error ?? null,
     committedTimelineItems,
     liveTimelineItems,
+    slashCommandActions: {compact: triggerCompaction},
     submitMessage,
     stopStreaming,
     listRef: messagesListRef,

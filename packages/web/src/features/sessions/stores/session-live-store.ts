@@ -91,6 +91,12 @@ interface SendSessionMessageInput {
   readonly sessionId: string;
 }
 
+interface CompactSessionInput {
+  readonly model: ModelReference;
+  readonly rpcClient: AgentRpcClientApi;
+  readonly sessionId: string;
+}
+
 interface ConnectInput {
   readonly queryClient: QueryClient;
   readonly rpcClient: AgentRpcClientApi;
@@ -99,6 +105,7 @@ interface ConnectInput {
 interface SessionLiveStoreState {
   readonly sessions: Record<string, SessionLiveState | undefined>;
   readonly abortSession: (input: {rpcClient: AgentRpcClientApi; sessionId: string}) => void;
+  readonly compactSession: (input: CompactSessionInput) => void;
   readonly connect: (input: ConnectInput) => void;
   readonly disconnect: () => void;
   readonly sendMessage: (input: SendSessionMessageInput) => void;
@@ -262,8 +269,34 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
     void rpcClient.run((rpc) => rpc.abortSession({sessionId})).catch(() => undefined);
   };
 
+  const compactSession = (input: CompactSessionInput): void => {
+    const {model, rpcClient, sessionId} = input;
+
+    const current = get().sessions[sessionId];
+    if (current?.status === "streaming" || current?.status === "stopping") return;
+
+    set((state) => {
+      const entry = state.sessions[sessionId] ?? emptyEntry({revision: 0});
+      const next = {...entry, compacting: true, error: null};
+      return {sessions: {...state.sessions, [sessionId]: {...next, status: toStatus(next)}}};
+    });
+
+    void rpcClient
+      .run((rpc) => rpc.compactSession({model, sessionId}))
+      .catch((cause: unknown) => {
+        const error = cause instanceof Error ? cause.message : "Failed to compact session.";
+        set((state) => {
+          const entry = state.sessions[sessionId];
+          if (!entry) return state;
+          const next = {...entry, compacting: false, error};
+          return {sessions: {...state.sessions, [sessionId]: {...next, status: toStatus(next)}}};
+        });
+      });
+  };
+
   return {
     sessions: {},
+    compactSession,
     connect,
     disconnect,
     sendMessage,

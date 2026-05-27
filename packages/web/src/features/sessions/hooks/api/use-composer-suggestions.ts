@@ -6,14 +6,13 @@ import type {
   ComposerFileReferenceSuggestionItem,
   ComposerPromptTemplateSuggestionItem,
   ComposerSkillSuggestionItem,
-  ComposerSlashCommandSuggestionItem,
   ComposerSuggestionItem,
   ComposerSuggestionMatch,
 } from "@/features/sessions/types/composer-suggestion";
+import {clientSlashCommandSuggestions} from "@/features/sessions/lib/composer/client-slash-commands";
+import type {ClientSlashCommandActions} from "@/features/sessions/lib/composer/client-slash-commands";
 import {eq} from "@/rpc/effect-query";
 import {AgentRpcProtocolClientService} from "@/rpc/agent-rpc-client";
-
-const CLIENT_SLASH_COMMAND_SUGGESTIONS: readonly ComposerSlashCommandSuggestionItem[] = [];
 
 function fileSuggestion(item: FolderFile): ComposerFileReferenceSuggestionItem {
   return {
@@ -29,7 +28,7 @@ function resourceSuggestion(item: ContractComposerSuggestionItem): ComposerPromp
   return item;
 }
 
-export function useComposerSuggestions(projectPath: string, match: ComposerSuggestionMatch | null) {
+export function useComposerSuggestions(projectPath: string, match: ComposerSuggestionMatch | null, input: {readonly slashCommandActions?: ClientSlashCommandActions} = {}) {
   const baseQueryKey = ["composer", "suggestions", projectPath, match?.kind] as const;
 
   return useQuery(
@@ -57,7 +56,7 @@ export function useComposerSuggestions(projectPath: string, match: ComposerSugge
           const suggestions = result.items.map(resourceSuggestion);
 
           if (match.kind === "slash") {
-            return [...CLIENT_SLASH_COMMAND_SUGGESTIONS, ...suggestions] satisfies ComposerSuggestionItem[];
+            return [...clientSlashCommandSuggestions({actions: input.slashCommandActions ?? {}, query: match.query}), ...suggestions] satisfies ComposerSuggestionItem[];
           }
 
           return suggestions satisfies ComposerSuggestionItem[];

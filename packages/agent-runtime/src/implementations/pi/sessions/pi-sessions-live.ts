@@ -22,6 +22,7 @@ export const PiSessionsFromInternal = Layer.effect(
 
     return {
       abortSession: (sessionId) => runtimeManager.abortSession(sessionId),
+      compactSession: (input) => runtimeManager.compactSession(input),
       create: (projectPath) => createSession(projectPath).pipe(Effect.provideService(PiSessionStore, sessionStore)),
       get: (sessionId) => getSession(sessionId).pipe(Effect.provideService(PiSessionStore, sessionStore)),
       listComposerSuggestions: (projectPath, kind, query) => listComposerSuggestions(projectPath, kind, query).pipe(Effect.provideService(PiResourceCatalog, resourceCatalog)),

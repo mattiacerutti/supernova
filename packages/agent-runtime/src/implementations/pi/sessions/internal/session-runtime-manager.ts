@@ -1,5 +1,5 @@
 import type {AgentSession, CompactionResult} from "@earendil-works/pi-coding-agent";
-import type {SendMessagePayload, SessionStreamEvent} from "@supernova/contracts/sessions/procedures";
+import type {CompactSessionPayload, SendMessagePayload, SessionStreamEvent} from "@supernova/contracts/sessions/procedures";
 import type {ModelReference, Session, SessionSummary, Turn} from "@supernova/contracts/sessions/schemas";
 import {Context, Effect, Layer, Stream} from "effect";
 import {PiAgentSessionFactory} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-agent-session-factory";
@@ -55,6 +55,13 @@ class SessionRuntimePool {
   public async abortSession(sessionId: string): Promise<void> {
     await this.runners.get(sessionId)?.release({abort: true});
     this.runners.delete(sessionId);
+  }
+
+  /** Starts manual compaction on a long-lived runtime for the target session. */
+  public async compactSession(input: CompactSessionPayload): Promise<void> {
+    const runner = this.runners.get(input.sessionId) ?? new SessionRuntime({...this.dependencies, sessionId: input.sessionId});
+    this.runners.set(input.sessionId, runner);
+    await runner.compactSession(input);
   }
 
   /** Aborts all retained runtimes during server/runtime shutdown. */
@@ -264,6 +271,40 @@ class SessionRuntime {
     })();
   }
 
+  /** Manually compacts the session context without submitting a user turn. */
+  public async compactSession(input: CompactSessionPayload): Promise<void> {
+    if (this.running) throw new Error("Session already has active work.");
+
+    this.running = true;
+    this.cancelled = false;
+
+    try {
+      const openedSession = await this.openSessionForModel(input.sessionId, input.model);
+
+      const agentSession = await this.getAgentSession(openedSession, {contentParts: [], model: input.model, sessionId: input.sessionId});
+      const runtimeSession = {...openedSession, sessionManager: agentSession.sessionManager};
+
+      this.activeTurn = undefined;
+
+      await this.publish({type: "session.compaction.started", revision: this.nextRevision(), sessionId: this.sessionId});
+      await agentSession.compact();
+      await this.waitForPiEventQueue();
+      await this.publish({type: "session.compaction.ended", revision: this.nextRevision(), sessionId: this.sessionId, willContinue: false});
+
+      await this.publishSessionSnapshot(runtimeSession);
+    } catch (cause) {
+      await this.publish({type: "session.compaction.ended", revision: this.nextRevision(), sessionId: this.sessionId, willContinue: false});
+      await this.publish({
+        type: "session.error",
+        revision: this.nextRevision(),
+        sessionId: this.sessionId,
+        error: cause instanceof Error ? cause.message : "Failed to compact session.",
+      });
+    } finally {
+      this.running = false;
+    }
+  }
+
   /** Releases the underlying Pi session and optionally aborts active provider work. */
   public async release(input: {abort: boolean}): Promise<void> {
     this.cancelled ||= input.abort;
@@ -306,6 +347,20 @@ class SessionRuntime {
       sessionInfo,
       sessionManager,
       titleWasGenerated,
+    };
+  }
+
+  /** Opens the durable Pi session and resolves the model for non-message commands. */
+  private async openSessionForModel(sessionId: string, modelReference: ModelReference): Promise<OpenedSession> {
+    const {info: sessionInfo, manager: sessionManager} = await this.sessionStore.openSessionById(sessionId);
+    const model = this.findSelectedModel({contentParts: [], model: modelReference, sessionId});
+
+    return {
+      model,
+      modelReference,
+      sessionInfo,
+      sessionManager,
+      titleWasGenerated: false,
     };
   }
 
@@ -430,6 +485,28 @@ class SessionRuntime {
     await this.publish({type: "session.snapshot", revision: this.nextRevision(), sessionId: this.sessionId, ...snapshot});
   }
 
+  /** Publishes a committed snapshot for commands that do not own an active turn. */
+  private async publishSessionSnapshot(openedSession: OpenedSession): Promise<void> {
+    const summary = toPiSessionSummary(openedSession.sessionInfo);
+    const turns = buildPiTurns(openedSession.sessionManager.getBranch(), openedSession.modelReference);
+
+    const latestTurn = turns.at(-1);
+
+    await this.publish({
+      type: "session.snapshot",
+      revision: this.nextRevision(),
+      sessionId: this.sessionId,
+      session: {
+        id: openedSession.sessionInfo.id,
+        model: openedSession.modelReference,
+        projectPath: openedSession.sessionInfo.cwd,
+        title: openedSession.sessionManager.getSessionName() ?? summary.title,
+        turns,
+        updatedAt: latestTurn?.completedAt ?? latestTurn?.startedAt ?? summary.updatedAt,
+      },
+    });
+  }
+
   /** Waits for Pi's queued session event processing, which owns post-agent auto-compaction. */
   private async waitForPiEventQueue(): Promise<void> {
     // AgentSession.prompt() can resolve before Pi finishes queued agent_end processing.
@@ -453,6 +530,7 @@ class SessionRuntime {
 
 interface SessionRuntimeManagerShape {
   readonly abortSession: (sessionId: string) => Effect.Effect<void>;
+  readonly compactSession: (input: CompactSessionPayload) => Effect.Effect<void>;
   readonly sendMessage: (input: SendMessagePayload) => Effect.Effect<void>;
   readonly watchEvents: () => Stream.Stream<SessionStreamEvent>;
 }
@@ -473,6 +551,7 @@ export const SessionRuntimeManagerLive = Layer.effect(
 
     return {
       abortSession: (sessionId: string) => Effect.promise(() => pool.abortSession(sessionId)),
+      compactSession: (input: CompactSessionPayload) => Effect.promise(() => pool.compactSession(input)),
       sendMessage: (input: SendMessagePayload) => Effect.promise(() => pool.sendMessage(input)),
       watchEvents: () => Stream.concat(Stream.make({type: "connected"} satisfies SessionStreamEvent), eventBus.stream()),
     };

@@ -16,6 +16,7 @@ export const AgentRpcLive = AgentRpcGroup.toLayer(
       abortSession: ({sessionId}) => sessions.abortSession(sessionId),
       archiveProjectSession: ({projectPath, sessionId}) => projects.archiveSession(projectPath, sessionId),
       cancelProviderLogin: ({loginSessionId}) => providers.cancelLogin(loginSessionId),
+      compactSession: (input) => sessions.compactSession(input),
       createFolder: ({path}) => folders.create(path),
       createSession: ({projectPath}) => sessions.create(projectPath),
       getProviderLoginSession: ({loginSessionId}) => providers.getLoginSession(loginSessionId),
