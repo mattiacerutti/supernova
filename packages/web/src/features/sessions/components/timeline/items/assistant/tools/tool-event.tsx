@@ -49,7 +49,9 @@ export default function ToolEvent(props: {event: ToolEvent; mode: ToolDetailMode
           )}
           data-expanded={showDetails}
         >
-          <div className={cn("min-w-0 overflow-hidden", mode === "collapsible" && "pt-2")}>{details}</div>
+          <div className="min-h-0 min-w-0 overflow-hidden">
+            <div className={cn("min-w-0", mode === "collapsible" && "pt-2")}>{details}</div>
+          </div>
         </div>
       )}
     </div>
