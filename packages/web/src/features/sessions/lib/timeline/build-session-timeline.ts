@@ -35,13 +35,27 @@ function turnToTimelineItems(turn: Turn, live: boolean): SessionTimelineItem[] {
 
   items.push({id: `user:${turn.userMessage.id}`, message: turn.userMessage, spacing: "message", turnId: turn.id, type: "user"});
 
-  for (const event of turn.events) {
+  for (const [eventIndex, event] of turn.events.entries()) {
     if (event.type === "tool" || event.type === "reasoning") {
       workEvents.push(event);
       continue;
     }
 
-    if (event.type === "compaction") continue;
+    if (event.type === "compaction") {
+      flushWork(false, event.timestamp);
+      if (event.status !== "completed") continue;
+
+      const nextEvent = turn.events[eventIndex + 1];
+      items.push({
+        durationMs: workDuration([event], nextEvent?.timestamp ?? turn.completedAt),
+        event,
+        id: `compaction:${event.id}`,
+        spacing: "work",
+        turnId: turn.id,
+        type: "compaction",
+      });
+      continue;
+    }
 
     flushWork(false, event.timestamp);
     items.push({event, id: `assistant:${event.id}`, live, spacing: "message", turnId: turn.id, type: "assistant"});

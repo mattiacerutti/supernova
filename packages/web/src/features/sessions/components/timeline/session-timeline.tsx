@@ -27,6 +27,7 @@ function isScrollerAtEnd(scroller: HTMLElement): boolean {
 }
 
 interface SessionTimelineProps {
+  readonly compacting: boolean;
   readonly isStreaming: boolean;
   readonly items: readonly SessionTimelineItem[];
   readonly listRef?: RefObject<LegendListRef | null>;
@@ -35,7 +36,7 @@ interface SessionTimelineProps {
 }
 
 export default function SessionTimeline(props: SessionTimelineProps) {
-  const {isStreaming, items, listRef, liveItems, streamError} = props;
+  const {compacting, isStreaming, items, listRef, liveItems, streamError} = props;
 
   const [autoFollowState, setAutoFollowState] = useState<AutoFollowState>("following");
 
@@ -168,7 +169,7 @@ export default function SessionTimeline(props: SessionTimelineProps) {
           keyExtractor={(item) => item.id}
           ListFooterComponent={
             <div ref={handleLiveTailRef}>
-              <SessionTimelineFooter isStreaming={isStreaming} liveItems={liveItems} streamError={streamError} />
+              <SessionTimelineFooter compacting={compacting} isStreaming={isStreaming} liveItems={liveItems} streamError={streamError} />
             </div>
           }
           maintainScrollAtEnd={maintainScrollAtEnd && {animated: false, on: {dataChange: true, itemLayout: true}}}

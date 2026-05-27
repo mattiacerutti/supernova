@@ -11,6 +11,7 @@ interface UseSessionTimelineResult {
   committedTimelineItems: readonly SessionTimelineItem[];
   listRef: React.RefObject<LegendListRef | null>;
   liveTimelineItems: readonly SessionTimelineItem[];
+  streamCompacting: boolean;
   stopStreaming: () => void;
   streamError: string | null;
   streamStatus: SessionLiveStatus;
@@ -59,6 +60,7 @@ export function useSessionTimeline(input: UseSessionTimelineInput): UseSessionTi
 
   return {
     streamStatus,
+    streamCompacting: stream?.compacting ?? false,
     streamError: stream?.error ?? null,
     committedTimelineItems,
     liveTimelineItems,

@@ -143,6 +143,7 @@ function SessionConversation(props: SessionConversationProps) {
       }
       timeline={
         <SessionTimeline
+          compacting={stream.streamCompacting}
           isStreaming={isStreaming}
           items={stream.committedTimelineItems}
           listRef={stream.listRef}

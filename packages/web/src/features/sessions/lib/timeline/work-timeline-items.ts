@@ -1,6 +1,8 @@
-import type {SessionWorkEvent} from "@/features/sessions/types/session-timeline-item";
+interface TimestampedTimelineEvent {
+  readonly timestamp: string;
+}
 
-export function workDuration(events: readonly SessionWorkEvent[], completedAt: string | undefined): number | undefined {
+export function workDuration(events: readonly TimestampedTimelineEvent[], completedAt: string | undefined): number | undefined {
   const times = events.map((event) => new Date(event.timestamp).getTime());
   const startedAt = times.at(0);
   const completedAtMs = completedAt === undefined ? times.at(-1) : new Date(completedAt).getTime();

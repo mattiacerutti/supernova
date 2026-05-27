@@ -1,5 +1,6 @@
 import {memo} from "react";
 import AssistantMessage from "@/features/sessions/components/timeline/items/assistant-message";
+import AssistantCompaction from "@/features/sessions/components/timeline/items/assistant-compaction";
 import UserMessage from "@/features/sessions/components/timeline/items/user-message";
 import AssistantWork from "@/features/sessions/components/timeline/items/assistant-work";
 import type {SessionTimelineItem} from "@/features/sessions/types/session-timeline-item";
@@ -16,6 +17,8 @@ const SessionTimelineRow = memo(function SessionTimelineRow(props: SessionTimeli
       return <UserMessage message={item.message} />;
     case "assistant":
       return <AssistantMessage event={item.event} live={item.live} />;
+    case "compaction":
+      return <AssistantCompaction item={item} />;
     case "work":
       return <AssistantWork item={item} />;
   }

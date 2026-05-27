@@ -3,13 +3,15 @@ import SessionTimelineRow from "@/features/sessions/components/timeline/session-
 import type {SessionTimelineItem} from "@/features/sessions/types/session-timeline-item";
 
 interface SessionTimelineFooterProps {
+  readonly compacting: boolean;
   readonly isStreaming: boolean;
   readonly liveItems: readonly SessionTimelineItem[];
   readonly streamError: string | null;
 }
 
 export default function SessionTimelineFooter(props: SessionTimelineFooterProps) {
-  const {isStreaming, liveItems, streamError} = props;
+  const {compacting, isStreaming, liveItems, streamError} = props;
+  const streamingLabel = compacting ? "Compacting context" : "Thinking";
 
   return (
     <>
@@ -21,9 +23,9 @@ export default function SessionTimelineFooter(props: SessionTimelineFooterProps)
       <div className="mx-auto w-full max-w-3xl px-5 pb-6 md:px-8">
         {isStreaming && (
           <div className="relative w-fit text-sm text-neutral-600">
-            <span>Thinking</span>
+            <span>{streamingLabel}</span>
             <span aria-hidden="true" className="thinking-shimmer absolute inset-0 text-neutral-200">
-              Thinking
+              {streamingLabel}
             </span>
           </div>
         )}

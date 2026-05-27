@@ -1,4 +1,4 @@
-import type {AssistantTurnEvent, ReasoningTurnEvent, ToolTurnEvent, Turn} from "@supernova/contracts/sessions/schemas";
+import type {AssistantTurnEvent, CompactionTurnEvent, ReasoningTurnEvent, ToolTurnEvent, Turn} from "@supernova/contracts/sessions/schemas";
 import {describe, expect, it} from "vitest";
 import {buildSessionTimeline} from "@/features/sessions/lib/timeline/build-session-timeline";
 import {formatDuration} from "@/features/sessions/lib/timeline/work-timeline-items";
@@ -19,6 +19,10 @@ function toolEvent(id: string, second: number, kind: "command" | "file-read" = "
 
 function assistantEvent(id: string, second: number): AssistantTurnEvent {
   return {content: `assistant ${id}`, id, timestamp: timestamp(second), type: "assistant"};
+}
+
+function compactionEvent(id: string, second: number): CompactionTurnEvent {
+  return {id, status: "completed", summary: `summary ${id}`, timestamp: timestamp(second), type: "compaction"};
 }
 
 function turn(overrides: Partial<Turn>): Turn {
@@ -87,6 +91,25 @@ describe("buildSessionTimeline", () => {
       {type: "user"},
       {event: {id: "assistant-1"}, live: true, type: "assistant"},
       {collapsible: true, events: [{id: "tool-1"}], live: true, type: "work"},
+    ]);
+  });
+
+  it("renders completed compaction summaries as timeline items", () => {
+    const timeline = buildSessionTimeline({
+      live: false,
+      liveTurn: null,
+      turns: [
+        turn({
+          events: [assistantEvent("assistant-1", 1), compactionEvent("compaction-1", 3), assistantEvent("assistant-2", 6)],
+        }),
+      ],
+    });
+
+    expect(timeline.committedItems).toMatchObject([
+      {type: "user"},
+      {event: {id: "assistant-1"}, type: "assistant"},
+      {durationMs: 3000, event: {id: "compaction-1", summary: "summary compaction-1", type: "compaction"}, id: "compaction:compaction-1", type: "compaction"},
+      {event: {id: "assistant-2"}, type: "assistant"},
     ]);
   });
 });
