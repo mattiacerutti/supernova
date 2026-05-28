@@ -23,6 +23,7 @@ export function createSession(projectPath: string) {
           projectPath,
           title: "New session",
           turns: [],
+          undoneTurns: [],
           updatedAt: header.timestamp,
         };
       },

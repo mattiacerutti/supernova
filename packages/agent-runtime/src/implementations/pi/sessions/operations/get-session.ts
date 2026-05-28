@@ -3,6 +3,7 @@ import {LoadSessionError} from "@supernova/contracts/sessions/procedures";
 import {toPiSessionSummary} from "@supernova/agent-runtime/implementations/pi/projects/pi-session-mapper";
 import {PiSessionStore} from "@supernova/agent-runtime/implementations/pi/shared/internal/pi-session-store";
 import {buildPiTurns} from "@supernova/agent-runtime/implementations/pi/shared/lib/turns-builder";
+import {buildUndoneTurns} from "@supernova/agent-runtime/implementations/pi/session-runtime/lib/session-snapshot";
 
 /** Loads one Pi session and maps it into the shared session detail contract. */
 export function getSession(sessionId: string) {
@@ -24,6 +25,7 @@ export function getSession(sessionId: string) {
           projectPath: sessionInfo.cwd,
           title: summary.title,
           turns: model ? buildPiTurns(branch, model) : [],
+          undoneTurns: model ? buildUndoneTurns({modelReference: model, sessionManager}) : [],
           updatedAt: summary.updatedAt,
         };
       },

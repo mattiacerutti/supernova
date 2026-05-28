@@ -14,6 +14,7 @@ import {PiAgentSessionFactory} from "@supernova/agent-runtime/implementations/pi
 import type {PiAgentSessionFactoryShape} from "@supernova/agent-runtime/implementations/pi/session-runtime/internal/pi-agent-session-factory";
 import {PiSessionTitleGenerator} from "@supernova/agent-runtime/implementations/pi/session-runtime/internal/pi-session-title-generator";
 import type {PiSessionTitleGeneratorShape} from "@supernova/agent-runtime/implementations/pi/session-runtime/internal/pi-session-title-generator";
+import {SessionCheckpointStoreLive} from "@supernova/agent-runtime/implementations/pi/session-runtime/internal/session-checkpoint-store";
 import {SessionEventBusLive} from "@supernova/agent-runtime/implementations/pi/session-runtime/internal/session-event-bus";
 import {PiSessionsFromInternal} from "@supernova/agent-runtime/implementations/pi/sessions/pi-sessions-live";
 import {SessionRuntimeService} from "@supernova/agent-runtime/services/session-runtime/session-runtime-service";
@@ -242,7 +243,7 @@ export function createPiTestRuntime(input?: {
     Layer.succeed(PiSessionStore, sessionStore),
     Layer.succeed(PiSessionTitleGenerator, titleGenerator)
   );
-  const runtimeLive = PiSessionRuntimeFromInternal.pipe(Layer.provide(Layer.mergeAll(internalLive, SessionEventBusLive)));
+  const runtimeLive = PiSessionRuntimeFromInternal.pipe(Layer.provide(Layer.mergeAll(internalLive, SessionCheckpointStoreLive, SessionEventBusLive)));
   const sessionsLive = PiSessionsFromInternal.pipe(Layer.provide(internalLive));
   const runtime = ManagedRuntime.make(Layer.mergeAll(sessionsLive, runtimeLive));
   const runWithSessions = <A, E>(effect: Effect.Effect<A, E, SessionsService>) => runtime.runPromise(effect);
@@ -264,9 +265,12 @@ export function createPiTestRuntime(input?: {
         const sessionRuntime = yield* SessionRuntimeService;
         const {message, ...payload} = messageInput;
         yield* sessionRuntime.sendMessage({contentParts: message ? [{text: message, type: "text"}] : [], ...payload});
-        yield* Effect.sleep("300 millis");
       })
     );
+    await waitUntil(() => {
+      if (!events.some((event) => event.type === "session.snapshot" || event.type === "session.error")) throw new Error("Session did not settle.");
+    });
+    await new Promise((resolve) => setTimeout(resolve, 300));
     await runtime.runPromise(Fiber.interrupt(watcher).pipe(Effect.ignore));
     return events;
   };

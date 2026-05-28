@@ -14,6 +14,8 @@ export const Session = Schema.Struct({
   projectPath: Schema.String,
   /** Ordered session transcript represented as turns. */
   turns: Schema.Array(Turn),
+  /** Turns currently hidden behind undo and available for redo. */
+  undoneTurns: Schema.Array(Turn),
   /** ISO timestamp for the last session update. */
   updatedAt: Schema.String,
 });

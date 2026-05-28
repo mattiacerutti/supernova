@@ -11,6 +11,7 @@ type PiAgentMessage = AgentSession["messages"][number];
 export interface ActiveTurnInput {
   readonly sessionInfo: PiSessionInfo;
   readonly baseParentId: string | null;
+  readonly customEntries?: readonly {readonly customType: string; readonly data: unknown}[];
   readonly messageContext: SendMessageContext;
   readonly modelReference: ModelReference;
 }
@@ -21,6 +22,7 @@ export class ActiveTurn {
 
   private readonly sessionInfo: PiSessionInfo;
   private readonly baseParentId: string | null;
+  private readonly customEntries: readonly {readonly customType: string; readonly data: unknown}[];
   private readonly messageContext: SendMessageContext;
   private readonly modelReference: ModelReference;
   /** Runtime-owned live transcript for this turn. */
@@ -28,6 +30,7 @@ export class ActiveTurn {
 
   public constructor(input: ActiveTurnInput, sessionManager: PiSessionManager) {
     this.baseParentId = input.baseParentId;
+    this.customEntries = input.customEntries ?? [];
     this.messageContext = input.messageContext;
     this.modelReference = input.modelReference;
     this.sessionInfo = input.sessionInfo;
@@ -45,8 +48,11 @@ export class ActiveTurn {
   }
 
   /** Appends Supernova-authored metadata entries that must precede the submitted user message. */
-  public appendCustomEntries(): void {
-    for (const entry of this.messageContext.customEntries) this.sessionManager.appendCustomEntry(entry.customType, entry.data);
+  public appendCustomEntries(): string[] {
+    const appendedEntryIds: string[] = [];
+    for (const entry of this.customEntries) appendedEntryIds.push(this.sessionManager.appendCustomEntry(entry.customType, entry.data));
+    for (const entry of this.messageContext.customEntries) appendedEntryIds.push(this.sessionManager.appendCustomEntry(entry.customType, entry.data));
+    return appendedEntryIds;
   }
 
   /** Appends a live Pi message according to Pi's ordered message lifecycle. */
@@ -113,6 +119,7 @@ export class ActiveTurn {
         projectPath: this.sessionInfo.cwd,
         title: this.sessionManager.getSessionName() ?? summary.title,
         turns,
+        undoneTurns: [],
         updatedAt: latestTurn?.completedAt ?? latestTurn?.startedAt ?? summary.updatedAt,
       },
     };

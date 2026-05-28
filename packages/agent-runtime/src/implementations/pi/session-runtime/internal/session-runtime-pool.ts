@@ -1,5 +1,8 @@
-import type {CompactSessionPayload, SendMessagePayload} from "@supernova/contracts/sessions/procedures";
+import type {CompactSessionPayload, RedoCheckpointPayload, RevertToMessagePayload, SendMessagePayload, UndoCheckpointPayload} from "@supernova/contracts/sessions/procedures";
 import {abortSession} from "@supernova/agent-runtime/implementations/pi/session-runtime/operations/abort-session";
+import {redoCheckpoint} from "@supernova/agent-runtime/implementations/pi/session-runtime/operations/checkpoint/redo-checkpoint";
+import {revertToMessage} from "@supernova/agent-runtime/implementations/pi/session-runtime/operations/checkpoint/revert-to-message";
+import {undoCheckpoint} from "@supernova/agent-runtime/implementations/pi/session-runtime/operations/checkpoint/undo-checkpoint";
 import {compactSession} from "@supernova/agent-runtime/implementations/pi/session-runtime/operations/compact-session";
 import {sendMessage} from "@supernova/agent-runtime/implementations/pi/session-runtime/operations/send-message";
 import {PiSessionRuntime} from "@supernova/agent-runtime/implementations/pi/session-runtime/internal/pi-session-runtime";
@@ -22,6 +25,21 @@ export class SessionRuntimePool {
   /** Starts manual compaction on the target session runtime. */
   public async compactSession(input: CompactSessionPayload): Promise<void> {
     await compactSession(this.getOrCreateRuntime(input.sessionId), input);
+  }
+
+  /** Moves the session back to a selected message checkpoint. */
+  public async revertToMessage(input: RevertToMessagePayload): Promise<void> {
+    await revertToMessage(this.getOrCreateRuntime(input.sessionId), input);
+  }
+
+  /** Moves the session back to the previous checkpoint. */
+  public async undoCheckpoint(input: UndoCheckpointPayload): Promise<void> {
+    await undoCheckpoint(this.getOrCreateRuntime(input.sessionId), input);
+  }
+
+  /** Moves the session forward to the next checkpoint after an undo. */
+  public async redoCheckpoint(input: RedoCheckpointPayload): Promise<void> {
+    await redoCheckpoint(this.getOrCreateRuntime(input.sessionId), input);
   }
 
   /** Explicitly aborts and disposes the runtime for one session. */

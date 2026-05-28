@@ -17,6 +17,9 @@ import {
   AbortSessionPayload,
   WatchEventsPayload,
   SessionStreamEvent,
+  RevertToMessagePayload,
+  UndoCheckpointPayload,
+  RedoCheckpointPayload,
 } from "@supernova/contracts/sessions/procedures";
 
 export const GetSessionRpc = Rpc.make("getSession", {
@@ -55,6 +58,18 @@ export const CompactSessionRpc = Rpc.make("compactSession", {
   payload: CompactSessionPayload,
 });
 
+export const RevertToMessageRpc = Rpc.make("revertToMessage", {
+  payload: RevertToMessagePayload,
+});
+
+export const UndoCheckpointRpc = Rpc.make("undoCheckpoint", {
+  payload: UndoCheckpointPayload,
+});
+
+export const RedoCheckpointRpc = Rpc.make("redoCheckpoint", {
+  payload: RedoCheckpointPayload,
+});
+
 export const WatchEventsRpc = Rpc.make("watchEvents", {
   payload: WatchEventsPayload,
   stream: true,
@@ -69,5 +84,8 @@ export const SessionRpcs = [
   SendMessageRpc,
   AbortSessionRpc,
   CompactSessionRpc,
+  RevertToMessageRpc,
+  UndoCheckpointRpc,
+  RedoCheckpointRpc,
   WatchEventsRpc,
 ] as const;

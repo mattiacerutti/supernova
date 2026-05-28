@@ -1,6 +1,9 @@
+import {execFile} from "node:child_process";
+import {promisify} from "node:util";
 import {Effect, Fiber, Stream} from "effect";
 import type {AssistantMessage} from "@earendil-works/pi-ai";
 import {mkdtempSync, rmSync} from "node:fs";
+import {readFile, writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {afterEach, describe, expect, it} from "vitest";
@@ -16,6 +19,28 @@ import {
   selectedPiModel,
   waitUntil,
 } from "@tests/implementations/pi/sessions/pi-session-test-utils";
+
+const execFilePromise = promisify(execFile);
+
+async function git(cwd: string, args: readonly string[]): Promise<void> {
+  await execFilePromise("git", [...args], {cwd, encoding: "utf8"});
+}
+
+async function gitOutput(cwd: string, args: readonly string[]): Promise<string> {
+  const result = await execFilePromise("git", [...args], {cwd, encoding: "utf8"});
+  return result.stdout.trim();
+}
+
+async function createGitProject(): Promise<string> {
+  const projectPath = mkdtempSync(join(tmpdir(), "supernova-send-message-git-"));
+  await git(projectPath, ["init"]);
+  await git(projectPath, ["config", "user.email", "test@example.com"]);
+  await git(projectPath, ["config", "user.name", "Test User"]);
+  await writeFile(join(projectPath, "file.txt"), "before\n");
+  await git(projectPath, ["add", "."]);
+  await git(projectPath, ["commit", "-m", "initial"]);
+  return projectPath;
+}
 
 function isSnapshotEvent(event: SessionStreamEvent): event is Extract<SessionStreamEvent, {type: "session.snapshot"}> {
   return event.type === "session.snapshot";
@@ -205,6 +230,33 @@ describe("sending messages through Pi sessions", () => {
       [{text: "second", type: "text"}],
       [{text: "third", type: "text"}],
     ]);
+  });
+
+  it("persists stable checkpoint entries around git-backed turns", async () => {
+    const projectPath = await createGitProject();
+    tempDirs.push(projectPath);
+    const pi = createPiTestRuntime();
+    runtimes.push(pi);
+    const {info, manager} = pi.createSession(projectPath);
+    pi.faux.setResponses([
+      async () => {
+        await writeFile(join(projectPath, "file.txt"), "after\n");
+        await writeFile(join(projectPath, "created.txt"), "created\n");
+        return fauxAssistantMessage("Changed files.");
+      },
+    ]);
+
+    await pi.sendMessage({message: "change files", model: selectedModelReference, sessionId: info.id});
+
+    const customEntries = manager.getBranch().filter((entry) => entry.type === "custom");
+    const checkpointEntries = customEntries.filter((entry) => entry.customType === "supernova.checkpoint");
+    const checkpointId = (checkpointEntries.at(-1)?.data as {checkpointId?: string} | undefined)?.checkpointId;
+
+    expect(checkpointEntries).toHaveLength(2);
+    expect(checkpointId).toEqual(expect.any(String));
+    expect(customEntries.some((entry) => entry.customType === "supernova.checkpoint-patch")).toBe(false);
+    await expect(gitOutput(projectPath, ["rev-parse", "--verify", `refs/supernova/checkpoints/${info.id}/${checkpointId}`])).resolves.toHaveLength(40);
+    await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("after\n");
   });
 
   it("keeps overflow compaction continuation in the same live turn", async () => {

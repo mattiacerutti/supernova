@@ -7,6 +7,7 @@ import type {PiResourceCatalogShape} from "@supernova/agent-runtime/implementati
 import type {PiSessionInfo, PiSessionManager, PiSessionStoreShape} from "@supernova/agent-runtime/implementations/pi/shared/internal/pi-session-store";
 import type {PiAgentSessionFactoryShape} from "@supernova/agent-runtime/implementations/pi/session-runtime/internal/pi-agent-session-factory";
 import type {PiSessionTitleGeneratorShape} from "@supernova/agent-runtime/implementations/pi/session-runtime/internal/pi-session-title-generator";
+import type {SessionCheckpointStoreShape} from "@supernova/agent-runtime/implementations/pi/session-runtime/internal/session-checkpoint-store";
 import type {SessionEventBusShape} from "@supernova/agent-runtime/implementations/pi/session-runtime/internal/session-event-bus";
 import {buildSessionSnapshot} from "@supernova/agent-runtime/implementations/pi/session-runtime/lib/session-snapshot";
 import {findSelectedModel} from "@supernova/agent-runtime/implementations/pi/session-runtime/lib/models/selected-model";
@@ -30,6 +31,7 @@ export interface PiSessionRuntimeDependencies {
   readonly eventBus: SessionEventBusShape;
   readonly modelCatalog: PiModelCatalogShape;
   readonly resourceCatalog: PiResourceCatalogShape;
+  readonly checkpointStore: SessionCheckpointStoreShape;
   readonly sessionStore: PiSessionStoreShape;
   readonly titleGenerator: PiSessionTitleGeneratorShape;
 }
@@ -45,6 +47,7 @@ export class PiSessionRuntime {
   public readonly titleGenerator: PiSessionTitleGeneratorShape;
 
   private readonly agentSessionFactory: PiAgentSessionFactoryShape;
+  private readonly checkpointStore: SessionCheckpointStoreShape;
   private readonly eventBus: SessionEventBusShape;
   private readonly modelCatalog: PiModelCatalogShape;
   private readonly sessionStore: PiSessionStoreShape;
@@ -60,6 +63,7 @@ export class PiSessionRuntime {
 
   public constructor(input: PiSessionRuntimeInput) {
     this.agentSessionFactory = input.agentSessionFactory;
+    this.checkpointStore = input.checkpointStore;
     this.eventBus = input.eventBus;
     this.modelCatalog = input.modelCatalog;
     this.resourceCatalog = input.resourceCatalog;
@@ -95,18 +99,28 @@ export class PiSessionRuntime {
     return this.releasePromise;
   }
 
-  /** Opens the durable Pi session and applies command-scoped model settings. */
-  public async openSession(sessionId: string, modelReference: ModelReference): Promise<OpenedRuntimeSession> {
+  /** Opens the durable Pi session and applies command-scoped model settings when provided. */
+  public async openSession(sessionId: string, modelReference?: ModelReference): Promise<OpenedRuntimeSession> {
     const {info: sessionInfo, manager: sessionManager} = await this.sessionStore.openSessionById(sessionId);
-    const model = findSelectedModel(this.modelCatalog, modelReference);
+    const resolvedModelReference = modelReference ?? this.currentModelReference(sessionManager);
+    const model = findSelectedModel(this.modelCatalog, resolvedModelReference);
 
-    const openedSession = {model, modelReference, sessionInfo, sessionManager, titleWasGenerated: false};
+    const openedSession = {model, modelReference: resolvedModelReference, sessionInfo, sessionManager, titleWasGenerated: false};
     const agentSession = await this.getAgentSession(openedSession);
 
-    await agentSession.setModel(model);
-    agentSession.setThinkingLevel(toPiThinkingLevel(modelReference.thinkingLevel));
+    if (modelReference) {
+      await agentSession.setModel(model);
+      agentSession.setThinkingLevel(toPiThinkingLevel(modelReference.thinkingLevel));
+    }
 
     return {...openedSession, sessionManager: agentSession.sessionManager};
+  }
+
+  private currentModelReference(sessionManager: PiSessionManager): ModelReference {
+    const sessionContext = sessionManager.buildSessionContext();
+    if (!sessionContext.model) throw new Error("Session model was not found.");
+
+    return {id: sessionContext.model.modelId, providerId: sessionContext.model.provider, thinkingLevel: sessionContext.thinkingLevel};
   }
 
   /** Creates or reuses the long-lived Pi AgentSession. */
@@ -131,11 +145,14 @@ export class PiSessionRuntime {
   }
 
   /** Submits a prepared active turn prompt and publishes the settled snapshot. */
-  public async sendActiveTurnPrompt(activeTurn: ActiveTurn): Promise<void> {
+  public async sendActiveTurn(activeTurn: ActiveTurn, onEnd?: () => Promise<void>): Promise<void> {
     try {
       const images = activeTurn.images;
       await this.activeSession?.prompt(activeTurn.prompt, images.length > 0 ? {images: [...images]} : undefined);
+
       await this.waitForPiEventQueue();
+
+      await onEnd?.();
       await this.publishSettledSnapshot(activeTurn);
     } finally {
       if (this.cancelled) await this.release({abort: false});
@@ -171,6 +188,16 @@ export class PiSessionRuntime {
   /** Returns whether this runtime has been explicitly cancelled. */
   public isCancelled(): boolean {
     return this.cancelled;
+  }
+
+  /** Captures a stable workspace checkpoint for the current session project. */
+  public async createCheckpoint(input: {readonly checkpointId: string; readonly cwd: string}): Promise<boolean> {
+    return this.checkpointStore.create({checkpointId: input.checkpointId, cwd: input.cwd, sessionId: this.sessionId});
+  }
+
+  /** Restores the full workspace state from a stable checkpoint. */
+  public async restoreCheckpoint(input: {readonly checkpointId: string; readonly cwd: string}): Promise<void> {
+    await this.checkpointStore.restore({checkpointId: input.checkpointId, cwd: input.cwd, sessionId: this.sessionId});
   }
 
   private subscribeToLiveUpdates(): void {
