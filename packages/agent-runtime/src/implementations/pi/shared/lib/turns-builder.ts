@@ -1,11 +1,11 @@
 import type {CompactionEntry, CustomEntry, SessionEntry, SessionMessageEntry} from "@earendil-works/pi-coding-agent";
 import type {AssistantMessage, ToolResultMessage, UserMessage as PiUserMessage} from "@earendil-works/pi-ai";
 import type {CompactionTurnEvent, ModelReference, ToolTurnEvent, Turn, TurnEvent, UserMessage} from "@supernova/contracts/sessions/schemas";
-import {createTurn} from "@supernova/agent-runtime/implementations/shared/turns";
-import {generateStableId} from "@supernova/agent-runtime/implementations/shared/id-generator";
-import {PiToolInvocationFactory} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns/tool-invocation-factory";
-import type {PiToolInvocation} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns/tool-invocation-factory";
-import {USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE, enrichContentPartsWithImages} from "@supernova/agent-runtime/implementations/pi/sessions/lib/user-message/content-parts";
+import {generateStableId} from "@supernova/agent-runtime/implementations/pi/shared/lib/id-generator";
+import {createTurn} from "@supernova/agent-runtime/implementations/pi/shared/lib/turns";
+import {PiToolInvocationFactory} from "@supernova/agent-runtime/implementations/pi/shared/lib/turns/tool-invocation-factory";
+import type {PiToolInvocation} from "@supernova/agent-runtime/implementations/pi/shared/lib/turns/tool-invocation-factory";
+import {USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE, enrichContentPartsWithImages} from "@supernova/agent-runtime/implementations/pi/shared/lib/user-message/content-parts";
 
 type UserMessageEntry = SessionMessageEntry & {message: PiUserMessage};
 type AssistantMessageEntry = SessionMessageEntry & {message: AssistantMessage};

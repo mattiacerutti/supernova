@@ -1,7 +1,7 @@
 import type {AgentSession, SessionEntry} from "@earendil-works/pi-coding-agent";
 import type {UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
-import {generateStableId} from "@supernova/agent-runtime/implementations/shared/id-generator";
-import {USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE} from "@supernova/agent-runtime/implementations/pi/sessions/lib/user-message/content-parts";
+import {generateStableId} from "@supernova/agent-runtime/implementations/pi/shared/lib/id-generator";
+import {USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE} from "@supernova/agent-runtime/implementations/pi/shared/lib/user-message/content-parts";
 
 type PiAgentMessage = AgentSession["messages"][number];
 

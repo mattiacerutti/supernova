@@ -4,7 +4,7 @@ import {mkdtempSync, rmSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {afterEach, describe, expect, it} from "vitest";
-import {SessionsService} from "@supernova/agent-runtime/services/sessions/sessions-service";
+import {SessionRuntimeService} from "@supernova/agent-runtime/services/session-runtime/session-runtime-service";
 import type {SessionStreamEvent} from "@supernova/contracts/sessions/procedures";
 import {
   createPiTestRuntime,
@@ -280,18 +280,18 @@ describe("sending messages through Pi sessions", () => {
     const events: SessionStreamEvent[] = [];
     const watcher = pi.runtime.runFork(
       Effect.gen(function* () {
-        const sessions = yield* SessionsService;
-        yield* Stream.runForEach(sessions.watchEvents(), (event) => Effect.sync(() => events.push(event)));
+        const sessionRuntime = yield* SessionRuntimeService;
+        yield* Stream.runForEach(sessionRuntime.watchEvents(), (event) => Effect.sync(() => events.push(event)));
       })
     );
     await waitUntil(() => {
       if (!events.some((event) => event.type === "connected")) throw new Error("Stream did not connect.");
     });
     const program = Effect.gen(function* () {
-      const sessions = yield* SessionsService;
-      yield* sessions.sendMessage({contentParts: [{text: "Fix it", type: "text"}], model: selectedModelReference, sessionId: info.id});
+      const sessionRuntime = yield* SessionRuntimeService;
+      yield* sessionRuntime.sendMessage({contentParts: [{text: "Fix it", type: "text"}], model: selectedModelReference, sessionId: info.id});
       yield* Effect.sleep("100 millis");
-      yield* sessions.abortSession(info.id);
+      yield* sessionRuntime.abortSession(info.id);
     });
 
     const run = pi.runtime.runPromise(program);

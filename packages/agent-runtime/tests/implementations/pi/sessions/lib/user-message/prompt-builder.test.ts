@@ -1,6 +1,6 @@
 import {describe, expect, it} from "vitest";
-import type {PiResourceCatalogShape} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-resource-catalog";
-import {buildPrompt} from "@supernova/agent-runtime/implementations/pi/sessions/lib/user-message/prompt-builder";
+import type {PiResourceCatalogShape} from "@supernova/agent-runtime/implementations/pi/shared/internal/pi-resource-catalog";
+import {buildPrompt} from "@supernova/agent-runtime/implementations/pi/session-runtime/lib/user-message/prompt-builder";
 
 const skillFile = "/skills/demo/SKILL.md";
 

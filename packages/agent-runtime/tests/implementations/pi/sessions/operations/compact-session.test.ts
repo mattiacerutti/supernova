@@ -1,6 +1,6 @@
 import {Effect, Fiber, Stream} from "effect";
 import {afterEach, describe, expect, it} from "vitest";
-import {SessionsService} from "@supernova/agent-runtime/services/sessions/sessions-service";
+import {SessionRuntimeService} from "@supernova/agent-runtime/services/session-runtime/session-runtime-service";
 import type {SessionStreamEvent} from "@supernova/contracts/sessions/procedures";
 import {createPiTestRuntime, fauxAssistantMessage, selectedModelReference, selectedPiModel, waitUntil} from "@tests/implementations/pi/sessions/pi-session-test-utils";
 
@@ -24,18 +24,18 @@ describe("manual Pi session compaction", () => {
     const events: SessionStreamEvent[] = [];
     const watcher = pi.runtime.runFork(
       Effect.gen(function* () {
-        const sessions = yield* SessionsService;
-        yield* Stream.runForEach(sessions.watchEvents(), (event) => Effect.sync(() => events.push(event)));
+        const sessionRuntime = yield* SessionRuntimeService;
+        yield* Stream.runForEach(sessionRuntime.watchEvents(), (event) => Effect.sync(() => events.push(event)));
       })
     );
     await waitUntil(() => {
       if (!events.some((event) => event.type === "connected")) throw new Error("Stream did not connect.");
     });
 
-    await pi.runWithSessions(
+    await pi.runWithSessionRuntime(
       Effect.gen(function* () {
-        const sessions = yield* SessionsService;
-        yield* sessions.compactSession({model: selectedModelReference, sessionId: info.id});
+        const sessionRuntime = yield* SessionRuntimeService;
+        yield* sessionRuntime.compactSession({model: selectedModelReference, sessionId: info.id});
       })
     );
     await waitUntil(() => {

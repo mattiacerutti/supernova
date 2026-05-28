@@ -3,7 +3,7 @@ import {Effect, Layer} from "effect";
 import {describe, expect, it, vi} from "vitest";
 import {PiSdkService} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
 import type {PiSdkServiceShape} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
-import {PiResourceCatalog, PiResourceCatalogLive} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-resource-catalog";
+import {PiResourceCatalog, PiResourceCatalogLive} from "@supernova/agent-runtime/implementations/pi/shared/internal/pi-resource-catalog";
 
 const skill = {
   baseDir: "/workspace/.agents/skills/example",

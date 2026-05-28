@@ -3,19 +3,20 @@ import {AuthStorage, createAgentSession, ModelRegistry, SessionManager, Settings
 import type {Api, FauxProviderRegistration} from "@earendil-works/pi-ai";
 import {fauxAssistantMessage, fauxText, fauxThinking, registerFauxProvider} from "@earendil-works/pi-ai";
 import {Effect, Fiber, Layer, ManagedRuntime, Stream} from "effect";
-import {PiAgentSessionFactory} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-agent-session-factory";
-import type {PiAgentSessionFactoryShape} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-agent-session-factory";
-import {PiModelCatalog} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-model-catalog";
-import type {PiModelCatalogShape} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-model-catalog";
-import {PiResourceCatalog} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-resource-catalog";
-import type {PiResourceCatalogShape} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-resource-catalog";
-import {PiSessionStore} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-session-store";
-import type {PiSessionInfo, PiSessionManager, PiSessionStoreShape} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-session-store";
-import {PiSessionTitleGenerator} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-session-title-generator";
-import type {PiSessionTitleGeneratorShape} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-session-title-generator";
-import {SessionEventBusLive} from "@supernova/agent-runtime/implementations/pi/sessions/internal/session-event-bus";
-import {SessionRuntimeManagerLive} from "@supernova/agent-runtime/implementations/pi/sessions/internal/session-runtime-manager";
+import {PiModelCatalog} from "@supernova/agent-runtime/implementations/pi/shared/internal/pi-model-catalog";
+import type {PiModelCatalogShape} from "@supernova/agent-runtime/implementations/pi/shared/internal/pi-model-catalog";
+import {PiResourceCatalog} from "@supernova/agent-runtime/implementations/pi/shared/internal/pi-resource-catalog";
+import type {PiResourceCatalogShape} from "@supernova/agent-runtime/implementations/pi/shared/internal/pi-resource-catalog";
+import {PiSessionStore} from "@supernova/agent-runtime/implementations/pi/shared/internal/pi-session-store";
+import type {PiSessionInfo, PiSessionManager, PiSessionStoreShape} from "@supernova/agent-runtime/implementations/pi/shared/internal/pi-session-store";
+import {PiSessionRuntimeFromInternal} from "@supernova/agent-runtime/implementations/pi/session-runtime/pi-session-runtime-live";
+import {PiAgentSessionFactory} from "@supernova/agent-runtime/implementations/pi/session-runtime/internal/pi-agent-session-factory";
+import type {PiAgentSessionFactoryShape} from "@supernova/agent-runtime/implementations/pi/session-runtime/internal/pi-agent-session-factory";
+import {PiSessionTitleGenerator} from "@supernova/agent-runtime/implementations/pi/session-runtime/internal/pi-session-title-generator";
+import type {PiSessionTitleGeneratorShape} from "@supernova/agent-runtime/implementations/pi/session-runtime/internal/pi-session-title-generator";
+import {SessionEventBusLive} from "@supernova/agent-runtime/implementations/pi/session-runtime/internal/session-event-bus";
 import {PiSessionsFromInternal} from "@supernova/agent-runtime/implementations/pi/sessions/pi-sessions-live";
+import {SessionRuntimeService} from "@supernova/agent-runtime/services/session-runtime/session-runtime-service";
 import {SessionsService} from "@supernova/agent-runtime/services/sessions/sessions-service";
 import type {SendMessagePayload, SessionStreamEvent} from "@supernova/contracts/sessions/procedures";
 import type {ModelReference, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
@@ -241,27 +242,28 @@ export function createPiTestRuntime(input?: {
     Layer.succeed(PiSessionStore, sessionStore),
     Layer.succeed(PiSessionTitleGenerator, titleGenerator)
   );
-  const runtimeLive = SessionRuntimeManagerLive.pipe(Layer.provide(Layer.mergeAll(internalLive, SessionEventBusLive)));
-  const sessionsLive = PiSessionsFromInternal.pipe(Layer.provide(Layer.mergeAll(internalLive, SessionEventBusLive, runtimeLive)));
-  const runtime = ManagedRuntime.make(sessionsLive);
+  const runtimeLive = PiSessionRuntimeFromInternal.pipe(Layer.provide(Layer.mergeAll(internalLive, SessionEventBusLive)));
+  const sessionsLive = PiSessionsFromInternal.pipe(Layer.provide(internalLive));
+  const runtime = ManagedRuntime.make(Layer.mergeAll(sessionsLive, runtimeLive));
   const runWithSessions = <A, E>(effect: Effect.Effect<A, E, SessionsService>) => runtime.runPromise(effect);
+  const runWithSessionRuntime = <A, E>(effect: Effect.Effect<A, E, SessionRuntimeService>) => runtime.runPromise(effect);
   const sendMessage = async (messageInput: Omit<SendMessagePayload, "contentParts"> & {readonly contentParts?: SendMessagePayload["contentParts"]; readonly message?: string}) => {
     const events: SessionStreamEvent[] = [];
     const watcher = runtime.runFork(
       Effect.gen(function* () {
-        const sessionsService = yield* SessionsService;
-        yield* Stream.runForEach(sessionsService.watchEvents(), (event) => Effect.sync(() => events.push(event)));
+        const sessionRuntime = yield* SessionRuntimeService;
+        yield* Stream.runForEach(sessionRuntime.watchEvents(), (event) => Effect.sync(() => events.push(event)));
       })
     );
     await waitUntil(() => {
       if (!events.some((event) => event.type === "connected")) throw new Error("Stream did not connect.");
     });
 
-    await runWithSessions(
+    await runWithSessionRuntime(
       Effect.gen(function* () {
-        const sessionsService = yield* SessionsService;
+        const sessionRuntime = yield* SessionRuntimeService;
         const {message, ...payload} = messageInput;
-        yield* sessionsService.sendMessage({contentParts: message ? [{text: message, type: "text"}] : [], ...payload});
+        yield* sessionRuntime.sendMessage({contentParts: message ? [{text: message, type: "text"}] : [], ...payload});
         yield* Effect.sleep("300 millis");
       })
     );
@@ -279,6 +281,7 @@ export function createPiTestRuntime(input?: {
     },
     modelRegistry,
     runWithSessions,
+    runWithSessionRuntime,
     agentSessionFactory,
     modelCatalog,
     resourceCatalog,

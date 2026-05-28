@@ -1,5 +1,5 @@
 import {describe, expect, it} from "vitest";
-import {createLiveBranchEntries} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns/live-branch-entries";
+import {createLiveBranchEntries} from "@supernova/agent-runtime/implementations/pi/session-runtime/lib/turns/live-branch-entries";
 import {assistantMessage, userMessage} from "@tests/implementations/pi/sessions/pi-session-test-utils";
 
 describe("creating live Pi branch entries", () => {

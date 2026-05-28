@@ -1,7 +1,7 @@
 import {Effect, Fiber, ManagedRuntime, Stream} from "effect";
 import {afterEach, describe, expect, it} from "vitest";
 import type {SessionStreamEvent} from "@supernova/contracts/sessions/procedures";
-import {SessionEventBus, SessionEventBusLive} from "@supernova/agent-runtime/implementations/pi/sessions/internal/session-event-bus";
+import {SessionEventBus, SessionEventBusLive} from "@supernova/agent-runtime/implementations/pi/session-runtime/internal/session-event-bus";
 import {waitUntil} from "@tests/implementations/pi/sessions/pi-session-test-utils";
 
 describe("session event bus", () => {

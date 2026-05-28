@@ -2,7 +2,7 @@ import {Effect, Layer} from "effect";
 import {describe, expect, it, vi} from "vitest";
 import {PiSdkService} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
 import type {PiSdkServiceShape} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
-import {PiAgentSessionFactory, PiAgentSessionFactoryLive} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-agent-session-factory";
+import {PiAgentSessionFactory, PiAgentSessionFactoryLive} from "@supernova/agent-runtime/implementations/pi/session-runtime/internal/pi-agent-session-factory";
 
 describe("Pi agent session factory", () => {
   it("creates sessions with Supernova's custom resource loader policy", async () => {

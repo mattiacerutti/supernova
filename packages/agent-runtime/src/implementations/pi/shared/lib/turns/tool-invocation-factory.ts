@@ -35,7 +35,7 @@ import {
   type Tool,
   type ToolStatus,
 } from "@supernova/contracts/sessions/schemas";
-import {fileContentToNewFilePatch, piEditDiffToPatch} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns/edit-patch";
+import {fileContentToNewFilePatch, piEditDiffToPatch} from "@supernova/agent-runtime/implementations/pi/shared/lib/turns/edit-patch";
 import {Option, Schema} from "effect";
 
 type PiToolOutput = string | readonly (TextContent | ImageContent)[];

@@ -1,6 +1,6 @@
 import {Schema} from "effect";
 import {describe, expect, it} from "vitest";
-import {PiToolInvocationFactory} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns/tool-invocation-factory";
+import {PiToolInvocationFactory} from "@supernova/agent-runtime/implementations/pi/shared/lib/turns/tool-invocation-factory";
 import {Tool} from "@supernova/contracts/sessions/schemas";
 import type {Tool as ToolType} from "@supernova/contracts/sessions/schemas";
 

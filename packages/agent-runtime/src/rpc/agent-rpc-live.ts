@@ -3,6 +3,7 @@ import {Effect} from "effect";
 import {FoldersService} from "@supernova/agent-runtime/services/folders/folders-service";
 import {ProvidersService} from "@supernova/agent-runtime/services/providers/providers-service";
 import {ProjectsService} from "@supernova/agent-runtime/services/projects/projects-service";
+import {SessionRuntimeService} from "@supernova/agent-runtime/services/session-runtime/session-runtime-service";
 import {SessionsService} from "@supernova/agent-runtime/services/sessions/sessions-service";
 
 export const AgentRpcLive = AgentRpcGroup.toLayer(
@@ -10,13 +11,14 @@ export const AgentRpcLive = AgentRpcGroup.toLayer(
     const folders = yield* FoldersService;
     const providers = yield* ProvidersService;
     const projects = yield* ProjectsService;
+    const sessionRuntime = yield* SessionRuntimeService;
     const sessions = yield* SessionsService;
 
     return {
-      abortSession: ({sessionId}) => sessions.abortSession(sessionId),
+      abortSession: ({sessionId}) => sessionRuntime.abortSession(sessionId),
       archiveProjectSession: ({projectPath, sessionId}) => projects.archiveSession(projectPath, sessionId),
       cancelProviderLogin: ({loginSessionId}) => providers.cancelLogin(loginSessionId),
-      compactSession: (input) => sessions.compactSession(input),
+      compactSession: (input) => sessionRuntime.compactSession(input),
       createFolder: ({path}) => folders.create(path),
       createSession: ({projectPath}) => sessions.create(projectPath),
       getProviderLoginSession: ({loginSessionId}) => providers.getLoginSession(loginSessionId),
@@ -29,10 +31,10 @@ export const AgentRpcLive = AgentRpcGroup.toLayer(
       listModels: () => sessions.listModels(),
       logoutProvider: ({providerId}) => providers.logout(providerId),
       setProviderApiKey: ({apiKey, providerId}) => providers.setApiKey(providerId, apiKey),
-      sendMessage: (input) => sessions.sendMessage(input),
+      sendMessage: (input) => sessionRuntime.sendMessage(input),
       startProviderOAuthLogin: ({providerId}) => providers.startOAuthLogin(providerId),
       submitProviderLoginInput: ({input, loginSessionId}) => providers.submitLoginInput(loginSessionId, input),
-      watchEvents: () => sessions.watchEvents(),
+      watchEvents: () => sessionRuntime.watchEvents(),
     };
   })
 );

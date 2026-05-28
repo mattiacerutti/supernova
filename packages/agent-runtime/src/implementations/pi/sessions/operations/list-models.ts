@@ -1,6 +1,6 @@
 import {Effect} from "effect";
 import {ListModelsError} from "@supernova/contracts/sessions/procedures";
-import {PiModelCatalog} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-model-catalog";
+import {PiModelCatalog} from "@supernova/agent-runtime/implementations/pi/shared/internal/pi-model-catalog";
 import {toAgentModelDetails} from "@supernova/agent-runtime/implementations/pi/sessions/lib/models/model-mapper";
 
 /** Lists available Pi models mapped into shared model details. */

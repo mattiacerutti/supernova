@@ -1,6 +1,6 @@
 import type {SessionEntry} from "@earendil-works/pi-coding-agent";
 import {describe, expect, it} from "vitest";
-import {buildPiTurns} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns-builder";
+import {buildPiTurns} from "@supernova/agent-runtime/implementations/pi/shared/lib/turns-builder";
 import {
   assistantMessage,
   contentPartsEntry,

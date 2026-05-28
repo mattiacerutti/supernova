@@ -1,8 +1,8 @@
 import {Context, Effect, Layer} from "effect";
 import type {UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 import {PiSdkService} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
-import type {PiModel} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-model-catalog";
-import {sessionTitleContext, sessionTitleMaxTokens, titleFromResponse} from "@supernova/agent-runtime/implementations/pi/sessions/lib/session-title-generator";
+import type {PiModel} from "@supernova/agent-runtime/implementations/pi/shared/internal/pi-model-catalog";
+import {sessionTitleContext, sessionTitleMaxTokens, titleFromResponse} from "@supernova/agent-runtime/implementations/pi/session-runtime/lib/session-title-generator";
 
 export interface PiSessionTitleGeneratorShape {
   readonly generateSessionTitle: (input: {readonly contentParts: readonly UserMessageContentPart[]; readonly model: PiModel}) => Promise<string>;

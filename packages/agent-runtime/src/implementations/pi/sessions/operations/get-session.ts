@@ -1,8 +1,8 @@
 import {Effect} from "effect";
 import {LoadSessionError} from "@supernova/contracts/sessions/procedures";
 import {toPiSessionSummary} from "@supernova/agent-runtime/implementations/pi/projects/pi-session-mapper";
-import {PiSessionStore} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-session-store";
-import {buildPiTurns} from "@supernova/agent-runtime/implementations/pi/sessions/lib/turns-builder";
+import {PiSessionStore} from "@supernova/agent-runtime/implementations/pi/shared/internal/pi-session-store";
+import {buildPiTurns} from "@supernova/agent-runtime/implementations/pi/shared/lib/turns-builder";
 
 /** Loads one Pi session and maps it into the shared session detail contract. */
 export function getSession(sessionId: string) {

@@ -1,7 +1,7 @@
 import type {Skill} from "@earendil-works/pi-coding-agent";
 import type {UserMessageAttachmentPart, UserMessageContentPart, UserMessageReferencePart} from "@supernova/contracts/sessions/schemas";
-import type {PiResourceCatalogShape} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-resource-catalog";
-import {contentFromParts} from "@supernova/agent-runtime/implementations/pi/sessions/lib/user-message/content-parts";
+import type {PiResourceCatalogShape} from "@supernova/agent-runtime/implementations/pi/shared/internal/pi-resource-catalog";
+import {contentFromParts} from "@supernova/agent-runtime/implementations/pi/shared/lib/user-message/content-parts";
 
 function escapeXml(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&apos;");

@@ -4,9 +4,9 @@ import {Effect} from "effect";
 import {matchSorter} from "match-sorter";
 import {ListComposerSuggestionsError} from "@supernova/contracts/sessions/procedures";
 import type {ComposerSuggestionItem, ComposerSuggestionTriggerKind} from "@supernova/contracts/sessions/procedures";
-import {generateStableId} from "@supernova/agent-runtime/implementations/shared/id-generator";
-import {PiResourceCatalog} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-resource-catalog";
-import type {PiResourceCatalogShape} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-resource-catalog";
+import {PiResourceCatalog} from "@supernova/agent-runtime/implementations/pi/shared/internal/pi-resource-catalog";
+import type {PiResourceCatalogShape} from "@supernova/agent-runtime/implementations/pi/shared/internal/pi-resource-catalog";
+import {generateStableId} from "@supernova/agent-runtime/implementations/pi/shared/lib/id-generator";
 
 const MAX_SUGGESTIONS = 50;
 

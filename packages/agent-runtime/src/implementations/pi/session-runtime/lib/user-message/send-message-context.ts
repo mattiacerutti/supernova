@@ -1,9 +1,9 @@
 import type {ImageContent} from "@earendil-works/pi-ai";
 import type {SendMessagePayload} from "@supernova/contracts/sessions/procedures";
 import type {UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
-import type {PiResourceCatalogShape} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-resource-catalog";
-import {USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE, imageContentFromParts} from "@supernova/agent-runtime/implementations/pi/sessions/lib/user-message/content-parts";
-import {buildPrompt} from "@supernova/agent-runtime/implementations/pi/sessions/lib/user-message/prompt-builder";
+import type {PiResourceCatalogShape} from "@supernova/agent-runtime/implementations/pi/shared/internal/pi-resource-catalog";
+import {USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE, imageContentFromParts} from "@supernova/agent-runtime/implementations/pi/shared/lib/user-message/content-parts";
+import {buildPrompt} from "@supernova/agent-runtime/implementations/pi/session-runtime/lib/user-message/prompt-builder";
 
 export type SendMessageContextCustomEntry = {
   readonly customType: typeof USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE;

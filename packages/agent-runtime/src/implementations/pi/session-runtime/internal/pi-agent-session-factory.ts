@@ -2,7 +2,7 @@ import {SettingsManager} from "@earendil-works/pi-coding-agent";
 import type {AgentSession} from "@earendil-works/pi-coding-agent";
 import {Context, Effect, Layer} from "effect";
 import {PiSdkService} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
-import type {PiSessionManager} from "@supernova/agent-runtime/implementations/pi/sessions/internal/pi-session-store";
+import type {PiSessionManager} from "@supernova/agent-runtime/implementations/pi/shared/internal/pi-session-store";
 
 export interface PiAgentSessionFactoryShape {
   readonly createAgentSession: (input: {readonly cwd: string; readonly sessionManager: PiSessionManager}) => Promise<{readonly session: AgentSession}>;
