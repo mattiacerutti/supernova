@@ -43,6 +43,7 @@ This package should stay focused on runtime behavior and provider integration. S
 
 ## Testing
 
+- Keep test folders aligned with the implementation boundaries under `src` unless the user explicitly requests a different organization. For example, tests for `src/implementations/pi/session-runtime` should live under `tests/implementations/pi/session-runtime`, and tests for shared Pi code should live under `tests/implementations/pi/shared`.
 - Add tests for critical paths, new behavior, bug fixes, and failure handling that could regress user-visible runtime behavior.
 - Test behavior and observable outcomes, not implementation details or whether code lines executed.
 - Prefer focused tests around operation boundaries, mapping logic, error handling, and stream/session lifecycle behavior.

@@ -1,4 +1,10 @@
-import type {CompactSessionPayload, RedoCheckpointPayload, RevertToMessagePayload, SendMessagePayload, UndoCheckpointPayload} from "@supernova/contracts/sessions/procedures";
+import type {
+  CompactSessionPayload,
+  RedoCheckpointPayload,
+  RevertToMessagePayload,
+  SendMessagePayload,
+  UndoCheckpointPayload,
+} from "@supernova/contracts/session-runtime/procedures";
 import {abortSession} from "@supernova/agent-runtime/implementations/pi/session-runtime/operations/abort-session";
 import {redoCheckpoint} from "@supernova/agent-runtime/implementations/pi/session-runtime/operations/checkpoint/redo-checkpoint";
 import {revertToMessage} from "@supernova/agent-runtime/implementations/pi/session-runtime/operations/checkpoint/revert-to-message";

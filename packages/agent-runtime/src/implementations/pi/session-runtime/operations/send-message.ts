@@ -1,4 +1,4 @@
-import type {SendMessagePayload} from "@supernova/contracts/sessions/procedures";
+import type {SendMessagePayload} from "@supernova/contracts/session-runtime/procedures";
 import {randomUUID} from "node:crypto";
 import {
   CHECKPOINT_CURSOR_CUSTOM_TYPE,

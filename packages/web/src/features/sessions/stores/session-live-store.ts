@@ -1,5 +1,5 @@
 import type {QueryClient} from "@tanstack/react-query";
-import type {SessionStreamEvent} from "@supernova/contracts/sessions/procedures";
+import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
 import type {ModelReference, Session, SessionSummary, Turn, UserMessageContentPart, UserMessage} from "@supernova/contracts/sessions/schemas";
 import type {ProjectSessionsListResult} from "@supernova/contracts/projects/procedures";
 import {create} from "zustand";

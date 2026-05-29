@@ -4,7 +4,7 @@ import {join} from "node:path";
 import {Effect} from "effect";
 import {afterEach, describe, expect, it} from "vitest";
 import {SessionsService} from "@supernova/agent-runtime/services/sessions/sessions-service";
-import {createPiTestRuntime, selectedModelReference} from "@tests/implementations/pi/sessions/pi-session-test-utils";
+import {createPiTestRuntime, selectedModelReference} from "@tests/implementations/pi/pi-session-test-utils";
 
 describe("Pi sessions service", () => {
   const runtimes: Array<{unregister: () => void}> = [];

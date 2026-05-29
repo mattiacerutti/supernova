@@ -7,7 +7,7 @@ import type {
   SendMessagePayload,
   SessionStreamEvent,
   UndoCheckpointPayload,
-} from "@supernova/contracts/sessions/procedures";
+} from "@supernova/contracts/session-runtime/procedures";
 
 export interface SessionRuntimeServiceShape {
   readonly abortSession: (sessionId: string) => Effect.Effect<void>;

@@ -1,7 +1,7 @@
 import {describe, expect, it} from "vitest";
 import type {PiResourceCatalogShape} from "@supernova/agent-runtime/implementations/pi/shared/internal/pi-resource-catalog";
 import {prepareSendMessageContext} from "@supernova/agent-runtime/implementations/pi/session-runtime/lib/user-message/send-message-context";
-import {imageAttachment, textAttachment} from "@tests/implementations/pi/sessions/pi-session-test-utils";
+import {imageAttachment, textAttachment} from "@tests/implementations/pi/pi-session-test-utils";
 
 const resourceCatalog: PiResourceCatalogShape = {
   listPromptTemplates: async () => [],

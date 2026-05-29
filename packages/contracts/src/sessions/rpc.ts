@@ -9,17 +9,9 @@ import {
   GetSessionPayload,
   GetSessionResult,
   LoadSessionError,
-  SendMessagePayload,
-  CompactSessionPayload,
   ListModelsError,
   ListModelsPayload,
   ListModelsResult,
-  AbortSessionPayload,
-  WatchEventsPayload,
-  SessionStreamEvent,
-  RevertToMessagePayload,
-  UndoCheckpointPayload,
-  RedoCheckpointPayload,
 } from "@supernova/contracts/sessions/procedures";
 
 export const GetSessionRpc = Rpc.make("getSession", {
@@ -46,46 +38,4 @@ export const ListComposerSuggestionsRpc = Rpc.make("listComposerSuggestions", {
   success: ListComposerSuggestionsResult,
 });
 
-export const SendMessageRpc = Rpc.make("sendMessage", {
-  payload: SendMessagePayload,
-});
-
-export const AbortSessionRpc = Rpc.make("abortSession", {
-  payload: AbortSessionPayload,
-});
-
-export const CompactSessionRpc = Rpc.make("compactSession", {
-  payload: CompactSessionPayload,
-});
-
-export const RevertToMessageRpc = Rpc.make("revertToMessage", {
-  payload: RevertToMessagePayload,
-});
-
-export const UndoCheckpointRpc = Rpc.make("undoCheckpoint", {
-  payload: UndoCheckpointPayload,
-});
-
-export const RedoCheckpointRpc = Rpc.make("redoCheckpoint", {
-  payload: RedoCheckpointPayload,
-});
-
-export const WatchEventsRpc = Rpc.make("watchEvents", {
-  payload: WatchEventsPayload,
-  stream: true,
-  success: SessionStreamEvent,
-});
-
-export const SessionRpcs = [
-  GetSessionRpc,
-  CreateSessionRpc,
-  ListModelsRpc,
-  ListComposerSuggestionsRpc,
-  SendMessageRpc,
-  AbortSessionRpc,
-  CompactSessionRpc,
-  RevertToMessageRpc,
-  UndoCheckpointRpc,
-  RedoCheckpointRpc,
-  WatchEventsRpc,
-] as const;
+export const SessionRpcs = [GetSessionRpc, CreateSessionRpc, ListModelsRpc, ListComposerSuggestionsRpc] as const;

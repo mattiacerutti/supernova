@@ -1,4 +1,4 @@
-import type {SessionStreamEvent} from "@supernova/contracts/sessions/procedures";
+import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
 import {Context, Effect, Layer, PubSub, Stream} from "effect";
 
 export interface SessionEventBusShape {

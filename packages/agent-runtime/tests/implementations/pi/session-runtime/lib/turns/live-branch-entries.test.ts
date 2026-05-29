@@ -1,6 +1,6 @@
 import {describe, expect, it} from "vitest";
 import {createLiveBranchEntries} from "@supernova/agent-runtime/implementations/pi/session-runtime/lib/turns/live-branch-entries";
-import {assistantMessage, userMessage} from "@tests/implementations/pi/sessions/pi-session-test-utils";
+import {assistantMessage, userMessage} from "@tests/implementations/pi/pi-session-test-utils";
 
 describe("creating live Pi branch entries", () => {
   it("creates parent-linked synthetic entries with stable ids", () => {

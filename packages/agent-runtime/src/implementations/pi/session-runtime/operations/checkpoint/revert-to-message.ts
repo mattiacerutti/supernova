@@ -1,5 +1,5 @@
 import type {SessionEntry, SessionMessageEntry} from "@earendil-works/pi-coding-agent";
-import type {RevertToMessagePayload} from "@supernova/contracts/sessions/procedures";
+import type {RevertToMessagePayload} from "@supernova/contracts/session-runtime/procedures";
 import {
   CHECKPOINT_CURSOR_CUSTOM_TYPE,
   isCheckpointEntry,

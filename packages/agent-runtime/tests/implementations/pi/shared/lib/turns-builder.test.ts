@@ -1,15 +1,7 @@
 import type {SessionEntry} from "@earendil-works/pi-coding-agent";
 import {describe, expect, it} from "vitest";
 import {buildPiTurns} from "@supernova/agent-runtime/implementations/pi/shared/lib/turns-builder";
-import {
-  assistantMessage,
-  contentPartsEntry,
-  messageEntry,
-  piAgentMessage,
-  piEntries,
-  selectedModelReference,
-  userMessage,
-} from "@tests/implementations/pi/sessions/pi-session-test-utils";
+import {assistantMessage, contentPartsEntry, messageEntry, piAgentMessage, piEntries, selectedModelReference, userMessage} from "@tests/implementations/pi/pi-session-test-utils";
 
 describe("projecting Pi branch entries into session turns", () => {
   it("groups user, assistant, and completed tool messages into one ordered turn", () => {

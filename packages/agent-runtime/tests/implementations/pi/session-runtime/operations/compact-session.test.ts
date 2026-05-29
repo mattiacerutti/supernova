@@ -1,8 +1,8 @@
 import {Effect, Fiber, Stream} from "effect";
 import {afterEach, describe, expect, it} from "vitest";
 import {SessionRuntimeService} from "@supernova/agent-runtime/services/session-runtime/session-runtime-service";
-import type {SessionStreamEvent} from "@supernova/contracts/sessions/procedures";
-import {createPiTestRuntime, fauxAssistantMessage, selectedModelReference, selectedPiModel, waitUntil} from "@tests/implementations/pi/sessions/pi-session-test-utils";
+import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
+import {createPiTestRuntime, fauxAssistantMessage, selectedModelReference, selectedPiModel, waitUntil} from "@tests/implementations/pi/pi-session-test-utils";
 
 function isSnapshotEvent(event: SessionStreamEvent): event is Extract<SessionStreamEvent, {type: "session.snapshot"}> {
   return event.type === "session.snapshot";

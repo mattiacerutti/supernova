@@ -1,4 +1,4 @@
-import type {RedoCheckpointPayload} from "@supernova/contracts/sessions/procedures";
+import type {RedoCheckpointPayload} from "@supernova/contracts/session-runtime/procedures";
 import {
   CHECKPOINT_CURSOR_CUSTOM_TYPE,
   isCheckpointEntry,

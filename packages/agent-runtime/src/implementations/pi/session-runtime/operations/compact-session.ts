@@ -1,4 +1,4 @@
-import type {CompactSessionPayload} from "@supernova/contracts/sessions/procedures";
+import type {CompactSessionPayload} from "@supernova/contracts/session-runtime/procedures";
 import {PiSessionRuntime} from "@supernova/agent-runtime/implementations/pi/session-runtime/internal/pi-session-runtime";
 
 /** Manually compacts the session context without submitting a user turn. */

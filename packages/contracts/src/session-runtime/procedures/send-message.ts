@@ -1,5 +1,5 @@
 import {Schema} from "effect";
-import {ModelReference, UserMessageContentPart} from "../schemas";
+import {ModelReference, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 
 export const SendMessagePayload = Schema.Struct({
   contentParts: Schema.Array(UserMessageContentPart),

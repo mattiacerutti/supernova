@@ -1,5 +1,5 @@
 import {Effect, Layer, Stream} from "effect";
-import type {SessionStreamEvent} from "@supernova/contracts/sessions/procedures";
+import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
 import {PiModelCatalog, PiModelCatalogLive} from "@supernova/agent-runtime/implementations/pi/shared/internal/pi-model-catalog";
 import {PiResourceCatalog, PiResourceCatalogLive} from "@supernova/agent-runtime/implementations/pi/shared/internal/pi-resource-catalog";
 import {PiSessionStore, PiSessionStoreLive} from "@supernova/agent-runtime/implementations/pi/shared/internal/pi-session-store";

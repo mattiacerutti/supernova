@@ -9,8 +9,8 @@ import {afterEach, describe, expect, it} from "vitest";
 import {SessionRuntimeService} from "@supernova/agent-runtime/services/session-runtime/session-runtime-service";
 import type {SessionRuntimeServiceShape} from "@supernova/agent-runtime/services/session-runtime/session-runtime-service";
 import {SessionsService} from "@supernova/agent-runtime/services/sessions/sessions-service";
-import type {SessionStreamEvent} from "@supernova/contracts/sessions/procedures";
-import {createPiTestRuntime, fauxAssistantMessage, selectedModelReference, waitUntil} from "@tests/implementations/pi/sessions/pi-session-test-utils";
+import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
+import {createPiTestRuntime, fauxAssistantMessage, selectedModelReference, waitUntil} from "@tests/implementations/pi/pi-session-test-utils";
 
 const execFilePromise = promisify(execFile);
 

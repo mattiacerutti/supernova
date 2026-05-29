@@ -1,5 +1,5 @@
 import type {AgentSession} from "@earendil-works/pi-coding-agent";
-import type {SessionStreamEvent} from "@supernova/contracts/sessions/procedures";
+import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
 import type {ModelReference, SessionSummary} from "@supernova/contracts/sessions/schemas";
 import {Effect} from "effect";
 import type {PiModel, PiModelCatalogShape} from "@supernova/agent-runtime/implementations/pi/shared/internal/pi-model-catalog";

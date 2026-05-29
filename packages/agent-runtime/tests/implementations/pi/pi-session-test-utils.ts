@@ -19,7 +19,7 @@ import {SessionEventBusLive} from "@supernova/agent-runtime/implementations/pi/s
 import {PiSessionsFromInternal} from "@supernova/agent-runtime/implementations/pi/sessions/pi-sessions-live";
 import {SessionRuntimeService} from "@supernova/agent-runtime/services/session-runtime/session-runtime-service";
 import {SessionsService} from "@supernova/agent-runtime/services/sessions/sessions-service";
-import type {SendMessagePayload, SessionStreamEvent} from "@supernova/contracts/sessions/procedures";
+import type {SendMessagePayload, SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
 import type {ModelReference, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 
 export {fauxAssistantMessage, fauxText, fauxThinking};

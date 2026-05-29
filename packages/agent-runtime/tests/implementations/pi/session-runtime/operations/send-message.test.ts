@@ -8,7 +8,7 @@ import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {afterEach, describe, expect, it} from "vitest";
 import {SessionRuntimeService} from "@supernova/agent-runtime/services/session-runtime/session-runtime-service";
-import type {SessionStreamEvent} from "@supernova/contracts/sessions/procedures";
+import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
 import {
   createPiTestRuntime,
   fauxAssistantMessage,
@@ -18,7 +18,7 @@ import {
   selectedModelReference,
   selectedPiModel,
   waitUntil,
-} from "@tests/implementations/pi/sessions/pi-session-test-utils";
+} from "@tests/implementations/pi/pi-session-test-utils";
 
 const execFilePromise = promisify(execFile);
 
