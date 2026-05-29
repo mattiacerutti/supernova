@@ -32,11 +32,12 @@ interface SessionTimelineProps {
   readonly items: readonly SessionTimelineItem[];
   readonly listRef?: RefObject<LegendListRef | null>;
   readonly liveItems: readonly SessionTimelineItem[];
+  readonly onRevertToMessage?: (turnId: string) => void;
   readonly streamError: string | null;
 }
 
 export default function SessionTimeline(props: SessionTimelineProps) {
-  const {compacting, isStreaming, items, listRef, liveItems, streamError} = props;
+  const {compacting, isStreaming, items, listRef, liveItems, onRevertToMessage, streamError} = props;
 
   const [autoFollowState, setAutoFollowState] = useState<AutoFollowState>("following");
 
@@ -146,10 +147,10 @@ export default function SessionTimeline(props: SessionTimelineProps) {
   const renderItem = useCallback(
     (renderProps: {item: SessionTimelineItem}): ReactNode => (
       <SessionTimelineItemFrame item={renderProps.item}>
-        <SessionTimelineRow item={renderProps.item} />
+        <SessionTimelineRow item={renderProps.item} onRevertToMessage={onRevertToMessage} />
       </SessionTimelineItemFrame>
     ),
-    []
+    [onRevertToMessage]
   );
 
   return (

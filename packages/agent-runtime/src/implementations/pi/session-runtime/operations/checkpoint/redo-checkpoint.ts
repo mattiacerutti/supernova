@@ -1,4 +1,5 @@
 import type {RedoCheckpointPayload} from "@supernova/contracts/session-runtime/procedures";
+import {CheckpointNavigationError} from "@supernova/contracts/session-runtime/procedures";
 import {
   CHECKPOINT_CURSOR_CUSTOM_TYPE,
   isCheckpointEntry,
@@ -32,7 +33,7 @@ export async function redoCheckpoint(runtime: PiSessionRuntime, input: RedoCheck
 
     await runtime.publishSessionSnapshot(openedSession);
   } catch (cause) {
-    await runtime.publishEvent({type: "session.error", sessionId: runtime.sessionId, error: cause instanceof Error ? cause.message : "Failed to redo checkpoint."});
+    throw new CheckpointNavigationError({cause, message: cause instanceof Error ? cause.message : "Failed to redo checkpoint."});
   } finally {
     runtime.endWork();
   }

@@ -4,6 +4,7 @@ import ModelPicker from "@/features/sessions/components/composer/pickers/model-p
 import ThinkingLevelPicker from "@/features/sessions/components/composer/pickers/thinking-level-picker";
 import SessionComposer from "@/features/sessions/components/composer/session-composer";
 import SessionComposerSkeleton from "@/features/sessions/components/composer/session-composer-skeleton";
+import UndoneTurnsDrawer from "@/features/sessions/components/composer/undone-turns-drawer";
 import SessionLayout from "@/features/sessions/components/session-layout";
 import SessionTimeline from "@/features/sessions/components/timeline/session-timeline";
 import SessionTitleText from "@/features/sessions/components/session-title-text";
@@ -68,9 +69,9 @@ function SessionConversation(props: SessionConversationProps) {
   const thinkingLevels = selectedModel?.thinkingLevels ?? [];
   const selectedThinkingLabel = thinkingLevels.find((level) => level.value === selectedModelReference?.thinkingLevel)?.label ?? "Reasoning";
 
-  const composerDisabled = modelsPending || !selectedModelReference;
   const imageSupported = selectedModel?.capabilities.images === true;
-  const composerAttachments = useComposerAttachments({disabled: composerDisabled, imageSupported});
+  const nextUndoneTurn = session.undoneTurns[0];
+  const nextUndoneContentParts = nextUndoneTurn?.userMessage.contentParts ?? [];
 
   const stream = useSessionTimeline({
     modelReference: selectedModelReference,
@@ -78,7 +79,13 @@ function SessionConversation(props: SessionConversationProps) {
     sessionTurns: session.turns,
   });
 
-  const isStreaming = stream.streamStatus !== "idle";
+  const composerDisabled = modelsPending || !selectedModelReference || stream.streamStatus !== "idle";
+
+  const composerAttachments = useComposerAttachments({
+    disabled: composerDisabled,
+    imageSupported,
+    initialContentParts: nextUndoneContentParts,
+  });
 
   const handleModelChange = (value: string): void => {
     const nextModel = availableModels.find((model) => modelKey(model.providerId, model.id) === value);
@@ -113,11 +120,13 @@ function SessionConversation(props: SessionConversationProps) {
           <SessionComposer.Root
             attachments={composerAttachments}
             disabled={composerDisabled}
+            initialContentParts={nextUndoneContentParts}
             onInterrupt={stream.stopStreaming}
             onSubmit={stream.submitMessage}
             projectPath={session.projectPath}
             slashCommandActions={stream.slashCommandActions}
             streamStatus={stream.streamStatus}
+            topExtension={<UndoneTurnsDrawer disabled={composerDisabled} onRevertToMessage={stream.revertToMessage} turns={session.undoneTurns} />}
           >
             <SessionComposer.Attachments />
             <SessionComposer.Input />
@@ -125,10 +134,10 @@ function SessionConversation(props: SessionConversationProps) {
               <SessionComposer.AttachButton />
               <SessionComposer.ActionGroup>
                 <div className="flex gap-2">
-                  <ModelPicker selectedModel={selectedModel} disabled={composerDisabled || isStreaming} models={availableModels} onModelChange={handleModelChange} />
+                  <ModelPicker selectedModel={selectedModel} disabled={composerDisabled} models={availableModels} onModelChange={handleModelChange} />
                   {thinkingLevels.length > 0 && (
                     <ThinkingLevelPicker
-                      disabled={composerDisabled || isStreaming}
+                      disabled={composerDisabled}
                       onThinkingLevelChange={handleThinkingLevelChange}
                       selectedThinkingLabel={selectedThinkingLabel}
                       selectedThinkingLevel={selectedModelReference?.thinkingLevel}
@@ -144,11 +153,12 @@ function SessionConversation(props: SessionConversationProps) {
       }
       timeline={
         <SessionTimeline
-          compacting={stream.streamCompacting}
-          isStreaming={isStreaming}
+          compacting={stream.streamStatus === "compacting"}
+          isStreaming={stream.streamStatus === "streaming" || stream.streamStatus === "compacting"}
           items={stream.committedTimelineItems}
           listRef={stream.listRef}
           liveItems={stream.liveTimelineItems}
+          onRevertToMessage={stream.revertToMessage}
           streamError={stream.streamError}
         />
       }

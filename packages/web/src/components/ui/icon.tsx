@@ -43,6 +43,7 @@ export type IconName =
   | "pin"
   | "plus"
   | "rectangle-horizontal"
+  | "redo"
   | "search"
   | "send"
   | "server"
@@ -54,6 +55,7 @@ export type IconName =
   | "stop"
   | "sun"
   | "trash"
+  | "undo"
   | "user"
   | "workflow"
   | "x";
@@ -96,6 +98,7 @@ const icons = {
   pin: getStaticIcon(fluentIcons, "pin-12-regular"),
   plus: getStaticIcon(lucideIcons, "plus"),
   "rectangle-horizontal": getStaticIcon(lucideIcons, "rectangle-horizontal"),
+  redo: getStaticIcon(lucideIcons, "redo-2"),
   search: getStaticIcon(lucideIcons, "search"),
   send: getStaticIcon(stashIcons, "arrow-up-solid"),
   server: getStaticIcon(lucideIcons, "server"),
@@ -107,6 +110,7 @@ const icons = {
   stop: getStaticIcon(materialSymbolsIcons, "stop-rounded"),
   sun: getStaticIcon(lucideIcons, "sun"),
   trash: getStaticIcon(lucideIcons, "trash-2"),
+  undo: getStaticIcon(lucideIcons, "undo-2"),
   user: getStaticIcon(lucideIcons, "user"),
   workflow: getStaticIcon(lucideIcons, "workflow"),
   x: getStaticIcon(lucideIcons, "x"),

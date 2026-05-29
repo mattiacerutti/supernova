@@ -1,7 +1,7 @@
 import type {ComposerSlashCommandSuggestionItem} from "@/features/sessions/types/composer-suggestion";
 import type {IconName} from "@/components/ui/icon";
 
-export type ClientSlashCommandId = "compact";
+export type ClientSlashCommandId = "compact" | "redo" | "undo";
 
 export type ClientSlashCommandActions = Partial<Record<ClientSlashCommandId, () => void>>;
 
@@ -18,6 +18,18 @@ const CLIENT_SLASH_COMMANDS: readonly ClientSlashCommandDefinition[] = [
     id: "compact",
     subtitle: "Summarize the conversation to reduce context size",
     title: "Compact",
+  },
+  {
+    icon: "undo",
+    id: "undo",
+    subtitle: "Roll back to the previous checkpoint",
+    title: "Undo",
+  },
+  {
+    icon: "redo",
+    id: "redo",
+    subtitle: "Restore the next undone checkpoint",
+    title: "Redo",
   },
 ];
 

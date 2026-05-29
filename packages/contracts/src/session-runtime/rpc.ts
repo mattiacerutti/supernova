@@ -1,6 +1,7 @@
 import * as Rpc from "effect/unstable/rpc/Rpc";
 import {
   AbortSessionPayload,
+  CheckpointNavigationError,
   CompactSessionPayload,
   RedoCheckpointPayload,
   RevertToMessagePayload,
@@ -23,14 +24,17 @@ export const CompactSessionRpc = Rpc.make("compactSession", {
 });
 
 export const RevertToMessageRpc = Rpc.make("revertToMessage", {
+  error: CheckpointNavigationError,
   payload: RevertToMessagePayload,
 });
 
 export const UndoCheckpointRpc = Rpc.make("undoCheckpoint", {
+  error: CheckpointNavigationError,
   payload: UndoCheckpointPayload,
 });
 
 export const RedoCheckpointRpc = Rpc.make("redoCheckpoint", {
+  error: CheckpointNavigationError,
   payload: RedoCheckpointPayload,
 });
 

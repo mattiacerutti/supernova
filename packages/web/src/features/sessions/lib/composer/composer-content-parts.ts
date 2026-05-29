@@ -37,6 +37,28 @@ export function trimComposerContentParts(parts: readonly UserMessageContentPart[
     .filter((part) => part.type !== "text" || part.text.length > 0);
 }
 
+/** Converts persisted text/reference content parts into TipTap editor content. */
+export function contentPartsToEditorContent(parts: readonly UserMessageContentPart[]): JSONContent {
+  const content: JSONContent[] = [];
+
+  for (const part of parts) {
+    if (part.type === "attachment") continue;
+
+    if (part.type === "reference") {
+      content.push(createReferenceNode(part));
+      continue;
+    }
+
+    const lines = part.text.split("\n");
+    for (const [index, line] of lines.entries()) {
+      if (index > 0) content.push({type: "hardBreak"});
+      if (line.length > 0) content.push({text: line, type: "text"});
+    }
+  }
+
+  return {content: [{content, type: "paragraph"}], type: "doc"};
+}
+
 type ReferenceNodeAttributes = Omit<UserMessageReferencePart, "type">;
 
 /**

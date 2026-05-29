@@ -12,11 +12,11 @@ interface UseSessionTimelineResult {
   committedTimelineItems: readonly SessionTimelineItem[];
   listRef: React.RefObject<LegendListRef | null>;
   liveTimelineItems: readonly SessionTimelineItem[];
-  streamCompacting: boolean;
   slashCommandActions: ClientSlashCommandActions;
   stopStreaming: () => void;
   streamError: string | null;
-  streamStatus: SessionLiveStatus;
+  readonly streamStatus: SessionLiveStatus;
+  readonly revertToMessage: (turnId: string) => void;
   submitMessage: (contentParts: readonly UserMessageContentPart[]) => void;
 }
 
@@ -31,19 +31,25 @@ export function useSessionTimeline(input: UseSessionTimelineInput): UseSessionTi
   const rpcClient = useAgentRpcClient();
   const messagesListRef = useRef<LegendListRef>(null);
 
-  const stream = useSessionLiveStore((state) => state.sessions[sessionId]);
+  const sessionState = useSessionLiveStore((state) => state.sessions[sessionId]);
   const abortSession = useSessionLiveStore((state) => state.abortSession);
   const compactSession = useSessionLiveStore((state) => state.compactSession);
+  const redoCheckpoint = useSessionLiveStore((state) => state.redoCheckpoint);
+  const revertSessionToMessage = useSessionLiveStore((state) => state.revertToMessage);
   const sendMessage = useSessionLiveStore((state) => state.sendMessage);
+  const undoCheckpoint = useSessionLiveStore((state) => state.undoCheckpoint);
 
-  const streamStatus = stream?.status ?? "idle";
-  const isStreaming = streamStatus !== "idle";
-  const streamTurn = stream?.liveTurn ?? null;
+  const streamStatus = sessionState?.status ?? "idle";
+  const streamTurn = sessionState?.liveTurn ?? null;
   const committedTimelineItems = useMemo(() => buildCommittedTimelineItems(sessionTurns), [sessionTurns]);
-  const liveTimelineItems = useMemo(() => buildLiveTimelineItems({live: isStreaming, liveTurn: streamTurn}), [isStreaming, streamTurn]);
+
+  const liveTimelineItems = useMemo(
+    () => buildLiveTimelineItems({live: streamStatus === "streaming" || streamStatus === "compacting", liveTurn: streamTurn}),
+    [streamStatus, streamTurn]
+  );
 
   const submitMessage = (contentParts: readonly UserMessageContentPart[]): void => {
-    if (isStreaming) return;
+    if (streamStatus !== "idle") return;
 
     if (!modelReference) {
       // The composer should already be disabled, but keeping this guard prevents
@@ -62,18 +68,36 @@ export function useSessionTimeline(input: UseSessionTimelineInput): UseSessionTi
   };
 
   const triggerCompaction = (): void => {
-    if (isStreaming || !modelReference) return;
+    if (streamStatus !== "idle" || !modelReference) return;
 
     compactSession({model: modelReference, rpcClient, sessionId});
   };
 
+  const undo = (): void => {
+    if (streamStatus !== "idle") return;
+
+    undoCheckpoint({rpcClient, sessionId});
+  };
+
+  const redo = (): void => {
+    if (streamStatus !== "idle") return;
+
+    redoCheckpoint({rpcClient, sessionId});
+  };
+
+  const revertToMessage = (turnId: string): void => {
+    if (streamStatus !== "idle") return;
+
+    revertSessionToMessage({rpcClient, sessionId, turnId});
+  };
+
   return {
     streamStatus,
-    streamCompacting: stream?.compacting ?? false,
-    streamError: stream?.error ?? null,
+    streamError: sessionState?.error ?? null,
     committedTimelineItems,
     liveTimelineItems,
-    slashCommandActions: {compact: triggerCompaction},
+    slashCommandActions: {compact: triggerCompaction, redo, undo},
+    revertToMessage,
     submitMessage,
     stopStreaming,
     listRef: messagesListRef,

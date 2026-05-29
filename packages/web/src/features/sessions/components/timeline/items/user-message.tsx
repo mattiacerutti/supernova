@@ -56,13 +56,19 @@ function UserMessageStructuredContent(props: {message: UserMessageModel}) {
 
 interface UserMessageProps {
   message: UserMessageModel;
+  onRevertToMessage?: (turnId: string) => void;
+  turnId: string;
 }
 
 export default function UserMessage(props: UserMessageProps) {
-  const {message} = props;
+  const {message, onRevertToMessage, turnId} = props;
   const attachments = message.contentParts.filter((part) => part.type === "attachment");
   const hasContent = message.contentParts.some((part) => part.type !== "attachment" && (part.type === "reference" || part.text.trim().length > 0));
   const copyText = textFromComposerContentParts(message.contentParts);
+
+  const handleRevert = (): void => {
+    onRevertToMessage?.(turnId);
+  };
 
   return (
     <article className="group/message flex justify-end">
@@ -78,7 +84,7 @@ export default function UserMessage(props: UserMessageProps) {
         <div className={cn("rounded-2xl corner-superellipse/1.3 bg-neutral-800 px-3.5 py-2 text-sm leading-relaxed text-neutral-200", !hasContent && "text-neutral-400")}>
           {hasContent ? <UserMessageStructuredContent message={message} /> : "(No content)"}
         </div>
-        <MessageActions align="end" copyText={copyText} />
+        <MessageActions align="end" copyText={copyText} onRevert={onRevertToMessage ? handleRevert : undefined} />
       </div>
     </article>
   );

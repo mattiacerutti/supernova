@@ -4,17 +4,16 @@ import type {ModelReference, Session, SessionSummary, Turn, UserMessageContentPa
 import type {ProjectSessionsListResult} from "@supernova/contracts/projects/procedures";
 import {create} from "zustand";
 import {Effect, Stream} from "effect";
+import {showToast} from "@/components/ui/toast-manager";
 import {allProjectSessionsQueryKey, listProjectSessionsQueryKey} from "@/features/projects/hooks/api/use-list-project-sessions";
 import {sessionQueryKey} from "@/features/sessions/hooks/api/use-session";
-import type {AgentRpcClientApi, AgentRpcClientFiber} from "@/rpc/agent-rpc-client";
+import type {AgentRpcClientApi, AgentRpcClientFiber, AgentRpcProtocolClient} from "@/rpc/agent-rpc-client";
 
-export type SessionLiveStatus = "idle" | "streaming" | "stopping";
+export type SessionLiveStatus = "checkpoint-navigating" | "compacting" | "idle" | "stopping" | "streaming";
 
 export interface SessionLiveState {
   /** Whether Pi has an active agent run for this session. */
   readonly agentStreaming: boolean;
-  /** Whether Pi is currently compacting this session context. */
-  readonly compacting: boolean;
   readonly error: string | null;
   /** Currently streaming turn, kept separate from committed turns until a server snapshot commits it. */
   readonly liveTurn: Turn | null;
@@ -43,7 +42,6 @@ function createInitialStreamTurn(input: {contentParts: readonly UserMessageConte
 function emptyEntry(input: {revision: number}): SessionLiveState {
   return {
     agentStreaming: false,
-    compacting: false,
     error: null,
     liveTurn: null,
     pendingContinuation: false,
@@ -56,7 +54,12 @@ function emptyEntry(input: {revision: number}): SessionLiveState {
 /** Derives the legacy composer status from event-derived lifecycle flags. */
 function toStatus(entry: Omit<SessionLiveState, "status">): SessionLiveStatus {
   if (entry.stopInProgress) return "stopping";
-  return entry.agentStreaming || entry.compacting || entry.pendingContinuation || entry.liveTurn !== null ? "streaming" : "idle";
+  return entry.agentStreaming || entry.pendingContinuation || entry.liveTurn !== null ? "streaming" : "idle";
+}
+
+/** Normalizes command failures for user-facing toasts. */
+function errorMessage(cause: unknown, fallback: string): string {
+  return cause instanceof Error && cause.message.length > 0 ? cause.message : fallback;
 }
 
 /** Applies metadata-only session updates to the visible session query. */
@@ -97,6 +100,15 @@ interface CompactSessionInput {
   readonly sessionId: string;
 }
 
+interface CheckpointNavigationInput {
+  readonly rpcClient: AgentRpcClientApi;
+  readonly sessionId: string;
+}
+
+interface RevertToMessageInput extends CheckpointNavigationInput {
+  readonly turnId: string;
+}
+
 interface ConnectInput {
   readonly queryClient: QueryClient;
   readonly rpcClient: AgentRpcClientApi;
@@ -108,7 +120,10 @@ interface SessionLiveStoreState {
   readonly compactSession: (input: CompactSessionInput) => void;
   readonly connect: (input: ConnectInput) => void;
   readonly disconnect: () => void;
+  readonly redoCheckpoint: (input: CheckpointNavigationInput) => void;
+  readonly revertToMessage: (input: RevertToMessageInput) => void;
   readonly sendMessage: (input: SendSessionMessageInput) => void;
+  readonly undoCheckpoint: (input: CheckpointNavigationInput) => void;
 }
 
 export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) => {
@@ -120,7 +135,6 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
     updateLifecycle(snapshot.sessionId, snapshot.revision, (entry) => ({
       ...entry,
       agentStreaming: false,
-      compacting: false,
       liveTurn: null,
       pendingContinuation: false,
       stopInProgress: false,
@@ -128,14 +142,20 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
   };
 
   /** Applies one lifecycle update while preserving monotonic per-session revision order. */
-  const updateLifecycle = (sessionId: string, revision: number, update: (entry: SessionLiveState) => Omit<SessionLiveState, "status">): void => {
+  const updateLifecycle = (
+    sessionId: string,
+    revision: number,
+    update: (entry: Omit<SessionLiveState, "status">) => Omit<SessionLiveState, "status"> & {readonly status?: SessionLiveStatus}
+  ): void => {
     set((state) => {
       const current = state.sessions[sessionId];
       if (shouldIgnoreEvent(current, revision)) return state;
 
       const base = current ?? emptyEntry({revision: 0});
-      const next = update({...base, revision});
-      return {sessions: {...state.sessions, [sessionId]: {...next, status: toStatus(next)}}};
+      const {status, ...entry} = {...base, revision};
+      void status;
+      const next = update(entry);
+      return {sessions: {...state.sessions, [sessionId]: {...next, status: next.status ?? toStatus(next)}}};
     });
   };
 
@@ -159,10 +179,10 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
         updateLifecycle(event.sessionId, event.revision, (entry) => ({...entry, agentStreaming: false}));
         return;
       case "session.compaction.started":
-        updateLifecycle(event.sessionId, event.revision, (entry) => ({...entry, compacting: true}));
+        updateLifecycle(event.sessionId, event.revision, (entry) => ({...entry, status: "compacting"}));
         return;
       case "session.compaction.ended":
-        updateLifecycle(event.sessionId, event.revision, (entry) => ({...entry, compacting: false, pendingContinuation: event.willContinue}));
+        updateLifecycle(event.sessionId, event.revision, (entry) => ({...entry, pendingContinuation: event.willContinue}));
         return;
       case "session.snapshot":
         flushSnapshot(queryClient, event);
@@ -229,7 +249,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
     const {contentParts, model, rpcClient, sessionId} = input;
 
     const current = get().sessions[sessionId];
-    if (current?.status === "streaming" || current?.status === "stopping") return;
+    if (current?.status !== undefined && current.status !== "idle") return;
 
     const liveTurn = createInitialStreamTurn({contentParts, model});
     // Optimistically show the user message in the live layer until the server emits authoritative events.
@@ -254,7 +274,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
   const abortSession = (input: {rpcClient: AgentRpcClientApi; sessionId: string}): void => {
     const {rpcClient, sessionId} = input;
     const stream = get().sessions[sessionId];
-    if (!stream || stream.status === "idle") return;
+    if (!stream || (stream.status !== "streaming" && stream.status !== "stopping")) return;
 
     const liveTurn = stream.liveTurn
       ? {...stream.liveTurn, completedAt: stream.liveTurn.completedAt ?? stream.liveTurn.events.at(-1)?.timestamp ?? new Date().toISOString(), status: "completed" as const}
@@ -273,25 +293,63 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
     const {model, rpcClient, sessionId} = input;
 
     const current = get().sessions[sessionId];
-    if (current?.status === "streaming" || current?.status === "stopping") return;
+    if (current?.status !== undefined && current.status !== "idle") return;
 
     set((state) => {
       const entry = state.sessions[sessionId] ?? emptyEntry({revision: 0});
-      const next = {...entry, compacting: true, error: null};
-      return {sessions: {...state.sessions, [sessionId]: {...next, status: toStatus(next)}}};
+      return {sessions: {...state.sessions, [sessionId]: {...entry, error: null, status: "compacting"}}};
     });
 
     void rpcClient
       .run((rpc) => rpc.compactSession({model, sessionId}))
       .catch((cause: unknown) => {
-        const error = cause instanceof Error ? cause.message : "Failed to compact session.";
+        const error = errorMessage(cause, "Failed to compact session.");
         set((state) => {
           const entry = state.sessions[sessionId];
           if (!entry) return state;
-          const next = {...entry, compacting: false, error};
+          const next = {...entry, error};
           return {sessions: {...state.sessions, [sessionId]: {...next, status: toStatus(next)}}};
         });
       });
+  };
+
+  const runCheckpointNavigation = (
+    input: CheckpointNavigationInput & {execute: (rpc: AgentRpcProtocolClient) => ReturnType<AgentRpcProtocolClient["undoCheckpoint"]>; title: string}
+  ): void => {
+    const {execute, rpcClient, sessionId, title} = input;
+
+    const current = get().sessions[sessionId];
+    if (current?.status !== undefined && current.status !== "idle") return;
+
+    set((state) => {
+      const entry = state.sessions[sessionId] ?? emptyEntry({revision: 0});
+      return {sessions: {...state.sessions, [sessionId]: {...entry, error: null, status: "checkpoint-navigating"}}};
+    });
+
+    void rpcClient
+      .run((rpc) => execute(rpc))
+      .catch((cause: unknown) => {
+        const description = errorMessage(cause, "The session checkpoint could not be changed.");
+        showToast(title, description);
+        set((state) => {
+          const entry = state.sessions[sessionId];
+          if (!entry) return state;
+          const next = {...entry};
+          return {sessions: {...state.sessions, [sessionId]: {...next, status: toStatus(next)}}};
+        });
+      });
+  };
+
+  const undoCheckpoint = (input: CheckpointNavigationInput): void => {
+    runCheckpointNavigation({...input, execute: (rpc) => rpc.undoCheckpoint({sessionId: input.sessionId}), title: "Unable to undo checkpoint"});
+  };
+
+  const redoCheckpoint = (input: CheckpointNavigationInput): void => {
+    runCheckpointNavigation({...input, execute: (rpc) => rpc.redoCheckpoint({sessionId: input.sessionId}), title: "Unable to redo checkpoint"});
+  };
+
+  const revertToMessage = (input: RevertToMessageInput): void => {
+    runCheckpointNavigation({...input, execute: (rpc) => rpc.revertToMessage({sessionId: input.sessionId, turnId: input.turnId}), title: "Unable to revert message"});
   };
 
   return {
@@ -299,7 +357,10 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
     compactSession,
     connect,
     disconnect,
+    redoCheckpoint,
+    revertToMessage,
     sendMessage,
     abortSession,
+    undoCheckpoint,
   };
 });

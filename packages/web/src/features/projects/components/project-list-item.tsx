@@ -236,7 +236,7 @@ export default function ProjectListItem(props: ProjectListItemProps) {
             const confirmingArchive = confirmingArchiveSessionId === session.id;
             const selected = location.pathname === `/session/${session.id}`;
             const sessionLive = sessionLiveStates[session.id];
-            const sessionStreaming = sessionLive?.status === "streaming" || sessionLive?.status === "stopping";
+            const sessionStreaming = sessionLive?.status === "streaming" || sessionLive?.status === "stopping" || sessionLive?.status === "compacting";
 
             return (
               <li

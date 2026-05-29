@@ -1,7 +1,7 @@
 import type {DragEvent, HTMLAttributes} from "react";
 import {useRef, useState} from "react";
 import {useMutation} from "@tanstack/react-query";
-import type {UserMessageAttachmentPart} from "@supernova/contracts/sessions/schemas";
+import type {UserMessageAttachmentPart, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 import {
   fileRequiresImageCapability,
   fileToSessionAttachmentPart,
@@ -53,13 +53,29 @@ function attachmentRequiresImageCapability(attachment: UserMessageAttachmentPart
 interface UseComposerAttachmentsInput {
   readonly disabled: boolean;
   readonly imageSupported: boolean;
+  readonly initialContentParts?: readonly UserMessageContentPart[];
+}
+
+interface ComposerAttachmentsState {
+  readonly attachments: readonly UserMessageAttachmentPart[];
+  readonly initialContentParts: readonly UserMessageContentPart[];
+}
+
+function attachmentsFromContentParts(parts: readonly UserMessageContentPart[]): readonly UserMessageAttachmentPart[] {
+  return parts.filter((part) => part.type === "attachment");
 }
 
 export function useComposerAttachments(input: UseComposerAttachmentsInput): ComposerAttachmentsController {
-  const {disabled, imageSupported} = input;
+  const {disabled, imageSupported, initialContentParts = []} = input;
 
-  const [attachments, setAttachments] = useState<readonly UserMessageAttachmentPart[]>([]);
+  const [attachmentState, setAttachmentState] = useState<ComposerAttachmentsState>({attachments: attachmentsFromContentParts(initialContentParts), initialContentParts});
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
+
+  let attachments = attachmentState.attachments;
+  if (attachmentState.initialContentParts !== initialContentParts) {
+    attachments = attachmentsFromContentParts(initialContentParts);
+    setAttachmentState({attachments, initialContentParts});
+  }
 
   const dragDepthRef = useRef(0);
 
@@ -90,7 +106,7 @@ export function useComposerAttachments(input: UseComposerAttachmentsInput): Comp
     },
     onSuccess: (result) => {
       if (result.attachments.length > 0) {
-        setAttachments((current) => [...current, ...result.attachments]);
+        setAttachmentState((current) => ({...current, attachments: [...current.attachments, ...result.attachments]}));
       }
 
       for (const error of result.errors) {
@@ -105,15 +121,15 @@ export function useComposerAttachments(input: UseComposerAttachmentsInput): Comp
   const isProcessing = processFilesMutation.isPending;
 
   const clear = (): void => {
-    setAttachments([]);
+    setAttachmentState((current) => ({...current, attachments: []}));
   };
 
   const remove = (attachmentId: string): void => {
-    setAttachments((current) => current.filter((attachment) => attachment.id !== attachmentId));
+    setAttachmentState((current) => ({...current, attachments: current.attachments.filter((attachment) => attachment.id !== attachmentId)}));
   };
 
   const removeUnsupportedImages = (): void => {
-    setAttachments((current) => current.filter((attachment) => !attachmentRequiresImageCapability(attachment)));
+    setAttachmentState((current) => ({...current, attachments: current.attachments.filter((attachment) => !attachmentRequiresImageCapability(attachment))}));
   };
 
   const addFiles = (files: readonly File[]): void => {

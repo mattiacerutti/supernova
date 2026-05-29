@@ -11,8 +11,9 @@ import Icon from "@/components/ui/icon";
 import IconButton from "@/components/ui/icon-button";
 import ComposerAttachmentPreview from "@/features/sessions/components/attachments/composer-attachment-preview";
 import ComposerEditor from "@/features/sessions/components/composer/editor/composer-editor";
-import {editorToContentParts, trimComposerContentParts} from "@/features/sessions/lib/composer/composer-content-parts";
+import {contentPartsToEditorContent, editorToContentParts, textFromComposerContentParts, trimComposerContentParts} from "@/features/sessions/lib/composer/composer-content-parts";
 import type {ComposerAttachmentsController} from "@/features/sessions/hooks/use-composer-attachments";
+import type {SessionLiveStatus} from "@/features/sessions/stores/session-live-store";
 import {SESSION_ATTACHMENT_ACCEPT} from "@/features/sessions/lib/attachments/session-attachments";
 import type {ComposerSuggestionMatch} from "@/features/sessions/types/composer-suggestion";
 import {cn} from "@/lib/cn";
@@ -39,7 +40,7 @@ interface SessionComposerContextValue {
   readonly setSuggestionMatch: (match: ComposerSuggestionMatch | null) => void;
   readonly setDraft: (draft: string) => void;
   readonly slashCommandActions?: ClientSlashCommandActions;
-  readonly streamStatus: "idle" | "streaming" | "stopping";
+  readonly streamStatus: SessionLiveStatus;
   readonly submit: () => void;
 }
 
@@ -108,27 +109,32 @@ interface SessionComposerRootProps {
   readonly attachments: ComposerAttachmentsController;
   readonly children: ReactNode;
   readonly disabled: boolean;
+  readonly initialContentParts?: readonly UserMessageContentPart[];
   readonly onInterrupt?: () => void;
   readonly onSubmit: (contentParts: readonly UserMessageContentPart[]) => void;
   readonly projectPath: string;
   readonly slashCommandActions?: ClientSlashCommandActions;
-  readonly streamStatus?: "idle" | "streaming" | "stopping";
+  readonly streamStatus?: SessionLiveStatus;
+  readonly topExtension?: ReactNode;
 }
 
 function SessionComposerRoot(props: SessionComposerRootProps) {
-  const {attachments, children, disabled, onInterrupt, onSubmit, projectPath, slashCommandActions, streamStatus = "idle"} = props;
-  const [draft, setDraft] = useState("");
+  const {attachments, children, disabled, initialContentParts = [], onInterrupt, onSubmit, projectPath, slashCommandActions, streamStatus = "idle", topExtension} = props;
+
+  const [draft, setDraft] = useState(() => textFromComposerContentParts(initialContentParts));
   const [suggestionMatch, setSuggestionMatch] = useState<ComposerSuggestionMatch | null>(null);
 
-  const isStreaming = streamStatus !== "idle";
-  const inputDisabled = disabled || isStreaming;
-  const canSubmit = (draft.trim().length > 0 || attachments.attachments.length > 0) && !disabled && !isStreaming && !attachments.isProcessing;
+  const isStreaming = streamStatus === "streaming" || streamStatus === "stopping";
+  const inputDisabled = disabled || streamStatus !== "idle";
+
+  const canSubmit = (draft.trim().length > 0 || attachments.attachments.length > 0) && !inputDisabled && !attachments.isProcessing;
   const canInterrupt = streamStatus === "streaming";
   const attachmentDisabled = inputDisabled || attachments.isProcessing;
 
   const editor = useEditor(
     {
       editable: !inputDisabled,
+      content: contentPartsToEditorContent(initialContentParts),
       editorProps: {
         attributes: {
           class: cn(
@@ -138,11 +144,14 @@ function SessionComposerRoot(props: SessionComposerRootProps) {
         },
       },
       extensions: [Document, Paragraph, Text, HardBreak, History, ComposerReferenceNode, createSuggestionExtension(setSuggestionMatch)],
+      onCreate: ({editor: currentEditor}) => {
+        setDraft(currentEditor.getText());
+      },
       onUpdate: ({editor: currentEditor}) => {
         setDraft(currentEditor.getText());
       },
     },
-    [inputDisabled]
+    [inputDisabled, initialContentParts]
   );
 
   const submit = (): void => {
@@ -178,7 +187,10 @@ function SessionComposerRoot(props: SessionComposerRootProps) {
       }}
     >
       <div className="px-4 pb-4 md:px-6">
-        <div className="relative mx-auto max-w-3xl rounded-3xl corner-superellipse/1.3 bg-[#2b2b2b] px-3 py-2 ring-1 ring-white/6 shadow-md">{children}</div>
+        <div className="mx-auto max-w-3xl">
+          {topExtension}
+          <div className="relative z-10 rounded-3xl corner-superellipse/1.3 bg-[#2b2b2b] px-3 py-2 ring-1 ring-white/6 shadow-md">{children}</div>
+        </div>
       </div>
     </SessionComposerContext.Provider>
   );

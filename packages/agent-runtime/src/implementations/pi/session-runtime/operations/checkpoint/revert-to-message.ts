@@ -1,5 +1,6 @@
 import type {SessionEntry, SessionMessageEntry} from "@earendil-works/pi-coding-agent";
 import type {RevertToMessagePayload} from "@supernova/contracts/session-runtime/procedures";
+import {CheckpointNavigationError} from "@supernova/contracts/session-runtime/procedures";
 import {
   CHECKPOINT_CURSOR_CUSTOM_TYPE,
   isCheckpointEntry,
@@ -50,7 +51,7 @@ export async function revertToMessage(runtime: PiSessionRuntime, input: RevertTo
 
     await runtime.publishSessionSnapshot(openedSession);
   } catch (cause) {
-    await runtime.publishEvent({type: "session.error", sessionId: runtime.sessionId, error: cause instanceof Error ? cause.message : "Failed to revert session."});
+    throw new CheckpointNavigationError({cause, message: cause instanceof Error ? cause.message : "Failed to revert session."});
   } finally {
     runtime.endWork();
   }

@@ -68,6 +68,38 @@ async function runSessionCommand(input: {
   return events;
 }
 
+async function runRejectedSessionCommand(input: {
+  readonly pi: ReturnType<typeof createPiTestRuntime>;
+  readonly run: (sessionRuntime: SessionRuntimeServiceShape) => Effect.Effect<void>;
+}): Promise<{readonly cause: unknown; readonly events: readonly SessionStreamEvent[]}> {
+  const events: SessionStreamEvent[] = [];
+  const watcher = input.pi.runtime.runFork(
+    Effect.gen(function* () {
+      const sessionRuntime = yield* SessionRuntimeService;
+      yield* Stream.runForEach(sessionRuntime.watchEvents(), (event) => Effect.sync(() => events.push(event)));
+    })
+  );
+  await waitUntil(() => {
+    if (!events.some((event) => event.type === "connected")) throw new Error("Stream did not connect.");
+  });
+
+  let cause: unknown;
+  try {
+    await input.pi.runWithSessionRuntime(
+      Effect.gen(function* () {
+        const sessionRuntime = yield* SessionRuntimeService;
+        yield* input.run(sessionRuntime);
+      })
+    );
+  } catch (error) {
+    cause = error;
+  }
+
+  await input.pi.runtime.runPromise(Effect.sleep("100 millis"));
+  await input.pi.runtime.runPromise(Fiber.interrupt(watcher).pipe(Effect.ignore));
+  return {cause, events};
+}
+
 describe("checkpoint navigation", () => {
   const runtimes: Array<{unregister: () => void}> = [];
   const tempDirs: string[] = [];
@@ -257,9 +289,10 @@ describe("checkpoint navigation", () => {
     await runSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.undoCheckpoint({sessionId: info.id})});
     await pi.sendMessage({message: "branch", model: selectedModelReference, sessionId: info.id});
 
-    const redoEvents = await runSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.redoCheckpoint({sessionId: info.id})});
+    const {cause, events: redoEvents} = await runRejectedSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.redoCheckpoint({sessionId: info.id})});
 
-    expect(errorEvents(redoEvents).at(-1)?.error).toBe("No checkpoint is available to redo.");
+    expect(cause).toMatchObject({message: "No checkpoint is available to redo."});
+    expect(errorEvents(redoEvents)).toEqual([]);
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("branch\n");
   });
 

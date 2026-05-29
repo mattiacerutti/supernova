@@ -7,14 +7,15 @@ import type {SessionTimelineItem} from "@/features/sessions/types/session-timeli
 
 interface SessionTimelineRowProps {
   readonly item: SessionTimelineItem;
+  readonly onRevertToMessage?: (turnId: string) => void;
 }
 
 const SessionTimelineRow = memo(function SessionTimelineRow(props: SessionTimelineRowProps) {
-  const {item} = props;
+  const {item, onRevertToMessage} = props;
 
   switch (item.type) {
     case "user":
-      return <UserMessage message={item.message} />;
+      return <UserMessage message={item.message} onRevertToMessage={onRevertToMessage} turnId={item.turnId} />;
     case "assistant":
       return <AssistantMessage event={item.event} live={item.live} />;
     case "compaction":
