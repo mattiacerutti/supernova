@@ -17,15 +17,22 @@
     "package:desktop:win": "turbo run package:win --filter=@supernova/desktop",
     "package:desktop:mac": "turbo run package:mac --filter=@supernova/desktop",
     "package:desktop:linux": "turbo run package:linux --filter=@supernova/desktop",
-    "lint": "turbo run lint",
-    "prettier": "turbo run prettier",
+    "lint": "turbo run lint && bun run lint:scripts",
+    "lint:scripts": "eslint scripts",
+    "prettier": "turbo run prettier && bun run prettier:scripts",
+    "prettier:scripts": "prettier --check scripts --ignore-path .prettierignore",
     "test": "turbo run test",
-    "typecheck": "turbo run typecheck",
+    "typecheck": "turbo run typecheck && bun run typecheck:scripts",
+    "typecheck:scripts": "tsc --project scripts/tsconfig.json",
     "prepare": "husky"
   },
   "devDependencies": {
+    "@types/node": "^22.19.1",
+    "eslint": "^10.3.0",
     "husky": "^9.1.7",
-    "prettier": "^3.8.3"
+    "prettier": "^3.8.3",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.59.1"
   },
   "dependencies": {
     "turbo": "^2.9.7"

@@ -1,0 +1,283 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version, for example 0.1.0 or v0.1.0
+        required: true
+        type: string
+      prerelease:
+        description: Mark the GitHub release as a prerelease
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      version: ${{ steps.release_meta.outputs.version }}
+      tag: ${{ steps.release_meta.outputs.tag }}
+      release_name: ${{ steps.release_meta.outputs.release_name }}
+      prerelease: ${{ steps.release_meta.outputs.prerelease }}
+      make_latest: ${{ steps.release_meta.outputs.make_latest }}
+      ref: ${{ steps.release_prep.outputs.ref }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fd-find
+          sudo ln -sf "$(which fdfind)" /usr/local/bin/fd
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - id: release_meta
+        name: Resolve release metadata
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          set -euo pipefail
+
+          version="${INPUT_VERSION#v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid release version: $INPUT_VERSION" >&2
+            exit 1
+          fi
+
+          prerelease="$INPUT_PRERELEASE"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            prerelease=true
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          echo "release_name=Supernova v$version" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+
+          if [[ "$prerelease" == "true" ]]; then
+            echo "make_latest=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "make_latest=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Ensure release does not exist
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release_meta.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          if git rev-parse --verify --quiet "refs/tags/${RELEASE_TAG}" >/dev/null; then
+            echo "Tag ${RELEASE_TAG} already exists." >&2
+            exit 1
+          fi
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "GitHub Release ${RELEASE_TAG} already exists." >&2
+            exit 1
+          fi
+
+      - id: release_prep
+        name: Prepare release commit
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ steps.release_meta.outputs.version }}
+          RELEASE_TAG: ${{ steps.release_meta.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          bun scripts/prepare-release.ts
+          bun install --lockfile-only --ignore-scripts
+
+          if git diff --quiet -- \
+            CHANGELOG.md \
+            apps/desktop/package.json \
+            apps/server/package.json \
+            packages/agent-runtime/package.json \
+            packages/contracts/package.json \
+            packages/web/package.json \
+            bun.lock; then
+            echo "Release metadata already prepared for ${RELEASE_TAG}."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add \
+              CHANGELOG.md \
+              apps/desktop/package.json \
+              apps/server/package.json \
+              packages/agent-runtime/package.json \
+              packages/contracts/package.json \
+              packages/web/package.json \
+              bun.lock
+            git commit -m "chore(release): ${RELEASE_TAG}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
+
+          echo "ref=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Test
+        run: bun run test
+
+  build:
+    name: Build ${{ matrix.label }}
+    needs: preflight
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: macOS arm64
+            runner: macos-latest
+            package_script: package:desktop:mac
+            arch: arm64
+          - label: macOS x64
+            runner: macos-13
+            package_script: package:desktop:mac
+            arch: x64
+          - label: Linux x64
+            runner: ubuntu-latest
+            package_script: package:desktop:linux
+            arch: x64
+          - label: Windows x64
+            runner: windows-latest
+            package_script: package:desktop:win
+            arch: x64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.preflight.outputs.ref }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Cache Bun and Turbo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            .turbo
+          key: ${{ runner.os }}-${{ matrix.arch }}-bun-${{ hashFiles('bun.lock') }}-${{ hashFiles('turbo.json') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.arch }}-bun-${{ hashFiles('bun.lock') }}-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build desktop artifact
+        run: bun run ${{ matrix.package_script }} -- --${{ matrix.arch }}
+
+      - name: Collect release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          shopt -s nullglob
+
+          for pattern in \
+            "apps/desktop/dist/*.dmg" \
+            "apps/desktop/dist/*.zip" \
+            "apps/desktop/dist/*.AppImage" \
+            "apps/desktop/dist/*.deb" \
+            "apps/desktop/dist/*.snap" \
+            "apps/desktop/dist/*.exe" \
+            "apps/desktop/dist/*.msi"; do
+            for file in $pattern; do
+              cp "$file" release-assets/
+            done
+          done
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ runner.os }}-${{ matrix.arch }}
+          path: release-assets/*
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    needs: [preflight, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.preflight.outputs.ref }}
+
+      - name: Download release assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*
+          merge-multiple: true
+          path: release-assets
+
+      - name: Extract changelog notes
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ needs.preflight.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          if [[ -f CHANGELOG.md ]]; then
+            awk -v version="$RELEASE_VERSION" '$0 == "## [" version "]" {flag=1; next} /^## \[/ {flag=0} flag' CHANGELOG.md > release-notes.md
+          fi
+
+          if [[ ! -s release-notes.md ]]; then
+            echo "Release ${RELEASE_VERSION}" > release-notes.md
+          fi
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.preflight.outputs.tag }}
+          target_commitish: ${{ needs.preflight.outputs.ref }}
+          name: ${{ needs.preflight.outputs.release_name }}
+          body_path: release-notes.md
+          prerelease: ${{ needs.preflight.outputs.prerelease }}
+          make_latest: ${{ needs.preflight.outputs.make_latest }}
+          files: release-assets/*
+          fail_on_unmatched_files: true

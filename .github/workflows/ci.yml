@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fd-find
+          sudo ln -sf "$(which fdfind)" /usr/local/bin/fd
+
+      - name: Cache Bun and Turbo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            .turbo
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}-${{ hashFiles('turbo.json') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Test
+        run: bun run test
+
+      - name: Build
+        run: bun run build

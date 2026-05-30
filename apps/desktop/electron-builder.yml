@@ -18,7 +18,7 @@ win:
   executableName: supernova
   icon: icons/icon.ico
 nsis:
-  artifactName: supernova-${version}-setup.${ext}
+  artifactName: supernova-${version}-${arch}-setup.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
@@ -33,7 +33,7 @@ mac:
   notarize: false
 dmg:
   icon: icons/icon.icns
-  artifactName: supernova-${version}.${ext}
+  artifactName: supernova-${version}-${arch}.${ext}
 linux:
   icon: icons
   target:
@@ -43,7 +43,7 @@ linux:
   maintainer: electronjs.org
   category: Utility
 appImage:
-  artifactName: supernova-${version}.${ext}
+  artifactName: supernova-${version}-${arch}.${ext}
 npmRebuild: false
 publish:
   provider: generic
