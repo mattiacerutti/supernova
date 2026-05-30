@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "SUPERNOVA_SERVER_DEV=1 bun --watch src/bootstrap.ts",
     "start": "node dist/cli.js",
-    "build": "rm -rf dist && bun build src/cli.ts src/bootstrap.ts --target node --outdir dist && cp -R ../../packages/web/dist dist/client",
+    "build": "rm -rf dist && bun build src/cli.ts src/bootstrap.ts --target node --outdir dist && cp -R ../../packages/web/dist dist/client && bun scripts/prepare-tools.ts",
     "lint": "eslint .",
     "prettier": "prettier --check . --ignore-path ../../.prettierignore",
     "typecheck": "tsc --noEmit"

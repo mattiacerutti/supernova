@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 import {Command, InvalidArgumentError} from "commander";
 import {DEFAULT_HOST, DEFAULT_PORT, startServer} from "@/runtime";
+import {registerBundledToolsPath} from "@/tools-path";
+
+registerBundledToolsPath();
 
 function parsePort(value: string): number {
   const port = Number(value);

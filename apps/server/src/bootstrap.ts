@@ -1,4 +1,7 @@
 import {DEFAULT_HOST, DEFAULT_PORT, DEFAULT_WEB_DEV_URL, startServer} from "@/runtime";
+import {registerBundledToolsPath} from "@/tools-path";
+
+registerBundledToolsPath();
 
 function parsePort(value: string | undefined): number {
   const port = Number(value ?? DEFAULT_PORT);
