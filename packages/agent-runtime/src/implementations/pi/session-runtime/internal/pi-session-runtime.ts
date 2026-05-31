@@ -173,7 +173,7 @@ export class PiSessionRuntime {
   /** Publishes session update event containing new session metadata. */
   public async publishSessionUpdate(openedSession: OpenedRuntimeSession): Promise<void> {
     if (!openedSession.titleWasGenerated) return;
-    await this.publishEvent({type: "session.updated", sessionId: this.sessionId, summary: this.sessionSummary(openedSession)});
+    await this.publishEvent({type: "session.updated", projectPath: openedSession.sessionInfo.cwd, sessionId: this.sessionId, summary: this.sessionSummary(openedSession)});
   }
 
   /** Publishes a committed snapshot for commands that do not own an active turn. */

@@ -59,23 +59,34 @@ function errorMessage(cause: unknown, fallback: string): string {
   return cause instanceof Error && cause.message.length > 0 ? cause.message : fallback;
 }
 
-/** Applies metadata-only session updates to the visible session query. */
-function applySessionSummary(input: {queryClient: QueryClient; sessionId: string; summary: SessionSummary}): void {
-  const {queryClient, sessionId, summary} = input;
+/** Upserts session metadata into cached project session lists. */
+function applyProjectSessionSummary(input: {projectPath: string; queryClient: QueryClient; sessionId: string; summary: SessionSummary}): void {
+  const {projectPath, queryClient, sessionId, summary} = input;
+  queryClient.setQueriesData<ProjectSessionsListResult>({queryKey: listProjectSessionsQueryKey(projectPath)}, (result) => {
+    if (!result) return result;
+
+    const sessionExists = result.sessions.some((session) => session.id === sessionId);
+    const sessions = sessionExists ? result.sessions.map((session) => (session.id === sessionId ? summary : session)) : [summary, ...result.sessions];
+    return {...result, sessions};
+  });
+}
+
+/** Applies metadata-only session updates to visible session and project list queries. */
+function applySessionSummary(input: {projectPath: string; queryClient: QueryClient; sessionId: string; summary: SessionSummary}): void {
+  const {projectPath, queryClient, sessionId, summary} = input;
   queryClient.setQueryData<Session>(sessionQueryKey(sessionId), (session) => (session ? {...session, title: summary.title, updatedAt: summary.updatedAt} : session));
+  applyProjectSessionSummary({projectPath, queryClient, sessionId, summary});
 }
 
 /** Writes an authoritative session snapshot into React Query and the project session list. */
 function applySessionSnapshot(input: {queryClient: QueryClient; snapshot: Extract<SessionStreamEvent, {type: "session.snapshot"}>}): void {
   const {queryClient, snapshot} = input;
   queryClient.setQueryData<Session>(sessionQueryKey(snapshot.sessionId), snapshot.session);
-  queryClient.setQueriesData<ProjectSessionsListResult>({queryKey: listProjectSessionsQueryKey(snapshot.session.projectPath)}, (result) => {
-    if (!result) return result;
-
-    const summary = {id: snapshot.session.id, title: snapshot.session.title, updatedAt: snapshot.session.updatedAt};
-    const sessionExists = result.sessions.some((session) => session.id === snapshot.sessionId);
-    const sessions = sessionExists ? result.sessions.map((session) => (session.id === snapshot.sessionId ? summary : session)) : [summary, ...result.sessions];
-    return {...result, sessions};
+  applyProjectSessionSummary({
+    projectPath: snapshot.session.projectPath,
+    queryClient,
+    sessionId: snapshot.sessionId,
+    summary: {id: snapshot.session.id, title: snapshot.session.title, updatedAt: snapshot.session.updatedAt},
   });
 }
 
@@ -186,7 +197,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
         updateLifecycle(event.sessionId, event.revision, (entry) => ({...entry, error: null, liveTurn: event.turn, stopInProgress: false}));
         return;
       case "session.updated":
-        applySessionSummary({queryClient, sessionId: event.sessionId, summary: event.summary});
+        applySessionSummary({projectPath: event.projectPath, queryClient, sessionId: event.sessionId, summary: event.summary});
         updateLifecycle(event.sessionId, event.revision, (entry) => ({...entry}));
         return;
       case "session.error":

@@ -125,6 +125,8 @@ export default function ProjectListItem(props: ProjectListItemProps) {
   };
 
   const handlePrefetchSession = (sessionId: string): void => {
+    if (sessionId === activeSessionId) return;
+
     void queryClient.prefetchQuery(sessionQueryOptions(sessionId));
   };
 
