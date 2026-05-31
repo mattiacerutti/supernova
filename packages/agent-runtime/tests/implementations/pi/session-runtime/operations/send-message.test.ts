@@ -170,7 +170,7 @@ describe("sending messages through Pi sessions", () => {
         expect.objectContaining({status: "completed", summary: "Compacted summary.", type: "compaction"}),
       ])
     );
-    expect(events.find((event) => event.type === "session.compaction.ended")).toMatchObject({type: "session.compaction.ended", willContinue: true});
+    expect(events.find((event) => event.type === "session.compaction.ended")).toMatchObject({type: "session.compaction.ended"});
   });
 
   it("keeps pre-prompt compaction in the submitted turn", async () => {
@@ -179,7 +179,7 @@ describe("sending messages through Pi sessions", () => {
     const {info, manager} = pi.createSession();
     manager.appendCustomEntry("supernova.user-message-content-parts", {contentParts: [{text: "Large previous request", type: "text"}]});
     manager.appendMessage({content: [{text: "Large previous request", type: "text"}], role: "user", timestamp: 1});
-    manager.appendMessage(assistantWithUsage("Large previous response", selectedPiModel.contextWindow + 10_000));
+    manager.appendMessage(assistantWithUsage("Large previous response", selectedPiModel.contextWindow - 500));
     pi.faux.setResponses([fauxAssistantMessage("Pre-prompt compacted summary."), fauxAssistantMessage("Response after pre-prompt compaction.")]);
 
     const events = await pi.sendMessage({message: "Continue after pre-prompt compaction", model: selectedModelReference, sessionId: info.id});
@@ -190,7 +190,7 @@ describe("sending messages through Pi sessions", () => {
       .map((event) => event.turn)
       .find((turn) => turn?.events.some((turnEvent) => turnEvent.type === "compaction" && turnEvent.status === "pending"));
 
-    expect(events.find((event) => event.type === "session.compaction.ended")).toMatchObject({type: "session.compaction.ended", willContinue: true});
+    expect(events.find((event) => event.type === "session.compaction.ended")).toMatchObject({type: "session.compaction.ended"});
     expect(pendingCompactionTurn).toMatchObject({
       userMessage: {contentParts: [{text: "Continue after pre-prompt compaction", type: "text"}]},
       events: expect.arrayContaining([expect.objectContaining({status: "pending", type: "compaction"})]),
@@ -274,7 +274,7 @@ describe("sending messages through Pi sessions", () => {
     const compactionTurn = liveTurns.find((event) => event.turn.events.some((turnEvent) => turnEvent.type === "compaction" && turnEvent.status === "completed"));
     const continuationTurn = liveTurns.find((event) => event.turn.events.some((turnEvent) => turnEvent.type === "assistant" && turnEvent.content.includes("Continued")));
 
-    expect(events.find((event) => event.type === "session.compaction.ended")).toMatchObject({type: "session.compaction.ended", willContinue: true});
+    expect(events.find((event) => event.type === "session.compaction.ended")).toMatchObject({type: "session.compaction.ended"});
     expect(compactionTurn).toMatchObject({
       turn: {
         userMessage: {contentParts: [{text: "Fix overflow", type: "text"}]},

@@ -178,7 +178,17 @@ export function createPiTestRuntime(input?: {
   const modelRegistry = ModelRegistry.inMemory(authStorage);
   const faux = registerFauxProvider({
     api: selectedPiModel.api,
-    models: [{id: selectedPiModel.id, input: [...selectedPiModel.input], name: selectedPiModel.name, reasoning: selectedPiModel.reasoning}],
+    models: [
+      {
+        contextWindow: selectedPiModel.contextWindow,
+        cost: selectedPiModel.cost,
+        id: selectedPiModel.id,
+        input: [...selectedPiModel.input],
+        maxTokens: selectedPiModel.maxTokens,
+        name: selectedPiModel.name,
+        reasoning: selectedPiModel.reasoning,
+      },
+    ],
     provider: selectedPiModel.provider,
   });
   const sessions = new Map<string, {info: PiSessionInfo; manager: PiSessionManager}>();

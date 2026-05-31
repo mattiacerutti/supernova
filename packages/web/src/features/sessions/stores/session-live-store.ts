@@ -17,8 +17,6 @@ export interface SessionLiveState {
   readonly error: string | null;
   /** Currently streaming turn, kept separate from committed turns until a server snapshot commits it. */
   readonly liveTurn: Turn | null;
-  /** Blocks sends in the gap after overflow compaction schedules continuation and before the next agent start. */
-  readonly pendingContinuation: boolean;
   /** Latest server revision applied for this session. Older session-scoped events are ignored. */
   readonly revision: number;
   /** Derived status that drives composer buttons and duplicate-send prevention. */
@@ -44,7 +42,6 @@ function emptyEntry(input: {revision: number}): SessionLiveState {
     agentStreaming: false,
     error: null,
     liveTurn: null,
-    pendingContinuation: false,
     revision: input.revision,
     status: "idle",
     stopInProgress: false,
@@ -54,7 +51,7 @@ function emptyEntry(input: {revision: number}): SessionLiveState {
 /** Derives the legacy composer status from event-derived lifecycle flags. */
 function toStatus(entry: Omit<SessionLiveState, "status">): SessionLiveStatus {
   if (entry.stopInProgress) return "stopping";
-  return entry.agentStreaming || entry.pendingContinuation || entry.liveTurn !== null ? "streaming" : "idle";
+  return entry.agentStreaming || entry.liveTurn !== null ? "streaming" : "idle";
 }
 
 /** Normalizes command failures for user-facing toasts. */
@@ -136,7 +133,6 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
       ...entry,
       agentStreaming: false,
       liveTurn: null,
-      pendingContinuation: false,
       stopInProgress: false,
     }));
   };
@@ -173,7 +169,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
       case "server.disposed":
         return;
       case "session.agent.started":
-        updateLifecycle(event.sessionId, event.revision, (entry) => ({...entry, agentStreaming: true, error: null, pendingContinuation: false, stopInProgress: false}));
+        updateLifecycle(event.sessionId, event.revision, (entry) => ({...entry, agentStreaming: true, error: null, stopInProgress: false}));
         return;
       case "session.agent.ended":
         updateLifecycle(event.sessionId, event.revision, (entry) => ({...entry, agentStreaming: false}));
@@ -182,7 +178,6 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
         updateLifecycle(event.sessionId, event.revision, (entry) => ({...entry, status: "compacting"}));
         return;
       case "session.compaction.ended":
-        updateLifecycle(event.sessionId, event.revision, (entry) => ({...entry, pendingContinuation: event.willContinue}));
         return;
       case "session.snapshot":
         flushSnapshot(queryClient, event);
@@ -200,7 +195,6 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
           agentStreaming: false,
           error: event.error,
           liveTurn: null,
-          pendingContinuation: false,
           stopInProgress: false,
         }));
         return;

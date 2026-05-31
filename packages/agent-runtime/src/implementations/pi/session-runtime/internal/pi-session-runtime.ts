@@ -232,7 +232,7 @@ export class PiSessionRuntime {
           break;
         case "compaction_end":
           activeTurn.completeLiveCompaction(event.result);
-          void this.publishEvent({type: "session.compaction.ended", sessionId: this.sessionId, willContinue: event.willRetry});
+          void this.publishEvent({type: "session.compaction.ended", sessionId: this.sessionId});
           void this.publishLiveTurn(activeTurn);
           break;
       }

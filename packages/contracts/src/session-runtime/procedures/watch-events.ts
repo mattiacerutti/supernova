@@ -10,7 +10,7 @@ export const SessionStreamEvent = Schema.Union([
   Schema.Struct({type: Schema.Literal("session.agent.started"), revision: Schema.Number, sessionId: Schema.String}),
   Schema.Struct({type: Schema.Literal("session.agent.ended"), revision: Schema.Number, sessionId: Schema.String}),
   Schema.Struct({type: Schema.Literal("session.compaction.started"), revision: Schema.Number, sessionId: Schema.String}),
-  Schema.Struct({type: Schema.Literal("session.compaction.ended"), revision: Schema.Number, sessionId: Schema.String, willContinue: Schema.Boolean}),
+  Schema.Struct({type: Schema.Literal("session.compaction.ended"), revision: Schema.Number, sessionId: Schema.String}),
   Schema.Struct({type: Schema.Literal("session.turn"), revision: Schema.Number, sessionId: Schema.String, turn: Turn}),
   Schema.Struct({type: Schema.Literal("session.snapshot"), revision: Schema.Number, sessionId: Schema.String, session: Session}),
   Schema.Struct({type: Schema.Literal("session.updated"), revision: Schema.Number, sessionId: Schema.String, summary: SessionSummary}),

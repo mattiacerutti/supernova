@@ -12,10 +12,10 @@ export async function compactSession(runtime: PiSessionRuntime, input: CompactSe
 
     await runtime.publishEvent({type: "session.compaction.started", sessionId: runtime.sessionId});
     await runtime.compactActiveSession();
-    await runtime.publishEvent({type: "session.compaction.ended", sessionId: runtime.sessionId, willContinue: false});
+    await runtime.publishEvent({type: "session.compaction.ended", sessionId: runtime.sessionId});
     await runtime.publishSessionSnapshot(openedSession);
   } catch (cause) {
-    await runtime.publishEvent({type: "session.compaction.ended", sessionId: runtime.sessionId, willContinue: false});
+    await runtime.publishEvent({type: "session.compaction.ended", sessionId: runtime.sessionId});
     await runtime.publishEvent({
       type: "session.error",
       sessionId: runtime.sessionId,
