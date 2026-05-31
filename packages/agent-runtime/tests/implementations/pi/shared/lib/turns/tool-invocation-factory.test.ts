@@ -57,7 +57,11 @@ describe("mapping Pi tool invocations", () => {
 
   it("maps file-changing tools to standard patches", () => {
     const edit = PiToolInvocationFactory.create("edit", {edits: [{newText: "primary", oldText: "ghost"}], path: "button.tsx"});
-    edit.complete({details: {diff: "-1 ghost\n+1 primary", firstChangedLine: 1}, isError: false, output: [{text: "edited", type: "text"}]});
+    edit.complete({
+      details: {diff: "-1 ghost\n+1 primary", patch: "--- a/button.tsx\n+++ b/button.tsx\n@@ -1,1 +1,1 @@\n-ghost\n+primary"},
+      isError: false,
+      output: [{text: "edited", type: "text"}],
+    });
     const write = PiToolInvocationFactory.create("write", {content: "one\ntwo\n", path: "notes.txt"});
     write.complete({details: undefined, isError: false, output: [{text: "written", type: "text"}]});
 

@@ -35,7 +35,6 @@ import {
   type Tool,
   type ToolStatus,
 } from "@supernova/contracts/sessions/schemas";
-import {fileContentToNewFilePatch, piEditDiffToPatch} from "@supernova/agent-runtime/implementations/pi/shared/lib/turns/edit-patch";
 import {Option, Schema} from "effect";
 
 type PiToolOutput = string | readonly (TextContent | ImageContent)[];
@@ -47,6 +46,15 @@ function piContentToText(content: PiToolOutput): string {
     .map((part) => (part.type === "text" ? part.text : ""))
     .filter(Boolean)
     .join("\n");
+}
+
+/** Converts full file content into a standard new-file unified patch. */
+function fileContentToNewFilePatch(input: {readonly content: string | undefined; readonly path: string | undefined}): string {
+  const path = input.path ?? "unknown file";
+  const lines = (input.content ?? "").split("\n");
+  if (lines.at(-1) === "") lines.pop();
+
+  return [`--- /dev/null`, `+++ b/${path}`, `@@ -0,0 +1,${lines.length} @@`, ...lines.map((line) => `+${line}`)].join("\n");
 }
 
 /** Completion payload emitted by Pi when a tool invocation finishes. */
@@ -170,7 +178,7 @@ class EditPiToolInvocation extends PiToolInvocation<EditToolInput, EditToolDetai
   }
 
   protected createResult(completion: PiToolCompletion<EditToolDetails>): FileEditToolResult {
-    return {patch: piEditDiffToPatch({diff: completion.details?.diff, firstChangedLine: completion.details?.firstChangedLine, path: this.input?.path})};
+    return {patch: completion.details?.patch ?? ""};
   }
 }
 
