@@ -1,5 +1,6 @@
 import type {ModelReference, Turn, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 import type {LegendListRef} from "@legendapp/list/react";
+import {useQueryClient} from "@tanstack/react-query";
 import {useMemo, useRef} from "react";
 import {buildCommittedTimelineItems, buildLiveTimelineItems} from "@/features/sessions/lib/timeline/build-session-timeline";
 import type {ClientSlashCommandActions} from "@/features/sessions/lib/composer/client-slash-commands";
@@ -28,6 +29,7 @@ interface UseSessionTimelineInput {
 
 export function useSessionTimeline(input: UseSessionTimelineInput): UseSessionTimelineResult {
   const {modelReference, sessionId, sessionTurns} = input;
+  const queryClient = useQueryClient();
   const rpcClient = useAgentRpcClient();
   const messagesListRef = useRef<LegendListRef>(null);
 
@@ -57,7 +59,7 @@ export function useSessionTimeline(input: UseSessionTimelineInput): UseSessionTi
       return;
     }
 
-    sendMessage({contentParts, model: modelReference, rpcClient, sessionId});
+    sendMessage({contentParts, model: modelReference, queryClient, rpcClient, sessionId});
     window.requestAnimationFrame(() => {
       void messagesListRef.current?.scrollToEnd({animated: false});
     });

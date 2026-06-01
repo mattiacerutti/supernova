@@ -1,4 +1,5 @@
 import {useNavigate} from "@tanstack/react-router";
+import {useQueryClient} from "@tanstack/react-query";
 import {useState} from "react";
 import SessionComposer from "@/features/sessions/components/composer/session-composer";
 import SessionComposerSkeleton from "@/features/sessions/components/composer/session-composer-skeleton";
@@ -24,6 +25,7 @@ export default function NewSessionPage(props: NewSessionPageProps) {
   const {projectName, projectPath} = props;
 
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const rpcClient = useAgentRpcClient();
   const createSessionMutation = useCreateSession();
 
@@ -83,7 +85,7 @@ export default function NewSessionPage(props: NewSessionPageProps) {
           setSessionModel(session.id, modelReference);
           recordRecentModel(resolvedModelKey);
           setLastThinkingLevel(resolvedThinkingLevel);
-          sendMessage({contentParts, model: modelReference, rpcClient, sessionId: session.id});
+          sendMessage({contentParts, model: modelReference, queryClient, rpcClient, sessionId: session.id});
           void navigate({params: {sessionId: session.id}, to: "/session/$sessionId"});
         },
       }

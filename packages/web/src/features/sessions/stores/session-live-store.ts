@@ -98,6 +98,7 @@ function shouldIgnoreEvent(entry: SessionLiveState | undefined, revision: number
 interface SendSessionMessageInput {
   readonly contentParts: readonly UserMessageContentPart[];
   readonly model: ModelReference;
+  readonly queryClient: QueryClient;
   readonly rpcClient: AgentRpcClientApi;
   readonly sessionId: string;
 }
@@ -251,12 +252,14 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
   };
 
   const sendMessage = (input: SendSessionMessageInput): void => {
-    const {contentParts, model, rpcClient, sessionId} = input;
+    const {contentParts, model, queryClient, rpcClient, sessionId} = input;
 
     const current = get().sessions[sessionId];
     if (current?.status !== undefined && current.status !== "idle") return;
 
     const liveTurn = createInitialStreamTurn({contentParts, model});
+    const previousSession = queryClient.getQueryData<Session>(sessionQueryKey(sessionId));
+    queryClient.setQueryData<Session>(sessionQueryKey(sessionId), (session) => (session ? {...session, undoneTurns: []} : session));
     // Optimistically show the user message in the live layer until the server emits authoritative events.
     set((state) => ({
       sessions: {...state.sessions, [sessionId]: {...emptyEntry({revision: 0}), agentStreaming: true, liveTurn, status: "streaming"}},
@@ -267,6 +270,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
       .catch((cause: unknown) => {
         // Command failures happen before work is accepted, for example invalid model/session errors.
         const error = cause instanceof Error ? cause.message : "Failed to send message.";
+        if (previousSession) queryClient.setQueryData(sessionQueryKey(sessionId), previousSession);
         set((state) => {
           const entry = state.sessions[sessionId];
           if (!entry) return state;
