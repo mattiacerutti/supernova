@@ -55,6 +55,9 @@ async function extractArchive(archivePath: string): Promise<void> {
 
   if (archivePath.endsWith(".zip")) {
     if (platform() === "win32") {
+      const quotedArchivePath = `'${archivePath.replaceAll("'", "''")}'`;
+      const quotedTmpDir = `'${tmpDir.replaceAll("'", "''")}'`;
+
       await execFilePromise("powershell.exe", [
         "-NoLogo",
         "-NoProfile",
@@ -62,9 +65,7 @@ async function extractArchive(archivePath: string): Promise<void> {
         "-ExecutionPolicy",
         "Bypass",
         "-Command",
-        "Expand-Archive -LiteralPath $args[0] -DestinationPath $args[1] -Force",
-        archivePath,
-        tmpDir,
+        `Expand-Archive -LiteralPath ${quotedArchivePath} -DestinationPath ${quotedTmpDir} -Force`,
       ]);
       return;
     }

@@ -2,6 +2,7 @@
   "name": "@supernova/desktop",
   "private": true,
   "version": "0.0.0",
+  "homepage": "https://github.com/mattiacerutti/supernova",
   "main": "./out/main/index.js",
   "scripts": {
     "lint": "eslint --cache .",
@@ -15,10 +16,10 @@
     "prebuild": "bun ./scripts/generate-icons.ts",
     "build": "bun run typecheck && electron-vite build --ignoreConfigWarning",
     "postinstall": "electron-builder install-app-deps",
-    "package:unpack": "bun run generate:icons && electron-builder --dir",
-    "package:win": "bun run generate:icons && electron-builder --win",
-    "package:mac": "bun run generate:icons && electron-builder --mac",
-    "package:linux": "bun run generate:icons && electron-builder --linux"
+    "package:unpack": "bun run generate:icons && electron-builder --dir --publish never",
+    "package:win": "bun run generate:icons && electron-builder --win --publish never",
+    "package:mac": "bun run generate:icons && electron-builder --mac --publish never",
+    "package:linux": "bun run generate:icons && electron-builder --linux --publish never"
   },
   "dependencies": {
     "@electron-toolkit/utils": "^4.0.0",
