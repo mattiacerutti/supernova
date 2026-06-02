@@ -1,3 +1,6 @@
+// Pi needs package metadata before agent-runtime imports it. Keep this first so
+// PI_PACKAGE_DIR points at Supernova's generated package.json before Pi loads.
+import "@/pi-runtime-package";
 import {DEFAULT_HOST, DEFAULT_PORT, DEFAULT_WEB_DEV_URL, startServer} from "@/runtime";
 
 function parsePort(value: string | undefined): number {

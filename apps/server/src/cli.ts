@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Pi needs package metadata before agent-runtime imports it. Keep this first so
+// PI_PACKAGE_DIR points at Supernova's generated package.json before Pi loads.
+import "@/pi-runtime-package";
 import {Command, InvalidArgumentError} from "commander";
 import {DEFAULT_HOST, DEFAULT_PORT, startServer} from "@/runtime";
 

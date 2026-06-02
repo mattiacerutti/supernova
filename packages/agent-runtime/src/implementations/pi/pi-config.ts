@@ -1,22 +1,6 @@
-import {homedir} from "node:os";
-import {join, resolve, sep} from "node:path";
-import {DefaultPackageManager, DefaultResourceLoader, SettingsManager} from "@earendil-works/pi-coding-agent";
+import {resolve, sep} from "node:path";
+import {DefaultPackageManager, DefaultResourceLoader, getAgentDir, SettingsManager} from "@earendil-works/pi-coding-agent";
 import type {ResourceLoader} from "@earendil-works/pi-coding-agent";
-
-const PI_AGENT_DIR_ENV = "PI_CODING_AGENT_DIR";
-const SUPERNOVA_CONFIG_DIR_NAME = ".supernova";
-
-/** Returns the Pi-compatible agent directory owned by Supernova. */
-export function getPiAgentDir(): string {
-  return join(homedir(), SUPERNOVA_CONFIG_DIR_NAME, "agent");
-}
-
-/** Configures Pi internals that still read their agent directory from process env. */
-export function configurePiAgentDir(): string {
-  const agentDir = getPiAgentDir();
-  process.env[PI_AGENT_DIR_ENV] = agentDir;
-  return agentDir;
-}
 
 function isAgentsSkillPath(path: string): boolean {
   const parts = resolve(path).split(sep);
@@ -62,10 +46,10 @@ export class CustomPiResourceLoader implements ResourceLoader {
   private readonly settingsManager = SettingsManager.inMemory();
   private piLoader: ResourceLoader;
 
-  constructor(input: {readonly agentDir: string; readonly projectPath: string}) {
-    this.agentDir = input.agentDir;
-    this.projectPath = input.projectPath;
-    this.piLoader = createRestrictedPiResourceLoader({agentDir: input.agentDir, projectPath: input.projectPath, settingsManager: this.settingsManager, skillPaths: []});
+  constructor(projectPath: string) {
+    this.agentDir = getAgentDir();
+    this.projectPath = projectPath;
+    this.piLoader = createRestrictedPiResourceLoader({agentDir: this.agentDir, projectPath, settingsManager: this.settingsManager, skillPaths: []});
   }
 
   getExtensions(): ReturnType<ResourceLoader["getExtensions"]> {

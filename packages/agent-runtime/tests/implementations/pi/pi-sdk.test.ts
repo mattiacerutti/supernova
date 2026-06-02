@@ -1,11 +1,11 @@
 import {mkdir, mkdtemp, writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
-import {AuthStorage, createAgentSession, getAgentDir, ModelRegistry, SessionManager, SettingsManager} from "@earendil-works/pi-coding-agent";
+import {AuthStorage, createAgentSession, ModelRegistry, SessionManager, SettingsManager} from "@earendil-works/pi-coding-agent";
 import {Effect} from "effect";
 import {afterEach, describe, expect, it} from "vitest";
 import {PiSdkLive, PiSdkService} from "@supernova/agent-runtime/implementations/pi/pi-sdk";
-import {configurePiAgentDir, CustomPiResourceLoader, getPiAgentDir} from "@supernova/agent-runtime/implementations/pi/pi-config";
+import {CustomPiResourceLoader} from "@supernova/agent-runtime/implementations/pi/pi-config";
 
 async function writeSkill(path: string, name: string): Promise<void> {
   await mkdir(path, {recursive: true});
@@ -36,23 +36,6 @@ describe("Supernova Pi SDK config", () => {
     process.env.HOME = originalHome;
   });
 
-  it("uses .supernova as Pi's agent directory", async () => {
-    const home = await mkdtemp(join(tmpdir(), "supernova-home-"));
-    process.env.HOME = home;
-
-    expect(getPiAgentDir()).toBe(join(home, ".supernova", "agent"));
-  });
-
-  it("configures Pi's default getAgentDir to use Supernova's agent directory", async () => {
-    const home = await mkdtemp(join(tmpdir(), "supernova-home-"));
-    process.env.HOME = home;
-
-    const agentDir = configurePiAgentDir();
-
-    expect(agentDir).toBe(join(home, ".supernova", "agent"));
-    expect(getAgentDir()).toBe(agentDir);
-  });
-
   it("wires PiSdkLive to the custom resource loader", async () => {
     const {project} = await createTestProject();
 
@@ -72,7 +55,7 @@ describe("Supernova Pi SDK config", () => {
   });
 
   it("loads Pi-discovered .agents skills without loading .pi skills", async () => {
-    const {agentDir, home, project, repo} = await createTestProject();
+    const {home, project, repo} = await createTestProject();
 
     await writeSkill(join(home, ".agents", "skills", "global-skill"), "global-skill");
     await writeSkill(join(repo, ".agents", "skills", "repo-skill"), "repo-skill");
@@ -80,14 +63,14 @@ describe("Supernova Pi SDK config", () => {
     await writeSkill(join(repo, "..", ".agents", "skills", "above-repo-skill"), "above-repo-skill");
     await writeSkill(join(project, ".pi", "skills", "pi-skill"), "pi-skill");
 
-    const loader = new CustomPiResourceLoader({agentDir, projectPath: project});
+    const loader = new CustomPiResourceLoader(project);
     await loader.reload();
 
     expect(loader.getSkills().skills.map((skill) => skill.name)).toEqual(["project-skill", "repo-skill", "global-skill"]);
   });
 
   it("does not load Pi extensions, themes, or prompt templates", async () => {
-    const {agentDir, project} = await createTestProject();
+    const {project} = await createTestProject();
 
     await mkdir(join(project, ".pi", "prompts"), {recursive: true});
     await mkdir(join(project, ".pi", "themes"), {recursive: true});
@@ -96,7 +79,7 @@ describe("Supernova Pi SDK config", () => {
     await writeFile(join(project, ".pi", "themes", "ignored.json"), "{}");
     await writeFile(join(project, ".pi", "extensions", "ignored.ts"), "export default function() {}\n");
 
-    const loader = new CustomPiResourceLoader({agentDir, projectPath: project});
+    const loader = new CustomPiResourceLoader(project);
     await loader.reload();
 
     expect(loader.getPrompts().prompts).toEqual([]);
@@ -114,7 +97,7 @@ describe("Supernova Pi SDK config", () => {
     await writeFile(join(project, ".pi", "APPEND_SYSTEM.md"), "ignored appended system prompt");
     await writeFile(join(project, "AGENTS.md"), "project instructions");
 
-    const loader = new CustomPiResourceLoader({agentDir, projectPath: project});
+    const loader = new CustomPiResourceLoader(project);
     await loader.reload();
 
     expect(loader.getSystemPrompt()).toBeUndefined();
