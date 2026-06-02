@@ -5,7 +5,7 @@ import {basename, dirname, isAbsolute, join} from "node:path";
 import {Effect} from "effect";
 import {FolderSuggestionsListError} from "@supernova/contracts/folders/procedures";
 import type {FolderSuggestion} from "@supernova/contracts/folders/schemas";
-import {expandHomePath, resolveFolderPath} from "@supernova/agent-runtime/layers/folders/lib/folder-paths";
+import {expandHomePath, normalizePathForDisplay, resolveFolderPath} from "@supernova/agent-runtime/layers/folders/lib/folder-paths";
 
 const MAX_SUGGESTIONS = 200;
 
@@ -60,7 +60,7 @@ async function listLocalFolderSuggestions(query: string): Promise<FolderSuggesti
     })
     .toSorted((left, right) => left.localeCompare(right))
     .slice(0, MAX_SUGGESTIONS)
-    .map((folderPath) => ({name: basename(folderPath), path: folderPath}));
+    .map((folderPath) => ({name: basename(folderPath), path: normalizePathForDisplay(folderPath)}));
 }
 
 /** Lists local folder suggestions and metadata for the folder picker. */
@@ -70,9 +70,9 @@ export function listFolderSuggestions(query: string) {
       const queryPath = query.trim().length > 0 ? resolveFolderPath(query) : homedir();
 
       return {
-        homePath: homedir(),
+        homePath: normalizePathForDisplay(homedir()),
         query,
-        queryPath,
+        queryPath: normalizePathForDisplay(queryPath),
         queryPathType: await readFolderPathType(queryPath),
         suggestions: await listLocalFolderSuggestions(query),
       };

@@ -1,10 +1,15 @@
 import {homedir} from "node:os";
-import {join, resolve, sep} from "node:path";
+import {join, resolve} from "node:path";
+
+/** Converts filesystem paths into the app's slash-delimited transport format. */
+export function normalizePathForDisplay(path: string): string {
+  return path.replace(/\\/g, "/");
+}
 
 /** Expands a leading home-directory marker in a folder path. */
 export function expandHomePath(value: string): string {
   if (value === "~") return homedir();
-  if (value.startsWith(`~${sep}`) || value.startsWith("~/")) return join(homedir(), value.slice(2));
+  if (value.startsWith("~/") || value.startsWith("~\\")) return join(homedir(), value.slice(2));
   return value;
 }
 

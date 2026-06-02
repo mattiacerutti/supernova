@@ -1,7 +1,7 @@
 import {mkdir} from "node:fs/promises";
 import {Effect} from "effect";
 import {FolderCreateError} from "@supernova/contracts/folders/procedures";
-import {resolveFolderPath} from "@supernova/agent-runtime/layers/folders/lib/folder-paths";
+import {normalizePathForDisplay, resolveFolderPath} from "@supernova/agent-runtime/layers/folders/lib/folder-paths";
 
 /** Creates a folder after resolving user-provided path input. */
 export function createFolder(path: string) {
@@ -9,7 +9,7 @@ export function createFolder(path: string) {
     try: async () => {
       const resolvedPath = resolveFolderPath(path);
       await mkdir(resolvedPath, {recursive: true});
-      return {path: resolvedPath};
+      return {path: normalizePathForDisplay(resolvedPath)};
     },
     catch: (cause) =>
       new FolderCreateError({

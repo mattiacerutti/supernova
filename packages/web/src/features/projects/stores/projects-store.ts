@@ -1,5 +1,6 @@
 import {create} from "zustand";
 import {persist} from "zustand/middleware";
+import {normalizeProjectPath, projectNameFromPath} from "@/features/projects/lib/project-paths";
 
 const PROJECTS_STORAGE_KEY = "supernova-projects";
 
@@ -21,17 +22,8 @@ interface ProjectsState {
   readonly toggleSessionPinned: (projectId: string, sessionId: string) => void;
 }
 
-function normalizeProjectPath(projectPath: string): string {
-  return projectPath.trim().replace(/[\\/]+$/, "");
-}
-
 function toProjectId(projectPath: string): string {
   return btoa(encodeURIComponent(projectPath)).replaceAll("=", "");
-}
-
-function toProjectName(projectPath: string): string {
-  const segments = projectPath.split(/[\\/]/).filter(Boolean);
-  return segments.at(-1) ?? projectPath;
 }
 
 export const useProjectsStore = create<ProjectsState>()(
@@ -47,7 +39,7 @@ export const useProjectsStore = create<ProjectsState>()(
 
         const project: StoredProject = {
           id: toProjectId(normalizedPath),
-          name: toProjectName(normalizedPath),
+          name: projectNameFromPath(normalizedPath),
           path: normalizedPath,
           addedAt: new Date().toISOString(),
         };

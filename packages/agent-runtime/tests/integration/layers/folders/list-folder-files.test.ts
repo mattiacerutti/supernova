@@ -60,6 +60,20 @@ describe("listing workspace file references", () => {
     ]);
   });
 
+  it("accepts backslash-delimited file reference queries", async () => {
+    const tempDir = await createTrackedProjectFixture();
+
+    const result = await Effect.runPromise(listFolderFiles(tempDir, String.raw`src\but`));
+
+    expect(result.items).toEqual([
+      {
+        path: "@src/components/button.tsx",
+        subtitle: "src/components",
+        title: "button.tsx",
+      },
+    ]);
+  });
+
   it("falls back to full-path search when a slash query does not start with an existing directory", async () => {
     const tempDir = await createTrackedProjectFixture();
 

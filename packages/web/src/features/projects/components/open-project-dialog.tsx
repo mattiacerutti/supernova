@@ -5,29 +5,9 @@ import Dialog from "@/components/ui/dialog";
 import Icon from "@/components/ui/icon";
 import {useCreateFolder} from "@/features/projects/hooks/api/use-create-folder";
 import {useListFolderSuggestions} from "@/features/projects/hooks/api/use-list-folder-suggestions";
+import {formatSuggestionPath, withTrailingProjectPathSeparator} from "@/features/projects/lib/project-paths";
 import {useProjectsStore} from "@/features/projects/stores/projects-store";
 import {cn} from "@/lib/cn";
-
-function formatSuggestionPath(displayPath: string, homePath: string | undefined): {parent: string; name: string; suffix: string} {
-  const trimmedPath = displayPath.replace(/\/$/, "");
-
-  const normalizedHomePath = homePath?.replace(/\/$/, "");
-  const displayTrimmedPath =
-    normalizedHomePath && (trimmedPath === normalizedHomePath || trimmedPath.startsWith(`${normalizedHomePath}/`))
-      ? `~${trimmedPath.slice(normalizedHomePath.length)}`
-      : trimmedPath;
-  const lastSlashIndex = displayTrimmedPath.lastIndexOf("/");
-
-  if (lastSlashIndex <= 0) {
-    return {name: displayTrimmedPath, parent: "", suffix: "/"};
-  }
-
-  return {
-    name: displayTrimmedPath.slice(lastSlashIndex + 1),
-    parent: `${displayTrimmedPath.slice(0, lastSlashIndex + 1)}`,
-    suffix: "/",
-  };
-}
 
 interface SuggestionItemProps {
   highlighted: boolean;
@@ -87,11 +67,13 @@ export default function OpenProjectDialog(props: OpenProjectDialogProps) {
 
   const suggestionsQuery = useListFolderSuggestions(projectPath);
   const createFolderMutation = useCreateFolder();
-  const homePath = suggestionsQuery.data?.homePath;
+
+  const pathStatus = suggestionsQuery.data?.query === projectPath ? suggestionsQuery.data : undefined;
+  const homePath = pathStatus?.homePath;
 
   const storedProjects = useProjectsStore((state) => state.projects);
   const recentProjects = storedProjects.slice(0, 5);
-  const suggestedFolders = suggestionsQuery.data?.suggestions ?? [];
+  const suggestedFolders = pathStatus?.suggestions ?? [];
 
   const isShowingDefaults = projectPath.trim().length === 0;
   const suggestions = [
@@ -102,7 +84,6 @@ export default function OpenProjectDialog(props: OpenProjectDialogProps) {
   const highlightedIndex = suggestions.length === 0 ? -1 : Math.min(activeSuggestionIndex, suggestions.length - 1);
   const activeSuggestion = highlightedIndex >= 0 ? suggestions[highlightedIndex] : undefined;
   const visibleHighlightIndex = hoveredSuggestionIndex ?? highlightedIndex;
-  const pathStatus = suggestionsQuery.data?.query === projectPath ? suggestionsQuery.data : undefined;
 
   const canSubmitPath = projectPath.trim().length > 0 && !!pathStatus && pathStatus.queryPathType !== "file" && !suggestionsQuery.isFetching && !createFolderMutation.isPending;
 
@@ -121,7 +102,7 @@ export default function OpenProjectDialog(props: OpenProjectDialogProps) {
   };
 
   const handleAutocomplete = (path: string): void => {
-    handlePathChange(path.endsWith("/") ? path : `${path}/`);
+    handlePathChange(withTrailingProjectPathSeparator(path));
   };
 
   const handleOpenPath = async (): Promise<void> => {

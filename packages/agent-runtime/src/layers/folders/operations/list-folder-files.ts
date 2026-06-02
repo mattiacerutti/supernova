@@ -1,10 +1,11 @@
 import {execFile} from "node:child_process";
 import {stat} from "node:fs/promises";
-import {basename, dirname, join} from "node:path";
+import {join, posix} from "node:path";
 import {promisify} from "node:util";
 import {Effect} from "effect";
 import {FolderFilesListError} from "@supernova/contracts/folders/procedures";
 import type {FolderFile} from "@supernova/contracts/folders/schemas";
+import {normalizePathForDisplay} from "@supernova/agent-runtime/layers/folders/lib/folder-paths";
 
 const execFilePromise = promisify(execFile);
 const FD_MAX_RESULTS = 100;
@@ -15,10 +16,6 @@ interface ProjectPathEntry {
   readonly path: string;
 }
 
-function toDisplayPath(path: string): string {
-  return path.replace(/\\/g, "/");
-}
-
 /** Escapes regex metacharacters before passing user input to fd. */
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -26,7 +23,7 @@ function escapeRegex(value: string): string {
 
 /** Converts a slash-delimited query into an fd path pattern. */
 function buildFdPathQuery(query: string): string {
-  const normalized = toDisplayPath(query);
+  const normalized = normalizePathForDisplay(query);
   if (!normalized.includes("/")) return normalized;
 
   const hasTrailingSeparator = normalized.endsWith("/");
@@ -44,7 +41,7 @@ function buildFdPathQuery(query: string): string {
 
 /** Narrows a file query to the deepest existing directory prefix. */
 async function scopedQuery(projectPath: string, query: string): Promise<{baseDir: string; displayBase: string; query: string}> {
-  const normalizedQuery = toDisplayPath(query);
+  const normalizedQuery = normalizePathForDisplay(query);
   const slashIndex = normalizedQuery.lastIndexOf("/");
   if (slashIndex === -1) return {baseDir: projectPath, displayBase: "", query: normalizedQuery};
 
@@ -63,7 +60,6 @@ async function scopedQuery(projectPath: string, query: string): Promise<{baseDir
 /** Runs fd inside the project and annotates matching paths with directory status. */
 async function runFd(projectPath: string, query: string): Promise<ProjectPathEntry[]> {
   const scope = await scopedQuery(projectPath, query);
-  // TODO: Resolve/provision the fd binary instead of assuming it is available on PATH.
   const args = [
     "--base-directory",
     scope.baseDir,
@@ -83,7 +79,7 @@ async function runFd(projectPath: string, query: string): Promise<ProjectPathEnt
     ".git/**",
   ];
 
-  if (toDisplayPath(scope.query).includes("/")) args.push("--full-path");
+  if (normalizePathForDisplay(scope.query).includes("/")) args.push("--full-path");
   if (scope.query) args.push(buildFdPathQuery(scope.query));
 
   const result = await execFilePromise("fd", args, {cwd: projectPath, encoding: "utf8", maxBuffer: 10 * 1024 * 1024});
@@ -94,7 +90,7 @@ async function runFd(projectPath: string, query: string): Promise<ProjectPathEnt
 
   return Promise.all(
     entries.map(async (entry): Promise<ProjectPathEntry> => {
-      const path = toDisplayPath(`${scope.displayBase}${entry}`).replace(/\/+$/g, "");
+      const path = normalizePathForDisplay(`${scope.displayBase}${entry}`).replace(/\/+$/g, "");
       const stats = await stat(join(projectPath, path)).catch(() => undefined);
       return {isDirectory: stats?.isDirectory() === true, path};
     })
@@ -105,7 +101,7 @@ async function runFd(projectPath: string, query: string): Promise<ProjectPathEnt
 function scoreEntry(entry: ProjectPathEntry, query: string): number {
   if (!query) return 1;
 
-  const fileName = basename(entry.path).toLowerCase();
+  const fileName = posix.basename(entry.path).toLowerCase();
   const lowerQuery = query.toLowerCase();
   const path = entry.path.toLowerCase();
   const score = fileName === lowerQuery ? 100 : fileName.startsWith(lowerQuery) ? 80 : fileName.includes(lowerQuery) ? 50 : path.includes(lowerQuery) ? 30 : 0;
@@ -115,11 +111,11 @@ function scoreEntry(entry: ProjectPathEntry, query: string): number {
 
 function toFolderFile(entry: ProjectPathEntry): FolderFile {
   const path = entry.isDirectory ? `${entry.path}/` : entry.path;
-  const parent = dirname(path);
+  const parent = posix.dirname(path);
   return {
     path: `@${path}`,
     subtitle: parent === "." ? undefined : parent,
-    title: basename(path),
+    title: posix.basename(path),
   };
 }
 
