@@ -81,9 +81,9 @@ Additional repositories may be cloned under `.context/` to provide local context
 Known useful references include:
 
 - `.context/effect` for Effect examples, internals, and idioms.
-- `.context/pi-mono` for Pi SDK and related monorepo patterns.
+- `.context/pi` for Pi SDK and related monorepo patterns.
 
-Other repositories may also be present in `.context/`; inspect the directory when broader examples or prior art would help.
+Other repositories may also be present in `.context/`; inspect the directory when broader examples would help.
 
 ## Code Standards
 
