@@ -1,55 +1,31 @@
 {
-  "fill-specializations" : [
-    {
-      "value" : {
-        "linear-gradient" : [
-          "srgb:0.08939,0.08939,0.08939,1.00000",
-          "srgb:0.00000,0.00000,0.00000,1.00000"
-        ],
-        "orientation" : {
-          "start" : {
-            "x" : 0.5,
-            "y" : 0
-          },
-          "stop" : {
-            "x" : 0.5,
-            "y" : 0.7
-          }
-        }
-      }
-    },
-    {
-      "appearance" : "dark",
-      "value" : {
-        "linear-gradient" : [
-          "srgb:0.08939,0.08939,0.08939,1.00000",
-          "srgb:0.00000,0.00000,0.00000,1.00000"
-        ],
-        "orientation" : {
-          "start" : {
-            "x" : 0.5,
-            "y" : 0
-          },
-          "stop" : {
-            "x" : 0.5,
-            "y" : 0.7
-          }
-        }
+  "fill" : {
+    "linear-gradient" : [
+      "srgb:0.00000,0.00000,0.00000,1.00000",
+      "srgb:0.05024,0.05060,0.05166,1.00000"
+    ],
+    "orientation" : {
+      "start" : {
+        "x" : 0.5,
+        "y" : 0
+      },
+      "stop" : {
+        "x" : 0.5,
+        "y" : 0.7
       }
     }
-  ],
+  },
   "groups" : [
     {
       "layers" : [
         {
-          "glass" : false,
-          "image-name" : "supernova_transparent.png",
-          "name" : "supernova_transparent",
+          "image-name" : "icon.png",
+          "name" : "icon",
           "position" : {
-            "scale" : 0.95,
+            "scale" : 1.1,
             "translation-in-points" : [
-              -0.47499999999990905,
-              -1.5703125
+              -24.442187500000045,
+              7.100000000000023
             ]
           }
         }
