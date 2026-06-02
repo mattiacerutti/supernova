@@ -15,21 +15,25 @@
     },
     "package:unpack": {
       "dependsOn": ["build", "^build"],
+      "passThroughEnv": ["APPLE_API_ISSUER", "APPLE_API_KEY", "APPLE_API_KEY_ID", "CSC_IDENTITY_AUTO_DISCOVERY", "CSC_KEY_PASSWORD", "CSC_LINK"],
       "cache": false,
       "outputs": ["dist/**"]
     },
     "package:win": {
       "dependsOn": ["build", "^build"],
+      "passThroughEnv": ["APPLE_API_ISSUER", "APPLE_API_KEY", "APPLE_API_KEY_ID", "CSC_IDENTITY_AUTO_DISCOVERY", "CSC_KEY_PASSWORD", "CSC_LINK"],
       "cache": false,
       "outputs": ["dist/**"]
     },
     "package:mac": {
       "dependsOn": ["build", "^build"],
+      "passThroughEnv": ["APPLE_API_ISSUER", "APPLE_API_KEY", "APPLE_API_KEY_ID", "CSC_IDENTITY_AUTO_DISCOVERY", "CSC_KEY_PASSWORD", "CSC_LINK"],
       "cache": false,
       "outputs": ["dist/**"]
     },
     "package:linux": {
       "dependsOn": ["build", "^build"],
+      "passThroughEnv": ["APPLE_API_ISSUER", "APPLE_API_KEY", "APPLE_API_KEY_ID", "CSC_IDENTITY_AUTO_DISCOVERY", "CSC_KEY_PASSWORD", "CSC_LINK"],
       "cache": false,
       "outputs": ["dist/**"]
     },

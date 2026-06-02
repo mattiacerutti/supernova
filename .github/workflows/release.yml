@@ -12,6 +12,11 @@ on:
         required: true
         default: false
         type: boolean
+      signed:
+        description: Enable desktop app signing
+        required: true
+        default: true
+        type: boolean
 
 permissions:
   contents: write
@@ -233,8 +238,52 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Validate desktop signing credentials
+        if: inputs.signed
+        shell: bash
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          set -euo pipefail
+
+          missing=()
+          for name in CSC_LINK CSC_KEY_PASSWORD APPLE_API_KEY APPLE_API_KEY_ID APPLE_API_ISSUER; do
+            if [[ -z "${!name:-}" ]]; then
+              missing+=("$name")
+            fi
+          done
+
+          if (( ${#missing[@]} > 0 )); then
+            printf 'Signed desktop release requested, but these secrets are missing: %s\n' "${missing[*]}" >&2
+            exit 1
+          fi
+
       - name: Build desktop artifact
-        run: bun run ${{ matrix.package_script }} -- --${{ matrix.arch }}
+        shell: bash
+        env:
+          DESKTOP_SIGNED: ${{ inputs.signed }}
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$DESKTOP_SIGNED" != "true" ]]; then
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+            unset CSC_LINK
+            unset CSC_KEY_PASSWORD
+            unset APPLE_API_KEY
+            unset APPLE_API_KEY_ID
+            unset APPLE_API_ISSUER
+          fi
+
+          bun run ${{ matrix.package_script }} -- --${{ matrix.arch }}
 
       - name: Collect release assets
         shell: bash

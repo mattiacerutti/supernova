@@ -12,6 +12,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Fixed
 
+- Fixed macOS desktop packaging so unsigned alpha builds can launch correctly.
+
 ### Removed
 
 ## [0.0.1-alpha.1]
