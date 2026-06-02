@@ -1,4 +1,4 @@
-import {mkdir, mkdtemp, writeFile} from "node:fs/promises";
+import {mkdir, mkdtemp, readFile, writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {AuthStorage, createAgentSession, ModelRegistry, SessionManager, SettingsManager} from "@earendil-works/pi-coding-agent";
@@ -17,9 +17,10 @@ async function createTestProject(): Promise<{agentDir: string; home: string; pro
   const home = await mkdtemp(join(tmpdir(), "supernova-home-"));
   const repo = await mkdtemp(join(tmpdir(), "supernova-repo-"));
   const project = join(repo, "packages", "app");
-  const agentDir = join(home, ".supernova", "agent");
+  const agentDir = join(home, ".supernova", "userdata", "agent");
 
   process.env.HOME = home;
+  process.env.PI_CODING_AGENT_DIR = agentDir;
   await mkdir(join(repo, ".git"), {recursive: true});
   await mkdir(project, {recursive: true});
 
@@ -28,6 +29,7 @@ async function createTestProject(): Promise<{agentDir: string; home: string; pro
 
 describe("Supernova Pi SDK config", () => {
   const originalHome = process.env.HOME;
+  const originalPiCodingAgentDir = process.env.PI_CODING_AGENT_DIR;
   const tempDirs: string[] = [];
 
   afterEach(() => {
@@ -35,6 +37,11 @@ describe("Supernova Pi SDK config", () => {
       delete process.env.HOME;
     } else {
       process.env.HOME = originalHome;
+    }
+    if (originalPiCodingAgentDir === undefined) {
+      delete process.env.PI_CODING_AGENT_DIR;
+    } else {
+      process.env.PI_CODING_AGENT_DIR = originalPiCodingAgentDir;
     }
     cleanupTempDirs(tempDirs);
   });
@@ -74,6 +81,25 @@ describe("Supernova Pi SDK config", () => {
     await loader.reload();
 
     expect(loader.getSkills().skills.map((skill) => skill.name)).toEqual(["project-skill", "repo-skill", "global-skill"]);
+  });
+
+  it("creates Pi auth storage from the runtime agent directory when the layer starts", async () => {
+    const home = await mkdtemp(join(tmpdir(), "supernova-home-"));
+    const agentDir = join(home, ".supernova", "dev", "agent");
+    tempDirs.push(home);
+    process.env.HOME = home;
+    process.env.PI_CODING_AGENT_DIR = agentDir;
+
+    const piSdk = await Effect.runPromise(
+      Effect.gen(function* () {
+        return yield* PiSdkService;
+      }).pipe(Effect.provide(PiSdkLive))
+    );
+
+    piSdk.authStorage.set("openai", {type: "api_key", key: "test-key"});
+
+    const authJson = JSON.parse(await readFile(join(agentDir, "auth.json"), "utf-8")) as Record<string, {type: string; key?: string}>;
+    expect(authJson.openai).toEqual({type: "api_key", key: "test-key"});
   });
 
   it("does not load Pi extensions, themes, or prompt templates", async () => {

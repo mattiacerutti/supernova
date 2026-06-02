@@ -1,5 +1,6 @@
 import {spawn} from "node:child_process";
 import type {ChildProcessWithoutNullStreams} from "node:child_process";
+import {homedir} from "node:os";
 import type {BrowserWindowConstructorOptions} from "electron";
 import {app, shell, BrowserWindow, ipcMain, nativeImage} from "electron";
 import {join} from "path";
@@ -13,6 +14,7 @@ let mainWindow: BrowserWindow | undefined;
 let server: SpawnedServer | undefined;
 
 const DEV_WEB_URL = "http://localhost:5173";
+const USER_DATA_DIR_NAME = SUPERNOVA_IS_DEV ? "supernova-dev" : "supernova";
 
 interface SpawnedServer {
   process: ChildProcessWithoutNullStreams;
@@ -123,6 +125,20 @@ function iconPath(): string {
   return join(iconsDir(), "icon.png");
 }
 
+// Keep Chromium profile state, localStorage, cookies, and DevTools state isolated
+// between desktop development and packaged app runs.
+function resolveUserDataPath(): string {
+  if (process.platform === "win32") {
+    return join(process.env.APPDATA || join(homedir(), "AppData", "Roaming"), USER_DATA_DIR_NAME);
+  }
+
+  if (process.platform === "darwin") {
+    return join(homedir(), "Library", "Application Support", USER_DATA_DIR_NAME);
+  }
+
+  return join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config"), USER_DATA_DIR_NAME);
+}
+
 function setDockIcon(): void {
   if (process.platform !== "darwin") return;
 
@@ -198,6 +214,8 @@ function resolveServerCommand(): string {
 function resolveServerEntry(): string {
   return app.isPackaged ? join(process.resourcesPath, "server", "bootstrap.js") : SUPERNOVA_SERVER_ENTRY;
 }
+
+app.setPath("userData", resolveUserDataPath());
 
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.

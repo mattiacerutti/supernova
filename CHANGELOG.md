@@ -6,6 +6,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Breaking Changes
 
+- Separated Supernova dev and production runtime state under `~/.supernova/dev` and `~/.supernova/userdata`, including Pi sessions, auth, and settings.
+
 ### Added
 
 ### Changed
