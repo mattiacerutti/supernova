@@ -74,6 +74,19 @@ Architecture:
   - `bun run typecheck`
   - `bun run lint`
 
+## Changelog
+
+Location: `CHANGELOG.md` at the repository root.
+
+Sections under `## [Unreleased]`: `### Breaking Changes`, `### Added`, `### Changed`, `### Fixed`, `### Removed`.
+
+Rules:
+
+- Add a changelog entry for every user-facing, release-relevant change.
+- All new entries go under `## [Unreleased]`. Read the section first and append to existing subsections; never duplicate section headers.
+- Do not add entries for purely internal cleanup, refactors, tests, or documentation-only changes unless they affect released behavior or release operations.
+- Released version sections are immutable; never modify them.
+
 ## Reference Repositories
 
 Additional repositories may be cloned under `.context/` to provide local context. When a user asks how other projects solve a problem, implement a pattern, or structure similar functionality, check `.context/` first before looking elsewhere.
