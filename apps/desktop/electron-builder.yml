@@ -35,6 +35,7 @@ dmg:
   icon: icons/icon.icns
   artifactName: supernova-${version}-${arch}.${ext}
 linux:
+  executableName: supernova
   icon: icons
   target:
     - AppImage
@@ -43,6 +44,10 @@ linux:
   maintainer: electronjs.org
   category: Utility
 appImage:
+  artifactName: supernova-${version}-${arch}.${ext}
+snap:
+  artifactName: supernova-${version}-${arch}.${ext}
+deb:
   artifactName: supernova-${version}-${arch}.${ext}
 npmRebuild: false
 publish:

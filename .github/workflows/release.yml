@@ -173,11 +173,11 @@ jobs:
       matrix:
         include:
           - label: macOS arm64
-            runner: macos-latest
+            runner: macos-26
             package_script: package:desktop:mac
             arch: arm64
           - label: macOS x64
-            runner: macos-13
+            runner: macos-26
             package_script: package:desktop:mac
             arch: x64
           - label: Linux x64
