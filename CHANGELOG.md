@@ -8,6 +8,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Added
 
+- Initial alpha release of the Supernova desktop agent UI.
+
 ### Changed
 
 ### Fixed
