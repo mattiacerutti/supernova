@@ -28,12 +28,51 @@ function updatePackageVersions(version: string): void {
   }
 }
 
-function hasReleaseNotes(unreleasedBody: string): boolean {
-  return unreleasedBody.split("\n").some((line) => line.trim() !== "" && !line.trim().startsWith("### "));
+function formatReleaseNotes(unreleasedBody: string): string {
+  const sections: Array<string> = [];
+  const preface: Array<string> = [];
+  let currentHeading: string | undefined;
+  let currentLines: Array<string> = [];
+
+  function flushCurrentSection(): void {
+    if (!currentHeading) return;
+
+    const content = currentLines.join("\n").trim();
+    if (content !== "") {
+      sections.push(`${currentHeading}\n\n${content}`);
+    }
+  }
+
+  // Keep version release notes compact while preserving any prose before the
+  // first subsection. The fresh Unreleased template still includes all headings.
+  for (const line of unreleasedBody.split("\n")) {
+    if (line.startsWith("### ")) {
+      flushCurrentSection();
+      currentHeading = line;
+      currentLines = [];
+      continue;
+    }
+
+    if (currentHeading) {
+      currentLines.push(line);
+    } else {
+      preface.push(line);
+    }
+  }
+
+  flushCurrentSection();
+
+  const prefaceText = preface.join("\n").trim();
+  if (prefaceText !== "") {
+    sections.unshift(prefaceText);
+  }
+
+  return sections.join("\n\n");
 }
 
 function promoteChangelogEntries(version: string): void {
   const changelog = readFileSync(changelogPath, "utf8");
+  // Release jobs can be retried after metadata is already prepared.
   if (changelog.includes(`## [${version}]`)) {
     return;
   }
@@ -49,13 +88,16 @@ function promoteChangelogEntries(version: string): void {
   const unreleasedEnd = nextVersionMatch && nextVersionMatch.index !== undefined ? unreleasedBodyStart + nextVersionMatch.index : changelog.length;
   const unreleasedBody = changelog.slice(unreleasedBodyStart, unreleasedEnd).trim();
 
-  if (!hasReleaseNotes(unreleasedBody)) {
+  const releaseNotes = formatReleaseNotes(unreleasedBody);
+  if (releaseNotes === "") {
     throw new Error("CHANGELOG.md has no unreleased entries to release.");
   }
 
   const beforeUnreleased = changelog.slice(0, unreleasedStart).trimEnd();
   const afterUnreleased = changelog.slice(unreleasedEnd).trimStart();
-  const sections = [beforeUnreleased, unreleasedTemplate, `## [${version}]\n\n${unreleasedBody}`];
+  // Reset Unreleased for the next cycle and append the current notes as the
+  // version section consumed by the GitHub Release body.
+  const sections = [beforeUnreleased, unreleasedTemplate, `## [${version}]\n\n${releaseNotes}`];
 
   if (afterUnreleased !== "") {
     sections.push(afterUnreleased);
