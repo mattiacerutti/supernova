@@ -22,7 +22,7 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
     binary += String.fromCharCode(...bytes.slice(index, index + chunkSize));
   }
 
-  return window.btoa(binary);
+  return globalThis.btoa(binary);
 }
 
 /** Formats an attachment type label from its extension or MIME subtype. */

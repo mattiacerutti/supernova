@@ -1,4 +1,4 @@
-import {beforeEach, describe, expect, test, vi} from "vitest";
+import {describe, expect, test} from "vitest";
 import {fileToSessionAttachmentPart, formatAttachmentSize, formatAttachmentType} from "@/features/sessions/lib/attachments/session-attachments";
 
 function testFile(input: {content: BlobPart[]; name: string; type?: string}): File {
@@ -7,10 +7,6 @@ function testFile(input: {content: BlobPart[]; name: string; type?: string}): Fi
 }
 
 describe("session attachments", () => {
-  beforeEach(() => {
-    vi.stubGlobal("window", {btoa: globalThis.btoa});
-  });
-
   test("creates a text attachment payload with normalized MIME and original bytes", async () => {
     const attachment = await fileToSessionAttachmentPart(testFile({content: ["hello"], name: "notes.md", type: "text/markdown"}));
 

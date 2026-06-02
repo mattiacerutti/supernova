@@ -1,10 +1,10 @@
 import {AgentRpcGroup} from "@supernova/contracts";
 import {Effect} from "effect";
-import {FoldersService} from "@supernova/agent-runtime/services/folders/folders-service";
-import {ProvidersService} from "@supernova/agent-runtime/services/providers/providers-service";
-import {ProjectsService} from "@supernova/agent-runtime/services/projects/projects-service";
-import {SessionRuntimeService} from "@supernova/agent-runtime/services/session-runtime/session-runtime-service";
-import {SessionsService} from "@supernova/agent-runtime/services/sessions/sessions-service";
+import {FoldersService} from "@supernova/agent-runtime/services/folders-service";
+import {ProvidersService} from "@supernova/agent-runtime/services/providers-service";
+import {ProjectsService} from "@supernova/agent-runtime/services/projects-service";
+import {SessionRuntimeService} from "@supernova/agent-runtime/services/session-runtime-service";
+import {SessionsService} from "@supernova/agent-runtime/services/sessions-service";
 
 export const AgentRpcLive = AgentRpcGroup.toLayer(
   Effect.gen(function* () {

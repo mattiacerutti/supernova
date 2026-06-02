@@ -2,15 +2,15 @@
 
 ## Purpose
 
-`packages/agent-runtime` owns thes runtime integration layer for Supernova. It provides Effect services and live implementations for provider SDKs, filesystem/runtime boundaries, sessions, streams, and related execution concerns.
+`packages/agent-runtime` owns thes runtime integration layer for Supernova. It provides Effect services and live layers for provider SDKs, filesystem/runtime boundaries, sessions, streams, and related execution concerns.
 
 This package should stay focused on runtime behavior and provider integration. Shared serializable contracts belong in `@supernova/contracts`, and UI or server routing concerns belong outside this package.
 
 ## Source Layout
 
-- Keep public Effect service tags and service interfaces in `src/services/<domain>`.
-- Keep runtime/provider-specific implementations in `src/implementations/<runtime>/<domain>`.
-- Use examples like `src/implementations/pi/sessions` and `src/implementations/filesystem/folders` as the intended shape.
+- Keep public Effect service tags and service interfaces as flat files in `src/services`.
+- Keep concrete runtime/provider wiring and operation layers in `src/layers/<domain>`.
+- Use examples like `src/layers/sessions`, `src/layers/session-runtime`, and `src/layers/folders` as the intended shape.
 - Keep public live layer files named `*-live.ts`.
 - Keep `*-live.ts` files focused on wiring service methods to implementation functions.
 - Put service operation implementations in an `operations` folder when a service has multiple non-trivial methods.
@@ -43,7 +43,7 @@ This package should stay focused on runtime behavior and provider integration. S
 
 ## Testing
 
-- Keep test folders aligned with the implementation boundaries under `src` unless the user explicitly requests a different organization. For example, tests for `src/implementations/pi/session-runtime` should live under `tests/implementations/pi/session-runtime`, and tests for shared Pi code should live under `tests/implementations/pi/shared`.
+- Keep test folders aligned with the layer boundaries under `src`, split by test category. For example, unit tests for `src/layers/session-runtime` should live under `tests/unit/layers/session-runtime`, and integration tests for `src/layers/folders` should live under `tests/integration/layers/folders`.
 - Add tests for critical paths, new behavior, bug fixes, and failure handling that could regress user-visible runtime behavior.
 - Test behavior and observable outcomes, not implementation details or whether code lines executed.
 - Prefer focused tests around operation boundaries, mapping logic, error handling, and stream/session lifecycle behavior.

@@ -1,240 +1,278 @@
 ---
 name: effect-ts
-description: This skill should be used when the user asks about Effect-TS patterns, services, layers, error handling, service composition, or writing/refactoring code that imports from 'effect'. Also covers Effect + Next.js integration with @prb/effect-next.
+description: "Write idiomatic Effect v4 TypeScript following official best practices from effect-solutions and the Effect source. Use when writing, reviewing, or refactoring Effect code: services (ServiceMap.Service), layers and dependency injection, error handling (Schema.TaggedErrorClass), data modeling (Schema.Class, branded types, variants), testing (@effect/vitest), HTTP clients (effect/unstable/http), CLI tools (effect/unstable/cli), config, observability, and project setup. Triggers on: 'Effect', 'effect-ts', '@effect/', 'Schema', 'ServiceMap', 'Layer', 'Effect.gen', 'Effect.fn', 'TaggedError', 'branded types', or any Effect-TS related code."
 ---
 
-# Effect-TS Expert
+# Effect-TS (v4)
 
-Expert guidance for functional programming with the Effect library, covering error handling, dependency injection,
-composability, and testing patterns.
+Patterns from [effect-solutions](https://github.com/kitlangton/effect-solutions) and the [Effect source](https://github.com/Effect-TS/effect-smol). This covers the latest v4 APIs.
 
-## Prerequisites Check
+## Source-First Rule
 
-Before starting any Effect-related work, verify the Effect-TS source code exists at `.context/effect`.
+When working in any repo that uses Effect (`effect` or `@effect/*` in package/dependency files), reference the official Effect source before writing, reviewing, or refactoring Effect code. Do not rely on stale memory, blog posts, or high-level docs alone.
 
-**If missing, stop immediately and inform the user.** Clone it before proceeding:
+- First check for the effect source mirror at `.context/effect-smol/` and the effect-solutions code code mirror at `.context/effect-solutions/`.
+- If any of them are missing, return an error to the user with details and end the conversation. Do not attempt to answer from memory.
 
-```bash
-git clone https://github.com/Effect-TS/effect.git .context/effect
-```
+## References
 
-## Research Strategy
+- **Effect mirror** (canonical for current work): `.context/effect-smol/`
+- **effect-solutions mirror** (best practices, docs, examples): `.context/effect-solutions/`
+- Search the mirrors for current patterns and APIs, especially under `.context/effect-smol/packages/effect/src/` and package tests/examples, before calling something an Effect best practice.
 
-Effect-TS has many ways to accomplish the same task. Proactively research best practices using the Task tool to spawn
-research agents when working with Effect patterns, especially for moderate to high complexity tasks.
+## Effect.gen and Effect.fn
 
-### Research Sources (Priority Order)
-
-1. **Codebase Patterns First** — Examine similar patterns in the current project before implementing. If Effect patterns
-   exist in the codebase, follow them for consistency. If no patterns exist, skip this step.
-
-2. **Effect Source Code** — For complex type errors, unclear behavior, or implementation details, examine the Effect
-   source at `.context/effect/packages/effect/src/`. This contains the core Effect logic and modules.
-
-### When to Research
-
-**HIGH Priority (Always Research):**
-
-- Implementing Services, Layers, or complex dependency injection
-- Error handling with multiple error types or complex error hierarchies
-- Stream-based operations and reactive patterns
-- Resource management with scoped effects and cleanup
-- Concurrent/parallel operations and performance-critical code
-- Testing patterns, especially unfamiliar test scenarios
-
-**MEDIUM Priority (Research if Complex):**
-
-- Refactoring imperative code (try-catch, promises) to Effect patterns
-- Adding new service dependencies or restructuring service layers
-- Custom error types or extending existing error hierarchies
-- Integrations with external systems (databases, APIs, third-party services)
-
-### Research Approach
-
-- Spawn multiple concurrent Task agents when investigating multiple related patterns
-- Focus on finding canonical, readable, and maintainable solutions rather than clever optimizations
-- Verify suggested approaches against existing codebase patterns for consistency (if patterns exist)
-- When multiple approaches are possible, research to find the most idiomatic Effect-TS solution
-
-## Codebase Pattern Discovery
-
-When working in a project that uses Effect, check for existing patterns before implementing new code:
-
-1. **Search for Effect imports** — Look for files importing from `'effect'` to understand existing usage
-2. **Identify service patterns** — Find how Services and Layers are structured in the project
-3. **Note error handling conventions** — Check how errors are defined and propagated
-4. **Examine test patterns** — Look at how Effect code is tested in the project
-
-**If no Effect patterns exist in the codebase**, proceed using canonical patterns from the Effect source and examples.
-Do not block on missing codebase patterns.
-
-## Effect Principles
-
-Apply these core principles when writing Effect code:
-
-### Error Handling
-
-- Use Effect's typed error system instead of throwing exceptions
-- Define descriptive error types with proper error propagation
-- Use `Effect.fail`, `Effect.catchTag`, `Effect.catchAll` for error control flow
-- See `./references/critical-rules.md` for forbidden patterns
-
-### Dependency Injection
-
-- Implement dependency injection using Services and Layers
-- Define services with `Context.Tag`
-- Compose layers with `Layer.merge`, `Layer.provide`
-- Use `Effect.provide` to inject dependencies
-
-### Composability
-
-- Leverage Effect's composability for complex operations
-- Use appropriate constructors: `Effect.succeed`, `Effect.fail`, `Effect.tryPromise`, `Effect.try`
-- Apply proper resource management with scoped effects
-- Chain operations with `Effect.flatMap`, `Effect.map`, `Effect.tap`
-
-### Code Quality
-
-- Write type-safe code that leverages Effect's type system
-- Use `Effect.gen` for readable sequential code
-- Implement proper testing patterns using Effect's testing utilities
-- Prefer `Effect.fn()` for automatic telemetry and better stack traces
-
-## Critical Rules
-
-Read and internalize `./references/critical-rules.md` before writing any Effect code. Key guidelines:
-
-- **INEFFECTIVE:** try-catch in Effect.gen (Effect failures aren't thrown)
-- **AVOID:** Type assertions (as never/any/unknown)
-- **RECOMMENDED:** `return yield*` pattern for errors (makes termination explicit)
-
-## Common Failure Modes
-
-Quick links to patterns that frequently cause issues:
-
-- **SubscriptionRef version mismatch** — `unsafeMake is not a function` → [runtime.md](./references/runtime.md)
-- **Cancellation vs Failure** — Interrupts aren't errors → [Error Taxonomy](#error-taxonomy)
-- **Option vs null** — Use Option internally, null at boundaries → [option-null.md](./references/option-null.md)
-- **Stream backpressure** — Infinite streams hang → [streams.md](./references/streams.md)
-
-## Explaining Solutions
-
-When providing solutions, explain the Effect-TS concepts being used and why they're appropriate for the specific use
-case. If encountering patterns not covered in the documentation, suggest improvements while maintaining consistency with
-existing codebase patterns (when they exist).
-
-## Quick Reference
-
-### Creating Effects
+`Effect.gen` provides sequential, readable composition (like async/await for Effect):
 
 ```typescript
-Effect.succeed(value); // Wrap success value
-Effect.fail(error); // Create failed effect
-Effect.tryPromise(fn); // Wrap promise-returning function
-Effect.try(fn); // Wrap synchronous throwing function
-Effect.sync(fn); // Wrap synchronous non-throwing function
+import {Effect} from "effect";
+
+const program = Effect.gen(function* () {
+  const data = yield* fetchData;
+  yield* Effect.logInfo(`Processing: ${data}`);
+  return yield* processData(data);
+});
 ```
 
-### Composing Effects
+`Effect.fn` adds call-site tracing and named spans. Use for all service methods:
 
 ```typescript
-Effect.flatMap(effect, fn); // Chain effects
-Effect.map(effect, fn); // Transform success value
-Effect.tap(effect, fn); // Side effect without changing value
-Effect.all([...effects]); // Run effects (concurrency configurable)
-Effect.forEach(items, fn); // Map over items with effects
-
-// Collect ALL errors (not just first)
-Effect.all([e1, e2, e3], {mode: "validate"}); // Returns all failures
-
-// Partial success handling
-Effect.partition([e1, e2, e3]); // Returns [failures, successes]
-```
-
-### Error Handling
-
-```typescript
-// Define typed errors with Data.TaggedError (preferred)
-class UserNotFoundError extends Data.TaggedError("UserNotFoundError")<{
-  userId: string;
-}> {}
-
-// Direct yield of errors (no Effect.fail wrapper needed)
-Effect.gen(function* () {
-  if (!user) {
-    return yield* new UserNotFoundError({userId});
-  }
+const processUser = Effect.fn("processUser")(function* (userId: string) {
+  yield* Effect.logInfo(`Processing user ${userId}`);
+  const user = yield* getUser(userId);
+  return yield* processData(user);
 });
 
-Effect.catchTag(effect, tag, fn); // Handle specific error tag
-Effect.catchAll(effect, fn); // Handle all errors
-Effect.result(effect); // Convert to Exit value
-Effect.orElse(effect, alt); // Fallback effect
+// Second argument for cross-cutting concerns (retry, timeout)
+const fetchWithRetry = Effect.fn("fetchWithRetry")(
+  function* (url: string) {
+    const data = yield* fetchData(url);
+    return yield* processData(data);
+  },
+  flow(Effect.retry(Schedule.recurs(3)), Effect.timeout("5 seconds"))
+);
 ```
 
-### Error Taxonomy
+## ServiceMap.Service
 
-Categorize errors for appropriate handling:
-
-| Category                | Examples                   | Handling                  |
-| ----------------------- | -------------------------- | ------------------------- |
-| **Expected Rejections** | User cancel, deny          | Graceful exit, no retry   |
-| **Domain Errors**       | Validation, business rules | Show to user, don't retry |
-| **Defects**             | Bugs, assertions           | Log + alert, investigate  |
-| **Interruptions**       | Fiber cancel, timeout      | Cleanup, may retry        |
-| **Unknown/Foreign**     | Thrown exceptions          | Normalize at boundary     |
+Define services as classes with a unique tag and typed interface:
 
 ```typescript
-// Pattern: Normalize unknown errors at boundary
-const safeBoundary = Effect.catchAllDefect(effect, (defect) => Effect.fail(new UnknownError({cause: defect})));
+import {Effect, ServiceMap} from "effect";
 
-// Pattern: Catch user-initiated cancellations separately
-Effect.catchTag(effect, "UserCancelledError", () => Effect.succeed(null));
-
-// Pattern: Handle interruptions differently from failures
-Effect.onInterrupt(effect, () => Effect.log("Operation cancelled"));
+class Database extends ServiceMap.Service<
+  Database,
+  {
+    readonly query: (sql: string) => Effect.Effect<unknown[]>;
+    readonly execute: (sql: string) => Effect.Effect<void>;
+  }
+>()("@app/Database") {}
 ```
 
-### Pattern Matching (Match Module)
+Implement with `Layer.effect` or `Layer.sync`, using `Effect.fn` for all methods:
 
-When you need to use Effect's Match module for pattern matching, see [references/pattern-matching.md](references/pattern-matching.md).
+```typescript
+import {Effect, Layer} from "effect";
 
-### Services and Layers / Generator Pattern
+class Users extends ServiceMap.Service<
+  Users,
+  {
+    readonly findById: (id: UserId) => Effect.Effect<User, UserNotFoundError>;
+    readonly all: () => Effect.Effect<readonly User[]>;
+  }
+>()("@app/Users") {
+  static readonly layer = Layer.effect(
+    Users,
+    Effect.gen(function* () {
+      const http = yield* HttpClient.HttpClient;
+      const findById = Effect.fn("Users.findById")(function* (id: UserId) {
+        const response = yield* http.get(`/users/${id}`);
+        return yield* HttpClientResponse.schemaBodyJson(User)(response);
+      });
+      const all = Effect.fn("Users.all")(function* () {
+        const response = yield* http.get("/users");
+        return yield* HttpClientResponse.schemaBodyJson(Schema.Array(User))(response);
+      });
+      return {findById, all};
+    })
+  );
+}
+```
 
-For service definition patterns (`Context.Tag`, `Effect.Service`, `Context.Reference`, `Context.ReadonlyTag`) and the generator pattern (`Effect.gen`, `Effect.fn`), see [references/services-layers.md](references/services-layers.md).
+**Rules:**
 
-### Runtime Patterns (Resource Management, Duration, Scheduling, State, SubscriptionRef, Concurrency)
+- Tag identifiers must be unique. Use `@app/ServiceName` pattern
+- Service methods should have `R = never` (dependencies via Layer, not method signatures)
+- Use `readonly` properties
 
-For resource lifecycles, durations, scheduling, state management, reactive refs, and concurrency primitives, see [references/runtime.md](references/runtime.md).
+See [references/services-and-layers.md](references/services-and-layers.md) for service-driven development, test layers, layer memoization, and full composition patterns.
 
-### Configuration & Environment Variables
+## Schema.Class and Branded Types
 
-When you need to read configuration with `Config`, handle secrets via `Redacted`, or wire custom config providers, see [references/config.md](references/config.md).
+Use `Schema.Class` for domain records. Brand all entity IDs and domain primitives:
 
-### Quick Utilities (Array Operations, Utility Functions, Deprecations)
+```typescript
+import {Schema} from "effect";
 
-For Effect's `Array`/`Order` sorting helpers, small utility functions like `constVoid`, and the running list of deprecations, see [references/quick-utils.md](references/quick-utils.md).
+const UserId = Schema.String.pipe(Schema.brand("UserId"));
+type UserId = typeof UserId.Type;
 
-## Additional Resources
+const Email = Schema.String.pipe(Schema.brand("Email"));
+type Email = typeof Email.Type;
 
-### Local Effect Resources
+class User extends Schema.Class("User")({
+  id: UserId,
+  name: Schema.String,
+  email: Email,
+  createdAt: Schema.Date,
+}) {
+  get displayName() {
+    return `${this.name} (${this.email})`;
+  }
+}
 
-- **`./.context/effect/packages/effect/src/`** — Core Effect modules and implementation
+// Construct with makeUnsafe for brands
+const userId = UserId.makeUnsafe("user-123");
+```
 
-### External Resources
+Use `Schema.TaggedClass` + `Schema.Union` for variants (OR types):
 
-- **Effect-Atom** — https://github.com/tim-smart/effect-atom (open in browser for reactive state management patterns)
+```typescript
+import {Match, Schema} from "effect";
 
-### Reference Files
+class Success extends Schema.TaggedClass("Success")("Success", {
+  value: Schema.Number,
+}) {}
+class Failure extends Schema.TaggedClass("Failure")("Failure", {
+  error: Schema.String,
+}) {}
+const Result = Schema.Union([Success, Failure]);
+type Result = typeof Result.Type;
 
-- **`./references/config.md`** — `Config`, `Redacted`, and custom config providers
-- **`./references/critical-rules.md`** — Forbidden patterns and mandatory conventions
-- **`./references/effect-atom.md`** — Effect-Atom reactive state management for React
-- **`./references/next-js.md`** — Effect + Next.js 15+ App Router integration patterns
-- **`./references/option-null.md`** — Option vs null boundary patterns
-- **`./references/pattern-matching.md`** — `Match` module for tagged unions and conditionals
-- **`./references/quick-utils.md`** — `Array`/`Order`, utility helpers, deprecations
-- **`./references/runtime.md`** — Resource management, Duration, Scheduling, State, SubscriptionRef, Concurrency
-- **`./references/services-layers.md`** — Services, Layers, generator (`Effect.gen` / `Effect.fn`)
-- **`./references/streams.md`** — Stream patterns and backpressure gotchas
-- **`./references/testing.md`** — Vitest deterministic testing patterns
+// Exhaustive pattern matching
+const render = (r: Result) =>
+  Match.valueTags(r, {
+    Success: ({value}) => `Got: ${value}`,
+    Failure: ({error}) => `Error: ${error}`,
+  });
+```
+
+See [references/data-modeling.md](references/data-modeling.md) for JSON encoding, Schema.Literals, validation, and full patterns.
+
+## Schema.TaggedErrorClass
+
+Define domain errors with `Schema.TaggedErrorClass`. They are yieldable (no `Effect.fail` needed):
+
+```typescript
+import {Schema} from "effect";
+
+class UserNotFoundError extends Schema.TaggedErrorClass("UserNotFoundError")("UserNotFoundError", {userId: UserId, message: Schema.String}) {}
+
+// Yieldable: yield directly in generators
+const getUser = Effect.fn("getUser")(function* (id: UserId) {
+  const user = yield* findUser(id);
+  if (!user) yield* new UserNotFoundError({userId: id, message: "Not found"});
+  return user;
+});
+```
+
+Recover with `catchTag` / `catchTags`:
+
+```typescript
+// Single tag
+const recovered = program.pipe(Effect.catchTag("UserNotFoundError", (e) => Effect.succeed(`User ${e.userId} missing`)));
+
+// Multiple tags
+const recovered2 = program.pipe(
+  Effect.catchTags({
+    UserNotFoundError: (e) => Effect.succeed("not found"),
+    ValidationError: (e) => Effect.succeed("invalid"),
+  })
+);
+```
+
+See [references/error-handling.md](references/error-handling.md) for defects, Schema.Defect, and recovery patterns.
+
+## Layer Composition
+
+Compose layers with `Layer.provideMerge` (incremental, flat types) and `Layer.merge` (parallel):
+
+```typescript
+import {Effect, Layer} from "effect";
+
+// Compose layers for the app
+const appLayer = UserService.layer.pipe(Layer.provideMerge(DatabaseLayer), Layer.provideMerge(LoggerLayer), Layer.provideMerge(ConfigLayer));
+
+// Provide once at the entry point
+const main = program.pipe(Effect.provide(appLayer));
+Effect.runPromise(main);
+```
+
+**Key rules:**
+
+- Store parameterized layers in constants (layer memoization by reference identity)
+- Provide once at app entry, not scattered throughout code
+- Use `Layer.sync` for synchronous implementations, `Layer.effect` for effectful ones
+
+## Testing Quick Start
+
+```typescript
+import {describe, expect, it} from "@effect/vitest";
+import {Effect, Layer} from "effect";
+
+it.effect("queries database", () =>
+  Effect.gen(function* () {
+    const db = yield* Database;
+    const results = yield* db.query("SELECT *");
+    expect(results.length).toBe(2);
+  }).pipe(Effect.provide(Database.testLayer))
+);
+```
+
+- Use `it.effect` for Effect-based tests (provides TestContext with TestClock)
+- Use `it.live` for real time / real clock
+- Provide fresh layers per test to prevent state leakage
+- Use `it.layer` only when sharing expensive resources across a suite
+
+See [references/testing.md](references/testing.md) for the full worked example and advanced patterns.
+
+## Pipe for Instrumentation
+
+```typescript
+const program = fetchData.pipe(
+  Effect.timeout("5 seconds"),
+  Effect.retry(Schedule.exponential("100 millis").pipe(Schedule.compose(Schedule.recurs(3)))),
+  Effect.tap((data) => Effect.logInfo(`Fetched: ${data}`)),
+  Effect.withSpan("fetchData")
+);
+```
+
+## Anti-Patterns
+
+| Do Not                                        | Do Instead                                               |
+| --------------------------------------------- | -------------------------------------------------------- |
+| `console.log(...)`                            | `Effect.log(...)` with structured data                   |
+| `process.env.KEY`                             | `Config.string("KEY")` or `Config.redacted("KEY")`       |
+| `throw new Error()` inside `Effect.gen`       | `yield* new TaggedError({...})` or `Effect.fail(...)`    |
+| `Effect.runSync(...)` inside services         | Keep everything effectful                                |
+| `Effect.catchAll(() => ...)` losing type info | `Effect.catchTag` / `Effect.catchTags`                   |
+| `null` / `undefined` in domain types          | `Option<T>` with `Option.match`                          |
+| `Option.getOrThrow(...)`                      | `Option.match({ onNone, onSome })` or `Option.getOrElse` |
+| `Effect.Service` (v3)                         | `ServiceMap.Service` (v4)                                |
+| `Schema.TaggedError<T>()` (v3)                | `Schema.TaggedErrorClass("Tag")("Tag", {...})` (v4)      |
+| Scatter `Effect.provide` calls                | Provide once at app entry                                |
+| Call parameterized layer constructors inline  | Store layers in constants (memoization)                  |
+
+## Reference Files
+
+Load these as needed for deeper patterns:
+
+- **[Services & Layers](references/services-and-layers.md)**: ServiceMap.Service, service-driven development, test layers, layer memoization, provide vs provideMerge
+- **[Data Modeling](references/data-modeling.md)**: Schema.Class, branded types, variants, Match.valueTags, JSON encoding
+- **[Schema Decisions](references/schema-decisions.md)**: Schema.Class vs Struct vs TaggedClass decision flowchart, migration patterns
+- **[Error Handling](references/error-handling.md)**: Schema.TaggedErrorClass, catch/catchTag/catchTags, defects, Schema.Defect, TypeId/refail patterns
+- **[Testing](references/testing.md)**: @effect/vitest setup, it.effect/it.live/it.layer, TestClock, Effect.flip, FiberRef isolation, worked example
+- **[HTTP Clients](references/http-clients.md)**: HttpClient, request building, response decoding, middleware, retries, typed API service
+- **[CLI](references/cli.md)**: Command.make, Arguments, Flags, subcommands, worked task manager example
+- **[Config](references/config.md)**: Config module, schema validation, ConfigProvider, Redacted, config layers
+- **[Processes & Scopes](references/processes.md)**: Fork types, Scope.extend, Command for child processes, killable background tasks

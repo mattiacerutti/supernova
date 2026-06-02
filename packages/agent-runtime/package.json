@@ -16,7 +16,9 @@
   "scripts": {
     "lint": "eslint .",
     "prettier": "prettier --check . --ignore-path ../../.prettierignore",
-    "test": "vitest run",
+    "test": "bun run test:unit && bun run test:integration",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:unit": "vitest run --config vitest.unit.config.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
