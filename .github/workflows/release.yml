@@ -128,8 +128,6 @@ jobs:
             bun.lock; then
             echo "Release metadata already prepared for ${RELEASE_TAG}."
           else
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add \
               CHANGELOG.md \
               apps/desktop/package.json \
@@ -138,11 +136,23 @@ jobs:
               packages/contracts/package.json \
               packages/web/package.json \
               bun.lock
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git commit -m "chore(release): ${RELEASE_TAG}"
-            git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
 
           echo "ref=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload release prep commit
+        shell: bash
+        run: git bundle create release-prep.bundle HEAD
+
+      - name: Upload release prep artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-prep
+          path: release-prep.bundle
+          if-no-files-found: error
 
       - name: Lint
         run: bun run lint
@@ -182,7 +192,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ needs.preflight.outputs.ref }}
+          fetch-depth: 0
+
+      - name: Download release prep commit
+        uses: actions/download-artifact@v4
+        with:
+          name: release-prep
+          path: release-prep
+
+      - name: Checkout release prep commit
+        shell: bash
+        env:
+          RELEASE_REF: ${{ needs.preflight.outputs.ref }}
+        run: |
+          set -euo pipefail
+
+          git fetch release-prep/release-prep.bundle HEAD
+          git checkout --detach "$RELEASE_REF"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -246,7 +272,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ needs.preflight.outputs.ref }}
+          fetch-depth: 0
+
+      - name: Download release prep commit
+        uses: actions/download-artifact@v4
+        with:
+          name: release-prep
+          path: release-prep
+
+      - name: Checkout release prep commit
+        shell: bash
+        env:
+          RELEASE_REF: ${{ needs.preflight.outputs.ref }}
+        run: |
+          set -euo pipefail
+
+          git fetch release-prep/release-prep.bundle HEAD
+          git checkout --detach "$RELEASE_REF"
 
       - name: Download release assets
         uses: actions/download-artifact@v4
@@ -269,6 +311,10 @@ jobs:
           if [[ ! -s release-notes.md ]]; then
             echo "Release ${RELEASE_VERSION}" > release-notes.md
           fi
+
+      - name: Push release prep commit
+        shell: bash
+        run: git push origin "HEAD:${GITHUB_REF_NAME}"
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
