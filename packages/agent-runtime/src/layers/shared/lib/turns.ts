@@ -1,7 +1,7 @@
 import type {ModelReference, Turn, TurnEvent, UserMessage} from "@supernova/contracts/sessions/schemas";
 
 /** Computes the aggregate status for a turn from its events. */
-export function turnStatus(events: readonly TurnEvent[], streaming = false): Turn["status"] {
+function turnStatus(events: readonly TurnEvent[], streaming = false): Turn["status"] {
   if (
     events.some(
       (event) =>

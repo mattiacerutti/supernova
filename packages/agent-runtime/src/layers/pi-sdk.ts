@@ -4,8 +4,8 @@ import {completeSimple} from "@earendil-works/pi-ai";
 import {Context, Layer} from "effect";
 import {CustomPiResourceLoader} from "@supernova/agent-runtime/layers/pi-config";
 
-export const authStorage = AuthStorage.create();
-export const modelRegistry = ModelRegistry.create(authStorage);
+const authStorage = AuthStorage.create();
+const modelRegistry = ModelRegistry.create(authStorage);
 
 export type PiSessionInfo = SessionInfo;
 

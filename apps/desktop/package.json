@@ -27,16 +27,14 @@
   "devDependencies": {
     "@ctjs/png2icons": "^3.0.3",
     "@electron-toolkit/eslint-config-ts": "^3.1.0",
-    "@supernova/server": "workspace:*",
+    "vite": "^7.2.6",
     "@types/node": "^22.19.1",
     "electron": "^39.2.6",
     "electron-builder": "^26.0.12",
     "electron-devtools-installer": "^4.0.0",
     "electron-vite": "^5.0.0",
     "eslint": "^9.39.1",
-    "react-devtools": "^7.0.1",
-    "sharp": "^0.34.5",
     "typescript": "^5.9.3",
-    "vite": "^7.2.6"
+    "sharp": "^0.34.5"
   }
 }

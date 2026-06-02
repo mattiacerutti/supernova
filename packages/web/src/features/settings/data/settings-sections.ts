@@ -9,7 +9,7 @@ export interface SettingsSection {
   label: string;
 }
 
-export const defaultSettingsSectionId: SettingsSectionId = "general";
+const defaultSettingsSectionId: SettingsSectionId = "general";
 
 export const settingsSections: SettingsSection[] = [
   {

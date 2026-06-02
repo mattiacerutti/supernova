@@ -34,7 +34,7 @@ export const PiSessionRuntimeFromInternal = Layer.effect(
   })
 );
 
-export const PiSessionRuntimeInternalLive = Layer.mergeAll(
+const PiSessionRuntimeInternalLive = Layer.mergeAll(
   PiSessionStoreLive,
   PiAgentSessionFactoryLive,
   PiModelCatalogLive,

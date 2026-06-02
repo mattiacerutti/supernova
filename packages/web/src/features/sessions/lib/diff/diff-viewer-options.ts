@@ -1,7 +1,7 @@
 import type {FileDiffOptions} from "@pierre/diffs";
 import {CODE_HIGHLIGHT_THEMES} from "@/lib/code-highlighting";
 
-export const SUPERNOVA_DIFF_VIEW_CSS = `
+const SUPERNOVA_DIFF_VIEW_CSS = `
 [data-diff] {
   --diffs-light-bg: rgb(38 38 38);
   --diffs-dark-bg: rgb(38 38 38);

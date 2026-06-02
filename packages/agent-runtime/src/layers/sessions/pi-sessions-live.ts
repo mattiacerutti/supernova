@@ -24,6 +24,6 @@ export const PiSessionsFromInternal = Layer.effect(
   })
 );
 
-export const PiSessionsInternalLive = Layer.mergeAll(PiSessionStoreLive, PiModelCatalogLive, PiResourceCatalogLive);
+const PiSessionsInternalLive = Layer.mergeAll(PiSessionStoreLive, PiModelCatalogLive, PiResourceCatalogLive);
 
 export const PiSessionsLive = PiSessionsFromInternal.pipe(Layer.provide(PiSessionsInternalLive));

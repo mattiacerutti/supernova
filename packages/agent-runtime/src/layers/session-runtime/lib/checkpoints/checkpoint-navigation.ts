@@ -32,7 +32,7 @@ export function isCheckpointEntry(entry: SessionEntry): entry is CheckpointEntry
   return isCustomEntry(entry) && entry.customType === CHECKPOINT_CUSTOM_TYPE;
 }
 
-export function isCheckpointCursorEntry(entry: SessionEntry): entry is CheckpointCursorEntry {
+function isCheckpointCursorEntry(entry: SessionEntry): entry is CheckpointCursorEntry {
   return isCustomEntry(entry) && entry.customType === CHECKPOINT_CURSOR_CUSTOM_TYPE;
 }
 

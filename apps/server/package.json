@@ -19,10 +19,9 @@
     "@hono/node-server": "^1.19.6",
     "@supernova/agent-runtime": "workspace:*",
     "@supernova/contracts": "workspace:*",
-    "@supernova/web": "workspace:*",
+    "hono": "^4.11.2",
     "commander": "^14.0.2",
-    "effect": "4.0.0-beta.60",
-    "hono": "^4.11.2"
+    "effect": "4.0.0-beta.60"
   },
   "devDependencies": {
     "@types/node": "^22.19.1",

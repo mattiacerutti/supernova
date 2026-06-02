@@ -117,18 +117,12 @@ export function piEntries(messages: readonly AgentSession["messages"][number][])
   });
 }
 
-export function appendConversation(manager: PiSessionManager, input?: {assistantText?: string; requestText?: string}): void {
+function appendConversation(manager: PiSessionManager, input?: {assistantText?: string; requestText?: string}): void {
   const requestText = input?.requestText ?? "Existing request";
   const assistantText = input?.assistantText ?? "Existing response";
   manager.appendCustomEntry("supernova.user-message-content-parts", {contentParts: [{text: requestText, type: "text"}]});
   manager.appendMessage({content: [{text: requestText, type: "text"}], role: "user", timestamp: 1});
   manager.appendMessage(fauxAssistantMessage(assistantText, {timestamp: 2}));
-}
-
-export async function collectEvents(stream: Stream.Stream<SessionStreamEvent>): Promise<SessionStreamEvent[]> {
-  const events: SessionStreamEvent[] = [];
-  await Effect.runPromise(Stream.runForEach(stream, (event) => Effect.sync(() => events.push(event))));
-  return events;
 }
 
 function sessionInfoFromManager(manager: PiSessionManager): PiSessionInfo {
