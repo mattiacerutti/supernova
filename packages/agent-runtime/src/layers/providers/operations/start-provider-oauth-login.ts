@@ -2,88 +2,87 @@ import {randomUUID} from "node:crypto";
 import type {OAuthDeviceCodeInfo, OAuthPrompt, OAuthSelectPrompt} from "@earendil-works/pi-ai";
 import {Effect} from "effect";
 import {ProviderLoginError} from "@supernova/contracts/providers/procedures";
-import type {ProviderLoginInputKind} from "@supernova/contracts/providers/schemas";
+import type {ProviderLoginStep, ProviderLoginTextInput} from "@supernova/contracts/providers/schemas";
 import {PiSdkService} from "@supernova/agent-runtime/layers/pi-sdk";
 import type {PiSdkServiceShape} from "@supernova/agent-runtime/layers/pi-sdk";
-import {loginSessions, toLoginSession} from "@supernova/agent-runtime/layers/providers/lib/login-sessions";
-import type {LoginSessionState} from "@supernova/agent-runtime/layers/providers/lib/login-sessions";
+import {ProviderLoginSessions} from "@supernova/agent-runtime/layers/providers/internal/provider-login-sessions";
+import type {ProviderLoginSessionsShape} from "@supernova/agent-runtime/layers/providers/internal/provider-login-sessions";
 import {errorMessage} from "@supernova/agent-runtime/layers/providers/lib/provider-errors";
 
-function waitForInput(state: LoginSessionState, kind: ProviderLoginInputKind, prompt: OAuthPrompt): Promise<string> {
-  return new Promise((resolve, reject) => {
-    state.status = "waiting_input";
-    state.inputKind = kind;
-    state.prompt = prompt.message;
-    state.placeholder = prompt.placeholder;
-    state.allowEmptyInput = prompt.allowEmpty;
-    state.waiter = {reject, resolve};
-  });
+function textInput(prompt: OAuthPrompt): ProviderLoginTextInput {
+  return {allowEmpty: prompt.allowEmpty, message: prompt.message, placeholder: prompt.placeholder};
 }
 
-/** Exposes device-code OAuth instructions through the existing login session shape. */
-function setDeviceCode(state: LoginSessionState, info: OAuthDeviceCodeInfo): void {
-  state.status = "authenticating";
-  state.authUrl = info.verificationUri;
-  state.instructions = `Enter code: ${info.userCode}`;
-  state.progress = "Waiting for authentication";
-  state.prompt = undefined;
-  state.inputKind = undefined;
-  state.placeholder = undefined;
-  state.allowEmptyInput = undefined;
+/** Maps Pi device-code metadata into a structured login step. */
+function deviceCodeStep(info: OAuthDeviceCodeInfo): ProviderLoginStep {
+  return {
+    expiresInSeconds: info.expiresInSeconds,
+    intervalSeconds: info.intervalSeconds,
+    type: "device_code",
+    userCode: info.userCode,
+    verificationUri: info.verificationUri,
+  };
 }
 
-/** Uses text input for provider selectors until the shared login contract has native select fields. */
-async function waitForSelection(state: LoginSessionState, prompt: OAuthSelectPrompt): Promise<string | undefined> {
-  //TODO: Add first-class support for Pi's broader OAuth selector contract.
-  // Pi can ask the host application to show structured provider choices
-  // during OAuth login. Our provider-login session contract currently
-  // only supports URL/instruction/progress fields and free-text input prompts,
-  // so this degrades the selector into a text prompt that asks for an option id.
-  // Revisit this by adding a structured input kind with option ids/labels to
-  // @supernova/contracts, then render those options in the web login UI instead
-  // of relying on users to manually type an id from formatted prompt text.
-  const options = prompt.options.map((option) => `${option.id}: ${option.label}`).join("\n");
-  const input = await waitForInput(state, "prompt", {allowEmpty: true, message: `${prompt.message}\n${options}`, placeholder: "Enter option id"});
-  return input || undefined;
-}
+/** Runs the provider OAuth flow while publishing structured login-session updates. */
+async function runOAuthLogin(piSdk: PiSdkServiceShape, sessions: ProviderLoginSessionsShape, loginSessionId: string, providerId: string): Promise<void> {
+  let pendingUpdate: Promise<unknown> = Promise.resolve();
+  const enqueueUpdate = (update: Effect.Effect<unknown, unknown>): void => {
+    pendingUpdate = pendingUpdate.then(() => Effect.runPromise(update));
+  };
 
-/** Runs the provider OAuth flow while mutating login-session state for polling clients. */
-async function runOAuthLogin(piSdk: PiSdkServiceShape, state: LoginSessionState): Promise<void> {
   try {
-    await piSdk.authStorage.login(state.providerId, {
+    const signal = await Effect.runPromise(sessions.getAbortSignal(loginSessionId));
+    let latestBrowserStep: Extract<ProviderLoginStep, {type: "browser_auth"}> | undefined;
+
+    await piSdk.authStorage.login(providerId, {
       onAuth: (info) => {
-        state.status = "authenticating";
-        state.authUrl = info.url;
-        state.instructions = info.instructions;
-        state.prompt = undefined;
-        state.inputKind = undefined;
-        state.placeholder = undefined;
-        state.allowEmptyInput = undefined;
+        latestBrowserStep = {authUrl: info.url, instructions: info.instructions, type: "browser_auth"};
+        enqueueUpdate(sessions.updateStep(loginSessionId, latestBrowserStep));
       },
       onDeviceCode: (info) => {
-        setDeviceCode(state, info);
+        enqueueUpdate(sessions.updateStep(loginSessionId, deviceCodeStep(info)));
       },
-      onManualCodeInput: () => waitForInput(state, "manual_code", {message: "Paste the redirect URL or authorization code."}),
+      onManualCodeInput: async () => {
+        await pendingUpdate;
+        const input = textInput({
+          message: "If the browser is on another machine, paste the final redirect URL or authorization code.",
+          placeholder: "Redirect URL or authorization code",
+        });
+        const step: ProviderLoginStep =
+          latestBrowserStep !== undefined
+            ? {...latestBrowserStep, manualInput: input}
+            : {authUrl: "", instructions: "Complete login in your browser, or paste the final redirect URL/code below.", manualInput: input, type: "browser_auth"};
+        return sessions.waitForInput(loginSessionId, {step});
+      },
       onProgress: (message) => {
-        state.progress = message;
+        enqueueUpdate(sessions.progress(loginSessionId, message));
       },
-      onPrompt: (prompt: OAuthPrompt) => waitForInput(state, "prompt", prompt),
-      onSelect: (prompt) => waitForSelection(state, prompt),
-      signal: state.abortController.signal,
+      onPrompt: async (prompt: OAuthPrompt) => {
+        await pendingUpdate;
+        return sessions.waitForInput(loginSessionId, {step: {input: textInput(prompt), type: "prompt"}});
+      },
+      onSelect: async (prompt: OAuthSelectPrompt) => {
+        await pendingUpdate;
+        const input = await sessions.waitForInput(loginSessionId, {
+          step: {message: prompt.message, options: prompt.options, type: "select"},
+        });
+        return input || undefined;
+      },
+      signal,
     });
+    await pendingUpdate;
     piSdk.modelRegistry.refresh();
-    state.status = "succeeded";
-    state.progress = "Connected";
-    state.waiter = undefined;
+    await Effect.runPromise(sessions.succeed(loginSessionId));
   } catch (cause) {
-    state.waiter = undefined;
-    if (state.abortController.signal.aborted) {
-      state.status = "cancelled";
+    await pendingUpdate.catch(() => undefined);
+    const signal = await Effect.runPromise(sessions.getAbortSignal(loginSessionId));
+    if (signal.aborted) {
+      await Effect.runPromise(sessions.cancel(loginSessionId));
       return;
     }
 
-    state.status = "failed";
-    state.error = errorMessage(cause, "Provider login failed.");
+    await Effect.runPromise(sessions.fail(loginSessionId, errorMessage(cause, "Provider login failed.")));
   }
 }
 
@@ -91,23 +90,17 @@ async function runOAuthLogin(piSdk: PiSdkServiceShape, state: LoginSessionState)
 export function startProviderOAuthLogin(providerId: string) {
   return Effect.gen(function* () {
     const piSdk = yield* PiSdkService;
+    const sessions = yield* ProviderLoginSessions;
 
-    return yield* Effect.try({
-      try: () => {
+    return yield* Effect.tryPromise({
+      try: async () => {
         const provider = piSdk.authStorage.getOAuthProviders().find((candidate) => candidate.id === providerId);
         if (!provider) throw new Error("Provider does not support OAuth login.");
 
-        const session: LoginSessionState = {
-          abortController: new AbortController(),
-          loginSessionId: randomUUID(),
-          providerId,
-          providerName: provider.name,
-          status: "pending",
-        };
-
-        loginSessions.set(session.loginSessionId, session);
-        void runOAuthLogin(piSdk, session);
-        return toLoginSession(session);
+        const loginSessionId = randomUUID();
+        const session = await Effect.runPromise(sessions.create({loginSessionId, providerId}));
+        void runOAuthLogin(piSdk, sessions, loginSessionId, providerId);
+        return session;
       },
       catch: (cause) => new ProviderLoginError({cause, message: errorMessage(cause, "Failed to start provider login.")}),
     });

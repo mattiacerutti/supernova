@@ -3,8 +3,8 @@ import type {Provider} from "@supernova/contracts/providers/schemas";
 import Dialog from "@/components/ui/dialog";
 import ProviderApiKeyContent from "@/features/settings/components/providers/provider-api-key-dialog";
 import ProviderConnectMethodContent from "@/features/settings/components/providers/provider-connect-method-dialog";
-import ProviderOAuthLoginContent from "@/features/settings/components/providers/provider-oauth-login-dialog";
-import ProviderSection from "@/features/settings/components/providers/provider-section";
+import ProviderOAuthContent from "@/features/settings/components/providers/provider-oauth-dialog";
+import ProvidersSection from "@/features/settings/components/providers/providers-section";
 import {useCancelProviderLogin} from "@/features/settings/hooks/api/auth/use-cancel-provider-login";
 import {useLogoutProvider} from "@/features/settings/hooks/api/auth/use-logout-provider";
 import {useStartProviderOAuthLogin} from "@/features/settings/hooks/api/auth/use-start-provider-oauth-login";
@@ -98,8 +98,8 @@ export default function ProvidersSettingsPage() {
         {providersQuery.data && (
           <>
             <div className="mt-10 space-y-10">
-              {connectedProviders.length > 0 && <ProviderSection onConnect={handleConnect} onDisconnect={handleDisconnect} providers={connectedProviders} title="Connected" />}
-              <ProviderSection onConnect={handleConnect} onDisconnect={handleDisconnect} providers={otherProviders} title="Available" />
+              {connectedProviders.length > 0 && <ProvidersSection onConnect={handleConnect} onDisconnect={handleDisconnect} providers={connectedProviders} title="Connected" />}
+              <ProvidersSection onConnect={handleConnect} onDisconnect={handleDisconnect} providers={otherProviders} title="Available" />
             </div>
 
             <Dialog
@@ -112,7 +112,9 @@ export default function ProvidersSettingsPage() {
             >
               {providerDialogView === "method" && <ProviderConnectMethodContent onSelect={handleConnectMethod} isStartingOAuthLogin={isStartingOAuthLogin} />}
               {providerDialogView === "api_key" && <ProviderApiKeyContent onClose={handleCloseProviderDialog} provider={selectedProvider} />}
-              {providerDialogView === "oauth" && <ProviderOAuthLoginContent loginSessionId={loginSessionId} onClose={handleCloseProviderDialog} />}
+              {providerDialogView === "oauth" && (
+                <ProviderOAuthContent initialSession={loginSession} key={loginSessionId} loginSessionId={loginSessionId} onClose={handleCloseProviderDialog} />
+              )}
             </Dialog>
           </>
         )}

@@ -7,7 +7,7 @@ import {
   ProviderLoginCancelPayload,
   ProviderLoginInputSubmitPayload,
   ProviderLoginResult,
-  ProviderLoginGetSessionPayload,
+  ProviderLoginWatchPayload,
   ProviderLogoutError,
   ProviderLogoutPayload,
   ProviderLogoutResult,
@@ -35,12 +35,6 @@ export const ProviderOAuthLoginStartRpc = Rpc.make("startProviderOAuthLogin", {
   success: ProviderLoginResult,
 });
 
-export const ProviderLoginGetSessionRpc = Rpc.make("getProviderLoginSession", {
-  error: ProviderLoginError,
-  payload: ProviderLoginGetSessionPayload,
-  success: ProviderLoginResult,
-});
-
 export const ProviderLoginInputSubmitRpc = Rpc.make("submitProviderLoginInput", {
   error: ProviderLoginError,
   payload: ProviderLoginInputSubmitPayload,
@@ -50,6 +44,13 @@ export const ProviderLoginInputSubmitRpc = Rpc.make("submitProviderLoginInput", 
 export const ProviderLoginCancelRpc = Rpc.make("cancelProviderLogin", {
   error: ProviderLoginError,
   payload: ProviderLoginCancelPayload,
+  success: ProviderLoginResult,
+});
+
+export const ProviderLoginWatchRpc = Rpc.make("watchProviderLoginSession", {
+  error: ProviderLoginError,
+  payload: ProviderLoginWatchPayload,
+  stream: true,
   success: ProviderLoginResult,
 });
 
@@ -63,8 +64,8 @@ export const ProviderRpcs = [
   ProvidersListRpc,
   ProviderApiKeySetRpc,
   ProviderOAuthLoginStartRpc,
-  ProviderLoginGetSessionRpc,
   ProviderLoginInputSubmitRpc,
   ProviderLoginCancelRpc,
+  ProviderLoginWatchRpc,
   ProviderLogoutRpc,
 ] as const;

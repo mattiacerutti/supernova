@@ -1,14 +1,14 @@
 import type {Provider} from "@supernova/contracts/providers/schemas";
-import ProviderRow from "@/features/settings/components/providers/provider-row";
+import ProviderRow from "@/features/settings/components/providers/list/provider-row";
 
-interface ProviderSectionProps {
+interface ProvidersSectionProps {
   title: string;
   providers: readonly Provider[];
   onConnect: (provider: Provider) => void;
   onDisconnect: (provider: Provider) => Promise<void>;
 }
 
-export default function ProviderSection(props: ProviderSectionProps) {
+export default function ProvidersSection(props: ProvidersSectionProps) {
   const {onConnect, onDisconnect, providers, title} = props;
 
   return (

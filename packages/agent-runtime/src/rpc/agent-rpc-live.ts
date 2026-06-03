@@ -21,7 +21,6 @@ export const AgentRpcLive = AgentRpcGroup.toLayer(
       compactSession: (input) => sessionRuntime.compactSession(input),
       createFolder: ({path}) => folders.create(path),
       createSession: ({projectPath}) => sessions.create(projectPath),
-      getProviderLoginSession: ({loginSessionId}) => providers.getLoginSession(loginSessionId),
       getSession: ({sessionId}) => sessions.get(sessionId),
       listFolderFiles: ({projectPath, query}) => folders.listFiles(projectPath, query),
       listFolderSuggestions: ({query}) => folders.listSuggestions(query),
@@ -36,6 +35,7 @@ export const AgentRpcLive = AgentRpcGroup.toLayer(
       sendMessage: (input) => sessionRuntime.sendMessage(input),
       startProviderOAuthLogin: ({providerId}) => providers.startOAuthLogin(providerId),
       submitProviderLoginInput: ({input, loginSessionId}) => providers.submitLoginInput(loginSessionId, input),
+      watchProviderLoginSession: ({loginSessionId}) => providers.watchLoginSession(loginSessionId),
       undoCheckpoint: (input) => sessionRuntime.undoCheckpoint(input),
       watchEvents: () => sessionRuntime.watchEvents(),
     };
