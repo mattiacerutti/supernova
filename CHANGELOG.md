@@ -14,6 +14,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Fixed
 
+- Removed display of partial tool-call arguments during streaming.
+
 ### Removed
 
 ## [0.0.1-alpha.3]

@@ -62,18 +62,21 @@ function ReadToolDetails(props: {tool: Extract<Tool, {kind: "file-read"}>}) {
     return null;
   }
 
-  const lineWindow = [
-    tool.input?.offset !== undefined ? `Read from line ${tool.input.offset}` : undefined,
-    tool.input?.limit !== undefined ? ` to ${tool.input.limit}` : undefined,
-  ].filter(Boolean);
+  let lineWindow: string | undefined;
+  if (tool.input.offset !== undefined) {
+    lineWindow = `Read from line ${tool.input.offset}`;
+    if (tool.input.limit !== undefined) lineWindow += ` to ${tool.input.limit}`;
+  } else if (tool.input.limit !== undefined) {
+    lineWindow = `Read up to ${tool.input.limit} lines`;
+  }
 
-  if (tool.status === "completed" && lineWindow.length === 0 && !tool.result.truncated) {
+  if (tool.status === "completed" && lineWindow === undefined && !tool.result.truncated) {
     return null;
   }
 
   return (
     <div className="space-y-2">
-      <DetailText>{lineWindow.length > 0 && <span>{lineWindow}</span>}</DetailText>
+      <DetailText>{lineWindow}</DetailText>
       {tool.status === "completed" && tool.result.truncated && <DetailText>Read output was truncated.</DetailText>}
       {tool.status === "error" && <DetailText className="text-red-300">{tool.error}</DetailText>}
     </div>

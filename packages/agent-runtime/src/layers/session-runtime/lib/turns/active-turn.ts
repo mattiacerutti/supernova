@@ -8,6 +8,15 @@ import type {SendMessageContext} from "@supernova/agent-runtime/layers/session-r
 
 type PiAgentMessage = AgentSession["messages"][number];
 
+function stripToolArguments(message: PiAgentMessage): PiAgentMessage {
+  if (message.role !== "assistant") return message;
+
+  return {
+    ...message,
+    content: message.content.map((part) => (part.type === "toolCall" ? {...part, arguments: {}} : part)),
+  };
+}
+
 export interface ActiveTurnInput {
   readonly sessionInfo: PiSessionInfo;
   readonly baseParentId: string | null;
@@ -57,17 +66,57 @@ export class ActiveTurn {
 
   /** Appends a live Pi message according to Pi's ordered message lifecycle. */
   public appendLiveMessage(message: PiAgentMessage): void {
-    this.liveMessages.push(message);
+    // The `message_update` event emits partial tool call arguments, since they are being streamed in realtime.
+    // To avoid showing incomplete arguments in the live transcript, we strip them out until the full arguments are available in the `tool_execution_start` event.
+    const sanitzedMessage = stripToolArguments(message);
+    this.liveMessages.push(sanitzedMessage);
   }
 
   /** Replaces the currently active live Pi message. */
   public replaceLastLiveMessage(message: PiAgentMessage): void {
+    const sanitizedMessage = stripToolArguments(message);
+
     if (this.liveMessages.length === 0) {
-      this.liveMessages.push(message);
+      this.liveMessages.push(sanitizedMessage);
       return;
     }
 
-    this.liveMessages[this.liveMessages.length - 1] = message;
+    this.liveMessages[this.liveMessages.length - 1] = sanitizedMessage;
+  }
+
+  /** Records non-streaming tool arguments once Pi starts executing a tool call. */
+  public recordToolExecutionStart(input: {readonly args: unknown; readonly toolCallId: string}): void {
+    // Pi emits `tool_execution_start` event before argument validation, thus they are typed as unknown.
+    // In case they are malformed, we simply reject recording them, as after validation a `tool_execution_end` event with error will still be emitted
+    const isValidToolArgs = (value: unknown): value is Record<string, unknown> => {
+      return typeof value === "object" && value !== null && !Array.isArray(value);
+    };
+
+    if (!isValidToolArgs(input.args)) return;
+    const args = input.args;
+
+    // Finds the message added by `message_update` event with the same toolCallId
+    const match = this.liveMessages.reduceRight<readonly [number, number] | undefined>((matched, message, messageIndex) => {
+      if (matched) return matched;
+      if (message.role !== "assistant") return undefined;
+
+      const toolCallIndex = message.content.findIndex((part) => part.type === "toolCall" && part.id === input.toolCallId);
+      return toolCallIndex === -1 ? undefined : [messageIndex, toolCallIndex];
+    }, undefined);
+    if (!match) return;
+
+    const [messageIndex, toolCallIndex] = match;
+    const message = this.liveMessages[messageIndex];
+    if (message?.role !== "assistant") return;
+
+    const toolCall = message.content[toolCallIndex];
+    if (toolCall?.type !== "toolCall") return;
+
+    // Replaces the tool call arguments with the execution-start arguments
+    const content = [...message.content];
+    content[toolCallIndex] = {...toolCall, arguments: args};
+
+    this.liveMessages[messageIndex] = {...message, content};
   }
 
   /** Adds a pending live compaction marker using Pi's context-summary message shape. */

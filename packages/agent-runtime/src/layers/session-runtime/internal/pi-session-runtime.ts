@@ -222,7 +222,7 @@ export class PiSessionRuntime {
           void this.publishLiveTurn(activeTurn);
           break;
         case "tool_execution_start":
-        case "tool_execution_end":
+          activeTurn.recordToolExecutionStart({args: event.args, toolCallId: event.toolCallId});
           void this.publishLiveTurn(activeTurn);
           break;
         case "compaction_start":
