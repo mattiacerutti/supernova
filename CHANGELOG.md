@@ -12,6 +12,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+- Split desktop icon generation into dev and production source sets.
+
 ### Fixed
 
 ### Removed
