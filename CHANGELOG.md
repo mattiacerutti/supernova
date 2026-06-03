@@ -18,6 +18,7 @@ All notable changes to Supernova are documented in this file.
 
 - Removed display of partial tool-call arguments during streaming.
 - Fixed command execution in the packaged desktop app so agents can find tools installed in the user's shell environment.
+- Fixed the packaged desktop app forgetting opened projects, model preferences, and other local UI settings after restarting.
 
 ### Removed
 

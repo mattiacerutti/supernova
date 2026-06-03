@@ -14,6 +14,7 @@ let mainWindow: BrowserWindow | undefined;
 let server: SpawnedServer | undefined;
 
 const DEV_WEB_URL = "http://localhost:5173";
+const PROD_DESKTOP_SERVER_PORT = 4318;
 const USER_DATA_DIR_NAME = SUPERNOVA_IS_DEV ? "supernova-dev" : "supernova";
 
 interface SpawnedServer {
@@ -38,8 +39,8 @@ function registerDesktopIpc(): void {
 async function createWindow(): Promise<void> {
   if (!SUPERNOVA_IS_DEV) {
     server ??= await startServerProcess({
-      host: "127.0.0.1",
-      port: 0,
+      host: "localhost",
+      port: PROD_DESKTOP_SERVER_PORT,
     });
   }
 
@@ -240,6 +241,15 @@ function failStartup(error: unknown): void {
   app.exit(1);
 }
 
+function focusMainWindow(): void {
+  if (!mainWindow) return;
+
+  if (mainWindow.isMinimized()) {
+    mainWindow.restore();
+  }
+  mainWindow.focus();
+}
+
 function resolveServerCommand(): string {
   return app.isPackaged ? process.execPath : "node";
 }
@@ -249,40 +259,51 @@ function resolveServerEntry(): string {
 }
 
 app.setPath("userData", resolveUserDataPath());
-syncShellEnvironment();
 
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
-// Some APIs can only be used after this event occurs.
-app.whenReady().then(() => {
-  app.setName("Supernova");
-  electronApp.setAppUserModelId("dev.supernova.app");
-  setDockIcon();
+const hasSingleInstanceLock = SUPERNOVA_IS_DEV || app.requestSingleInstanceLock();
 
-  app.on("browser-window-created", (_, window) => {
-    optimizer.watchWindowShortcuts(window);
-  });
+if (!hasSingleInstanceLock) {
+  app.quit();
+} else {
+  syncShellEnvironment();
 
-  registerDesktopIpc();
-
-  void installDevToolsExtensions().then(createWindow).catch(failStartup);
-
-  app.on("activate", function () {
-    // On macOS it's common to re-create a window in the app when the
-    // dock icon is clicked and there are no other windows open.
-    if (BrowserWindow.getAllWindows().length === 0) void createWindow().catch(failStartup);
-  });
-});
-
-app.on("before-quit", () => {
-  server?.process.kill();
-});
-
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    app.quit();
+  if (!SUPERNOVA_IS_DEV) {
+    app.on("second-instance", focusMainWindow);
   }
-});
+
+  // This method will be called when Electron has finished
+  // initialization and is ready to create browser windows.
+  // Some APIs can only be used after this event occurs.
+  app.whenReady().then(() => {
+    app.setName("Supernova");
+    electronApp.setAppUserModelId("dev.supernova.app");
+    setDockIcon();
+
+    app.on("browser-window-created", (_, window) => {
+      optimizer.watchWindowShortcuts(window);
+    });
+
+    registerDesktopIpc();
+
+    void installDevToolsExtensions().then(createWindow).catch(failStartup);
+
+    app.on("activate", function () {
+      // On macOS it's common to re-create a window in the app when the
+      // dock icon is clicked and there are no other windows open.
+      if (BrowserWindow.getAllWindows().length === 0) void createWindow().catch(failStartup);
+    });
+  });
+
+  app.on("before-quit", () => {
+    server?.process.kill();
+  });
+
+  // Quit when all windows are closed, except on macOS. There, it's common
+  // for applications and their menu bar to stay active until the user quits
+  // explicitly with Cmd + Q.
+  app.on("window-all-closed", () => {
+    if (process.platform !== "darwin") {
+      app.quit();
+    }
+  });
+}
