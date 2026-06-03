@@ -17,6 +17,7 @@ All notable changes to Supernova are documented in this file.
 ### Fixed
 
 - Removed display of partial tool-call arguments during streaming.
+- Fixed command execution in the packaged desktop app so agents can find tools installed in the user's shell environment.
 
 ### Removed
 

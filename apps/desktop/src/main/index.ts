@@ -1,9 +1,9 @@
-import {spawn} from "node:child_process";
+import {spawn, spawnSync} from "node:child_process";
 import type {ChildProcessWithoutNullStreams} from "node:child_process";
 import {homedir} from "node:os";
+import {delimiter, join} from "node:path";
 import type {BrowserWindowConstructorOptions} from "electron";
 import {app, shell, BrowserWindow, ipcMain, nativeImage} from "electron";
-import {join} from "path";
 import {electronApp, optimizer} from "@electron-toolkit/utils";
 import installExtension, {REACT_DEVELOPER_TOOLS} from "electron-devtools-installer";
 
@@ -202,6 +202,39 @@ function startServerProcess(options: {host: string; port: number}): Promise<Spaw
   });
 }
 
+function syncShellEnvironment(): void {
+  if (process.platform === "win32") return;
+
+  const shellPath = process.env.SHELL;
+  if (!shellPath) return;
+
+  try {
+    const result = spawnSync(shellPath, ["-ilc", `printf '\n%s\n' "$PATH"`], {
+      encoding: "utf8",
+      env: {
+        HOME: process.env.HOME ?? homedir(),
+        TERM: "dumb",
+      },
+      timeout: 3000,
+      windowsHide: true,
+    });
+
+    if (result.status !== 0 || !result.stdout) return;
+
+    const loginPath = result.stdout.trim().split(/\r?\n/).at(-1)?.trim();
+    if (!loginPath) return;
+
+    const mergedPathEntries = new Set(loginPath.split(delimiter).filter(Boolean));
+    for (const entry of (process.env.PATH ?? "").split(delimiter).filter(Boolean)) {
+      mergedPathEntries.add(entry);
+    }
+
+    process.env.PATH = [...mergedPathEntries].join(delimiter);
+  } catch {
+    // Best effort: keep Electron's inherited environment if shell probing fails.
+  }
+}
+
 function failStartup(error: unknown): void {
   console.error("Failed to start Supernova.", error);
   app.exit(1);
@@ -216,6 +249,7 @@ function resolveServerEntry(): string {
 }
 
 app.setPath("userData", resolveUserDataPath());
+syncShellEnvironment();
 
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
