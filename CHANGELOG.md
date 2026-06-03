@@ -6,17 +6,23 @@ All notable changes to Supernova are documented in this file.
 
 ### Breaking Changes
 
-- Separated Supernova dev and production runtime state under `~/.supernova/dev` and `~/.supernova/userdata`, including Pi sessions, auth, and settings.
-
 ### Added
 
 ### Changed
 
-- Split desktop icon generation into dev and production source sets.
-
 ### Fixed
 
 ### Removed
+
+## [0.0.1-alpha.3]
+
+### Breaking Changes
+
+- Separated Supernova dev and production runtime state under `~/.supernova/dev` and `~/.supernova/userdata`, including Pi sessions, auth, and settings.
+
+### Changed
+
+- Split desktop icon generation into dev and production source sets.
 
 ## [0.0.1-alpha.2]
 
