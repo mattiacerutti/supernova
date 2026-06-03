@@ -8,6 +8,16 @@ All notable changes to Supernova are documented in this file.
 
 ### Added
 
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.0.1-alpha.4]
+
+### Added
+
 - Added a projects sidebar action for collapsing all expanded projects.
 
 ### Changed
@@ -19,8 +29,6 @@ All notable changes to Supernova are documented in this file.
 - Removed display of partial tool-call arguments during streaming.
 - Fixed command execution in the packaged desktop app so agents can find tools installed in the user's shell environment.
 - Fixed the packaged desktop app forgetting opened projects, model preferences, and other local UI settings after restarting.
-
-### Removed
 
 ## [0.0.1-alpha.3]
 
