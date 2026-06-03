@@ -1,6 +1,7 @@
 import {useSidebarSectionsStore} from "@/features/sidebar/stores/sidebar-store";
 
 export function useSidebarSections() {
+  const collapseAllProjects = useSidebarSectionsStore((state) => state.collapseAllProjects);
   const expandedProjects = useSidebarSectionsStore((state) => state.expandedProjects);
   const isPinnedCollapsed = useSidebarSectionsStore((state) => state.isPinnedCollapsed);
   const isProjectsCollapsed = useSidebarSectionsStore((state) => state.isProjectsCollapsed);
@@ -10,6 +11,7 @@ export function useSidebarSections() {
   const toggleProjectsCollapsed = useSidebarSectionsStore((state) => state.toggleProjectsCollapsed);
 
   return {
+    collapseAllProjects,
     expandProject,
     expandedProjects,
     isPinnedCollapsed,

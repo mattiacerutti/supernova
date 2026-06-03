@@ -8,6 +8,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Added
 
+- Added a projects sidebar action for collapsing all expanded projects.
+
 ### Changed
 
 - Reworked provider OAuth login into a streamed, step-based flow with support for device-code or browser login.

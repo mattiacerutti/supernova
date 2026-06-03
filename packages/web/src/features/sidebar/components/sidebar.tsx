@@ -15,7 +15,7 @@ import type {SidebarActionId} from "@/features/sidebar/types/sidebar";
 import {sidebarActions} from "@/features/sidebar/stores/sidebar-store";
 
 export default function Sidebar() {
-  const {expandProject, expandedProjects, isPinnedCollapsed, isProjectsCollapsed, togglePinnedCollapsed, toggleProject, toggleProjectsCollapsed} = useSidebarSections();
+  const {collapseAllProjects, expandProject, expandedProjects, isPinnedCollapsed, isProjectsCollapsed, togglePinnedCollapsed, toggleProject, toggleProjectsCollapsed} = useSidebarSections();
   const location = useLocation();
 
   const projects = useProjectList();
@@ -106,12 +106,14 @@ export default function Sidebar() {
           </div>
 
           <div className="flex items-center gap-2 opacity-0 group-hover/projects:opacity-100" onClick={handleProjectsActionClick}>
-            <IconButton className="size-6" label="Expand projects">
+            <IconButton className="size-6" label="Collapse projects" onClick={collapseAllProjects}>
               <Icon name="maximize" size="xs" />
             </IconButton>
+            {/* TODO: Re-enable project filtering/sorting when the sidebar supports it.
             <IconButton className="size-6" label="Filter projects">
               <Icon name="filter" size="xs" />
             </IconButton>
+            */}
             <IconButton className="size-6" label="New project" onClick={handleOpenProjectDialog}>
               <Icon name="folder-plus" size="xs" />
             </IconButton>

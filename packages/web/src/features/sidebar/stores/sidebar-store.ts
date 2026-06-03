@@ -13,6 +13,7 @@ interface SidebarSectionsState {
   readonly isPinnedCollapsed: boolean;
   readonly isProjectsCollapsed: boolean;
   readonly sidebarWidth: number;
+  readonly collapseAllProjects: () => void;
   readonly expandProject: (projectId: string) => void;
   readonly setSidebarWidth: (width: number) => void;
   readonly togglePinnedCollapsed: () => void;
@@ -32,6 +33,9 @@ export const useSidebarSectionsStore = create<SidebarSectionsState>()(
       isPinnedCollapsed: false,
       isProjectsCollapsed: false,
       sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
+      collapseAllProjects: () => {
+        set({expandedProjects: new Set<string>()});
+      },
       expandProject: (projectId) => {
         set((state) => {
           if (state.expandedProjects.has(projectId)) return state;
