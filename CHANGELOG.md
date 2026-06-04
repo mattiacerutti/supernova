@@ -17,6 +17,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Fixed
 
+- Fixed read tool line range labels to display the ending line relative to the starting offset.
+
 ### Removed
 
 ## [0.0.1-alpha.4]

@@ -65,9 +65,9 @@ function ReadToolDetails(props: {tool: Extract<Tool, {kind: "file-read"}>}) {
   let lineWindow: string | undefined;
   if (tool.input.offset !== undefined) {
     lineWindow = `Read from line ${tool.input.offset}`;
-    if (tool.input.limit !== undefined) lineWindow += ` to ${tool.input.limit}`;
+    if (tool.input.limit !== undefined) lineWindow += ` to ${tool.input.offset + tool.input.limit}`;
   } else if (tool.input.limit !== undefined) {
-    lineWindow = `Read up to ${tool.input.limit} lines`;
+    lineWindow = `Read the first ${tool.input.limit} lines`;
   }
 
   if (tool.status === "completed" && lineWindow === undefined && !tool.result.truncated) {
