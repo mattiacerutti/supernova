@@ -10,6 +10,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+- Improved session work duration labels to show hours, minutes, and seconds.
+
 ### Fixed
 
 - Fixed the desktop app resetting its window size and position after reopening.

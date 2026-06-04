@@ -120,5 +120,7 @@ describe("formatDuration", () => {
     expect(formatDuration(999)).toBe("a moment");
     expect(formatDuration(1499)).toBe("1s");
     expect(formatDuration(1500)).toBe("2s");
+    expect(formatDuration(300_000)).toBe("5m");
+    expect(formatDuration(3_723_000)).toBe("1h 2m 3s");
   });
 });
