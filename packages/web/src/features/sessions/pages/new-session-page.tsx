@@ -1,5 +1,6 @@
 import {useNavigate} from "@tanstack/react-router";
 import {useQueryClient} from "@tanstack/react-query";
+import {showToast} from "@/components/ui/toast-manager";
 import {useState} from "react";
 import SessionComposer from "@/features/sessions/components/composer/session-composer";
 import SessionComposerSkeleton from "@/features/sessions/components/composer/session-composer-skeleton";
@@ -14,6 +15,7 @@ import {useModelPickerStore} from "@/features/sessions/stores/model-picker-store
 import {useSessionModelsStore} from "@/features/sessions/stores/session-models-store";
 import {useSessionLiveStore} from "@/features/sessions/stores/session-live-store";
 import {useAgentRpcClient} from "@/rpc/use-agent-rpc-client";
+import appIconUrl from "@assets/icon.png";
 import type {UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 
 interface NewSessionPageProps {
@@ -80,6 +82,9 @@ export default function NewSessionPage(props: NewSessionPageProps) {
     createSessionMutation.mutate(
       {projectPath},
       {
+        onError: () => {
+          showToast("Unable to create the session", "Please try again.");
+        },
         onSuccess: (session) => {
           const modelReference = selectionFromModel(selectedModel, resolvedThinkingLevel);
           setSessionModel(session.id, modelReference);
@@ -93,38 +98,42 @@ export default function NewSessionPage(props: NewSessionPageProps) {
   };
 
   return (
-    <div {...composerAttachments.dropZoneProps} className="relative flex min-h-0 flex-1 flex-col items-center justify-center px-4 pb-16 pt-10">
-      <div className="w-full max-w-3xl">
-        <h1 className="mb-10 text-center text-4xl font-normal tracking-tight text-neutral-50">
-          What should we build in <i>{projectName}</i>?
-        </h1>
-        {createSessionMutation.error && <p className="mb-4 text-center text-sm text-red-300">Unable to create the session.</p>}
-        {modelsPending ? (
-          <SessionComposerSkeleton />
-        ) : (
-          <SessionComposer.Root attachments={composerAttachments} disabled={composerDisabled} onSubmit={handleSubmit} projectPath={projectPath}>
-            <SessionComposer.Attachments />
-            <SessionComposer.Input placeholder="Ask anything." />
-            <SessionComposer.Toolbar>
-              <SessionComposer.AttachButton />
-              <SessionComposer.ActionGroup>
-                <div className="flex gap-2">
-                  <ModelPicker selectedModel={selectedModel} disabled={composerDisabled} models={availableModels} onModelChange={handleModelChange} />
-                  {thinkingLevels.length > 0 && (
-                    <ThinkingLevelPicker
-                      disabled={composerDisabled}
-                      onThinkingLevelChange={handleThinkingLevelChange}
-                      selectedThinkingLabel={selectedThinkingLabel}
-                      selectedThinkingLevel={resolvedThinkingLevel}
-                      thinkingLevels={thinkingLevels}
-                    />
-                  )}
-                </div>
-                <SessionComposer.SubmitButton />
-              </SessionComposer.ActionGroup>
-            </SessionComposer.Toolbar>
-          </SessionComposer.Root>
-        )}
+    <div {...composerAttachments.dropZoneProps} className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden px-4 pb-16 pt-4">
+      <div className="flex h-[min(calc(100svh-1rem),32rem)] w-[min(calc(100vw-2rem),48rem)] flex-col items-center justify-center overflow-visible">
+        <div className="mb-8 flex flex-col items-center gap-3">
+          <img src={appIconUrl} alt="Supernova" className="h-16 w-auto shrink-0 rounded-2xl" draggable={false} />
+          <h1 className="text-center text-4xl font-normal tracking-tight text-neutral-50">
+            What should we build in <i className="text-neutral-400">{projectName}</i>?
+          </h1>
+        </div>
+        <div className="relative w-full">
+          {modelsPending ? (
+            <SessionComposerSkeleton />
+          ) : (
+            <SessionComposer.Root attachments={composerAttachments} disabled={composerDisabled} onSubmit={handleSubmit} projectPath={projectPath}>
+              <SessionComposer.Attachments />
+              <SessionComposer.Input placeholder="Ask anything." />
+              <SessionComposer.Toolbar>
+                <SessionComposer.AttachButton />
+                <SessionComposer.ActionGroup>
+                  <div className="flex gap-2">
+                    <ModelPicker selectedModel={selectedModel} disabled={composerDisabled} models={availableModels} onModelChange={handleModelChange} />
+                    {thinkingLevels.length > 0 && (
+                      <ThinkingLevelPicker
+                        disabled={composerDisabled}
+                        onThinkingLevelChange={handleThinkingLevelChange}
+                        selectedThinkingLabel={selectedThinkingLabel}
+                        selectedThinkingLevel={resolvedThinkingLevel}
+                        thinkingLevels={thinkingLevels}
+                      />
+                    )}
+                  </div>
+                  <SessionComposer.SubmitButton />
+                </SessionComposer.ActionGroup>
+              </SessionComposer.Toolbar>
+            </SessionComposer.Root>
+          )}
+        </div>
       </div>
       {composerAttachments.isDraggingFiles && <AttachmentDropOverlay />}
     </div>

@@ -5,7 +5,8 @@
     "lib": ["ES2023", "DOM"],
     "types": ["vite/client"],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@assets/*": ["./assets/*"]
     }
   },
   "include": ["src", "tests"]
