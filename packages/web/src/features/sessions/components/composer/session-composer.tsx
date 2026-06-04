@@ -125,9 +125,9 @@ function SessionComposerRoot(props: SessionComposerRootProps) {
   const [suggestionMatch, setSuggestionMatch] = useState<ComposerSuggestionMatch | null>(null);
 
   const isStreaming = streamStatus === "streaming" || streamStatus === "stopping";
-  const inputDisabled = disabled || streamStatus !== "idle";
+  const inputDisabled = disabled;
 
-  const canSubmit = (draft.trim().length > 0 || attachments.attachments.length > 0) && !inputDisabled && !attachments.isProcessing;
+  const canSubmit = (draft.trim().length > 0 || attachments.attachments.length > 0) && !inputDisabled && !attachments.isProcessing && streamStatus === "idle";
   const canInterrupt = streamStatus === "streaming";
   const attachmentDisabled = inputDisabled || attachments.isProcessing;
 

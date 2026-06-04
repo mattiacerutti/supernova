@@ -12,6 +12,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+- Allowed interactive with the message composer while a session is streaming.
+
 ### Fixed
 
 ### Removed

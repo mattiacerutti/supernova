@@ -79,7 +79,8 @@ function SessionConversation(props: SessionConversationProps) {
     sessionTurns: session.turns,
   });
 
-  const composerDisabled = modelsPending || !selectedModelReference || stream.streamStatus !== "idle";
+  const composerDisabled = modelsPending || !selectedModelReference;
+  const composerActionDisabled = composerDisabled || stream.streamStatus !== "idle";
 
   const composerAttachments = useComposerAttachments({
     disabled: composerDisabled,
@@ -126,7 +127,7 @@ function SessionConversation(props: SessionConversationProps) {
             projectPath={session.projectPath}
             slashCommandActions={stream.slashCommandActions}
             streamStatus={stream.streamStatus}
-            topExtension={<UndoneTurnsDrawer disabled={composerDisabled} onRevertToMessage={stream.revertToMessage} turns={session.undoneTurns} />}
+            topExtension={<UndoneTurnsDrawer disabled={composerActionDisabled} onRevertToMessage={stream.revertToMessage} turns={session.undoneTurns} />}
           >
             <SessionComposer.Attachments />
             <SessionComposer.Input />
@@ -134,10 +135,10 @@ function SessionConversation(props: SessionConversationProps) {
               <SessionComposer.AttachButton />
               <SessionComposer.ActionGroup>
                 <div className="flex gap-2">
-                  <ModelPicker selectedModel={selectedModel} disabled={composerDisabled} models={availableModels} onModelChange={handleModelChange} />
+                  <ModelPicker selectedModel={selectedModel} disabled={composerActionDisabled} models={availableModels} onModelChange={handleModelChange} />
                   {thinkingLevels.length > 0 && (
                     <ThinkingLevelPicker
-                      disabled={composerDisabled}
+                      disabled={composerActionDisabled}
                       onThinkingLevelChange={handleThinkingLevelChange}
                       selectedThinkingLabel={selectedThinkingLabel}
                       selectedThinkingLevel={selectedModelReference?.thinkingLevel}
