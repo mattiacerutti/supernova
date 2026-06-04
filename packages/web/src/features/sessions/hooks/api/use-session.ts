@@ -15,6 +15,7 @@ export function sessionQueryOptions(sessionId: string) {
         return yield* rpc.getSession({sessionId});
       }),
     queryKey: sessionQueryKey(sessionId),
+    refetchOnWindowFocus: false,
   });
 }
 
