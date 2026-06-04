@@ -84,19 +84,34 @@ export class PiSessionRuntime {
     this.running = false;
   }
 
-  /** Releases the underlying Pi session and optionally aborts active provider work. */
-  public async release(input: {abort: boolean}): Promise<void> {
-    this.cancelled ||= input.abort;
+  /**
+   * Disposes this runtime during server shutdown or pool teardown.
+   *
+   * This is a terminal lifecycle operation: it aborts any active Pi work,
+   * unsubscribes from Pi events, and disposes the underlying Pi AgentSession.
+   */
+  public async dispose(): Promise<void> {
     if (!this.activeSession && !this.unsubscribe) return;
     if (this.releasePromise) return this.releasePromise;
 
     this.releasePromise = (async () => {
-      if (input.abort) await this.activeSession?.abort().catch(() => undefined);
+      await this.abort();
       this.unsubscribe?.();
       this.activeSession?.dispose();
     })();
 
     return this.releasePromise;
+  }
+
+  /**
+   * Stops the current user-facing agent run without tearing down this runtime.
+   *
+   * This is used by the manual stop action. It aborts provider/Pi work but keeps
+   * session-scoped runtime state, such as event revisions, available for the next command.
+   */
+  public async abort(): Promise<void> {
+    this.cancelled = true;
+    await this.activeSession?.abort().catch(() => undefined);
   }
 
   /** Opens the durable Pi session and applies command-scoped model settings when provided. */
@@ -146,17 +161,13 @@ export class PiSessionRuntime {
 
   /** Submits a prepared active turn prompt and publishes the settled snapshot. */
   public async sendActiveTurn(activeTurn: ActiveTurn, onEnd?: () => Promise<void>): Promise<void> {
-    try {
-      const images = activeTurn.images;
-      await this.activeSession?.prompt(activeTurn.prompt, images.length > 0 ? {images: [...images]} : undefined);
+    const images = activeTurn.images;
+    await this.activeSession?.prompt(activeTurn.prompt, images.length > 0 ? {images: [...images]} : undefined);
 
-      await this.waitForPiEventQueue();
+    await this.waitForPiEventQueue();
 
-      await onEnd?.();
-      await this.publishSettledSnapshot(activeTurn);
-    } finally {
-      if (this.cancelled) await this.release({abort: false});
-    }
+    await onEnd?.();
+    await this.publishSettledSnapshot(activeTurn);
   }
 
   /** Runs Pi manual compaction on the active session. */

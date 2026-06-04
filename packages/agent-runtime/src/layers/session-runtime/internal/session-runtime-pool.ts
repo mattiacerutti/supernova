@@ -48,15 +48,14 @@ export class SessionRuntimePool {
     await redoCheckpoint(this.getOrCreateRuntime(input.sessionId), input);
   }
 
-  /** Explicitly aborts and disposes the runtime for one session. */
+  /** Aborts active work for one session while preserving the retained runtime. */
   public async abortSession(sessionId: string): Promise<void> {
     await abortSession(this.runtimes.get(sessionId));
-    this.runtimes.delete(sessionId);
   }
 
   /** Aborts all retained runtimes during server/runtime shutdown. */
   public async dispose(): Promise<void> {
-    await Promise.all([...this.runtimes.values()].map((runtime) => runtime.release({abort: true})));
+    await Promise.all([...this.runtimes.values()].map((runtime) => runtime.dispose()));
   }
 
   private getOrCreateRuntime(sessionId: string): PiSessionRuntime {

@@ -18,6 +18,7 @@ All notable changes to Supernova are documented in this file.
 ### Fixed
 
 - Fixed read tool line range labels to display the ending line relative to the starting offset.
+- Fixed the session UI getting stuck when reverting messages after stopping an in-progress response.
 
 ### Removed
 

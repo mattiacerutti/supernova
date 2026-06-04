@@ -160,6 +160,97 @@ describe("checkpoint navigation", () => {
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("one\n");
   });
 
+  it("keeps checkpoint navigation revisions monotonic after a manual abort", async () => {
+    const projectPath = await createProject();
+    tempDirs.push(projectPath);
+    const pi = createPiTestRuntime();
+    runtimes.push(pi);
+    const {info} = pi.createSession(projectPath);
+    pi.faux.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
+
+    await pi.sendMessage({message: "one", model: selectedModelReference, sessionId: info.id});
+    const secondEvents = await pi.sendMessage({message: "two", model: selectedModelReference, sessionId: info.id});
+    const secondTurnId = snapshotEvents(secondEvents).at(-1)!.session.turns.at(-1)!.id;
+
+    let providerSignal: AbortSignal | undefined;
+    let releaseProvider: (() => void) | undefined;
+    const providerStarted = new Promise<void>((resolve) => {
+      pi.faux.setResponses([
+        async (_context, options) => {
+          providerSignal = options?.signal;
+          resolve();
+          await new Promise<void>((release) => {
+            releaseProvider = release;
+          });
+          return fauxAssistantMessage("three");
+        },
+      ]);
+    });
+    const events: SessionStreamEvent[] = [];
+    const watcher = pi.runtime.runFork(
+      Effect.gen(function* () {
+        const sessionRuntime = yield* SessionRuntimeService;
+        yield* Stream.runForEach(sessionRuntime.watchEvents(), (event) => Effect.sync(() => events.push(event)));
+      })
+    );
+
+    try {
+      await waitUntil(() => {
+        if (!events.some((event) => event.type === "connected")) throw new Error("Stream did not connect.");
+      });
+
+      await pi.runWithSessionRuntime(
+        Effect.gen(function* () {
+          const sessionRuntime = yield* SessionRuntimeService;
+          yield* sessionRuntime.sendMessage({contentParts: [{text: "three", type: "text"}], model: selectedModelReference, sessionId: info.id});
+        })
+      );
+      await providerStarted;
+      await waitUntil(() => {
+        if (!events.some((event) => event.type === "session.agent.started")) throw new Error("Session agent did not start.");
+      });
+
+      const abortRun = pi.runWithSessionRuntime(
+        Effect.gen(function* () {
+          const sessionRuntime = yield* SessionRuntimeService;
+          yield* sessionRuntime.abortSession(info.id);
+        })
+      );
+      await waitUntil(() => {
+        if (!providerSignal?.aborted) throw new Error("Provider request was not aborted.");
+      });
+      releaseProvider?.();
+      await abortRun;
+      await waitUntil(() => {
+        if (!events.some((event) => event.type === "session.snapshot")) throw new Error("Aborted session did not publish a snapshot.");
+      });
+
+      const maxRevisionBeforeRevert = Math.max(...events.flatMap((event) => ("revision" in event ? [event.revision] : [])));
+
+      await pi.runWithSessionRuntime(
+        Effect.gen(function* () {
+          const sessionRuntime = yield* SessionRuntimeService;
+          yield* sessionRuntime.revertToMessage({sessionId: info.id, turnId: secondTurnId});
+        })
+      );
+      await waitUntil(() => {
+        const latestSnapshot = snapshotEvents(events).at(-1);
+        if (!latestSnapshot || latestSnapshot.revision <= maxRevisionBeforeRevert) throw new Error("Revert snapshot did not advance the session revision.");
+      });
+
+      const latestSnapshot = snapshotEvents(events).at(-1)!;
+      expect(latestSnapshot.revision).toBeGreaterThan(maxRevisionBeforeRevert);
+      expect(latestSnapshot.session.turns.map((turn) => turn.userMessage.contentParts[0])).toEqual([{text: "one", type: "text"}]);
+      expect(latestSnapshot.session.undoneTurns.map((turn) => turn.userMessage.contentParts[0])).toEqual([
+        {text: "two", type: "text"},
+        {text: "three", type: "text"},
+      ]);
+    } finally {
+      releaseProvider?.();
+      await pi.runtime.runPromise(Fiber.interrupt(watcher).pipe(Effect.ignore));
+    }
+  });
+
   it("undoes and redoes one checkpoint while restoring files in both directions", async () => {
     const projectPath = await createGitProject();
     tempDirs.push(projectPath);
