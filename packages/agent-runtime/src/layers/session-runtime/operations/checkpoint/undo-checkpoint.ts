@@ -42,6 +42,7 @@ export async function undoCheckpoint(runtime: PiSessionRuntime, input: UndoCheck
     // Sets branch to the previous checkpoint and appends a checkpoint cursor entry pointing to the restored checkpoint.
     openedSession.sessionManager.branch(previous.id);
     openedSession.sessionManager.appendCustomEntry(CHECKPOINT_CURSOR_CUSTOM_TYPE, {leafEntryId: cursor.leafEntryId});
+    runtime.syncAgentSessionContext();
 
     await runtime.publishSessionSnapshot(openedSession);
   } catch (cause) {

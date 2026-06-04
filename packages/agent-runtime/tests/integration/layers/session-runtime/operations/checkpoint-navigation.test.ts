@@ -447,6 +447,43 @@ describe("checkpoint navigation", () => {
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("three\n");
   });
 
+  it("rebuilds provider context from the visible branch after undo", async () => {
+    const projectPath = await createProject();
+    tempDirs.push(projectPath);
+    const pi = createPiTestRuntime();
+    runtimes.push(pi);
+    const {info} = pi.createSession(projectPath);
+    let providerUserTexts: string[] | undefined;
+    pi.faux.setResponses([
+      fauxAssistantMessage("one"),
+      fauxAssistantMessage("two"),
+      (context) => {
+        providerUserTexts = context.messages
+          .filter((message) => message.role === "user")
+          .flatMap((message) => {
+            if (typeof message.content === "string") return [message.content];
+            return message.content.flatMap((part) => (part.type === "text" ? [part.text] : []));
+          });
+        return fauxAssistantMessage("branch");
+      },
+    ]);
+
+    await pi.sendMessage({message: "one", model: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "two", model: selectedModelReference, sessionId: info.id});
+    await runSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.undoCheckpoint({sessionId: info.id})});
+    const branchEvents = await pi.sendMessage({message: "branch", model: selectedModelReference, sessionId: info.id});
+
+    expect(providerUserTexts).toEqual(["one", "branch"]);
+    expect(
+      snapshotEvents(branchEvents)
+        .at(-1)
+        ?.session.turns.map((turn) => turn.userMessage.contentParts[0])
+    ).toEqual([
+      {text: "one", type: "text"},
+      {text: "branch", type: "text"},
+    ]);
+  });
+
   it("does not redo after a new branch diverges from an undone checkpoint", async () => {
     const projectPath = await createGitProject();
     tempDirs.push(projectPath);

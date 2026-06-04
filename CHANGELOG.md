@@ -14,6 +14,7 @@ All notable changes to Supernova are documented in this file.
 
 ### Fixed
 
+- Fixed checkpoint navigation leaking undone messages into the agent's provider context.
 - Fixed composer and sent-message references adding unintended visual spacing around adjacent text.
 - Fixed the desktop app resetting its window size and position after reopening.
 

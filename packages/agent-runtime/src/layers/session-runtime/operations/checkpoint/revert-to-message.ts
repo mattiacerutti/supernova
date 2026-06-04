@@ -49,6 +49,7 @@ export async function revertToMessage(runtime: PiSessionRuntime, input: RevertTo
 
     openedSession.sessionManager.branch(target.id);
     openedSession.sessionManager.appendCustomEntry(CHECKPOINT_CURSOR_CUSTOM_TYPE, {leafEntryId: cursor.leafEntryId});
+    runtime.syncAgentSessionContext();
 
     await runtime.publishSessionSnapshot(openedSession);
   } catch (cause) {

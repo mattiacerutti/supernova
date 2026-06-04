@@ -128,6 +128,8 @@ export class PiSessionRuntime {
       agentSession.setThinkingLevel(toPiThinkingLevel(modelReference.thinkingLevel));
     }
 
+    this.syncAgentSessionContext();
+
     return {...openedSession, sessionManager: agentSession.sessionManager};
   }
 
@@ -157,6 +159,12 @@ export class PiSessionRuntime {
   /** Clears active turn state for commands that do not own a user turn. */
   public clearActiveTurn(): void {
     this.activeTurn = undefined;
+  }
+
+  /** Rebuilds the reusable Pi agent's in-memory LLM context from the current session branch. */
+  public syncAgentSessionContext(): void {
+    if (!this.activeSession) return;
+    this.activeSession.state.messages = this.activeSession.sessionManager.buildSessionContext().messages;
   }
 
   /** Submits a prepared active turn prompt and publishes the settled snapshot. */
