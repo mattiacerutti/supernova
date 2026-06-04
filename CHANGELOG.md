@@ -13,6 +13,7 @@ All notable changes to Supernova are documented in this file.
 ### Changed
 
 - Allowed interactive with the message composer while a session is streaming.
+- Made checkpoint undo and redo restore only checkpoint-changed worktree files without moving Git history or resetting staged changes.
 
 ### Fixed
 

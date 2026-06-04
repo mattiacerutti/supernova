@@ -74,7 +74,7 @@ describe("Pi session checkpoint store", () => {
     expect(created).toBe(false);
   });
 
-  it("restores the full checkpoint tree with pi-rewind safe clean", async () => {
+  it("restores only files changed between checkpoints", async () => {
     const repo = await createRepo();
     repos.push(repo);
     await writeFile(join(repo, "preexisting.txt"), "keep me\n");
@@ -94,7 +94,8 @@ describe("Pi session checkpoint store", () => {
     await runCheckpoint(
       Effect.gen(function* () {
         const store = yield* SessionCheckpointStore;
-        yield* Effect.promise(() => store.restore({checkpointId: "cp-restore", cwd: repo, sessionId}));
+        yield* Effect.promise(() => store.create({checkpointId: "cp-current", cwd: repo, sessionId}));
+        yield* Effect.promise(() => store.restore({checkpointId: "cp-restore", cwd: repo, fromCheckpointId: "cp-current", sessionId}));
       })
     );
 
@@ -123,30 +124,42 @@ describe("Pi session checkpoint store", () => {
     await expect(gitOutput(repo, ["status", "--porcelain"])).resolves.toBe(statusBefore);
   });
 
-  it("restores staged state", async () => {
+  it("restores checkpoint files without moving HEAD or resetting staged state", async () => {
     const repo = await createRepo();
     repos.push(repo);
-    await writeFile(join(repo, "tracked.txt"), "staged checkpoint\n");
-    await git(repo, ["add", "tracked.txt"]);
+    await writeFile(join(repo, "tracked.txt"), "checkpoint\n");
 
     await runCheckpoint(
       Effect.gen(function* () {
         const store = yield* SessionCheckpointStore;
-        yield* Effect.promise(() => store.create({checkpointId: "cp-staged", cwd: repo, sessionId}));
+        yield* Effect.promise(() => store.create({checkpointId: "cp-gentle", cwd: repo, sessionId}));
       })
     );
 
-    await writeFile(join(repo, "tracked.txt"), "after checkpoint\n");
+    await writeFile(join(repo, "tracked.txt"), "committed after checkpoint\n");
     await git(repo, ["add", "tracked.txt"]);
+    await git(repo, ["commit", "-m", "after checkpoint"]);
+    const headBeforeRestore = await gitOutput(repo, ["rev-parse", "HEAD"]);
     await runCheckpoint(
       Effect.gen(function* () {
         const store = yield* SessionCheckpointStore;
-        yield* Effect.promise(() => store.restore({checkpointId: "cp-staged", cwd: repo, sessionId}));
+        yield* Effect.promise(() => store.create({checkpointId: "cp-after", cwd: repo, sessionId}));
+      })
+    );
+    await writeFile(join(repo, "user-staged.txt"), "keep staged\n");
+    await git(repo, ["add", "user-staged.txt"]);
+
+    await runCheckpoint(
+      Effect.gen(function* () {
+        const store = yield* SessionCheckpointStore;
+        yield* Effect.promise(() => store.restore({checkpointId: "cp-gentle", cwd: repo, fromCheckpointId: "cp-after", sessionId}));
       })
     );
 
-    await expect(readFile(join(repo, "tracked.txt"), "utf8")).resolves.toBe("staged checkpoint\n");
-    await expect(gitOutput(repo, ["diff", "--cached", "--", "tracked.txt"])).resolves.toContain("staged checkpoint");
+    await expect(gitOutput(repo, ["rev-parse", "HEAD"])).resolves.toBe(headBeforeRestore);
+    await expect(readFile(join(repo, "tracked.txt"), "utf8")).resolves.toBe("checkpoint\n");
+    await expect(readFile(join(repo, "user-staged.txt"), "utf8")).resolves.toBe("keep staged\n");
+    await expect(gitOutput(repo, ["diff", "--cached", "--name-only"])).resolves.toContain("user-staged.txt");
   });
 
   it("blocks cross-branch restores", async () => {

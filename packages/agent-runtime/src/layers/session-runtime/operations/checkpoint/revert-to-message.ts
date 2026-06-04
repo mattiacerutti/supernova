@@ -41,10 +41,11 @@ export async function revertToMessage(runtime: PiSessionRuntime, input: RevertTo
     // the user message. Undone targets move forward, so restore the next checkpoint.
     const target = targetIndex <= nodeIndex ? findCheckpointBefore(branch, targetIndex) : findCheckpointAfter(branch, targetIndex);
 
-    if (nodeIndex === -1 || targetIndex === -1 || !target) throw new Error("Checkpoint target was not found.");
+    const current = branch[nodeIndex];
+    if (nodeIndex === -1 || targetIndex === -1 || !target || !current || !isCheckpointEntry(current)) throw new Error("Checkpoint target was not found.");
 
     runtime.clearActiveTurn();
-    await runtime.restoreCheckpoint({checkpointId: target.data.checkpointId, cwd: openedSession.sessionInfo.cwd});
+    await runtime.restoreCheckpoint({checkpointId: target.data.checkpointId, cwd: openedSession.sessionInfo.cwd, fromCheckpointId: current.data.checkpointId});
 
     openedSession.sessionManager.branch(target.id);
     openedSession.sessionManager.appendCustomEntry(CHECKPOINT_CURSOR_CUSTOM_TYPE, {leafEntryId: cursor.leafEntryId});

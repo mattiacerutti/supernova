@@ -195,9 +195,9 @@ export class PiSessionRuntime {
     return this.checkpointStore.create({checkpointId: input.checkpointId, cwd: input.cwd, sessionId: this.sessionId});
   }
 
-  /** Restores the full workspace state from a stable checkpoint. */
-  public async restoreCheckpoint(input: {readonly checkpointId: string; readonly cwd: string}): Promise<void> {
-    await this.checkpointStore.restore({checkpointId: input.checkpointId, cwd: input.cwd, sessionId: this.sessionId});
+  /** Restores only files changed between checkpoints into the worktree, leaving Git HEAD and staged state untouched. */
+  public async restoreCheckpoint(input: {readonly checkpointId: string; readonly cwd: string; readonly fromCheckpointId?: string}): Promise<void> {
+    await this.checkpointStore.restore({checkpointId: input.checkpointId, cwd: input.cwd, fromCheckpointId: input.fromCheckpointId, sessionId: this.sessionId});
   }
 
   private subscribeToLiveUpdates(): void {

@@ -37,7 +37,7 @@ export async function undoCheckpoint(runtime: PiSessionRuntime, input: UndoCheck
     if (!cursor) throw new Error("Checkpoint cursor was not found.");
 
     runtime.clearActiveTurn();
-    await runtime.restoreCheckpoint({checkpointId: previous.data.checkpointId, cwd: openedSession.sessionInfo.cwd});
+    await runtime.restoreCheckpoint({checkpointId: previous.data.checkpointId, cwd: openedSession.sessionInfo.cwd, fromCheckpointId: current.data.checkpointId});
 
     // Sets branch to the previous checkpoint and appends a checkpoint cursor entry pointing to the restored checkpoint.
     openedSession.sessionManager.branch(previous.id);

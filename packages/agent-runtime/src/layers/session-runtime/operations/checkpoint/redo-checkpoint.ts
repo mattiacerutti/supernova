@@ -20,13 +20,16 @@ export async function redoCheckpoint(runtime: PiSessionRuntime, input: RedoCheck
     const nodeIndex = cursor.nodeEntryId ? branch.findIndex((entry) => entry.id === cursor.nodeEntryId) : -1;
     if (nodeIndex === -1) throw new Error("No checkpoint is available to redo.");
 
+    const current = branch[nodeIndex];
+    if (!current || !isCheckpointEntry(current)) throw new Error("No checkpoint is available to redo.");
+
     // Find the next checkpoint entry by removing all entries up to and including the current checkpoint cursor node, then looking for the first checkpoint entry in the remaining branch.
     const target = branch.slice(nodeIndex + 1).find(isCheckpointEntry);
 
     if (!target) throw new Error("No checkpoint is available to redo.");
 
     runtime.clearActiveTurn();
-    await runtime.restoreCheckpoint({checkpointId: target.data.checkpointId, cwd: openedSession.sessionInfo.cwd});
+    await runtime.restoreCheckpoint({checkpointId: target.data.checkpointId, cwd: openedSession.sessionInfo.cwd, fromCheckpointId: current.data.checkpointId});
 
     openedSession.sessionManager.branch(target.id);
     openedSession.sessionManager.appendCustomEntry(CHECKPOINT_CURSOR_CUSTOM_TYPE, {leafEntryId: cursor.leafEntryId});

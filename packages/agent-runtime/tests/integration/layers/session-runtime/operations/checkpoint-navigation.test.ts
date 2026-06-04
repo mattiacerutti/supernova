@@ -18,6 +18,11 @@ async function git(cwd: string, args: readonly string[]): Promise<void> {
   await execFilePromise("git", [...args], {cwd, encoding: "utf8"});
 }
 
+async function gitOutput(cwd: string, args: readonly string[]): Promise<string> {
+  const result = await execFilePromise("git", [...args], {cwd, encoding: "utf8"});
+  return result.stdout.trim();
+}
+
 async function createGitProject(): Promise<string> {
   const projectPath = mkdtempSync(join(tmpdir(), "supernova-checkpoint-navigation-"));
   await git(projectPath, ["init"]);
@@ -200,6 +205,87 @@ describe("checkpoint navigation", () => {
     ]);
     expect(snapshotEvents(redoEvents).at(-1)?.session.undoneTurns).toEqual([]);
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("two\n");
+  });
+
+  it("preserves git history and user files outside the checkpoint diff during undo and redo", async () => {
+    const projectPath = await createGitProject();
+    tempDirs.push(projectPath);
+    const pi = createPiTestRuntime();
+    runtimes.push(pi);
+    const {info} = pi.createSession(projectPath);
+    pi.faux.setResponses([
+      async () => {
+        await writeFile(join(projectPath, "file.txt"), "one\n");
+        await git(projectPath, ["add", "file.txt"]);
+        await git(projectPath, ["commit", "-m", "agent one"]);
+        return fauxAssistantMessage("one");
+      },
+      async () => {
+        await writeFile(join(projectPath, "file.txt"), "two\n");
+        await git(projectPath, ["add", "file.txt"]);
+        await git(projectPath, ["commit", "-m", "agent two"]);
+        return fauxAssistantMessage("two");
+      },
+    ]);
+
+    await pi.sendMessage({message: "one", model: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "two", model: selectedModelReference, sessionId: info.id});
+    const headAfterSecondTurn = await gitOutput(projectPath, ["rev-parse", "HEAD"]);
+    await writeFile(join(projectPath, "user-staged.txt"), "keep staged\n");
+    await git(projectPath, ["add", "user-staged.txt"]);
+    await writeFile(join(projectPath, "user-untracked.txt"), "keep untracked\n");
+
+    const undoEvents = await runSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.undoCheckpoint({sessionId: info.id})});
+
+    expect(errorEvents(undoEvents)).toEqual([]);
+    await expect(gitOutput(projectPath, ["rev-parse", "HEAD"])).resolves.toBe(headAfterSecondTurn);
+    await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("one\n");
+    await expect(readFile(join(projectPath, "user-staged.txt"), "utf8")).resolves.toBe("keep staged\n");
+    await expect(readFile(join(projectPath, "user-untracked.txt"), "utf8")).resolves.toBe("keep untracked\n");
+    await expect(gitOutput(projectPath, ["diff", "--cached", "--name-only"])).resolves.toContain("user-staged.txt");
+
+    await writeFile(join(projectPath, "redo-staged.txt"), "keep through redo\n");
+    await git(projectPath, ["add", "redo-staged.txt"]);
+    const redoEvents = await runSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.redoCheckpoint({sessionId: info.id})});
+
+    expect(errorEvents(redoEvents)).toEqual([]);
+    await expect(gitOutput(projectPath, ["rev-parse", "HEAD"])).resolves.toBe(headAfterSecondTurn);
+    await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("two\n");
+    await expect(readFile(join(projectPath, "user-staged.txt"), "utf8")).resolves.toBe("keep staged\n");
+    await expect(readFile(join(projectPath, "user-untracked.txt"), "utf8")).resolves.toBe("keep untracked\n");
+    await expect(readFile(join(projectPath, "redo-staged.txt"), "utf8")).resolves.toBe("keep through redo\n");
+    await expect(gitOutput(projectPath, ["diff", "--cached", "--name-only"])).resolves.toContain("user-staged.txt");
+    await expect(gitOutput(projectPath, ["diff", "--cached", "--name-only"])).resolves.toContain("redo-staged.txt");
+  });
+
+  it("does not touch git stash entries during checkpoint undo", async () => {
+    const projectPath = await createGitProject();
+    tempDirs.push(projectPath);
+    const pi = createPiTestRuntime();
+    runtimes.push(pi);
+    const {info} = pi.createSession(projectPath);
+    pi.faux.setResponses([
+      async () => {
+        await writeFile(join(projectPath, "file.txt"), "one\n");
+        return fauxAssistantMessage("one");
+      },
+      async () => {
+        await writeFile(join(projectPath, "file.txt"), "two\n");
+        return fauxAssistantMessage("two");
+      },
+    ]);
+
+    await pi.sendMessage({message: "one", model: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "two", model: selectedModelReference, sessionId: info.id});
+    await writeFile(join(projectPath, "stashed-only.txt"), "stash me\n");
+    await git(projectPath, ["stash", "push", "--include-untracked", "-m", "manual stash"]);
+
+    const undoEvents = await runSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.undoCheckpoint({sessionId: info.id})});
+
+    expect(errorEvents(undoEvents)).toEqual([]);
+    await expect(gitOutput(projectPath, ["stash", "list"])).resolves.toContain("manual stash");
+    await expect(gitOutput(projectPath, ["stash", "show", "--include-untracked", "--name-only", "stash@{0}"])).resolves.toContain("stashed-only.txt");
+    await expect(readFile(join(projectPath, "stashed-only.txt"), "utf8")).rejects.toThrow();
   });
 
   it("reverts forward to selected undone turns", async () => {
