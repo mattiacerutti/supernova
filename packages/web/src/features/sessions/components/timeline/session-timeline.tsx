@@ -184,7 +184,7 @@ export default function SessionTimeline(props: SessionTimelineProps) {
       )}
       {showScrollToEndButton && (
         <IconButton
-          className="absolute bottom-4 left-1/2 z-10 grid size-9 -translate-x-1/2 place-items-center rounded-full bg-[#181818] text-white ring-1 ring-white/10 transition hover:bg-[#202020]"
+          className="absolute bottom-4 left-1/2 z-10 grid size-9 -translate-x-1/2 place-items-center rounded-full bg-[#181818] text-white ring-1 ring-neutral-700 transition hover:bg-[#202020]"
           label="Scroll to latest message"
           onClick={handleScrollToEndClick}
           size="none"

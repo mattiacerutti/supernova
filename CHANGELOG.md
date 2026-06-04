@@ -12,6 +12,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Fixed
 
+- Fixed the scroll-to-bottom chat button border being transparent.
+
 ### Removed
 
 ## [0.0.1-alpha.6]
