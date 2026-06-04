@@ -12,6 +12,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Fixed
 
+- Fixed the desktop app resetting its window size and position after reopening.
+
 ### Removed
 
 ## [0.0.1-alpha.5]

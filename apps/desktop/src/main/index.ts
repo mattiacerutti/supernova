@@ -6,6 +6,7 @@ import type {BrowserWindowConstructorOptions} from "electron";
 import {app, shell, BrowserWindow, ipcMain, nativeImage} from "electron";
 import {electronApp, optimizer} from "@electron-toolkit/utils";
 import installExtension, {REACT_DEVELOPER_TOOLS} from "electron-devtools-installer";
+import windowState from "electron-window-state";
 
 declare const SUPERNOVA_IS_DEV: boolean;
 declare const SUPERNOVA_SERVER_ENTRY: string;
@@ -44,9 +45,16 @@ async function createWindow(): Promise<void> {
     });
   }
 
+  const savedWindowState = windowState({
+    defaultWidth: 1280,
+    defaultHeight: 800,
+  });
+
   mainWindow = new BrowserWindow({
-    width: 1100,
-    height: 780,
+    x: savedWindowState.x,
+    y: savedWindowState.y,
+    width: savedWindowState.width,
+    height: savedWindowState.height,
     title: "Supernova",
     show: false,
     autoHideMenuBar: true,
@@ -59,6 +67,8 @@ async function createWindow(): Promise<void> {
       nodeIntegration: false,
     },
   });
+
+  savedWindowState.manage(mainWindow);
 
   if (SUPERNOVA_IS_DEV) {
     mainWindow.webContents.openDevTools({mode: "detach"});
