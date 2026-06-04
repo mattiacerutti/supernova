@@ -1,4 +1,6 @@
 import type {CustomEntry, SessionEntry} from "@earendil-works/pi-coding-agent";
+import type {OpenedRuntimeSession} from "@supernova/agent-runtime/layers/session-runtime/internal/pi-session-runtime";
+import type {PiSessionRuntime} from "@supernova/agent-runtime/layers/session-runtime/internal/pi-session-runtime";
 
 export const CHECKPOINT_CUSTOM_TYPE = "supernova.checkpoint";
 export const CHECKPOINT_CURSOR_CUSTOM_TYPE = "supernova.checkpoint-cursor";
@@ -24,6 +26,12 @@ export type CheckpointEntry = CustomEntry<CheckpointEntryData> & {readonly data:
  */
 export type CheckpointCursorEntry = CustomEntry<CheckpointCursorEntryData> & {readonly data: CheckpointCursorEntryData};
 
+export interface NavigateToCheckpointInput {
+  readonly current: CheckpointEntry;
+  readonly cursorLeafEntryId: string;
+  readonly target: CheckpointEntry;
+}
+
 function isCustomEntry(entry: SessionEntry): entry is CustomEntry {
   return entry.type === "custom";
 }
@@ -44,4 +52,21 @@ export function latestCheckpointCursor(entries: readonly SessionEntry[]): (Check
   if (!entry.parentId) throw new Error("Invalid checkpoint cursor entry: missing parentId referencing the checkpoint entry.");
 
   return {leafEntryId: entry.data.leafEntryId, nodeEntryId: entry.parentId};
+}
+
+/** Navigates to a resolved checkpoint and updates files, branch state, agent context, and subscribers. */
+export async function navigateToCheckpoint(runtime: PiSessionRuntime, openedSession: OpenedRuntimeSession, input: NavigateToCheckpointInput): Promise<void> {
+  runtime.clearActiveTurn();
+  await runtime.restoreCheckpoint({
+    checkpointId: input.target.data.checkpointId,
+    cwd: openedSession.sessionInfo.cwd,
+    fromCheckpointId: input.current.data.checkpointId,
+  });
+
+  // Sets branch to the target checkpoint and appends a checkpoint cursor entry pointing to the restored checkpoint.
+  openedSession.sessionManager.branch(input.target.id);
+  openedSession.sessionManager.appendCustomEntry(CHECKPOINT_CURSOR_CUSTOM_TYPE, {leafEntryId: input.cursorLeafEntryId});
+  runtime.syncAgentSessionContext();
+
+  await runtime.publishSessionSnapshot(openedSession);
 }

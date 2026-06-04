@@ -1,11 +1,7 @@
 import type {SessionEntry, SessionMessageEntry} from "@earendil-works/pi-coding-agent";
 import type {RevertToMessagePayload} from "@supernova/contracts/session-runtime/procedures";
 import {CheckpointNavigationError} from "@supernova/contracts/session-runtime/procedures";
-import {
-  CHECKPOINT_CURSOR_CUSTOM_TYPE,
-  isCheckpointEntry,
-  latestCheckpointCursor,
-} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-navigation";
+import {isCheckpointEntry, latestCheckpointCursor, navigateToCheckpoint} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-navigation";
 import type {CheckpointEntry} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-navigation";
 import {PiSessionRuntime} from "@supernova/agent-runtime/layers/session-runtime/internal/pi-session-runtime";
 
@@ -34,24 +30,17 @@ export async function revertToMessage(runtime: PiSessionRuntime, input: RevertTo
     // The cursor parent is the visible checkpoint. The leaf branch also includes
     // redoable turns, so comparing indexes tells us whether the target is visible
     // or currently undone.
-    const nodeIndex = cursor.nodeEntryId ? branch.findIndex((entry) => entry.id === cursor.nodeEntryId) : -1;
+    const nodeIndex = branch.findIndex((entry) => entry.id === cursor.nodeEntryId);
     const targetIndex = branch.findIndex((entry) => isTargetUserEntry(entry, input.turnId));
 
     // Visible targets are reverted inclusively, so restore the checkpoint before
     // the user message. Undone targets move forward, so restore the next checkpoint.
     const target = targetIndex <= nodeIndex ? findCheckpointBefore(branch, targetIndex) : findCheckpointAfter(branch, targetIndex);
-
     const current = branch[nodeIndex];
+
     if (nodeIndex === -1 || targetIndex === -1 || !target || !current || !isCheckpointEntry(current)) throw new Error("Checkpoint target was not found.");
 
-    runtime.clearActiveTurn();
-    await runtime.restoreCheckpoint({checkpointId: target.data.checkpointId, cwd: openedSession.sessionInfo.cwd, fromCheckpointId: current.data.checkpointId});
-
-    openedSession.sessionManager.branch(target.id);
-    openedSession.sessionManager.appendCustomEntry(CHECKPOINT_CURSOR_CUSTOM_TYPE, {leafEntryId: cursor.leafEntryId});
-    runtime.syncAgentSessionContext();
-
-    await runtime.publishSessionSnapshot(openedSession);
+    await navigateToCheckpoint(runtime, openedSession, {current, cursorLeafEntryId: cursor.leafEntryId, target});
   } catch (cause) {
     throw new CheckpointNavigationError({cause, message: cause instanceof Error ? cause.message : "Failed to revert session."});
   } finally {
