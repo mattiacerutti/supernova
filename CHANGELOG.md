@@ -10,6 +10,7 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+- Added a fade-in animation for newly revealed live assistant message text.
 - Improved session work duration labels to show hours, minutes, and seconds.
 
 ### Fixed

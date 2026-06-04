@@ -70,15 +70,47 @@ function CodeBlock(props: {children: ReactNode; code: string; language?: string}
   );
 }
 
+interface StreamingFadeTextProps {
+  readonly children: string;
+}
+
+function StreamingFadeText(props: StreamingFadeTextProps) {
+  const {children} = props;
+
+  // Split only the recent live-text tail into small keyed spans so CSS can fade
+  // newly mounted chunks without React state. Older text stays in one plain text
+  // node to avoid reconciling an unbounded number of animated spans.
+  // The 160-char window keeps the animated tail to about one short paragraph,
+  // while 8-char chunks keep fades visible without creating too many spans.
+  const chunkStartIndex = Math.max(0, Math.floor((children.length - 160) / 8) * 8);
+  const chunks: Array<{index: number; text: string}> = [];
+
+  for (let index = chunkStartIndex; index < children.length; index += 8) {
+    chunks.push({index, text: children.slice(index, index + 8)});
+  }
+
+  return (
+    <>
+      {children.slice(0, chunkStartIndex)}
+      {chunks.map((chunk) => (
+        <span className="session-stream-fade-in" key={chunk.index}>
+          {chunk.text}
+        </span>
+      ))}
+    </>
+  );
+}
+
 interface AssistantMessageContentProps {
   children: string;
   className?: string;
+  fadeNewText?: boolean;
   mode?: "markdown" | "text";
   streaming?: boolean;
 }
 
 export default function AssistantMessageContent(props: AssistantMessageContentProps) {
-  const {children, className, mode = "markdown", streaming = false} = props;
+  const {children, className, fadeNewText = false, mode = "markdown", streaming = false} = props;
 
   if (streaming) {
     const segments = segmentStreamingMessage(children);
@@ -86,7 +118,7 @@ export default function AssistantMessageContent(props: AssistantMessageContentPr
     return (
       <div className="space-y-3">
         {segments.map((segment, index) => (
-          <AssistantMessageContent className={className} key={`${segment.mode}-${index}-${segment.text.length}`} mode={segment.mode}>
+          <AssistantMessageContent className={className} fadeNewText={segment.mode === "text"} key={`${segment.mode}-${index}`} mode={segment.mode}>
             {segment.text}
           </AssistantMessageContent>
         ))}
@@ -96,7 +128,7 @@ export default function AssistantMessageContent(props: AssistantMessageContentPr
 
   return (
     <div className={cn("session-markdown min-w-0 max-w-full text-sm leading-7 text-neutral-200", className)}>
-      {mode === "text" && <div className="whitespace-pre-wrap">{children}</div>}
+      {mode === "text" && <div className="whitespace-pre-wrap">{fadeNewText ? <StreamingFadeText>{children}</StreamingFadeText> : children}</div>}
       {mode === "markdown" && (
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
