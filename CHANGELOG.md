@@ -10,6 +10,14 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+### Fixed
+
+### Removed
+
+## [0.0.1-alpha.6]
+
+### Changed
+
 - Added a fade-in animation for newly revealed live assistant message text.
 - Improved session work duration labels to show hours, minutes, and seconds.
 
@@ -18,8 +26,6 @@ All notable changes to Supernova are documented in this file.
 - Fixed checkpoint navigation leaking undone messages into the agent's provider context.
 - Fixed composer and sent-message references adding unintended visual spacing around adjacent text.
 - Fixed the desktop app resetting its window size and position after reopening.
-
-### Removed
 
 ## [0.0.1-alpha.5]
 
