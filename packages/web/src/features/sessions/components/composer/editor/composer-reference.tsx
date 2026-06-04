@@ -11,7 +11,7 @@ export default function ComposerReference(props: NodeViewProps) {
   return (
     <NodeViewWrapper
       as="span"
-      className="mx-1 inline-flex select-none items-baseline gap-1 whitespace-nowrap align-baseline leading-[inherit] text-sky-300"
+      className="inline-flex select-none items-baseline gap-1 whitespace-nowrap align-baseline leading-[inherit] text-sky-300"
       contentEditable={false}
       spellCheck={false}
     >

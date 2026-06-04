@@ -33,7 +33,7 @@ function ReferenceContentPart(props: {part: Extract<NonNullable<UserMessageModel
   const iconName = part.kind === "skill" ? "skill" : part.value.endsWith("/") ? "folder" : "file";
 
   return (
-    <span className="mx-1 inline-flex items-baseline gap-1 whitespace-nowrap align-baseline leading-[inherit] text-sky-300">
+    <span className="inline-flex items-baseline gap-1 whitespace-nowrap align-baseline leading-[inherit] text-sky-300">
       <Icon className="relative top-px size-[1em] text-sky-300" name={iconName} size="xs" />
       <span>{part.name}</span>
     </span>
