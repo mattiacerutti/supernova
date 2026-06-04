@@ -8,6 +8,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Added
 
+- Added spring interaction for session pin icons when sessions are pinned or unpinned.
+
 ### Changed
 
 ### Fixed

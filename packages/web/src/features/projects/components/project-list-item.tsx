@@ -255,11 +255,15 @@ export default function ProjectListItem(props: ProjectListItemProps) {
                   variant="primary"
                 >
                   <IconButton
-                    className={cn("size-4 shrink-0", !session.pinned && "invisible group-hover/session:visible")}
+                    className={cn("group/pin-toggle size-4 shrink-0", !session.pinned && "invisible group-hover/session:visible")}
                     label={session.pinned ? "Unpin session" : "Pin session"}
                     onClick={(event) => handleToggleSessionPinned(event, session.id)}
                   >
-                    <Icon name="pin" size="xs" />
+                    <Icon
+                      className="origin-center transition-transform duration-250 ease-[cubic-bezier(0.2,0.9,0.2,1.15)] group-active/pin-toggle:scale-85 group-active/pin-toggle:-rotate-8 motion-reduce:transition-none"
+                      name="pin"
+                      size="xs"
+                    />
                   </IconButton>
                   <SessionTitleText className="min-w-0 flex-1 truncate text-sm" title={session.title} />
                   <span className="grid w-12 shrink-0 place-items-center justify-items-end">
