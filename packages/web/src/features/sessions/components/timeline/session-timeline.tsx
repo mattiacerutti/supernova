@@ -1,7 +1,6 @@
-import {LegendList, type LegendListRef} from "@legendapp/list/react";
-import {useCallback, useRef, useState} from "react";
-import type {ReactNode, RefObject, WheelEvent} from "react";
-import {flushSync} from "react-dom";
+import {useVirtualizer} from "@tanstack/react-virtual";
+import {useCallback, useState} from "react";
+import type {ReactNode, RefObject} from "react";
 import Icon from "@/components/ui/icon";
 import IconButton from "@/components/ui/icon-button";
 import SessionTimelineFooter from "@/features/sessions/components/timeline/session-timeline-footer";
@@ -9,149 +8,77 @@ import SessionTimelineItemFrame from "@/features/sessions/components/timeline/se
 import SessionTimelineRow from "@/features/sessions/components/timeline/session-timeline-row";
 import type {SessionTimelineItem} from "@/features/sessions/types/session-timeline-item";
 
-type AutoFollowState = "following" | "leaving" | "detached";
-
+const FOOTER_ESTIMATED_SIZE_PX = 96;
+const ITEM_ESTIMATED_SIZE_PX = 140;
 const SCROLL_END_THRESHOLD_PX = 2;
-const SCROLL_DIRECTION_THRESHOLD_PX = 1;
-
-function distanceFromEnd(scroller: HTMLElement): number {
-  return scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop;
-}
-
-function hasScrollableOverflow(scroller: HTMLElement): boolean {
-  return scroller.scrollHeight - scroller.clientHeight > SCROLL_DIRECTION_THRESHOLD_PX;
-}
 
 function isScrollerAtEnd(scroller: HTMLElement): boolean {
-  return distanceFromEnd(scroller) <= SCROLL_END_THRESHOLD_PX;
+  return scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop <= SCROLL_END_THRESHOLD_PX;
 }
 
 interface SessionTimelineProps {
   readonly compacting: boolean;
   readonly isStreaming: boolean;
   readonly items: readonly SessionTimelineItem[];
-  readonly listRef?: RefObject<LegendListRef | null>;
+  readonly scrollContainerRef: RefObject<HTMLDivElement | null>;
   readonly liveItems: readonly SessionTimelineItem[];
   readonly onRevertToMessage?: (turnId: string) => void;
   readonly streamError: string | null;
 }
 
 export default function SessionTimeline(props: SessionTimelineProps) {
-  const {compacting, isStreaming, items, listRef, liveItems, onRevertToMessage, streamError} = props;
+  const {compacting, isStreaming, items, scrollContainerRef, liveItems, onRevertToMessage, streamError} = props;
 
-  const [autoFollowState, setAutoFollowState] = useState<AutoFollowState>("following");
+  const [showScrollToEndButton, setShowScrollToEndButton] = useState(false);
 
-  const maintainScrollAtEnd = autoFollowState === "following";
-  const showScrollToEndButton = autoFollowState !== "following";
+  const itemCount = items.length + 1;
   const hasTimelineContent = items.length > 0 || liveItems.length > 0 || isStreaming || streamError !== null;
-  const firstLiveItem = liveItems[0];
 
-  const liveTailTurnId = firstLiveItem?.turnId ?? null;
-  const autoFollowStateRef = useRef<AutoFollowState>("following");
-  const liveTailRef = useRef<{observer: ResizeObserver | null; turnId: string | null}>({observer: null, turnId: null});
-  const scrollTopRef = useRef<number | null>(null);
+  // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual owns mutable scroll state by design.
+  const virtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
+    anchorTo: "end",
+    count: itemCount,
+    estimateSize: (index) => (index === items.length ? FOOTER_ESTIMATED_SIZE_PX : ITEM_ESTIMATED_SIZE_PX),
+    followOnAppend: "auto",
+    getItemKey: (index) => items[index]?.id ?? "session-timeline-footer",
+    getScrollElement: () => scrollContainerRef.current,
+    initialOffset: () => Number.MAX_SAFE_INTEGER,
+    overscan: 6,
+    paddingStart: 24,
+    scrollEndThreshold: SCROLL_END_THRESHOLD_PX,
+  });
 
-  const setAutoFollow = useCallback((nextState: AutoFollowState | ((current: AutoFollowState) => AutoFollowState)): void => {
-    const resolvedState = typeof nextState === "function" ? nextState(autoFollowStateRef.current) : nextState;
-    if (resolvedState === autoFollowStateRef.current) return;
-
-    autoFollowStateRef.current = resolvedState;
-    setAutoFollowState(resolvedState);
-  }, []);
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (_item, _delta, instance) => instance.isAtEnd(SCROLL_END_THRESHOLD_PX);
 
   const scrollToEnd = useCallback(
-    (force = false): void => {
-      if (!force && autoFollowStateRef.current !== "following") return;
-
-      const list = listRef?.current;
-      if (!list) return;
-
-      void list.scrollToEnd({animated: false});
-      const scroller = list.getScrollableNode();
-      if (!scroller) return;
-
-      scroller.scrollTop = scroller.scrollHeight;
-      scrollTopRef.current = scroller.scrollTop;
+    (behavior: ScrollBehavior = "auto"): void => {
+      virtualizer.scrollToEnd({behavior});
+      setShowScrollToEndButton(false);
     },
-    [listRef]
+    [virtualizer]
   );
 
   const handleScroll = (): void => {
-    const state = listRef?.current?.getState();
-    const scroller = listRef?.current?.getScrollableNode();
-    if (!state || !scroller) return;
+    const scroller = scrollContainerRef.current;
+    if (!scroller) return;
 
-    const previousScrollTop = scrollTopRef.current ?? scroller.scrollTop;
-    const scrollingUp = scroller.scrollTop < previousScrollTop - SCROLL_DIRECTION_THRESHOLD_PX;
-    scrollTopRef.current = scroller.scrollTop;
+    setShowScrollToEndButton(!isScrollerAtEnd(scroller));
+  };
 
-    if (!hasScrollableOverflow(scroller)) {
-      setAutoFollow("following");
-      return;
+  const renderVirtualItem = (index: number): ReactNode => {
+    const item = items[index];
+    if (item) {
+      return (
+        <SessionTimelineItemFrame item={item}>
+          <SessionTimelineRow item={item} onRevertToMessage={onRevertToMessage} />
+        </SessionTimelineItemFrame>
+      );
     }
 
-    if (isScrollerAtEnd(scroller)) {
-      setAutoFollow((current) => (current === "leaving" ? "leaving" : "following"));
-      return;
-    }
-
-    setAutoFollow((current) => {
-      if (current === "leaving") return "detached";
-      if (current === "following" && scrollingUp) return "detached";
-      return current;
-    });
+    return <SessionTimelineFooter compacting={compacting} isStreaming={isStreaming} liveItems={liveItems} streamError={streamError} />;
   };
 
-  const handleWheelCapture = (event: WheelEvent<HTMLDivElement>): void => {
-    const scroller = listRef?.current?.getScrollableNode();
-    if (!scroller || !hasScrollableOverflow(scroller)) return;
-
-    if (event.deltaY >= 0 || autoFollowStateRef.current !== "following") return;
-
-    flushSync(() => {
-      setAutoFollow("leaving");
-    });
-  };
-
-  const handleScrollToEndClick = (): void => {
-    setAutoFollow("following");
-    scrollToEnd(true);
-    window.requestAnimationFrame(() => scrollToEnd(true));
-  };
-
-  const handleLiveTailRef = useCallback(
-    (element: HTMLDivElement | null): void => {
-      liveTailRef.current.observer?.disconnect();
-      liveTailRef.current.observer = null;
-
-      if (!element) return;
-
-      if (liveTailTurnId !== liveTailRef.current.turnId) {
-        liveTailRef.current.turnId = liveTailTurnId;
-        if (liveTailTurnId !== null) {
-          setAutoFollow("following");
-          scrollToEnd(true);
-          window.requestAnimationFrame(() => scrollToEnd(true));
-        }
-      }
-
-      const observer = new ResizeObserver(() => scrollToEnd());
-      observer.observe(element);
-      liveTailRef.current.observer = observer;
-
-      scrollToEnd();
-    },
-    [liveTailTurnId, scrollToEnd, setAutoFollow]
-  );
-
-  const renderItem = useCallback(
-    (renderProps: {item: SessionTimelineItem}): ReactNode => (
-      <SessionTimelineItemFrame item={renderProps.item}>
-        <SessionTimelineRow item={renderProps.item} onRevertToMessage={onRevertToMessage} />
-      </SessionTimelineItemFrame>
-    ),
-    [onRevertToMessage]
-  );
+  const virtualItems = virtualizer.getVirtualItems();
 
   return (
     <div className="relative min-h-0 flex-1 select-text">
@@ -161,32 +88,27 @@ export default function SessionTimeline(props: SessionTimelineProps) {
         </div>
       )}
       {hasTimelineContent && (
-        <LegendList<SessionTimelineItem>
-          className="h-full overflow-x-hidden overscroll-y-contain"
-          contentContainerStyle={{paddingTop: 24}}
-          data={items}
-          estimatedItemSize={140}
-          initialScrollAtEnd
-          keyExtractor={(item) => item.id}
-          ListFooterComponent={
-            <div ref={handleLiveTailRef}>
-              <SessionTimelineFooter compacting={compacting} isStreaming={isStreaming} liveItems={liveItems} streamError={streamError} />
-            </div>
-          }
-          maintainScrollAtEnd={maintainScrollAtEnd && {animated: false, on: {dataChange: true, itemLayout: true}}}
-          maintainScrollAtEndThreshold={0.1}
-          maintainVisibleContentPosition
-          onScroll={handleScroll}
-          onWheelCapture={handleWheelCapture}
-          ref={listRef}
-          renderItem={renderItem}
-        />
+        <div className="h-full overflow-x-hidden overflow-y-auto overscroll-y-contain" onScroll={handleScroll} ref={scrollContainerRef}>
+          <div className="relative w-full" style={{height: virtualizer.getTotalSize()}}>
+            {virtualItems.map((virtualItem) => (
+              <div
+                className="absolute left-0 top-0 w-full"
+                data-index={virtualItem.index}
+                key={virtualItem.key}
+                ref={virtualizer.measureElement}
+                style={{transform: `translateY(${virtualItem.start}px)`}}
+              >
+                {renderVirtualItem(virtualItem.index)}
+              </div>
+            ))}
+          </div>
+        </div>
       )}
       {showScrollToEndButton && (
         <IconButton
           className="absolute bottom-4 left-1/2 z-10 grid size-9 -translate-x-1/2 place-items-center rounded-full bg-[#181818] text-white ring-1 ring-neutral-700 transition hover:bg-[#202020]"
           label="Scroll to latest message"
-          onClick={handleScrollToEndClick}
+          onClick={() => scrollToEnd("smooth")}
           size="none"
           variant="bare"
         >

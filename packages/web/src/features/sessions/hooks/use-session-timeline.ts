@@ -1,7 +1,7 @@
 import type {ModelReference, Turn, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
-import type {LegendListRef} from "@legendapp/list/react";
 import {useQueryClient} from "@tanstack/react-query";
 import {useMemo, useRef} from "react";
+import type {RefObject} from "react";
 import {buildCommittedTimelineItems, buildLiveTimelineItems} from "@/features/sessions/lib/timeline/build-session-timeline";
 import type {ClientSlashCommandActions} from "@/features/sessions/lib/composer/client-slash-commands";
 import {useSessionLiveStore} from "@/features/sessions/stores/session-live-store";
@@ -11,7 +11,7 @@ import {useAgentRpcClient} from "@/rpc/use-agent-rpc-client";
 
 interface UseSessionTimelineResult {
   committedTimelineItems: readonly SessionTimelineItem[];
-  listRef: React.RefObject<LegendListRef | null>;
+  scrollContainerRef: RefObject<HTMLDivElement | null>;
   liveTimelineItems: readonly SessionTimelineItem[];
   slashCommandActions: ClientSlashCommandActions;
   stopStreaming: () => void;
@@ -31,7 +31,7 @@ export function useSessionTimeline(input: UseSessionTimelineInput): UseSessionTi
   const {modelReference, sessionId, sessionTurns} = input;
   const queryClient = useQueryClient();
   const rpcClient = useAgentRpcClient();
-  const messagesListRef = useRef<LegendListRef>(null);
+  const messagesListRef = useRef<HTMLDivElement>(null);
 
   const sessionState = useSessionLiveStore((state) => state.sessions[sessionId]);
   const abortSession = useSessionLiveStore((state) => state.abortSession);
@@ -61,7 +61,10 @@ export function useSessionTimeline(input: UseSessionTimelineInput): UseSessionTi
 
     sendMessage({contentParts, model: modelReference, queryClient, rpcClient, sessionId});
     window.requestAnimationFrame(() => {
-      void messagesListRef.current?.scrollToEnd({animated: false});
+      const scroller = messagesListRef.current;
+      if (!scroller) return;
+
+      scroller.scrollTop = scroller.scrollHeight;
     });
   };
 
@@ -102,6 +105,6 @@ export function useSessionTimeline(input: UseSessionTimelineInput): UseSessionTi
     revertToMessage,
     submitMessage,
     stopStreaming,
-    listRef: messagesListRef,
+    scrollContainerRef: messagesListRef,
   };
 }

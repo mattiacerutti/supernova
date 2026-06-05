@@ -12,6 +12,7 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+- Replaced the session chat timeline virtualizer with TanStack Virtual.
 - Changed the session footer to hide the Thinking label while a tool call is in progress.
 
 ### Fixed

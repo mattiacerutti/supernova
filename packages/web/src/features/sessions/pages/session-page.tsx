@@ -157,7 +157,7 @@ function SessionConversation(props: SessionConversationProps) {
           compacting={stream.streamStatus === "compacting"}
           isStreaming={stream.streamStatus === "streaming" || stream.streamStatus === "compacting"}
           items={stream.committedTimelineItems}
-          listRef={stream.listRef}
+          scrollContainerRef={stream.scrollContainerRef}
           liveItems={stream.liveTimelineItems}
           onRevertToMessage={stream.revertToMessage}
           streamError={stream.streamError}
