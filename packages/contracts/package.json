@@ -1,7 +1,7 @@
 {
   "name": "@supernova/contracts",
   "private": true,
-  "version": "0.0.1-alpha.6",
+  "version": "0.0.1-beta.1",
   "type": "module",
   "exports": {
     ".": {

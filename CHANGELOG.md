@@ -8,6 +8,16 @@ All notable changes to Supernova are documented in this file.
 
 ### Added
 
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.0.1-beta.1]
+
+### Added
+
 - Added a confirmation dialog before creating missing folders from the open-project dialog.
 - Added a skeleton loading state for the providers settings page.
 
@@ -19,8 +29,6 @@ All notable changes to Supernova are documented in this file.
 ### Fixed
 
 - Fixed the scroll-to-bottom chat button border being transparent.
-
-### Removed
 
 ## [0.0.1-alpha.6]
 
