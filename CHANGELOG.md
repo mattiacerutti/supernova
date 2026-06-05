@@ -8,6 +8,7 @@ All notable changes to Supernova are documented in this file.
 
 ### Added
 
+- Added a confirmation dialog before creating missing folders from the open-project dialog.
 - Added a skeleton loading state for the providers settings page.
 
 ### Changed

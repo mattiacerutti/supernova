@@ -62,6 +62,7 @@ interface OpenProjectDialogProps {
 
 export default function OpenProjectDialog(props: OpenProjectDialogProps) {
   const {activeSuggestionIndex, onActiveSuggestionIndexChange, onClose, onOpenProject, onProjectPathChange, open, projectPath} = props;
+  const [folderCreationConfirmation, setFolderCreationConfirmation] = useState<{open: boolean; path: string} | null>(null);
   const [hoveredSuggestionIndex, setHoveredSuggestionIndex] = useState<number | null>(null);
   const [selectionSource, setSelectionSource] = useState<"keyboard" | "mouse">("keyboard");
 
@@ -85,7 +86,13 @@ export default function OpenProjectDialog(props: OpenProjectDialogProps) {
   const activeSuggestion = highlightedIndex >= 0 ? suggestions[highlightedIndex] : undefined;
   const visibleHighlightIndex = hoveredSuggestionIndex ?? highlightedIndex;
 
-  const canSubmitPath = projectPath.trim().length > 0 && !!pathStatus && pathStatus.queryPathType !== "file" && !suggestionsQuery.isFetching && !createFolderMutation.isPending;
+  const canSubmitPath =
+    projectPath.trim().length > 0 &&
+    !!pathStatus &&
+    pathStatus.queryPathType !== "file" &&
+    !suggestionsQuery.isFetching &&
+    !createFolderMutation.isPending &&
+    !folderCreationConfirmation?.open;
 
   const handlePathChange = (value: string): void => {
     createFolderMutation.reset();
@@ -113,8 +120,8 @@ export default function OpenProjectDialog(props: OpenProjectDialogProps) {
       return;
     }
 
-    const result = await createFolderMutation.mutateAsync({path: pathStatus.queryPath});
-    onOpenProject(result.path);
+    createFolderMutation.reset();
+    setFolderCreationConfirmation({open: true, path: pathStatus.queryPath});
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
@@ -142,8 +149,29 @@ export default function OpenProjectDialog(props: OpenProjectDialogProps) {
     }
   };
 
+  const handleConfirmCreateFolder = async (): Promise<void> => {
+    if (!folderCreationConfirmation) return;
+
+    try {
+      const result = await createFolderMutation.mutateAsync({path: folderCreationConfirmation.path});
+      setFolderCreationConfirmation((confirmation) => (confirmation ? {...confirmation, open: false} : null));
+      onOpenProject(result.path);
+    } catch {
+      // The mutation state renders the error message in the confirmation dialog.
+    }
+  };
+
+  const handleCancelCreateFolder = (): void => {
+    createFolderMutation.reset();
+    setFolderCreationConfirmation((confirmation) => (confirmation ? {...confirmation, open: false} : null));
+  };
+
   const handleDialogOpenChange = (nextOpen: boolean): void => {
     if (!nextOpen) onClose();
+  };
+
+  const handleCreateFolderDialogOpenChange = (nextOpen: boolean): void => {
+    if (!nextOpen) handleCancelCreateFolder();
   };
 
   const isLoading = suggestionsQuery.isPending && !suggestionsQuery.data;
@@ -151,76 +179,106 @@ export default function OpenProjectDialog(props: OpenProjectDialogProps) {
   const isEmpty = !isLoading && !hasError && suggestedFolders.length === 0 && !isShowingDefaults;
 
   return (
-    <Dialog onOpenChange={handleDialogOpenChange} open={open} title="Open project">
-      <div className="shrink-0 pt-4">
-        <div className="flex items-center gap-2 rounded-xl bg-white/3 px-3 py-1.5 text-neutral-500 ring-1 ring-white/5 focus-within:text-neutral-300 focus-within:ring-white/10">
-          <Icon name="search" size="sm" />
-          <input
-            autoFocus
-            className="min-w-0 flex-1 bg-transparent text-sm text-neutral-200 outline-none placeholder:text-neutral-600"
-            onChange={(event) => handlePathChange(event.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Search folders"
-            value={projectPath}
-          />
-
-          <Button
-            disabled={!canSubmitPath}
-            className={cn("size-8", pathStatus?.queryPathType === "file" && "pointer-events-none invisible")}
-            onClick={() => void handleOpenPath()}
-            shape="icon"
-            size="sm"
-            title="Open project path"
-            variant="ghost"
-          >
-            <Icon className="text-neutral-400" name="arrow-right" size="sm" />
-          </Button>
-        </div>
-        {createFolderMutation.error && <p className="pt-2 text-sm text-red-400">Unable to create this folder.</p>}
-      </div>
-
-      <div className="-ml-3 -mr-5 min-h-0 flex-1 overflow-y-auto py-2">
-        {isLoading && <p className="px-3 py-2 text-sm text-neutral-600">Searching folders...</p>}
-        {hasError && <p className="px-3 py-2 text-sm text-red-400">Unable to search folders.</p>}
-        {isEmpty && <p className="px-3 py-2 text-sm text-neutral-600">No matching subfolders.</p>}
-
-        {isShowingDefaults && recentProjects.length > 0 && (
-          <div className="pb-2">
-            <p className="px-3 pb-1 pt-2 text-xs font-medium text-neutral-600">Recent projects</p>
-            {suggestions
-              .filter((s) => s.kind === "recent")
-              .map((s) => (
-                <SuggestionItem
-                  highlighted={s.index === visibleHighlightIndex}
-                  homePath={homePath}
-                  key={`recent-${s.path}`}
-                  onAutocomplete={handleAutocomplete}
-                  onHoverEnd={() => setHoveredSuggestionIndex(null)}
-                  onPointerHover={() => handleSuggestionHoverStart(s.index)}
-                  path={s.path}
-                  shouldScrollIntoView={selectionSource === "keyboard" && hoveredSuggestionIndex === null && s.index === highlightedIndex}
-                />
-              ))}
-          </div>
-        )}
-
-        {isShowingDefaults && <p className="px-3 pb-1 pt-2 text-xs font-medium text-neutral-600">Open project</p>}
-
-        {suggestions
-          .filter((s) => s.kind === "folder")
-          .map((s) => (
-            <SuggestionItem
-              highlighted={s.index === visibleHighlightIndex}
-              homePath={homePath}
-              key={`folder-${s.path}`}
-              onAutocomplete={handleAutocomplete}
-              onHoverEnd={() => setHoveredSuggestionIndex(null)}
-              onPointerHover={() => handleSuggestionHoverStart(s.index)}
-              path={s.path}
-              shouldScrollIntoView={selectionSource === "keyboard" && hoveredSuggestionIndex === null && s.index === highlightedIndex}
+    <>
+      <Dialog onOpenChange={handleDialogOpenChange} open={open} title="Open project">
+        <div className="shrink-0 pt-4">
+          <div className="flex items-center gap-2 rounded-xl bg-white/3 px-3 py-1.5 text-neutral-500 ring-1 ring-white/5 focus-within:text-neutral-300 focus-within:ring-white/10">
+            <Icon name="search" size="sm" />
+            <input
+              autoFocus
+              className="min-w-0 flex-1 bg-transparent text-sm text-neutral-200 outline-none placeholder:text-neutral-600"
+              onChange={(event) => handlePathChange(event.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Search folders"
+              value={projectPath}
             />
-          ))}
-      </div>
-    </Dialog>
+
+            <Button
+              disabled={!canSubmitPath}
+              className={cn("size-8", pathStatus?.queryPathType === "file" && "pointer-events-none invisible")}
+              onClick={() => void handleOpenPath()}
+              shape="icon"
+              size="sm"
+              title="Open project path"
+              variant="ghost"
+            >
+              <Icon className="text-neutral-400" name="arrow-right" size="sm" />
+            </Button>
+          </div>
+        </div>
+
+        <div className="-ml-3 -mr-5 min-h-0 flex-1 overflow-y-auto py-2">
+          {isLoading && <p className="px-3 py-2 text-sm text-neutral-600">Searching folders...</p>}
+          {hasError && <p className="px-3 py-2 text-sm text-red-400">Unable to search folders.</p>}
+          {isEmpty && <p className="px-3 py-2 text-sm text-neutral-600">No matching subfolders.</p>}
+
+          {isShowingDefaults && recentProjects.length > 0 && (
+            <div className="pb-2">
+              <p className="px-3 pb-1 pt-2 text-xs font-medium text-neutral-600">Recent projects</p>
+              {suggestions
+                .filter((s) => s.kind === "recent")
+                .map((s) => (
+                  <SuggestionItem
+                    highlighted={s.index === visibleHighlightIndex}
+                    homePath={homePath}
+                    key={`recent-${s.path}`}
+                    onAutocomplete={handleAutocomplete}
+                    onHoverEnd={() => setHoveredSuggestionIndex(null)}
+                    onPointerHover={() => handleSuggestionHoverStart(s.index)}
+                    path={s.path}
+                    shouldScrollIntoView={selectionSource === "keyboard" && hoveredSuggestionIndex === null && s.index === highlightedIndex}
+                  />
+                ))}
+            </div>
+          )}
+
+          {isShowingDefaults && <p className="px-3 pb-1 pt-2 text-xs font-medium text-neutral-600">Open project</p>}
+
+          {suggestions
+            .filter((s) => s.kind === "folder")
+            .map((s) => (
+              <SuggestionItem
+                highlighted={s.index === visibleHighlightIndex}
+                homePath={homePath}
+                key={`folder-${s.path}`}
+                onAutocomplete={handleAutocomplete}
+                onHoverEnd={() => setHoveredSuggestionIndex(null)}
+                onPointerHover={() => handleSuggestionHoverStart(s.index)}
+                path={s.path}
+                shouldScrollIntoView={selectionSource === "keyboard" && hoveredSuggestionIndex === null && s.index === highlightedIndex}
+              />
+            ))}
+        </div>
+      </Dialog>
+
+      <Dialog
+        containerClassName="h-auto w-[min(calc(100vw-1rem),28rem)]"
+        onOpenChange={handleCreateFolderDialogOpenChange}
+        open={folderCreationConfirmation?.open ?? false}
+        title="Create folder?"
+      >
+        <div className="flex flex-col gap-5 pb-5 pt-3">
+          <p className="text-sm leading-6 text-neutral-400">
+            The folder <span className="text-neutral-200">{folderCreationConfirmation?.path}</span> does not exist. Create it and open it as a project?
+          </p>
+
+          {createFolderMutation.error && <p className="text-sm text-red-400">Unable to create this folder.</p>}
+
+          <div className="flex justify-end gap-2">
+            <Button className="rounded-xl px-3 py-2 text-sm text-neutral-400 hover:bg-white/7 hover:text-neutral-100" onClick={handleCancelCreateFolder} variant="bare">
+              Cancel
+            </Button>
+            <Button
+              className="rounded-xl bg-white/10 px-3 py-2 text-sm text-neutral-100 hover:bg-white/15 disabled:hover:bg-white/10"
+              disabled={createFolderMutation.isPending}
+              onClick={() => void handleConfirmCreateFolder()}
+              variant="bare"
+            >
+              Create folder
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+    </>
   );
 }
