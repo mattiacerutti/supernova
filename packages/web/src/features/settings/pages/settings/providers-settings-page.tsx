@@ -4,6 +4,7 @@ import Dialog from "@/components/ui/dialog";
 import ProviderApiKeyContent from "@/features/settings/components/providers/provider-api-key-dialog";
 import ProviderConnectMethodContent from "@/features/settings/components/providers/provider-connect-method-dialog";
 import ProviderOAuthContent from "@/features/settings/components/providers/provider-oauth-dialog";
+import ProvidersPageSkeleton from "@/features/settings/components/providers/providers-page-skeleton";
 import ProvidersSection from "@/features/settings/components/providers/providers-section";
 import {useCancelProviderLogin} from "@/features/settings/hooks/api/auth/use-cancel-provider-login";
 import {useLogoutProvider} from "@/features/settings/hooks/api/auth/use-logout-provider";
@@ -93,7 +94,7 @@ export default function ProvidersSettingsPage() {
         <h1 className="text-3xl font-semibold tracking-tight text-neutral-200">Providers</h1>
         <p className="mt-2 text-sm text-neutral-500">Connect model providers to use them.</p>
 
-        {providersQuery.isPending && <p className="mt-8 text-sm text-neutral-500">Loading providers...</p>}
+        {providersQuery.isPending && <ProvidersPageSkeleton />}
         {providersQuery.error && <p className="mt-8 text-sm text-red-400">Unable to load providers.</p>}
         {providersQuery.data && (
           <>

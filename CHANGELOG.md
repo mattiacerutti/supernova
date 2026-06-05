@@ -8,6 +8,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Added
 
+- Added a skeleton loading state for the providers settings page.
+
 ### Changed
 
 ### Fixed
