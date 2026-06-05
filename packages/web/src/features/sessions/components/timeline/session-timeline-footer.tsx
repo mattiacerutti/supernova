@@ -9,9 +9,15 @@ interface SessionTimelineFooterProps {
   readonly streamError: string | null;
 }
 
+function hasPendingToolCall(items: readonly SessionTimelineItem[]): boolean {
+  return items.some((item) => item.type === "work" && item.events.some((event) => event.type === "tool" && event.tool?.status === "pending"));
+}
+
 export default function SessionTimelineFooter(props: SessionTimelineFooterProps) {
   const {compacting, isStreaming, liveItems, streamError} = props;
+
   const streamingLabel = compacting ? "Compacting context" : "Thinking";
+  const showStreamingLabel = isStreaming && !hasPendingToolCall(liveItems);
 
   return (
     <>
@@ -21,7 +27,7 @@ export default function SessionTimelineFooter(props: SessionTimelineFooterProps)
         </SessionTimelineItemFrame>
       ))}
       <div className="mx-auto w-full max-w-3xl px-5 pb-6 md:px-8">
-        {isStreaming && (
+        {showStreamingLabel && (
           <div className="relative w-fit text-sm text-neutral-600">
             <span>{streamingLabel}</span>
             <span aria-hidden="true" className="thinking-shimmer absolute inset-0 text-neutral-200">

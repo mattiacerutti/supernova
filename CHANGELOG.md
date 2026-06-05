@@ -12,6 +12,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+- Changed the session footer to hide the Thinking label while a tool call is in progress.
+
 ### Fixed
 
 - Fixed the scroll-to-bottom chat button border being transparent.
