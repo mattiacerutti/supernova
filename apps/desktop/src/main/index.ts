@@ -55,6 +55,8 @@ async function createWindow(): Promise<void> {
     y: savedWindowState.y,
     width: savedWindowState.width,
     height: savedWindowState.height,
+    minWidth: 840,
+    minHeight: 620,
     title: "Supernova",
     show: false,
     autoHideMenuBar: true,

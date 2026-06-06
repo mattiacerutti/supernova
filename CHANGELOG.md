@@ -10,7 +10,11 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+- Set a minimum desktop app window size.
+
 ### Fixed
+
+- Fixed the compact-width layout so the session panel shows by default and the sidebar toggle switches between full-width panels. Also made the settings sidebar keep its normal split layout while the page shrinks. ([#1](https://github.com/mattiacerutti/supernova/issues/1))
 
 ### Removed
 

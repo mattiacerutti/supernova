@@ -1,4 +1,3 @@
-import {useState} from "react";
 import {useRouter, useRouterState, useCanGoBack} from "@tanstack/react-router";
 import type {ReactNode} from "react";
 import type {AppEnvironment} from "@/app/app-environment";
@@ -7,6 +6,7 @@ import Icon from "@/components/ui/icon";
 import IconButton from "@/components/ui/icon-button";
 import ResizableSidebarLayout from "@/features/sidebar/components/resizable-sidebar-layout";
 import Sidebar from "@/features/sidebar/components/sidebar";
+import {useSidebarVisibility} from "@/features/sidebar/hooks/use-sidebar-visibility";
 
 interface HomePageProps {
   appEnvironment: AppEnvironment;
@@ -15,7 +15,7 @@ interface HomePageProps {
 
 export default function HomePage(props: HomePageProps) {
   const {appEnvironment, children} = props;
-  const [sidebarVisible, setSidebarVisible] = useState(true);
+  const {sidebarVisible, toggleSidebar} = useSidebarVisibility();
   const router = useRouter();
 
   useRouterState({
@@ -30,10 +30,6 @@ export default function HomePage(props: HomePageProps) {
   const canGoForward = currentIndex < router.history.length - 1;
   const navigationVisible = isDesktopEnvironment(appEnvironment);
 
-  const handleToggleSidebar = (): void => {
-    setSidebarVisible((visible) => !visible);
-  };
-
   const handleGoBack = (): void => {
     router.history.back();
   };
@@ -44,7 +40,7 @@ export default function HomePage(props: HomePageProps) {
 
   const titlebarActions = (
     <>
-      <IconButton className="size-7" label="Toggle sidebar" onClick={handleToggleSidebar}>
+      <IconButton className="size-7" label="Toggle sidebar" onClick={toggleSidebar}>
         <Icon name="panel-left" size="sm" />
       </IconButton>
       {navigationVisible && (
