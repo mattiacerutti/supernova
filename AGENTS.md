@@ -12,6 +12,16 @@ The Pi SDK is used as the execution engine (https://pi.dev/docs). This repositor
 - interaction model
 - feature layer (todos, planning, subagents, etc.)
 
+The goal is for Supernova to be fast, performant and have an ultra-polished user experience.
+
+### Core Priorities
+
+1. Performance first.
+2. Reliability first.
+3. Keep behavior predictable under load and during failures (session restarts, reconnects, partial streams).
+
+If a tradeoff is required, choose correctness and robustness over short-term convenience.
+
 ## High-Level Architecture
 
 ```text
@@ -73,6 +83,53 @@ Architecture:
   - `bun run test`
   - `bun run typecheck`
   - `bun run lint`
+- Before editing a file, check whether its package directory contain a nested `AGENTS.md` and read it. Follow those local instructions in addition to this root file for files under that scope.
+
+## Reference Repositories
+
+Additional repositories may be cloned under `.context/` to provide local context. When a user asks how other projects solve a problem, implement a pattern, or structure similar functionality, check `.context/` first before looking elsewhere.
+
+Known useful references include:
+
+- `.context/effect` for Effect examples, internals, and idioms.
+- `.context/pi` for Pi SDK and related monorepo patterns.
+
+Other repositories may also be present in `.context/`; inspect the directory when broader examples would help.
+
+## Maintainability
+
+Long term maintainability is a core priority. If you add new functionality, first check if there is shared logic that can be extracted to a separate module. Duplicate logic across multiple files is a code smell and should be avoided. Don't be afraid to change existing code. Don't take shortcuts by just adding local logic to solve a problem.
+
+## Code Standards
+
+- Favor readability over micro-optimizations: straightforward control flow, early returns, and clear naming. Extract constants for magic numbers/strings and keep inline styles minimal (lean on classes or computed style helpers).
+- Use `import type` for types; keep strings double-quoted and favor `const` over `let`.
+- Use kebab-case for files and folders.
+- Read files in full before making wide-ranging changes, before editing files you have not already fully inspected, and when the user asks you to investigate or audit something. Do not rely only on search snippets for broad changes.
+- Single-line helper functions with a single call site are forbidden; inline them instead.
+- Always ask before removing functionality or code that appears to be intentional.
+- Do not preserve backward compatibility unless the user explicitly asks for it.
+
+### Imports and logging
+
+- Prefer package or path aliases (`@/...`, `@assets/...`, `@supernova/...`) over deep relative imports. Never use relative path imports (`./...` or `../...`).
+- Follow package-specific import guidance when it is more precise, such as using `@supernova/agent-runtime/...` for source imports that must typecheck from dependent packages.
+- Never include TypeScript file extensions in imports (`.ts` or `.tsx`).
+- Do not create local `index.ts` barrel files.
+- Keep logging minimal and purposeful; remove noisy debug output when not needed.
+
+### Implementation Logic
+
+Keep procedure logic, shared helpers, mappers, resolvers, factories, builders, classes, state holders, and lifecycle coordinators easy to scan and understand. Use these rules by role, not by folder name: an implementation file under `operations` can need them just as much as one under `lib`.
+
+- Order function declarations from top to bottom as non-exported functions, then exported functions.
+- If a function uses a named `Options` input type or interface for its arguments, then place it directly above the function that uses it.
+- Add small TSDoc comments to exported functions, exported classes, and public methods on exported classes.
+- Add small TSDoc comments to non-exported functions, classes, and methods when their behavior is not trivial.
+
+## User override
+
+If the user instructions conflict with rules set out here, ask for confirmation that they want to override the rules. Only then execute their instructions.
 
 ## Changelog
 
@@ -87,56 +144,16 @@ Rules:
 - Do not add entries for purely internal cleanup, refactors, tests, or documentation-only changes unless they affect released behavior or release operations.
 - Released version sections are immutable; never modify them.
 
-## Reference Repositories
+Style:
 
-Additional repositories may be cloned under `.context/` to provide local context. When a user asks how other projects solve a problem, implement a pattern, or structure similar functionality, check `.context/` first before looking elsewhere.
+- Write changelogs concise, product-facing, and focused on observable behavior.
+- Describe what changed for users, not the implementation details, commit work, or the wording of the request.
+- Use plain past-tense release-note phrasing: `Added ...`, `Changed ...`, `Fixed ...`, `Removed ...`.
+- Prefer one clear sentence. Add a second sentence only when needed to explain user impact or important release behavior.
+- Mention technical details only when they are part of the user-facing surface, such as a command, setting, file type, provider, or platform.
+- Avoid entries like `Implemented requested sidebar refactor`; write `Changed the sidebar to keep project actions visible while resizing the window`.
 
-Known useful references include:
+Attribution:
 
-- `.context/effect` for Effect examples, internals, and idioms.
-- `.context/pi` for Pi SDK and related monorepo patterns.
-
-Other repositories may also be present in `.context/`; inspect the directory when broader examples would help.
-
-## Code Standards
-
-- Favor readability over micro-optimizations: straightforward control flow, early returns, and clear naming. Extract constants for magic numbers/strings and keep inline styles minimal (lean on classes or computed style helpers).
-- Use `import type` for types; keep strings double-quoted and favor `const` over `let`.
-- Use kebab-case for files and folders.
-- Read files in full before making wide-ranging changes, before editing files you have not already fully inspected, and when the user asks you to investigate or audit something. Do not rely only on search snippets for broad changes.
-- Single-line helper functions with a single call site are forbidden; inline them instead.
-- Always ask before removing functionality or code that appears to be intentional
-- Do not preserve backward compatibility unless the user explicitly asks for it
-
-### Implementation Logic
-
-Keep procedure logic, shared helpers, mappers, resolvers, factories, builders, classes, state holders, and lifecycle coordinators easy to scan and understand. Use these rules by role, not by folder name; an implementation file under `operations` can need them just as much as one under `lib`.
-
-- Order function declarations from top to bottom as non-exported functions, then exported functions.
-- If a function uses a named `Options` input type or interface for its arguments, then place it directly above the function that uses it.
-- Add small TSDoc comments to exported functions, exported classes, and public methods on exported classes.
-- Add small TSDoc comments to non-exported functions, classes, and methods when their behavior is not trivial.
-
-### Core Priorities
-
-1. Performance first.
-2. Reliability first.
-3. Keep behavior predictable under load and during failures (session restarts, reconnects, partial streams).
-
-If a tradeoff is required, choose correctness and robustness over short-term convenience.
-
-## Maintainability
-
-Long term maintainability is a core priority. If you add new functionality, first check if there is shared logic that can be extracted to a separate module. Duplicate logic across multiple files is a code smell and should be avoided. Don't be afraid to change existing code. Don't take shortcuts by just adding local logic to solve a problem.
-
-### Imports and logging
-
-- Prefer package or path aliases (`@/...`, `@assets/...`, `@supernova/...`) over deep relative imports. Never use relative path imports (`./...` or `../...`).
-- Follow package-specific import guidance when it is more precise, such as using `@supernova/agent-runtime/...` for source imports that must typecheck from dependent packages.
-- Never include TypeScript file extensions in imports (`.ts` or `.tsx`).
-- Do not create local `index.ts` barrel files.
-- Keep logging minimal and purposeful; remove noisy debug output when not needed.
-
-### User override
-
-If the user instructions conflict with rules set out here, ask for confirmation that they want to override the rules. Only then execute their instructions.
+- Internal issue fixes: `Fixed foo bar ([#123](https://github.com/mattiacerutti/supernova/issues/123))`
+- External contributions: `Added feature X ([#456](https://github.com/mattiacerutti/supernova/pull/456) by [@username](https://github.com/username))`
