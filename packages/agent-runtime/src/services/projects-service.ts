@@ -8,7 +8,7 @@ import type {
 
 export interface ProjectsServiceShape {
   readonly archiveSession: (projectPath: string, sessionId: string) => Effect.Effect<ProjectSessionArchiveResult, ProjectSessionArchiveError>;
-  readonly listSessions: (input: {cursor?: string; limit?: number; projectPath: string}) => Effect.Effect<ProjectSessionsListResult, ProjectSessionsListError>;
+  readonly listSessions: (input: {projectPath: string}) => Effect.Effect<ProjectSessionsListResult, ProjectSessionsListError>;
 }
 
 export class ProjectsService extends Context.Service<ProjectsService, ProjectsServiceShape>()("supernova/agent-runtime/ProjectsService") {}

@@ -12,13 +12,11 @@ export function listProjectSessionsQueryKey(projectPath: string) {
 }
 
 interface UseListProjectSessionsOptions {
-  cursor?: string;
-  limit?: number;
   projectPath: string;
 }
 
 export function useListProjectSessions(options: UseListProjectSessionsOptions) {
-  const {cursor, limit, projectPath} = options;
+  const {projectPath} = options;
 
   return useQuery(
     eq.queryOptions({
@@ -27,9 +25,9 @@ export function useListProjectSessions(options: UseListProjectSessionsOptions) {
       queryFn: () =>
         Effect.gen(function* () {
           const rpc = yield* AgentRpcProtocolClientService;
-          return yield* rpc.listProjectSessions({cursor, limit, projectPath});
+          return yield* rpc.listProjectSessions({projectPath});
         }),
-      queryKey: [...listProjectSessionsQueryKey(projectPath), {cursor, limit}] as const,
+      queryKey: listProjectSessionsQueryKey(projectPath),
     })
   );
 }

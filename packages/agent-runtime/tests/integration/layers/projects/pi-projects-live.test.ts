@@ -42,31 +42,22 @@ describe("listing and archiving Pi project sessions", () => {
     vi.restoreAllMocks();
   });
 
-  it("returns project sessions newest-first and continues after the cursor without repeating earlier pages", async () => {
+  it("returns all project sessions newest-first", async () => {
     const piSdk = makePiSdk([
       session({id: "older", modified: new Date("2026-01-01T00:00:00.000Z"), name: "Older"}),
       session({id: "newest", modified: new Date("2026-01-03T00:00:00.000Z"), name: "Newest"}),
       session({id: "middle", modified: new Date("2026-01-02T00:00:00.000Z"), name: "Middle"}),
     ]);
 
-    const firstPage = await runWithProjects(
+    const result = await runWithProjects(
       piSdk,
       Effect.gen(function* () {
         const projects = yield* ProjectsService;
-        return yield* projects.listSessions({limit: 2, projectPath: "/workspace"});
-      })
-    );
-    const secondPage = await runWithProjects(
-      piSdk,
-      Effect.gen(function* () {
-        const projects = yield* ProjectsService;
-        return yield* projects.listSessions({cursor: firstPage.nextCursor, limit: 2, projectPath: "/workspace"});
+        return yield* projects.listSessions({projectPath: "/workspace"});
       })
     );
 
-    expect(firstPage).toMatchObject({hasMore: true, nextCursor: "middle", sessions: [{id: "newest"}, {id: "middle"}]});
-    expect(secondPage).toMatchObject({hasMore: false, sessions: [{id: "older"}]});
-    expect(secondPage.nextCursor).toBeUndefined();
+    expect(result).toMatchObject({projectPath: "/workspace", sessions: [{id: "newest"}, {id: "middle"}, {id: "older"}]});
   });
 
   it("archives a session by moving the backing session file into an archive directory", async () => {

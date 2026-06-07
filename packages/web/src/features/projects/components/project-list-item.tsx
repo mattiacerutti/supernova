@@ -32,7 +32,6 @@ export default function ProjectListItem(props: ProjectListItemProps) {
   const {activeSessionId, expanded, onToggle, project} = props;
 
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
-  const [loadedSessionLimit, setLoadedSessionLimit] = useState(INITIAL_SESSION_LIMIT);
   const [visibleSessionLimit, setVisibleSessionLimit] = useState(INITIAL_SESSION_LIMIT);
   const [confirmingArchiveSessionId, setConfirmingArchiveSessionId] = useState<string | null>(null);
   const animatedSessionListsRef = useRef(new WeakSet<HTMLElement>());
@@ -56,7 +55,7 @@ export default function ProjectListItem(props: ProjectListItemProps) {
     renaming,
     startRenaming,
   } = useInlineRename({initialValue: project.name, onSave: (name) => renameProject(project.id, name)});
-  const sessionsQuery = useListProjectSessions({limit: loadedSessionLimit, projectPath: project.path});
+  const sessionsQuery = useListProjectSessions({projectPath: project.path});
 
   const sessions =
     sessionsQuery.data?.sessions
@@ -71,16 +70,18 @@ export default function ProjectListItem(props: ProjectListItemProps) {
 
   const activeSession = sessions.find((session) => session.id === activeSessionId);
 
-  const visibleSessions = sessions.slice(0, visibleSessionLimit);
+  const pinnedSessions = sessions.filter((session) => session.pinned);
+  const unpinnedSessions = sessions.filter((session) => !session.pinned);
+  const visibleSessionIds = new Set([...pinnedSessions, ...unpinnedSessions.slice(0, visibleSessionLimit), ...(activeSession ? [activeSession] : [])].map((session) => session.id));
+  const visibleSessions = sessions.filter((session) => visibleSessionIds.has(session.id));
   const displayedSessions = expanded ? visibleSessions : activeSession ? [activeSession] : [];
   const sessionsExpanded = expanded || activeSession != null;
 
   const hasSessions = sessions.length > 0;
-  const hasHiddenLoadedSessions = sessions.length > visibleSessionLimit;
+  const hasHiddenSessions = unpinnedSessions.some((session) => !visibleSessionIds.has(session.id));
   const canShowLessSessions = visibleSessionLimit > INITIAL_SESSION_LIMIT;
-  const canShowMoreSessions = expanded && (hasHiddenLoadedSessions || !!sessionsQuery.data?.hasMore);
+  const canShowMoreSessions = expanded && hasHiddenSessions;
   const canShowLessAtEnd = expanded && canShowLessSessions && !canShowMoreSessions;
-  const isLoadingMoreSessions = sessionsQuery.isFetching && sessions.length < loadedSessionLimit;
   const canOpenInFinder = window.desktopShell?.platform === "darwin";
 
   const handleToggle = (): void => {
@@ -145,12 +146,6 @@ export default function ProjectListItem(props: ProjectListItemProps) {
   };
 
   const handleLoadMoreSessions = (): void => {
-    if (hasHiddenLoadedSessions) {
-      setVisibleSessionLimit(sessions.length);
-      return;
-    }
-
-    setLoadedSessionLimit((limit) => limit + SESSION_LIMIT_INCREMENT);
     setVisibleSessionLimit((limit) => limit + SESSION_LIMIT_INCREMENT);
   };
 
@@ -296,16 +291,8 @@ export default function ProjectListItem(props: ProjectListItemProps) {
 
           {canShowMoreSessions && (
             <li>
-              <Button className="ml-8 inline-flex items-center justify-start gap-2 py-1 text-xs" disabled={isLoadingMoreSessions} onClick={handleLoadMoreSessions} variant="ghost">
+              <Button className="ml-8 inline-flex items-center justify-start gap-2 py-1 text-xs" onClick={handleLoadMoreSessions} variant="ghost">
                 Show more
-                <span className="grid size-2.5 place-items-center" aria-hidden="true">
-                  <span
-                    className={cn(
-                      "size-2.5 rounded-full border border-neutral-600 border-t-neutral-300 opacity-0 transition-opacity duration-100",
-                      isLoadingMoreSessions && "animate-spin opacity-100 delay-150"
-                    )}
-                  />
-                </span>
               </Button>
             </li>
           )}

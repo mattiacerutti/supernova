@@ -16,6 +16,7 @@ All notable changes to Supernova are documented in this file.
 
 ### Fixed
 
+- Fixed pinned sidebar chats so they remain visible even when older chats are hidden behind the project preview limit.
 - Fixed the compact-width layout so the session panel shows by default and the sidebar toggle switches between full-width panels. Also made the settings sidebar keep its normal split layout while the page shrinks. ([#1](https://github.com/mattiacerutti/supernova/issues/1))
 
 ### Removed
