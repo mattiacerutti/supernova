@@ -2,6 +2,10 @@ import type {AnimationEvent} from "react";
 import {useState} from "react";
 import {cn} from "@/lib/cn";
 
+function shouldRevealTitleChange(previousTitle: string, nextTitle: string): boolean {
+  return previousTitle.trim() === "Untitled session" && nextTitle.trim().length > 0 && previousTitle !== nextTitle;
+}
+
 interface SessionTitleRevealState {
   readonly revealingTitle: string | null;
   readonly title: string;
@@ -17,7 +21,7 @@ export default function SessionTitleText(props: SessionTitleTextProps) {
   const [revealState, setRevealState] = useState<SessionTitleRevealState>(() => ({revealingTitle: null, title}));
 
   if (revealState.title !== title) {
-    setRevealState({revealingTitle: title, title});
+    setRevealState({revealingTitle: shouldRevealTitleChange(revealState.title, title) ? title : null, title});
   }
 
   const revealing = revealState.revealingTitle === title;

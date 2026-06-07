@@ -5,6 +5,7 @@ import ThinkingLevelPicker from "@/features/sessions/components/composer/pickers
 import SessionComposer from "@/features/sessions/components/composer/session-composer";
 import SessionComposerSkeleton from "@/features/sessions/components/composer/session-composer-skeleton";
 import UndoneTurnsDrawer from "@/features/sessions/components/composer/undone-turns-drawer";
+import SessionActionsMenu from "@/features/sessions/components/session-actions-menu";
 import SessionLayout from "@/features/sessions/components/session-layout";
 import SessionTimeline from "@/features/sessions/components/timeline/session-timeline";
 import SessionTitleText from "@/features/sessions/components/session-title-text";
@@ -12,10 +13,12 @@ import {useSession} from "@/features/sessions/hooks/api/use-session";
 import {useSessionModels} from "@/features/sessions/hooks/api/use-session-models";
 import {useComposerAttachments} from "@/features/sessions/hooks/use-composer-attachments";
 import {useCachedSessionTitle} from "@/features/sessions/hooks/use-cached-session-title";
+import {useRenameSession as useRenameSessionMutation} from "@/features/sessions/hooks/api/use-rename-session";
 import {useSessionTimeline} from "@/features/sessions/hooks/use-session-timeline";
 import {modelKey, resolveThinkingLevel, selectionFromModel, selectionKey} from "@/features/sessions/lib/composer/model-picker/model-utils";
 import {useModelPickerStore} from "@/features/sessions/stores/model-picker-store";
 import {useSessionModelsStore} from "@/features/sessions/stores/session-models-store";
+import {useInlineRename} from "@/hooks/use-inline-rename";
 
 interface SessionLoadingProps {
   readonly appEnvironment: AppEnvironment;
@@ -50,6 +53,18 @@ interface SessionConversationProps {
 function SessionConversation(props: SessionConversationProps) {
   const {appEnvironment, session} = props;
 
+  const renameSessionMutation = useRenameSessionMutation();
+  const {
+    draftName,
+    handleBlur: handleRenameBlur,
+    handleChange: handleRenameChange,
+    handleClick: handleRenameClick,
+    handleFocus: handleRenameFocus,
+    handleInputRef: renameInputRef,
+    handleKeyDown: handleRenameKeyDown,
+    renaming,
+    startRenaming,
+  } = useInlineRename({initialValue: session.title, onSave: (title) => renameSessionMutation.mutate({sessionId: session.id, title})});
   const {data: models, isPending: modelsPending} = useSessionModels();
   const availableModels = models ?? [];
 
@@ -163,7 +178,23 @@ function SessionConversation(props: SessionConversationProps) {
           streamError={stream.streamError}
         />
       }
-      title={<SessionTitleText className="block truncate" title={session.title} />}
+      title={
+        renaming ? (
+          <input
+            className="block h-5 min-w-0 w-64 truncate border-0 bg-transparent p-0 text-sm font-medium leading-5 text-neutral-200 outline-none"
+            onBlur={handleRenameBlur}
+            onChange={handleRenameChange}
+            onClick={handleRenameClick}
+            onFocus={handleRenameFocus}
+            onKeyDown={handleRenameKeyDown}
+            ref={renameInputRef}
+            value={draftName}
+          />
+        ) : (
+          <SessionTitleText className="block truncate" title={session.title} />
+        )
+      }
+      titleActions={<SessionActionsMenu onRename={startRenaming} projectPath={session.projectPath} sessionId={session.id} sessionTitle={session.title} />}
     />
   );
 }

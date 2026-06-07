@@ -10,7 +10,7 @@ import Menu, {MenuItem} from "@/components/ui/menu";
 import type {ProjectListProject} from "@/features/projects/types/project-list";
 import {useArchiveProjectSession} from "@/features/projects/hooks/api/use-archive-project-session";
 import {useListProjectSessions} from "@/features/projects/hooks/api/use-list-project-sessions";
-import {useRenameProject} from "@/features/projects/hooks/use-rename-project";
+import {useInlineRename} from "@/hooks/use-inline-rename";
 import {useProjectsStore} from "@/features/projects/stores/projects-store";
 import {sessionQueryOptions} from "@/features/sessions/hooks/api/use-session";
 import {useSessionLiveStore} from "@/features/sessions/stores/session-live-store";
@@ -40,6 +40,7 @@ export default function ProjectListItem(props: ProjectListItemProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const removeProject = useProjectsStore((state) => state.removeProject);
+  const renameProject = useProjectsStore((state) => state.renameProject);
   const toggleSessionPinned = useProjectsStore((state) => state.toggleSessionPinned);
   const toggleProjectPinned = useProjectsStore((state) => state.toggleProjectPinned);
   const sessionLiveStates = useSessionLiveStore((state) => state.sessions);
@@ -54,7 +55,7 @@ export default function ProjectListItem(props: ProjectListItemProps) {
     handleInputRef: renameInputRef,
     renaming,
     startRenaming,
-  } = useRenameProject({projectId: project.id, projectName: project.name});
+  } = useInlineRename({initialValue: project.name, onSave: (name) => renameProject(project.id, name)});
   const sessionsQuery = useListProjectSessions({limit: loadedSessionLimit, projectPath: project.path});
 
   const sessions =

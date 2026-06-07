@@ -12,6 +12,9 @@ import {
   ListModelsError,
   ListModelsPayload,
   ListModelsResult,
+  RenameSessionError,
+  RenameSessionPayload,
+  RenameSessionResult,
 } from "@supernova/contracts/sessions/procedures";
 
 export const GetSessionRpc = Rpc.make("getSession", {
@@ -38,4 +41,10 @@ export const ListComposerSuggestionsRpc = Rpc.make("listComposerSuggestions", {
   success: ListComposerSuggestionsResult,
 });
 
-export const SessionRpcs = [GetSessionRpc, CreateSessionRpc, ListModelsRpc, ListComposerSuggestionsRpc] as const;
+export const RenameSessionRpc = Rpc.make("renameSession", {
+  error: RenameSessionError,
+  payload: RenameSessionPayload,
+  success: RenameSessionResult,
+});
+
+export const SessionRpcs = [GetSessionRpc, CreateSessionRpc, ListModelsRpc, ListComposerSuggestionsRpc, RenameSessionRpc] as const;

@@ -21,7 +21,7 @@ export function createSession(projectPath: string) {
         return {
           id: sessionManager.getSessionId(),
           projectPath,
-          title: "New session",
+          title: "Untitled session",
           turns: [],
           undoneTurns: [],
           updatedAt: header.timestamp,

@@ -30,6 +30,7 @@ export const AgentRpcLive = AgentRpcGroup.toLayer(
       listModels: () => sessions.listModels(),
       logoutProvider: ({providerId}) => providers.logout(providerId),
       redoCheckpoint: (input) => sessionRuntime.redoCheckpoint(input),
+      renameSession: (input) => sessions.rename(input),
       revertToMessage: (input) => sessionRuntime.revertToMessage(input),
       setProviderApiKey: ({apiKey, providerId}) => providers.setApiKey(providerId, apiKey),
       sendMessage: (input) => sessionRuntime.sendMessage(input),

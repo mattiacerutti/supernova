@@ -30,9 +30,32 @@ describe("Pi sessions service", () => {
     );
     const created = pi.getSession(session.id);
 
-    expect(session).toMatchObject({id: session.id, projectPath: "/workspace", title: "New session", turns: []});
+    expect(session).toMatchObject({id: session.id, projectPath: "/workspace", title: "Untitled session", turns: []});
     const header = JSON.parse(await readFile(created?.info.path ?? "", "utf8"));
     expect(header).toMatchObject({cwd: "/workspace", id: session.id, timestamp: session.updatedAt, type: "session"});
+  });
+
+  it("renames a persisted session", async () => {
+    const pi = createPiTestRuntime();
+    runtimes.push(pi);
+    const {info} = pi.createSession();
+
+    const session = await pi.runWithSessions(
+      Effect.gen(function* () {
+        const sessions = yield* SessionsService;
+        return yield* sessions.rename({sessionId: info.id, title: "Investigate flaky tests"});
+      })
+    );
+
+    const renamed = await pi.runWithSessions(
+      Effect.gen(function* () {
+        const sessions = yield* SessionsService;
+        return yield* sessions.get(info.id);
+      })
+    );
+
+    expect(session).toMatchObject({id: info.id, title: "Investigate flaky tests"});
+    expect(renamed).toMatchObject({id: info.id, title: "Investigate flaky tests"});
   });
 
   it("loads turns from raw branch history instead of compacted context", async () => {

@@ -7,6 +7,7 @@ import {createSession} from "@supernova/agent-runtime/layers/sessions/operations
 import {getSession} from "@supernova/agent-runtime/layers/sessions/operations/get-session";
 import {listComposerSuggestions} from "@supernova/agent-runtime/layers/sessions/operations/list-composer-suggestions";
 import {listModels} from "@supernova/agent-runtime/layers/sessions/operations/list-models";
+import {renameSession} from "@supernova/agent-runtime/layers/sessions/operations/rename-session";
 
 export const PiSessionsFromInternal = Layer.effect(
   SessionsService,
@@ -20,6 +21,7 @@ export const PiSessionsFromInternal = Layer.effect(
       get: (sessionId) => getSession(sessionId).pipe(Effect.provideService(PiSessionStore, sessionStore)),
       listComposerSuggestions: (projectPath, kind, query) => listComposerSuggestions(projectPath, kind, query).pipe(Effect.provideService(PiResourceCatalog, resourceCatalog)),
       listModels: () => listModels().pipe(Effect.provideService(PiModelCatalog, modelCatalog)),
+      rename: (input) => renameSession(input).pipe(Effect.provideService(PiSessionStore, sessionStore)),
     };
   })
 );

@@ -8,6 +8,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Added
 
+- Added chat actions in the session header for pinning, renaming, and archiving the current chat.
+
 ### Changed
 
 - Set a minimum desktop app window size.

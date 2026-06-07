@@ -1,32 +1,33 @@
 import type {ChangeEvent, FocusEvent, KeyboardEvent, MouseEvent} from "react";
 import {useRef, useState} from "react";
-import {useProjectsStore} from "@/features/projects/stores/projects-store";
 
-interface UseRenameProjectOptions {
-  projectId: string;
-  projectName: string;
+interface UseInlineRenameOptions {
+  readonly initialValue: string;
+  readonly onSave: (value: string) => void;
 }
 
-export function useRenameProject(options: UseRenameProjectOptions) {
-  const {projectId, projectName} = options;
+/** Manages inline rename input state, focus behavior, and commit/cancel keyboard interactions. */
+export function useInlineRename(options: UseInlineRenameOptions) {
+  const {initialValue, onSave} = options;
 
   const [renaming, setRenaming] = useState(false);
-  const [draftName, setDraftName] = useState(projectName);
+  const [draftName, setDraftName] = useState(initialValue);
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const renameProject = useProjectsStore((state) => state.renameProject);
 
   const startRenaming = (): void => {
-    setDraftName(projectName);
+    setDraftName(initialValue);
     setRenaming(true);
   };
 
   const saveRename = (): void => {
-    renameProject(projectId, draftName);
+    const trimmedName = draftName.trim();
     setRenaming(false);
+    if (trimmedName.length === 0 || trimmedName === initialValue) return;
+    onSave(trimmedName);
   };
 
   const cancelRename = (): void => {
-    setDraftName(projectName);
+    setDraftName(initialValue);
     setRenaming(false);
   };
 

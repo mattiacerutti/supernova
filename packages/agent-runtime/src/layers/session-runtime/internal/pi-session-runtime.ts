@@ -259,7 +259,7 @@ export class PiSessionRuntime {
   }
 
   private sessionSummary(openedSession: OpenedRuntimeSession): SessionSummary {
-    return {id: openedSession.sessionInfo.id, title: openedSession.sessionManager.getSessionName() ?? "Untitled", updatedAt: new Date().toISOString()};
+    return {id: openedSession.sessionInfo.id, title: openedSession.sessionManager.getSessionName() ?? "Untitled session", updatedAt: new Date().toISOString()};
   }
 
   private async publishLiveTurn(activeTurn: ActiveTurn): Promise<void> {
