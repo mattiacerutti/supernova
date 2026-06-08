@@ -187,8 +187,12 @@ function SessionComposerRoot(props: SessionComposerRootProps) {
       }}
     >
       <div className="px-4 pb-4 md:px-6">
-        <div className="mx-auto max-w-3xl">
-          {topExtension}
+        <div className="relative mx-auto max-w-3xl">
+          {topExtension && (
+            <div className="pointer-events-none absolute inset-x-0 bottom-full z-0">
+              <div className="pointer-events-auto">{topExtension}</div>
+            </div>
+          )}
           <div className="relative z-10 rounded-3xl corner-superellipse/1.3 bg-[#2b2b2b] px-3 py-2 ring-1 ring-white/6 shadow-md">{children}</div>
         </div>
       </div>

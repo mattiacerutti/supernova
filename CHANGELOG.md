@@ -12,6 +12,7 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+- Changed the rolled-back messages drawer to overlay the session instead of resizing it.
 - Set a minimum desktop app window size.
 
 ### Fixed
