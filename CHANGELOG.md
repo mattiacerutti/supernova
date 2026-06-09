@@ -8,6 +8,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Added
 
+- Added sidebar session search.
+
 ### Changed
 
 ### Fixed

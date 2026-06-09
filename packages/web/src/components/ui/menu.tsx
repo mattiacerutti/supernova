@@ -40,6 +40,7 @@ interface MenuProps {
   children: ReactNode;
   className?: string;
   onOpenChange?: ComponentProps<typeof BaseMenu.Root>["onOpenChange"];
+  onOpenChangeComplete?: ComponentProps<typeof BaseMenu.Root>["onOpenChangeComplete"];
   open?: ComponentProps<typeof BaseMenu.Root>["open"];
   side?: ComponentProps<typeof BaseMenu.Positioner>["side"];
   sideOffset?: ComponentProps<typeof BaseMenu.Positioner>["sideOffset"];
@@ -48,7 +49,7 @@ interface MenuProps {
 }
 
 export default function Menu(props: MenuProps) {
-  const {align = "end", alignOffset, children, className, onOpenChange, open, side = "bottom", sideOffset = 8, trigger, triggerLabel} = props;
+  const {align = "end", alignOffset, children, className, onOpenChange, onOpenChangeComplete, open, side = "bottom", sideOffset = 8, trigger, triggerLabel} = props;
 
   const handleTriggerClick = (event: MouseEvent<HTMLButtonElement>, onClick: MenuTriggerProps["onClick"]): void => {
     event.stopPropagation();
@@ -61,7 +62,7 @@ export default function Menu(props: MenuProps) {
   };
 
   return (
-    <BaseMenu.Root modal={false} onOpenChange={onOpenChange} open={open}>
+    <BaseMenu.Root modal={false} onOpenChange={onOpenChange} onOpenChangeComplete={onOpenChangeComplete} open={open}>
       <BaseMenu.Trigger
         render={(triggerProps) => {
           const {onClick, onKeyDown, ...buttonProps} = triggerProps as MenuTriggerProps;

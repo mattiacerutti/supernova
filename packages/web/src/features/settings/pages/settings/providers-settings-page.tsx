@@ -1,4 +1,4 @@
-import {useState} from "react";
+import {useRef, useState} from "react";
 import type {Provider} from "@supernova/contracts/providers/schemas";
 import Dialog from "@/components/ui/dialog";
 import ProviderApiKeyContent from "@/features/settings/components/providers/provider-api-key-dialog";
@@ -18,28 +18,38 @@ export default function ProvidersSettingsPage() {
   const providersQuery = useListProviders();
 
   const logoutMutation = useLogoutProvider();
-  const {isPending: isStartingOAuthLogin, data: loginSession, mutateAsync: startOAuthLoginMutation} = useStartProviderOAuthLogin();
+  const {isPending: isStartingOAuthLogin, data: loginSession, mutateAsync: startOAuthLoginMutation, reset: resetOAuthLoginMutation} = useStartProviderOAuthLogin();
   const cancelLoginMutation = useCancelProviderLogin();
 
   const [selectedProvider, setSelectedProvider] = useState<Provider | undefined>();
   const [providerDialogOpen, setProviderDialogOpen] = useState(false);
   const [providerDialogView, setProviderDialogView] = useState<ProviderDialogView | undefined>();
   const loginSessionId = loginSession?.loginSessionId;
+  const pendingCloseRef = useRef<{cancelLogin: boolean; loginSessionId: string | undefined; view: ProviderDialogView | undefined}>({
+    cancelLogin: true,
+    loginSessionId: undefined,
+    view: undefined,
+  });
 
   const handleCloseProviderDialog = (cancelLogin: boolean = true): void => {
+    pendingCloseRef.current = {cancelLogin, loginSessionId, view: providerDialogView};
     setProviderDialogOpen(false);
-    const shouldRefetchProviders = providerDialogView === "oauth";
+  };
 
-    if (shouldRefetchProviders) {
+  const handleProviderDialogOpenChangeComplete = (open: boolean): void => {
+    if (open) return;
+
+    const pendingClose = pendingCloseRef.current;
+    if (pendingClose.view === "oauth") {
       void providersQuery.refetch();
+      if (pendingClose.cancelLogin && pendingClose.loginSessionId) {
+        cancelLoginMutation.mutate({loginSessionId: pendingClose.loginSessionId});
+      }
     }
 
-    // Delay login cancellation to allow the dialog to close smoothly without jank.
-    window.setTimeout(() => {
-      if (cancelLogin && providerDialogView === "oauth" && loginSessionId) {
-        cancelLoginMutation.mutate({loginSessionId});
-      }
-    }, 300);
+    resetOAuthLoginMutation();
+    setProviderDialogView(undefined);
+    setSelectedProvider(undefined);
   };
 
   const startOAuthLogin = async (provider: Provider) => {
@@ -108,6 +118,7 @@ export default function ProvidersSettingsPage() {
               onOpenChange={(open) => {
                 if (!open) handleCloseProviderDialog();
               }}
+              onOpenChangeComplete={handleProviderDialogOpenChangeComplete}
               open={providerDialogOpen}
               title={`Connect ${selectedProvider?.name ?? "provider"}`}
             >

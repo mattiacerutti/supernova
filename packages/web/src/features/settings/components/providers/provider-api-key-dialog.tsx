@@ -16,7 +16,6 @@ export default function ProviderApiKeyContent(props: ProviderApiKeyContentProps)
   const setApiKeyMutation = useSetProviderApiKey();
 
   const handleClose = (): void => {
-    setApiKey("");
     onClose();
   };
 
@@ -28,7 +27,6 @@ export default function ProviderApiKeyContent(props: ProviderApiKeyContentProps)
       {apiKey, providerId: provider.id},
       {
         onSuccess: () => {
-          setApiKey("");
           onClose();
         },
       }

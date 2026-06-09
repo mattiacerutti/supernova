@@ -34,14 +34,13 @@ export default function ModelPicker(props: ModelPickerProps) {
   const selectedModelKey = selectedModel ? modelKey(selectedModel.providerId, selectedModel.id) : undefined;
 
   const handleOpenChange = (nextOpen: boolean): void => {
+    if (nextOpen) setSearch("");
     setOpen(nextOpen);
-    if (!nextOpen) setSearch("");
   };
 
   const handleModelSelect = (value: string): void => {
     onModelChange(value);
     setOpen(false);
-    setSearch("");
   };
 
   const handleFavoriteClick = (event: MouseEvent<HTMLButtonElement>, value: string): void => {

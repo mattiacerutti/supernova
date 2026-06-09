@@ -1,3 +1,4 @@
+import {icons as bxIcons} from "@iconify-json/bx";
 import {icons as cuidaIcons} from "@iconify-json/cuida";
 import {icons as fluentIcons} from "@iconify-json/fluent";
 import {icons as iconoirIcons} from "@iconify-json/iconoir";
@@ -47,6 +48,7 @@ export type IconName =
   | "search"
   | "send"
   | "server"
+  | "session"
   | "settings"
   | "shield"
   | "skill"
@@ -102,6 +104,7 @@ const icons = {
   search: getStaticIcon(lucideIcons, "search"),
   send: getStaticIcon(stashIcons, "arrow-up-solid"),
   server: getStaticIcon(lucideIcons, "server"),
+  session: getStaticIcon(bxIcons, "chat"),
   settings: getStaticIcon(lucideIcons, "settings"),
   shield: getStaticIcon(lucideIcons, "shield"),
   skill: getStaticIcon(mingcuteIcons, "tool-line"),

@@ -7,6 +7,7 @@ import {useState} from "react";
 import SidebarActionButton from "@/features/sidebar/components/sidebar-action-button";
 import OpenProjectDialog from "@/features/projects/components/open-project-dialog";
 import ProjectListItem from "@/features/projects/components/project-list-item";
+import SearchSessionsDialog from "@/features/projects/components/search-sessions-dialog";
 import {useProjectList} from "@/features/projects/hooks/use-project-list";
 import {useProjectsStore} from "@/features/projects/stores/projects-store";
 import {cn} from "@/lib/cn";
@@ -25,10 +26,7 @@ export default function Sidebar() {
   const activeSessionId = location.pathname.startsWith("/session/") && location.pathname !== "/session/new" ? location.pathname.slice("/session/".length) : "";
 
   const [openProjectDialogOpen, setOpenProjectDialogOpen] = useState(false);
-
-  // We need the parent to control the state of the dialog to reset it when opening.
-  const [openProjectPath, setOpenProjectPath] = useState("");
-  const [openProjectActiveSuggestionIndex, setOpenProjectActiveSuggestionIndex] = useState(0);
+  const [searchSessionsDialogOpen, setSearchSessionsDialogOpen] = useState(false);
 
   const addProject = useProjectsStore((state) => state.addProject);
 
@@ -37,8 +35,6 @@ export default function Sidebar() {
   };
 
   const handleOpenProjectDialog = (): void => {
-    setOpenProjectPath("");
-    setOpenProjectActiveSuggestionIndex(0);
     setOpenProjectDialogOpen(true);
   };
 
@@ -46,9 +42,22 @@ export default function Sidebar() {
     setOpenProjectDialogOpen(false);
   };
 
+  const handleOpenSearchSessionsDialog = (): void => {
+    setSearchSessionsDialogOpen(true);
+  };
+
+  const handleCloseSearchSessionsDialog = (): void => {
+    setSearchSessionsDialogOpen(false);
+  };
+
   const handleSidebarActionClick = (actionId: SidebarActionId): void => {
     if (actionId === "new-project") {
       handleOpenProjectDialog();
+      return;
+    }
+
+    if (actionId === "search") {
+      handleOpenSearchSessionsDialog();
     }
   };
 
@@ -142,15 +151,8 @@ export default function Sidebar() {
           <span>Settings</span>
         </Link>
       </div>
-      <OpenProjectDialog
-        activeSuggestionIndex={openProjectActiveSuggestionIndex}
-        onActiveSuggestionIndexChange={setOpenProjectActiveSuggestionIndex}
-        onClose={handleCloseProjectDialog}
-        onOpenProject={handleOpenProject}
-        onProjectPathChange={setOpenProjectPath}
-        open={openProjectDialogOpen}
-        projectPath={openProjectPath}
-      />
+      <OpenProjectDialog onClose={handleCloseProjectDialog} onOpenProject={handleOpenProject} open={openProjectDialogOpen} />
+      <SearchSessionsDialog onClose={handleCloseSearchSessionsDialog} open={searchSessionsDialogOpen} />
     </aside>
   );
 }

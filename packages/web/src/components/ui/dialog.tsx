@@ -8,15 +8,16 @@ interface DialogProps {
   className?: string;
   containerClassName?: string;
   onOpenChange: (open: boolean) => void;
+  onOpenChangeComplete?: (open: boolean) => void;
   open: boolean;
   title: ReactNode;
 }
 
 export default function Dialog(props: DialogProps) {
-  const {children, className, containerClassName, onOpenChange, open, title} = props;
+  const {children, className, containerClassName, onOpenChange, onOpenChangeComplete, open, title} = props;
 
   return (
-    <BaseDialog.Root onOpenChange={onOpenChange} open={open}>
+    <BaseDialog.Root onOpenChange={onOpenChange} onOpenChangeComplete={onOpenChangeComplete} open={open}>
       <BaseDialog.Portal>
         <BaseDialog.Backdrop className="fixed inset-0 z-50 bg-black/55 opacity-100 backdrop-blur-[1px] transition-opacity duration-150 ease-out data-closed:opacity-0 data-ending-style:opacity-0 data-starting-style:opacity-0" />
         <BaseDialog.Viewport className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center overflow-hidden">

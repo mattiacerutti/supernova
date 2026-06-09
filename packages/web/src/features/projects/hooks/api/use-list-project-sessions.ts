@@ -11,6 +11,20 @@ export function listProjectSessionsQueryKey(projectPath: string) {
   return [...allProjectSessionsQueryKey(), projectPath] as const;
 }
 
+/** Builds shared query options for loading sessions belonging to one project. */
+export function listProjectSessionsQueryOptions(projectPath: string) {
+  return eq.queryOptions({
+    enabled: projectPath.length > 0,
+    placeholderData: (previousData) => previousData,
+    queryFn: () =>
+      Effect.gen(function* () {
+        const rpc = yield* AgentRpcProtocolClientService;
+        return yield* rpc.listProjectSessions({projectPath});
+      }),
+    queryKey: listProjectSessionsQueryKey(projectPath),
+  });
+}
+
 interface UseListProjectSessionsOptions {
   projectPath: string;
 }
@@ -18,16 +32,5 @@ interface UseListProjectSessionsOptions {
 export function useListProjectSessions(options: UseListProjectSessionsOptions) {
   const {projectPath} = options;
 
-  return useQuery(
-    eq.queryOptions({
-      enabled: projectPath.length > 0,
-      placeholderData: (previousData) => previousData,
-      queryFn: () =>
-        Effect.gen(function* () {
-          const rpc = yield* AgentRpcProtocolClientService;
-          return yield* rpc.listProjectSessions({projectPath});
-        }),
-      queryKey: listProjectSessionsQueryKey(projectPath),
-    })
-  );
+  return useQuery(listProjectSessionsQueryOptions(projectPath));
 }
