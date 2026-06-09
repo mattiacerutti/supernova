@@ -134,7 +134,7 @@ describe("session live store", () => {
 
     await waitUntil(() => {
       expect(queryClient.getQueryData(sessionQueryKey("session-1"))).toEqual(committedSession);
-      expect(useSessionLiveStore.getState().sessions["session-1"]).toMatchObject({liveTurn: null, revision: 3, status: "idle"});
+      expect(useSessionLiveStore.getState().sessions["session-1"]).toMatchObject({liveTurn: null, revision: 3, session: committedSession, status: "idle"});
     });
     expect(invalidateQueries).toHaveBeenCalledWith({queryKey: ["session"]});
   });
@@ -158,7 +158,7 @@ describe("session live store", () => {
 
   it("guards session commands while work is active", () => {
     const rpcClient = commandRpcClient();
-    useSessionLiveStore.setState({sessions: {"session-1": {agentStreaming: true, error: null, liveTurn: turn(), revision: 1, status: "streaming", stopInProgress: false}}});
+    useSessionLiveStore.setState({sessions: {"session-1": {agentStreaming: true, error: null, session: null, liveTurn: turn(), revision: 1, status: "streaming", stopInProgress: false}}});
 
     useSessionLiveStore.getState().sendMessage({contentParts, model, queryClient: createQueryClient(), rpcClient, sessionId: "session-1"});
     useSessionLiveStore.getState().compactSession({model, rpcClient, sessionId: "session-1"});
@@ -169,7 +169,7 @@ describe("session live store", () => {
 
   it("marks a streaming turn as stopping when aborting", () => {
     const rpcClient = commandRpcClient();
-    useSessionLiveStore.setState({sessions: {"session-1": {agentStreaming: true, error: null, liveTurn: turn(), revision: 1, status: "streaming", stopInProgress: false}}});
+    useSessionLiveStore.setState({sessions: {"session-1": {agentStreaming: true, error: null, session: null, liveTurn: turn(), revision: 1, status: "streaming", stopInProgress: false}}});
 
     useSessionLiveStore.getState().abortSession({rpcClient, sessionId: "session-1"});
 

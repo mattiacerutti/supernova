@@ -1,5 +1,6 @@
 import {useQuery} from "@tanstack/react-query";
 import {Effect} from "effect";
+import {useSessionLiveStore} from "@/features/sessions/stores/session-live-store";
 import {eq} from "@/rpc/effect-query";
 import {AgentRpcProtocolClientService} from "@/rpc/agent-rpc-client";
 
@@ -12,7 +13,9 @@ export function sessionQueryOptions(sessionId: string) {
     queryFn: () =>
       Effect.gen(function* () {
         const rpc = yield* AgentRpcProtocolClientService;
-        return yield* rpc.getSession({sessionId});
+        const session = yield* rpc.getSession({sessionId});
+        yield* Effect.sync(() => useSessionLiveStore.getState().hydrateSession(session));
+        return session;
       }),
     queryKey: sessionQueryKey(sessionId),
     refetchOnWindowFocus: false,

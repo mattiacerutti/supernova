@@ -6,7 +6,6 @@ import {create} from "zustand";
 import {Effect, Stream} from "effect";
 import {showToast} from "@/components/ui/toast-manager";
 import {allProjectSessionsQueryKey, listProjectSessionsQueryKey} from "@/features/projects/hooks/api/use-list-project-sessions";
-import {sessionQueryKey} from "@/features/sessions/hooks/api/use-session";
 import type {AgentRpcClientApi, AgentRpcClientFiber, AgentRpcProtocolClient} from "@/rpc/agent-rpc-client";
 
 export type SessionLiveStatus = "checkpoint-navigating" | "compacting" | "idle" | "stopping" | "streaming";
@@ -15,6 +14,8 @@ export interface SessionLiveState {
   /** Whether Pi has an active agent run for this session. */
   readonly agentStreaming: boolean;
   readonly error: string | null;
+  /** Latest committed session snapshot used by the active timeline. */
+  readonly session: Session | null;
   /** Currently streaming turn, kept separate from committed turns until a server snapshot commits it. */
   readonly liveTurn: Turn | null;
   /** Latest server revision applied for this session. Older session-scoped events are ignored. */
@@ -29,6 +30,10 @@ let fiber: AgentRpcClientFiber | null = null;
 let isConnecting = false;
 let reconnectTimer: number | null = null;
 
+function sessionQueryKey(sessionId: string) {
+  return ["session", sessionId] as const;
+}
+
 /** Creates an optimistic local turn so the user message appears before the first runtime snapshot. */
 function createInitialStreamTurn(input: {contentParts: readonly UserMessageContentPart[]; model: ModelReference}): Turn {
   const timestamp = new Date().toISOString();
@@ -41,6 +46,7 @@ function emptyEntry(input: {revision: number}): SessionLiveState {
   return {
     agentStreaming: false,
     error: null,
+    session: null,
     liveTurn: null,
     revision: input.revision,
     status: "idle",
@@ -129,6 +135,7 @@ interface SessionLiveStoreState {
   readonly compactSession: (input: CompactSessionInput) => void;
   readonly connect: (input: ConnectInput) => void;
   readonly disconnect: () => void;
+  readonly hydrateSession: (session: Session) => void;
   readonly redoCheckpoint: (input: CheckpointNavigationInput) => void;
   readonly revertToMessage: (input: RevertToMessageInput) => void;
   readonly sendMessage: (input: SendSessionMessageInput) => void;
@@ -136,15 +143,31 @@ interface SessionLiveStoreState {
 }
 
 export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) => {
+  const hydrateSession = (session: Session): void => {
+    set((state) => {
+      const entry = state.sessions[session.id] ?? emptyEntry({revision: 0});
+      return {sessions: {...state.sessions, [session.id]: {...entry, session}}};
+    });
+  };
+
   /** Applies one snapshot to both React Query committed state and Zustand live state. */
   const flushSnapshot = (queryClient: QueryClient, snapshot: Extract<SessionStreamEvent, {type: "session.snapshot"}>): void => {
-    if (shouldIgnoreEvent(get().sessions[snapshot.sessionId], snapshot.revision)) return;
+    const current = get().sessions[snapshot.sessionId];
+    if (shouldIgnoreEvent(current, snapshot.revision)) return;
+
+    const stoppedLiveTurn = current?.stopInProgress ? current.liveTurn : null;
+    const snapshotContainsStoppedTurn = stoppedLiveTurn
+      ? snapshot.session.turns.some((turn) => turn.userMessage.id === stoppedLiveTurn.userMessage.id)
+      : false;
+    const preserveStoppedLiveTurn = stoppedLiveTurn !== null && !snapshotContainsStoppedTurn;
 
     applySessionSnapshot({queryClient, snapshot});
     updateLifecycle(snapshot.sessionId, snapshot.revision, (entry) => ({
       ...entry,
       agentStreaming: false,
-      liveTurn: null,
+      session: snapshot.session,
+      liveTurn: preserveStoppedLiveTurn ? stoppedLiveTurn : null,
+      status: preserveStoppedLiveTurn ? "idle" : undefined,
       stopInProgress: false,
     }));
   };
@@ -195,11 +218,14 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
         flushSnapshot(queryClient, event);
         return;
       case "session.turn":
-        updateLifecycle(event.sessionId, event.revision, (entry) => ({...entry, error: null, liveTurn: event.turn, stopInProgress: false}));
+        updateLifecycle(event.sessionId, event.revision, (entry) => ({...entry, error: null, liveTurn: event.turn}));
         return;
       case "session.updated":
         applySessionSummary({projectPath: event.projectPath, queryClient, sessionId: event.sessionId, summary: event.summary});
-        updateLifecycle(event.sessionId, event.revision, (entry) => ({...entry}));
+        updateLifecycle(event.sessionId, event.revision, (entry) => ({
+          ...entry,
+          session: entry.session ? {...entry.session, title: event.summary.title, updatedAt: event.summary.updatedAt} : entry.session,
+        }));
         return;
       case "session.error":
         updateLifecycle(event.sessionId, event.revision, (entry) => ({
@@ -255,15 +281,30 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
     const {contentParts, model, queryClient, rpcClient, sessionId} = input;
 
     const current = get().sessions[sessionId];
-    if (current?.status !== undefined && current.status !== "idle") return;
+    if (current && current.status !== "idle") return;
 
     const liveTurn = createInitialStreamTurn({contentParts, model});
     const previousSession = queryClient.getQueryData<Session>(sessionQueryKey(sessionId));
+    const previousEntry = current;
     queryClient.setQueryData<Session>(sessionQueryKey(sessionId), (session) => (session ? {...session, undoneTurns: []} : session));
     // Optimistically show the user message in the live layer until the server emits authoritative events.
-    set((state) => ({
-      sessions: {...state.sessions, [sessionId]: {...emptyEntry({revision: 0}), agentStreaming: true, liveTurn, status: "streaming"}},
-    }));
+    set((state) => {
+      const entry = state.sessions[sessionId] ?? emptyEntry({revision: 0});
+      const session = entry.session ?? previousSession;
+      return {
+        sessions: {
+          ...state.sessions,
+          [sessionId]: {
+            ...entry,
+            agentStreaming: true,
+            error: null,
+            liveTurn,
+            session: session ? {...session, undoneTurns: []} : null,
+            status: "streaming",
+          },
+        },
+      };
+    });
 
     void rpcClient
       .run((rpc) => rpc.sendMessage({contentParts, model, sessionId}))
@@ -274,7 +315,14 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
         set((state) => {
           const entry = state.sessions[sessionId];
           if (!entry) return state;
-          const next = {...entry, agentStreaming: false, error, liveTurn: null, stopInProgress: false};
+          const next = {
+            ...entry,
+            agentStreaming: false,
+            error,
+            liveTurn: null,
+            session: previousEntry?.session ?? previousSession ?? entry.session,
+            stopInProgress: false,
+          };
           return {sessions: {...state.sessions, [sessionId]: {...next, status: toStatus(next)}}};
         });
       });
@@ -302,7 +350,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
     const {model, rpcClient, sessionId} = input;
 
     const current = get().sessions[sessionId];
-    if (current?.status !== undefined && current.status !== "idle") return;
+    if (current && current.status !== "idle") return;
 
     set((state) => {
       const entry = state.sessions[sessionId] ?? emptyEntry({revision: 0});
@@ -328,7 +376,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
     const {execute, rpcClient, sessionId, title} = input;
 
     const current = get().sessions[sessionId];
-    if (current?.status !== undefined && current.status !== "idle") return;
+    if (current && current.status !== "idle") return;
 
     set((state) => {
       const entry = state.sessions[sessionId] ?? emptyEntry({revision: 0});
@@ -343,8 +391,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
         set((state) => {
           const entry = state.sessions[sessionId];
           if (!entry) return state;
-          const next = {...entry};
-          return {sessions: {...state.sessions, [sessionId]: {...next, status: toStatus(next)}}};
+          return {sessions: {...state.sessions, [sessionId]: {...entry, status: toStatus(entry)}}};
         });
       });
   };
@@ -366,6 +413,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
     compactSession,
     connect,
     disconnect,
+    hydrateSession,
     redoCheckpoint,
     revertToMessage,
     sendMessage,

@@ -3,6 +3,7 @@ import {Effect} from "effect";
 import type {Session} from "@supernova/contracts/sessions/schemas";
 import {listProjectSessionsQueryKey} from "@/features/projects/hooks/api/use-list-project-sessions";
 import {sessionQueryKey} from "@/features/sessions/hooks/api/use-session";
+import {useSessionLiveStore} from "@/features/sessions/stores/session-live-store";
 import {AgentRpcProtocolClientService} from "@/rpc/agent-rpc-client";
 import {eq} from "@/rpc/effect-query";
 
@@ -22,6 +23,7 @@ export function useRenameSession() {
           return yield* rpc.renameSession(input);
         }),
       onSuccess: async (session: Session) => {
+        useSessionLiveStore.getState().hydrateSession(session);
         queryClient.setQueryData(sessionQueryKey(session.id), session);
         await queryClient.invalidateQueries({queryKey: listProjectSessionsQueryKey(session.projectPath)});
       },

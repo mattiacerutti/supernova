@@ -17,6 +17,7 @@ import {useRenameSession as useRenameSessionMutation} from "@/features/sessions/
 import {useSessionTimeline} from "@/features/sessions/hooks/use-session-timeline";
 import {modelKey, resolveThinkingLevel, selectionFromModel, selectionKey} from "@/features/sessions/lib/composer/model-picker/model-utils";
 import {useModelPickerStore} from "@/features/sessions/stores/model-picker-store";
+import {useSessionLiveStore} from "@/features/sessions/stores/session-live-store";
 import {useSessionModelsStore} from "@/features/sessions/stores/session-models-store";
 import {useInlineRename} from "@/hooks/use-inline-rename";
 
@@ -170,9 +171,9 @@ function SessionConversation(props: SessionConversationProps) {
       timeline={
         <SessionTimeline
           compacting={stream.streamStatus === "compacting"}
+          forceFollow={stream.streamStatus === "checkpoint-navigating"}
           isStreaming={stream.streamStatus === "streaming" || stream.streamStatus === "compacting"}
           items={stream.committedTimelineItems}
-          scrollContainerRef={stream.scrollContainerRef}
           liveItems={stream.liveTimelineItems}
           onRevertToMessage={stream.revertToMessage}
           streamError={stream.streamError}
@@ -207,19 +208,20 @@ interface SessionPageProps {
 export default function SessionPage(props: SessionPageProps) {
   const {appEnvironment, sessionId} = props;
 
-  const sessionQuery = useSession(sessionId);
+  const {error} = useSession(sessionId);
+  const session = useSessionLiveStore((state) => state.sessions[sessionId]?.session);
 
-  if (sessionQuery.isPending) {
+  if (!session) {
+    if (error) {
+      return (
+        <div className="grid flex-1 place-items-center px-6 py-10">
+          <p className="text-sm text-red-300">Unable to load this session.</p>
+        </div>
+      );
+    }
+
     return <SessionLoading appEnvironment={appEnvironment} sessionId={sessionId} />;
   }
 
-  if (sessionQuery.error || !sessionQuery.data) {
-    return (
-      <div className="grid flex-1 place-items-center px-6 py-10">
-        <p className="text-sm text-red-300">Unable to load this session.</p>
-      </div>
-    );
-  }
-
-  return <SessionConversation appEnvironment={appEnvironment} session={sessionQuery.data} />;
+  return <SessionConversation appEnvironment={appEnvironment} session={session} />;
 }

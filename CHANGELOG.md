@@ -12,6 +12,7 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+- Changed the session chat timeline back to Legend List scrolling behavior, which fixed a lot of small janky behaviors with auto-scroll.
 - Changed the rolled-back messages drawer to overlay the session instead of resizing it.
 - Set a minimum desktop app window size.
 
