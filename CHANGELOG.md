@@ -14,6 +14,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Fixed
 
+- Fixed stopped messages duplicating after stopping before the assistant response starts.
+
 ### Removed
 
 ## [0.0.1-beta.2]

@@ -155,19 +155,12 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
     const current = get().sessions[snapshot.sessionId];
     if (shouldIgnoreEvent(current, snapshot.revision)) return;
 
-    const stoppedLiveTurn = current?.stopInProgress ? current.liveTurn : null;
-    const snapshotContainsStoppedTurn = stoppedLiveTurn
-      ? snapshot.session.turns.some((turn) => turn.userMessage.id === stoppedLiveTurn.userMessage.id)
-      : false;
-    const preserveStoppedLiveTurn = stoppedLiveTurn !== null && !snapshotContainsStoppedTurn;
-
     applySessionSnapshot({queryClient, snapshot});
     updateLifecycle(snapshot.sessionId, snapshot.revision, (entry) => ({
       ...entry,
       agentStreaming: false,
       session: snapshot.session,
-      liveTurn: preserveStoppedLiveTurn ? stoppedLiveTurn : null,
-      status: preserveStoppedLiveTurn ? "idle" : undefined,
+      liveTurn: null,
       stopInProgress: false,
     }));
   };
