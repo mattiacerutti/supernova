@@ -1,7 +1,7 @@
 {
   "name": "@supernova/server",
   "private": true,
-  "version": "0.0.1-beta.1",
+  "version": "0.0.1-beta.2",
   "type": "module",
   "bin": {
     "supernova-server": "./dist/cli.js"
