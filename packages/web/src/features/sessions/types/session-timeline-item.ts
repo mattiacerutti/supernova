@@ -28,7 +28,7 @@ export interface WorkSessionTimelineItem extends SessionTimelineItemBase {
   readonly durationMs: number | undefined;
   readonly events: readonly SessionWorkEvent[];
   readonly live: boolean;
-  readonly spacing: "work";
+  readonly spacing: "message" | "work";
   readonly type: "work";
 }
 

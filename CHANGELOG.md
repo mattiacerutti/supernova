@@ -14,6 +14,7 @@ All notable changes to Supernova are documented in this file.
 
 ### Fixed
 
+- Fixed reasoning-only assistant turns to use the same timeline spacing as normal assistant messages.
 - Fixed stopped messages duplicating after stopping before the assistant response starts.
 
 ### Removed

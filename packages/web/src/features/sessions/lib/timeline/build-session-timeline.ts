@@ -24,7 +24,7 @@ function turnToTimelineItems(turn: Turn, live: boolean): SessionTimelineItem[] {
       events: workEvents,
       id: `work:${turn.id}:${workIndex}`,
       live: workLive,
-      spacing: "work",
+      spacing: hasAssistantResponse ? "work" : "message",
       turnId: turn.id,
       type: "work",
     });
