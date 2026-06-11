@@ -6,7 +6,8 @@
     "types": ["vite/client"],
     "paths": {
       "@/*": ["./src/*"],
-      "@assets/*": ["./assets/*"]
+      "@assets/*": ["./assets/*"],
+      "@e2e/*": ["./tests/e2e/*"]
     }
   },
   "include": ["src", "tests"]

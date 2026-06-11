@@ -1,14 +1,13 @@
-import {getSharedAgentRpcClient} from "@/rpc/agent-rpc-client";
+import type {AgentRpcClientApi} from "@/rpc/agent-rpc-client";
 import {AgentRpcClientContext} from "@/rpc/agent-rpc-client-context";
 
-const client = getSharedAgentRpcClient();
-
 interface AgentRpcClientProviderProps {
-  children: React.ReactNode;
+  readonly children: React.ReactNode;
+  readonly client: AgentRpcClientApi;
 }
 
 export default function AgentRpcClientProvider(props: AgentRpcClientProviderProps) {
-  const {children} = props;
+  const {children, client} = props;
 
   return <AgentRpcClientContext value={client}>{children}</AgentRpcClientContext>;
 }

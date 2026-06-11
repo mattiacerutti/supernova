@@ -115,8 +115,20 @@ export interface AgentRpcClientFiber {
   readonly interrupt: () => Promise<void>;
 }
 
-const sharedAgentRpcClient = new AgentRpcClient(resolveAgentDesktopWsUrl());
+let sharedAgentRpcClient: AgentRpcClientApi | null = null;
 
-export function getSharedAgentRpcClient(): AgentRpcClientApi {
+/** Initializes the shared app RPC client before React renders. */
+export async function getAgentRpcClient(): Promise<AgentRpcClientApi> {
+  async function createAgentRpcClient(): Promise<AgentRpcClientApi> {
+    if (import.meta.env.VITE_SUPERNOVA_E2E === "1") {
+      const {createE2eAgentRpcClient} = await import("@e2e/support/agent-rpc-client");
+      return createE2eAgentRpcClient();
+    }
+
+    return new AgentRpcClient(resolveAgentDesktopWsUrl());
+  }
+
+  sharedAgentRpcClient ??= await createAgentRpcClient();
   return sharedAgentRpcClient;
 }
+

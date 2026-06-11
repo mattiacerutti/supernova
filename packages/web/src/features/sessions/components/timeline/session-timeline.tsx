@@ -49,6 +49,7 @@ export default function SessionTimeline(props: SessionTimelineProps) {
       )}
       {hasTimelineContent && (
         <LegendList<SessionTimelineItem>
+          aria-label="Session timeline"
           className="h-full overflow-x-hidden overscroll-y-contain"
           contentContainerStyle={{paddingTop: 24}}
           data={items}

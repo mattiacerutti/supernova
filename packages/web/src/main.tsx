@@ -3,6 +3,7 @@ import {createRoot} from "react-dom/client";
 import App from "@/app/app";
 import {getAppEnvironment} from "@/app/app-environment";
 import AppProviders from "@/app/providers";
+import {getAgentRpcClient} from "@/rpc/agent-rpc-client";
 import "@/app/styles.css";
 
 interface DesktopShell {
@@ -23,9 +24,11 @@ const appEnvironment = getAppEnvironment(desktopShell?.platform);
 
 document.documentElement.dataset.appEnvironment = appEnvironment;
 
+const rpcClient = await getAgentRpcClient();
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <AppProviders>
+    <AppProviders rpcClient={rpcClient}>
       <App appEnvironment={appEnvironment} />
     </AppProviders>
   </StrictMode>

@@ -203,6 +203,10 @@ export function useSessionTimelineAutoScroll(input: UseSessionTimelineAutoScroll
 
       if (event.deltaY >= 0 || autoFollowStateRef.current !== "following") return;
 
+      if (programmaticScrollFrameRef.current !== null) window.cancelAnimationFrame(programmaticScrollFrameRef.current);
+      programmaticScrollFrameRef.current = null;
+      programmaticScrollTokenRef.current = 0;
+
       // Commit before the browser applies the wheel scroll so Legend List stops pinning the tail.
       flushSync(() => {
         setAutoFollow("leaving");

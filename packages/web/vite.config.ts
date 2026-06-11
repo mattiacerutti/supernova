@@ -30,6 +30,7 @@ export default defineConfig({
     alias: {
       "@": resolve(__dirname, "src"),
       "@assets": resolve(__dirname, "assets"),
+      "@e2e": resolve(__dirname, "tests/e2e"),
     },
   },
 });

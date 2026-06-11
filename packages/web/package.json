@@ -10,7 +10,10 @@
     "lint": "eslint .",
     "prettier": "prettier --check . --ignore-path ../../.prettierignore",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run tests/unit",
+    "test:e2e": "playwright test",
+    "test:e2e:report": "playwright show-report tests/e2e/playwright-report",
+    "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
@@ -58,6 +61,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.60.0",
     "@rolldown/plugin-babel": "^0.2.3",
     "@tailwindcss/vite": "^4.2.4",
     "@types/imurmurhash": "^0.1.4",

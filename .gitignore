@@ -9,6 +9,8 @@ dist
 # code coverage
 coverage
 *.lcov
+packages/web/tests/e2e/playwright-report
+packages/web/tests/e2e/test-results
 
 # logs
 logs
