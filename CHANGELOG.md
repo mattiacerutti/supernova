@@ -8,6 +8,16 @@ All notable changes to Supernova are documented in this file.
 
 ### Added
 
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.0.1-beta.3]
+
+### Added
+
 - Added sidebar session search.
 
 ### Changed
@@ -18,8 +28,6 @@ All notable changes to Supernova are documented in this file.
 
 - Fixed reasoning-only assistant turns to use the same timeline spacing as normal assistant messages.
 - Fixed stopped messages duplicating after stopping before the assistant response starts.
-
-### Removed
 
 ## [0.0.1-beta.2]
 
