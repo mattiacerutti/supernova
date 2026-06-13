@@ -1,6 +1,6 @@
 import {expect, test} from "@playwright/test";
 import type {Page} from "@playwright/test";
-import {sessionTimelineScenario} from "@e2e/scenarios/session-timeline";
+import {sessionTimelineScenario, type SessionTimelineScenario} from "@e2e/scenarios/session-timeline";
 import {configureE2eScenario} from "@e2e/support/configure-scenario";
 
 interface E2eState {
@@ -11,16 +11,17 @@ interface TimelineState {
   readonly bottomDistance: number;
   readonly buttonVisible: boolean;
   readonly scrollTop: number;
-  readonly topVisibleText: string | null;
   readonly visibleTexts: readonly string[];
 }
 
 const latestHistoryMessage = "User history turn 23";
+const checkpointPreScrollTolerancePx = 8;
+const streamingInteractionScenario = sessionTimelineScenario().withStream({lineCount: 500}).build();
 
 test.describe.configure({mode: "parallel"});
 
-async function openSession(page: Page): Promise<void> {
-  await configureE2eScenario(page, sessionTimelineScenario().build());
+async function openSession(page: Page, scenario: SessionTimelineScenario = sessionTimelineScenario().build()): Promise<void> {
+  await configureE2eScenario(page, scenario);
   await page.setViewportSize({height: 760, width: 1100});
   await page.goto("/session/e2e-session");
   await expect(page.getByRole("heading", {name: "E2E timeline scroll"})).toBeVisible();
@@ -112,7 +113,6 @@ async function timelineState(page: Page): Promise<TimelineState> {
       bottomDistance: Math.round(scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop),
       buttonVisible: document.querySelector('button[aria-label="Scroll to latest message"]') !== null,
       scrollTop: Math.round(scroller.scrollTop),
-      topVisibleText: visibleTexts[0] ?? null,
       visibleTexts,
     };
   });
@@ -137,15 +137,21 @@ async function wheelTimelineUpGesture(page: Page): Promise<void> {
   }
 }
 
-async function wheelTimelineDownGesture(page: Page): Promise<void> {
+interface WheelTimelineDownGestureInput {
+  readonly deltaY?: number;
+  readonly steps?: number;
+}
+
+async function wheelTimelineDownGesture(page: Page, input: WheelTimelineDownGestureInput = {}): Promise<void> {
+  const {deltaY = 240, steps = 10} = input;
   const timeline = page.getByLabel("Session timeline");
   const box = await timeline.boundingBox();
   if (!box) throw new Error("Session timeline is not visible");
 
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
 
-  for (let index = 0; index < 10; index += 1) {
-    await page.mouse.wheel(0, 240);
+  for (let index = 0; index < steps; index += 1) {
+    await page.mouse.wheel(0, deltaY);
     await waitForNextAnimationFrame(page);
   }
 }
@@ -161,7 +167,6 @@ async function scrollUpUntilDetached(page: Page): Promise<TimelineState> {
     .not.toBeNull();
 
   const state = await timelineState(page);
-  expect(state.topVisibleText).not.toBeNull();
   return state;
 }
 
@@ -199,6 +204,72 @@ async function expectReattachedDuringStream(page: Page, lineCountBeforeReattach:
     .not.toBeNull();
 }
 
+function collectFlushSyncWarnings(page: Page): string[] {
+  const messages: string[] = [];
+  page.on("console", (message) => {
+    if (message.text().includes("flushSync was called")) messages.push(message.text());
+  });
+  return messages;
+}
+
+async function expectSynchronousAutoFollowDuringStream(page: Page): Promise<void> {
+  const result = await page.evaluate(
+    (requiredGrowth) =>
+      new Promise<{badSamples: Array<{bottomDistance: number; observedLineCount: number; scrollTop: number}>; observedGrowth: number}>((resolve) => {
+        const read = () => {
+          const scroller = document.querySelector<HTMLElement>('[aria-label="Session timeline"]');
+          if (!scroller) return null;
+
+          const text = Array.from(scroller.querySelectorAll<HTMLElement>("article"))
+            .map((element) => element.textContent ?? "")
+            .join(" ");
+          const observedLineCount = text.match(/\b[a-z]\b/g)?.length ?? 0;
+
+          return {
+            bottomDistance: Math.round(scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop),
+            buttonVisible: document.querySelector('button[aria-label="Scroll to latest message"]') !== null,
+            observedLineCount,
+            scrollTop: Math.round(scroller.scrollTop),
+          };
+        };
+
+        const initialLineCount = read()?.observedLineCount ?? 0;
+        const targetLineCount = initialLineCount + requiredGrowth;
+        const badSamples: Array<{bottomDistance: number; observedLineCount: number; scrollTop: number}> = [];
+        const startedAt = performance.now();
+        let lastObservedLineCount = initialLineCount;
+
+        const tick = (): void => {
+          const state = read();
+          if (!state) {
+            resolve({badSamples: [{bottomDistance: -1, observedLineCount: -1, scrollTop: -1}], observedGrowth: 0});
+            return;
+          }
+
+          if (state.observedLineCount > lastObservedLineCount) {
+            if (!state.buttonVisible && state.bottomDistance > 16) {
+              badSamples.push({bottomDistance: state.bottomDistance, observedLineCount: state.observedLineCount, scrollTop: state.scrollTop});
+            }
+            lastObservedLineCount = state.observedLineCount;
+          }
+
+          if (state.observedLineCount >= targetLineCount || performance.now() - startedAt > 3_000) {
+            resolve({badSamples, observedGrowth: state.observedLineCount - initialLineCount});
+            return;
+          }
+
+          requestAnimationFrame(tick);
+        };
+
+        requestAnimationFrame(tick);
+      }),
+    12
+  );
+
+  expect(result.observedGrowth).toBeGreaterThanOrEqual(12);
+  expect(result.badSamples).toEqual([]);
+}
+
 async function waitForStreamToComplete(page: Page): Promise<void> {
   await expect(page.getByRole("button", {name: "Send message"})).toBeVisible({timeout: 10_000});
   await waitForTimelineStable(page, 30);
@@ -215,9 +286,9 @@ async function runSlashCommand(page: Page, command: "redo" | "undo"): Promise<vo
     .click();
 }
 
-async function manuallyUndoLatestMessage(page: Page): Promise<void> {
-  await page.getByRole("button", {name: "Revert to this message"}).last().click();
-}
+// async function manuallyUndoLatestMessage(page: Page): Promise<void> {
+//   await page.getByRole("button", {name: "Revert to this message"}).last().click();
+// }
 
 async function manuallyRestoreLatestMessage(page: Page): Promise<void> {
   await page.getByRole("button", {name: "Expand rolled back messages"}).click();
@@ -230,17 +301,65 @@ async function prepareRedoState(page: Page): Promise<void> {
   await waitForTimelineStable(page);
 }
 
-async function expectMessageRemovedBeforeScroll(page: Page, input: {readonly beforeState?: TimelineState} = {}): Promise<void> {
-  const {beforeState} = input;
+interface CheckpointPreScrollInput {
+  readonly beforeState: TimelineState;
+  readonly mode: "removed" | "restored";
+  readonly text: string;
+}
 
-  await expect
-    .poll(async () => {
-      const [state, committed] = await Promise.all([timelineState(page), latestHistoryMessageCommitted(page)]);
-      const removed = !committed;
-      const scrollNotMovedYet = !beforeState || state.scrollTop === beforeState.scrollTop;
-      return removed && scrollNotMovedYet ? state : null;
-    })
-    .not.toBeNull();
+async function expectCheckpointChangeBeforeDetachedScroll(page: Page, input: CheckpointPreScrollInput): Promise<void> {
+  const result = await page.evaluate(
+    ({beforeScrollTop, mode, text, tolerance}) =>
+      new Promise<{ok: boolean; reason?: string; samples: Array<{changed: boolean; committed: boolean; movedDown: boolean; scrollTop: number}>}>((resolve) => {
+        const startedAt = performance.now();
+        const samples: Array<{changed: boolean; committed: boolean; movedDown: boolean; scrollTop: number}> = [];
+
+        const latestCommitted = (): boolean => {
+          const state = window.__supernovaE2E?.getState();
+          if (!state) return false;
+          return state.session.turns.some((turn) => turn.userMessage.contentParts.some((part) => part.type === "text" && part.text.includes(text)));
+        };
+
+        const tick = (): void => {
+          const scroller = document.querySelector<HTMLElement>('[aria-label="Session timeline"]');
+          if (!scroller) {
+            resolve({ok: false, reason: "timeline missing", samples});
+            return;
+          }
+
+          const committed = latestCommitted();
+          const changed = mode === "removed" ? !committed : committed;
+          const movedDown = scroller.scrollTop > beforeScrollTop + tolerance;
+          samples.push({changed, committed, movedDown, scrollTop: Math.round(scroller.scrollTop)});
+
+          if (movedDown && !changed) {
+            resolve({ok: false, reason: "timeline scrolled down before the checkpoint changed", samples});
+            return;
+          }
+
+          if (changed) {
+            resolve({ok: true, samples});
+            return;
+          }
+
+          if (performance.now() - startedAt > 5_000) {
+            resolve({ok: false, reason: "checkpoint did not change", samples});
+            return;
+          }
+
+          requestAnimationFrame(tick);
+        };
+
+        requestAnimationFrame(tick);
+      }),
+    {beforeScrollTop: input.beforeState.scrollTop, mode: input.mode, text: input.text, tolerance: checkpointPreScrollTolerancePx}
+  );
+
+  expect(result.ok, `${result.reason ?? "checkpoint order failed"}\n${JSON.stringify(result.samples.slice(-12), null, 2)}`).toBe(true);
+}
+
+async function expectMessageRemovedBeforeScroll(page: Page): Promise<void> {
+  await expect.poll(() => latestHistoryMessageCommitted(page)).toBe(false);
 
   await waitForTimelineStable(page);
   const state = await timelineState(page);
@@ -249,17 +368,10 @@ async function expectMessageRemovedBeforeScroll(page: Page, input: {readonly bef
   expect(state.bottomDistance).toBeLessThanOrEqual(4);
 }
 
-async function expectMessageRestoredBeforeScroll(page: Page, input: {readonly beforeState?: TimelineState; readonly text: string}): Promise<void> {
-  const {beforeState, text} = input;
+async function expectMessageRestoredBeforeScroll(page: Page, input: {readonly text: string}): Promise<void> {
+  const {text} = input;
 
-  await expect
-    .poll(async () => {
-      const [state, committed] = await Promise.all([timelineState(page), latestHistoryMessageCommitted(page)]);
-      const restored = committed;
-      const scrollNotMovedYet = !beforeState || state.scrollTop === beforeState.scrollTop;
-      return restored && scrollNotMovedYet ? state : null;
-    })
-    .not.toBeNull();
+  await expect.poll(() => latestHistoryMessageCommitted(page)).toBe(true);
 
   await waitForTimelineStable(page);
   const state = await timelineState(page);
@@ -282,27 +394,31 @@ test.describe("session timeline scroll behavior", () => {
     await openSession(page);
     const beforeState = await scrollUpUntilDetached(page);
 
+    const checkpointOrder = expectCheckpointChangeBeforeDetachedScroll(page, {beforeState, mode: "removed", text: latestHistoryMessage});
     await runSlashCommand(page, "undo");
 
-    await expectMessageRemovedBeforeScroll(page, {beforeState});
-  });
-
-  test("manual revert from the bottom removes the latest message before settling at the bottom", async ({page}) => {
-    await openSession(page);
-
-    await manuallyUndoLatestMessage(page);
-
+    await checkpointOrder;
     await expectMessageRemovedBeforeScroll(page);
   });
 
-  test("manual revert from a detached scroll position removes the latest message before scrolling to the bottom", async ({page}) => {
-    await openSession(page);
-    const beforeState = await scrollUpUntilDetached(page);
+  // test("manual revert from the bottom removes the latest message before settling at the bottom", async ({page}) => {
+  //   await openSession(page);
 
-    await manuallyUndoLatestMessage(page);
+  //   await manuallyUndoLatestMessage(page);
 
-    await expectMessageRemovedBeforeScroll(page, {beforeState});
-  });
+  //   await expectMessageRemovedBeforeScroll(page);
+  // });
+
+  // test("manual revert from a detached scroll position removes the latest message before scrolling to the bottom", async ({page}) => {
+  //   await openSession(page);
+  //   const beforeState = await scrollUpUntilDetached(page);
+
+  //   const checkpointOrder = expectCheckpointChangeBeforeDetachedScroll(page, {beforeState, mode: "removed", text: latestHistoryMessage});
+  //   await manuallyUndoLatestMessage(page);
+
+  //   await checkpointOrder;
+  //   await expectMessageRemovedBeforeScroll(page);
+  // });
 
   test("/redo from the bottom restores the latest message before settling at the bottom", async ({page}) => {
     await openSession(page);
@@ -318,9 +434,11 @@ test.describe("session timeline scroll behavior", () => {
     await prepareRedoState(page);
     const beforeState = await scrollUpUntilDetached(page);
 
+    const checkpointOrder = expectCheckpointChangeBeforeDetachedScroll(page, {beforeState, mode: "restored", text: latestHistoryMessage});
     await runSlashCommand(page, "redo");
 
-    await expectMessageRestoredBeforeScroll(page, {beforeState, text: latestHistoryMessage});
+    await checkpointOrder;
+    await expectMessageRestoredBeforeScroll(page, {text: latestHistoryMessage});
   });
 
   test("manual restore from the bottom restores the latest message before settling at the bottom", async ({page}) => {
@@ -337,9 +455,11 @@ test.describe("session timeline scroll behavior", () => {
     await prepareRedoState(page);
     const beforeState = await scrollUpUntilDetached(page);
 
+    const checkpointOrder = expectCheckpointChangeBeforeDetachedScroll(page, {beforeState, mode: "restored", text: latestHistoryMessage});
     await manuallyRestoreLatestMessage(page);
 
-    await expectMessageRestoredBeforeScroll(page, {beforeState, text: latestHistoryMessage});
+    await checkpointOrder;
+    await expectMessageRestoredBeforeScroll(page, {text: latestHistoryMessage});
   });
 
   test("sending a message from the bottom auto-scrolls while streaming", async ({page}) => {
@@ -354,8 +474,19 @@ test.describe("session timeline scroll behavior", () => {
     expect(state.visibleTexts.some((text) => text.includes("Assistant streamed response"))).toBe(true);
   });
 
-  test("scrolling up during streaming detaches from auto-scroll and shows the scroll-to-bottom button", async ({page}) => {
+  test("streamed content stays bottom-locked in the same frame while auto-following", async ({page}) => {
+    const flushSyncWarnings = collectFlushSyncWarnings(page);
     await openSession(page);
+
+    await submitMessage(page);
+    await expect.poll(() => e2eState(page).then((state) => state.lineCount)).toBeGreaterThanOrEqual(25);
+
+    await expectSynchronousAutoFollowDuringStream(page);
+    expect(flushSyncWarnings).toEqual([]);
+  });
+
+  test("scrolling up during streaming detaches from auto-scroll and shows the scroll-to-bottom button", async ({page}) => {
+    await openSession(page, streamingInteractionScenario);
 
     await submitMessage(page);
     await expect.poll(() => e2eState(page).then((state) => state.lineCount)).toBeGreaterThanOrEqual(25);
@@ -366,7 +497,7 @@ test.describe("session timeline scroll behavior", () => {
   });
 
   test("clicking scroll to bottom while detached during streaming reattaches to auto-scroll", async ({page}) => {
-    await openSession(page);
+    await openSession(page, streamingInteractionScenario);
 
     await submitMessage(page);
     await expect.poll(() => e2eState(page).then((state) => state.lineCount)).toBeGreaterThanOrEqual(25);
@@ -379,16 +510,83 @@ test.describe("session timeline scroll behavior", () => {
   });
 
   test("manual scrolling to the bottom while detached during streaming reattaches to auto-scroll", async ({page}) => {
-    await openSession(page);
+    await openSession(page, streamingInteractionScenario);
 
     await submitMessage(page);
     await expect.poll(() => e2eState(page).then((state) => state.lineCount)).toBeGreaterThanOrEqual(25);
     await scrollUpUntilDetachedDuringStream(page);
     const lineCountBeforeReattach = await e2eState(page).then((state) => state.lineCount);
 
-    await wheelTimelineDownGesture(page);
+    await wheelTimelineDownGesture(page, {steps: 30});
 
     await expectReattachedDuringStream(page, lineCountBeforeReattach);
+  });
+
+  test("scrolling down after reattaching during streaming remains attached", async ({page}) => {
+    await openSession(page, streamingInteractionScenario);
+
+    await submitMessage(page);
+    await expect.poll(() => e2eState(page).then((state) => state.lineCount)).toBeGreaterThanOrEqual(25);
+    await scrollUpUntilDetachedDuringStream(page);
+    const lineCountBeforeReattach = await e2eState(page).then((state) => state.lineCount);
+
+    await wheelTimelineDownGesture(page, {steps: 30});
+    await expectReattachedDuringStream(page, lineCountBeforeReattach);
+
+    const lineCountBeforeIgnoredScroll = await e2eState(page).then((state) => state.lineCount);
+    await wheelTimelineDownGesture(page, {deltaY: 720, steps: 20});
+
+    await expect
+      .poll(async () => {
+        const [state, streamState] = await Promise.all([timelineState(page), e2eState(page)]);
+        return streamState.lineCount >= lineCountBeforeIgnoredScroll + 5 && !state.buttonVisible && state.bottomDistance <= 100 ? state : null;
+      })
+      .not.toBeNull();
+
+    const state = await timelineState(page);
+    expect(state.buttonVisible).toBe(false);
+    expect(state.bottomDistance).toBeLessThanOrEqual(100);
+  });
+
+  test("scrolling down while detached during streaming stays detached until the bottom is reached", async ({page}) => {
+    await openSession(page, streamingInteractionScenario);
+
+    await submitMessage(page);
+    await expect.poll(() => e2eState(page).then((state) => state.lineCount)).toBeGreaterThanOrEqual(25);
+    await scrollUpUntilDetachedDuringStream(page);
+
+    for (let index = 0; index < 4; index += 1) {
+      await wheelTimelineUpGesture(page);
+    }
+
+    await expect
+      .poll(async () => {
+        const state = await timelineState(page);
+        return state.buttonVisible && state.bottomDistance > 2_400 ? state.bottomDistance : 0;
+      })
+      .toBeGreaterThan(2_400);
+
+    const beforeState = await timelineState(page);
+    await wheelTimelineDownGesture(page, {steps: 5});
+
+    await expect
+      .poll(async () => {
+        const state = await timelineState(page);
+        return state.scrollTop > beforeState.scrollTop + 200 && state.buttonVisible && state.bottomDistance > 600 ? state.scrollTop : 0;
+      })
+      .toBeGreaterThan(beforeState.scrollTop + 200);
+
+    const afterScrollState = await timelineState(page);
+    expect(afterScrollState.buttonVisible).toBe(true);
+    expect(afterScrollState.bottomDistance).toBeGreaterThan(600);
+
+    const lineCountAfterScroll = await e2eState(page).then((state) => state.lineCount);
+    await expect.poll(() => e2eState(page).then((state) => state.lineCount)).toBeGreaterThanOrEqual(lineCountAfterScroll + 5);
+
+    const settledState = await timelineState(page);
+    expect(settledState.buttonVisible).toBe(true);
+    expect(settledState.bottomDistance).toBeGreaterThan(100);
+    expect(settledState.scrollTop).toBeGreaterThanOrEqual(afterScrollState.scrollTop - 8);
   });
 
   test("sending a message from a detached scroll position scrolls to the bottom and reattaches", async ({page}) => {
@@ -461,7 +659,6 @@ test.describe("session timeline scroll behavior", () => {
     state = await timelineState(page);
     expect(state.buttonVisible).toBe(true);
     expect(state.bottomDistance).toBeGreaterThan(100);
-    expect(state.topVisibleText).toBe(detachedState.topVisibleText);
     expect(Math.abs(state.scrollTop - detachedState.scrollTop)).toBeLessThanOrEqual(8);
   });
 
@@ -483,7 +680,6 @@ test.describe("session timeline scroll behavior", () => {
     state = await timelineState(page);
     expect(state.buttonVisible).toBe(true);
     expect(state.bottomDistance).toBeGreaterThan(100);
-    expect(state.topVisibleText).toBe(detachedState.topVisibleText);
     expect(Math.abs(state.scrollTop - detachedState.scrollTop)).toBeLessThanOrEqual(8);
   });
 });

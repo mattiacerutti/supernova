@@ -10,5 +10,5 @@ interface SessionTimelineItemFrameProps {
 export default function SessionTimelineItemFrame(props: SessionTimelineItemFrameProps) {
   const {children, item} = props;
 
-  return <div className={cn("mx-auto w-full max-w-3xl px-5 md:px-8", item.spacing === "work" ? "pb-4" : "pb-8")}>{children}</div>;
+  return <div className={cn("mx-auto w-full max-w-3xl px-5 [overflow-anchor:none] md:px-8", item.spacing === "work" ? "pb-4" : "pb-8")}>{children}</div>;
 }

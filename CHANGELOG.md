@@ -12,6 +12,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+- Changed the session timeline to use custom virtua handling so the live tail is virtualized and streamed messages scroll reliably.
+
 ### Fixed
 
 - Fixed reasoning-only assistant turns to use the same timeline spacing as normal assistant messages.

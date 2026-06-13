@@ -170,12 +170,14 @@ function SessionConversation(props: SessionConversationProps) {
       }
       timeline={
         <SessionTimeline
+          key={session.id}
           compacting={stream.streamStatus === "compacting"}
           forceFollow={stream.streamStatus === "checkpoint-navigating"}
           isStreaming={stream.streamStatus === "streaming" || stream.streamStatus === "compacting"}
           items={stream.committedTimelineItems}
           liveItems={stream.liveTimelineItems}
           onRevertToMessage={stream.revertToMessage}
+          sessionId={session.id}
           streamError={stream.streamError}
         />
       }
