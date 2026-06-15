@@ -7,9 +7,13 @@ import {PiAgentSessionFactory, PiAgentSessionFactoryLive} from "@supernova/agent
 describe("Pi agent session factory", () => {
   it("creates sessions with Supernova's custom resource loader policy", async () => {
     const resourceLoader = {reload: vi.fn(async () => undefined)};
+    const session = {
+      getActiveToolNames: vi.fn(() => ["read", "bash", "edit", "write"]),
+      setActiveToolsByName: vi.fn(),
+    };
     const piSdk = {
       authStorage: {},
-      createAgentSession: vi.fn(async () => ({session: {}})),
+      createAgentSession: vi.fn(async () => ({session})),
       createResourceLoader: vi.fn(() => resourceLoader),
       modelRegistry: {},
     } as unknown as PiSdkServiceShape;
@@ -22,10 +26,12 @@ describe("Pi agent session factory", () => {
     expect(resourceLoader.reload).toHaveBeenCalledOnce();
     expect(piSdk.createAgentSession).toHaveBeenCalledWith(
       expect.objectContaining({
+        customTools: [expect.objectContaining({name: "web_fetch"})],
         resourceLoader,
         sessionManager,
       })
     );
+    expect(session.setActiveToolsByName).toHaveBeenCalledWith(["read", "bash", "edit", "write", "web_fetch"]);
   });
 });
 

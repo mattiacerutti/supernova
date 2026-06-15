@@ -8,6 +8,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Added
 
+- Added a web fetch tool so agents can retrieve HTTP and HTTPS page content as markdown, text, or HTML.
+
 ### Changed
 
 ### Fixed

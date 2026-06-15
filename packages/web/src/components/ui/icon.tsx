@@ -32,6 +32,7 @@ export type IconName =
   | "folder-plus"
   | "gauge"
   | "git-branch"
+  | "globe"
   | "key"
   | "image"
   | "loader"
@@ -88,6 +89,7 @@ const icons = {
   "folder-plus": getStaticIcon(mdiIcons, "create-new-folder-outline"),
   gauge: getStaticIcon(lucideIcons, "gauge"),
   "git-branch": getStaticIcon(lucideIcons, "git-branch"),
+  globe: getStaticIcon(lucideIcons, "globe"),
   image: getStaticIcon(lucideIcons, "image"),
   key: getStaticIcon(lucideIcons, "key-round"),
   loader: getStaticIcon(lucideIcons, "loader-circle"),

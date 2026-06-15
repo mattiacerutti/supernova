@@ -80,6 +80,21 @@ export const FileFindToolResult = Schema.Struct({
   truncated: Schema.optional(Schema.Boolean),
 });
 
+/** Input for fetching content from the web. */
+export const WebFetchToolInput = Schema.Struct({
+  url: Schema.String,
+  format: Schema.optional(Schema.Literals(["markdown", "text", "html"])),
+  timeout: Schema.optional(Schema.Number),
+});
+
+/** Result data produced by a web fetch tool. */
+export const WebFetchToolResult = Schema.Struct({
+  url: Schema.String,
+  contentType: Schema.String,
+  format: Schema.Literals(["markdown", "text", "html"]),
+  output: Schema.String,
+});
+
 /** Input payload for a custom or unknown tool. */
 export const CustomToolInput = Schema.Record(Schema.String, Schema.Unknown);
 
@@ -114,6 +129,7 @@ export const Tool = Schema.Union([
   ...sessionToolStates("file-edit", FileEditToolInput, FileEditToolResult),
   ...sessionToolStates("file-write", FileWriteToolInput, FileWriteToolResult),
   ...sessionToolStates("file-find", FileFindToolInput, FileFindToolResult),
+  ...sessionToolStates("web-fetch", WebFetchToolInput, WebFetchToolResult),
   ...sessionToolStates("custom", CustomToolInput, CustomToolResult),
 ]);
 
@@ -130,6 +146,8 @@ export type FileWriteToolInput = typeof FileWriteToolInput.Type;
 export type FileWriteToolResult = typeof FileWriteToolResult.Type;
 export type FileFindToolInput = typeof FileFindToolInput.Type;
 export type FileFindToolResult = typeof FileFindToolResult.Type;
+export type WebFetchToolInput = typeof WebFetchToolInput.Type;
+export type WebFetchToolResult = typeof WebFetchToolResult.Type;
 export type CustomToolInput = typeof CustomToolInput.Type;
 export type CustomToolResult = typeof CustomToolResult.Type;
 export type Tool = typeof Tool.Type;

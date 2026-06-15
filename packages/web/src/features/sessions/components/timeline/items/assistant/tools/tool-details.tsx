@@ -83,6 +83,18 @@ function ReadToolDetails(props: {tool: Extract<Tool, {kind: "file-read"}>}) {
   );
 }
 
+function WebFetchToolDetails(props: {tool: Extract<Tool, {kind: "web-fetch"}>}) {
+  const {tool} = props;
+
+  const url = tool.input?.url ?? (tool.status === "completed" ? tool.result.url : undefined);
+
+  if (!url) {
+    return null;
+  }
+
+  return <DetailText>{url}</DetailText>;
+}
+
 function FileMutationToolDetails(props: {tool: FileMutationTool}) {
   const {tool} = props;
 
@@ -118,6 +130,8 @@ export default function ToolDetails(props: {tool: Tool | undefined}): ReactNode 
     case "file-edit":
     case "file-write":
       return FileMutationToolDetails({tool});
+    case "web-fetch":
+      return WebFetchToolDetails({tool});
     // NOTE: Readonly tools such as list and find are supported but never exposed to the agent by Pi, so we don't have a custom UI yet.
     default:
       return <DefaultToolDetails tool={tool} />;

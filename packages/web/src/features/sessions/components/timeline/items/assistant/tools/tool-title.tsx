@@ -27,7 +27,7 @@ function getFileEditDiffStats(patch: string): FileEditDiffStats {
   );
 }
 
-function ToolTitleRow(props: {children: ReactNode; icon: "folder" | "server"}) {
+function ToolTitleRow(props: {children: ReactNode; icon: "folder" | "globe" | "server"}) {
   const {children, icon} = props;
 
   return (
@@ -116,6 +116,16 @@ function FindToolTitle(props: {tool: Extract<Tool, {kind: "file-find"}>}) {
   );
 }
 
+function WebFetchToolTitle(props: {tool: Extract<Tool, {kind: "web-fetch"}>}) {
+  const {tool} = props;
+
+  return (
+    <ToolTitleRow icon="globe">
+      <span className="min-w-0 wrap-break-word">{tool.status === "pending" ? "Fetching an URL" : "Fetched an URL"}</span>
+    </ToolTitleRow>
+  );
+}
+
 function ToolTitleContent(props: {event: ToolEvent}) {
   const {event} = props;
 
@@ -131,6 +141,8 @@ function ToolTitleContent(props: {event: ToolEvent}) {
       return <FileMutationToolTitle tool={event.tool} />;
     case "file-find":
       return <FindToolTitle tool={event.tool} />;
+    case "web-fetch":
+      return <WebFetchToolTitle tool={event.tool} />;
     default:
       return <DefaultToolTitle tool={event.tool} />;
   }

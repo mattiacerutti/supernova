@@ -26,10 +26,14 @@
     "@earendil-works/pi-coding-agent": "^0.78.0",
     "@supernova/contracts": "workspace:*",
     "effect": "4.0.0-beta.60",
-    "match-sorter": "^8.3.0"
+    "htmlparser2": "^12.0.0",
+    "match-sorter": "^8.3.0",
+    "turndown": "^7.2.4",
+    "typebox": "1.1.38"
   },
   "devDependencies": {
     "@types/node": "^22.19.1",
+    "@types/turndown": "^5.0.6",
     "eslint": "^10.3.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.59.1",

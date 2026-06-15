@@ -69,6 +69,23 @@ describe("mapping Pi tool invocations", () => {
     expect(write.toTool()).toMatchObject({kind: "file-write", result: {patch: "--- /dev/null\n+++ b/notes.txt\n@@ -0,0 +1,2 @@\n+one\n+two"}, status: "completed"});
   });
 
+  it("maps web fetch tools to standard web fetch events", () => {
+    const invocation = PiToolInvocationFactory.create("web_fetch", {format: "markdown", timeout: 12, url: "https://example.com"});
+    invocation.complete({
+      details: {contentType: "text/html", format: "markdown", output: "# Example", url: "https://example.com/"},
+      isError: false,
+      output: [{text: "# Example", type: "text"}],
+    });
+
+    expect(invocation.toTool()).toEqual({
+      input: {format: "markdown", timeout: 12, url: "https://example.com"},
+      kind: "web-fetch",
+      result: {contentType: "text/html", format: "markdown", output: "# Example", url: "https://example.com/"},
+      status: "completed",
+    });
+    expectValidTool(invocation.toTool());
+  });
+
   it("preserves unknown tools as custom tool events", () => {
     const invocation = PiToolInvocationFactory.create("unknown-tool", {value: 42});
     invocation.complete({details: {extra: true}, isError: false, output: "done"});

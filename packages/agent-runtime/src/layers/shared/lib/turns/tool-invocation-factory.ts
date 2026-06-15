@@ -34,6 +34,9 @@ import {
   type FileWriteToolResult,
   type Tool,
   type ToolStatus,
+  WebFetchToolInput as WebFetchToolInputSchema,
+  type WebFetchToolInput,
+  type WebFetchToolResult,
 } from "@supernova/contracts/sessions/schemas";
 import {Option, Schema} from "effect";
 
@@ -213,6 +216,26 @@ class FindPiToolInvocation extends PiToolInvocation<FindToolInput, FindToolDetai
   }
 }
 
+class WebFetchPiToolInvocation extends PiToolInvocation<WebFetchToolInput, WebFetchToolResult, WebFetchToolInput, WebFetchToolResult> {
+  public constructor(input: Partial<WebFetchToolInput> | undefined) {
+    super("web_fetch", "web-fetch", input);
+  }
+
+  protected createInput(input: Partial<WebFetchToolInput>): WebFetchToolInput | undefined {
+    const candidate = {format: input.format, timeout: input.timeout, url: input.url} satisfies Partial<WebFetchToolInput>;
+    return Schema.decodeUnknownOption(WebFetchToolInputSchema)(candidate).pipe(Option.getOrUndefined);
+  }
+
+  protected createResult(completion: PiToolCompletion<WebFetchToolResult>): WebFetchToolResult {
+    return {
+      contentType: completion.details?.contentType ?? "",
+      format: completion.details?.format ?? this.input?.format ?? "markdown",
+      output: completion.details?.output ?? piContentToText(completion.output),
+      url: completion.details?.url ?? this.input?.url ?? "",
+    };
+  }
+}
+
 class CustomPiToolInvocation extends PiToolInvocation<CustomToolInput, Record<string, unknown>, CustomToolInput, CustomToolResult> {
   public constructor(name: string, input: Record<string, unknown> | undefined) {
     super(name, "custom", input);
@@ -244,6 +267,8 @@ export class PiToolInvocationFactory {
         return new WritePiToolInvocation(input);
       case "find":
         return new FindPiToolInvocation(input);
+      case "web_fetch":
+        return new WebFetchPiToolInvocation(input);
       default:
         return new CustomPiToolInvocation(toolName, input);
     }
