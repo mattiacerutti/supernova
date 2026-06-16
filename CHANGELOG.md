@@ -14,6 +14,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Fixed
 
+- Fixed long user messages so they stay within the chat timeline and wrap instead of overflowing.
+
 ### Removed
 
 ## [0.0.1-beta.3]

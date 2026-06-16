@@ -72,7 +72,7 @@ export default function UserMessage(props: UserMessageProps) {
 
   return (
     <article className="group/message flex justify-end">
-      <div className="flex max-w-lg flex-col items-end gap-2">
+      <div className="flex max-w-lg min-w-0 flex-col items-end gap-2">
         {attachments.length > 0 && (
           <div className="flex flex-wrap items-end justify-end gap-2">
             {attachments.map((attachment) => (
@@ -81,7 +81,12 @@ export default function UserMessage(props: UserMessageProps) {
           </div>
         )}
 
-        <div className={cn("rounded-2xl corner-superellipse/1.3 bg-neutral-800 px-3.5 py-2 text-sm leading-relaxed text-neutral-200", !hasContent && "text-neutral-400")}>
+        <div
+          className={cn(
+            "max-w-full rounded-2xl corner-superellipse/1.3 bg-neutral-800 px-3.5 py-2 text-sm leading-relaxed wrap-break-word text-neutral-200",
+            !hasContent && "text-neutral-400"
+          )}
+        >
           {hasContent ? <UserMessageStructuredContent message={message} /> : "(No content)"}
         </div>
         <MessageActions align="end" copyText={copyText} onRevert={onRevertToMessage ? handleRevert : undefined} />
