@@ -27,14 +27,32 @@ function isSessionTimelineItem(item: TimelineVirtualItem): item is SessionTimeli
   return item.type === "assistant" || item.type === "compaction" || item.type === "user" || item.type === "work";
 }
 
+interface StreamingStatusLabelProps {
+  readonly label: string;
+}
+
+function StreamingStatusLabel(props: StreamingStatusLabelProps) {
+  const {label} = props;
+
+  return (
+    <div className="relative w-fit text-sm text-neutral-600">
+      <span>{label}</span>
+      <span aria-hidden="true" className="thinking-shimmer absolute inset-0 text-neutral-200">
+        {label}
+      </span>
+    </div>
+  );
+}
+
 interface SessionTimelineVirtualRowProps {
   readonly activeTurnId: string | null;
+  readonly inlineStatusLabel?: string;
   readonly item: TimelineVirtualItem;
   readonly onRevertToMessage?: (turnId: string) => void;
 }
 
 export default function SessionTimelineVirtualRow(props: SessionTimelineVirtualRowProps) {
-  const {activeTurnId, item, onRevertToMessage} = props;
+  const {activeTurnId, inlineStatusLabel, item, onRevertToMessage} = props;
 
   if (item.type === "top-spacer") return <div aria-hidden="true" className="h-6" data-timeline-row="top-spacer" />;
   if (item.type === "bottom-spacer") return <div aria-hidden="true" className="h-6" data-timeline-row="bottom-spacer" />;
@@ -42,12 +60,7 @@ export default function SessionTimelineVirtualRow(props: SessionTimelineVirtualR
   if (item.type === "streaming-status") {
     return (
       <div className="mx-auto w-full max-w-3xl px-5 pb-6 md:px-8" data-timeline-row="streaming-status">
-        <div className="relative w-fit text-sm text-neutral-600">
-          <span>{item.label}</span>
-          <span aria-hidden="true" className="thinking-shimmer absolute inset-0 text-neutral-200">
-            {item.label}
-          </span>
-        </div>
+        <StreamingStatusLabel label={item.label} />
       </div>
     );
   }
@@ -65,6 +78,11 @@ export default function SessionTimelineVirtualRow(props: SessionTimelineVirtualR
   return (
     <SessionTimelineItemFrame item={item}>
       <SessionTimelineRow item={item} onRevertToMessage={activeTurnId && item.turnId === activeTurnId ? undefined : onRevertToMessage} />
+      {inlineStatusLabel && (
+        <div className="mt-4" data-timeline-row="inline-streaming-status">
+          <StreamingStatusLabel label={inlineStatusLabel} />
+        </div>
+      )}
     </SessionTimelineItemFrame>
   );
 }

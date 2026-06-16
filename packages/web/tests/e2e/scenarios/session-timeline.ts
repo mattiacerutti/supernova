@@ -10,8 +10,13 @@ interface SessionTimelineCheckpointScenario {
   readonly snapshotDelayMs: number;
 }
 
+interface SessionTimelineCommandToolScenario {
+  readonly outputLineCount: number;
+}
+
 export interface SessionTimelineScenario {
   readonly checkpoint: SessionTimelineCheckpointScenario;
+  readonly commandTool?: SessionTimelineCommandToolScenario;
   readonly historyTurnCount: number;
   readonly kind: "session-timeline";
   readonly projectPath: string;
@@ -22,6 +27,7 @@ export interface SessionTimelineScenario {
 
 const defaultSessionTimelineScenario = {
   checkpoint: {snapshotDelayMs: 50},
+  commandTool: undefined,
   historyTurnCount: 24,
   kind: "session-timeline",
   projectPath: "/tmp/supernova-e2e",
@@ -53,6 +59,11 @@ export class SessionTimelineScenarioBuilder {
     return this;
   }
 
+  public withCommandTool(input: SessionTimelineCommandToolScenario): this {
+    this.value = {...this.value, commandTool: {...input}};
+    return this;
+  }
+
   public withHistoryTurnCount(historyTurnCount: number): this {
     this.value = {...this.value, historyTurnCount};
     return this;
@@ -67,6 +78,7 @@ export class SessionTimelineScenarioBuilder {
     return {
       ...this.value,
       checkpoint: {...this.value.checkpoint},
+      commandTool: this.value.commandTool ? {...this.value.commandTool} : undefined,
       stream: {...this.value.stream},
     };
   }
@@ -91,6 +103,37 @@ export function sessionTimelineBaseSession(input: {readonly scenario: SessionTim
     turns,
     undoneTurns: [],
     updatedAt: timestamp(turns.length * 1_000),
+  };
+}
+
+export function sessionTimelineCommandToolTurn(input: {readonly index: number; readonly outputLineCount: number}): Turn {
+  const {index, outputLineCount} = input;
+  const output = Array.from({length: outputLineCount}, (_, lineIndex) => `command output line ${lineIndex}`).join("\n");
+
+  return {
+    completedAt: timestamp(index * 1_000 + 500),
+    events: [
+      {
+        id: `command-tool-${index}`,
+        timestamp: timestamp(index * 1_000 + 200),
+        tool: {
+          input: {command: "printf long output"},
+          kind: "command",
+          result: {output, truncated: false},
+          status: "completed",
+        },
+        type: "tool",
+      },
+    ],
+    id: `command-tool-turn-${index}`,
+    model: sessionTimelineModel,
+    startedAt: timestamp(index * 1_000),
+    status: "completed",
+    userMessage: {
+      contentParts: [{text: `User command tool turn ${index}.`, type: "text"}],
+      id: `user-command-tool-${index}`,
+      timestamp: timestamp(index * 1_000),
+    },
   };
 }
 

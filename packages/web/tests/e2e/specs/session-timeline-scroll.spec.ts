@@ -16,6 +16,7 @@ interface TimelineState {
 
 const latestHistoryMessage = "User history turn 23";
 const checkpointPreScrollTolerancePx = 8;
+const commandToolScenario = sessionTimelineScenario().withCommandTool({outputLineCount: 120}).build();
 const streamingInteractionScenario = sessionTimelineScenario().withStream({lineCount: 500}).build();
 
 test.describe.configure({mode: "parallel"});
@@ -142,6 +143,45 @@ interface WheelTimelineDownGestureInput {
   readonly steps?: number;
 }
 
+async function wheelCommandToolDetailsUpGesture(page: Page, initialNestedScrollTop = 420): Promise<{nestedScrollTop: number; timelineScrollTop: number}> {
+  const panel = page.locator('[data-scrollable]').filter({hasText: "$ printf long output"}).first();
+  await expect(panel).toBeVisible();
+
+  await panel.evaluate((element, scrollTop) => {
+    element.scrollTop = scrollTop;
+  }, initialNestedScrollTop);
+
+  const before = await page.evaluate(() => {
+    const panel = Array.from(document.querySelectorAll<HTMLElement>("[data-scrollable]")).find((element) => element.textContent?.includes("$ printf long output"));
+    const timeline = document.querySelector<HTMLElement>('[aria-label="Session timeline"]');
+    if (!panel || !timeline) throw new Error("Timeline or command details panel is missing");
+    return {nestedScrollTop: Math.round(panel.scrollTop), timelineScrollTop: Math.round(timeline.scrollTop)};
+  });
+
+  const wheelPoint = await page.evaluate(() => {
+    const panel = Array.from(document.querySelectorAll<HTMLElement>("[data-scrollable]")).find((element) => element.textContent?.includes("$ printf long output"));
+    const timeline = document.querySelector<HTMLElement>('[aria-label="Session timeline"]');
+    if (!panel || !timeline) throw new Error("Timeline or command details panel is missing");
+
+    const panelRect = panel.getBoundingClientRect();
+    const timelineRect = timeline.getBoundingClientRect();
+    const top = Math.max(panelRect.top, timelineRect.top);
+    const bottom = Math.min(panelRect.bottom, timelineRect.bottom);
+    if (bottom <= top) throw new Error("Command details panel is outside the visible timeline viewport");
+
+    return {
+      x: panelRect.left + panelRect.width / 2,
+      y: top + (bottom - top) / 2,
+    };
+  });
+
+  await page.mouse.move(wheelPoint.x, wheelPoint.y);
+  await page.mouse.wheel(0, -160);
+  await waitForNextAnimationFrame(page);
+
+  return before;
+}
+
 async function wheelTimelineDownGesture(page: Page, input: WheelTimelineDownGestureInput = {}): Promise<void> {
   const {deltaY = 240, steps = 10} = input;
   const timeline = page.getByLabel("Session timeline");
@@ -197,10 +237,13 @@ async function stopStreaming(page: Page): Promise<void> {
 
 async function expectReattachedDuringStream(page: Page, lineCountBeforeReattach: number): Promise<void> {
   await expect
-    .poll(async () => {
-      const [state, streamState] = await Promise.all([timelineState(page), e2eState(page)]);
-      return streamState.lineCount > lineCountBeforeReattach && !state.buttonVisible && state.bottomDistance <= 100 ? state : null;
-    })
+    .poll(
+      async () => {
+        const [state, streamState] = await Promise.all([timelineState(page), e2eState(page)]);
+        return streamState.lineCount > lineCountBeforeReattach && !state.buttonVisible && state.bottomDistance <= 100 ? state : null;
+      },
+      {timeout: 10_000}
+    )
     .not.toBeNull();
 }
 
@@ -286,9 +329,22 @@ async function runSlashCommand(page: Page, command: "redo" | "undo"): Promise<vo
     .click();
 }
 
-// async function manuallyUndoLatestMessage(page: Page): Promise<void> {
-//   await page.getByRole("button", {name: "Revert to this message"}).last().click();
-// }
+async function manuallyUndoLatestMessage(page: Page): Promise<void> {
+  const buttonIndex = await page.evaluate(() => {
+    const scroller = document.querySelector<HTMLElement>('[aria-label="Session timeline"]');
+    if (!scroller) return -1;
+
+    const scrollerRect = scroller.getBoundingClientRect();
+    const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('button[aria-label="Revert to this message"]'));
+    return buttons.findLastIndex((button) => {
+      const rect = button.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0 && rect.bottom >= scrollerRect.top && rect.top <= scrollerRect.bottom;
+    });
+  });
+
+  if (buttonIndex < 0) throw new Error("No visible revert button found in the timeline");
+  await page.getByRole("button", {name: "Revert to this message"}).nth(buttonIndex).click();
+}
 
 async function manuallyRestoreLatestMessage(page: Page): Promise<void> {
   await page.getByRole("button", {name: "Expand rolled back messages"}).click();
@@ -401,24 +457,24 @@ test.describe("session timeline scroll behavior", () => {
     await expectMessageRemovedBeforeScroll(page);
   });
 
-  // test("manual revert from the bottom removes the latest message before settling at the bottom", async ({page}) => {
-  //   await openSession(page);
+  test("manual revert from the bottom removes the latest message before settling at the bottom", async ({page}) => {
+    await openSession(page);
 
-  //   await manuallyUndoLatestMessage(page);
+    await manuallyUndoLatestMessage(page);
 
-  //   await expectMessageRemovedBeforeScroll(page);
-  // });
+    await expectMessageRemovedBeforeScroll(page);
+  });
 
-  // test("manual revert from a detached scroll position removes the latest message before scrolling to the bottom", async ({page}) => {
-  //   await openSession(page);
-  //   const beforeState = await scrollUpUntilDetached(page);
+  test("manual revert from a detached scroll position removes the latest message before scrolling to the bottom", async ({page}) => {
+    await openSession(page);
+    const beforeState = await scrollUpUntilDetached(page);
 
-  //   const checkpointOrder = expectCheckpointChangeBeforeDetachedScroll(page, {beforeState, mode: "removed", text: latestHistoryMessage});
-  //   await manuallyUndoLatestMessage(page);
+    const checkpointOrder = expectCheckpointChangeBeforeDetachedScroll(page, {beforeState, mode: "removed", text: latestHistoryMessage});
+    await manuallyUndoLatestMessage(page);
 
-  //   await checkpointOrder;
-  //   await expectMessageRemovedBeforeScroll(page);
-  // });
+    await checkpointOrder;
+    await expectMessageRemovedBeforeScroll(page);
+  });
 
   test("/redo from the bottom restores the latest message before settling at the bottom", async ({page}) => {
     await openSession(page);
@@ -460,6 +516,54 @@ test.describe("session timeline scroll behavior", () => {
 
     await checkpointOrder;
     await expectMessageRestoredBeforeScroll(page, {text: latestHistoryMessage});
+  });
+
+  test("scrolling command tool details with the wheel does not detach the timeline", async ({page}) => {
+    await openSession(page, commandToolScenario);
+
+    const before = await wheelCommandToolDetailsUpGesture(page);
+
+    await expect
+      .poll(async () => {
+        const state = await page.evaluate(() => {
+          const panel = Array.from(document.querySelectorAll<HTMLElement>("[data-scrollable]")).find((element) => element.textContent?.includes("$ printf long output"));
+          const timeline = document.querySelector<HTMLElement>('[aria-label="Session timeline"]');
+          if (!panel || !timeline) throw new Error("Timeline or command details panel is missing");
+          return {
+            buttonVisible: document.querySelector('button[aria-label="Scroll to latest message"]') !== null,
+            nestedScrollTop: Math.round(panel.scrollTop),
+            timelineScrollTop: Math.round(timeline.scrollTop),
+          };
+        });
+
+        if (state.nestedScrollTop < before.nestedScrollTop && Math.abs(state.timelineScrollTop - before.timelineScrollTop) <= 2 && !state.buttonVisible) return state;
+        return null;
+      })
+      .not.toBeNull();
+  });
+
+  test("scrolling command tool details to the top with the wheel does not detach the timeline", async ({page}) => {
+    await openSession(page, commandToolScenario);
+
+    const before = await wheelCommandToolDetailsUpGesture(page, 40);
+
+    await expect
+      .poll(async () => {
+        const state = await page.evaluate(() => {
+          const panel = Array.from(document.querySelectorAll<HTMLElement>("[data-scrollable]")).find((element) => element.textContent?.includes("$ printf long output"));
+          const timeline = document.querySelector<HTMLElement>('[aria-label="Session timeline"]');
+          if (!panel || !timeline) throw new Error("Timeline or command details panel is missing");
+          return {
+            buttonVisible: document.querySelector('button[aria-label="Scroll to latest message"]') !== null,
+            nestedScrollTop: Math.round(panel.scrollTop),
+            timelineScrollTop: Math.round(timeline.scrollTop),
+          };
+        });
+
+        if (state.nestedScrollTop < before.nestedScrollTop && Math.abs(state.timelineScrollTop - before.timelineScrollTop) <= 2 && !state.buttonVisible) return state;
+        return null;
+      })
+      .not.toBeNull();
   });
 
   test("sending a message from the bottom auto-scrolls while streaming", async ({page}) => {

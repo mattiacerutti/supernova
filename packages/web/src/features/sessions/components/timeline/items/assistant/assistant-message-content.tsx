@@ -171,7 +171,7 @@ export default function AssistantMessageContent(props: AssistantMessageContentPr
               );
             },
             table: ({children: tableChildren}) => (
-              <div className="my-4 overflow-x-auto rounded-xl border border-white/8">
+              <div className="my-4 overflow-x-auto rounded-xl border border-white/8" data-scrollable>
                 <table className="w-full border-collapse text-left text-sm">{tableChildren}</table>
               </div>
             ),

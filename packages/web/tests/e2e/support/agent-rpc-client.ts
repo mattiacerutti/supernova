@@ -6,6 +6,7 @@ import type {E2eScenario} from "@e2e/scenarios/scenario";
 import {
   projectSummary,
   sessionTimelineBaseSession,
+  sessionTimelineCommandToolTurn,
   sessionTimelineHistoryTurn,
   sessionTimelineModelDetails,
   sessionTimelineScenario,
@@ -47,7 +48,10 @@ export class E2eAgentRpcClient implements AgentRpcClientApi {
   private streamTimer: number | null = null;
 
   public constructor(private readonly scenario: SessionTimelineScenario) {
-    this.historyTurns = Array.from({length: scenario.historyTurnCount}, (_, index) => sessionTimelineHistoryTurn(index));
+    const historyTurns = Array.from({length: scenario.historyTurnCount}, (_, index) => sessionTimelineHistoryTurn(index));
+    this.historyTurns = scenario.commandTool
+      ? [...historyTurns, sessionTimelineCommandToolTurn({index: scenario.historyTurnCount, outputLineCount: scenario.commandTool.outputLineCount})]
+      : historyTurns;
     this.session = sessionTimelineBaseSession({scenario, turns: this.historyTurns});
     window.__supernovaE2E = {
       getState: () => ({lineCount: this.lineCount, session: this.session}),
