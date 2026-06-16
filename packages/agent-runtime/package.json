@@ -1,7 +1,7 @@
 {
   "name": "@supernova/agent-runtime",
   "private": true,
-  "version": "0.0.1-beta.3",
+  "version": "0.0.1-beta.4",
   "type": "module",
   "exports": {
     ".": {
