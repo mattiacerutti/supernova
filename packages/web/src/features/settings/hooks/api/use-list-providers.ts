@@ -10,11 +10,7 @@ export function listProvidersQueryKey() {
 export function useListProviders() {
   return useQuery(
     eq.queryOptions({
-      queryFn: () =>
-        Effect.gen(function* () {
-          const rpc = yield* AgentRpcProtocolClientService;
-          return yield* rpc.listProviders();
-        }),
+      queryFn: () => Effect.flatMap(Effect.service(AgentRpcProtocolClientService), (rpc) => rpc.listProviders()),
       queryKey: listProvidersQueryKey(),
     })
   );

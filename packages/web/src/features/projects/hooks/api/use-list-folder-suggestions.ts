@@ -11,11 +11,7 @@ export function useListFolderSuggestions(query: string) {
   return useQuery(
     eq.queryOptions({
       placeholderData: (previousData) => previousData,
-      queryFn: () =>
-        Effect.gen(function* () {
-          const rpc = yield* AgentRpcProtocolClientService;
-          return yield* rpc.listFolderSuggestions({query});
-        }),
+      queryFn: () => Effect.flatMap(Effect.service(AgentRpcProtocolClientService), (rpc) => rpc.listFolderSuggestions({query})),
       queryKey: listFolderSuggestionsQueryKey(query),
     })
   );

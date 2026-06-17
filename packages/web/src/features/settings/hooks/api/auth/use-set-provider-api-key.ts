@@ -9,11 +9,7 @@ export function useSetProviderApiKey() {
 
   return useMutation(
     eq.mutationOptions({
-      mutationFn: (input: {apiKey: string; providerId: string}) =>
-        Effect.gen(function* () {
-          const rpc = yield* AgentRpcProtocolClientService;
-          return yield* rpc.setProviderApiKey(input);
-        }),
+      mutationFn: (input: {apiKey: string; providerId: string}) => Effect.flatMap(Effect.service(AgentRpcProtocolClientService), (rpc) => rpc.setProviderApiKey(input)),
       onSuccess: async () => {
         await queryClient.invalidateQueries({queryKey: listProvidersQueryKey()});
       },

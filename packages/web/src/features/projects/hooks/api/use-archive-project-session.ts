@@ -14,11 +14,7 @@ export function useArchiveProjectSession() {
 
   return useMutation(
     eq.mutationOptions({
-      mutationFn: (input: ArchiveProjectSessionInput) =>
-        Effect.gen(function* () {
-          const rpc = yield* AgentRpcProtocolClientService;
-          return yield* rpc.archiveProjectSession(input);
-        }),
+      mutationFn: (input: ArchiveProjectSessionInput) => Effect.flatMap(Effect.service(AgentRpcProtocolClientService), (rpc) => rpc.archiveProjectSession(input)),
       onSuccess: async (result) => {
         await queryClient.invalidateQueries({queryKey: listProjectSessionsQueryKey(result.projectPath)});
       },

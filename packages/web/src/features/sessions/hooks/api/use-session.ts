@@ -11,12 +11,9 @@ export function sessionQueryKey(sessionId: string) {
 export function sessionQueryOptions(sessionId: string) {
   return eq.queryOptions({
     queryFn: () =>
-      Effect.gen(function* () {
-        const rpc = yield* AgentRpcProtocolClientService;
-        const session = yield* rpc.getSession({sessionId});
-        yield* Effect.sync(() => useSessionLiveStore.getState().hydrateSession(session));
-        return session;
-      }),
+      Effect.flatMap(Effect.service(AgentRpcProtocolClientService), (rpc) =>
+        rpc.getSession({sessionId}).pipe(Effect.tap((session) => Effect.sync(() => useSessionLiveStore.getState().hydrateSession(session))))
+      ),
     queryKey: sessionQueryKey(sessionId),
     refetchOnWindowFocus: false,
   });

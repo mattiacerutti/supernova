@@ -6,11 +6,7 @@ import {AgentRpcProtocolClientService} from "@/rpc/agent-rpc-client";
 export function useSubmitProviderLoginInput() {
   return useMutation(
     eq.mutationOptions({
-      mutationFn: (input: {input: string; loginSessionId: string}) =>
-        Effect.gen(function* () {
-          const rpc = yield* AgentRpcProtocolClientService;
-          return yield* rpc.submitProviderLoginInput(input);
-        }),
+      mutationFn: (input: {input: string; loginSessionId: string}) => Effect.flatMap(Effect.service(AgentRpcProtocolClientService), (rpc) => rpc.submitProviderLoginInput(input)),
     })
   );
 }

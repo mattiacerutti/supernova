@@ -12,11 +12,7 @@ export function useCreateFolder() {
 
   return useMutation(
     eq.mutationOptions({
-      mutationFn: (input: CreateFolderInput) =>
-        Effect.gen(function* () {
-          const rpc = yield* AgentRpcProtocolClientService;
-          return yield* rpc.createFolder(input);
-        }),
+      mutationFn: (input: CreateFolderInput) => Effect.flatMap(Effect.service(AgentRpcProtocolClientService), (rpc) => rpc.createFolder(input)),
       onSuccess: async () => {
         await queryClient.invalidateQueries({queryKey: ["agent", "folder", "suggestions"]});
       },

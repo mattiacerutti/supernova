@@ -6,11 +6,7 @@ import {AgentRpcProtocolClientService} from "@/rpc/agent-rpc-client";
 export function useCancelProviderLogin() {
   return useMutation(
     eq.mutationOptions({
-      mutationFn: (input: {loginSessionId: string}) =>
-        Effect.gen(function* () {
-          const rpc = yield* AgentRpcProtocolClientService;
-          return yield* rpc.cancelProviderLogin(input);
-        }),
+      mutationFn: (input: {loginSessionId: string}) => Effect.flatMap(Effect.service(AgentRpcProtocolClientService), (rpc) => rpc.cancelProviderLogin(input)),
     })
   );
 }

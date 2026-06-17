@@ -17,11 +17,7 @@ export function useRenameSession() {
 
   return useMutation(
     eq.mutationOptions({
-      mutationFn: (input: RenameSessionInput) =>
-        Effect.gen(function* () {
-          const rpc = yield* AgentRpcProtocolClientService;
-          return yield* rpc.renameSession(input);
-        }),
+      mutationFn: (input: RenameSessionInput) => Effect.flatMap(Effect.service(AgentRpcProtocolClientService), (rpc) => rpc.renameSession(input)),
       onSuccess: async (session: Session) => {
         useSessionLiveStore.getState().hydrateSession(session);
         queryClient.setQueryData(sessionQueryKey(session.id), session);

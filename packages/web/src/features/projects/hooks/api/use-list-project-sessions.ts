@@ -16,11 +16,7 @@ export function listProjectSessionsQueryOptions(projectPath: string) {
   return eq.queryOptions({
     enabled: projectPath.length > 0,
     placeholderData: (previousData) => previousData,
-    queryFn: () =>
-      Effect.gen(function* () {
-        const rpc = yield* AgentRpcProtocolClientService;
-        return yield* rpc.listProjectSessions({projectPath});
-      }),
+    queryFn: () => Effect.flatMap(Effect.service(AgentRpcProtocolClientService), (rpc) => rpc.listProjectSessions({projectPath})),
     queryKey: listProjectSessionsQueryKey(projectPath),
   });
 }

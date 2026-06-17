@@ -6,11 +6,7 @@ import {Effect} from "effect";
 export function useSessionModels() {
   return useQuery(
     eq.queryOptions({
-      queryFn: () =>
-        Effect.gen(function* () {
-          const rpc = yield* AgentRpcProtocolClientService;
-          return yield* rpc.listModels();
-        }),
+      queryFn: () => Effect.flatMap(Effect.service(AgentRpcProtocolClientService), (rpc) => rpc.listModels()),
       queryKey: ["session", "models"] as const,
     })
   );

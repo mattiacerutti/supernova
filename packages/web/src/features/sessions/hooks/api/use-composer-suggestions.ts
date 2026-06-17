@@ -39,28 +39,32 @@ export function useComposerSuggestions(projectPath: string, match: ComposerSugge
         return previousData;
       },
       queryKey: [...baseQueryKey, match?.query],
-      queryFn: () =>
-        Effect.gen(function* () {
-          if (!match) {
-            throw new Error("Match is required");
-          }
+      queryFn: () => {
+        if (!match) return Effect.die(new Error("Match is required")) as Effect.Effect<ComposerSuggestionItem[]>;
 
-          const rpc = yield* AgentRpcProtocolClientService;
-
+        return Effect.flatMap(Effect.service(AgentRpcProtocolClientService), (rpc): Effect.Effect<ComposerSuggestionItem[], {_tag: string}, never> => {
           if (match.kind === "file") {
-            const result = yield* rpc.listFolderFiles({projectPath, query: match.query});
-            return result.items.map(fileSuggestion) satisfies ComposerSuggestionItem[];
+            return rpc.listFolderFiles({projectPath, query: match.query}).pipe(
+              Effect.map((result) => {
+                const suggestions: ComposerSuggestionItem[] = result.items.map(fileSuggestion);
+                return suggestions;
+              })
+            );
           }
 
-          const result = yield* rpc.listComposerSuggestions({kind: match.kind, projectPath, query: match.query});
-          const suggestions = result.items.map(resourceSuggestion);
+          return rpc.listComposerSuggestions({kind: match.kind, projectPath, query: match.query}).pipe(
+            Effect.map((result) => {
+              const suggestions: ComposerSuggestionItem[] = result.items.map(resourceSuggestion);
 
-          if (match.kind === "slash") {
-            return [...clientSlashCommandSuggestions({actions: input.slashCommandActions ?? {}, query: match.query}), ...suggestions] satisfies ComposerSuggestionItem[];
-          }
+              if (match.kind === "slash") {
+                return [...clientSlashCommandSuggestions({actions: input.slashCommandActions ?? {}, query: match.query}), ...suggestions];
+              }
 
-          return suggestions satisfies ComposerSuggestionItem[];
-        }),
+              return suggestions;
+            })
+          );
+        });
+      },
     })
   );
 }

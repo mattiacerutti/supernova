@@ -9,11 +9,7 @@ export function useLogoutProvider() {
 
   return useMutation(
     eq.mutationOptions({
-      mutationFn: (input: {providerId: string}) =>
-        Effect.gen(function* () {
-          const rpc = yield* AgentRpcProtocolClientService;
-          return yield* rpc.logoutProvider(input);
-        }),
+      mutationFn: (input: {providerId: string}) => Effect.flatMap(Effect.service(AgentRpcProtocolClientService), (rpc) => rpc.logoutProvider(input)),
       onSuccess: async () => {
         await queryClient.invalidateQueries({queryKey: listProvidersQueryKey()});
       },
