@@ -59,7 +59,7 @@ export default function SessionTimelineVirtualRow(props: SessionTimelineVirtualR
 
   if (item.type === "streaming-status") {
     return (
-      <div className="mx-auto w-full max-w-3xl px-5 pb-6 md:px-8" data-timeline-row="streaming-status">
+      <div className="mx-auto w-full max-w-3xl px-5 pb-8 md:px-8" data-timeline-row="streaming-status">
         <StreamingStatusLabel label={item.label} />
       </div>
     );

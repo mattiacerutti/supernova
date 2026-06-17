@@ -172,7 +172,6 @@ function SessionConversation(props: SessionConversationProps) {
         <SessionTimeline
           key={session.id}
           compacting={stream.streamStatus === "compacting"}
-          forceFollow={stream.streamStatus === "checkpoint-navigating"}
           isStreaming={stream.streamStatus === "streaming" || stream.streamStatus === "compacting"}
           items={stream.committedTimelineItems}
           liveItems={stream.liveTimelineItems}

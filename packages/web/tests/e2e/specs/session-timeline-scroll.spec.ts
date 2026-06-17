@@ -17,7 +17,9 @@ interface TimelineState {
 const latestHistoryMessage = "User history turn 23";
 const checkpointPreScrollTolerancePx = 8;
 const commandToolScenario = sessionTimelineScenario().withCommandTool({outputLineCount: 120}).build();
+const longHistoryScenario = sessionTimelineScenario().withHistoryTurnCount(80).build();
 const streamingInteractionScenario = sessionTimelineScenario().withStream({lineCount: 500}).build();
+const settlingIdMismatchScenario = sessionTimelineScenario().withStream({liveIdPrefix: "live-", settledIdPrefix: "settled-"}).build();
 
 test.describe.configure({mode: "parallel"});
 
@@ -144,7 +146,7 @@ interface WheelTimelineDownGestureInput {
 }
 
 async function wheelCommandToolDetailsUpGesture(page: Page, initialNestedScrollTop = 420): Promise<{nestedScrollTop: number; timelineScrollTop: number}> {
-  const panel = page.locator('[data-scrollable]').filter({hasText: "$ printf long output"}).first();
+  const panel = page.locator("[data-scrollable]").filter({hasText: "$ printf long output"}).first();
   await expect(panel).toBeVisible();
 
   await panel.evaluate((element, scrollTop) => {
@@ -438,6 +440,52 @@ async function expectMessageRestoredBeforeScroll(page: Page, input: {readonly te
 }
 
 test.describe("session timeline scroll behavior", () => {
+  test("opens long uncached sessions at the bottom", async ({page}) => {
+    await configureE2eScenario(page, longHistoryScenario);
+    await page.setViewportSize({height: 760, width: 1100});
+    await page.goto("/session/e2e-session", {waitUntil: "commit"});
+
+    const initialFrames = await page.evaluate(
+      () =>
+        new Promise<Array<{bottomDistance: number; buttonVisible: boolean}>>((resolve) => {
+          const samples: Array<{bottomDistance: number; buttonVisible: boolean}> = [];
+          let started = false;
+
+          const start = (): void => {
+            if (started) return;
+            const scroller = document.querySelector<HTMLElement>('[aria-label="Session timeline"]');
+            if (!scroller) return;
+
+            started = true;
+            let frame = 0;
+            const tick = (): void => {
+              samples.push({
+                bottomDistance: Math.round(scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop),
+                buttonVisible: document.querySelector('button[aria-label="Scroll to latest message"]') !== null,
+              });
+
+              frame += 1;
+              if (frame < 20) requestAnimationFrame(tick);
+              else resolve(samples);
+            };
+            tick();
+          };
+
+          new MutationObserver(start).observe(document.documentElement, {childList: true, subtree: true});
+          requestAnimationFrame(start);
+        })
+    );
+
+    await expect(page.getByRole("heading", {name: "E2E timeline scroll"})).toBeVisible();
+    await waitForTimelineStable(page);
+
+    expect(initialFrames.some((frame) => frame.buttonVisible)).toBe(false);
+    const state = await timelineState(page);
+    expect(state.buttonVisible).toBe(false);
+    expect(state.bottomDistance).toBeLessThanOrEqual(4);
+    expect(state.visibleTexts.some((text) => text.includes("Assistant history turn 79"))).toBe(true);
+  });
+
   test("/undo from the bottom removes the latest message before settling at the bottom", async ({page}) => {
     await openSession(page);
 
@@ -589,6 +637,29 @@ test.describe("session timeline scroll behavior", () => {
     expect(flushSyncWarnings).toEqual([]);
   });
 
+  test("scrolling slightly up during streaming detaches from auto-scroll", async ({page}) => {
+    await openSession(page, streamingInteractionScenario);
+
+    await submitMessage(page);
+    await expect.poll(() => e2eState(page).then((state) => state.lineCount)).toBeGreaterThanOrEqual(25);
+
+    const timeline = page.getByLabel("Session timeline");
+    const box = await timeline.boundingBox();
+    if (!box) throw new Error("Session timeline is not visible");
+
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.wheel(0, -80);
+    await waitForNextAnimationFrame(page);
+    const detachedLineCount = await e2eState(page).then((state) => state.lineCount);
+
+    await expect
+      .poll(async () => {
+        const [nextTimelineState, nextE2eState] = await Promise.all([timelineState(page), e2eState(page)]);
+        return nextE2eState.lineCount >= detachedLineCount + 5 && nextTimelineState.buttonVisible && nextTimelineState.bottomDistance > 4 ? nextTimelineState : null;
+      })
+      .not.toBeNull();
+  });
+
   test("scrolling up during streaming detaches from auto-scroll and shows the scroll-to-bottom button", async ({page}) => {
     await openSession(page, streamingInteractionScenario);
 
@@ -726,6 +797,66 @@ test.describe("session timeline scroll behavior", () => {
     expect(state.visibleTexts.some((text) => text.includes("Assistant streamed response"))).toBe(true);
   });
 
+  test("restores the bottom cache after an auto-followed stream completes", async ({page}) => {
+    test.setTimeout(15_000);
+    await openSession(page);
+
+    await submitMessage(page);
+    await expect.poll(() => e2eState(page).then((state) => state.lineCount)).toBeGreaterThanOrEqual(25);
+    await waitForStreamToComplete(page);
+
+    await page.evaluate(() => {
+      window.history.pushState(null, "", "/");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    await expect(page.getByText("Select a session or start a new one.")).toBeVisible();
+
+    await page.evaluate(() => {
+      window.history.pushState(null, "", "/session/e2e-session");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    await expect(page.getByRole("heading", {name: "E2E timeline scroll"})).toBeVisible();
+    await waitForTimelineStable(page);
+
+    const state = await timelineState(page);
+    expect(state.buttonVisible).toBe(false);
+    expect(state.bottomDistance).toBeLessThanOrEqual(4);
+    expect(state.visibleTexts.some((text) => text.includes("Assistant streamed response"))).toBe(true);
+  });
+
+  test("restores a detached cache after an auto-followed stream completes", async ({page}) => {
+    test.setTimeout(15_000);
+    await openSession(page);
+
+    await submitMessage(page);
+    await expect.poll(() => e2eState(page).then((state) => state.lineCount)).toBeGreaterThanOrEqual(25);
+    await waitForStreamToComplete(page);
+
+    await wheelTimelineUpGesture(page);
+    await waitForTimelineStable(page);
+    const beforeState = await timelineState(page);
+    expect(beforeState.buttonVisible).toBe(true);
+    expect(beforeState.bottomDistance).toBeGreaterThan(50);
+
+    await page.evaluate(() => {
+      window.history.pushState(null, "", "/");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    await expect(page.getByText("Select a session or start a new one.")).toBeVisible();
+
+    await page.evaluate(() => {
+      window.history.pushState(null, "", "/session/e2e-session");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    await expect(page.getByRole("heading", {name: "E2E timeline scroll"})).toBeVisible();
+    await waitForTimelineStable(page);
+
+    const restoredState = await timelineState(page);
+    expect(restoredState.buttonVisible).toBe(true);
+    expect(Math.abs(restoredState.bottomDistance - beforeState.bottomDistance)).toBeLessThanOrEqual(8);
+    expect(Math.abs(restoredState.scrollTop - beforeState.scrollTop)).toBeLessThanOrEqual(8);
+  });
+
   test("long-lived message aborts while following and stays at the bottom", async ({page}) => {
     test.setTimeout(15_000);
     await openSession(page);
@@ -748,7 +879,7 @@ test.describe("session timeline scroll behavior", () => {
 
   test("long-lived message completes while detached and keeps the same content visible without scrolling", async ({page}) => {
     test.setTimeout(15_000);
-    await openSession(page);
+    await openSession(page, settlingIdMismatchScenario);
 
     await submitMessage(page);
     await expect.poll(() => e2eState(page).then((state) => state.lineCount)).toBeGreaterThanOrEqual(25);
@@ -768,7 +899,7 @@ test.describe("session timeline scroll behavior", () => {
 
   test("long-lived message aborts while detached and keeps the same content visible without scrolling", async ({page}) => {
     test.setTimeout(15_000);
-    await openSession(page);
+    await openSession(page, settlingIdMismatchScenario);
 
     await submitMessage(page);
     await expect.poll(() => e2eState(page).then((state) => state.lineCount)).toBeGreaterThanOrEqual(25);

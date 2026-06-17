@@ -3,7 +3,9 @@ import type {ModelDetails, ModelReference, Session, Turn, UserMessageContentPart
 interface SessionTimelineStreamScenario {
   readonly intervalMs: number;
   readonly lineCount: number;
+  readonly liveIdPrefix: string;
   readonly responsePrefix: string;
+  readonly settledIdPrefix: string;
 }
 
 interface SessionTimelineCheckpointScenario {
@@ -35,7 +37,9 @@ const defaultSessionTimelineScenario = {
   stream: {
     intervalMs: 24,
     lineCount: 250,
+    liveIdPrefix: "",
     responsePrefix: "Assistant streamed response.",
+    settledIdPrefix: "",
   },
   title: "E2E timeline scroll",
 } satisfies SessionTimelineScenario;
@@ -167,15 +171,18 @@ export function sessionTimelineStreamTurn(input: {
   readonly status: "completed" | "error" | "streaming";
 }): Turn {
   const completedAt = input.status === "completed" || input.status === "error" ? timestamp(100_000) : undefined;
+  const idPrefix = input.status === "streaming" ? input.scenario.stream.liveIdPrefix : input.scenario.stream.settledIdPrefix;
 
   return {
     completedAt,
-    events: [{content: sessionTimelineStreamContent({lineCount: input.lineCount, scenario: input.scenario}), id: "assistant-stream", timestamp: timestamp(90_000), type: "assistant"}],
-    id: "stream-turn",
+    events: [
+      {content: sessionTimelineStreamContent({lineCount: input.lineCount, scenario: input.scenario}), id: `${idPrefix}assistant-stream`, timestamp: timestamp(90_000), type: "assistant"},
+    ],
+    id: `${idPrefix}stream-turn`,
     model: sessionTimelineModel,
     startedAt: timestamp(80_000),
     status: input.status,
-    userMessage: {contentParts: input.contentParts, id: "user-stream", timestamp: timestamp(80_000)},
+    userMessage: {contentParts: input.contentParts, id: `${idPrefix}user-stream`, timestamp: timestamp(80_000)},
   };
 }
 
