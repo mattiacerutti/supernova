@@ -1,9 +1,9 @@
-import {useContext} from "react";
+import {use} from "react";
 import {AgentRpcClientContext} from "@/rpc/agent-rpc-client-context";
 import type {AgentRpcClientApi} from "@/rpc/agent-rpc-client";
 
 export function useAgentRpcClient(): AgentRpcClientApi {
-  const client = useContext(AgentRpcClientContext);
+  const client = use(AgentRpcClientContext);
   if (!client) throw new Error("Agent RPC client is not available.");
   return client;
 }

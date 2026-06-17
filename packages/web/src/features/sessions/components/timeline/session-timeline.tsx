@@ -232,7 +232,7 @@ export default function SessionTimeline(props: SessionTimelineProps) {
     paddingEnd: TIMELINE_BOTTOM_PADDING_PX,
     rangeExtractor: (range) => {
       const indexes = defaultRangeExtractor({...range, overscan: renderOverscan});
-      return [...new Set([...resizePinnedIndexesRef.current, ...indexes, ...(activeRowIndex < 0 ? [] : [activeRowIndex])])].sort((a, b) => a - b);
+      return Array.from(new Set([...resizePinnedIndexesRef.current, ...indexes, ...(activeRowIndex < 0 ? [] : [activeRowIndex])])).toSorted((a, b) => a - b);
     },
     scrollEndThreshold: 80,
     scrollToFn: (offset, options, instance) => {

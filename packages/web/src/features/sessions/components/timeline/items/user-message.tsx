@@ -5,24 +5,27 @@ import MessageActions from "@/features/sessions/components/timeline/items/action
 import {textFromComposerContentParts} from "@/features/sessions/lib/composer/composer-content-parts";
 import {cn} from "@/lib/cn";
 
-// TODO: Review these components and possibly refactor
-
 function UserMessageContent(props: {children: string}) {
   const {children} = props;
   const parts = children.split(/(`[^`]+`)/g);
+  const partOccurrences = new Map<string, number>();
 
   return (
     <span className="whitespace-pre-wrap">
-      {parts.map((part, index) => {
+      {parts.map((part) => {
+        const occurrence = partOccurrences.get(part) ?? 0;
+        partOccurrences.set(part, occurrence + 1);
+        const key = `${part}:${occurrence}`;
+
         if (part.startsWith("`") && part.endsWith("`") && part.length > 2) {
           return (
-            <code className="rounded bg-white/8 px-1 py-0.5 font-mono text-xs text-neutral-200" key={`${part}-${index}`}>
+            <code className="rounded bg-white/8 px-1 py-0.5 font-mono text-xs text-neutral-200" key={key}>
               {part.slice(1, -1)}
             </code>
           );
         }
 
-        return <span key={`${part}-${index}`}>{part}</span>;
+        return <span key={key}>{part}</span>;
       })}
     </span>
   );
@@ -42,11 +45,17 @@ function ReferenceContentPart(props: {part: Extract<NonNullable<UserMessageModel
 
 function UserMessageStructuredContent(props: {message: UserMessageModel}) {
   const {message} = props;
+  const textPartOccurrences = new Map<string, number>();
 
   return (
     <span className="whitespace-pre-wrap">
-      {message.contentParts.map((part, index) => {
-        if (part.type === "text") return <UserMessageContent key={`text-${index}`}>{part.text}</UserMessageContent>;
+      {message.contentParts.map((part) => {
+        if (part.type === "text") {
+          const occurrence = textPartOccurrences.get(part.text) ?? 0;
+          textPartOccurrences.set(part.text, occurrence + 1);
+          return <UserMessageContent key={`text:${part.text}:${occurrence}`}>{part.text}</UserMessageContent>;
+        }
+
         if (part.type === "attachment") return null;
         return <ReferenceContentPart key={part.id} part={part} />;
       })}

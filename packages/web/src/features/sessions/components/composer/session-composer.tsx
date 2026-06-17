@@ -6,7 +6,7 @@ import Paragraph from "@tiptap/extension-paragraph";
 import Text from "@tiptap/extension-text";
 import {useEditor} from "@tiptap/react";
 import type {ChangeEvent, ClipboardEvent, ReactNode} from "react";
-import {createContext, useContext, useRef, useState} from "react";
+import {createContext, use, useRef, useState} from "react";
 import Icon from "@/components/ui/icon";
 import IconButton from "@/components/ui/icon-button";
 import ComposerAttachmentPreview from "@/features/sessions/components/attachments/composer-attachment-preview";
@@ -47,7 +47,7 @@ interface SessionComposerContextValue {
 const SessionComposerContext = createContext<SessionComposerContextValue | null>(null);
 
 function useSessionComposerContext(): SessionComposerContextValue {
-  const context = useContext(SessionComposerContext);
+  const context = use(SessionComposerContext);
   if (!context) throw new Error("SessionComposer compound components must be rendered inside SessionComposer.Root.");
 
   return context;
