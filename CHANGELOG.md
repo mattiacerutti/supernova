@@ -10,6 +10,14 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+### Fixed
+
+### Removed
+
+## [0.0.1-beta.5]
+
+### Changed
+
 - Changed the session timeline scroll-to-bottom button to appear as soon as the user scrolls away from the latest message.
 - Changed the session timeline to maintain scroll position when switching between sessions.
 
@@ -24,8 +32,6 @@ All notable changes to Supernova are documented in this file.
 - Fixed the session timeline scrolling to the bottom when a detached streaming message finishes or is stopped.
 - Fixed the session timeline drifting slightly upward when the first streamed output replaces the initial thinking state.
 - Fixed the initial thinking status and inline streaming status using different bottom spacing.
-
-### Removed
 
 ## [0.0.1-beta.4]
 
