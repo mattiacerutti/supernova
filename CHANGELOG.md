@@ -10,6 +10,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+- Changed the session timeline scroll-to-bottom button to appear as soon as the user scrolls away from the latest message.
+
 ### Fixed
 
 ### Removed

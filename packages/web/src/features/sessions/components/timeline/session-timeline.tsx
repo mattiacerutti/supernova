@@ -81,10 +81,6 @@ function buildTimelineRows(input: {
   return rows;
 }
 
-function jumpThreshold(element: HTMLElement): number {
-  return Math.max(400, element.clientHeight);
-}
-
 function scrollStateFor(element: HTMLElement): TimelineScrollState {
   const max = element.scrollHeight - element.clientHeight;
   const distance = max - element.scrollTop;
@@ -92,7 +88,7 @@ function scrollStateFor(element: HTMLElement): TimelineScrollState {
 
   return {
     bottom: !overflow || distance <= SCROLL_END_THRESHOLD_PX,
-    jump: overflow && distance > jumpThreshold(element),
+    jump: overflow && distance > SCROLL_END_THRESHOLD_PX,
     overflow,
   };
 }
