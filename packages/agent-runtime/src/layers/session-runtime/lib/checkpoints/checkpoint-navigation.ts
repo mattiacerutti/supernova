@@ -54,6 +54,15 @@ export function latestCheckpointCursor(entries: readonly SessionEntry[]): (Check
   return {leafEntryId: entry.data.leafEntryId, nodeEntryId: entry.parentId};
 }
 
+/** Clears redo state by moving the latest checkpoint cursor to the currently visible checkpoint. */
+export function invalidateCheckpointRedo(openedSession: OpenedRuntimeSession): void {
+  const cursor = latestCheckpointCursor(openedSession.sessionManager.getEntries());
+  if (!cursor || cursor.nodeEntryId === cursor.leafEntryId) return;
+
+  openedSession.sessionManager.branch(cursor.nodeEntryId);
+  openedSession.sessionManager.appendCustomEntry(CHECKPOINT_CURSOR_CUSTOM_TYPE, {leafEntryId: cursor.nodeEntryId});
+}
+
 /** Navigates to a resolved checkpoint and updates files, branch state, agent context, and subscribers. */
 export async function navigateToCheckpoint(runtime: PiSessionRuntime, openedSession: OpenedRuntimeSession, input: NavigateToCheckpointInput): Promise<void> {
   runtime.clearActiveTurn();

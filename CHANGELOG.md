@@ -15,6 +15,7 @@ All notable changes to Supernova are documented in this file.
 
 ### Fixed
 
+- Fixed rolled-back messages reappearing when returning to a streaming session after sending a replacement message.
 - Fixed rolled-back messages drawer layering so timeline content no longer appears above it.
 - Fixed prefilled composer text reserving its height before the editor finishes loading.
 - Fixed the session timeline staying bottom-pinned when the composer grows while the user is at the latest message.

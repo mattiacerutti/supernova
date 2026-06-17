@@ -484,6 +484,67 @@ describe("checkpoint navigation", () => {
     ]);
   });
 
+  it("clears redo turns as soon as a replacement message is accepted", async () => {
+    const projectPath = await createProject();
+    tempDirs.push(projectPath);
+    const pi = createPiTestRuntime();
+    runtimes.push(pi);
+    const {info} = pi.createSession(projectPath);
+    pi.faux.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
+
+    await pi.sendMessage({message: "one", model: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "two", model: selectedModelReference, sessionId: info.id});
+    await runSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.undoCheckpoint({sessionId: info.id})});
+
+    let releaseProvider: (() => void) | undefined;
+    const providerStarted = new Promise<void>((resolve) => {
+      pi.faux.setResponses([
+        async () => {
+          resolve();
+          await new Promise<void>((release) => {
+            releaseProvider = release;
+          });
+          return fauxAssistantMessage("branch");
+        },
+      ]);
+    });
+
+    await pi.runWithSessionRuntime(
+      Effect.gen(function* () {
+        const sessionRuntime = yield* SessionRuntimeService;
+        yield* sessionRuntime.sendMessage({contentParts: [{text: "branch", type: "text"}], model: selectedModelReference, sessionId: info.id});
+      })
+    );
+    await providerStarted;
+
+    try {
+      const loadedWhileStreaming = await pi.runWithSessions(
+        Effect.gen(function* () {
+          const sessions = yield* SessionsService;
+          return yield* sessions.get(info.id);
+        })
+      );
+
+      expect(loadedWhileStreaming.undoneTurns).toEqual([]);
+    } finally {
+      releaseProvider?.();
+    }
+
+    await waitUntil(async () => {
+      const loaded = await pi.runWithSessions(
+        Effect.gen(function* () {
+          const sessions = yield* SessionsService;
+          return yield* sessions.get(info.id);
+        })
+      );
+      expect(loaded.turns.map((turn) => turn.userMessage.contentParts[0])).toEqual([
+        {text: "one", type: "text"},
+        {text: "branch", type: "text"},
+      ]);
+      expect(loaded.undoneTurns).toEqual([]);
+    });
+  });
+
   it("does not redo after a new branch diverges from an undone checkpoint", async () => {
     const projectPath = await createGitProject();
     tempDirs.push(projectPath);

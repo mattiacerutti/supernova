@@ -3,6 +3,7 @@ import {randomUUID} from "node:crypto";
 import {
   CHECKPOINT_CURSOR_CUSTOM_TYPE,
   CHECKPOINT_CUSTOM_TYPE,
+  invalidateCheckpointRedo,
   isCheckpointEntry,
 } from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-navigation";
 import {ActiveTurn} from "@supernova/agent-runtime/layers/session-runtime/lib/turns/active-turn";
@@ -63,10 +64,12 @@ async function openSession(runtime: PiSessionRuntime, input: SendMessagePayload)
 
 async function createActiveTurn(runtime: PiSessionRuntime, openedSession: OpenedRuntimeSession, input: SendMessagePayload): Promise<ActiveTurn> {
   const sessionManager = openedSession.sessionManager;
-  const baseBranch = sessionManager.getBranch();
-
   const messageContext = await prepareSendMessageContext(input, {projectPath: openedSession.sessionInfo.cwd, resourceCatalog: runtime.resourceCatalog});
 
+  // Once a replacement message is accepted, the old redo path is no longer valid even before the turn settles.
+  invalidateCheckpointRedo(openedSession);
+
+  const baseBranch = sessionManager.getBranch();
   const customEntries = [];
 
   if (!baseBranch.some(isCheckpointEntry)) {
