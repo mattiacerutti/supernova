@@ -19,6 +19,7 @@ All notable changes to Supernova are documented in this file.
 - Fixed prefilled composer text reserving its height before the editor finishes loading.
 - Fixed the session timeline staying bottom-pinned when the composer grows while the user is at the latest message.
 - Fixed streaming sessions continuing to auto-scroll after the user scrolled slightly away from the latest message.
+- Fixed streaming sessions losing auto-follow after switching away and back while already at the latest message.
 - Fixed the session timeline scrolling to the bottom when a detached streaming message finishes or is stopped.
 - Fixed the session timeline drifting slightly upward when the first streamed output replaces the initial thinking state.
 - Fixed the initial thinking status and inline streaming status using different bottom spacing.

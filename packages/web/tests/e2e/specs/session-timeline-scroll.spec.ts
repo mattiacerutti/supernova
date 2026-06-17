@@ -671,6 +671,30 @@ test.describe("session timeline scroll behavior", () => {
     expect(state.bottomDistance).toBeGreaterThan(100);
   });
 
+  test("switching away and back while auto-following a stream keeps auto-follow enabled", async ({page}) => {
+    await openSession(page, streamingInteractionScenario);
+
+    await submitMessage(page);
+    await expect.poll(() => e2eState(page).then((state) => state.lineCount)).toBeGreaterThanOrEqual(25);
+    const lineCountBeforeSwitch = await e2eState(page).then((state) => state.lineCount);
+
+    await page.evaluate(() => {
+      window.history.pushState(null, "", "/");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    await expect(page.getByText("Select a session or start a new one.")).toBeVisible();
+    await expect.poll(() => e2eState(page).then((state) => state.lineCount)).toBeGreaterThanOrEqual(lineCountBeforeSwitch + 10);
+
+    await page.evaluate(() => {
+      window.history.pushState(null, "", "/session/e2e-session");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    await expect(page.getByRole("heading", {name: "E2E timeline scroll"})).toBeVisible();
+    const lineCountAfterReturn = await e2eState(page).then((state) => state.lineCount);
+
+    await expectReattachedDuringStream(page, lineCountAfterReturn);
+  });
+
   test("clicking scroll to bottom while detached during streaming reattaches to auto-scroll", async ({page}) => {
     await openSession(page, streamingInteractionScenario);
 

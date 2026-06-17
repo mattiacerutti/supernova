@@ -12,7 +12,13 @@ const TIMELINE_CACHE_LIMIT = 16;
 const TIMELINE_FALLBACK_ITEM_SIZE = 60;
 const TIMELINE_SCROLL_END_THRESHOLD_PX = 50;
 
-const timelineCache = new Map<string, {measurements: VirtualItem[]; scrollOffset: number}>();
+interface TimelineCacheEntry {
+  readonly measurements: VirtualItem[];
+  readonly scrollOffset: number;
+  readonly wasAtEnd: boolean;
+}
+
+const timelineCache = new Map<string, TimelineCacheEntry>();
 
 function hasLiveTimelineOutput(items: readonly SessionTimelineItem[]): boolean {
   return items.some((item) => {
@@ -128,8 +134,8 @@ export default function SessionTimeline(props: SessionTimelineProps) {
   const virtualContentRef = useRef<HTMLDivElement | null>(null);
 
   const initialBottomSettleFrameRef = useRef<number | null>(null);
-  const shouldSettleInitialBottomRef = useRef(cachedRef.current === undefined);
-  const isAtEndRef = useRef(cachedRef.current === undefined);
+  const shouldSettleInitialBottomRef = useRef(cachedRef.current?.wasAtEnd ?? cachedRef.current === undefined);
+  const isAtEndRef = useRef(cachedRef.current?.wasAtEnd ?? cachedRef.current === undefined);
 
   const latestRowsLengthRef = useRef(timelineRows.length);
   const latestRowsRef = useRef(timelineRows);
@@ -197,7 +203,7 @@ export default function SessionTimeline(props: SessionTimelineProps) {
     getItemKey: (index) => virtualRowKeys[index] ?? `removed:${index}`,
     getScrollElement: () => scrollRootRef.current,
     initialMeasurementsCache: cachedRef.current?.measurements,
-    initialOffset: () => cachedRef.current?.scrollOffset ?? Number.MAX_SAFE_INTEGER,
+    initialOffset: () => (cachedRef.current?.wasAtEnd ? Number.MAX_SAFE_INTEGER : (cachedRef.current?.scrollOffset ?? Number.MAX_SAFE_INTEGER)),
     overscan: 5,
     paddingEnd: TIMELINE_BOTTOM_PADDING_PX,
     rangeExtractor: (range) => {
@@ -279,8 +285,9 @@ export default function SessionTimeline(props: SessionTimelineProps) {
           key: latestRowsRef.current[measurement.index]?.id ?? measurement.key,
         }));
         const scrollOffset = root?.scrollTop ?? virtualizer.scrollOffset ?? 0;
+        const bottomDistance = root ? root.scrollHeight - root.clientHeight - root.scrollTop : Number.POSITIVE_INFINITY;
         timelineCache.delete(latestSessionIdRef.current);
-        timelineCache.set(latestSessionIdRef.current, {measurements, scrollOffset});
+        timelineCache.set(latestSessionIdRef.current, {measurements, scrollOffset, wasAtEnd: bottomDistance <= virtualizer.options.scrollEndThreshold});
         while (timelineCache.size > TIMELINE_CACHE_LIMIT) timelineCache.delete(timelineCache.keys().next().value!);
       }
     },
