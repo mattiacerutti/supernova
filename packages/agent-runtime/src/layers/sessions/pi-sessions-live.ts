@@ -18,10 +18,10 @@ export const PiSessionsFromInternal = Layer.effect(
 
     return {
       create: (projectPath) => createSession(projectPath).pipe(Effect.provideService(PiSessionStore, sessionStore)),
-      get: (sessionId) => getSession(sessionId).pipe(Effect.provideService(PiSessionStore, sessionStore)),
+      get: (sessionId) => getSession(sessionId).pipe(Effect.provideService(PiModelCatalog, modelCatalog), Effect.provideService(PiSessionStore, sessionStore)),
       listComposerSuggestions: (projectPath, kind, query) => listComposerSuggestions(projectPath, kind, query).pipe(Effect.provideService(PiResourceCatalog, resourceCatalog)),
       listModels: () => listModels().pipe(Effect.provideService(PiModelCatalog, modelCatalog)),
-      rename: (input) => renameSession(input).pipe(Effect.provideService(PiSessionStore, sessionStore)),
+      rename: (input) => renameSession(input).pipe(Effect.provideService(PiModelCatalog, modelCatalog), Effect.provideService(PiSessionStore, sessionStore)),
     };
   })
 );

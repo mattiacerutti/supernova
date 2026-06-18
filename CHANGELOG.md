@@ -8,6 +8,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Added
 
+- Added a session context usage indicator next to the model selector.
+
 ### Changed
 
 - Changed sidebar session age labels.

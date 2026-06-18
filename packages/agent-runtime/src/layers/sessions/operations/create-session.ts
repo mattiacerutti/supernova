@@ -20,6 +20,7 @@ export function createSession(projectPath: string) {
 
         return {
           id: sessionManager.getSessionId(),
+          context: {usedTokens: 0, contextWindow: 0},
           projectPath,
           title: "Untitled session",
           turns: [],

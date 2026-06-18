@@ -81,6 +81,7 @@ async function createActiveTurn(runtime: PiSessionRuntime, openedSession: Opened
   return new ActiveTurn(
     {
       sessionInfo: openedSession.sessionInfo,
+      contextWindow: openedSession.model.contextWindow,
       customEntries,
       modelReference: openedSession.modelReference,
       messageContext,

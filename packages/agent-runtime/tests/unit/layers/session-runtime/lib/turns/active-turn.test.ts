@@ -27,6 +27,7 @@ function createActiveTurn(): ActiveTurn {
   return new ActiveTurn(
     {
       baseParentId: null,
+      contextWindow: 200_000,
       messageContext,
       modelReference: selectedModelReference,
       sessionInfo,

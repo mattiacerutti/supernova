@@ -2,6 +2,14 @@ import {Schema} from "effect";
 import {ModelReference} from "./model";
 import {Turn} from "./turn";
 
+/** Current token usage for the active session context. */
+export const SessionContextUsage = Schema.Struct({
+  /** Tokens currently used by the provider context, or null when Pi cannot safely know yet. */
+  usedTokens: Schema.NullOr(Schema.Number),
+  /** Maximum token window for the current model. */
+  contextWindow: Schema.Number,
+});
+
 /** Full session transcript and metadata. */
 export const Session = Schema.Struct({
   /** Stable session identifier. */
@@ -10,6 +18,8 @@ export const Session = Schema.Struct({
   title: Schema.String,
   /** Current session model configuration, when the runtime exposes one. */
   model: Schema.optional(ModelReference),
+  /** Current token usage for the active model context. */
+  context: SessionContextUsage,
   /** Absolute path of the project/workspace associated with the session. */
   projectPath: Schema.String,
   /** Ordered session transcript represented as turns. */
@@ -31,4 +41,5 @@ export const SessionSummary = Schema.Struct({
 });
 
 export type Session = typeof Session.Type;
+export type SessionContextUsage = typeof SessionContextUsage.Type;
 export type SessionSummary = typeof SessionSummary.Type;

@@ -3,6 +3,7 @@ import type {ModelReference, Session, Turn} from "@supernova/contracts/sessions/
 import {toPiSessionSummary} from "@supernova/agent-runtime/layers/projects/pi-session-mapper";
 import type {PiSessionInfo, PiSessionManager} from "@supernova/agent-runtime/layers/shared/internal/pi-session-store";
 import {buildPiTurns} from "@supernova/agent-runtime/layers/shared/lib/turns-builder";
+import {buildSessionContextUsage} from "@supernova/agent-runtime/layers/session-runtime/lib/session-context-usage";
 import {createLiveBranchEntries} from "@supernova/agent-runtime/layers/session-runtime/lib/turns/live-branch-entries";
 import type {SendMessageContext} from "@supernova/agent-runtime/layers/session-runtime/lib/user-message/send-message-context";
 
@@ -20,6 +21,7 @@ function stripToolArguments(message: PiAgentMessage): PiAgentMessage {
 export interface ActiveTurnInput {
   readonly sessionInfo: PiSessionInfo;
   readonly baseParentId: string | null;
+  readonly contextWindow: number;
   readonly customEntries?: readonly {readonly customType: string; readonly data: unknown}[];
   readonly messageContext: SendMessageContext;
   readonly modelReference: ModelReference;
@@ -31,6 +33,7 @@ export class ActiveTurn {
 
   private readonly sessionInfo: PiSessionInfo;
   private readonly baseParentId: string | null;
+  private readonly contextWindow: number;
   private readonly customEntries: readonly {readonly customType: string; readonly data: unknown}[];
   private readonly messageContext: SendMessageContext;
   private readonly modelReference: ModelReference;
@@ -39,6 +42,7 @@ export class ActiveTurn {
 
   public constructor(input: ActiveTurnInput, sessionManager: PiSessionManager) {
     this.baseParentId = input.baseParentId;
+    this.contextWindow = input.contextWindow;
     this.customEntries = input.customEntries ?? [];
     this.messageContext = input.messageContext;
     this.modelReference = input.modelReference;
@@ -157,7 +161,8 @@ export class ActiveTurn {
 
   /** Builds the authoritative committed snapshot after Pi has persisted and drained the turn. */
   public buildSettledSnapshot(): {session: Session} {
-    const turns = buildPiTurns(this.sessionManager.getBranch(), this.modelReference);
+    const branch = this.sessionManager.getBranch();
+    const turns = buildPiTurns(branch, this.modelReference);
     const summary = toPiSessionSummary(this.sessionInfo);
     const latestTurn = turns.at(-1);
 
@@ -165,6 +170,7 @@ export class ActiveTurn {
       session: {
         id: this.sessionInfo.id,
         model: this.modelReference,
+        context: buildSessionContextUsage({contextWindow: this.contextWindow, entries: branch, messages: this.sessionManager.buildSessionContext().messages}),
         projectPath: this.sessionInfo.cwd,
         title: this.sessionManager.getSessionName() ?? summary.title,
         turns,

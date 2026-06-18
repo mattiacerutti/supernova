@@ -2,6 +2,7 @@ import type {Session} from "@supernova/contracts/sessions/schemas";
 import type {AppEnvironment} from "@/app/app-environment";
 import ModelPicker from "@/features/sessions/components/composer/pickers/model-picker";
 import ThinkingLevelPicker from "@/features/sessions/components/composer/pickers/thinking-level-picker";
+import SessionContextIndicator from "@/features/sessions/components/composer/session-context-indicator";
 import SessionComposer from "@/features/sessions/components/composer/session-composer";
 import SessionComposerSkeleton from "@/features/sessions/components/composer/session-composer-skeleton";
 import UndoneTurnsDrawer from "@/features/sessions/components/composer/undone-turns-drawer";
@@ -150,7 +151,8 @@ function SessionConversation(props: SessionConversationProps) {
             <SessionComposer.Toolbar>
               <SessionComposer.AttachButton />
               <SessionComposer.ActionGroup>
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2">
+                  <SessionContextIndicator context={session.context} />
                   <ModelPicker selectedModel={selectedModel} disabled={composerActionDisabled} models={availableModels} onModelChange={handleModelChange} />
                   {thinkingLevels.length > 0 && (
                     <ThinkingLevelPicker

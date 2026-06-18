@@ -200,7 +200,12 @@ export class PiSessionRuntime {
     await this.publishEvent({
       type: "session.snapshot",
       sessionId: this.sessionId,
-      session: buildSessionSnapshot({sessionInfo: openedSession.sessionInfo, sessionManager: openedSession.sessionManager, modelReference: openedSession.modelReference}),
+      session: buildSessionSnapshot({
+        contextWindow: openedSession.model.contextWindow,
+        sessionInfo: openedSession.sessionInfo,
+        sessionManager: openedSession.sessionManager,
+        modelReference: openedSession.modelReference,
+      }),
     });
   }
 

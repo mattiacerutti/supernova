@@ -101,6 +101,7 @@ export function sessionTimelineBaseSession(input: {readonly scenario: SessionTim
 
   return {
     id: scenario.sessionId,
+    context: {usedTokens: 0, contextWindow: 200_000},
     model: sessionTimelineModel,
     projectPath: scenario.projectPath,
     title: scenario.title,
