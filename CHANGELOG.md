@@ -12,6 +12,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Fixed
 
+- Fixed renamed chats briefly flashing their previous title after confirming a new name.
+
 ### Removed
 
 ## [0.0.1-beta.5]
