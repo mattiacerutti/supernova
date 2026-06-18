@@ -7,8 +7,16 @@ import type {Tool} from "@supernova/contracts/sessions/schemas";
 
 type FileMutationTool = Extract<Tool, {kind: "file-edit" | "file-write"}>;
 
+function pathSegments(path: string): readonly string[] {
+  return path.split(/[\\/]/).filter(Boolean);
+}
+
 function fileName(path: string): string {
-  return path.split("/").filter(Boolean).at(-1) ?? path;
+  return pathSegments(path).at(-1) ?? path;
+}
+
+function isSkillRead(path: string): boolean {
+  return pathSegments(path).at(-1) === "SKILL.md";
 }
 
 function formatJson(value: unknown): string {
@@ -58,7 +66,7 @@ function CommandToolDetails(props: {tool: Extract<Tool, {kind: "command"}>}) {
 function ReadToolDetails(props: {tool: Extract<Tool, {kind: "file-read"}>}) {
   const {tool} = props;
 
-  if (tool.input === undefined) {
+  if (tool.input === undefined || isSkillRead(tool.input.path)) {
     return null;
   }
 

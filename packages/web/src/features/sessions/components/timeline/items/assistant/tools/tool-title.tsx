@@ -1,13 +1,22 @@
 import type {ReactNode} from "react";
 import Icon from "@/components/ui/icon";
+import type {IconName} from "@/components/ui/icon";
 import type {SessionWorkEvent} from "@/features/sessions/types/session-timeline-item";
 import type {Tool} from "@supernova/contracts/sessions/schemas";
 
 type ToolEvent = Extract<SessionWorkEvent, {type: "tool"}>;
 type FileMutationTool = Extract<Tool, {kind: "file-edit" | "file-write"}>;
 
+function pathSegments(path: string): readonly string[] {
+  return path.split(/[\\/]/).filter(Boolean);
+}
+
 function fileName(path: string): string {
-  return path.split("/").filter(Boolean).at(-1) ?? path;
+  return pathSegments(path).at(-1) ?? path;
+}
+
+function isSkillRead(path: string): boolean {
+  return pathSegments(path).at(-1) === "SKILL.md";
 }
 
 interface FileEditDiffStats {
@@ -27,7 +36,7 @@ function getFileEditDiffStats(patch: string): FileEditDiffStats {
   );
 }
 
-function ToolTitleRow(props: {children: ReactNode; icon: "folder" | "globe" | "server"}) {
+function ToolTitleRow(props: {children: ReactNode; icon: IconName}) {
   const {children, icon} = props;
 
   return (
@@ -60,6 +69,17 @@ function CommandToolTitle(props: {tool: Extract<Tool, {kind: "command"}>}) {
 
 function ReadToolTitle(props: {tool: Extract<Tool, {kind: "file-read"}>}) {
   const {tool} = props;
+
+  if (tool.input && isSkillRead(tool.input.path)) {
+    const skillName = pathSegments(tool.input.path).at(-2);
+    return (
+      <ToolTitleRow icon="skill">
+        <span className="min-w-0 wrap-break-word">
+          {tool.status === "pending" ? "Loading" : "Loaded"} skill {skillName}
+        </span>
+      </ToolTitleRow>
+    );
+  }
 
   const name = tool.input?.path ? ` ${fileName(tool.input.path)}` : "a file";
 

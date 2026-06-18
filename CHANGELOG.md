@@ -10,6 +10,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+- Changed session timeline skill file reads to display as loaded skills instead of generic file reads.
+
 ### Fixed
 
 - Fixed renamed chats briefly flashing their previous title after confirming a new name.
