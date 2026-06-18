@@ -10,6 +10,7 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+- Changed sidebar session age labels.
 - Changed session timeline skill file reads to display as loaded skills instead of generic file reads.
 
 ### Fixed
