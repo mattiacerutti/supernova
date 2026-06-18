@@ -13,8 +13,8 @@ describe("formatUpdatedAt", () => {
 
   it.each([
     {input: "not-a-date", name: "invalid dates", output: ""},
-    {input: "2026-04-07T12:01:00.000Z", name: "future dates", output: "just now"},
-    {input: "2026-04-07T11:59:30.000Z", name: "sub-minute ages", output: "just now"},
+    {input: "2026-04-07T12:01:00.000Z", name: "future dates", output: "now"},
+    {input: "2026-04-07T11:59:30.000Z", name: "sub-minute ages", output: "now"},
     {input: "2026-04-07T11:45:00.000Z", name: "minute ages", output: "15m"},
     {input: "2026-04-07T06:00:00.000Z", name: "hour ages", output: "6h"},
     {input: "2026-04-06T12:00:00.000Z", name: "day ages", output: "1d"},
