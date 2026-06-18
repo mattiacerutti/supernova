@@ -60,6 +60,14 @@ function toStatus(entry: Omit<SessionLiveState, "status">): SessionLiveStatus {
   return entry.agentStreaming || entry.liveTurn !== null ? "streaming" : "idle";
 }
 
+/** Preserves explicit compaction status across live turn updates until the server emits compaction end. */
+function nextLifecycleStatus(input: {entry: Omit<SessionLiveState, "status">; previousStatus: SessionLiveStatus; status?: SessionLiveStatus}): SessionLiveStatus {
+  const {entry, previousStatus, status} = input;
+  if (status) return status;
+  if (previousStatus === "compacting") return "compacting";
+  return toStatus(entry);
+}
+
 /** Normalizes command failures for user-facing toasts. */
 function errorMessage(cause: unknown, fallback: string): string {
   return cause instanceof Error && cause.message.length > 0 ? cause.message : fallback;
@@ -177,9 +185,8 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
 
       const base = current ?? emptyEntry({revision: 0});
       const {status, ...entry} = {...base, revision};
-      void status;
       const next = update(entry);
-      return {sessions: {...state.sessions, [sessionId]: {...next, status: next.status ?? toStatus(next)}}};
+      return {sessions: {...state.sessions, [sessionId]: {...next, status: nextLifecycleStatus({entry: next, previousStatus: status, status: next.status})}}};
     });
   };
 
@@ -206,6 +213,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
         updateLifecycle(event.sessionId, event.revision, (entry) => ({...entry, status: "compacting"}));
         return;
       case "session.compaction.ended":
+        updateLifecycle(event.sessionId, event.revision, (entry) => ({...entry, status: toStatus(entry)}));
         return;
       case "session.snapshot":
         flushSnapshot(queryClient, event);

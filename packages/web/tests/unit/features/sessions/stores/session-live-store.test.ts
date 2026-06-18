@@ -139,6 +139,23 @@ describe("session live store", () => {
     expect(invalidateQueries).toHaveBeenCalledWith({queryKey: ["session"]});
   });
 
+  it("keeps threshold compaction status while live turn updates arrive", async () => {
+    const queryClient = createQueryClient();
+    const rpcClient = streamRpcClient([
+      {type: "connected"},
+      {revision: 1, sessionId: "session-1", type: "session.agent.started"},
+      {revision: 2, sessionId: "session-1", turn: turn({id: "before-compaction"}), type: "session.turn"},
+      {revision: 3, sessionId: "session-1", type: "session.compaction.started"},
+      {revision: 4, sessionId: "session-1", turn: turn({id: "during-compaction"}), type: "session.turn"},
+    ]);
+
+    useSessionLiveStore.getState().connect({queryClient, rpcClient});
+
+    await waitUntil(() => {
+      expect(useSessionLiveStore.getState().sessions["session-1"]).toMatchObject({liveTurn: {id: "during-compaction"}, status: "compacting"});
+    });
+  });
+
   it("clears stopped live turns when an authoritative snapshot arrives", async () => {
     const queryClient = createQueryClient();
     const stoppedTurn = turn({
