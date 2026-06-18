@@ -12,11 +12,12 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
-- Changed sidebar session age labels.
+- Changed sidebar session age labels to show `now` for recent activity.
 - Changed session timeline skill file reads to display as loaded skills instead of generic file reads.
 
 ### Fixed
 
+- Fixed sidebar session age labels wrapping onto multiple lines.
 - Fixed automatic threshold compaction showing the chat footer as Thinking instead of Compacting context while compaction is running.
 - Fixed model and reasoning selectors being unavailable while a message is streaming.
 - Fixed renamed chats briefly flashing their previous title after confirming a new name.

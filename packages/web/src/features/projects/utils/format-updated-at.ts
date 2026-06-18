@@ -6,7 +6,7 @@ export function formatUpdatedAt(value: string): string {
   const elapsedMs = Date.now() - updatedAt;
 
   const elapsedSeconds = Math.floor(elapsedMs / 1_000);
-  if (elapsedSeconds < 60) return "just now";
+  if (elapsedSeconds < 60) return "now";
 
   const elapsedMinutes = Math.floor(elapsedSeconds / 60);
   if (elapsedMinutes < 60) return `${elapsedMinutes}m`;

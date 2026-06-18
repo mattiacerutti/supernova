@@ -263,7 +263,7 @@ export default function ProjectListItem(props: ProjectListItemProps) {
                   </IconButton>
                   <SessionTitleText className="min-w-0 flex-1 truncate text-sm" title={session.title} />
                   <span className="grid w-12 shrink-0 place-items-center justify-items-end">
-                    <span className="col-start-1 row-start-1 w-full justify-self-end pr-1.5 text-right text-xs text-neutral-500 group-hover/session:invisible">
+                    <span className="col-start-1 row-start-1 w-full justify-self-end whitespace-nowrap pr-1.5 text-right text-xs text-neutral-500 group-hover/session:invisible">
                       {sessionStreaming ? (
                         <span className="inline-block size-2 animate-spin rounded-full border border-neutral-600 border-t-neutral-300" aria-label="Session streaming" />
                       ) : (
