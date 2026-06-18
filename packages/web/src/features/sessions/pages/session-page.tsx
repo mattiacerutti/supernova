@@ -153,10 +153,10 @@ function SessionConversation(props: SessionConversationProps) {
               <SessionComposer.ActionGroup>
                 <div className="flex items-center gap-2">
                   <SessionContextIndicator context={session.context} />
-                  <ModelPicker selectedModel={selectedModel} disabled={composerActionDisabled} models={availableModels} onModelChange={handleModelChange} />
+                  <ModelPicker selectedModel={selectedModel} disabled={composerDisabled} models={availableModels} onModelChange={handleModelChange} />
                   {thinkingLevels.length > 0 && (
                     <ThinkingLevelPicker
-                      disabled={composerActionDisabled}
+                      disabled={composerDisabled}
                       onThinkingLevelChange={handleThinkingLevelChange}
                       selectedThinkingLabel={selectedThinkingLabel}
                       selectedThinkingLevel={selectedModelReference?.thinkingLevel}
