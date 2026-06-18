@@ -49,6 +49,7 @@ export class CustomPiResourceLoader implements ResourceLoader {
   constructor(projectPath: string) {
     this.agentDir = getAgentDir();
     this.projectPath = projectPath;
+    this.settingsManager.setProjectTrusted(true);
     this.piLoader = createRestrictedPiResourceLoader({agentDir: this.agentDir, projectPath, settingsManager: this.settingsManager, skillPaths: []});
   }
 

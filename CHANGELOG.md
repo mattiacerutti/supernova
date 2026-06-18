@@ -12,6 +12,7 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+- Changed Pi runtime dependency to 0.79.7.
 - Changed sidebar session age labels to show `now` for recent activity.
 - Changed session timeline skill file reads to display as loaded skills instead of generic file reads.
 
