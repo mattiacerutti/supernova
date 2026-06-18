@@ -21,6 +21,8 @@ All notable changes to Supernova are documented in this file.
 - Fixed automatic threshold compaction showing the chat footer as Thinking instead of Compacting context while compaction is running.
 - Fixed model and reasoning selectors being unavailable while a message is streaming.
 - Fixed renamed chats briefly flashing their previous title after confirming a new name.
+- Fixed the Supernova icon on the new session page appearing clipped at the edges.
+- Fixed the scroll-to-latest button overlapping rolled-back messages.
 
 ### Removed
 

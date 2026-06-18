@@ -1,4 +1,5 @@
 import type {Session} from "@supernova/contracts/sessions/schemas";
+import {useCallback, useState} from "react";
 import type {AppEnvironment} from "@/app/app-environment";
 import ModelPicker from "@/features/sessions/components/composer/pickers/model-picker";
 import ThinkingLevelPicker from "@/features/sessions/components/composer/pickers/thinking-level-picker";
@@ -89,6 +90,7 @@ function SessionConversation(props: SessionConversationProps) {
   const imageSupported = selectedModel?.capabilities.images === true;
   const nextUndoneTurn = session.undoneTurns[0];
   const nextUndoneContentParts = nextUndoneTurn?.userMessage.contentParts ?? [];
+  const [undoneDrawerHeight, setUndoneDrawerHeight] = useState(0);
 
   const stream = useSessionTimeline({
     modelReference: selectedModelReference,
@@ -126,6 +128,10 @@ function SessionConversation(props: SessionConversationProps) {
     setLastThinkingLevel(value);
   };
 
+  const handleUndoneDrawerHeightChange = useCallback((height: number): void => {
+    setUndoneDrawerHeight((current) => (Math.abs(current - height) < 0.5 ? current : height));
+  }, []);
+
   return (
     <SessionLayout
       appEnvironment={appEnvironment}
@@ -144,7 +150,14 @@ function SessionConversation(props: SessionConversationProps) {
             projectPath={session.projectPath}
             slashCommandActions={stream.slashCommandActions}
             streamStatus={stream.streamStatus}
-            topExtension={<UndoneTurnsDrawer disabled={composerActionDisabled} onRevertToMessage={stream.revertToMessage} turns={session.undoneTurns} />}
+            topExtension={
+              <UndoneTurnsDrawer
+                disabled={composerActionDisabled}
+                onHeightChange={handleUndoneDrawerHeightChange}
+                onRevertToMessage={stream.revertToMessage}
+                turns={session.undoneTurns}
+              />
+            }
           >
             <SessionComposer.Attachments />
             <SessionComposer.Input />
@@ -173,6 +186,7 @@ function SessionConversation(props: SessionConversationProps) {
       timeline={
         <SessionTimeline
           key={session.id}
+          bottomOverlayHeight={undoneDrawerHeight}
           compacting={stream.streamStatus === "compacting"}
           isStreaming={stream.streamStatus === "streaming" || stream.streamStatus === "compacting"}
           items={stream.committedTimelineItems}

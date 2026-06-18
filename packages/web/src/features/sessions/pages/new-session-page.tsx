@@ -101,7 +101,7 @@ export default function NewSessionPage(props: NewSessionPageProps) {
     <div {...composerAttachments.dropZoneProps} className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden px-4 pb-16 pt-4">
       <div className="flex h-[min(calc(100svh-1rem),32rem)] w-[min(calc(100vw-2rem),48rem)] flex-col items-center justify-center overflow-visible">
         <div className="mb-8 flex flex-col items-center gap-3">
-          <img src={appIconUrl} alt="Supernova" className="h-16 w-auto shrink-0 rounded-2xl" draggable={false} />
+          <img src={appIconUrl} alt="Supernova" className="h-16 w-auto shrink-0" draggable={false} />
           <h1 className="text-center text-4xl font-normal tracking-tight text-neutral-50">
             What should we build in <i className="text-neutral-400">{projectName}</i>?
           </h1>

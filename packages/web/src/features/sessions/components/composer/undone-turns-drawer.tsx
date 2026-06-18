@@ -1,6 +1,6 @@
 import type {Turn, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 import {AnimatePresence, motion} from "framer-motion";
-import {useState} from "react";
+import {useLayoutEffect, useRef, useState} from "react";
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import {cn} from "@/lib/cn";
@@ -38,16 +38,39 @@ function UndoneTurnTitle(props: {readonly contentParts: readonly UserMessageCont
 
 interface UndoneTurnsDrawerProps {
   readonly disabled?: boolean;
+  readonly onHeightChange?: (height: number) => void;
   readonly onRevertToMessage: (turnId: string) => void;
   readonly turns: readonly Turn[];
 }
 
 export default function UndoneTurnsDrawer(props: UndoneTurnsDrawerProps) {
-  const {disabled = false, onRevertToMessage, turns} = props;
+  const {disabled = false, onHeightChange, onRevertToMessage, turns} = props;
   const [expanded, setExpanded] = useState(false);
+  const drawerRef = useRef<HTMLDivElement | null>(null);
   const visible = turns.length > 0;
   const count = turns.length;
   const previewTurn = turns[0];
+
+  useLayoutEffect(() => {
+    if (!onHeightChange) return;
+
+    const drawer = drawerRef.current;
+    if (!drawer) {
+      onHeightChange(0);
+      return;
+    }
+
+    const updateHeight = (): void => {
+      // Subtracts 20px to account for the drawer's bottom overlap with the composer
+      onHeightChange(Math.max(0, drawer.getBoundingClientRect().height - 20));
+    };
+
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(drawer);
+
+    return () => observer.disconnect();
+  }, [expanded, onHeightChange, visible]);
 
   const handleToggle = (): void => {
     setExpanded((current) => !current);
@@ -55,6 +78,7 @@ export default function UndoneTurnsDrawer(props: UndoneTurnsDrawerProps) {
 
   const handleExitComplete = (): void => {
     setExpanded(false);
+    onHeightChange?.(0);
   };
 
   return (
@@ -65,6 +89,7 @@ export default function UndoneTurnsDrawer(props: UndoneTurnsDrawerProps) {
           className="-mb-5 overflow-hidden"
           exit={{height: 0, opacity: 0, y: 8}}
           initial={{height: 0, opacity: 0, y: 8}}
+          ref={drawerRef}
           transition={DRAWER_TRANSITION}
         >
           <div className="min-h-0 min-w-0 overflow-hidden">

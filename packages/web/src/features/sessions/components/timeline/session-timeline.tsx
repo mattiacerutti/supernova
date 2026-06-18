@@ -107,6 +107,7 @@ function VirtualTimelineRow(props: VirtualTimelineRowProps) {
 }
 
 interface SessionTimelineProps {
+  readonly bottomOverlayHeight?: number;
   readonly compacting: boolean;
   readonly isStreaming: boolean;
   readonly items: readonly SessionTimelineItem[];
@@ -117,7 +118,7 @@ interface SessionTimelineProps {
 }
 
 export default function SessionTimeline(props: SessionTimelineProps) {
-  const {compacting, isStreaming, items, liveItems, onRevertToMessage, sessionId, streamError} = props;
+  const {bottomOverlayHeight = 0, compacting, isStreaming, items, liveItems, onRevertToMessage, sessionId, streamError} = props;
 
   const [scrollToEndButton, setShowScrollToEndButton] = useState(false);
 
@@ -352,10 +353,11 @@ export default function SessionTimeline(props: SessionTimelineProps) {
       )}
       {scrollToEndButton && (
         <IconButton
-          className="absolute bottom-4 left-1/2 z-30 grid size-9 -translate-x-1/2 place-items-center rounded-full bg-[#181818] text-white ring-1 ring-neutral-700 transition hover:bg-[#202020]"
+          className="absolute left-1/2 z-30 grid size-9 -translate-x-1/2 place-items-center rounded-full bg-[#181818] text-white ring-1 ring-neutral-700 transition hover:bg-[#202020]"
           label="Scroll to latest message"
           onClick={() => virtualizer.scrollToEnd()}
           size="none"
+          style={{bottom: `calc(1rem + ${bottomOverlayHeight}px)`}}
           variant="bare"
         >
           <Icon name="arrow-down" size="sm" />
