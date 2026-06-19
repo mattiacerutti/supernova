@@ -8,6 +8,7 @@ import AttachmentDropOverlay from "@/features/sessions/components/attachments/at
 import ModelPicker from "@/features/sessions/components/composer/pickers/model-picker";
 import ThinkingLevelPicker from "@/features/sessions/components/composer/pickers/thinking-level-picker";
 import {useCreateSession} from "@/features/sessions/hooks/api/use-create-session";
+import {sessionQueryKey} from "@/features/sessions/hooks/api/use-session";
 import {useSessionModels} from "@/features/sessions/hooks/api/use-session-models";
 import {useComposerAttachments} from "@/features/sessions/hooks/use-composer-attachments";
 import {modelKey, resolveThinkingLevel, selectionFromModel} from "@/features/sessions/lib/composer/model-picker/model-utils";
@@ -34,6 +35,7 @@ export default function NewSessionPage(props: NewSessionPageProps) {
   const {data: models, isPending: modelsPending} = useSessionModels();
   const availableModels = models ?? [];
 
+  const hydrateSession = useSessionLiveStore((state) => state.hydrateSession);
   const sendMessage = useSessionLiveStore((state) => state.sendMessage);
   const setSessionModel = useSessionModelsStore((state) => state.setSessionModel);
   const recordRecentModel = useModelPickerStore((state) => state.recordRecentModel);
@@ -87,6 +89,8 @@ export default function NewSessionPage(props: NewSessionPageProps) {
         },
         onSuccess: (session) => {
           const modelReference = selectionFromModel(selectedModel, resolvedThinkingLevel);
+          queryClient.setQueryData(sessionQueryKey(session.id), session);
+          hydrateSession(session);
           setSessionModel(session.id, modelReference);
           recordRecentModel(resolvedModelKey);
           setLastThinkingLevel(resolvedThinkingLevel);
