@@ -8,6 +8,16 @@ All notable changes to Supernova are documented in this file.
 
 ### Added
 
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.0.1-beta.6]
+
+### Added
+
 - Added a session context usage indicator next to the model selector.
 
 ### Changed
@@ -26,8 +36,6 @@ All notable changes to Supernova are documented in this file.
 - Fixed the Supernova icon on the new session page appearing clipped at the edges.
 - Fixed the scroll-to-latest button overlapping rolled-back messages.
 - Fixed the open-project dialog briefly flashing an empty subfolder state while folder suggestions are loading.
-
-### Removed
 
 ## [0.0.1-beta.5]
 
