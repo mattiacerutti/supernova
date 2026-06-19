@@ -10,19 +10,9 @@ import {formatSuggestionPath, withTrailingProjectPathSeparator} from "@/features
 import {useProjectsStore} from "@/features/projects/stores/projects-store";
 import {cn} from "@/lib/cn";
 
-interface ProjectSearchHeaderRow {
-  readonly id: "recent-projects" | "open-project";
-  readonly title: string;
-  readonly type: "header";
-}
-
-interface ProjectSearchSuggestionRow {
-  readonly kind: "folder" | "recent";
-  readonly path: string;
-  readonly type: "suggestion";
-}
-
-type ProjectSearchRow = ProjectSearchHeaderRow | ProjectSearchSuggestionRow;
+type ProjectSearchRow =
+  | {readonly id: "recent-projects" | "open-project"; readonly title: string; readonly type: "header"}
+  | {readonly kind: "folder" | "recent"; readonly path: string; readonly type: "suggestion"};
 
 interface SuggestionItemProps {
   highlighted: boolean;
@@ -36,13 +26,9 @@ function SuggestionItem(props: SuggestionItemProps) {
   const {highlighted, homePath, onAutocomplete, path, ref} = props;
   const {name, parent, suffix} = formatSuggestionPath(path, homePath);
 
-  const handleAutocomplete = (): void => {
-    onAutocomplete(path);
-  };
-
   return (
     <div className={cn("group flex items-center gap-1 rounded-xl corner-superellipse/1.3", highlighted && "bg-white/6")} ref={ref}>
-      <Button className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 px-3 py-2 text-left" onClick={handleAutocomplete} variant="bare">
+      <Button className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 px-3 py-2 text-left" onClick={() => onAutocomplete(path)} variant="bare">
         <Icon className="shrink-0 text-neutral-500" name="folder" size="sm" />
         <span className="min-w-0 flex-1 truncate text-[15px]">
           {parent && <span className="text-neutral-500">{parent}</span>}
@@ -62,48 +48,58 @@ interface OpenProjectDialogProps {
 
 export default function OpenProjectDialog(props: OpenProjectDialogProps) {
   const {onClose, onOpenProject, open} = props;
-  const [activeRowIndex, setActiveRowIndex] = useState(0);
+  const [activeRow, setActiveRow] = useState({index: 0, query: ""});
   const [folderCreationDialogOpen, setFolderCreationDialogOpen] = useState(false);
   const [projectPath, setProjectPath] = useState("");
-  const suggestionsQuery = useListFolderSuggestions(projectPath);
+  const [queryPath, setQueryPath] = useState("");
+  const suggestionsQuery = useListFolderSuggestions(queryPath);
   const createFolderMutation = useCreateFolder();
 
-  const pathStatus = suggestionsQuery.data?.query === projectPath ? suggestionsQuery.data : undefined;
+  const displayStatus = suggestionsQuery.data;
+  const displayedQuery = displayStatus?.query ?? "";
+  const currentProjectPath = displayStatus?.query === queryPath ? queryPath : projectPath;
+  const activeRowIndex = activeRow.query === displayedQuery ? activeRow.index : 0;
+  const pathStatus = displayStatus?.query === currentProjectPath ? displayStatus : undefined;
   const folderCreationPath = pathStatus?.queryPath;
-  const homePath = pathStatus?.homePath;
+  const homePath = displayStatus?.homePath;
 
   const storedProjects = useProjectsStore((state) => state.projects);
   const recentProjects = storedProjects.slice(0, 5);
-  const suggestedFolders = pathStatus?.suggestions ?? [];
+  const suggestedFolders = displayStatus?.suggestions ?? [];
 
-  const isShowingDefaults = projectPath.trim().length === 0;
-  const recentRows: ProjectSearchSuggestionRow[] = isShowingDefaults ? recentProjects.map((project) => ({kind: "recent", path: project.path, type: "suggestion"})) : [];
-  const folderRows: ProjectSearchSuggestionRow[] = suggestedFolders.map((folder) => ({kind: "folder", path: folder.path, type: "suggestion"}));
+  const isShowingDefaults = currentProjectPath.trim().length === 0;
+  const recentRows: ProjectSearchRow[] = isShowingDefaults ? recentProjects.map((project) => ({kind: "recent", path: project.path, type: "suggestion"})) : [];
+  const folderRows: ProjectSearchRow[] = suggestedFolders.map((folder) => ({kind: "folder", path: folder.path, type: "suggestion"}));
   const rows: ProjectSearchRow[] = [
-    ...(recentRows.length > 0 ? [{id: "recent-projects", title: "Recent projects", type: "header"} satisfies ProjectSearchHeaderRow, ...recentRows] : []),
-    ...(isShowingDefaults ? [{id: "open-project", title: "Open project", type: "header"} satisfies ProjectSearchHeaderRow] : []),
+    ...(recentRows.length > 0 ? [{id: "recent-projects", title: "Recent projects", type: "header"} satisfies ProjectSearchRow, ...recentRows] : []),
+    ...(isShowingDefaults ? [{id: "open-project", title: "Open project", type: "header"} satisfies ProjectSearchRow] : []),
     ...folderRows,
   ];
 
   const canSubmitPath =
-    projectPath.trim().length > 0 &&
+    currentProjectPath.trim().length > 0 &&
     !!pathStatus &&
     pathStatus.queryPathType !== "file" &&
     !suggestionsQuery.isFetching &&
     !createFolderMutation.isPending &&
     !folderCreationDialogOpen;
 
+  const handleActiveRowIndexChange = (updater: number | ((current: number) => number)): void => {
+    setActiveRow((current) => ({index: typeof updater === "function" ? updater(current.query === displayedQuery ? current.index : 0) : updater, query: displayedQuery}));
+  };
+
   const handlePathChange = (value: string): void => {
     createFolderMutation.reset();
     setProjectPath(value);
-    setActiveRowIndex(0);
+    setQueryPath(value);
   };
 
   const handleAutocomplete = (path: string): void => {
-    handlePathChange(withTrailingProjectPathSeparator(path));
+    createFolderMutation.reset();
+    setQueryPath(withTrailingProjectPathSeparator(path));
   };
 
-  const handleOpenPath = async (): Promise<void> => {
+  const handleOpenPath = (): void => {
     if (!canSubmitPath || !pathStatus) return;
 
     if (pathStatus.queryPathType === "directory") {
@@ -127,36 +123,19 @@ export default function OpenProjectDialog(props: OpenProjectDialogProps) {
     }
   };
 
-  const handleCancelCreateFolder = (): void => {
-    setFolderCreationDialogOpen(false);
-  };
-
-  const handleDialogOpenChange = (nextOpen: boolean): void => {
-    if (!nextOpen) onClose();
-  };
-
   const handleDialogOpenChangeComplete = (nextOpen: boolean): void => {
     if (nextOpen) return;
 
     createFolderMutation.reset();
-    setActiveRowIndex(0);
+    setActiveRow({index: 0, query: ""});
     setFolderCreationDialogOpen(false);
     setProjectPath("");
-  };
-
-  const handleCreateFolderDialogOpenChange = (nextOpen: boolean): void => {
-    if (!nextOpen) handleCancelCreateFolder();
-  };
-
-  const handleCreateFolderDialogOpenChangeComplete = (nextOpen: boolean): void => {
-    if (nextOpen) return;
-
-    createFolderMutation.reset();
+    setQueryPath("");
   };
 
   const isLoading = suggestionsQuery.isPending && !suggestionsQuery.data;
   const hasError = !!suggestionsQuery.error;
-  const isEmpty = !isLoading && !hasError && suggestedFolders.length === 0 && !isShowingDefaults;
+  const isEmpty = !isLoading && !suggestionsQuery.isFetching && !hasError && suggestedFolders.length === 0 && !isShowingDefaults;
   const listStatus = (
     <>
       {isLoading && <p className="px-3 py-2 text-sm text-neutral-600">Searching folders...</p>}
@@ -167,15 +146,23 @@ export default function OpenProjectDialog(props: OpenProjectDialogProps) {
 
   return (
     <>
-      <Dialog onOpenChange={handleDialogOpenChange} onOpenChangeComplete={handleDialogOpenChangeComplete} open={open} title="Open project">
+      <Dialog
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) onClose();
+        }}
+        onOpenChangeComplete={handleDialogOpenChangeComplete}
+        open={open}
+        title="Open project"
+      >
         <SearchableList
           activeIndex={activeRowIndex}
+          key={displayedQuery}
           getItemKey={(row) => (row.type === "header" ? row.id : `${row.kind}-${row.path}`)}
           isItemSelectable={(row) => row.type === "suggestion"}
           items={rows}
           listStatus={listStatus}
-          onActiveIndexChange={setActiveRowIndex}
-          onSubmit={() => void handleOpenPath()}
+          onActiveIndexChange={handleActiveRowIndexChange}
+          onSubmit={handleOpenPath}
           onTab={(row) => {
             if (row.type === "suggestion") handleAutocomplete(row.path);
           }}
@@ -189,13 +176,13 @@ export default function OpenProjectDialog(props: OpenProjectDialogProps) {
                   onChange={(event) => handlePathChange(event.target.value)}
                   onKeyDown={onKeyDown}
                   placeholder="Search folders"
-                  value={projectPath}
+                  value={currentProjectPath}
                 />
 
                 <Button
                   disabled={!canSubmitPath}
                   className={cn("size-8", pathStatus?.queryPathType === "file" && "pointer-events-none invisible")}
-                  onClick={() => void handleOpenPath()}
+                  onClick={handleOpenPath}
                   shape="icon"
                   size="sm"
                   title="Open project path"
@@ -218,8 +205,12 @@ export default function OpenProjectDialog(props: OpenProjectDialogProps) {
 
       <Dialog
         containerClassName="h-auto w-[min(calc(100vw-1rem),28rem)]"
-        onOpenChange={handleCreateFolderDialogOpenChange}
-        onOpenChangeComplete={handleCreateFolderDialogOpenChangeComplete}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setFolderCreationDialogOpen(false);
+        }}
+        onOpenChangeComplete={(nextOpen) => {
+          if (!nextOpen) createFolderMutation.reset();
+        }}
         open={folderCreationDialogOpen}
         title="Create folder?"
       >
@@ -231,7 +222,11 @@ export default function OpenProjectDialog(props: OpenProjectDialogProps) {
           {createFolderMutation.error && <p className="text-sm text-red-400">Unable to create this folder.</p>}
 
           <div className="flex justify-end gap-2">
-            <Button className="rounded-xl px-3 py-2 text-sm text-neutral-400 hover:bg-white/7 hover:text-neutral-100" onClick={handleCancelCreateFolder} variant="bare">
+            <Button
+              className="rounded-xl px-3 py-2 text-sm text-neutral-400 hover:bg-white/7 hover:text-neutral-100"
+              onClick={() => setFolderCreationDialogOpen(false)}
+              variant="bare"
+            >
               Cancel
             </Button>
             <Button

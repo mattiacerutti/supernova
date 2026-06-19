@@ -25,6 +25,7 @@ All notable changes to Supernova are documented in this file.
 - Fixed renamed chats briefly flashing their previous title after confirming a new name.
 - Fixed the Supernova icon on the new session page appearing clipped at the edges.
 - Fixed the scroll-to-latest button overlapping rolled-back messages.
+- Fixed the open-project dialog briefly flashing an empty subfolder state while folder suggestions are loading.
 
 ### Removed
 
