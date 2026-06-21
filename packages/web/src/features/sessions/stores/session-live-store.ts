@@ -6,6 +6,7 @@ import {create} from "zustand";
 import {Effect, Stream} from "effect";
 import {showToast} from "@/components/ui/toast-manager";
 import {allProjectSessionsQueryKey, listProjectSessionsQueryKey} from "@/features/projects/hooks/api/use-list-project-sessions";
+import {allSessionsQueryKey, sessionQueryKey} from "@/features/sessions/hooks/api/use-session";
 import type {AgentRpcClientApi, AgentRpcClientFiber, AgentRpcProtocolClient} from "@/rpc/agent-rpc-client";
 
 export type SessionLiveStatus = "checkpoint-navigating" | "compacting" | "idle" | "stopping" | "streaming";
@@ -29,10 +30,6 @@ export interface SessionLiveState {
 let fiber: AgentRpcClientFiber | null = null;
 let isConnecting = false;
 let reconnectTimer: number | null = null;
-
-function sessionQueryKey(sessionId: string) {
-  return ["session", sessionId] as const;
-}
 
 /** Creates an optimistic local turn so the user message appears before the first runtime snapshot. */
 function createInitialStreamTurn(input: {contentParts: readonly UserMessageContentPart[]; model: ModelReference}): Turn {
@@ -197,7 +194,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
     switch (event.type) {
       case "connected":
         // A fresh global stream may have missed prior events. Refetch known query data to repair state.
-        void queryClient.invalidateQueries({queryKey: ["session"]});
+        void queryClient.invalidateQueries({queryKey: allSessionsQueryKey()});
         void queryClient.invalidateQueries({queryKey: allProjectSessionsQueryKey()});
         return;
       case "heartbeat":

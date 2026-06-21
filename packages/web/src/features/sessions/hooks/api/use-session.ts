@@ -4,8 +4,12 @@ import {useSessionLiveStore} from "@/features/sessions/stores/session-live-store
 import {eq} from "@/rpc/effect-query";
 import {AgentRpcProtocolClientService} from "@/rpc/agent-rpc-client";
 
+export function allSessionsQueryKey() {
+  return ["session"] as const;
+}
+
 export function sessionQueryKey(sessionId: string) {
-  return ["session", sessionId] as const;
+  return [...allSessionsQueryKey(), sessionId] as const;
 }
 
 export function sessionQueryOptions(sessionId: string) {

@@ -4,7 +4,7 @@ import type {ModelReference, Session, Turn, UserMessageContentPart} from "@super
 import {QueryClient as TanStackQueryClient} from "@tanstack/react-query";
 import {Effect, Stream} from "effect";
 import {afterEach, beforeEach, describe, expect, it, vi} from "vitest";
-import {sessionQueryKey} from "@/features/sessions/hooks/api/use-session";
+import {allSessionsQueryKey, sessionQueryKey} from "@/features/sessions/hooks/api/use-session";
 import {useSessionLiveStore} from "@/features/sessions/stores/session-live-store";
 import type {AgentRpcClientApi, AgentRpcClientFiber, AgentRpcProtocolClient} from "@/rpc/agent-rpc-client";
 
@@ -137,7 +137,7 @@ describe("session live store", () => {
       expect(queryClient.getQueryData(sessionQueryKey("session-1"))).toEqual(committedSession);
       expect(useSessionLiveStore.getState().sessions["session-1"]).toMatchObject({liveTurn: null, revision: 3, session: committedSession, status: "idle"});
     });
-    expect(invalidateQueries).toHaveBeenCalledWith({queryKey: ["session"]});
+    expect(invalidateQueries).toHaveBeenCalledWith({queryKey: allSessionsQueryKey()});
   });
 
   it("keeps threshold compaction status while live turn updates arrive", async () => {

@@ -28,8 +28,20 @@ function resourceSuggestion(item: ContractComposerSuggestionItem): ComposerPromp
   return item;
 }
 
+export function allComposerSuggestionsQueryKey(projectPath: string) {
+  return ["composer", "suggestions", projectPath] as const;
+}
+
+export function composerSuggestionsMatchQueryKey(projectPath: string, match: ComposerSuggestionMatch | null) {
+  return [...allComposerSuggestionsQueryKey(projectPath), match?.kind] as const;
+}
+
+export function composerSuggestionsQueryKey(projectPath: string, match: ComposerSuggestionMatch | null) {
+  return [...composerSuggestionsMatchQueryKey(projectPath, match), match?.query] as const;
+}
+
 export function useComposerSuggestions(projectPath: string, match: ComposerSuggestionMatch | null, input: {readonly slashCommandActions?: ClientSlashCommandActions} = {}) {
-  const baseQueryKey = ["composer", "suggestions", projectPath, match?.kind] as const;
+  const baseQueryKey = composerSuggestionsMatchQueryKey(projectPath, match);
 
   return useQuery(
     eq.queryOptions({
@@ -38,7 +50,7 @@ export function useComposerSuggestions(projectPath: string, match: ComposerSugge
         if (!previousQuery || !baseQueryKey.every((value, index) => value === previousQuery.queryKey[index])) return undefined;
         return previousData;
       },
-      queryKey: [...baseQueryKey, match?.query],
+      queryKey: composerSuggestionsQueryKey(projectPath, match),
       queryFn: () => {
         if (!match) return Effect.die(new Error("Match is required")) as Effect.Effect<ComposerSuggestionItem[]>;
 
