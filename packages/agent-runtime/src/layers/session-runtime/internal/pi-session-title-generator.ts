@@ -23,6 +23,7 @@ export const PiSessionTitleGeneratorLive = Layer.effect(
 
         const response = await piSdk.completeSimple(model, sessionTitleContext({contentParts}), {
           apiKey: requestAuth.apiKey,
+          env: requestAuth.env,
           headers: requestAuth.headers,
           maxTokens: sessionTitleMaxTokens,
         });

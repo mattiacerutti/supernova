@@ -14,7 +14,6 @@ import {findSelectedModel} from "@supernova/agent-runtime/layers/session-runtime
 import {toPiThinkingLevel} from "@supernova/agent-runtime/layers/session-runtime/lib/models/thinking-levels";
 import {ActiveTurn} from "@supernova/agent-runtime/layers/session-runtime/lib/turns/active-turn";
 
-type AgentSessionEventQueueAccessor = {readonly _agentEventQueue?: Promise<void>};
 type RevisionedSessionStreamEvent = Extract<SessionStreamEvent, {readonly revision: number}>;
 type UnrevisionedSessionStreamEvent = RevisionedSessionStreamEvent extends infer Event ? (Event extends {readonly revision: number} ? Omit<Event, "revision"> : never) : never;
 
@@ -172,7 +171,7 @@ export class PiSessionRuntime {
     const images = activeTurn.images;
     await this.activeSession?.prompt(activeTurn.prompt, images.length > 0 ? {images: [...images]} : undefined);
 
-    await this.waitForPiEventQueue();
+    await this.waitForPiSettlement();
 
     await onEnd?.();
     await this.publishSettledSnapshot(activeTurn);
@@ -181,7 +180,7 @@ export class PiSessionRuntime {
   /** Runs Pi manual compaction on the active session. */
   public async compactActiveSession(): Promise<void> {
     await this.activeSession?.compact();
-    await this.waitForPiEventQueue();
+    await this.waitForPiSettlement();
   }
 
   /** Publishes a public runtime event with a fresh revision. */
@@ -278,8 +277,9 @@ export class PiSessionRuntime {
     await this.publishEvent({type: "session.snapshot", sessionId: this.sessionId, ...activeTurn.buildSettledSnapshot()});
   }
 
-  private async waitForPiEventQueue(): Promise<void> {
-    await (this.activeSession as unknown as AgentSessionEventQueueAccessor | undefined)?._agentEventQueue;
+  /** Waits for Pi to finish its public run-settlement boundary before publishing committed state. */
+  private async waitForPiSettlement(): Promise<void> {
+    await this.activeSession?.agent.waitForIdle();
   }
 
   private nextRevision(): number {

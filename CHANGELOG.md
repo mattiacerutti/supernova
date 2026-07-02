@@ -10,6 +10,7 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+- Changed Pi runtime dependency to 0.80.3.
 - Changed the context window menu to use clearer text hierarchy with a bounded usage meter and visible percentage.
 - Changed major scrollable areas to use shadcn/ui `scroll-fade` edge fades when more content is available.
 - Changed streaming status shimmer effects to use shadcn/ui `shimmer`.

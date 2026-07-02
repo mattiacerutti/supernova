@@ -1,7 +1,7 @@
 import type {AgentSession, PromptTemplate, SessionEntry, Skill} from "@earendil-works/pi-coding-agent";
 import {AuthStorage, createAgentSession, ModelRegistry, SessionManager, SettingsManager} from "@earendil-works/pi-coding-agent";
-import type {Api, FauxProviderRegistration} from "@earendil-works/pi-ai";
-import {fauxAssistantMessage, fauxText, fauxThinking, registerFauxProvider} from "@earendil-works/pi-ai";
+import type {Api, FauxProviderRegistration} from "@earendil-works/pi-ai/compat";
+import {fauxAssistantMessage, fauxText, fauxThinking, registerFauxProvider} from "@earendil-works/pi-ai/compat";
 import {Effect, Fiber, Layer, ManagedRuntime, Stream} from "effect";
 import {PiModelCatalog} from "@supernova/agent-runtime/layers/shared/internal/pi-model-catalog";
 import type {PiModelCatalogShape} from "@supernova/agent-runtime/layers/shared/internal/pi-model-catalog";

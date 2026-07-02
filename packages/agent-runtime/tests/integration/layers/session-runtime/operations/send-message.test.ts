@@ -157,6 +157,7 @@ describe("sending messages through Pi sessions", () => {
     const pi = createPiTestRuntime();
     runtimes.push(pi);
     const {info, manager} = pi.createSession();
+    pi.appendConversation(manager, {requestText: "Older request", assistantText: "Older response."});
     pi.appendConversation(manager, {requestText: "x".repeat(selectedPiModel.contextWindow * 4), assistantText: "Old response."});
     pi.faux.setResponses([fauxAssistantMessage("Done."), fauxAssistantMessage("Compacted summary."), fauxAssistantMessage("Compacted summary.")]);
 
@@ -167,7 +168,7 @@ describe("sending messages through Pi sessions", () => {
     expect(liveCompactionEvents).toEqual(
       expect.arrayContaining([
         expect.objectContaining({status: "pending", type: "compaction"}),
-        expect.objectContaining({status: "completed", summary: "Compacted summary.", type: "compaction"}),
+        expect.objectContaining({status: "completed", summary: expect.stringContaining("Compacted summary."), type: "compaction"}),
       ])
     );
     expect(events.find((event) => event.type === "session.compaction.ended")).toMatchObject({type: "session.compaction.ended"});
@@ -177,8 +178,10 @@ describe("sending messages through Pi sessions", () => {
     const pi = createPiTestRuntime({settings: {compaction: {enabled: true, reserveTokens: 1000}}});
     runtimes.push(pi);
     const {info, manager} = pi.createSession();
-    manager.appendCustomEntry("supernova.user-message-content-parts", {contentParts: [{text: "Large previous request", type: "text"}]});
-    manager.appendMessage({content: [{text: "Large previous request", type: "text"}], role: "user", timestamp: 1});
+    const largePreviousRequest = "x".repeat(selectedPiModel.contextWindow * 4);
+    pi.appendConversation(manager, {requestText: "Older request", assistantText: "Older response."});
+    manager.appendCustomEntry("supernova.user-message-content-parts", {contentParts: [{text: largePreviousRequest, type: "text"}]});
+    manager.appendMessage({content: [{text: largePreviousRequest, type: "text"}], role: "user", timestamp: 1});
     manager.appendMessage(assistantWithUsage("Large previous response", selectedPiModel.contextWindow - 500));
     pi.faux.setResponses([fauxAssistantMessage("Pre-prompt compacted summary."), fauxAssistantMessage("Response after pre-prompt compaction.")]);
 
@@ -198,7 +201,7 @@ describe("sending messages through Pi sessions", () => {
     expect(liveTurn).toMatchObject({
       userMessage: {contentParts: [{text: "Continue after pre-prompt compaction", type: "text"}]},
       events: expect.arrayContaining([
-        expect.objectContaining({status: "completed", summary: "Pre-prompt compacted summary.", type: "compaction"}),
+        expect.objectContaining({status: "completed", summary: expect.stringContaining("Pre-prompt compacted summary."), type: "compaction"}),
         expect.objectContaining({content: "Response after pre-prompt compaction.", type: "assistant"}),
       ]),
     });
@@ -208,7 +211,7 @@ describe("sending messages through Pi sessions", () => {
     );
     expect(finalSnapshot).toMatchObject({type: "session.snapshot"});
     expect(persistedTurn).toMatchObject({userMessage: {contentParts: [{text: "Continue after pre-prompt compaction", type: "text"}]}});
-    expect(persistedTurn?.events).toContainEqual(expect.objectContaining({status: "completed", summary: "Pre-prompt compacted summary.", type: "compaction"}));
+    expect(persistedTurn?.events).toContainEqual(expect.objectContaining({status: "completed", summary: expect.stringContaining("Pre-prompt compacted summary."), type: "compaction"}));
     expect(persistedTurn?.events).toContainEqual(expect.objectContaining({content: "Response after pre-prompt compaction.", type: "assistant"}));
   });
 
@@ -262,7 +265,9 @@ describe("sending messages through Pi sessions", () => {
   it("keeps overflow compaction continuation in the same live turn", async () => {
     const pi = createPiTestRuntime();
     runtimes.push(pi);
-    const {info} = pi.createSession();
+    const {info, manager} = pi.createSession();
+    pi.appendConversation(manager, {requestText: "Older request", assistantText: "Older response."});
+    pi.appendConversation(manager, {requestText: "x".repeat(selectedPiModel.contextWindow * 4), assistantText: "Old response."});
     pi.faux.setResponses([
       fauxAssistantMessage("", {errorMessage: "prompt is too long", stopReason: "error"}),
       fauxAssistantMessage("Compacted overflow summary."),
@@ -278,14 +283,14 @@ describe("sending messages through Pi sessions", () => {
     expect(compactionTurn).toMatchObject({
       turn: {
         userMessage: {contentParts: [{text: "Fix overflow", type: "text"}]},
-        events: expect.arrayContaining([expect.objectContaining({status: "completed", summary: "Compacted overflow summary.", type: "compaction"})]),
+        events: expect.arrayContaining([expect.objectContaining({status: "completed", summary: expect.stringContaining("Compacted overflow summary."), type: "compaction"})]),
       },
     });
     expect(continuationTurn).toMatchObject({
       turn: {
         userMessage: {contentParts: [{text: "Fix overflow", type: "text"}]},
         events: expect.arrayContaining([
-          expect.objectContaining({status: "completed", summary: "Compacted overflow summary.", type: "compaction"}),
+          expect.objectContaining({status: "completed", summary: expect.stringContaining("Compacted overflow summary."), type: "compaction"}),
           expect.objectContaining({content: "Continued after compaction.", type: "assistant"}),
         ]),
       },

@@ -19,6 +19,7 @@ describe("manual Pi session compaction", () => {
     const pi = createPiTestRuntime();
     runtimes.push(pi);
     const {info, manager} = pi.createSession();
+    pi.appendConversation(manager, {requestText: "Older request", assistantText: "Older response."});
     pi.appendConversation(manager, {requestText: "x".repeat(selectedPiModel.contextWindow * 4), assistantText: "Old response."});
     pi.faux.setResponses([fauxAssistantMessage("Manual compacted summary.")]);
     const events: SessionStreamEvent[] = [];
@@ -50,6 +51,6 @@ describe("manual Pi session compaction", () => {
 
     expect(events.find((event) => event.type === "session.compaction.started")).toMatchObject({sessionId: info.id, type: "session.compaction.started"});
     expect(events.find((event) => event.type === "session.compaction.ended")).toMatchObject({sessionId: info.id, type: "session.compaction.ended"});
-    expect(finalSnapshot?.session.turns.at(-1)?.events).toContainEqual(expect.objectContaining({summary: "Manual compacted summary.", type: "compaction"}));
+    expect(finalSnapshot?.session.turns.at(-1)?.events).toContainEqual(expect.objectContaining({summary: expect.stringContaining("Manual compacted summary."), type: "compaction"}));
   });
 });
