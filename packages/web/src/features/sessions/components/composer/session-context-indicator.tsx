@@ -52,7 +52,7 @@ export default function SessionContextIndicator(props: SessionContextIndicatorPr
   return (
     <Menu
       align="end"
-      className="w-48 rounded-2xl pt-3"
+      className="w-56 overflow-hidden bg-neutral-800 backdrop-blur-none"
       sideOffset={10}
       trigger={(triggerProps) => (
         <Button {...triggerProps} className="grid size-7 place-items-center rounded-full p-0 text-neutral-300" title={label} type="button" variant="primary">
@@ -61,19 +61,23 @@ export default function SessionContextIndicator(props: SessionContextIndicatorPr
       )}
       triggerLabel="Show context usage"
     >
-      <div className="px-2 pb-2 text-sm text-neutral-500">Context</div>
-      <div className="space-y-1 px-2 pb-2 text-sm">
-        <div className="flex items-center justify-between gap-3 py-1 text-neutral-500">
-          <span>Used</span>
-          <span className="font-medium text-neutral-200">{formatContextTokens(context.usedTokens)}</span>
+      <div className="space-y-3 p-2">
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-sm font-medium text-neutral-500">Context window</span>
+          <span className="shrink-0 text-sm font-medium tabular-nums text-neutral-200">{context.usedTokens === null ? "?" : `${Math.round(percentage)}%`}</span>
         </div>
-        <div className="flex items-center justify-between gap-3 py-1 text-neutral-500">
-          <span>Window</span>
-          <span className="font-medium text-neutral-200">{formatTokens(context.contextWindow)}</span>
+        <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+          <div className="h-full rounded-full bg-neutral-200 transition-[width] duration-300" style={{width: `${Math.max(0, Math.min(100, percentage))}%`}} />
         </div>
-        <div className="flex items-center justify-between gap-3 py-1 text-neutral-500">
-          <span>Usage</span>
-          <span className="font-medium text-neutral-200">{context.usedTokens === null ? "?" : `${Math.round(percentage)}%`}</span>
+        <div className="space-y-1 text-xs leading-5">
+          <div className="flex items-center justify-between gap-4 text-neutral-500">
+            <span>Used</span>
+            <span className="max-w-32 truncate font-medium tabular-nums text-neutral-200">{formatContextTokens(context.usedTokens)}</span>
+          </div>
+          <div className="flex items-center justify-between gap-4 text-neutral-500">
+            <span>Window</span>
+            <span className="max-w-32 truncate font-medium tabular-nums text-neutral-200">{formatTokens(context.contextWindow)}</span>
+          </div>
         </div>
       </div>
     </Menu>
