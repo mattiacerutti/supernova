@@ -1,5 +1,6 @@
 import {defaultRangeExtractor, elementScroll, useVirtualizer} from "@tanstack/react-virtual";
 import type {ReactVirtualizer, VirtualItem} from "@tanstack/react-virtual";
+import {AnimatePresence, motion, useReducedMotion} from "framer-motion";
 import {useLayoutEffect, useRef, useState} from "react";
 import SessionTimelineVirtualRow from "@/features/sessions/components/timeline/session-timeline-virtual-row";
 import type {TimelineVirtualItem} from "@/features/sessions/components/timeline/session-timeline-virtual-row";
@@ -121,6 +122,7 @@ export default function SessionTimeline(props: SessionTimelineProps) {
   const {bottomOverlayHeight = 0, compacting, isStreaming, items, liveItems, onRevertToMessage, sessionId, streamError} = props;
 
   const [scrollToEndButton, setShowScrollToEndButton] = useState(false);
+  const shouldReduceMotion = useReducedMotion();
 
   const hasTimelineContent = items.length > 0 || liveItems.length > 0 || isStreaming || streamError !== null;
   const timelineRows = hasTimelineContent ? buildTimelineRows({compacting, isStreaming, items, liveItems, streamError}) : [];
@@ -351,18 +353,27 @@ export default function SessionTimeline(props: SessionTimelineProps) {
           </div>
         </div>
       )}
-      {scrollToEndButton && (
-        <IconButton
-          className="absolute left-1/2 z-30 grid size-9 -translate-x-1/2 place-items-center rounded-full bg-[#181818] text-white ring-1 ring-neutral-700 transition hover:bg-[#202020]"
-          label="Scroll to latest message"
-          onClick={() => virtualizer.scrollToEnd()}
-          size="none"
-          style={{bottom: `calc(1rem + ${bottomOverlayHeight}px)`}}
-          variant="bare"
-        >
-          <Icon name="arrow-down" size="sm" />
-        </IconButton>
-      )}
+      <AnimatePresence>
+        {scrollToEndButton && (
+          <motion.div
+            animate={{opacity: 1, scale: 1, x: "-50%", y: 0, transition: {duration: 0.2, ease: [0.23, 1, 0.32, 1]}}}
+            className="absolute left-1/2 z-10"
+            exit={{opacity: 0, scale: 0.95, x: "-50%", y: shouldReduceMotion ? 0 : "100%", transition: {duration: 0.4, ease: [0.7, 0, 0.84, 0]}}}
+            initial={{opacity: 0, scale: 0.95, x: "-50%", y: shouldReduceMotion ? 0 : "100%"}}
+            style={{bottom: `calc(1rem + ${bottomOverlayHeight}px)`}}
+          >
+            <IconButton
+              className="grid size-9 place-items-center rounded-full bg-[#181818] text-white ring-1 ring-neutral-700 transition hover:bg-[#202020]"
+              label="Scroll to latest message"
+              onClick={() => virtualizer.scrollToEnd()}
+              size="none"
+              variant="bare"
+            >
+              <Icon name="arrow-down" size="sm" />
+            </IconButton>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
