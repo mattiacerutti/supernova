@@ -1,7 +1,7 @@
 import type {SessionEntry, SessionMessageEntry} from "@earendil-works/pi-coding-agent";
 import type {RevertToMessagePayload} from "@supernova/contracts/session-runtime/procedures";
 import {CheckpointNavigationError} from "@supernova/contracts/session-runtime/procedures";
-import {isCheckpointEntry, latestCheckpointCursor, navigateToCheckpoint} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-navigation";
+import {isCheckpointAfterTurnEntry, isCheckpointEntry, latestCheckpointCursor, navigateToCheckpoint} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-navigation";
 import type {CheckpointEntry} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-navigation";
 import {PiSessionRuntime} from "@supernova/agent-runtime/layers/session-runtime/internal/pi-session-runtime";
 
@@ -14,7 +14,7 @@ function findCheckpointBefore(branch: readonly SessionEntry[], index: number): C
 }
 
 function findCheckpointAfter(branch: readonly SessionEntry[], index: number): CheckpointEntry | undefined {
-  return branch.slice(index + 1).find(isCheckpointEntry);
+  return branch.slice(index + 1).find(isCheckpointAfterTurnEntry);
 }
 
 /** Moves the session and workspace to the selected committed turn. */

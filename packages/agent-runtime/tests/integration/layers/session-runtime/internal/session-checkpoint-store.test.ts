@@ -1,5 +1,5 @@
 import {execFile} from "node:child_process";
-import {mkdtempSync, rmSync} from "node:fs";
+import {existsSync, mkdtempSync, rmSync} from "node:fs";
 import {mkdir, readFile, rm, writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
@@ -57,6 +57,7 @@ describe("Pi session checkpoint store", () => {
 
     expect(created).toBe(true);
     await expect(gitOutput(repo, ["rev-parse", "--verify", `refs/supernova/checkpoints/${sessionId}/cp-1`])).resolves.toHaveLength(40);
+    expect(existsSync(await gitOutput(repo, ["rev-parse", "--path-format=absolute", "--git-path", "supernova/checkpoints/index"]))).toBe(true);
   });
 
   it("returns false for non-git directories", async () => {
@@ -104,6 +105,31 @@ describe("Pi session checkpoint store", () => {
     await expect(readFile(join(repo, "preexisting.txt"), "utf8")).resolves.toBe("keep me\n");
     await expect(readFile(join(repo, "created.txt"), "utf8")).rejects.toThrow();
     await expect(readFile(join(repo, "ignored.log"), "utf8")).resolves.toBe("ignored\n");
+  });
+
+  it("restores paths that require literal pathspec handling", async () => {
+    const repo = await createRepo();
+    repos.push(repo);
+    const literalPath = join(repo, ":literal.txt");
+    await writeFile(literalPath, "before\n");
+
+    await runCheckpoint(
+      Effect.gen(function* () {
+        const store = yield* SessionCheckpointStore;
+        yield* Effect.promise(() => store.create({checkpointId: "cp-literal-before", cwd: repo, sessionId}));
+      })
+    );
+
+    await writeFile(literalPath, "after\n");
+    await runCheckpoint(
+      Effect.gen(function* () {
+        const store = yield* SessionCheckpointStore;
+        yield* Effect.promise(() => store.create({checkpointId: "cp-literal-after", cwd: repo, sessionId}));
+        yield* Effect.promise(() => store.restore({checkpointId: "cp-literal-before", cwd: repo, fromCheckpointId: "cp-literal-after", sessionId}));
+      })
+    );
+
+    await expect(readFile(literalPath, "utf8")).resolves.toBe("before\n");
   });
 
   it("does not mutate the user index while creating a checkpoint", async () => {
@@ -162,9 +188,10 @@ describe("Pi session checkpoint store", () => {
     await expect(gitOutput(repo, ["diff", "--cached", "--name-only"])).resolves.toContain("user-staged.txt");
   });
 
-  it("blocks cross-branch restores", async () => {
+  it("restores across branches without moving HEAD", async () => {
     const repo = await createRepo();
     repos.push(repo);
+    await writeFile(join(repo, "tracked.txt"), "main checkpoint\n");
     await runCheckpoint(
       Effect.gen(function* () {
         const store = yield* SessionCheckpointStore;
@@ -172,14 +199,17 @@ describe("Pi session checkpoint store", () => {
       })
     );
     await git(repo, ["checkout", "-b", "feature"]);
+    await writeFile(join(repo, "tracked.txt"), "feature checkpoint\n");
 
-    await expect(
-      runCheckpoint(
-        Effect.gen(function* () {
-          const store = yield* SessionCheckpointStore;
-          yield* Effect.promise(() => store.restore({checkpointId: "cp-main", cwd: repo, sessionId}));
-        })
-      )
-    ).rejects.toThrow("Checkpoint was created on");
+    await runCheckpoint(
+      Effect.gen(function* () {
+        const store = yield* SessionCheckpointStore;
+        yield* Effect.promise(() => store.create({checkpointId: "cp-feature", cwd: repo, sessionId}));
+        yield* Effect.promise(() => store.restore({checkpointId: "cp-main", cwd: repo, fromCheckpointId: "cp-feature", sessionId}));
+      })
+    );
+
+    await expect(gitOutput(repo, ["branch", "--show-current"])).resolves.toBe("feature");
+    await expect(readFile(join(repo, "tracked.txt"), "utf8")).resolves.toBe("main checkpoint\n");
   });
 });

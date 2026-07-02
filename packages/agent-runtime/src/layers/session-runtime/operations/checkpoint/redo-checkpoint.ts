@@ -1,7 +1,15 @@
 import type {RedoCheckpointPayload} from "@supernova/contracts/session-runtime/procedures";
 import {CheckpointNavigationError} from "@supernova/contracts/session-runtime/procedures";
-import {isCheckpointEntry, latestCheckpointCursor, navigateToCheckpoint} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-navigation";
+import type {SessionEntry} from "@earendil-works/pi-coding-agent";
+import {isCheckpointAfterTurnEntry, isCheckpointEntry, latestCheckpointCursor, navigateToCheckpoint} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-navigation";
 import {PiSessionRuntime} from "@supernova/agent-runtime/layers/session-runtime/internal/pi-session-runtime";
+
+function findRedoTarget(branch: readonly SessionEntry[], currentIndex: number) {
+  const nextUserOffset = branch.slice(currentIndex + 1).findIndex((entry) => entry.type === "message" && entry.message.role === "user");
+  if (nextUserOffset === -1) return undefined;
+
+  return branch.slice(currentIndex + nextUserOffset + 2).find(isCheckpointAfterTurnEntry);
+}
 
 /** Moves the session and workspace forward along the most recently undone path. */
 export async function redoCheckpoint(runtime: PiSessionRuntime, input: RedoCheckpointPayload): Promise<void> {
@@ -19,8 +27,7 @@ export async function redoCheckpoint(runtime: PiSessionRuntime, input: RedoCheck
     const current = branch[nodeIndex];
     if (!current || !isCheckpointEntry(current)) throw new Error("No checkpoint is available to redo.");
 
-    // Find the next checkpoint entry by removing all entries up to and including the current checkpoint cursor node, then looking for the first checkpoint entry in the remaining branch.
-    const target = branch.slice(nodeIndex + 1).find(isCheckpointEntry);
+    const target = findRedoTarget(branch, nodeIndex);
     if (!target) throw new Error("No checkpoint is available to redo.");
 
     await navigateToCheckpoint(runtime, openedSession, {current, cursorLeafEntryId: cursor.leafEntryId, target});

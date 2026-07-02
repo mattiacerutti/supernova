@@ -10,7 +10,12 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+- Changed checkpoint restores to use repo-local incremental snapshots and batched Git restores for faster undo and redo in large projects.
+- Changed checkpoint undo to work after carrying uncommitted changes onto a new Git branch.
+
 ### Fixed
+
+- Fixed undoing a turn so manual file changes made between completed turns are preserved.
 
 ### Removed
 

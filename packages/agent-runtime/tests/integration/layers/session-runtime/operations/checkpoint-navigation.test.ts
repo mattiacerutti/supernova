@@ -160,6 +160,69 @@ describe("checkpoint navigation", () => {
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("one\n");
   });
 
+  it("preserves manual file changes made between turns when undoing the later turn", async () => {
+    const projectPath = await createGitProject();
+    tempDirs.push(projectPath);
+    const pi = createPiTestRuntime();
+    runtimes.push(pi);
+    const {info} = pi.createSession(projectPath);
+    pi.faux.setResponses([
+      async () => {
+        await writeFile(join(projectPath, "file.txt"), "one\n");
+        return fauxAssistantMessage("one");
+      },
+      async () => {
+        await writeFile(join(projectPath, "file.txt"), "two\n");
+        await writeFile(join(projectPath, "agent-two.txt"), "agent two\n");
+        return fauxAssistantMessage("two");
+      },
+    ]);
+
+    await pi.sendMessage({message: "one", model: selectedModelReference, sessionId: info.id});
+    await writeFile(join(projectPath, "manual.txt"), "manual between turns\n");
+    await pi.sendMessage({message: "two", model: selectedModelReference, sessionId: info.id});
+
+    const undoEvents = await runSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.undoCheckpoint({sessionId: info.id})});
+
+    expect(errorEvents(undoEvents)).toEqual([]);
+    await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("one\n");
+    await expect(readFile(join(projectPath, "manual.txt"), "utf8")).resolves.toBe("manual between turns\n");
+    await expect(readFile(join(projectPath, "agent-two.txt"), "utf8")).rejects.toThrow();
+  });
+
+  it("undoes a turn after uncommitted changes are carried onto a new branch", async () => {
+    const projectPath = await createGitProject();
+    tempDirs.push(projectPath);
+    await git(projectPath, ["branch", "-M", "main"]);
+    const pi = createPiTestRuntime();
+    runtimes.push(pi);
+    const {info} = pi.createSession(projectPath);
+    pi.faux.setResponses([
+      async () => {
+        await writeFile(join(projectPath, "file.txt"), "one\n");
+        return fauxAssistantMessage("one");
+      },
+      async () => {
+        await writeFile(join(projectPath, "file.txt"), "two\n");
+        await writeFile(join(projectPath, "agent-two.txt"), "agent two\n");
+        return fauxAssistantMessage("two");
+      },
+    ]);
+
+    await pi.sendMessage({message: "one", model: selectedModelReference, sessionId: info.id});
+    await writeFile(join(projectPath, "manual.txt"), "manual between turns\n");
+    await pi.sendMessage({message: "two", model: selectedModelReference, sessionId: info.id});
+    await git(projectPath, ["checkout", "-b", "second"]);
+
+    const undoEvents = await runSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.undoCheckpoint({sessionId: info.id})});
+
+    expect(errorEvents(undoEvents)).toEqual([]);
+    await expect(gitOutput(projectPath, ["branch", "--show-current"])).resolves.toBe("second");
+    await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("one\n");
+    await expect(readFile(join(projectPath, "manual.txt"), "utf8")).resolves.toBe("manual between turns\n");
+    await expect(readFile(join(projectPath, "agent-two.txt"), "utf8")).rejects.toThrow();
+  });
+
   it("keeps checkpoint navigation revisions monotonic after a manual abort", async () => {
     const projectPath = await createProject();
     tempDirs.push(projectPath);

@@ -5,9 +5,13 @@ import type {PiSessionRuntime} from "@supernova/agent-runtime/layers/session-run
 export const CHECKPOINT_CUSTOM_TYPE = "supernova.checkpoint";
 export const CHECKPOINT_CURSOR_CUSTOM_TYPE = "supernova.checkpoint-cursor";
 
+export type CheckpointPhase = "before-turn" | "after-turn";
+
 interface CheckpointEntryData {
   /** Unique identifier for the checkpoint, used for git restoration. */
   readonly checkpointId: string;
+  /** Position of this checkpoint around a user turn. */
+  readonly phase: CheckpointPhase;
 }
 
 interface CheckpointCursorEntryData {
@@ -38,6 +42,10 @@ function isCustomEntry(entry: SessionEntry): entry is CustomEntry {
 
 export function isCheckpointEntry(entry: SessionEntry): entry is CheckpointEntry {
   return isCustomEntry(entry) && entry.customType === CHECKPOINT_CUSTOM_TYPE;
+}
+
+export function isCheckpointAfterTurnEntry(entry: SessionEntry): entry is CheckpointEntry {
+  return isCheckpointEntry(entry) && entry.data.phase === "after-turn";
 }
 
 function isCheckpointCursorEntry(entry: SessionEntry): entry is CheckpointCursorEntry {

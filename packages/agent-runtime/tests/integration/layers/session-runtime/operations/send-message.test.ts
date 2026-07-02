@@ -252,7 +252,7 @@ describe("sending messages through Pi sessions", () => {
     const checkpointEntries = customEntries.filter((entry) => entry.customType === "supernova.checkpoint");
     const checkpointId = (checkpointEntries.at(-1)?.data as {checkpointId?: string} | undefined)?.checkpointId;
 
-    expect(checkpointEntries).toHaveLength(2);
+    expect(checkpointEntries.map((entry) => (entry.data as {phase?: string}).phase)).toEqual(["before-turn", "after-turn"]);
     expect(checkpointId).toEqual(expect.any(String));
     expect(customEntries.some((entry) => entry.customType === "supernova.checkpoint-patch")).toBe(false);
     await expect(gitOutput(projectPath, ["rev-parse", "--verify", `refs/supernova/checkpoints/${info.id}/${checkpointId}`])).resolves.toHaveLength(40);

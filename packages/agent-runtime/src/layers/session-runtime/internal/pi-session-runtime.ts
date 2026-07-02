@@ -220,7 +220,7 @@ export class PiSessionRuntime {
   }
 
   /** Restores only files changed between checkpoints into the worktree, leaving Git HEAD and staged state untouched. */
-  public async restoreCheckpoint(input: {readonly checkpointId: string; readonly cwd: string; readonly fromCheckpointId?: string}): Promise<void> {
+  public async restoreCheckpoint(input: {readonly checkpointId: string; readonly cwd: string; readonly fromCheckpointId: string}): Promise<void> {
     await this.checkpointStore.restore({checkpointId: input.checkpointId, cwd: input.cwd, fromCheckpointId: input.fromCheckpointId, sessionId: this.sessionId});
   }
 

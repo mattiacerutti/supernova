@@ -1,8 +1,7 @@
-import {execFile} from "node:child_process";
+import {execFile, spawn} from "node:child_process";
 import {existsSync} from "node:fs";
-import {mkdtemp, rm} from "node:fs/promises";
-import {tmpdir} from "node:os";
-import {join} from "node:path";
+import {mkdir, rm} from "node:fs/promises";
+import {dirname, join} from "node:path";
 import {promisify} from "node:util";
 import {Context, Layer} from "effect";
 
@@ -20,16 +19,12 @@ interface GitResult {
 }
 
 interface CheckpointMetadata {
-  readonly branch: string;
-  readonly headSha: string;
-  readonly indexTreeSha: string;
-  readonly preexistingUntrackedFiles: readonly string[];
   readonly worktreeTreeSha: string;
 }
 
 export interface SessionCheckpointStoreShape {
   readonly create: (input: {readonly checkpointId: string; readonly cwd: string; readonly sessionId: string}) => Promise<boolean>;
-  readonly restore: (input: {readonly checkpointId: string; readonly cwd: string; readonly fromCheckpointId?: string; readonly sessionId: string}) => Promise<void>;
+  readonly restore: (input: {readonly checkpointId: string; readonly cwd: string; readonly fromCheckpointId: string; readonly sessionId: string}) => Promise<void>;
 }
 
 /** Private workspace checkpoint capability owned by the Pi session runtime. */
@@ -43,6 +38,28 @@ async function runGit(args: readonly string[], options: {readonly cwd?: string; 
     const error = cause as {readonly code?: number; readonly stderr?: string; readonly stdout?: string};
     return {code: typeof error.code === "number" ? error.code : 1, stderr: error.stderr ?? "", stdout: error.stdout ?? ""};
   }
+}
+
+async function runGitWithInput(args: readonly string[], options: {readonly cwd?: string; readonly env?: NodeJS.ProcessEnv; readonly stdin: string}): Promise<GitResult> {
+  return new Promise((resolve) => {
+    const child = spawn("git", [...args], {cwd: options.cwd, env: options.env});
+    const stdout: Buffer[] = [];
+    const stderr: Buffer[] = [];
+    let stdoutBytes = 0;
+    let stderrBytes = 0;
+
+    child.stdout.on("data", (chunk: Buffer) => {
+      stdoutBytes += chunk.byteLength;
+      if (stdoutBytes <= MAX_BUFFER_BYTES) stdout.push(chunk);
+    });
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderrBytes += chunk.byteLength;
+      if (stderrBytes <= MAX_BUFFER_BYTES) stderr.push(chunk);
+    });
+    child.on("error", (cause) => resolve({code: 1, stderr: cause.message, stdout: ""}));
+    child.on("close", (code) => resolve({code: code ?? 1, stderr: Buffer.concat(stderr).toString("utf8"), stdout: Buffer.concat(stdout).toString("utf8")}));
+    child.stdin.end(options.stdin);
+  });
 }
 
 async function withRepoLock<T>(repoRoot: string, run: () => Promise<T>): Promise<T> {
@@ -71,17 +88,6 @@ function metadataValue(message: string, key: string): string | undefined {
   return message.match(new RegExp(`^${key} (.+)$`, "m"))?.[1]?.trim();
 }
 
-function parseJsonList(value: string | undefined): readonly string[] {
-  if (!value) return [];
-
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
-  } catch {
-    return [];
-  }
-}
-
 async function repoRoot(cwd: string): Promise<string | undefined> {
   if (!existsSync(cwd)) return undefined;
 
@@ -96,27 +102,32 @@ async function readHeadSha(root: string): Promise<string> {
   return result.code === 0 && head.length > 0 ? head : ZERO_SHA;
 }
 
-async function readBranch(root: string): Promise<string> {
-  const result = await runGit(["rev-parse", "--abbrev-ref", "HEAD"], {cwd: root});
-  const branch = result.stdout.trim();
-  return result.code === 0 && branch.length > 0 ? branch : "unknown";
+function encodeLiteralPathspecs(paths: readonly string[]): string {
+  return paths.map((path) => `:(top,literal)${path}`).join("\0") + "\0";
 }
 
-async function listPreexistingUntrackedFiles(root: string): Promise<readonly string[]> {
-  const result = await runGit(["ls-files", "--others", "--exclude-standard"], {cwd: root});
-  if (result.code !== 0) return [];
-  return result.stdout
-    .split("\n")
-    .map((file) => file.trim())
-    .filter(Boolean);
+async function listSnapshotCandidates(input: {readonly env: NodeJS.ProcessEnv; readonly root: string}): Promise<readonly string[]> {
+  const [tracked, untracked] = await Promise.all([
+    runGit([...GIT_CONFIG, "diff-files", "--name-only", "-z", "--", "."], {cwd: input.root, env: input.env}),
+    runGit([...GIT_CONFIG, "ls-files", "--others", "--exclude-standard", "-z", "--", "."], {cwd: input.root, env: input.env}),
+  ]);
+  if (tracked.code !== 0 || untracked.code !== 0) return [];
+  return [...new Set([...tracked.stdout.split("\0").filter(Boolean), ...untracked.stdout.split("\0").filter(Boolean)])];
+}
+
+async function stageSnapshotCandidates(input: {readonly candidates: readonly string[]; readonly env: NodeJS.ProcessEnv; readonly root: string}): Promise<boolean> {
+  if (input.candidates.length === 0) return true;
+
+  const result = await runGitWithInput([...GIT_CONFIG, "add", "--all", "--sparse", "--pathspec-from-file=-", "--pathspec-file-nul"], {
+    cwd: input.root,
+    env: input.env,
+    stdin: encodeLiteralPathspecs(input.candidates),
+  });
+  return result.code === 0;
 }
 
 async function writeCheckpointCommit(input: {
-  readonly branch: string;
   readonly checkpointId: string;
-  readonly headSha: string;
-  readonly indexTreeSha: string;
-  readonly preexistingUntrackedFiles: readonly string[];
   readonly root: string;
   readonly sessionId: string;
   readonly worktreeTreeSha: string;
@@ -126,12 +137,8 @@ async function writeCheckpointCommit(input: {
     "supernova-checkpoint",
     `sessionId ${input.sessionId}`,
     `checkpointId ${input.checkpointId}`,
-    `branch ${input.branch}`,
-    `head ${input.headSha}`,
-    `index-tree ${input.indexTreeSha}`,
     `worktree-tree ${input.worktreeTreeSha}`,
     `created ${created}`,
-    `untracked ${JSON.stringify(input.preexistingUntrackedFiles)}`,
   ].join("\n");
 
   const result = await runGit(["commit-tree", input.worktreeTreeSha, "-m", message], {
@@ -157,18 +164,10 @@ async function loadCheckpointMetadata(input: {readonly checkpointId: string; rea
   const message = await runGit(["cat-file", "commit", commit.stdout.trim()], {cwd: input.root});
   if (message.code !== 0) return undefined;
 
-  const headSha = metadataValue(message.stdout, "head");
-  const indexTreeSha = metadataValue(message.stdout, "index-tree");
   const worktreeTreeSha = metadataValue(message.stdout, "worktree-tree");
-  if (!headSha || !indexTreeSha || !worktreeTreeSha) return undefined;
+  if (!worktreeTreeSha) return undefined;
 
-  return {
-    branch: metadataValue(message.stdout, "branch") ?? "unknown",
-    headSha,
-    indexTreeSha,
-    preexistingUntrackedFiles: parseJsonList(metadataValue(message.stdout, "untracked")),
-    worktreeTreeSha,
-  };
+  return {worktreeTreeSha};
 }
 
 async function create(input: {readonly checkpointId: string; readonly cwd: string; readonly sessionId: string}): Promise<boolean> {
@@ -176,108 +175,52 @@ async function create(input: {readonly checkpointId: string; readonly cwd: strin
   if (!root) return false;
 
   return withRepoLock(root, async () => {
-    const tempDir = await mkdtemp(join(tmpdir(), "supernova-checkpoint-"));
-    const tempIndex = join(tempDir, "index");
+    const indexPathResult = await runGit(["rev-parse", "--path-format=absolute", "--git-path", "supernova/checkpoints/index"], {cwd: root});
+    const indexPath = indexPathResult.stdout.trim();
+    if (indexPathResult.code !== 0 || indexPath.length === 0) return false;
 
-    try {
-      const headSha = await readHeadSha(root);
-      const branch = await readBranch(root);
-      const indexTree = await runGit([...GIT_CONFIG, "write-tree"], {cwd: root});
-      if (indexTree.code !== 0) return false;
+    const headSha = await readHeadSha(root);
+    await mkdir(dirname(indexPath), {recursive: true});
+    const env = {...process.env, GIT_INDEX_FILE: indexPath};
+    if (!existsSync(indexPath) && headSha !== ZERO_SHA) await runGit([...GIT_CONFIG, "read-tree", headSha], {cwd: root, env});
 
-      const env = {...process.env, GIT_INDEX_FILE: tempIndex};
-      if (headSha !== ZERO_SHA) await runGit([...GIT_CONFIG, "read-tree", headSha], {cwd: root, env});
+    const candidates = await listSnapshotCandidates({env, root});
+    if (!(await stageSnapshotCandidates({candidates, env, root}))) return false;
 
-      await runGit([...GIT_CONFIG, "add", "--all", "--", "."], {cwd: root, env});
-      const worktreeTree = await runGit([...GIT_CONFIG, "write-tree"], {cwd: root, env});
-      if (worktreeTree.code !== 0) return false;
+    const worktreeTree = await runGit([...GIT_CONFIG, "write-tree"], {cwd: root, env});
+    if (worktreeTree.code !== 0) return false;
 
-      const commit = await writeCheckpointCommit({
-        branch,
-        checkpointId: input.checkpointId,
-        headSha,
-        indexTreeSha: indexTree.stdout.trim(),
-        preexistingUntrackedFiles: await listPreexistingUntrackedFiles(root),
-        root,
-        sessionId: input.sessionId,
-        worktreeTreeSha: worktreeTree.stdout.trim(),
-      });
-      if (!commit) return false;
+    const commit = await writeCheckpointCommit({
+      checkpointId: input.checkpointId,
+      root,
+      sessionId: input.sessionId,
+      worktreeTreeSha: worktreeTree.stdout.trim(),
+    });
+    if (!commit) return false;
 
-      const update = await runGit(["update-ref", checkpointRef(input), commit], {cwd: root});
-      return update.code === 0;
-    } finally {
-      await rm(tempDir, {force: true, recursive: true}).catch(() => undefined);
-    }
+    const update = await runGit(["update-ref", checkpointRef(input), commit], {cwd: root});
+    return update.code === 0;
   });
 }
 
-/** Parses NUL-delimited name-status output and includes both sides of renames/copies. */
-function parseChangedPaths(output: string): readonly string[] {
-  const entries = output.split("\0").filter(Boolean);
-  const paths = new Set<string>();
+async function changedPathOperations(input: {readonly fromTreeSha: string; readonly root: string; readonly toTreeSha: string}) {
+  const result = await runGit(["diff", "--name-status", "--no-renames", "-z", input.fromTreeSha, input.toTreeSha], {cwd: input.root});
+  const deletePaths = new Set<string>();
+  const restorePaths = new Set<string>();
+  const entries = result.code === 0 ? result.stdout.split("\0").filter(Boolean) : [];
 
-  for (let index = 0; index < entries.length; index += 1) {
+  for (let index = 0; index < entries.length; index += 2) {
     const status = entries[index];
-    if (!status) continue;
-
-    if (status.startsWith("R") || status.startsWith("C")) {
-      const oldPath = entries[index + 1];
-      const newPath = entries[index + 2];
-      if (oldPath) paths.add(oldPath);
-      if (newPath) paths.add(newPath);
-      index += 2;
-      continue;
-    }
-
     const filePath = entries[index + 1];
-    if (filePath) paths.add(filePath);
-    index += 1;
+    if (!status || !filePath) continue;
+    if (status.startsWith("D")) deletePaths.add(filePath);
+    else restorePaths.add(filePath);
   }
 
-  return [...paths];
+  return {deletePaths: [...deletePaths], restorePaths: [...restorePaths]};
 }
 
-/** Lists paths that changed between two checkpoint worktree trees. */
-async function changedPathsBetweenTrees(input: {readonly fromTreeSha: string; readonly root: string; readonly toTreeSha: string}): Promise<readonly string[]> {
-  const result = await runGit(["diff", "--name-status", "-z", input.fromTreeSha, input.toTreeSha], {cwd: input.root});
-  return result.code === 0 ? parseChangedPaths(result.stdout) : [];
-}
-
-/** Returns whether a tree contains the given repository-relative path. */
-async function treeHasPath(input: {readonly path: string; readonly root: string; readonly treeSha: string}): Promise<boolean> {
-  const result = await runGit(["cat-file", "-e", `${input.treeSha}:${input.path}`], {cwd: input.root});
-  return result.code === 0;
-}
-
-/** Restores a single path from a tree into the worktree, or deletes it if absent from the tree. */
-async function restoreChangedPath(input: {readonly path: string; readonly root: string; readonly treeSha: string}): Promise<void> {
-  if (await treeHasPath(input)) {
-    await runGit([...GIT_CONFIG, "restore", "--source", input.treeSha, "--worktree", "--", input.path], {cwd: input.root});
-    return;
-  }
-
-  await rm(join(input.root, input.path), {force: true, recursive: true}).catch(() => undefined);
-}
-
-/** Captures the current worktree into an isolated temporary index without mutating the user's index. */
-async function currentWorktreeTree(root: string): Promise<string | undefined> {
-  const tempDir = await mkdtemp(join(tmpdir(), "supernova-checkpoint-restore-"));
-  const tempIndex = join(tempDir, "index");
-
-  try {
-    const headSha = await readHeadSha(root);
-    const env = {...process.env, GIT_INDEX_FILE: tempIndex};
-    if (headSha !== ZERO_SHA) await runGit([...GIT_CONFIG, "read-tree", headSha], {cwd: root, env});
-    await runGit([...GIT_CONFIG, "add", "--all", "--", "."], {cwd: root, env});
-    const worktreeTree = await runGit([...GIT_CONFIG, "write-tree"], {cwd: root, env});
-    return worktreeTree.code === 0 ? worktreeTree.stdout.trim() : undefined;
-  } finally {
-    await rm(tempDir, {force: true, recursive: true}).catch(() => undefined);
-  }
-}
-
-async function restore(input: {readonly checkpointId: string; readonly cwd: string; readonly fromCheckpointId?: string; readonly sessionId: string}): Promise<void> {
+async function restore(input: {readonly checkpointId: string; readonly cwd: string; readonly fromCheckpointId: string; readonly sessionId: string}): Promise<void> {
   const root = await repoRoot(input.cwd);
   if (!root) return;
 
@@ -285,18 +228,16 @@ async function restore(input: {readonly checkpointId: string; readonly cwd: stri
     const checkpoint = await loadCheckpointMetadata({checkpointId: input.checkpointId, root, sessionId: input.sessionId});
     if (!checkpoint) return;
 
-    const currentBranch = await readBranch(root);
-    if (checkpoint.branch !== "unknown" && currentBranch !== checkpoint.branch)
-      throw new Error(`Checkpoint was created on "${checkpoint.branch}" but current branch is "${currentBranch}".`);
+    const fromCheckpoint = await loadCheckpointMetadata({checkpointId: input.fromCheckpointId, root, sessionId: input.sessionId});
+    if (!fromCheckpoint) return;
 
-    const fromCheckpoint = input.fromCheckpointId
-      ? await loadCheckpointMetadata({checkpointId: input.fromCheckpointId, root, sessionId: input.sessionId})
-      : undefined;
-    const fromTreeSha = fromCheckpoint?.worktreeTreeSha ?? (await currentWorktreeTree(root));
-    if (!fromTreeSha) return;
-
-    const changedPaths = await changedPathsBetweenTrees({fromTreeSha, root, toTreeSha: checkpoint.worktreeTreeSha});
-    for (const path of changedPaths) await restoreChangedPath({path, root, treeSha: checkpoint.worktreeTreeSha});
+    const operations = await changedPathOperations({fromTreeSha: fromCheckpoint.worktreeTreeSha, root, toTreeSha: checkpoint.worktreeTreeSha});
+    if (operations.restorePaths.length > 0)
+      await runGitWithInput([...GIT_CONFIG, "restore", "--source", checkpoint.worktreeTreeSha, "--worktree", "--pathspec-from-file=-", "--pathspec-file-nul"], {
+        cwd: root,
+        stdin: encodeLiteralPathspecs(operations.restorePaths),
+      });
+    for (const path of operations.deletePaths) await rm(join(root, path), {force: true, recursive: true}).catch(() => undefined);
   });
 }
 
