@@ -125,7 +125,7 @@ export default function UndoneTurnsDrawer(props: UndoneTurnsDrawerProps) {
                     <div className="min-h-0 min-w-0 overflow-visible">
                       <motion.div
                         animate={{opacity: 1, y: 0}}
-                        className="max-h-40 space-y-1 overflow-x-hidden overflow-y-auto pr-1 pb-0.5"
+                        className="scroll-fade-y max-h-40 space-y-1 overflow-x-hidden overflow-y-auto pr-1 pb-0.5"
                         initial={{opacity: 0, y: 4}}
                         transition={DRAWER_TRANSITION}
                       >

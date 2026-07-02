@@ -79,7 +79,7 @@ export default function ModelPicker(props: ModelPickerProps) {
       </div>
 
       <div className="relative">
-        <div className="max-h-60 overflow-y-auto [overflow-anchor:none]" ref={scrollContainerRef}>
+        <div className="scroll-fade-b max-h-60 overflow-y-auto [overflow-anchor:none]" ref={scrollContainerRef}>
           {sections.length === 0 && <div className="px-3 py-7 text-center text-sm text-neutral-500">No models found</div>}
           {sections.map((section) => (
             <div key={section.title}>
@@ -121,7 +121,6 @@ export default function ModelPicker(props: ModelPickerProps) {
             </div>
           ))}
         </div>
-        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-linear-to-t from-neutral-800 to-transparent" />
       </div>
     </Menu>
   );

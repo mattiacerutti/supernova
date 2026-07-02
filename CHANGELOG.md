@@ -10,6 +10,7 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+- Changed major scrollable areas to use shadcn/ui `scroll-fade` edge fades when more content is available.
 - Changed the scroll-to-latest button to animate when appearing and disappearing.
 - Changed checkpoint restores to use repo-local incremental snapshots and batched Git restores for faster undo and redo in large projects.
 - Changed checkpoint undo to work after carrying uncommitted changes onto a new Git branch.

@@ -322,7 +322,7 @@ export default function SessionTimeline(props: SessionTimelineProps) {
         </div>
       )}
       {hasTimelineContent && (
-        <div aria-label="Session timeline" className="h-full overflow-x-hidden overflow-y-auto overscroll-y-contain" ref={scrollRootRef} onScroll={handleScroll}>
+        <div aria-label="Session timeline" className="scroll-fade-y h-full overflow-x-hidden overflow-y-auto overscroll-y-contain" ref={scrollRootRef} onScroll={handleScroll}>
           <div
             data-timeline-virtual-content
             ref={(element) => {

@@ -77,7 +77,7 @@ export default function Sidebar() {
         ))}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
+      <div className="scroll-fade-y min-h-0 flex-1 overflow-y-auto px-3 pb-3">
         {pinnedProjects.length > 0 && (
           <div>
             <Button className="group/pinned mb-2 flex h-6 w-full items-center justify-between px-2 text-neutral-500" onClick={togglePinnedCollapsed} variant="bare">

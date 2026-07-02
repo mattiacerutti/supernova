@@ -13,7 +13,7 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
 
   return (
     <aside className="flex h-svh w-full shrink-0 flex-col pt-14 md:w-72">
-      <nav className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-1">
+      <nav className="scroll-fade-y min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-1">
         <div className="space-y-0.5">
           <Link
             className="flex w-full items-center gap-2.5 rounded-xl corner-superellipse/1.3 px-2 py-1.5 text-left text-sm text-neutral-300 hover:bg-white/7 hover:text-white"

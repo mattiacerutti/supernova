@@ -133,7 +133,7 @@ export default function SearchableList<TItem>(props: SearchableListProps<TItem>)
   return (
     <>
       {renderInput({onKeyDown: handleKeyDown})}
-      <div className={cn("-ml-3 -mr-5 min-h-0 flex-1 overflow-y-auto pb-2 pr-2", className)} ref={scrollParentRef}>
+      <div className={cn("scroll-fade-y -ml-3 -mr-5 min-h-0 flex-1 overflow-y-auto pb-2 pr-2", className)} ref={scrollParentRef}>
         {listStatus}
         {virtualized && (
           <div className="relative w-full" style={{height: `${virtualizer.getTotalSize()}px`}}>

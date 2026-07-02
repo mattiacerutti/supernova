@@ -138,7 +138,7 @@ function SessionComposerRoot(props: SessionComposerRootProps) {
       editorProps: {
         attributes: {
           class: cn(
-            "max-h-48 min-h-10 w-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent p-1 text-sm leading-5 text-neutral-200 outline-none",
+            "scroll-fade-y max-h-48 min-h-10 w-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent p-1 text-sm leading-5 text-neutral-200 outline-none",
             inputDisabled && "cursor-default opacity-60"
           ),
         },

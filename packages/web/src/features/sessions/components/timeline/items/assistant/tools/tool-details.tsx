@@ -50,14 +50,16 @@ function CommandToolDetails(props: {tool: Extract<Tool, {kind: "command"}>}) {
   const hasOutput = output !== undefined && output.length > 0;
 
   return (
-    <ContentPanel className="p-0 text-sm font-mono">
-      <div className="sticky top-0 z-10 flex items-center justify-between bg-neutral-800 px-2.5 pb-1.5 pt-2.5 font-sans text-sm text-neutral-500">
+    <ContentPanel className="p-0 text-sm font-mono" scrollable={false}>
+      <div className="flex items-center justify-between bg-neutral-800 px-2.5 pb-1.5 pt-2.5 font-sans text-sm text-neutral-500">
         <span>Shell</span>
       </div>
-      <div className="flex flex-col gap-1.5 px-2.5 pb-2.5">
-        <pre className="whitespace-pre-wrap wrap-break-word text-neutral-200">$ {tool.input.command}</pre>
-        {hasOutput && <pre className={cn("whitespace-pre-wrap wrap-break-word", tool.status === "error" ? "text-red-300" : "text-neutral-400")}>{output}</pre>}
-        {tool.status === "completed" && tool.result.truncated && <DetailText className="mt-2 font-sans">Output was truncated.</DetailText>}
+      <div className="scroll-fade max-h-72 overflow-auto overscroll-contain" data-scrollable>
+        <div className="flex flex-col gap-1.5 px-2.5 pb-2.5">
+          <pre className="whitespace-pre-wrap wrap-break-word text-neutral-200">$ {tool.input.command}</pre>
+          {hasOutput && <pre className={cn("whitespace-pre-wrap wrap-break-word", tool.status === "error" ? "text-red-300" : "text-neutral-400")}>{output}</pre>}
+          {tool.status === "completed" && tool.result.truncated && <DetailText className="mt-2 font-sans">Output was truncated.</DetailText>}
+        </div>
       </div>
     </ContentPanel>
   );
@@ -115,12 +117,14 @@ function FileMutationToolDetails(props: {tool: FileMutationTool}) {
   const fileDiff = patch ? parseFileEditPatch({patch, path}) : undefined;
 
   return (
-    <ContentPanel className="overflow-auto p-0 text-sm">
-      <div className="sticky top-0 z-10 flex items-center justify-between bg-neutral-800 px-2.5 pb-1.5 pt-2.5 font-sans text-sm text-neutral-500">
+    <ContentPanel className="p-0 text-sm" scrollable={false}>
+      <div className="flex items-center justify-between bg-neutral-800 px-2.5 pb-1.5 pt-2.5 font-sans text-sm text-neutral-500">
         <span className="min-w-0 truncate">{fileName(path)}</span>
       </div>
-      {fileDiff && <DiffViewer fileDiff={fileDiff} key={patch} />}
-      {tool.status === "error" && <p className="px-2.5 pb-2.5 text-sm leading-none text-red-300">{tool.error}</p>}
+      <div className="scroll-fade max-h-72 overflow-auto overscroll-contain" data-scrollable>
+        {fileDiff && <DiffViewer fileDiff={fileDiff} key={patch} />}
+        {tool.status === "error" && <p className="px-2.5 pb-2.5 text-sm leading-none text-red-300">{tool.error}</p>}
+      </div>
     </ContentPanel>
   );
 }

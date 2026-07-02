@@ -19,19 +19,19 @@ function HighlightedCode(props: {code: string; language?: string}) {
   const cachedHtml = getCachedHighlightedCode({code, language, theme});
 
   if (cachedHtml) {
-    return <div className="session-markdown-shiki" dangerouslySetInnerHTML={{__html: cachedHtml}} />;
+    return <div className="session-markdown-shiki scroll-fade-x overflow-x-auto" dangerouslySetInnerHTML={{__html: cachedHtml}} />;
   }
 
   const html = use(highlightCode({code, language, theme}));
 
-  return <div className="session-markdown-shiki" dangerouslySetInnerHTML={{__html: html}} />;
+  return <div className="session-markdown-shiki scroll-fade-x overflow-x-auto" dangerouslySetInnerHTML={{__html: html}} />;
 }
 
 function PlainCode(props: {code: string}) {
   const {code} = props;
 
   return (
-    <div className="session-markdown-shiki">
+    <div className="session-markdown-shiki scroll-fade-x overflow-x-auto">
       <pre>
         <code>{code}</code>
       </pre>
@@ -171,8 +171,10 @@ export default function AssistantMessageContent(props: AssistantMessageContentPr
               );
             },
             table: ({children: tableChildren}) => (
-              <div className="my-4 overflow-x-auto rounded-xl border border-white/8" data-scrollable>
-                <table className="w-full border-collapse text-left text-sm">{tableChildren}</table>
+              <div className="my-4 overflow-hidden rounded-xl border border-white/8">
+                <div className="scroll-fade-x overflow-x-auto" data-scrollable>
+                  <table className="w-full border-collapse text-left text-sm">{tableChildren}</table>
+                </div>
               </div>
             ),
             td: ({children: cellChildren}) => <td className="border-t border-white/7 px-3 py-2 text-neutral-300">{cellChildren}</td>,
