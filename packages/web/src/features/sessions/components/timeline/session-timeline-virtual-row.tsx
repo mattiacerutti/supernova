@@ -34,14 +34,7 @@ interface StreamingStatusLabelProps {
 function StreamingStatusLabel(props: StreamingStatusLabelProps) {
   const {label} = props;
 
-  return (
-    <div className="relative w-fit text-sm text-neutral-600">
-      <span>{label}</span>
-      <span aria-hidden="true" className="thinking-shimmer absolute inset-0 text-neutral-200">
-        {label}
-      </span>
-    </div>
-  );
+  return <p className="shimmer w-fit text-sm text-neutral-600">{label}</p>;
 }
 
 interface SessionTimelineVirtualRowProps {

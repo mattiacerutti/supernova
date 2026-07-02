@@ -171,16 +171,10 @@ function ToolTitleContent(props: {event: ToolEvent}) {
 export default function ToolTitle(props: {event: ToolEvent}) {
   const {event} = props;
   const pending = event.tool?.status === "pending";
-  const content = <ToolTitleContent event={event} />;
 
   return (
-    <div className="relative grid min-w-0">
-      <div className="col-start-1 row-start-1 min-w-0">{content}</div>
-      {pending && (
-        <div aria-hidden="true" className="thinking-shimmer col-start-1 row-start-1 min-w-0 text-neutral-200">
-          {content}
-        </div>
-      )}
+    <div className={pending ? "shimmer min-w-0 text-neutral-600" : "min-w-0"}>
+      <ToolTitleContent event={event} />
     </div>
   );
 }
