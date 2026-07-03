@@ -8,6 +8,16 @@ All notable changes to Supernova are documented in this file.
 
 ### Added
 
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.0.1-beta.7]
+
+### Added
+
 - Added composer draft persistence when switching between new chats and existing sessions.
 
 ### Changed
@@ -23,8 +33,6 @@ All notable changes to Supernova are documented in this file.
 ### Fixed
 
 - Fixed undoing a turn so manual file changes made between completed turns are preserved.
-
-### Removed
 
 ## [0.0.1-beta.6]
 
