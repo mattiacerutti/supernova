@@ -8,6 +8,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Added
 
+- Added composer draft persistence when switching between new chats and existing sessions.
+
 ### Changed
 
 - Changed Pi runtime dependency to 0.80.3.

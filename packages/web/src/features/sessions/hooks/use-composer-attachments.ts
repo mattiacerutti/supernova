@@ -1,7 +1,7 @@
 import type {DragEvent, HTMLAttributes} from "react";
 import {useRef, useState} from "react";
 import {useMutation} from "@tanstack/react-query";
-import type {UserMessageAttachmentPart, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {UserMessageAttachmentPart} from "@supernova/contracts/sessions/schemas";
 import {
   fileRequiresImageCapability,
   fileToSessionAttachmentPart,
@@ -13,6 +13,10 @@ import {
 import {showToast} from "@/components/ui/toast-manager";
 
 export type ComposerAttachmentDropZoneProps = Pick<HTMLAttributes<HTMLDivElement>, "onDragEnter" | "onDragLeave" | "onDragOver" | "onDrop">;
+
+export type ComposerAttachmentsUpdate =
+  | readonly UserMessageAttachmentPart[]
+  | ((attachments: readonly UserMessageAttachmentPart[]) => readonly UserMessageAttachmentPart[]);
 
 export interface ComposerAttachmentsController {
   readonly addFiles: (files: readonly File[]) => void;
@@ -51,32 +55,17 @@ function attachmentRequiresImageCapability(attachment: UserMessageAttachmentPart
 }
 
 interface UseComposerAttachmentsInput {
+  readonly attachments: readonly UserMessageAttachmentPart[];
   readonly disabled: boolean;
   readonly imageSupported: boolean;
-  readonly initialContentParts?: readonly UserMessageContentPart[];
+  readonly onAttachmentsChange: (update: ComposerAttachmentsUpdate) => void;
 }
 
-interface ComposerAttachmentsState {
-  readonly attachments: readonly UserMessageAttachmentPart[];
-  readonly initialContentParts: readonly UserMessageContentPart[];
-}
-
-function attachmentsFromContentParts(parts: readonly UserMessageContentPart[]): readonly UserMessageAttachmentPart[] {
-  return parts.filter((part) => part.type === "attachment");
-}
-
+/** Manages composer file attachment actions, validation, and drag/drop UI state. */
 export function useComposerAttachments(input: UseComposerAttachmentsInput): ComposerAttachmentsController {
-  const {disabled, imageSupported, initialContentParts = []} = input;
+  const {attachments, disabled, imageSupported, onAttachmentsChange} = input;
 
-  const [attachmentState, setAttachmentState] = useState<ComposerAttachmentsState>({attachments: attachmentsFromContentParts(initialContentParts), initialContentParts});
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
-
-  let attachments = attachmentState.attachments;
-  if (attachmentState.initialContentParts !== initialContentParts) {
-    attachments = attachmentsFromContentParts(initialContentParts);
-    setAttachmentState({attachments, initialContentParts});
-  }
-
   const dragDepthRef = useRef(0);
 
   const processFilesMutation = useMutation({
@@ -106,7 +95,7 @@ export function useComposerAttachments(input: UseComposerAttachmentsInput): Comp
     },
     onSuccess: (result) => {
       if (result.attachments.length > 0) {
-        setAttachmentState((current) => ({...current, attachments: [...current.attachments, ...result.attachments]}));
+        onAttachmentsChange((current) => [...current, ...result.attachments]);
       }
 
       for (const error of result.errors) {
@@ -121,15 +110,15 @@ export function useComposerAttachments(input: UseComposerAttachmentsInput): Comp
   const isProcessing = processFilesMutation.isPending;
 
   const clear = (): void => {
-    setAttachmentState((current) => ({...current, attachments: []}));
+    onAttachmentsChange([]);
   };
 
   const remove = (attachmentId: string): void => {
-    setAttachmentState((current) => ({...current, attachments: current.attachments.filter((attachment) => attachment.id !== attachmentId)}));
+    onAttachmentsChange((current) => current.filter((attachment) => attachment.id !== attachmentId));
   };
 
   const removeUnsupportedImages = (): void => {
-    setAttachmentState((current) => ({...current, attachments: current.attachments.filter((attachment) => !attachmentRequiresImageCapability(attachment))}));
+    onAttachmentsChange((current) => current.filter((attachment) => !attachmentRequiresImageCapability(attachment)));
   };
 
   const addFiles = (files: readonly File[]): void => {

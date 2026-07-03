@@ -14,6 +14,7 @@ import SessionTitleText from "@/features/sessions/components/session-title-text"
 import {useSession} from "@/features/sessions/hooks/api/use-session";
 import {useSessionModels} from "@/features/sessions/hooks/api/use-session-models";
 import {useComposerAttachments} from "@/features/sessions/hooks/use-composer-attachments";
+import {useComposerDraft} from "@/features/sessions/hooks/use-composer-draft";
 import {useCachedSessionTitle} from "@/features/sessions/hooks/use-cached-session-title";
 import {useRenameSession as useRenameSessionMutation} from "@/features/sessions/hooks/api/use-rename-session";
 import {useSessionTimeline} from "@/features/sessions/hooks/use-session-timeline";
@@ -21,6 +22,7 @@ import {modelKey, resolveThinkingLevel, selectionFromModel, selectionKey} from "
 import {useModelPickerStore} from "@/features/sessions/stores/model-picker-store";
 import {useSessionLiveStore} from "@/features/sessions/stores/session-live-store";
 import {useSessionModelsStore} from "@/features/sessions/stores/session-models-store";
+import {sessionComposerDraftKey} from "@/features/sessions/stores/composer-drafts-store";
 import {useInlineRename} from "@/hooks/use-inline-rename";
 
 interface SessionLoadingProps {
@@ -90,6 +92,8 @@ function SessionConversation(props: SessionConversationProps) {
   const imageSupported = selectedModel?.capabilities.images === true;
   const nextUndoneTurn = session.undoneTurns[0];
   const nextUndoneContentParts = nextUndoneTurn?.userMessage.contentParts ?? [];
+  const composerDraftKey = sessionComposerDraftKey(session.id);
+  const composerDraft = useComposerDraft({fallbackContentParts: nextUndoneContentParts, key: composerDraftKey});
   const [undoneDrawerHeight, setUndoneDrawerHeight] = useState(0);
 
   const stream = useSessionTimeline({
@@ -102,9 +106,10 @@ function SessionConversation(props: SessionConversationProps) {
   const composerActionDisabled = composerDisabled || stream.streamStatus !== "idle";
 
   const composerAttachments = useComposerAttachments({
+    attachments: composerDraft.attachments,
     disabled: composerDisabled,
     imageSupported,
-    initialContentParts: nextUndoneContentParts,
+    onAttachmentsChange: composerDraft.setAttachments,
   });
 
   const handleModelChange = (value: string): void => {
@@ -142,9 +147,12 @@ function SessionConversation(props: SessionConversationProps) {
           <SessionComposerSkeleton />
         ) : (
           <SessionComposer.Root
+            key={composerDraftKey}
             attachments={composerAttachments}
             disabled={composerDisabled}
-            initialContentParts={nextUndoneContentParts}
+            initialContentParts={composerDraft.contentParts}
+            onContentPartsChange={composerDraft.setEditableContentParts}
+            onDraftClear={composerDraft.clear}
             onInterrupt={stream.stopStreaming}
             onSubmit={stream.submitMessage}
             projectPath={session.projectPath}

@@ -1,4 +1,4 @@
-import type {UserMessageContentPart, UserMessageReferencePart} from "@supernova/contracts/sessions/schemas";
+import type {UserMessageAttachmentPart, UserMessageContentPart, UserMessageReferencePart} from "@supernova/contracts/sessions/schemas";
 import type {Editor, JSONContent} from "@tiptap/react";
 
 function contentPartValue(part: UserMessageContentPart): string {
@@ -17,6 +17,16 @@ function pushTextContentPart(parts: UserMessageContentPart[], text: string): voi
   }
 
   parts.push({text, type: "text"});
+}
+
+/** Returns the editor-owned text and reference content parts, excluding file attachments. */
+export function editableComposerContentParts(parts: readonly UserMessageContentPart[]): readonly UserMessageContentPart[] {
+  return parts.filter((part) => part.type !== "attachment");
+}
+
+/** Returns the attachment content parts for a composer draft. */
+export function attachmentComposerContentParts(parts: readonly UserMessageContentPart[]): readonly UserMessageAttachmentPart[] {
+  return parts.filter((part): part is UserMessageAttachmentPart => part.type === "attachment");
 }
 
 /** Converts mixed text/reference composer parts into their plain text representation. */

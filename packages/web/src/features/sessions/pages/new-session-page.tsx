@@ -11,9 +11,11 @@ import {useCreateSession} from "@/features/sessions/hooks/api/use-create-session
 import {sessionQueryKey} from "@/features/sessions/hooks/api/use-session";
 import {useSessionModels} from "@/features/sessions/hooks/api/use-session-models";
 import {useComposerAttachments} from "@/features/sessions/hooks/use-composer-attachments";
+import {useComposerDraft} from "@/features/sessions/hooks/use-composer-draft";
 import {modelKey, resolveThinkingLevel, selectionFromModel} from "@/features/sessions/lib/composer/model-picker/model-utils";
 import {useModelPickerStore} from "@/features/sessions/stores/model-picker-store";
 import {useSessionModelsStore} from "@/features/sessions/stores/session-models-store";
+import {newSessionComposerDraftKey} from "@/features/sessions/stores/composer-drafts-store";
 import {useSessionLiveStore} from "@/features/sessions/stores/session-live-store";
 import {useAgentRpcClient} from "@/rpc/use-agent-rpc-client";
 import appIconUrl from "@assets/icon.png";
@@ -59,7 +61,14 @@ export default function NewSessionPage(props: NewSessionPageProps) {
 
   const composerDisabled = createSessionMutation.isPending || modelsPending || !selectedModel;
   const imageSupported = selectedModel?.capabilities.images === true;
-  const composerAttachments = useComposerAttachments({disabled: composerDisabled, imageSupported});
+  const composerDraftKey = newSessionComposerDraftKey(projectPath);
+  const composerDraft = useComposerDraft({key: composerDraftKey});
+  const composerAttachments = useComposerAttachments({
+    attachments: composerDraft.attachments,
+    disabled: composerDisabled,
+    imageSupported,
+    onAttachmentsChange: composerDraft.setAttachments,
+  });
 
   const handleModelChange = (value: string): void => {
     const nextModel = availableModels.find((model) => modelKey(model.providerId, model.id) === value);
@@ -114,7 +123,16 @@ export default function NewSessionPage(props: NewSessionPageProps) {
           {modelsPending ? (
             <SessionComposerSkeleton />
           ) : (
-            <SessionComposer.Root attachments={composerAttachments} disabled={composerDisabled} onSubmit={handleSubmit} projectPath={projectPath}>
+            <SessionComposer.Root
+              key={composerDraftKey}
+              attachments={composerAttachments}
+              disabled={composerDisabled}
+              initialContentParts={composerDraft.contentParts}
+              onContentPartsChange={composerDraft.setEditableContentParts}
+              onDraftClear={composerDraft.clear}
+              onSubmit={handleSubmit}
+              projectPath={projectPath}
+            >
               <SessionComposer.Attachments />
               <SessionComposer.Input placeholder="Ask anything." />
               <SessionComposer.Toolbar>

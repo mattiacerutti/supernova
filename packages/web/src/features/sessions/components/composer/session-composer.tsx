@@ -110,6 +110,8 @@ interface SessionComposerRootProps {
   readonly children: ReactNode;
   readonly disabled: boolean;
   readonly initialContentParts?: readonly UserMessageContentPart[];
+  readonly onContentPartsChange?: (contentParts: readonly UserMessageContentPart[]) => void;
+  readonly onDraftClear?: () => void;
   readonly onInterrupt?: () => void;
   readonly onSubmit: (contentParts: readonly UserMessageContentPart[]) => void;
   readonly projectPath: string;
@@ -119,7 +121,20 @@ interface SessionComposerRootProps {
 }
 
 function SessionComposerRoot(props: SessionComposerRootProps) {
-  const {attachments, children, disabled, initialContentParts = [], onInterrupt, onSubmit, projectPath, slashCommandActions, streamStatus = "idle", topExtension} = props;
+  const {
+    attachments,
+    children,
+    disabled,
+    initialContentParts = [],
+    onContentPartsChange,
+    onDraftClear,
+    onInterrupt,
+    onSubmit,
+    projectPath,
+    slashCommandActions,
+    streamStatus = "idle",
+    topExtension,
+  } = props;
 
   const [draft, setDraft] = useState(() => textFromComposerContentParts(initialContentParts));
   const [suggestionMatch, setSuggestionMatch] = useState<ComposerSuggestionMatch | null>(null);
@@ -146,12 +161,14 @@ function SessionComposerRoot(props: SessionComposerRootProps) {
       extensions: [Document, Paragraph, Text, HardBreak, History, ComposerReferenceNode, createSuggestionExtension(setSuggestionMatch)],
       onCreate: ({editor: currentEditor}) => {
         setDraft(currentEditor.getText());
+        if (initialContentParts.length > 0) onContentPartsChange?.(editorToContentParts(currentEditor));
       },
       onUpdate: ({editor: currentEditor}) => {
         setDraft(currentEditor.getText());
+        onContentPartsChange?.(editorToContentParts(currentEditor));
       },
     },
-    [inputDisabled, initialContentParts]
+    [inputDisabled, onContentPartsChange]
   );
 
   const submit = (): void => {
@@ -163,6 +180,7 @@ function SessionComposerRoot(props: SessionComposerRootProps) {
     editor?.commands.clearContent();
     setDraft("");
     attachments.clear();
+    onDraftClear?.();
   };
 
   return (
