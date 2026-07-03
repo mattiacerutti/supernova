@@ -1,61 +1,43 @@
 import type {UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import {Node} from "@tiptap/core";
 import Document from "@tiptap/extension-document";
 import HardBreak from "@tiptap/extension-hard-break";
 import History from "@tiptap/extension-history";
 import Paragraph from "@tiptap/extension-paragraph";
 import Text from "@tiptap/extension-text";
-import {useEditor} from "@tiptap/react";
+import {ReactNodeViewRenderer, useEditor} from "@tiptap/react";
 import type {ChangeEvent, ClipboardEvent, ReactNode} from "react";
-import {createContext, use, useRef, useState} from "react";
+import {useRef, useState} from "react";
 import Icon from "@/components/ui/icon";
 import IconButton from "@/components/ui/icon-button";
 import ComposerAttachmentPreview from "@/features/sessions/components/attachments/composer-attachment-preview";
 import ComposerEditor from "@/features/sessions/components/composer/editor/composer-editor";
-import {contentPartsToEditorContent, editorToContentParts, textFromComposerContentParts, trimComposerContentParts} from "@/features/sessions/lib/composer/composer-content-parts";
-import type {ComposerAttachmentsController} from "@/features/sessions/hooks/use-composer-attachments";
-import type {SessionLiveStatus} from "@/features/sessions/stores/session-live-store";
-import {SESSION_ATTACHMENT_ACCEPT} from "@/features/sessions/lib/attachments/session-attachments";
-import type {ComposerSuggestionMatch} from "@/features/sessions/types/composer-suggestion";
-import {cn} from "@/lib/cn";
-import {createSuggestionExtension} from "@/features/sessions/lib/composer/composer-suggestions";
-import type {ClientSlashCommandActions} from "@/features/sessions/lib/composer/client-slash-commands";
-import {Node} from "@tiptap/core";
-import {ReactNodeViewRenderer} from "@tiptap/react";
 import ComposerReference from "@/features/sessions/components/composer/editor/composer-reference";
+import type {ComposerAttachmentsController} from "@/features/sessions/hooks/use-composer-attachments";
+import {SESSION_ATTACHMENT_ACCEPT} from "@/features/sessions/lib/attachments/session-attachments";
+import type {ClientSlashCommandActions} from "@/features/sessions/lib/composer/client-slash-commands";
+import {contentPartsToEditorContent, editorToContentParts, textFromComposerContentParts, trimComposerContentParts} from "@/features/sessions/lib/composer/composer-content-parts";
+import {createSuggestionExtension} from "@/features/sessions/lib/composer/composer-suggestions";
+import type {ComposerSuggestionMatch} from "@/features/sessions/types/composer-suggestion";
+import type {SessionLiveStatus} from "@/features/sessions/stores/session-live-store";
+import {cn} from "@/lib/cn";
 
 type ComposerClipboardEvent = ClipboardEvent<HTMLElement> | globalThis.ClipboardEvent;
 
-interface SessionComposerContextValue {
-  readonly attachmentDisabled: boolean;
-  readonly attachments: ComposerAttachmentsController;
-  readonly canInterrupt: boolean;
-  readonly canSubmit: boolean;
+type ComposerEditorInstance = ReturnType<typeof useEditor>;
+
+interface SessionComposerDraft {
+  readonly contentParts: readonly UserMessageContentPart[];
+  readonly clear?: () => void;
+  readonly setEditableContentParts?: (contentParts: readonly UserMessageContentPart[]) => void;
+}
+
+interface ComposerInputState {
+  readonly draftText: string;
+  readonly editor: ComposerEditorInstance;
+  readonly onSuggestionMatchChange: (match: ComposerSuggestionMatch | null) => void;
   readonly suggestionMatch: ComposerSuggestionMatch | null;
-  readonly draft: string;
-  readonly editor: ReturnType<typeof useEditor>;
-  readonly inputDisabled: boolean;
-  readonly isStreaming: boolean;
-  readonly onInterrupt?: () => void;
-  readonly projectPath: string;
-  readonly setSuggestionMatch: (match: ComposerSuggestionMatch | null) => void;
-  readonly setDraft: (draft: string) => void;
-  readonly slashCommandActions?: ClientSlashCommandActions;
-  readonly streamStatus: SessionLiveStatus;
-  readonly submit: () => void;
 }
-
-const SessionComposerContext = createContext<SessionComposerContextValue | null>(null);
-
-function useSessionComposerContext(): SessionComposerContextValue {
-  const context = use(SessionComposerContext);
-  if (!context) throw new Error("SessionComposer compound components must be rendered inside SessionComposer.Root.");
-
-  return context;
-}
-
-// -----------------------------------------------------------------------------
-// Helpers
-// -----------------------------------------------------------------------------
 
 function clipboardFiles(event: ComposerClipboardEvent): File[] {
   const clipboardData = event.clipboardData;
@@ -72,11 +54,6 @@ function clipboardFiles(event: ComposerClipboardEvent): File[] {
   });
 }
 
-// -----------------------------------------------------------------------------
-// Root
-// -----------------------------------------------------------------------------
-
-// TipTap node for message content references (e.g. files, skills)
 const ComposerReferenceNode = Node.create({
   addAttributes() {
     return {
@@ -105,125 +82,12 @@ const ComposerReferenceNode = Node.create({
   selectable: false,
 });
 
-interface SessionComposerRootProps {
+interface SessionComposerAttachmentsProps {
   readonly attachments: ComposerAttachmentsController;
-  readonly children: ReactNode;
-  readonly disabled: boolean;
-  readonly initialContentParts?: readonly UserMessageContentPart[];
-  readonly onContentPartsChange?: (contentParts: readonly UserMessageContentPart[]) => void;
-  readonly onDraftClear?: () => void;
-  readonly onInterrupt?: () => void;
-  readonly onSubmit: (contentParts: readonly UserMessageContentPart[]) => void;
-  readonly projectPath: string;
-  readonly slashCommandActions?: ClientSlashCommandActions;
-  readonly streamStatus?: SessionLiveStatus;
-  readonly topExtension?: ReactNode;
 }
 
-function SessionComposerRoot(props: SessionComposerRootProps) {
-  const {
-    attachments,
-    children,
-    disabled,
-    initialContentParts = [],
-    onContentPartsChange,
-    onDraftClear,
-    onInterrupt,
-    onSubmit,
-    projectPath,
-    slashCommandActions,
-    streamStatus = "idle",
-    topExtension,
-  } = props;
-
-  const [draft, setDraft] = useState(() => textFromComposerContentParts(initialContentParts));
-  const [suggestionMatch, setSuggestionMatch] = useState<ComposerSuggestionMatch | null>(null);
-
-  const isStreaming = streamStatus === "streaming" || streamStatus === "stopping";
-  const inputDisabled = disabled;
-
-  const canSubmit = (draft.trim().length > 0 || attachments.attachments.length > 0) && !inputDisabled && !attachments.isProcessing && streamStatus === "idle";
-  const canInterrupt = streamStatus === "streaming";
-  const attachmentDisabled = inputDisabled || attachments.isProcessing;
-
-  const editor = useEditor(
-    {
-      editable: !inputDisabled,
-      content: contentPartsToEditorContent(initialContentParts),
-      editorProps: {
-        attributes: {
-          class: cn(
-            "scroll-fade-y max-h-48 min-h-10 w-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent p-1 text-sm leading-5 text-neutral-200 outline-none",
-            inputDisabled && "cursor-default opacity-60"
-          ),
-        },
-      },
-      extensions: [Document, Paragraph, Text, HardBreak, History, ComposerReferenceNode, createSuggestionExtension(setSuggestionMatch)],
-      onCreate: ({editor: currentEditor}) => {
-        setDraft(currentEditor.getText());
-        if (initialContentParts.length > 0) onContentPartsChange?.(editorToContentParts(currentEditor));
-      },
-      onUpdate: ({editor: currentEditor}) => {
-        setDraft(currentEditor.getText());
-        onContentPartsChange?.(editorToContentParts(currentEditor));
-      },
-    },
-    [inputDisabled, onContentPartsChange]
-  );
-
-  const submit = (): void => {
-    if (!canSubmit) return;
-
-    const trimmedContentParts = trimComposerContentParts(editor ? editorToContentParts(editor) : []);
-    const textContentParts = trimmedContentParts.length > 0 ? trimmedContentParts : draft.trim() ? [{text: draft.trim(), type: "text" as const}] : [];
-    onSubmit([...textContentParts, ...attachments.attachments]);
-    editor?.commands.clearContent();
-    setDraft("");
-    attachments.clear();
-    onDraftClear?.();
-  };
-
-  return (
-    <SessionComposerContext.Provider
-      value={{
-        attachmentDisabled,
-        attachments,
-        canInterrupt,
-        canSubmit,
-        suggestionMatch,
-        draft,
-        editor,
-        inputDisabled,
-        isStreaming,
-        onInterrupt,
-        projectPath,
-        setSuggestionMatch,
-        setDraft,
-        slashCommandActions,
-        streamStatus,
-        submit,
-      }}
-    >
-      <div className="relative z-20 px-4 pb-4 md:px-6">
-        <div className="relative mx-auto max-w-3xl">
-          {topExtension && (
-            <div className="pointer-events-none absolute inset-x-0 bottom-full z-0">
-              <div className="pointer-events-auto">{topExtension}</div>
-            </div>
-          )}
-          <div className="relative z-10 rounded-3xl corner-superellipse/1.3 bg-[#2b2b2b] px-3 py-2 ring-1 ring-white/6 shadow-md">{children}</div>
-        </div>
-      </div>
-    </SessionComposerContext.Provider>
-  );
-}
-
-// -----------------------------------------------------------------------------
-// Attachments
-// -----------------------------------------------------------------------------
-
-function SessionComposerAttachments() {
-  const {attachments} = useSessionComposerContext();
+function SessionComposerAttachments(props: SessionComposerAttachmentsProps) {
+  const {attachments} = props;
 
   return (
     <>
@@ -240,17 +104,18 @@ function SessionComposerAttachments() {
   );
 }
 
-// -----------------------------------------------------------------------------
-// Input
-// -----------------------------------------------------------------------------
-
 interface SessionComposerInputProps {
-  readonly placeholder?: string;
+  readonly attachmentDisabled: boolean;
+  readonly attachments: ComposerAttachmentsController;
+  readonly input: ComposerInputState;
+  readonly onSubmit: () => void;
+  readonly placeholder: string;
+  readonly projectPath: string;
+  readonly slashCommandActions?: ClientSlashCommandActions;
 }
 
 function SessionComposerInput(props: SessionComposerInputProps) {
-  const {placeholder = "Ask for follow-up changes"} = props;
-  const {attachmentDisabled, attachments, draft, editor, projectPath, setSuggestionMatch, slashCommandActions, submit, suggestionMatch} = useSessionComposerContext();
+  const {attachmentDisabled, attachments, input, onSubmit, placeholder, projectPath, slashCommandActions} = props;
 
   const handlePaste = (event: ComposerClipboardEvent): void => {
     const files = clipboardFiles(event);
@@ -265,51 +130,32 @@ function SessionComposerInput(props: SessionComposerInputProps) {
   return (
     <div className="relative -mx-3 px-3">
       <ComposerEditor
-        suggestionMatch={suggestionMatch}
-        editor={editor}
-        onSuggestionMatchChange={setSuggestionMatch}
+        editor={input.editor}
         onPaste={handlePaste}
-        onSubmit={submit}
+        onSubmit={onSubmit}
+        onSuggestionMatchChange={input.onSuggestionMatchChange}
         placeholder={placeholder}
         projectPath={projectPath}
         slashCommandActions={slashCommandActions}
-        value={draft}
+        suggestionMatch={input.suggestionMatch}
+        value={input.draftText}
       />
     </div>
   );
 }
 
-// -----------------------------------------------------------------------------
-// Toolbar
-// -----------------------------------------------------------------------------
-
-function SessionComposerToolbar({children}: {children: ReactNode}) {
-  return <div className="flex items-center justify-between gap-2">{children}</div>;
-}
-
-// -----------------------------------------------------------------------------
-// Action Group
-// -----------------------------------------------------------------------------
-
-function SessionComposerActionGroup({children}: {children: ReactNode}) {
-  return <div className="flex min-w-0 items-center gap-4">{children}</div>;
-}
-
-// -----------------------------------------------------------------------------
-// Attach Button
-// -----------------------------------------------------------------------------
-
-interface SessionComposerButtonProps {
+interface SessionComposerAttachButtonProps {
+  readonly attachments: ComposerAttachmentsController;
+  readonly disabled: boolean;
   readonly label?: string;
 }
 
-function SessionComposerAttachButton(props: SessionComposerButtonProps) {
-  const {label = "Attach files"} = props;
-  const {attachmentDisabled, attachments} = useSessionComposerContext();
+function SessionComposerAttachButton(props: SessionComposerAttachButtonProps) {
+  const {attachments, disabled, label = "Attach files"} = props;
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleClick = (): void => {
-    if (attachmentDisabled) return;
+    if (disabled) return;
     fileInputRef.current?.click();
   };
 
@@ -321,11 +167,11 @@ function SessionComposerAttachButton(props: SessionComposerButtonProps) {
 
   return (
     <>
-      <input accept={SESSION_ATTACHMENT_ACCEPT} className="hidden" disabled={attachmentDisabled} multiple onChange={handleChange} ref={fileInputRef} type="file" />
+      <input accept={SESSION_ATTACHMENT_ACCEPT} className="hidden" disabled={disabled} multiple onChange={handleChange} ref={fileInputRef} type="file" />
       <IconButton
         label={label}
         className="grid size-8 place-items-center rounded-full text-neutral-400 transition hover:bg-white/6 hover:text-neutral-100 disabled:cursor-default disabled:text-neutral-600 disabled:hover:bg-transparent"
-        disabled={attachmentDisabled}
+        disabled={disabled}
         onClick={handleClick}
         size="none"
         title={label}
@@ -337,16 +183,110 @@ function SessionComposerAttachButton(props: SessionComposerButtonProps) {
   );
 }
 
-// -----------------------------------------------------------------------------
-// Submit Button
-// -----------------------------------------------------------------------------
+interface SessionComposerSubmitButtonProps {
+  readonly canInterrupt: boolean;
+  readonly canSubmit: boolean;
+  readonly isStreaming: boolean;
+  readonly onClick: () => void;
+  readonly streamStatus: SessionLiveStatus;
+}
 
-function SessionComposerSubmitButton() {
-  const {canInterrupt, canSubmit, isStreaming, onInterrupt, streamStatus, submit} = useSessionComposerContext();
+function SessionComposerSubmitButton(props: SessionComposerSubmitButtonProps) {
+  const {canInterrupt, canSubmit, isStreaming, onClick, streamStatus} = props;
   const disabled = isStreaming ? !canInterrupt : !canSubmit;
   const label = isStreaming ? (streamStatus === "stopping" ? "Stopping stream" : "Stop streaming") : "Send message";
 
-  const handleClick = (): void => {
+  return (
+    <IconButton
+      label={label}
+      className="grid size-9 place-items-center rounded-full bg-neutral-300 text-neutral-950 transition hover:bg-white disabled:cursor-default disabled:bg-white/10 disabled:text-neutral-500"
+      disabled={disabled}
+      onClick={onClick}
+      size="none"
+      variant="bare"
+    >
+      <Icon name={isStreaming ? "stop" : "send"} size="md" />
+    </IconButton>
+  );
+}
+
+interface SessionComposerProps {
+  readonly attachments: ComposerAttachmentsController;
+  readonly disabled: boolean;
+  readonly draft: SessionComposerDraft;
+  readonly onInterrupt?: () => void;
+  readonly onSubmit: (contentParts: readonly UserMessageContentPart[]) => void;
+  readonly placeholder?: string;
+  readonly projectPath: string;
+  readonly slashCommandActions?: ClientSlashCommandActions;
+  readonly streamStatus?: SessionLiveStatus;
+  readonly toolbarControls?: ReactNode;
+  readonly topExtension?: ReactNode;
+}
+
+/** Renders the message composer, including editor, attachments, toolbar, and submit/stop action. */
+export default function SessionComposer(props: SessionComposerProps) {
+  const {
+    attachments,
+    disabled,
+    draft,
+    onInterrupt,
+    onSubmit,
+    placeholder = "Ask for follow-up changes",
+    projectPath,
+    slashCommandActions,
+    streamStatus = "idle",
+    toolbarControls,
+    topExtension,
+  } = props;
+
+  const [draftText, setDraftText] = useState(() => textFromComposerContentParts(draft.contentParts));
+  const [suggestionMatch, setSuggestionMatch] = useState<ComposerSuggestionMatch | null>(null);
+
+  const inputDisabled = disabled;
+  const isStreaming = streamStatus === "streaming" || streamStatus === "stopping";
+  const attachmentDisabled = inputDisabled || attachments.isProcessing;
+  const canSubmit = (draftText.trim().length > 0 || attachments.attachments.length > 0) && !inputDisabled && !attachments.isProcessing && streamStatus === "idle";
+  const canInterrupt = streamStatus === "streaming";
+
+  const editor = useEditor(
+    {
+      editable: !inputDisabled,
+      content: contentPartsToEditorContent(draft.contentParts),
+      editorProps: {
+        attributes: {
+          class: cn(
+            "scroll-fade-y max-h-48 min-h-10 w-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent p-1 text-sm leading-5 text-neutral-200 outline-none",
+            inputDisabled && "cursor-default opacity-60"
+          ),
+        },
+      },
+      extensions: [Document, Paragraph, Text, HardBreak, History, ComposerReferenceNode, createSuggestionExtension(setSuggestionMatch)],
+      onCreate: ({editor: currentEditor}) => {
+        setDraftText(currentEditor.getText());
+        if (draft.contentParts.length > 0) draft.setEditableContentParts?.(editorToContentParts(currentEditor));
+      },
+      onUpdate: ({editor: currentEditor}) => {
+        setDraftText(currentEditor.getText());
+        draft.setEditableContentParts?.(editorToContentParts(currentEditor));
+      },
+    },
+    [inputDisabled, draft.setEditableContentParts]
+  );
+
+  const submit = (): void => {
+    if (!canSubmit) return;
+
+    const trimmedContentParts = trimComposerContentParts(editor ? editorToContentParts(editor) : []);
+    const textContentParts = trimmedContentParts.length > 0 ? trimmedContentParts : draftText.trim() ? [{text: draftText.trim(), type: "text" as const}] : [];
+    onSubmit([...textContentParts, ...attachments.attachments]);
+    editor?.commands.clearContent();
+    setDraftText("");
+    attachments.clear();
+    draft.clear?.();
+  };
+
+  const handleSubmitButtonClick = (): void => {
     if (isStreaming) {
       if (canInterrupt) onInterrupt?.();
       return;
@@ -356,31 +296,39 @@ function SessionComposerSubmitButton() {
   };
 
   return (
-    <IconButton
-      label={label}
-      className="grid size-9 place-items-center rounded-full bg-neutral-300 text-neutral-950 transition hover:bg-white disabled:cursor-default disabled:bg-white/10 disabled:text-neutral-500"
-      disabled={disabled}
-      onClick={handleClick}
-      size="none"
-      variant="bare"
-    >
-      <Icon name={isStreaming ? "stop" : "send"} size="md" />
-    </IconButton>
+    <div className="relative z-20 px-4 pb-4 md:px-6">
+      <div className="relative mx-auto max-w-3xl">
+        {topExtension && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-full z-0">
+            <div className="pointer-events-auto">{topExtension}</div>
+          </div>
+        )}
+        <div className="relative z-10 rounded-3xl corner-superellipse/1.3 bg-[#2b2b2b] px-3 py-2 ring-1 ring-white/6 shadow-md">
+          <SessionComposerAttachments attachments={attachments} />
+          <SessionComposerInput
+            attachmentDisabled={attachmentDisabled}
+            attachments={attachments}
+            input={{draftText, editor, onSuggestionMatchChange: setSuggestionMatch, suggestionMatch}}
+            onSubmit={submit}
+            placeholder={placeholder}
+            projectPath={projectPath}
+            slashCommandActions={slashCommandActions}
+          />
+          <div className="flex items-center justify-between gap-2">
+            <SessionComposerAttachButton attachments={attachments} disabled={attachmentDisabled} />
+            <div className="flex min-w-0 items-center gap-4">
+              {toolbarControls}
+              <SessionComposerSubmitButton
+                canInterrupt={canInterrupt}
+                canSubmit={canSubmit}
+                isStreaming={isStreaming}
+                onClick={handleSubmitButtonClick}
+                streamStatus={streamStatus}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
-
-// -----------------------------------------------------------------------------
-// Exports
-// -----------------------------------------------------------------------------
-
-const SessionComposer = {
-  ActionGroup: SessionComposerActionGroup,
-  AttachButton: SessionComposerAttachButton,
-  Attachments: SessionComposerAttachments,
-  Input: SessionComposerInput,
-  Root: SessionComposerRoot,
-  SubmitButton: SessionComposerSubmitButton,
-  Toolbar: SessionComposerToolbar,
-} as const;
-
-export default SessionComposer;

@@ -17,7 +17,7 @@ export function selectionKey(selection: ModelReference | undefined): string {
   return selection ? modelKey(selection.providerId, selection.id) : "";
 }
 
-export function selectionFromModel(model: ModelDetails, thinkingLevel: string | undefined): ModelReference {
+export function createModelReference(model: ModelDetails, thinkingLevel: string | undefined): ModelReference {
   return {
     id: model.id,
     providerId: model.providerId,

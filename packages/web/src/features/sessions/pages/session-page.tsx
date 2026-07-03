@@ -3,26 +3,23 @@ import {useCallback, useState} from "react";
 import type {AppEnvironment} from "@/app/app-environment";
 import ModelPicker from "@/features/sessions/components/composer/pickers/model-picker";
 import ThinkingLevelPicker from "@/features/sessions/components/composer/pickers/thinking-level-picker";
-import SessionContextIndicator from "@/features/sessions/components/composer/session-context-indicator";
 import SessionComposer from "@/features/sessions/components/composer/session-composer";
 import SessionComposerSkeleton from "@/features/sessions/components/composer/session-composer-skeleton";
+import SessionContextIndicator from "@/features/sessions/components/composer/session-context-indicator";
 import UndoneTurnsDrawer from "@/features/sessions/components/composer/undone-turns-drawer";
 import SessionActionsMenu from "@/features/sessions/components/session-actions-menu";
 import SessionLayout from "@/features/sessions/components/session-layout";
-import SessionTimeline from "@/features/sessions/components/timeline/session-timeline";
 import SessionTitleText from "@/features/sessions/components/session-title-text";
+import SessionTimeline from "@/features/sessions/components/timeline/session-timeline";
+import {useRenameSession as useRenameSessionMutation} from "@/features/sessions/hooks/api/use-rename-session";
 import {useSession} from "@/features/sessions/hooks/api/use-session";
-import {useSessionModels} from "@/features/sessions/hooks/api/use-session-models";
+import {useCachedSessionTitle} from "@/features/sessions/hooks/use-cached-session-title";
 import {useComposerAttachments} from "@/features/sessions/hooks/use-composer-attachments";
 import {useComposerDraft} from "@/features/sessions/hooks/use-composer-draft";
-import {useCachedSessionTitle} from "@/features/sessions/hooks/use-cached-session-title";
-import {useRenameSession as useRenameSessionMutation} from "@/features/sessions/hooks/api/use-rename-session";
+import {useComposerModelSelection} from "@/features/sessions/hooks/use-composer-model-selection";
 import {useSessionTimeline} from "@/features/sessions/hooks/use-session-timeline";
-import {modelKey, resolveThinkingLevel, selectionFromModel, selectionKey} from "@/features/sessions/lib/composer/model-picker/model-utils";
-import {useModelPickerStore} from "@/features/sessions/stores/model-picker-store";
-import {useSessionLiveStore} from "@/features/sessions/stores/session-live-store";
-import {useSessionModelsStore} from "@/features/sessions/stores/session-models-store";
 import {sessionComposerDraftKey} from "@/features/sessions/stores/composer-drafts-store";
+import {useSessionLiveStore} from "@/features/sessions/stores/session-live-store";
 import {useInlineRename} from "@/hooks/use-inline-rename";
 
 interface SessionLoadingProps {
@@ -51,8 +48,8 @@ function SessionLoading(props: SessionLoadingProps) {
 }
 
 interface SessionConversationProps {
-  appEnvironment: AppEnvironment;
-  session: Session;
+  readonly appEnvironment: AppEnvironment;
+  readonly session: Session;
 }
 
 function SessionConversation(props: SessionConversationProps) {
@@ -70,67 +67,60 @@ function SessionConversation(props: SessionConversationProps) {
     renaming,
     startRenaming,
   } = useInlineRename({initialValue: session.title, onSave: (title) => renameSessionMutation.mutate({sessionId: session.id, title})});
-  const {data: models, isPending: modelsPending} = useSessionModels();
-  const availableModels = models ?? [];
 
-  const storedSessionModel = useSessionModelsStore((state) => state.models[session.id]);
-  const setSessionModel = useSessionModelsStore((state) => state.setSessionModel);
-  const recordRecentModel = useModelPickerStore((state) => state.recordRecentModel);
-  const setLastThinkingLevel = useModelPickerStore((state) => state.setLastThinkingLevel);
-  const lastThinkingLevel = useModelPickerStore((state) => state.lastThinkingLevel);
-
-  const selectedModelKey =
-    selectionKey(storedSessionModel) || selectionKey(session.model) || (availableModels[0] ? modelKey(availableModels[0].providerId, availableModels[0].id) : "");
-  const selectedModel = availableModels.find((model) => modelKey(model.providerId, model.id) === selectedModelKey);
-
-  const selectedThinkingLevel = storedSessionModel?.thinkingLevel ?? session.model?.thinkingLevel;
-  const selectedModelReference = selectedModel ? selectionFromModel(selectedModel, resolveThinkingLevel(selectedModel, selectedThinkingLevel)) : undefined;
-
-  const thinkingLevels = selectedModel?.thinkingLevels ?? [];
-  const selectedThinkingLabel = thinkingLevels.find((level) => level.value === selectedModelReference?.thinkingLevel)?.label ?? "Reasoning";
-
-  const imageSupported = selectedModel?.capabilities.images === true;
-  const nextUndoneTurn = session.undoneTurns[0];
-  const nextUndoneContentParts = nextUndoneTurn?.userMessage.contentParts ?? [];
+  const modelSelection = useComposerModelSelection({initialSelection: session.model, sessionId: session.id});
   const composerDraftKey = sessionComposerDraftKey(session.id);
-  const composerDraft = useComposerDraft({fallbackContentParts: nextUndoneContentParts, key: composerDraftKey});
+  const composerDraft = useComposerDraft({key: composerDraftKey});
+  const stream = useSessionTimeline({modelReference: modelSelection.modelReference, sessionId: session.id, sessionTurns: session.turns});
   const [undoneDrawerHeight, setUndoneDrawerHeight] = useState(0);
 
-  const stream = useSessionTimeline({
-    modelReference: selectedModelReference,
-    sessionId: session.id,
-    sessionTurns: session.turns,
-  });
-
-  const composerDisabled = modelsPending || !selectedModelReference;
+  const composerDisabled = modelSelection.isPending || !modelSelection.modelReference;
   const composerActionDisabled = composerDisabled || stream.streamStatus !== "idle";
-
+  const thinkingLevels = modelSelection.selectedModel?.thinkingLevels ?? [];
   const composerAttachments = useComposerAttachments({
     attachments: composerDraft.attachments,
     disabled: composerDisabled,
-    imageSupported,
+    imageSupported: modelSelection.selectedModel?.capabilities.images === true,
     onAttachmentsChange: composerDraft.setAttachments,
   });
 
   const handleModelChange = (value: string): void => {
-    const nextModel = availableModels.find((model) => modelKey(model.providerId, model.id) === value);
+    const nextModel = modelSelection.findModel(value);
     if (!nextModel) return;
 
-    const currentLevel = selectedModelReference?.thinkingLevel ?? lastThinkingLevel;
-    const nextThinkingLevel = resolveThinkingLevel(nextModel, currentLevel);
-    const nextSelection = selectionFromModel(nextModel, nextThinkingLevel);
-
     if (!nextModel.capabilities.images) composerAttachments.removeUnsupportedImages();
-    setSessionModel(session.id, nextSelection);
-    recordRecentModel(value);
+    modelSelection.selectModel(value);
   };
 
-  const handleThinkingLevelChange = (value: string): void => {
-    if (!selectedModel) return;
+  const handleUndo = (): void => {
+    if (stream.streamStatus !== "idle") return;
 
-    const nextSelection = selectionFromModel(selectedModel, value);
-    setSessionModel(session.id, nextSelection);
-    setLastThinkingLevel(value);
+    const turn = session.turns.at(-1);
+    if (turn) composerDraft.replaceContentParts(turn.userMessage.contentParts);
+    stream.slashCommandActions.undo?.();
+  };
+
+  const handleRedo = (): void => {
+    if (stream.streamStatus !== "idle") return;
+
+    composerDraft.replaceContentParts(session.undoneTurns[1]?.userMessage.contentParts ?? []);
+    stream.slashCommandActions.redo?.();
+  };
+
+  const handleRevertToMessage = (turnId: string): void => {
+    if (stream.streamStatus !== "idle") return;
+
+    const turn = [...session.turns, ...session.undoneTurns].find((item) => item.id === turnId);
+    if (turn) composerDraft.replaceContentParts(turn.userMessage.contentParts);
+    stream.revertToMessage(turnId);
+  };
+
+  const handleRestoreUndoneTurn = (turnId: string): void => {
+    if (stream.streamStatus !== "idle") return;
+
+    const restoredTurnIndex = session.undoneTurns.findIndex((turn) => turn.id === turnId);
+    composerDraft.replaceContentParts(session.undoneTurns[restoredTurnIndex + 1]?.userMessage.contentParts ?? []);
+    stream.revertToMessage(turnId);
   };
 
   const handleUndoneDrawerHeightChange = useCallback((height: number): void => {
@@ -143,52 +133,43 @@ function SessionConversation(props: SessionConversationProps) {
       attachmentDropOverlayVisible={composerAttachments.isDraggingFiles}
       attachmentDropZoneProps={composerAttachments.dropZoneProps}
       composer={
-        modelsPending ? (
+        modelSelection.isPending ? (
           <SessionComposerSkeleton />
         ) : (
-          <SessionComposer.Root
-            key={composerDraftKey}
+          <SessionComposer
+            key={`${composerDraftKey}:${composerDraft.revision}`}
             attachments={composerAttachments}
             disabled={composerDisabled}
-            initialContentParts={composerDraft.contentParts}
-            onContentPartsChange={composerDraft.setEditableContentParts}
-            onDraftClear={composerDraft.clear}
+            draft={composerDraft}
             onInterrupt={stream.stopStreaming}
             onSubmit={stream.submitMessage}
             projectPath={session.projectPath}
-            slashCommandActions={stream.slashCommandActions}
+            slashCommandActions={{...stream.slashCommandActions, redo: handleRedo, undo: handleUndo}}
             streamStatus={stream.streamStatus}
+            toolbarControls={
+              <div className="flex items-center gap-2">
+                <SessionContextIndicator context={session.context} />
+                <ModelPicker selectedModel={modelSelection.selectedModel} disabled={composerDisabled} models={modelSelection.availableModels} onModelChange={handleModelChange} />
+                {thinkingLevels.length > 0 && (
+                  <ThinkingLevelPicker
+                    disabled={composerDisabled}
+                    onThinkingLevelChange={modelSelection.selectThinkingLevel}
+                    selectedThinkingLabel={modelSelection.selectedThinkingLabel}
+                    selectedThinkingLevel={modelSelection.modelReference?.thinkingLevel}
+                    thinkingLevels={thinkingLevels}
+                  />
+                )}
+              </div>
+            }
             topExtension={
               <UndoneTurnsDrawer
                 disabled={composerActionDisabled}
                 onHeightChange={handleUndoneDrawerHeightChange}
-                onRevertToMessage={stream.revertToMessage}
+                onRevertToMessage={handleRestoreUndoneTurn}
                 turns={session.undoneTurns}
               />
             }
-          >
-            <SessionComposer.Attachments />
-            <SessionComposer.Input />
-            <SessionComposer.Toolbar>
-              <SessionComposer.AttachButton />
-              <SessionComposer.ActionGroup>
-                <div className="flex items-center gap-2">
-                  <SessionContextIndicator context={session.context} />
-                  <ModelPicker selectedModel={selectedModel} disabled={composerDisabled} models={availableModels} onModelChange={handleModelChange} />
-                  {thinkingLevels.length > 0 && (
-                    <ThinkingLevelPicker
-                      disabled={composerDisabled}
-                      onThinkingLevelChange={handleThinkingLevelChange}
-                      selectedThinkingLabel={selectedThinkingLabel}
-                      selectedThinkingLevel={selectedModelReference?.thinkingLevel}
-                      thinkingLevels={thinkingLevels}
-                    />
-                  )}
-                </div>
-                <SessionComposer.SubmitButton />
-              </SessionComposer.ActionGroup>
-            </SessionComposer.Toolbar>
-          </SessionComposer.Root>
+          />
         )
       }
       timeline={
@@ -199,7 +180,7 @@ function SessionConversation(props: SessionConversationProps) {
           isStreaming={stream.streamStatus === "streaming" || stream.streamStatus === "compacting"}
           items={stream.committedTimelineItems}
           liveItems={stream.liveTimelineItems}
-          onRevertToMessage={stream.revertToMessage}
+          onRevertToMessage={handleRevertToMessage}
           sessionId={session.id}
           streamError={stream.streamError}
         />
@@ -226,8 +207,8 @@ function SessionConversation(props: SessionConversationProps) {
 }
 
 interface SessionPageProps {
-  appEnvironment: AppEnvironment;
-  sessionId: string;
+  readonly appEnvironment: AppEnvironment;
+  readonly sessionId: string;
 }
 
 export default function SessionPage(props: SessionPageProps) {
