@@ -70,6 +70,17 @@ function errorMessage(cause: unknown, fallback: string): string {
   return cause instanceof Error && cause.message.length > 0 ? cause.message : fallback;
 }
 
+/** Applies the cheap local chat-only part of checkpoint navigation. Server snapshots remain authoritative. */
+function optimisticRevertToMessage(session: Session, turnId: string): Session {
+  const undoneIndex = session.undoneTurns.findIndex((turn) => turn.id === turnId);
+  if (undoneIndex >= 0) {
+    return {...session, turns: [...session.turns, ...session.undoneTurns.slice(0, undoneIndex + 1)], undoneTurns: session.undoneTurns.slice(undoneIndex + 1)};
+  }
+
+  const turnIndex = session.turns.findIndex((turn) => turn.id === turnId);
+  return turnIndex >= 0 ? {...session, turns: session.turns.slice(0, turnIndex), undoneTurns: [...session.turns.slice(turnIndex), ...session.undoneTurns]} : session;
+}
+
 /** Upserts session metadata into cached project session lists. */
 function applyProjectSessionSummary(input: {projectPath: string; queryClient: QueryClient; sessionId: string; summary: SessionSummary}): void {
   const {projectPath, queryClient, sessionId, summary} = input;
@@ -121,6 +132,7 @@ interface CompactSessionInput {
 }
 
 interface CheckpointNavigationInput {
+  readonly queryClient: QueryClient;
   readonly rpcClient: AgentRpcClientApi;
   readonly sessionId: string;
 }
@@ -369,16 +381,25 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
   };
 
   const runCheckpointNavigation = (
-    input: CheckpointNavigationInput & {execute: (rpc: AgentRpcProtocolClient) => ReturnType<AgentRpcProtocolClient["undoCheckpoint"]>; title: string}
+    input: CheckpointNavigationInput & {
+      execute: (rpc: AgentRpcProtocolClient) => ReturnType<AgentRpcProtocolClient["undoCheckpoint"]>;
+      optimisticTurnId: (session: Session) => string | undefined;
+      title: string;
+    }
   ): void => {
-    const {execute, rpcClient, sessionId, title} = input;
+    const {execute, optimisticTurnId, queryClient, rpcClient, sessionId, title} = input;
 
     const current = get().sessions[sessionId];
     if (current && current.status !== "idle") return;
 
+    const previousSession = queryClient.getQueryData<Session>(sessionQueryKey(sessionId));
+    const turnId = previousSession ? optimisticTurnId(previousSession) : undefined;
+    const optimisticSession = previousSession && turnId ? optimisticRevertToMessage(previousSession, turnId) : previousSession;
+    if (optimisticSession) queryClient.setQueryData(sessionQueryKey(sessionId), optimisticSession);
+
     set((state) => {
       const entry = state.sessions[sessionId] ?? emptyEntry({revision: 0});
-      return {sessions: {...state.sessions, [sessionId]: {...entry, error: null, status: "checkpoint-navigating"}}};
+      return {sessions: {...state.sessions, [sessionId]: {...entry, error: null, session: optimisticSession ?? entry.session, status: "checkpoint-navigating"}}};
     });
 
     void rpcClient
@@ -386,24 +407,26 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
       .catch((cause: unknown) => {
         const description = errorMessage(cause, "The session checkpoint could not be changed.");
         showToast(title, description);
+        if (previousSession) queryClient.setQueryData(sessionQueryKey(sessionId), previousSession);
         set((state) => {
           const entry = state.sessions[sessionId];
           if (!entry) return state;
-          return {sessions: {...state.sessions, [sessionId]: {...entry, status: toStatus(entry)}}};
+          const next = {...entry, session: previousSession ?? entry.session};
+          return {sessions: {...state.sessions, [sessionId]: {...next, status: toStatus(next)}}};
         });
       });
   };
 
   const undoCheckpoint = (input: CheckpointNavigationInput): void => {
-    runCheckpointNavigation({...input, execute: (rpc) => rpc.undoCheckpoint({sessionId: input.sessionId}), title: "Unable to undo checkpoint"});
+    runCheckpointNavigation({...input, execute: (rpc) => rpc.undoCheckpoint({sessionId: input.sessionId}), optimisticTurnId: (session) => session.turns.at(-1)?.id, title: "Unable to undo checkpoint"});
   };
 
   const redoCheckpoint = (input: CheckpointNavigationInput): void => {
-    runCheckpointNavigation({...input, execute: (rpc) => rpc.redoCheckpoint({sessionId: input.sessionId}), title: "Unable to redo checkpoint"});
+    runCheckpointNavigation({...input, execute: (rpc) => rpc.redoCheckpoint({sessionId: input.sessionId}), optimisticTurnId: (session) => session.undoneTurns[0]?.id, title: "Unable to redo checkpoint"});
   };
 
   const revertToMessage = (input: RevertToMessageInput): void => {
-    runCheckpointNavigation({...input, execute: (rpc) => rpc.revertToMessage({sessionId: input.sessionId, turnId: input.turnId}), title: "Unable to revert message"});
+    runCheckpointNavigation({...input, execute: (rpc) => rpc.revertToMessage({sessionId: input.sessionId, turnId: input.turnId}), optimisticTurnId: () => input.turnId, title: "Unable to revert message"});
   };
 
   return {

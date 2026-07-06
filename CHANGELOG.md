@@ -10,6 +10,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+- Changed checkpoint undo, redo, revert, and restore actions to update the session timeline immediately while navigation completes.
+
 ### Fixed
 
 - Fixed checkpoint navigation so undo, redo, and message restores keep the model and reasoning picker selection stable.

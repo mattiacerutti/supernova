@@ -178,7 +178,7 @@ export class E2eAgentRpcClient implements AgentRpcClientApi {
     this.scheduleCheckpointSnapshot((session) => {
       const undoneIndex = session.undoneTurns.findIndex((turn) => turn.id === turnId);
       if (undoneIndex >= 0) {
-        const restoredTurns = session.undoneTurns.slice(0, undoneIndex + 1).reverse();
+        const restoredTurns = session.undoneTurns.slice(0, undoneIndex + 1);
         return {
           ...session,
           turns: [...session.turns, ...restoredTurns],
@@ -190,7 +190,7 @@ export class E2eAgentRpcClient implements AgentRpcClientApi {
       const turnIndex = session.turns.findIndex((turn) => turn.id === turnId);
       if (turnIndex < 0) return session;
 
-      const undoneTurns = session.turns.slice(turnIndex).reverse();
+      const undoneTurns = session.turns.slice(turnIndex);
       return {
         ...session,
         turns: session.turns.slice(0, turnIndex),

@@ -87,7 +87,7 @@ function streamRpcClient(events: readonly SessionStreamEvent[]): AgentRpcClientA
   } as AgentRpcClientApi & {readonly interrupted: boolean};
 }
 
-function commandRpcClient(input?: {readonly rejectSend?: boolean}): AgentRpcClientApi {
+function commandRpcClient(input?: {readonly rejectNavigation?: boolean; readonly rejectSend?: boolean}): AgentRpcClientApi {
   return {
     dispose: vi.fn(async () => undefined),
     fork: vi.fn(),
@@ -95,10 +95,10 @@ function commandRpcClient(input?: {readonly rejectSend?: boolean}): AgentRpcClie
       const protocol = {
         abortSession: () => Effect.void,
         compactSession: () => Effect.void,
-        redoCheckpoint: () => Effect.void,
-        revertToMessage: () => Effect.void,
+        redoCheckpoint: () => (input?.rejectNavigation ? Effect.fail(new Error("Checkpoint unavailable")) : Effect.void),
+        revertToMessage: () => (input?.rejectNavigation ? Effect.fail(new Error("Checkpoint unavailable")) : Effect.void),
         sendMessage: () => (input?.rejectSend ? Effect.fail(new Error("Model unavailable")) : Effect.void),
-        undoCheckpoint: () => Effect.void,
+        undoCheckpoint: () => (input?.rejectNavigation ? Effect.fail(new Error("Checkpoint unavailable")) : Effect.void),
       } as unknown as AgentRpcProtocolClient;
       return await Effect.runPromise(execute(protocol));
     }),
@@ -214,6 +214,63 @@ describe("session live store", () => {
     expect(queryClient.getQueryData(sessionQueryKey("session-1"))).toEqual(previousSession);
   });
 
+  it("optimistically moves turns when navigating checkpoints and rolls back failures", async () => {
+    const cases = [
+      {
+        name: "undo",
+        run: (queryClient: QueryClient, rpcClient: AgentRpcClientApi) => useSessionLiveStore.getState().undoCheckpoint({queryClient, rpcClient, sessionId: "session-1"}),
+        before: session({turns: [turn({id: "kept"}), turn({id: "undone"})], undoneTurns: [turn({id: "redoable"})]}),
+        after: {turns: ["kept"], undoneTurns: ["undone", "redoable"]},
+      },
+      {
+        name: "redo",
+        run: (queryClient: QueryClient, rpcClient: AgentRpcClientApi) => useSessionLiveStore.getState().redoCheckpoint({queryClient, rpcClient, sessionId: "session-1"}),
+        before: session({turns: [turn({id: "kept"})], undoneTurns: [turn({id: "restored"}), turn({id: "still-undone"})]}),
+        after: {turns: ["kept", "restored"], undoneTurns: ["still-undone"]},
+      },
+      {
+        name: "revert visible message",
+        run: (queryClient: QueryClient, rpcClient: AgentRpcClientApi) =>
+          useSessionLiveStore.getState().revertToMessage({queryClient, rpcClient, sessionId: "session-1", turnId: "reverted"}),
+        before: session({turns: [turn({id: "kept"}), turn({id: "reverted"}), turn({id: "also-reverted"})], undoneTurns: [turn({id: "redoable"})]}),
+        after: {turns: ["kept"], undoneTurns: ["reverted", "also-reverted", "redoable"]},
+      },
+      {
+        name: "restore undone message",
+        run: (queryClient: QueryClient, rpcClient: AgentRpcClientApi) =>
+          useSessionLiveStore.getState().revertToMessage({queryClient, rpcClient, sessionId: "session-1", turnId: "restored"}),
+        before: session({turns: [turn({id: "kept"})], undoneTurns: [turn({id: "restored-after"}), turn({id: "restored"}), turn({id: "still-undone"})]}),
+        after: {turns: ["kept", "restored-after", "restored"], undoneTurns: ["still-undone"]},
+      },
+    ];
+
+    for (const item of cases) {
+      useSessionLiveStore.setState({sessions: {}});
+      const queryClient = createQueryClient();
+      queryClient.setQueryData(sessionQueryKey("session-1"), item.before);
+      item.run(queryClient, commandRpcClient());
+
+      expect(
+        queryClient.getQueryData<Session>(sessionQueryKey("session-1"))?.turns.map((item) => item.id),
+        item.name
+      ).toEqual(item.after.turns);
+      expect(
+        queryClient.getQueryData<Session>(sessionQueryKey("session-1"))?.undoneTurns.map((item) => item.id),
+        item.name
+      ).toEqual(item.after.undoneTurns);
+    }
+
+    const queryClient = createQueryClient();
+    const before = session({turns: [turn({id: "kept"}), turn({id: "undone"})]});
+    queryClient.setQueryData(sessionQueryKey("session-1"), before);
+    useSessionLiveStore.setState({sessions: {}});
+
+    useSessionLiveStore.getState().undoCheckpoint({queryClient, rpcClient: commandRpcClient({rejectNavigation: true}), sessionId: "session-1"});
+
+    expect(queryClient.getQueryData<Session>(sessionQueryKey("session-1"))?.turns.map((item) => item.id)).toEqual(["kept"]);
+    await waitUntil(() => expect(queryClient.getQueryData(sessionQueryKey("session-1"))).toEqual(before));
+  });
+
   it("guards session commands while work is active", () => {
     const rpcClient = commandRpcClient();
     useSessionLiveStore.setState({
@@ -222,7 +279,7 @@ describe("session live store", () => {
 
     useSessionLiveStore.getState().sendMessage({contentParts, modelReference: model, queryClient: createQueryClient(), rpcClient, sessionId: "session-1"});
     useSessionLiveStore.getState().compactSession({modelReference: model, rpcClient, sessionId: "session-1"});
-    useSessionLiveStore.getState().undoCheckpoint({rpcClient, sessionId: "session-1"});
+    useSessionLiveStore.getState().undoCheckpoint({queryClient: createQueryClient(), rpcClient, sessionId: "session-1"});
 
     expect(rpcClient.run).not.toHaveBeenCalled();
   });

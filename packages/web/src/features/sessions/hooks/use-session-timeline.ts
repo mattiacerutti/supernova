@@ -72,19 +72,19 @@ export function useSessionTimeline(input: UseSessionTimelineInput): UseSessionTi
   const undo = (): void => {
     if (streamStatus !== "idle") return;
 
-    undoCheckpoint({rpcClient, sessionId});
+    undoCheckpoint({queryClient, rpcClient, sessionId});
   };
 
   const redo = (): void => {
     if (streamStatus !== "idle") return;
 
-    redoCheckpoint({rpcClient, sessionId});
+    redoCheckpoint({queryClient, rpcClient, sessionId});
   };
 
   const revertToMessage = (turnId: string): void => {
     if (streamStatus !== "idle") return;
 
-    revertSessionToMessage({rpcClient, sessionId, turnId});
+    revertSessionToMessage({queryClient, rpcClient, sessionId, turnId});
   };
 
   return {
