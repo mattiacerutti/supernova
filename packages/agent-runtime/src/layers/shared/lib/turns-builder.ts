@@ -141,8 +141,8 @@ class PiTurnDraft {
   }
 
   /** Finalizes the draft into a shared turn. */
-  public toTurn(model: ModelReference): Turn {
-    return createTurn({events: this.events, model, userMessage: this.userMessage});
+  public toTurn(modelReference: ModelReference): Turn {
+    return createTurn({events: this.events, modelReference, userMessage: this.userMessage});
   }
 }
 

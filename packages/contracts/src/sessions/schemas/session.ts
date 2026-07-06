@@ -17,7 +17,7 @@ export const Session = Schema.Struct({
   /** Human-readable session title. */
   title: Schema.String,
   /** Current session model configuration, when the runtime exposes one. */
-  model: Schema.optional(ModelReference),
+  modelReference: Schema.optional(ModelReference),
   /** Current token usage for the active model context. */
   context: SessionContextUsage,
   /** Absolute path of the project/workspace associated with the session. */

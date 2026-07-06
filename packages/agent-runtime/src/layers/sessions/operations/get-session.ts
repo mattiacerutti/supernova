@@ -21,17 +21,17 @@ export function getSession(sessionId: string) {
         const branch = sessionManager.getBranch();
         const summary = toPiSessionSummary(sessionInfo);
 
-        const model = sessionContext.model ? {id: sessionContext.model.modelId, providerId: sessionContext.model.provider, thinkingLevel: sessionContext.thinkingLevel} : undefined;
-        const contextWindow = resolveModelContextWindow(modelCatalog, model);
+        const modelReference = sessionContext.model ? {id: sessionContext.model.modelId, providerId: sessionContext.model.provider, thinkingLevel: sessionContext.thinkingLevel} : undefined;
+        const contextWindow = resolveModelContextWindow(modelCatalog, modelReference);
 
         return {
           id: sessionInfo.id,
-          model,
+          modelReference,
           context: buildSessionContextUsage({contextWindow, entries: branch, messages: sessionContext.messages}),
           projectPath: sessionInfo.cwd,
           title: sessionManager.getSessionName() ?? summary.title,
-          turns: model ? buildPiTurns(branch, model) : [],
-          undoneTurns: model ? buildUndoneTurns({modelReference: model, sessionManager}) : [],
+          turns: modelReference ? buildPiTurns(branch, modelReference) : [],
+          undoneTurns: modelReference ? buildUndoneTurns({modelReference, sessionManager}) : [],
           updatedAt: summary.updatedAt,
         };
       },

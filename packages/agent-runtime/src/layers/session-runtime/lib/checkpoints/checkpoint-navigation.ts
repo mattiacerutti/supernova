@@ -83,7 +83,7 @@ export async function navigateToCheckpoint(runtime: PiSessionRuntime, openedSess
   // Sets branch to the target checkpoint and appends a checkpoint cursor entry pointing to the restored checkpoint.
   openedSession.sessionManager.branch(input.target.id);
   openedSession.sessionManager.appendCustomEntry(CHECKPOINT_CURSOR_CUSTOM_TYPE, {leafEntryId: input.cursorLeafEntryId});
-  runtime.syncAgentSessionContext();
+  const syncedState = runtime.syncAgentSessionStateFromBranch();
 
-  await runtime.publishSessionSnapshot(openedSession);
+  await runtime.publishSessionSnapshot(syncedState ? {...openedSession, ...syncedState} : openedSession);
 }

@@ -3,7 +3,7 @@ import {ModelReference, UserMessageContentPart} from "@supernova/contracts/sessi
 
 export const SendMessagePayload = Schema.Struct({
   contentParts: Schema.Array(UserMessageContentPart),
-  model: ModelReference,
+  modelReference: ModelReference,
   sessionId: Schema.String,
 });
 

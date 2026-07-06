@@ -142,9 +142,9 @@ describe("checkpoint navigation", () => {
       },
     ]);
 
-    await pi.sendMessage({message: "one", model: selectedModelReference, sessionId: info.id});
-    const secondEvents = await pi.sendMessage({message: "two", model: selectedModelReference, sessionId: info.id});
-    await pi.sendMessage({message: "three", model: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
+    const secondEvents = await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "three", modelReference: selectedModelReference, sessionId: info.id});
     const secondTurnId = snapshotEvents(secondEvents).at(-1)!.session.turns.at(-1)!.id;
 
     const revertEvents = await runSessionCommand({
@@ -178,9 +178,9 @@ describe("checkpoint navigation", () => {
       },
     ]);
 
-    await pi.sendMessage({message: "one", model: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
     await writeFile(join(projectPath, "manual.txt"), "manual between turns\n");
-    await pi.sendMessage({message: "two", model: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
 
     const undoEvents = await runSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.undoCheckpoint({sessionId: info.id})});
 
@@ -209,9 +209,9 @@ describe("checkpoint navigation", () => {
       },
     ]);
 
-    await pi.sendMessage({message: "one", model: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
     await writeFile(join(projectPath, "manual.txt"), "manual between turns\n");
-    await pi.sendMessage({message: "two", model: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
     await git(projectPath, ["checkout", "-b", "second"]);
 
     const undoEvents = await runSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.undoCheckpoint({sessionId: info.id})});
@@ -231,8 +231,8 @@ describe("checkpoint navigation", () => {
     const {info} = pi.createSession(projectPath);
     pi.faux.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
 
-    await pi.sendMessage({message: "one", model: selectedModelReference, sessionId: info.id});
-    const secondEvents = await pi.sendMessage({message: "two", model: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
+    const secondEvents = await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
     const secondTurnId = snapshotEvents(secondEvents).at(-1)!.session.turns.at(-1)!.id;
 
     let providerSignal: AbortSignal | undefined;
@@ -265,7 +265,7 @@ describe("checkpoint navigation", () => {
       await pi.runWithSessionRuntime(
         Effect.gen(function* () {
           const sessionRuntime = yield* SessionRuntimeService;
-          yield* sessionRuntime.sendMessage({contentParts: [{text: "three", type: "text"}], model: selectedModelReference, sessionId: info.id});
+          yield* sessionRuntime.sendMessage({contentParts: [{text: "three", type: "text"}], modelReference: selectedModelReference, sessionId: info.id});
         })
       );
       await providerStarted;
@@ -331,8 +331,8 @@ describe("checkpoint navigation", () => {
       },
     ]);
 
-    await pi.sendMessage({message: "one", model: selectedModelReference, sessionId: info.id});
-    await pi.sendMessage({message: "two", model: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
 
     const undoEvents = await runSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.undoCheckpoint({sessionId: info.id})});
     expect(
@@ -382,8 +382,8 @@ describe("checkpoint navigation", () => {
       },
     ]);
 
-    await pi.sendMessage({message: "one", model: selectedModelReference, sessionId: info.id});
-    await pi.sendMessage({message: "two", model: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
     const headAfterSecondTurn = await gitOutput(projectPath, ["rev-parse", "HEAD"]);
     await writeFile(join(projectPath, "user-staged.txt"), "keep staged\n");
     await git(projectPath, ["add", "user-staged.txt"]);
@@ -429,8 +429,8 @@ describe("checkpoint navigation", () => {
       },
     ]);
 
-    await pi.sendMessage({message: "one", model: selectedModelReference, sessionId: info.id});
-    await pi.sendMessage({message: "two", model: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
     await writeFile(join(projectPath, "stashed-only.txt"), "stash me\n");
     await git(projectPath, ["stash", "push", "--include-untracked", "-m", "manual stash"]);
 
@@ -463,9 +463,9 @@ describe("checkpoint navigation", () => {
       },
     ]);
 
-    await pi.sendMessage({message: "one", model: selectedModelReference, sessionId: info.id});
-    const secondEvents = await pi.sendMessage({message: "two", model: selectedModelReference, sessionId: info.id});
-    const thirdEvents = await pi.sendMessage({message: "three", model: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
+    const secondEvents = await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
+    const thirdEvents = await pi.sendMessage({message: "three", modelReference: selectedModelReference, sessionId: info.id});
     const secondTurnId = snapshotEvents(secondEvents).at(-1)!.session.turns.at(-1)!.id;
     const thirdTurnId = snapshotEvents(thirdEvents).at(-1)!.session.turns.at(-1)!.id;
 
@@ -510,6 +510,28 @@ describe("checkpoint navigation", () => {
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("three\n");
   });
 
+  it("publishes the restored checkpoint model when reverting backward and forward", async () => {
+    const projectPath = await createProject();
+    tempDirs.push(projectPath);
+    const pi = createPiTestRuntime();
+    runtimes.push(pi);
+    const {info} = pi.createSession(projectPath);
+    const highModel = selectedModelReference;
+    const offModel = {...selectedModelReference, thinkingLevel: "off"};
+    pi.faux.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
+
+    const firstEvents = await pi.sendMessage({message: "one", modelReference: highModel, sessionId: info.id});
+    const secondEvents = await pi.sendMessage({message: "two", modelReference: offModel, sessionId: info.id});
+    const firstTurnId = snapshotEvents(firstEvents).at(-1)!.session.turns.at(-1)!.id;
+    const secondTurnId = snapshotEvents(secondEvents).at(-1)!.session.turns.at(-1)!.id;
+
+    const revertFirstEvents = await runSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.revertToMessage({sessionId: info.id, turnId: firstTurnId})});
+    expect(snapshotEvents(revertFirstEvents).at(-1)?.session.modelReference).toEqual(highModel);
+
+    const restoreSecondEvents = await runSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.revertToMessage({sessionId: info.id, turnId: secondTurnId})});
+    expect(snapshotEvents(restoreSecondEvents).at(-1)?.session.modelReference).toEqual(offModel);
+  });
+
   it("rebuilds provider context from the visible branch after undo", async () => {
     const projectPath = await createProject();
     tempDirs.push(projectPath);
@@ -531,10 +553,10 @@ describe("checkpoint navigation", () => {
       },
     ]);
 
-    await pi.sendMessage({message: "one", model: selectedModelReference, sessionId: info.id});
-    await pi.sendMessage({message: "two", model: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
     await runSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.undoCheckpoint({sessionId: info.id})});
-    const branchEvents = await pi.sendMessage({message: "branch", model: selectedModelReference, sessionId: info.id});
+    const branchEvents = await pi.sendMessage({message: "branch", modelReference: selectedModelReference, sessionId: info.id});
 
     expect(providerUserTexts).toEqual(["one", "branch"]);
     expect(
@@ -555,8 +577,8 @@ describe("checkpoint navigation", () => {
     const {info} = pi.createSession(projectPath);
     pi.faux.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
 
-    await pi.sendMessage({message: "one", model: selectedModelReference, sessionId: info.id});
-    await pi.sendMessage({message: "two", model: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
     await runSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.undoCheckpoint({sessionId: info.id})});
 
     let releaseProvider: (() => void) | undefined;
@@ -575,7 +597,7 @@ describe("checkpoint navigation", () => {
     await pi.runWithSessionRuntime(
       Effect.gen(function* () {
         const sessionRuntime = yield* SessionRuntimeService;
-        yield* sessionRuntime.sendMessage({contentParts: [{text: "branch", type: "text"}], model: selectedModelReference, sessionId: info.id});
+        yield* sessionRuntime.sendMessage({contentParts: [{text: "branch", type: "text"}], modelReference: selectedModelReference, sessionId: info.id});
       })
     );
     await providerStarted;
@@ -629,10 +651,10 @@ describe("checkpoint navigation", () => {
       },
     ]);
 
-    await pi.sendMessage({message: "one", model: selectedModelReference, sessionId: info.id});
-    await pi.sendMessage({message: "two", model: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
     await runSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.undoCheckpoint({sessionId: info.id})});
-    await pi.sendMessage({message: "branch", model: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "branch", modelReference: selectedModelReference, sessionId: info.id});
 
     const {cause, events: redoEvents} = await runRejectedSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.redoCheckpoint({sessionId: info.id})});
 
@@ -650,8 +672,8 @@ describe("checkpoint navigation", () => {
     const {info} = pi.createSession(projectPath);
     pi.faux.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
 
-    await pi.sendMessage({message: "one", model: selectedModelReference, sessionId: info.id});
-    await pi.sendMessage({message: "two", model: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
     await runSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.undoCheckpoint({sessionId: info.id})});
 
     const loaded = await pi.runWithSessions(
@@ -682,8 +704,8 @@ describe("checkpoint navigation", () => {
       },
     ]);
 
-    await pi.sendMessage({message: "one", model: selectedModelReference, sessionId: info.id});
-    await pi.sendMessage({message: "two", model: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
 
     const undoEvents = await runSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.undoCheckpoint({sessionId: info.id})});
 
@@ -717,9 +739,9 @@ describe("checkpoint navigation", () => {
     const {info} = pi.createSession(projectPath);
     pi.faux.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two"), fauxAssistantMessage("three")]);
 
-    await pi.sendMessage({message: "one", model: selectedModelReference, sessionId: info.id});
-    const secondEvents = await pi.sendMessage({message: "two", model: selectedModelReference, sessionId: info.id});
-    await pi.sendMessage({message: "three", model: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
+    const secondEvents = await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "three", modelReference: selectedModelReference, sessionId: info.id});
     const secondTurnId = snapshotEvents(secondEvents).at(-1)!.session.turns.at(-1)!.id;
 
     const revertEvents = await runSessionCommand({

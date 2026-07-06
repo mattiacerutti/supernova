@@ -6,7 +6,7 @@ export async function compactSession(runtime: PiSessionRuntime, input: CompactSe
   runtime.beginWork();
 
   try {
-    const openedSession = await runtime.openSession(input.sessionId, input.model);
+    const openedSession = await runtime.openSession(input.sessionId, input.modelReference);
 
     runtime.clearActiveTurn();
 

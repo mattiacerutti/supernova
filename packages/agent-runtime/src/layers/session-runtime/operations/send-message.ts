@@ -51,7 +51,7 @@ export async function sendMessage(runtime: PiSessionRuntime, input: SendMessageP
 }
 
 async function openSession(runtime: PiSessionRuntime, input: SendMessagePayload): Promise<OpenedRuntimeSession> {
-  const openedSession = await runtime.openSession(runtime.sessionId, input.model);
+  const openedSession = await runtime.openSession(runtime.sessionId, input.modelReference);
 
   if (openedSession.sessionManager.getSessionName() !== undefined) return openedSession;
 

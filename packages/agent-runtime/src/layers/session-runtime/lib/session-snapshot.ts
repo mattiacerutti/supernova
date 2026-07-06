@@ -31,7 +31,7 @@ export function buildSessionSnapshot(input: {
 
   return {
     id: input.sessionInfo.id,
-    model: input.modelReference,
+    modelReference: input.modelReference,
     context: buildSessionContextUsage({contextWindow: input.contextWindow, entries: branch, messages: input.sessionManager.buildSessionContext().messages}),
     projectPath: input.sessionInfo.cwd,
     title: input.sessionManager.getSessionName() ?? summary.title,

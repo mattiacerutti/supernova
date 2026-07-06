@@ -32,10 +32,10 @@ let isConnecting = false;
 let reconnectTimer: number | null = null;
 
 /** Creates an optimistic local turn so the user message appears before the first runtime snapshot. */
-function createInitialStreamTurn(input: {contentParts: readonly UserMessageContentPart[]; model: ModelReference}): Turn {
+function createInitialStreamTurn(input: {contentParts: readonly UserMessageContentPart[]; modelReference: ModelReference}): Turn {
   const timestamp = new Date().toISOString();
   const localMessage: UserMessage = {contentParts: input.contentParts, id: `msg_${crypto.randomUUID()}`, timestamp};
-  return {events: [], id: localMessage.id, model: input.model, startedAt: timestamp, status: "streaming", userMessage: localMessage};
+  return {events: [], id: localMessage.id, modelReference: input.modelReference, startedAt: timestamp, status: "streaming", userMessage: localMessage};
 }
 
 /** Creates baseline event-derived state for sessions first seen from the global stream. */
@@ -108,14 +108,14 @@ function shouldIgnoreEvent(entry: SessionLiveState | undefined, revision: number
 
 interface SendSessionMessageInput {
   readonly contentParts: readonly UserMessageContentPart[];
-  readonly model: ModelReference;
+  readonly modelReference: ModelReference;
   readonly queryClient: QueryClient;
   readonly rpcClient: AgentRpcClientApi;
   readonly sessionId: string;
 }
 
 interface CompactSessionInput {
-  readonly model: ModelReference;
+  readonly modelReference: ModelReference;
   readonly rpcClient: AgentRpcClientApi;
   readonly sessionId: string;
 }
@@ -276,12 +276,12 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
   };
 
   const sendMessage = (input: SendSessionMessageInput): void => {
-    const {contentParts, model, queryClient, rpcClient, sessionId} = input;
+    const {contentParts, modelReference, queryClient, rpcClient, sessionId} = input;
 
     const current = get().sessions[sessionId];
     if (current && current.status !== "idle") return;
 
-    const liveTurn = createInitialStreamTurn({contentParts, model});
+    const liveTurn = createInitialStreamTurn({contentParts, modelReference});
     const previousSession = queryClient.getQueryData<Session>(sessionQueryKey(sessionId));
     const previousEntry = current;
     queryClient.setQueryData<Session>(sessionQueryKey(sessionId), (session) => (session ? {...session, undoneTurns: []} : session));
@@ -305,7 +305,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
     });
 
     void rpcClient
-      .run((rpc) => rpc.sendMessage({contentParts, model, sessionId}))
+      .run((rpc) => rpc.sendMessage({contentParts, modelReference, sessionId}))
       .catch((cause: unknown) => {
         // Command failures happen before work is accepted, for example invalid model/session errors.
         const error = cause instanceof Error ? cause.message : "Failed to send message.";
@@ -345,7 +345,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
   };
 
   const compactSession = (input: CompactSessionInput): void => {
-    const {model, rpcClient, sessionId} = input;
+    const {modelReference, rpcClient, sessionId} = input;
 
     const current = get().sessions[sessionId];
     if (current && current.status !== "idle") return;
@@ -356,7 +356,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
     });
 
     void rpcClient
-      .run((rpc) => rpc.compactSession({model, sessionId}))
+      .run((rpc) => rpc.compactSession({modelReference, sessionId}))
       .catch((cause: unknown) => {
         const error = errorMessage(cause, "Failed to compact session.");
         set((state) => {

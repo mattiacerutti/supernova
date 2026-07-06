@@ -24,7 +24,7 @@ function turn(input?: Partial<Turn>): Turn {
   return {
     events: [],
     id: "turn-1",
-    model,
+    modelReference: model,
     startedAt: "2026-01-01T00:00:00.000Z",
     status: "streaming",
     userMessage: {contentParts, id: "message-1", timestamp: "2026-01-01T00:00:00.000Z"},
@@ -203,7 +203,7 @@ describe("session live store", () => {
     const rpcClient = commandRpcClient({rejectSend: true});
     queryClient.setQueryData(sessionQueryKey("session-1"), previousSession);
 
-    useSessionLiveStore.getState().sendMessage({contentParts, model, queryClient, rpcClient, sessionId: "session-1"});
+    useSessionLiveStore.getState().sendMessage({contentParts, modelReference: model, queryClient, rpcClient, sessionId: "session-1"});
 
     expect(useSessionLiveStore.getState().sessions["session-1"]).toMatchObject({agentStreaming: true, status: "streaming"});
     expect(queryClient.getQueryData<Session>(sessionQueryKey("session-1"))?.undoneTurns).toEqual([]);
@@ -220,8 +220,8 @@ describe("session live store", () => {
       sessions: {"session-1": {agentStreaming: true, error: null, session: null, liveTurn: turn(), revision: 1, status: "streaming", stopInProgress: false}},
     });
 
-    useSessionLiveStore.getState().sendMessage({contentParts, model, queryClient: createQueryClient(), rpcClient, sessionId: "session-1"});
-    useSessionLiveStore.getState().compactSession({model, rpcClient, sessionId: "session-1"});
+    useSessionLiveStore.getState().sendMessage({contentParts, modelReference: model, queryClient: createQueryClient(), rpcClient, sessionId: "session-1"});
+    useSessionLiveStore.getState().compactSession({modelReference: model, rpcClient, sessionId: "session-1"});
     useSessionLiveStore.getState().undoCheckpoint({rpcClient, sessionId: "session-1"});
 
     expect(rpcClient.run).not.toHaveBeenCalled();

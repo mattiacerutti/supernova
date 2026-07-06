@@ -14,7 +14,7 @@ describe("preparing Pi send-message context", () => {
     const context = await prepareSendMessageContext(
       {
         contentParts: [{text: "Review ", type: "text"}, {id: "file", kind: "file", name: "file.ts", type: "reference", value: "@src/file.ts"}, imageAttachment, textAttachment],
-        model: {id: "claude-sonnet", providerId: "anthropic"},
+        modelReference: {id: "claude-sonnet", providerId: "anthropic"},
         sessionId: "session-1",
       },
       {projectPath: process.cwd(), resourceCatalog}
@@ -39,7 +39,7 @@ describe("preparing Pi send-message context", () => {
 
   it("does not persist empty content-part metadata", async () => {
     const context = await prepareSendMessageContext(
-      {contentParts: [], model: {id: "claude-sonnet", providerId: "anthropic"}, sessionId: "session-1"},
+      {contentParts: [], modelReference: {id: "claude-sonnet", providerId: "anthropic"}, sessionId: "session-1"},
       {projectPath: process.cwd(), resourceCatalog}
     );
 

@@ -37,7 +37,7 @@ describe("manual Pi session compaction", () => {
       await pi.runWithSessionRuntime(
         Effect.gen(function* () {
           const sessionRuntime = yield* SessionRuntimeService;
-          yield* sessionRuntime.compactSession({model: selectedModelReference, sessionId: info.id});
+          yield* sessionRuntime.compactSession({modelReference: selectedModelReference, sessionId: info.id});
         })
       );
       await waitUntil(() => {

@@ -35,14 +35,14 @@ export default function NewSessionPage(props: NewSessionPageProps) {
 
   const composerDisabled = createSessionMutation.isPending || modelSelection.isPending || !modelSelection.modelReference;
 
-  const thinkingLevels = modelSelection.selectedModel?.thinkingLevels ?? [];
+  const thinkingLevels = modelSelection.selectedModelDetails?.thinkingLevels ?? [];
 
   const composerDraftKey = newSessionComposerDraftKey(projectPath);
   const composerDraft = useComposerDraft({key: composerDraftKey});
   const composerAttachments = useComposerAttachments({
     attachments: composerDraft.attachments,
     disabled: composerDisabled,
-    imageSupported: modelSelection.selectedModel?.capabilities.images === true,
+    imageSupported: modelSelection.selectedModelDetails?.capabilities.images === true,
     onAttachmentsChange: composerDraft.setAttachments,
   });
 
@@ -67,9 +67,8 @@ export default function NewSessionPage(props: NewSessionPageProps) {
         onSuccess: (session) => {
           queryClient.setQueryData(sessionQueryKey(session.id), session);
           hydrateSession(session);
-          modelSelection.assignToSession(session.id);
-          modelSelection.rememberSelection();
-          sendMessage({contentParts, model: modelReference, queryClient, rpcClient, sessionId: session.id});
+          modelSelection.assignToSession(session.id, modelReference);
+          sendMessage({contentParts, modelReference, queryClient, rpcClient, sessionId: session.id});
           void navigate({params: {sessionId: session.id}, to: "/session/$sessionId"});
         },
       }
@@ -99,7 +98,7 @@ export default function NewSessionPage(props: NewSessionPageProps) {
               projectPath={projectPath}
               toolbarControls={
                 <div className="flex gap-2">
-                  <ModelPicker selectedModel={modelSelection.selectedModel} disabled={composerDisabled} models={modelSelection.availableModels} onModelChange={handleModelChange} />
+                  <ModelPicker selectedModel={modelSelection.selectedModelDetails} disabled={composerDisabled} models={modelSelection.availableModels} onModelChange={handleModelChange} />
                   {thinkingLevels.length > 0 && (
                     <ThinkingLevelPicker
                       disabled={composerDisabled}

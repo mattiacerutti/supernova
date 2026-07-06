@@ -15,13 +15,13 @@ function turnStatus(events: readonly TurnEvent[], streaming = false): Turn["stat
 }
 
 /** Creates a normalized turn from a user message and collected events. */
-export function createTurn(input: {events: TurnEvent[]; model: ModelReference; streaming?: boolean; userMessage: UserMessage}): Turn {
-  const {events, model, streaming, userMessage} = input;
+export function createTurn(input: {events: TurnEvent[]; modelReference: ModelReference; streaming?: boolean; userMessage: UserMessage}): Turn {
+  const {events, modelReference, streaming, userMessage} = input;
   return {
     completedAt: events.at(-1)?.timestamp,
     events,
     id: userMessage.id,
-    model,
+    modelReference,
     startedAt: userMessage.timestamp,
     status: turnStatus(events, streaming),
     userMessage,

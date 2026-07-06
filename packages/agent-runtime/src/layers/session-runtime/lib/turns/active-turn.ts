@@ -169,7 +169,7 @@ export class ActiveTurn {
     return {
       session: {
         id: this.sessionInfo.id,
-        model: this.modelReference,
+        modelReference: this.modelReference,
         context: buildSessionContextUsage({contextWindow: this.contextWindow, entries: branch, messages: this.sessionManager.buildSessionContext().messages}),
         projectPath: this.sessionInfo.cwd,
         title: this.sessionManager.getSessionName() ?? summary.title,

@@ -84,7 +84,7 @@ describe("sending messages through Pi sessions", () => {
     pi.appendConversation(manager);
     pi.faux.setResponses([fauxAssistantMessage([fauxThinking("Checking the workspace"), fauxText("Done.")])]);
 
-    const events = await pi.sendMessage({message: "Fix it", model: selectedModelReference, sessionId: info.id});
+    const events = await pi.sendMessage({message: "Fix it", modelReference: selectedModelReference, sessionId: info.id});
 
     expect(manager.buildSessionContext()).toMatchObject({model: {modelId: "claude-sonnet", provider: "anthropic"}, thinkingLevel: "high"});
     expect(events.find((event) => event.type === "session.agent.started")).toMatchObject({sessionId: info.id, type: "session.agent.started"});
@@ -128,7 +128,7 @@ describe("sending messages through Pi sessions", () => {
       },
     ]);
 
-    const events = await pi.sendMessage({contentParts, model: selectedModelReference, sessionId: info.id});
+    const events = await pi.sendMessage({contentParts, modelReference: selectedModelReference, sessionId: info.id});
 
     expect(providerUserContent).toEqual([
       {text: "Review @src/file.ts", type: "text"},
@@ -161,7 +161,7 @@ describe("sending messages through Pi sessions", () => {
     pi.appendConversation(manager, {requestText: "x".repeat(selectedPiModel.contextWindow * 4), assistantText: "Old response."});
     pi.faux.setResponses([fauxAssistantMessage("Done."), fauxAssistantMessage("Compacted summary."), fauxAssistantMessage("Compacted summary.")]);
 
-    const events = await pi.sendMessage({message: "Continue", model: selectedModelReference, sessionId: info.id});
+    const events = await pi.sendMessage({message: "Continue", modelReference: selectedModelReference, sessionId: info.id});
     const liveCompactionEvents = events.filter(isTurnEvent).flatMap((event) => event.turn.events.filter((turnEvent) => turnEvent.type === "compaction"));
 
     expect(liveCompactionEvents.map((event) => event.status)).toEqual(expect.arrayContaining(["pending", "completed"]));
@@ -185,7 +185,7 @@ describe("sending messages through Pi sessions", () => {
     manager.appendMessage(assistantWithUsage("Large previous response", selectedPiModel.contextWindow - 500));
     pi.faux.setResponses([fauxAssistantMessage("Pre-prompt compacted summary."), fauxAssistantMessage("Response after pre-prompt compaction.")]);
 
-    const events = await pi.sendMessage({message: "Continue after pre-prompt compaction", model: selectedModelReference, sessionId: info.id});
+    const events = await pi.sendMessage({message: "Continue after pre-prompt compaction", modelReference: selectedModelReference, sessionId: info.id});
     const liveTurn = turnEvents(events)
       .map((event) => event.turn)
       .find((turn) => turn?.events.some((turnEvent) => turnEvent.type === "assistant" && turnEvent.content === "Response after pre-prompt compaction."));
@@ -223,9 +223,9 @@ describe("sending messages through Pi sessions", () => {
     const {info} = pi.createSession();
     pi.faux.setResponses([fauxAssistantMessage("First response."), fauxAssistantMessage("Second response."), fauxAssistantMessage("Third response.")]);
 
-    await pi.sendMessage({message: "first", model: selectedModelReference, sessionId: info.id});
-    await pi.sendMessage({message: "second", model: selectedModelReference, sessionId: info.id});
-    const events = await pi.sendMessage({message: "third", model: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "first", modelReference: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "second", modelReference: selectedModelReference, sessionId: info.id});
+    const events = await pi.sendMessage({message: "third", modelReference: selectedModelReference, sessionId: info.id});
     const finalSnapshot = snapshotEvents(events).at(-1);
 
     expect(finalSnapshot?.session.turns.map((turn) => turn.userMessage.contentParts)).toEqual([
@@ -249,7 +249,7 @@ describe("sending messages through Pi sessions", () => {
       },
     ]);
 
-    await pi.sendMessage({message: "change files", model: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "change files", modelReference: selectedModelReference, sessionId: info.id});
 
     const customEntries = manager.getBranch().filter((entry) => entry.type === "custom");
     const checkpointEntries = customEntries.filter((entry) => entry.customType === "supernova.checkpoint");
@@ -274,7 +274,7 @@ describe("sending messages through Pi sessions", () => {
       fauxAssistantMessage("Continued after compaction."),
     ]);
 
-    const events = await pi.sendMessage({message: "Fix overflow", model: selectedModelReference, sessionId: info.id});
+    const events = await pi.sendMessage({message: "Fix overflow", modelReference: selectedModelReference, sessionId: info.id});
     const liveTurns = turnEvents(events);
     const compactionTurn = liveTurns.find((event) => event.turn.events.some((turnEvent) => turnEvent.type === "compaction" && turnEvent.status === "completed"));
     const continuationTurn = liveTurns.find((event) => event.turn.events.some((turnEvent) => turnEvent.type === "assistant" && turnEvent.content.includes("Continued")));
@@ -302,7 +302,7 @@ describe("sending messages through Pi sessions", () => {
     runtimes.push(pi);
     const {info} = pi.createSession();
 
-    await expect(pi.sendMessage({message: "Fix it", model: {...selectedModelReference, id: "missing-model"}, sessionId: info.id})).rejects.toThrow(
+    await expect(pi.sendMessage({message: "Fix it", modelReference: {...selectedModelReference, id: "missing-model"}, sessionId: info.id})).rejects.toThrow(
       "Selected model is not available."
     );
     expect(pi.faux.state.callCount).toBe(0);
@@ -312,7 +312,7 @@ describe("sending messages through Pi sessions", () => {
     const pi = createPiTestRuntime();
     runtimes.push(pi);
 
-    await expect(pi.sendMessage({message: "Fix it", model: selectedModelReference, sessionId: "missing-session"})).rejects.toThrow("Session not found.");
+    await expect(pi.sendMessage({message: "Fix it", modelReference: selectedModelReference, sessionId: "missing-session"})).rejects.toThrow("Session not found.");
     expect(pi.faux.state.callCount).toBe(0);
   });
 
@@ -348,7 +348,7 @@ describe("sending messages through Pi sessions", () => {
       const run = pi.runtime.runPromise(
         Effect.gen(function* () {
           const sessionRuntime = yield* SessionRuntimeService;
-          yield* sessionRuntime.sendMessage({contentParts: [{text: "Fix it", type: "text"}], model: selectedModelReference, sessionId: info.id});
+          yield* sessionRuntime.sendMessage({contentParts: [{text: "Fix it", type: "text"}], modelReference: selectedModelReference, sessionId: info.id});
         })
       );
       await providerStarted;

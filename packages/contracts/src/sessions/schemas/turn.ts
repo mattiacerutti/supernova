@@ -69,7 +69,7 @@ export const Turn = Schema.Struct({
   /** Current lifecycle state of the turn. */
   status: Schema.Union([Schema.Literal("completed"), Schema.Literal("error"), Schema.Literal("streaming")]),
   /** Model configuration used for this turn. */
-  model: ModelReference,
+  modelReference: ModelReference,
   /** User message that initiated the turn. */
   userMessage: UserMessage,
   /** Ordered assistant, reasoning, and tool events produced for the turn. */

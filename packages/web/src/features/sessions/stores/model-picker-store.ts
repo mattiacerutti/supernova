@@ -9,7 +9,7 @@ interface ModelPickerState {
   readonly recentModelKeys: readonly string[];
   readonly lastThinkingLevel: string | undefined;
   readonly recordRecentModel: (modelKey: string) => void;
-  readonly setLastThinkingLevel: (value: string | undefined) => void;
+  readonly recordRecentThinkingLevel: (value: string | undefined) => void;
   readonly toggleFavoriteModel: (modelKey: string) => void;
 }
 
@@ -24,7 +24,7 @@ export const useModelPickerStore = create<ModelPickerState>()(
           recentModelKeys: [modelKey, ...state.recentModelKeys.filter((key) => key !== modelKey)].slice(0, MAX_RECENT_MODELS),
         }));
       },
-      setLastThinkingLevel: (value) => {
+      recordRecentThinkingLevel: (value) => {
         set({lastThinkingLevel: value});
       },
       toggleFavoriteModel: (modelKey) => {

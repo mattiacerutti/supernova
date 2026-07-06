@@ -116,27 +116,28 @@ export class PiSessionRuntime {
   /** Opens the durable Pi session and applies command-scoped model settings when provided. */
   public async openSession(sessionId: string, modelReference?: ModelReference): Promise<OpenedRuntimeSession> {
     const {info: sessionInfo, manager: sessionManager} = await this.sessionStore.openSessionById(sessionId);
-    const resolvedModelReference = modelReference ?? this.currentModelReference(sessionManager);
-    const model = findSelectedModel(this.modelCatalog, resolvedModelReference);
 
-    const openedSession = {model, modelReference: resolvedModelReference, sessionInfo, sessionManager, titleWasGenerated: false};
+    const initialModelState = modelReference ? {model: findSelectedModel(this.modelCatalog, modelReference), modelReference} : this.resolveCurrentModel(sessionManager);
+
+    const openedSession = {...initialModelState, sessionInfo, sessionManager, titleWasGenerated: false};
     const agentSession = await this.getAgentSession(openedSession);
 
     if (modelReference) {
-      await agentSession.setModel(model);
+      await agentSession.setModel(initialModelState.model);
       agentSession.setThinkingLevel(toPiThinkingLevel(modelReference.thinkingLevel));
     }
 
-    this.syncAgentSessionContext();
+    const syncedState = this.syncAgentSessionStateFromBranch();
 
-    return {...openedSession, sessionManager: agentSession.sessionManager};
+    return {...openedSession, ...(syncedState ?? {}), sessionManager: agentSession.sessionManager};
   }
 
-  private currentModelReference(sessionManager: PiSessionManager): ModelReference {
+  private resolveCurrentModel(sessionManager: PiSessionManager): {readonly model: PiModel; readonly modelReference: ModelReference} {
     const sessionContext = sessionManager.buildSessionContext();
     if (!sessionContext.model) throw new Error("Session model was not found.");
 
-    return {id: sessionContext.model.modelId, providerId: sessionContext.model.provider, thinkingLevel: sessionContext.thinkingLevel};
+    const modelReference = {id: sessionContext.model.modelId, providerId: sessionContext.model.provider, thinkingLevel: sessionContext.thinkingLevel};
+    return {model: findSelectedModel(this.modelCatalog, modelReference), modelReference};
   }
 
   /** Creates or reuses the long-lived Pi AgentSession. */
@@ -160,10 +161,18 @@ export class PiSessionRuntime {
     this.activeTurn = undefined;
   }
 
-  /** Rebuilds the reusable Pi agent's in-memory LLM context from the current session branch. */
-  public syncAgentSessionContext(): void {
-    if (!this.activeSession) return;
-    this.activeSession.state.messages = this.activeSession.sessionManager.buildSessionContext().messages;
+  /** Rebuilds session-derived in-memory agent state from the current session branch. */
+  public syncAgentSessionStateFromBranch(): {readonly model: PiModel; readonly modelReference: ModelReference} | undefined {
+    if (!this.activeSession) return undefined;
+
+    const sessionManager = this.activeSession.sessionManager;
+    const syncedState = this.resolveCurrentModel(sessionManager);
+
+    this.activeSession.state.messages = sessionManager.buildSessionContext().messages;
+    this.activeSession.state.model = syncedState.model;
+    this.activeSession.state.thinkingLevel = toPiThinkingLevel(syncedState.modelReference.thinkingLevel);
+
+    return syncedState;
   }
 
   /** Submits a prepared active turn prompt and publishes the settled snapshot. */

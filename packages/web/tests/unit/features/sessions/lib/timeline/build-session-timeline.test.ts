@@ -30,7 +30,7 @@ function turn(overrides: Partial<Turn>): Turn {
     completedAt: timestamp(10),
     events: [],
     id: "turn-1",
-    model,
+    modelReference: model,
     status: "completed",
     userMessage: {contentParts: [{text: "Ship it", type: "text"}], id: "user-1", timestamp: timestamp(0)},
     ...overrides,

@@ -12,6 +12,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Fixed
 
+- Fixed checkpoint navigation so undo, redo, and message restores keep the model and reasoning picker selection stable.
+
 ### Removed
 
 ## [0.0.1-beta.7]

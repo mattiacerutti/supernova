@@ -102,7 +102,7 @@ export function sessionTimelineBaseSession(input: {readonly scenario: SessionTim
   return {
     id: scenario.sessionId,
     context: {usedTokens: 0, contextWindow: 200_000},
-    model: sessionTimelineModel,
+    modelReference: sessionTimelineModel,
     projectPath: scenario.projectPath,
     title: scenario.title,
     turns,
@@ -131,7 +131,7 @@ export function sessionTimelineCommandToolTurn(input: {readonly index: number; r
       },
     ],
     id: `command-tool-turn-${index}`,
-    model: sessionTimelineModel,
+    modelReference: sessionTimelineModel,
     startedAt: timestamp(index * 1_000),
     status: "completed",
     userMessage: {
@@ -149,7 +149,7 @@ export function sessionTimelineHistoryTurn(index: number): Turn {
       {content: `Assistant history turn ${index}. ${"history ".repeat(40)}`, id: `assistant-history-${index}`, timestamp: timestamp(index * 1_000 + 200), type: "assistant"},
     ],
     id: `history-turn-${index}`,
-    model: sessionTimelineModel,
+    modelReference: sessionTimelineModel,
     startedAt: timestamp(index * 1_000),
     status: "completed",
     userMessage: {
@@ -180,7 +180,7 @@ export function sessionTimelineStreamTurn(input: {
       {content: sessionTimelineStreamContent({lineCount: input.lineCount, scenario: input.scenario}), id: `${idPrefix}assistant-stream`, timestamp: timestamp(90_000), type: "assistant"},
     ],
     id: `${idPrefix}stream-turn`,
-    model: sessionTimelineModel,
+    modelReference: sessionTimelineModel,
     startedAt: timestamp(80_000),
     status: input.status,
     userMessage: {contentParts: input.contentParts, id: `${idPrefix}user-stream`, timestamp: timestamp(80_000)},

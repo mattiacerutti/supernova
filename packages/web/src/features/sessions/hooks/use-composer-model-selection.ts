@@ -13,12 +13,11 @@ interface UseComposerModelSelectionInput {
 interface ComposerModelSelection {
   readonly availableModels: readonly ModelDetails[];
   readonly isPending: boolean;
-  readonly selectedModel: ModelDetails | undefined;
+  readonly selectedModelDetails: ModelDetails | undefined;
   readonly selectedThinkingLabel: string;
   readonly modelReference: ModelReference | undefined;
-  readonly assignToSession: (sessionId: string) => void;
+  readonly assignToSession: (sessionId: string, selection: ModelReference) => void;
   readonly findModel: (key: string) => ModelDetails | undefined;
-  readonly rememberSelection: () => void;
   readonly selectModel: (key: string) => void;
   readonly selectThinkingLevel: (value: string) => void;
 }
@@ -46,27 +45,28 @@ export function useComposerModelSelection(input: UseComposerModelSelectionInput 
   const availableModels = models ?? [];
 
   const [localSelection, setLocalSelection] = useState<ModelReference | undefined>(undefined);
+
   const storedSessionSelection = useSessionModelsStore((state) => (sessionId ? state.models[sessionId] : undefined));
   const setSessionModel = useSessionModelsStore((state) => state.setSessionModel);
   const recordRecentModel = useModelPickerStore((state) => state.recordRecentModel);
   const recentModelKeys = useModelPickerStore((state) => state.recentModelKeys);
   const lastThinkingLevel = useModelPickerStore((state) => state.lastThinkingLevel);
-  const setLastThinkingLevel = useModelPickerStore((state) => state.setLastThinkingLevel);
+  const recordRecentThinkingLevel = useModelPickerStore((state) => state.recordRecentThinkingLevel);
 
   // Determine the active selection based on session ID, stored selection, and local selection
   const activeSelection = sessionId ? (storedSessionSelection ?? initialSelection) : localSelection;
   const activeSelectionModel = modelFromReference(availableModels, activeSelection);
 
   // Final selected model is active selection model if available, otherwise the most recent model, or the first available model
-  const selectedModel = activeSelectionModel ?? recentModel(availableModels, recentModelKeys) ?? availableModels[0];
+  const selectedModelDetails = activeSelectionModel ?? recentModel(availableModels, recentModelKeys) ?? availableModels[0];
 
   // If we have an active selection, we use that selection thinking level, otherwise we fallback
   // to the last thinking level used (which is normalized in case the model does not support it)
   const preferredThinkingLevel = activeSelectionModel ? activeSelection?.thinkingLevel : lastThinkingLevel;
-  const resolvedThinkingLevel = selectedModel ? resolveThinkingLevel(selectedModel, preferredThinkingLevel) : undefined;
+  const resolvedThinkingLevel = selectedModelDetails ? resolveThinkingLevel(selectedModelDetails, preferredThinkingLevel) : undefined;
 
-  const modelReference = selectedModel ? createModelReference(selectedModel, resolvedThinkingLevel) : undefined;
-  const selectedThinkingLabel = selectedModel?.thinkingLevels.find((level) => level.value === modelReference?.thinkingLevel)?.label ?? "Reasoning";
+  const modelReference = selectedModelDetails ? createModelReference(selectedModelDetails, resolvedThinkingLevel) : undefined;
+  const selectedThinkingLabel = selectedModelDetails?.thinkingLevels.find((level) => level.value === modelReference?.thinkingLevel)?.label ?? "Reasoning";
 
   const saveSelection = (selection: ModelReference): void => {
     if (sessionId) {
@@ -83,24 +83,25 @@ export function useComposerModelSelection(input: UseComposerModelSelectionInput 
     const nextModel = findModel(key);
     if (!nextModel) return;
 
-    saveSelection(createModelReference(nextModel, resolveThinkingLevel(nextModel, modelReference?.thinkingLevel ?? lastThinkingLevel)));
+    const thinkingLevel = resolveThinkingLevel(nextModel, modelReference?.thinkingLevel ?? lastThinkingLevel);
+    const reference = createModelReference(nextModel, thinkingLevel);
+
+    saveSelection(reference);
     recordRecentModel(key);
   };
 
   const selectThinkingLevel = (value: string): void => {
-    if (!selectedModel) return;
+    if (!selectedModelDetails) return;
 
-    saveSelection(createModelReference(selectedModel, value));
-    setLastThinkingLevel(value);
+    saveSelection(createModelReference(selectedModelDetails, value));
+    recordRecentThinkingLevel(value);
   };
 
-  const rememberSelection = (): void => {
-    if (modelReference) recordRecentModel(modelKey(modelReference.providerId, modelReference.id));
-    setLastThinkingLevel(modelReference?.thinkingLevel);
-  };
+  const assignToSession = (nextSessionId: string, selection: ModelReference): void => {
+    setSessionModel(nextSessionId, selection);
 
-  const assignToSession = (nextSessionId: string): void => {
-    if (modelReference) setSessionModel(nextSessionId, modelReference);
+    recordRecentModel(modelKey(selection.providerId, selection.id));
+    recordRecentThinkingLevel(selection.thinkingLevel);
   };
 
   return {
@@ -109,10 +110,9 @@ export function useComposerModelSelection(input: UseComposerModelSelectionInput 
     findModel,
     isPending,
     modelReference,
-    rememberSelection,
     selectModel,
     selectThinkingLevel,
-    selectedModel,
+    selectedModelDetails,
     selectedThinkingLabel,
   };
 }

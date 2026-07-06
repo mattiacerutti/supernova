@@ -26,7 +26,7 @@ describe("projecting Pi branch entries into session turns", () => {
 
     expect(turns).toMatchObject([
       {
-        model: selectedModelReference,
+        modelReference: selectedModelReference,
         status: "completed",
         userMessage: {contentParts: [{text: "Run the tests", type: "text"}]},
         events: [

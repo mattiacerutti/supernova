@@ -21,7 +21,7 @@ export const useSessionModelsStore = create<SessionModelsState>()(
     }),
     {
       name: SESSION_MODEL_SELECTION_STORAGE_KEY,
-      partialize: (state) => ({selections: state.models}),
+      partialize: (state) => ({models: state.models}),
     }
   )
 );

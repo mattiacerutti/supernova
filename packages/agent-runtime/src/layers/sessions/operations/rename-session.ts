@@ -23,9 +23,9 @@ export function renameSession(input: {readonly sessionId: string; readonly title
         const updatedSessionInfo = {...sessionInfo, modified: new Date(), name: trimmedTitle};
         const sessionContext = sessionManager.buildSessionContext();
         const summary = toPiSessionSummary(updatedSessionInfo);
-        const model = sessionContext.model ? {id: sessionContext.model.modelId, providerId: sessionContext.model.provider, thinkingLevel: sessionContext.thinkingLevel} : undefined;
+        const modelReference = sessionContext.model ? {id: sessionContext.model.modelId, providerId: sessionContext.model.provider, thinkingLevel: sessionContext.thinkingLevel} : undefined;
 
-        if (!model) {
+        if (!modelReference) {
           return {
             id: sessionInfo.id,
             context: {usedTokens: 0, contextWindow: 0},
@@ -37,7 +37,7 @@ export function renameSession(input: {readonly sessionId: string; readonly title
           };
         }
 
-        return buildSessionSnapshot({contextWindow: resolveModelContextWindow(modelCatalog, model), sessionInfo: updatedSessionInfo, sessionManager, modelReference: model});
+        return buildSessionSnapshot({contextWindow: resolveModelContextWindow(modelCatalog, modelReference), sessionInfo: updatedSessionInfo, sessionManager, modelReference});
       },
       catch: (cause) => new RenameSessionError({cause, message: cause instanceof Error ? cause.message : "Failed to rename session."}),
     });

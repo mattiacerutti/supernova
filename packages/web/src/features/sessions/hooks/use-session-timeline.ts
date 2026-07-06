@@ -56,7 +56,7 @@ export function useSessionTimeline(input: UseSessionTimelineInput): UseSessionTi
       return;
     }
 
-    sendMessage({contentParts, model: modelReference, queryClient, rpcClient, sessionId});
+    sendMessage({contentParts, modelReference, queryClient, rpcClient, sessionId});
   };
 
   const stopStreaming = (): void => {
@@ -66,7 +66,7 @@ export function useSessionTimeline(input: UseSessionTimelineInput): UseSessionTi
   const triggerCompaction = (): void => {
     if (streamStatus !== "idle" || !modelReference) return;
 
-    compactSession({model: modelReference, rpcClient, sessionId});
+    compactSession({modelReference, rpcClient, sessionId});
   };
 
   const undo = (): void => {

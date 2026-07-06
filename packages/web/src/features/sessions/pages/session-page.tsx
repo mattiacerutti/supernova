@@ -68,7 +68,7 @@ function SessionConversation(props: SessionConversationProps) {
     startRenaming,
   } = useInlineRename({initialValue: session.title, onSave: (title) => renameSessionMutation.mutate({sessionId: session.id, title})});
 
-  const modelSelection = useComposerModelSelection({initialSelection: session.model, sessionId: session.id});
+  const modelSelection = useComposerModelSelection({initialSelection: session.modelReference, sessionId: session.id});
   const composerDraftKey = sessionComposerDraftKey(session.id);
   const composerDraft = useComposerDraft({key: composerDraftKey});
   const stream = useSessionTimeline({modelReference: modelSelection.modelReference, sessionId: session.id, sessionTurns: session.turns});
@@ -76,11 +76,11 @@ function SessionConversation(props: SessionConversationProps) {
 
   const composerDisabled = modelSelection.isPending || !modelSelection.modelReference;
   const composerActionDisabled = composerDisabled || stream.streamStatus !== "idle";
-  const thinkingLevels = modelSelection.selectedModel?.thinkingLevels ?? [];
+  const thinkingLevels = modelSelection.selectedModelDetails?.thinkingLevels ?? [];
   const composerAttachments = useComposerAttachments({
     attachments: composerDraft.attachments,
     disabled: composerDisabled,
-    imageSupported: modelSelection.selectedModel?.capabilities.images === true,
+    imageSupported: modelSelection.selectedModelDetails?.capabilities.images === true,
     onAttachmentsChange: composerDraft.setAttachments,
   });
 
@@ -149,7 +149,7 @@ function SessionConversation(props: SessionConversationProps) {
             toolbarControls={
               <div className="flex items-center gap-2">
                 <SessionContextIndicator context={session.context} />
-                <ModelPicker selectedModel={modelSelection.selectedModel} disabled={composerDisabled} models={modelSelection.availableModels} onModelChange={handleModelChange} />
+                <ModelPicker selectedModel={modelSelection.selectedModelDetails} disabled={composerDisabled} models={modelSelection.availableModels} onModelChange={handleModelChange} />
                 {thinkingLevels.length > 0 && (
                   <ThinkingLevelPicker
                     disabled={composerDisabled}

@@ -27,8 +27,11 @@ const selectedModel = {
 
 describe("session models store", () => {
   beforeEach(() => {
+    const localStorage = createLocalStorage();
+
     vi.resetModules();
-    vi.stubGlobal("window", {localStorage: createLocalStorage()});
+    vi.stubGlobal("localStorage", localStorage);
+    vi.stubGlobal("window", {localStorage});
   });
 
   afterEach(() => {
@@ -43,5 +46,6 @@ describe("session models store", () => {
     expect(useSessionModelsStore.getState().getSessionModel("session-1")).toEqual(selectedModel);
     expect(useSessionModelsStore.getState().getSessionModel("session-2")).toBeUndefined();
     expect(useSessionModelsStore.getState().getSessionModel("")).toBeUndefined();
+    expect(JSON.parse(localStorage.getItem("supernova-session-model-selection") ?? "{}")?.state?.models?.["session-1"]).toEqual(selectedModel);
   });
 });

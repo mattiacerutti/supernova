@@ -28,7 +28,7 @@ function turn(overrides: Partial<Turn>): Turn {
   return {
     events: [],
     id: "turn-1",
-    model,
+    modelReference: model,
     status: "streaming",
     userMessage: {contentParts: [{text: "Fix the tests", type: "text"}], id: "user-1", timestamp: "2026-01-01T00:00:00.000Z"},
     ...overrides,

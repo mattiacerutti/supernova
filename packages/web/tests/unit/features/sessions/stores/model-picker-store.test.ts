@@ -38,13 +38,13 @@ describe("model picker store", () => {
     expect(useModelPickerStore.getState().recentModelKeys).toEqual(["three", "six", "five", "four", "two"]);
   });
 
-  it("toggles favorites and stores the last thinking level", async () => {
+  it("toggles favorites and records the recent thinking level", async () => {
     const {useModelPickerStore} = await import("@/features/sessions/stores/model-picker-store");
 
     useModelPickerStore.getState().toggleFavoriteModel("anthropic:claude");
     useModelPickerStore.getState().toggleFavoriteModel("openai:gpt");
     useModelPickerStore.getState().toggleFavoriteModel("anthropic:claude");
-    useModelPickerStore.getState().setLastThinkingLevel("high");
+    useModelPickerStore.getState().recordRecentThinkingLevel("high");
 
     expect(useModelPickerStore.getState()).toMatchObject({favoriteModelKeys: ["openai:gpt"], lastThinkingLevel: "high"});
   });
