@@ -15,6 +15,7 @@ All notable changes to Supernova are documented in this file.
 ### Fixed
 
 - Fixed checkpoint navigation so undo, redo, and message restores keep the model and reasoning picker selection stable.
+- Fixed the scroll-to-latest button staying visible after checkpoint navigation scrolls the timeline to the latest message.
 
 ### Removed
 

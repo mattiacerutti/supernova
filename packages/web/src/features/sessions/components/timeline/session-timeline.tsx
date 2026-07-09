@@ -273,6 +273,8 @@ export default function SessionTimeline(props: SessionTimelineProps) {
     previousVisibleTurnCountRef.current = visibleTurnCount;
     if (visibleTurnCount === previousVisibleTurnCount) return;
 
+    isAtEndRef.current = true;
+    setShowScrollToEndButton(false);
     virtualizer.scrollToEnd();
   }, [visibleTurnCount, virtualizer]);
 
@@ -312,6 +314,12 @@ export default function SessionTimeline(props: SessionTimelineProps) {
     isAtEndRef.current = isAtEnd;
 
     setShowScrollToEndButton(!isAtEnd);
+  };
+
+  const handleScrollToEndButtonClick = (): void => {
+    isAtEndRef.current = true;
+    setShowScrollToEndButton(false);
+    virtualizer.scrollToEnd();
   };
 
   return (
@@ -365,7 +373,7 @@ export default function SessionTimeline(props: SessionTimelineProps) {
             <IconButton
               className="grid size-9 place-items-center rounded-full bg-[#181818] text-white ring-1 ring-neutral-700 transition hover:bg-[#202020]"
               label="Scroll to latest message"
-              onClick={() => virtualizer.scrollToEnd()}
+              onClick={handleScrollToEndButtonClick}
               size="none"
               variant="bare"
             >
