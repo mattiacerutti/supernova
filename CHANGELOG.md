@@ -10,6 +10,14 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+### Fixed
+
+### Removed
+
+## [0.0.1-beta.8]
+
+### Changed
+
 - Upgraded the Pi runtime dependency to 0.80.6.
 - Changed checkpoint undo, redo, revert, and restore actions to update the session timeline immediately while navigation completes.
 
@@ -17,8 +25,6 @@ All notable changes to Supernova are documented in this file.
 
 - Fixed checkpoint navigation so undo, redo, and message restores keep the model and reasoning picker selection stable.
 - Fixed the scroll-to-latest button staying visible after checkpoint navigation scrolls the timeline to the latest message.
-
-### Removed
 
 ## [0.0.1-beta.7]
 
