@@ -6,6 +6,7 @@ const thinkingLevelLabels: Record<ModelThinkingLevel, string> = {
   high: "High",
   low: "Low",
   medium: "Medium",
+  max: "Max",
   minimal: "Minimal",
   off: "Off",
   xhigh: "Extra High",
@@ -13,7 +14,7 @@ const thinkingLevelLabels: Record<ModelThinkingLevel, string> = {
 
 /** Formats provider-native thinking levels into human-readable labels. */
 function formatNativeThinkingLabel(level: ModelThinkingLevel, nativeLevel: string | null | undefined): string {
-  if (!nativeLevel) return thinkingLevelLabels[level];
+  if (!nativeLevel || nativeLevel === level) return thinkingLevelLabels[level];
 
   return nativeLevel
     .split(/[\s_-]+/)

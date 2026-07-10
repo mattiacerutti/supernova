@@ -7,6 +7,7 @@ const thinkingLevelRank: Record<string, number> = {
   medium: 3,
   high: 4,
   xhigh: 5,
+  max: 6,
 };
 
 export function modelKey(provider: string, id: string): string {

@@ -54,4 +54,18 @@ describe("mapping Pi models", () => {
       {label: "Max", value: "xhigh"},
     ]);
   });
+
+  it("exposes the canonical max thinking level when supported", () => {
+    const details = toAgentModelDetails(model({thinkingLevelMap: {max: "max", xhigh: "xhigh"}}), "Anthropic");
+
+    expect(details.thinkingLevels).toEqual([
+      {label: "Off", value: "off"},
+      {label: "Minimal", value: "minimal"},
+      {label: "Low", value: "low"},
+      {label: "Medium", value: "medium"},
+      {label: "High", value: "high"},
+      {label: "Extra High", value: "xhigh"},
+      {label: "Max", value: "max"},
+    ]);
+  });
 });

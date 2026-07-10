@@ -24,6 +24,18 @@ describe("resolveThinkingLevel", () => {
     expect(resolveThinkingLevel(details, "medium")).toBe("medium");
     expect(resolveThinkingLevel(details, "low")).toBe("medium");
     expect(resolveThinkingLevel(details, "xhigh")).toBe("high");
+    expect(resolveThinkingLevel(details, "max")).toBe("high");
+  });
+
+  it("uses max as the highest ranked thinking level", () => {
+    const details = model([
+      {label: "Medium", value: "medium"},
+      {label: "Extra High", value: "xhigh"},
+      {label: "Max", value: "max"},
+    ]);
+
+    expect(resolveThinkingLevel(details, "xhigh")).toBe("xhigh");
+    expect(resolveThinkingLevel(details, "max")).toBe("max");
   });
 
   it("falls back predictably when no ranked match is available", () => {

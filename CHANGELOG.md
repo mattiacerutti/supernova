@@ -10,6 +10,7 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+- Upgraded the Pi runtime dependency to 0.80.6.
 - Changed checkpoint undo, redo, revert, and restore actions to update the session timeline immediately while navigation completes.
 
 ### Fixed
