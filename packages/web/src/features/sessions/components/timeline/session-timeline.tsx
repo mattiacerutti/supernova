@@ -1,17 +1,18 @@
-import {defaultRangeExtractor, elementScroll, useVirtualizer} from "@tanstack/react-virtual";
-import type {ReactVirtualizer, VirtualItem} from "@tanstack/react-virtual";
+import {elementScroll, useVirtualizer} from "@tanstack/react-virtual";
+import type {VirtualItem} from "@tanstack/react-virtual";
 import {AnimatePresence, motion, useReducedMotion} from "framer-motion";
 import {useLayoutEffect, useRef, useState} from "react";
+import type {UIEvent} from "react";
+import {MessageScroller, MessageScrollerButton, MessageScrollerContent, MessageScrollerProvider, MessageScrollerViewport} from "@/components/ui/message-scroller";
 import SessionTimelineVirtualRow from "@/features/sessions/components/timeline/session-timeline-virtual-row";
 import type {TimelineVirtualItem} from "@/features/sessions/components/timeline/session-timeline-virtual-row";
 import type {SessionTimelineItem} from "@/features/sessions/types/session-timeline-item";
-import IconButton from "@/components/ui/icon-button";
-import Icon from "@/components/ui/icon";
 
 const TIMELINE_BOTTOM_PADDING_PX = 24;
 const TIMELINE_CACHE_LIMIT = 16;
-const TIMELINE_FALLBACK_ITEM_SIZE = 60;
-const TIMELINE_SCROLL_END_THRESHOLD_PX = 50;
+const TIMELINE_CACHE_END_THRESHOLD_PX = 5;
+const TIMELINE_FALLBACK_ITEM_SIZE = 86;
+const TIMELINE_SCROLL_BUTTON_THRESHOLD_PX = 50;
 
 interface TimelineCacheEntry {
   readonly measurements: VirtualItem[];
@@ -37,6 +38,24 @@ function streamingStatusLabel(compacting: boolean): string {
   return compacting ? "Compacting context" : "Thinking";
 }
 
+/** Keeps virtual row identity stable when live event ids change on settlement. */
+function buildVirtualRowKeys(rows: readonly TimelineVirtualItem[]): readonly string[] {
+  const typeCounts = new Map<string, number>();
+  let turnIndex = -1;
+
+  return rows.map((item) => {
+    if (!("turnId" in item)) return item.id;
+    if (item.type === "user") {
+      turnIndex += 1;
+      typeCounts.clear();
+    }
+
+    const typeIndex = typeCounts.get(item.type) ?? 0;
+    typeCounts.set(item.type, typeIndex + 1);
+    return `turn:${turnIndex}:${item.type}:${typeIndex}`;
+  });
+}
+
 function buildTimelineRows(input: {
   readonly compacting: boolean;
   readonly isStreaming: boolean;
@@ -58,55 +77,6 @@ function buildTimelineRows(input: {
   return rows;
 }
 
-function turnFingerprint(rows: readonly TimelineVirtualItem[], turnId: string): string | null {
-  for (const item of rows) {
-    if (item.type === "user" && item.turnId === turnId) return JSON.stringify(item.message.contentParts);
-  }
-
-  return null;
-}
-
-interface VirtualTimelineRowProps {
-  readonly activeTurnId: string | null;
-  readonly inlineStatusLabel?: string;
-  readonly item: TimelineVirtualItem;
-  readonly onRevertToMessage?: (turnId: string) => void;
-  readonly virtualItem: VirtualItem;
-  readonly virtualizer: ReactVirtualizer<HTMLDivElement, HTMLDivElement>;
-}
-
-function VirtualTimelineRow(props: VirtualTimelineRowProps) {
-  const {activeTurnId, inlineStatusLabel, item, onRevertToMessage, virtualItem, virtualizer} = props;
-  const measuredElementRef = useRef<HTMLDivElement | null>(null);
-
-  const setMeasuredElement = (element: HTMLDivElement | null): void => {
-    measuredElementRef.current = element;
-    if (element) virtualizer.measureElement(element);
-  };
-
-  useLayoutEffect(() => {
-    const element = measuredElementRef.current;
-    if (!element) return;
-    virtualizer.measureElement(element);
-  }, [inlineStatusLabel, item.id, virtualizer]);
-
-  return (
-    <div
-      data-index={virtualItem.index}
-      data-timeline-key={String(virtualItem.key)}
-      ref={setMeasuredElement}
-      style={{
-        left: 0,
-        overflow: inlineStatusLabel ? "visible" : "clip",
-        position: "absolute",
-        width: "100%",
-      }}
-    >
-      <SessionTimelineVirtualRow activeTurnId={activeTurnId} inlineStatusLabel={inlineStatusLabel} item={item} onRevertToMessage={onRevertToMessage} />
-    </div>
-  );
-}
-
 interface SessionTimelineProps {
   readonly bottomOverlayHeight?: number;
   readonly compacting: boolean;
@@ -120,101 +90,45 @@ interface SessionTimelineProps {
 
 export default function SessionTimeline(props: SessionTimelineProps) {
   const {bottomOverlayHeight = 0, compacting, isStreaming, items, liveItems, onRevertToMessage, sessionId, streamError} = props;
-
-  const [scrollToEndButton, setShowScrollToEndButton] = useState(false);
-  const shouldReduceMotion = useReducedMotion();
+  const cachedRef = useRef(timelineCache.get(sessionId));
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const virtualContentRef = useRef<HTMLDivElement>(null);
+  const initialPositionFrameRef = useRef<number | null>(null);
+  const shouldRestoreCachedOffsetRef = useRef(true);
+  const tanStackFollowsEndRef = useRef(cachedRef.current?.wasAtEnd ?? cachedRef.current === undefined);
 
   const hasTimelineContent = items.length > 0 || liveItems.length > 0 || isStreaming || streamError !== null;
   const timelineRows = hasTimelineContent ? buildTimelineRows({compacting, isStreaming, items, liveItems, streamError}) : [];
   const activeTurnId = liveItems[0]?.turnId ?? null;
-  const activeRowIndex = activeTurnId ? timelineRows.findLastIndex((item) => "turnId" in item && item.turnId === activeTurnId) : -1;
   const inlineStatusItemId = isStreaming && hasLiveTimelineOutput(liveItems) && !hasPendingToolCall(liveItems) ? liveItems.at(-1)?.id : undefined;
   const inlineStatusLabel = inlineStatusItemId ? streamingStatusLabel(compacting) : undefined;
-  const visibleTurnCount = new Set([...items.map((item) => item.turnId), ...liveItems.map((item) => item.turnId)]).size;
-
-  const cachedRef = useRef(timelineCache.get(sessionId));
-  const scrollRootRef = useRef<HTMLDivElement | null>(null);
-  const virtualContentRef = useRef<HTMLDivElement | null>(null);
-
-  const initialBottomSettleFrameRef = useRef<number | null>(null);
-  const shouldSettleInitialBottomRef = useRef(cachedRef.current?.wasAtEnd ?? cachedRef.current === undefined);
-  const isAtEndRef = useRef(cachedRef.current?.wasAtEnd ?? cachedRef.current === undefined);
-
+  const virtualRowKeys = buildVirtualRowKeys(timelineRows);
   const latestRowsLengthRef = useRef(timelineRows.length);
-  const latestRowsRef = useRef(timelineRows);
-  const latestSessionIdRef = useRef(sessionId);
-  const previousVisibleTurnCountRef = useRef(visibleTurnCount);
-  const activeTurnKeyPrefixRef = useRef<string | null>(null);
-  const activeTurnKeySequenceRef = useRef(0);
-  const hadActiveTurnRef = useRef(false);
-  const latestActiveTurnFingerprintRef = useRef<string | null>(null);
-
+  const [scrollButtonVisible, setScrollButtonVisible] = useState(false);
+  const shouldReduceMotion = useReducedMotion();
   latestRowsLengthRef.current = timelineRows.length;
-  latestRowsRef.current = timelineRows;
-  latestSessionIdRef.current = sessionId;
 
-  const activeTurnFingerprint = activeTurnId ? turnFingerprint(timelineRows, activeTurnId) : null;
-  const lastCommittedTurnId = items.at(-1)?.turnId ?? null;
-  const lastCommittedFingerprint = lastCommittedTurnId ? turnFingerprint(timelineRows, lastCommittedTurnId) : null;
-  let stableKeyTurnId: string | null = null;
-  let stableKeyPrefix: string | null = null;
-
-  if (activeTurnId && activeTurnFingerprint) {
-    if (!hadActiveTurnRef.current) {
-      activeTurnKeySequenceRef.current += 1;
-      activeTurnKeyPrefixRef.current = `active-turn:${activeTurnKeySequenceRef.current}`;
-    }
-
-    latestActiveTurnFingerprintRef.current = activeTurnFingerprint;
-    stableKeyTurnId = activeTurnId;
-    stableKeyPrefix = activeTurnKeyPrefixRef.current;
-  } else if (lastCommittedTurnId && lastCommittedFingerprint === latestActiveTurnFingerprintRef.current) {
-    stableKeyTurnId = lastCommittedTurnId;
-    stableKeyPrefix = activeTurnKeyPrefixRef.current;
-  } else {
-    activeTurnKeyPrefixRef.current = null;
-    latestActiveTurnFingerprintRef.current = null;
-  }
-  hadActiveTurnRef.current = Boolean(activeTurnId);
-
-  const stableKeySlots = new Map<number, number>();
-  if (stableKeyTurnId) {
-    let slot = 0;
-    for (const [index, item] of timelineRows.entries()) {
-      if ("turnId" in item && item.turnId === stableKeyTurnId) {
-        stableKeySlots.set(index, slot);
-        slot += 1;
-      }
-    }
-  }
-
-  const virtualRowKeys = timelineRows.map((item, index) => {
-    const slot = stableKeySlots.get(index);
-    return slot === undefined || !stableKeyPrefix ? item.id : `${stableKeyPrefix}:${slot}`;
-  });
   // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual owns mutable scroll state by design.
   const virtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
-    anchorTo: "end",
+    // Message Scroller owns follow intent. TanStack mirrors that intent only
+    // for row-size compensation, keeping a growing response visually stable
+    // without independently deciding whether to follow it.
+    anchorTo: tanStackFollowsEndRef.current ? "end" : "start",
     count: timelineRows.length,
-    // Keep scroll compensation and row positioning in the same frame. Without
-    // this, first-time measurements in huge sessions can flash because scrollTop
-    // updates before React commits the new virtual row positions.
     directDomUpdates: true,
     directDomUpdatesMode: "position",
     estimateSize: () => TIMELINE_FALLBACK_ITEM_SIZE,
-    followOnAppend: true,
-    getItemKey: (index) => virtualRowKeys[index] ?? `removed:${index}`,
-    getScrollElement: () => scrollRootRef.current,
+    followOnAppend: tanStackFollowsEndRef.current,
+    getItemKey: (index) => virtualRowKeys[index] ?? index,
+    getScrollElement: () => viewportRef.current,
     initialMeasurementsCache: cachedRef.current?.measurements,
     initialOffset: () => (cachedRef.current?.wasAtEnd ? Number.MAX_SAFE_INTEGER : (cachedRef.current?.scrollOffset ?? Number.MAX_SAFE_INTEGER)),
-    overscan: 5,
+    overscan: 8,
     paddingEnd: TIMELINE_BOTTOM_PADDING_PX,
-    rangeExtractor: (range) => {
-      const indexes = defaultRangeExtractor(range);
-      if (activeRowIndex < 0) return indexes;
-      return Array.from(new Set([...indexes, activeRowIndex])).toSorted((a, b) => a - b);
-    },
-    scrollEndThreshold: 5,
+    scrollEndThreshold: 0,
+    // TanStack adjusts scrollTop before notifying React about a measured size.
+    // Publish the new virtual height first so the browser does not clamp that
+    // adjustment against the previous height and visibly correct a frame later.
     scrollToFn: (offset, options, instance) => {
       if (virtualContentRef.current) virtualContentRef.current.style.height = `${instance.getTotalSize()}px`;
       elementScroll(offset, options, instance);
@@ -225,102 +139,72 @@ export default function SessionTimeline(props: SessionTimelineProps) {
 
   const virtualItems = virtualizer.getVirtualItems();
 
-  useLayoutEffect(() => {
-    if (!hasTimelineContent) return;
-
-    const scroller = scrollRootRef.current;
-    if (!scroller) return;
-
-    const readIsAtEnd = (): boolean => scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop <= TIMELINE_SCROLL_END_THRESHOLD_PX;
-
-    isAtEndRef.current = readIsAtEnd();
-    const observer = new ResizeObserver(() => {
-      if (!isAtEndRef.current) return;
-
-      scroller.scrollTop = scroller.scrollHeight - scroller.clientHeight;
-      const isAtEnd = readIsAtEnd();
-      isAtEndRef.current = isAtEnd;
-      setShowScrollToEndButton(!isAtEnd);
-    });
-    observer.observe(scroller);
-
-    return () => observer.disconnect();
-  }, [hasTimelineContent]);
+  const handleViewportScroll = (event: UIEvent<HTMLDivElement>): void => {
+    const viewport = event.currentTarget;
+    const followsEnd = !viewport.dataset.scrollable?.includes("end");
+    tanStackFollowsEndRef.current = followsEnd;
+    virtualizer.options.anchorTo = followsEnd ? "end" : "start";
+    virtualizer.options.followOnAppend = followsEnd;
+    setScrollButtonVisible(viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop >= TIMELINE_SCROLL_BUTTON_THRESHOLD_PX);
+  };
 
   useLayoutEffect(() => {
-    if (!hasTimelineContent || !shouldSettleInitialBottomRef.current) return;
+    if (!hasTimelineContent || !shouldRestoreCachedOffsetRef.current) return;
 
-    // First uncached mounts start at the estimated bottom, then bottom rows get
-    // their real sizes. The synchronous call corrects the pre-paint commit after
-    // ref measurements; the RAF pass catches late ResizeObserver/direct-DOM size
-    // updates without showing the estimated-bottom frame.
-    isAtEndRef.current = true;
-    virtualizer.scrollToEnd();
-    initialBottomSettleFrameRef.current = window.requestAnimationFrame(() => {
-      initialBottomSettleFrameRef.current = null;
-      shouldSettleInitialBottomRef.current = false;
-      isAtEndRef.current = true;
-      virtualizer.scrollToEnd();
-    });
-
-    return () => {
-      if (initialBottomSettleFrameRef.current !== null) window.cancelAnimationFrame(initialBottomSettleFrameRef.current);
-    };
-  }, [hasTimelineContent, timelineRows.length, virtualizer]);
-
-  useLayoutEffect(() => {
-    const previousVisibleTurnCount = previousVisibleTurnCountRef.current;
-    previousVisibleTurnCountRef.current = visibleTurnCount;
-    if (visibleTurnCount === previousVisibleTurnCount) return;
-
-    isAtEndRef.current = true;
-    setShowScrollToEndButton(false);
-    virtualizer.scrollToEnd();
-  }, [visibleTurnCount, virtualizer]);
-
-  useLayoutEffect(
-    () => () => {
-      if (latestRowsLengthRef.current > 0) {
-        const root = scrollRootRef.current;
-        // Active streams use temporary stable virtual keys to avoid live→settled
-        // jumps. Persist canonical row ids in the cache so a later remount can
-        // reuse the measurements after those temporary keys are gone.
-        const measurements = virtualizer.takeSnapshot().map((measurement) => ({
-          ...measurement,
-          key: latestRowsRef.current[measurement.index]?.id ?? measurement.key,
-        }));
-        const scrollOffset = root?.scrollTop ?? virtualizer.scrollOffset ?? 0;
-        const bottomDistance = root ? root.scrollHeight - root.clientHeight - root.scrollTop : Number.POSITIVE_INFINITY;
-        timelineCache.delete(latestSessionIdRef.current);
-        timelineCache.set(latestSessionIdRef.current, {measurements, scrollOffset, wasAtEnd: bottomDistance <= virtualizer.options.scrollEndThreshold});
-        while (timelineCache.size > TIMELINE_CACHE_LIMIT) timelineCache.delete(timelineCache.keys().next().value!);
-      }
-    },
-    [virtualizer]
-  );
-
-  const handleScroll = (): void => {
-    const scroller = scrollRootRef.current;
-    if (!scroller) return;
-
-    if (shouldSettleInitialBottomRef.current) {
-      isAtEndRef.current = true;
-      setShowScrollToEndButton(false);
+    const cached = cachedRef.current;
+    const viewport = viewportRef.current;
+    if (cached && !cached.wasAtEnd) {
+      shouldRestoreCachedOffsetRef.current = false;
+      virtualizer.scrollToOffset(cached.scrollOffset);
+      if (viewport) viewport.style.visibility = "visible";
       return;
     }
 
-    const bottomDistance = scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop;
-    const isAtEnd = bottomDistance <= TIMELINE_SCROLL_END_THRESHOLD_PX;
-    isAtEndRef.current = isAtEnd;
+    // Message Scroller applies its default position before TanStack has
+    // measured every row entering the bottom range. Keep the viewport hidden
+    // while TanStack reconciles those measurements, then reveal it on the
+    // first frame that is already anchored to the measured bottom.
+    const settleAtBottom = (): void => {
+      virtualizer.scrollToEnd();
+      const currentViewport = viewportRef.current;
+      if (!currentViewport) return;
 
-    setShowScrollToEndButton(!isAtEnd);
-  };
+      const bottomDistance = currentViewport.scrollHeight - currentViewport.clientHeight - currentViewport.scrollTop;
+      if (bottomDistance <= TIMELINE_CACHE_END_THRESHOLD_PX) {
+        shouldRestoreCachedOffsetRef.current = false;
+        currentViewport.style.visibility = "visible";
+        return;
+      }
 
-  const handleScrollToEndButtonClick = (): void => {
-    isAtEndRef.current = true;
-    setShowScrollToEndButton(false);
+      initialPositionFrameRef.current = window.requestAnimationFrame(settleAtBottom);
+    };
+
     virtualizer.scrollToEnd();
-  };
+    initialPositionFrameRef.current = window.requestAnimationFrame(settleAtBottom);
+
+    return () => {
+      if (initialPositionFrameRef.current !== null) window.cancelAnimationFrame(initialPositionFrameRef.current);
+    };
+  }, [hasTimelineContent, virtualizer]);
+
+  useLayoutEffect(
+    () => () => {
+      if (latestRowsLengthRef.current === 0) return;
+
+      const viewport = viewportRef.current;
+      const scrollOffset = viewport?.scrollTop ?? virtualizer.scrollOffset ?? 0;
+      const bottomDistance = viewport ? viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop : Number.POSITIVE_INFINITY;
+
+      timelineCache.delete(sessionId);
+      timelineCache.set(sessionId, {
+        measurements: virtualizer.takeSnapshot(),
+        scrollOffset,
+        wasAtEnd: bottomDistance <= TIMELINE_CACHE_END_THRESHOLD_PX,
+      });
+      while (timelineCache.size > TIMELINE_CACHE_LIMIT) timelineCache.delete(timelineCache.keys().next().value!);
+    },
+    [sessionId, virtualizer]
+  );
 
   return (
     <div className="relative min-h-0 flex-1 select-text">
@@ -330,58 +214,61 @@ export default function SessionTimeline(props: SessionTimelineProps) {
         </div>
       )}
       {hasTimelineContent && (
-        <div aria-label="Session timeline" className="scroll-fade-y h-full overflow-x-hidden overflow-y-auto overscroll-y-contain" ref={scrollRootRef} onScroll={handleScroll}>
-          <div
-            data-timeline-virtual-content
-            ref={(element) => {
-              virtualContentRef.current = element;
-              virtualizer.containerRef(element);
-            }}
-            style={{
-              position: "relative",
-              width: "100%",
-            }}
-          >
-            {virtualItems.map((virtualItem) => {
-              const item = timelineRows[virtualItem.index];
-              if (!item) return null;
-
-              return (
-                <VirtualTimelineRow
-                  activeTurnId={activeTurnId}
-                  inlineStatusLabel={item.id === inlineStatusItemId ? inlineStatusLabel : undefined}
-                  item={item}
-                  key={virtualItem.key}
-                  onRevertToMessage={onRevertToMessage}
-                  virtualItem={virtualItem}
-                  virtualizer={virtualizer}
-                />
-              );
-            })}
-          </div>
-        </div>
-      )}
-      <AnimatePresence>
-        {scrollToEndButton && (
-          <motion.div
-            animate={{opacity: 1, scale: 1, x: "-50%", y: 0, transition: {duration: 0.2, ease: [0.23, 1, 0.32, 1]}}}
-            className="absolute left-1/2 z-10"
-            exit={{opacity: 0, scale: 0.95, x: "-50%", y: shouldReduceMotion ? 0 : "100%", transition: {duration: 0.4, ease: [0.7, 0, 0.84, 0]}}}
-            initial={{opacity: 0, scale: 0.95, x: "-50%", y: shouldReduceMotion ? 0 : "100%"}}
-            style={{bottom: `calc(1rem + ${bottomOverlayHeight}px)`}}
-          >
-            <IconButton
-              className="grid size-9 place-items-center rounded-full bg-surface text-ink-strong ring-1 ring-border-strong transition hover:bg-overlay-hover"
-              label="Scroll to latest message"
-              onClick={handleScrollToEndButtonClick}
-              size="none"
-              variant="bare"
+        <MessageScrollerProvider autoScroll defaultScrollPosition={cachedRef.current && !cachedRef.current.wasAtEnd ? "start" : "end"} scrollEdgeThreshold={0}>
+          <MessageScroller>
+            <MessageScrollerViewport
+              aria-label="Session timeline"
+              className={shouldRestoreCachedOffsetRef.current ? "invisible" : undefined}
+              onScroll={handleViewportScroll}
+              preserveScrollOnPrepend={false}
+              ref={viewportRef}
             >
-              <Icon name="arrow-down" size="sm" />
-            </IconButton>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              <MessageScrollerContent aria-busy={isStreaming} className="block min-h-full">
+                <div
+                  className="relative w-full"
+                  data-timeline-virtual-content
+                  ref={(element) => {
+                    virtualContentRef.current = element;
+                    virtualizer.containerRef(element);
+                  }}
+                >
+                  {virtualItems.map((virtualItem) => {
+                    const item = timelineRows[virtualItem.index];
+                    if (!item) return null;
+
+                    return (
+                      <div className="absolute inset-s-0 w-full" data-index={virtualItem.index} key={virtualItem.key} ref={virtualizer.measureElement}>
+                        <SessionTimelineVirtualRow
+                          activeTurnId={activeTurnId}
+                          inlineStatusLabel={item.id === inlineStatusItemId ? inlineStatusLabel : undefined}
+                          item={item}
+                          onRevertToMessage={onRevertToMessage}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </MessageScrollerContent>
+            </MessageScrollerViewport>
+            <AnimatePresence>
+              {scrollButtonVisible && (
+                <motion.div
+                  animate={{opacity: 1, scale: 1, x: "-50%", y: 0, transition: {duration: 0.2, ease: [0.23, 1, 0.32, 1]}}}
+                  className="absolute left-1/2 z-10"
+                  exit={{opacity: 0, scale: 0.95, x: "-50%", y: shouldReduceMotion ? 0 : "100%", transition: {duration: 0.4, ease: [0.7, 0, 0.84, 0]}}}
+                  initial={{opacity: 0, scale: 0.95, x: "-50%", y: shouldReduceMotion ? 0 : "100%"}}
+                  style={{bottom: `calc(1rem + ${bottomOverlayHeight}px)`}}
+                >
+                  <MessageScrollerButton
+                    behavior="auto"
+                    className="static translate-x-0 bg-surface text-ink-strong ring-border-strong transition-colors hover:bg-overlay-hover rtl:translate-x-0"
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </MessageScroller>
+        </MessageScrollerProvider>
+      )}
     </div>
   );
 }
