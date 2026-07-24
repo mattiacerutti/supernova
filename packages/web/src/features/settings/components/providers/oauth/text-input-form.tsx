@@ -15,7 +15,7 @@ export default function TextInputForm(props: TextInputFormProps) {
 
   return (
     <form className="space-y-2" id="provider-login-input-form" onSubmit={onSubmit}>
-      <label className="block text-sm text-neutral-300" htmlFor="provider-login-input">
+      <label className="block text-sm text-ink" htmlFor="provider-login-input">
         {input.message}
       </label>
       <Input autoFocus disabled={disabled} id="provider-login-input" onChange={(event) => onChange(event.target.value)} placeholder={input.placeholder} value={value} />

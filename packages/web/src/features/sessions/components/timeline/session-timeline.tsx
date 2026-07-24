@@ -326,7 +326,7 @@ export default function SessionTimeline(props: SessionTimelineProps) {
     <div className="relative min-h-0 flex-1 select-text">
       {!hasTimelineContent && (
         <div className="flex min-h-full items-center justify-center px-5 pb-8 pt-6 md:px-8">
-          <p className="text-center text-sm text-neutral-600">No messages yet.</p>
+          <p className="text-center text-sm text-ink-faint">No messages yet.</p>
         </div>
       )}
       {hasTimelineContent && (
@@ -371,7 +371,7 @@ export default function SessionTimeline(props: SessionTimelineProps) {
             style={{bottom: `calc(1rem + ${bottomOverlayHeight}px)`}}
           >
             <IconButton
-              className="grid size-9 place-items-center rounded-full bg-[#181818] text-white ring-1 ring-neutral-700 transition hover:bg-[#202020]"
+              className="grid size-9 place-items-center rounded-full bg-surface text-ink-strong ring-1 ring-border-strong transition hover:bg-overlay-hover"
               label="Scroll to latest message"
               onClick={handleScrollToEndButtonClick}
               size="none"

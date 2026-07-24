@@ -96,26 +96,26 @@ export default function ProviderOAuthContent(props: ProviderOAuthContentProps) {
   return (
     <div className="space-y-2 pb-4 pt-1">
       {(!session || session.step.type === "starting") && (
-        <div className="flex items-center gap-2 py-2 text-sm text-neutral-500">
-          <Icon className="animate-spin text-neutral-600" name="loader" size="sm" />
+        <div className="flex items-center gap-2 py-2 text-sm text-ink-muted">
+          <Icon className="animate-spin text-ink-faint" name="loader" size="sm" />
           <span>Starting login...</span>
         </div>
       )}
 
       {session?.step.type === "select" && (
         <div className="space-y-3">
-          <p className="text-sm text-neutral-400">{session.step.message}</p>
+          <p className="text-sm text-ink-muted">{session.step.message}</p>
           <div className="-ml-3 -mr-3 space-y-0.5">
             {session.step.options.map((option) => (
               <Button
-                className="flex w-full items-center justify-between rounded-xl corner-superellipse/1.3 px-3 py-2 text-left hover:bg-white/6"
+                className="flex w-full items-center justify-between rounded-xl corner-superellipse/1.3 px-3 py-2 text-left hover:bg-overlay-hover"
                 disabled={submitInputMutation.isPending}
                 key={option.id}
                 onClick={() => submitLoginInput(option.id)}
                 variant="bare"
               >
-                <span className="text-sm text-neutral-200">{option.label}</span>
-                <Icon className="text-neutral-500" name="arrow-right" size="xs" />
+                <span className="text-sm text-ink">{option.label}</span>
+                <Icon className="text-ink-muted" name="arrow-right" size="xs" />
               </Button>
             ))}
           </div>
@@ -125,12 +125,12 @@ export default function ProviderOAuthContent(props: ProviderOAuthContentProps) {
       {session?.step.type === "browser_auth" && (
         <div className="space-y-2">
           <div className="space-y-1">
-            {session.step.instructions && <p className="text-sm text-neutral-400">{session.step.instructions}</p>}
+            {session.step.instructions && <p className="text-sm text-ink-muted">{session.step.instructions}</p>}
             {session.step.authUrl && <AuthLink href={session.step.authUrl} />}
           </div>
           {session.step.manualInput && (
             <div className="space-y-2 pt-3">
-              <p className="text-xs text-neutral-600">{session.step.manualInput.message}</p>
+              <p className="text-xs text-ink-faint">{session.step.manualInput.message}</p>
               <form id="provider-login-input-form" onSubmit={handleSubmit}>
                 <Input
                   autoFocus
@@ -149,17 +149,17 @@ export default function ProviderOAuthContent(props: ProviderOAuthContentProps) {
       {session?.step.type === "device_code" && (
         <div className="space-y-2">
           <div className="space-y-1">
-            <p className="text-sm text-neutral-400">Open the verification page and enter this code.</p>
+            <p className="text-sm text-ink-muted">Open the verification page and enter this code.</p>
             <AuthLink href={session.step.verificationUri} label="Open verification page" />
           </div>
           <div className="space-y-1 pt-3">
             <div className="flex items-center gap-3">
-              <code className="select-all whitespace-nowrap font-mono text-lg font-semibold tracking-widest text-neutral-100">{session.step.userCode}</code>
+              <code className="select-all whitespace-nowrap font-mono text-lg font-semibold tracking-widest text-ink-strong">{session.step.userCode}</code>
               <Button className="w-auto shrink-0 px-2.5 py-1 text-xs" onClick={handleCopyDeviceCode} size="sm" variant="primary">
                 {copiedCode ? "Copied" : "Copy"}
               </Button>
             </div>
-            {session.step.expiresInSeconds && <p className="text-xs text-neutral-600">This code expires in about {Math.ceil(session.step.expiresInSeconds / 60)} minutes.</p>}
+            {session.step.expiresInSeconds && <p className="text-xs text-ink-faint">This code expires in about {Math.ceil(session.step.expiresInSeconds / 60)} minutes.</p>}
           </div>
         </div>
       )}
@@ -169,34 +169,34 @@ export default function ProviderOAuthContent(props: ProviderOAuthContentProps) {
       )}
 
       {session?.progress && !complete && (
-        <div className="flex items-center gap-2 text-sm text-neutral-500">
-          <Icon className="animate-spin text-neutral-600" name="loader" size="sm" />
+        <div className="flex items-center gap-2 text-sm text-ink-muted">
+          <Icon className="animate-spin text-ink-faint" name="loader" size="sm" />
           <span>{session.progress}</span>
         </div>
       )}
 
       {waitingForAuthorization && (
         <div className="flex items-center gap-2">
-          <Icon className="animate-spin text-neutral-500" name="loader" size="sm" />
-          <span className="text-sm text-neutral-500">Waiting for authorization...</span>
+          <Icon className="animate-spin text-ink-muted" name="loader" size="sm" />
+          <span className="text-sm text-ink-muted">Waiting for authorization...</span>
         </div>
       )}
 
       {session?.step.type === "succeeded" && (
         <div className="flex items-center gap-2 py-2">
-          <Icon className="text-emerald-400" name="check" size="sm" />
-          <p className="text-sm text-emerald-400">Provider connected successfully.</p>
+          <Icon className="text-diff-added" name="check" size="sm" />
+          <p className="text-sm text-diff-added">Provider connected successfully.</p>
         </div>
       )}
 
       {(session?.step.type === "failed" || !loginSessionId) && (
         <div className="flex items-center gap-2">
-          <Icon className="text-red-400" name="x" size="sm" />
-          <p className="text-sm text-red-400">{session?.step.type === "failed" ? session.step.error : "Login failed. Please try again later."}</p>
+          <Icon className="text-diff-removed" name="x" size="sm" />
+          <p className="text-sm text-diff-removed">{session?.step.type === "failed" ? session.step.error : "Login failed. Please try again later."}</p>
         </div>
       )}
 
-      {session?.step.type === "cancelled" && <p className="text-sm text-neutral-500">Login cancelled.</p>}
+      {session?.step.type === "cancelled" && <p className="text-sm text-ink-muted">Login cancelled.</p>}
 
       <div className="flex justify-end gap-2 pt-2">
         <Button className="w-auto px-3 text-xs" onClick={handleClose} size="sm" variant="primary">

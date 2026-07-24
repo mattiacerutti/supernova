@@ -36,12 +36,12 @@ export default function ProviderApiKeyContent(props: ProviderApiKeyContentProps)
   return (
     <form className="space-y-4 pb-4 pt-1" onSubmit={handleSubmit}>
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-neutral-300" htmlFor="api-key-input">
+        <label className="block text-sm font-medium text-ink" htmlFor="api-key-input">
           API key
         </label>
         <Input autoFocus id="api-key-input" onChange={(event) => setApiKey(event.target.value)} placeholder="Paste your API key" type="password" value={apiKey} />
       </div>
-      {setApiKeyMutation.error && <p className="text-sm text-red-400">{setApiKeyMutation.error.message}</p>}
+      {setApiKeyMutation.error && <p className="text-sm text-diff-removed">{setApiKeyMutation.error.message}</p>}
       <div className="flex justify-end gap-2">
         <Button className="w-auto px-3 text-xs" onClick={handleClose} size="sm" variant="primary">
           Cancel

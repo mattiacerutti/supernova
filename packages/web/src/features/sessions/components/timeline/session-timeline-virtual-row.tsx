@@ -34,7 +34,7 @@ interface StreamingStatusLabelProps {
 function StreamingStatusLabel(props: StreamingStatusLabelProps) {
   const {label} = props;
 
-  return <p className="shimmer w-fit text-sm text-neutral-600">{label}</p>;
+  return <p className="shimmer w-fit text-sm text-ink-faint">{label}</p>;
 }
 
 interface SessionTimelineVirtualRowProps {
@@ -61,7 +61,7 @@ export default function SessionTimelineVirtualRow(props: SessionTimelineVirtualR
   if (item.type === "stream-error") {
     return (
       <div className="mx-auto w-full max-w-3xl px-5 pb-6 md:px-8" data-timeline-row="stream-error">
-        <p className="text-sm text-red-300">{item.message}</p>
+        <p className="text-sm text-diff-removed">{item.message}</p>
       </div>
     );
   }

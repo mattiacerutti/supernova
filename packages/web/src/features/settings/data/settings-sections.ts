@@ -1,6 +1,6 @@
 import type {IconName} from "@/components/ui/icon";
 
-export type SettingsSectionId = "general" | "providers";
+export type SettingsSectionId = "appearance" | "providers";
 
 export interface SettingsSection {
   description: string;
@@ -9,15 +9,15 @@ export interface SettingsSection {
   label: string;
 }
 
-const defaultSettingsSectionId: SettingsSectionId = "general";
+const defaultSettingsSection: SettingsSection = {
+  description: "Customize the theme, typography, and interface styling.",
+  icon: "palette",
+  id: "appearance",
+  label: "Appearance",
+};
 
 export const settingsSections: SettingsSection[] = [
-  {
-    description: "Configure app-level preferences and default behavior.",
-    icon: "settings",
-    id: "general",
-    label: "General",
-  },
+  defaultSettingsSection,
   {
     description: "Manage model providers and API keys.",
     icon: "server",
@@ -27,10 +27,5 @@ export const settingsSections: SettingsSection[] = [
 ];
 
 export function getSettingsSection(sectionId?: string): SettingsSection {
-  const defaultSection = settingsSections.find((section) => section.id === defaultSettingsSectionId);
-  if (!defaultSection) {
-    throw new Error("Default settings section is missing.");
-  }
-
-  return settingsSections.find((section) => section.id === sectionId) || defaultSection;
+  return settingsSections.find((section) => section.id === sectionId) ?? defaultSettingsSection;
 }

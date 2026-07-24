@@ -3,6 +3,7 @@ import {createRoot} from "react-dom/client";
 import App from "@/app/app";
 import {getAppEnvironment} from "@/app/app-environment";
 import AppProviders from "@/app/providers";
+import {initializeAppearance} from "@/features/settings/stores/appearance-store";
 import {getAgentRpcClient} from "@/rpc/agent-rpc-client";
 import "@/app/styles.css";
 
@@ -23,6 +24,7 @@ const desktopShell = window.desktopShell;
 const appEnvironment = getAppEnvironment(desktopShell?.platform);
 
 document.documentElement.dataset.appEnvironment = appEnvironment;
+initializeAppearance();
 
 const rpcClient = await getAgentRpcClient();
 

@@ -44,7 +44,7 @@ export default function SessionActionsMenu(props: SessionActionsMenuProps) {
       onOpenChange={setActionsMenuOpen}
       open={actionsMenuOpen}
       trigger={(triggerProps) => (
-        <Button {...triggerProps} className="size-7 text-neutral-500 hover:text-neutral-300" shape="icon" size="md" variant="ghost">
+        <Button {...triggerProps} className="size-7 text-ink-muted hover:text-ink" shape="icon" size="md" variant="ghost">
           <Icon name="more-horizontal" size="xs" />
         </Button>
       )}

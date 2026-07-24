@@ -27,7 +27,7 @@ export default function ToolEvent(props: {event: ToolEvent; mode: ToolDetailMode
       {mode === "collapsible" && detailsAvailable ? (
         <Button
           aria-expanded={showDetails}
-          className="group flex w-full min-w-0 items-center gap-2 px-0 py-0 text-left text-neutral-600 hover:text-neutral-500"
+          className="group flex w-full min-w-0 items-center gap-2 px-0 py-0 text-left text-ink-faint hover:text-ink-muted"
           onClick={handleToggle}
           variant="ghost"
         >
@@ -35,7 +35,7 @@ export default function ToolEvent(props: {event: ToolEvent; mode: ToolDetailMode
           <Icon className={cn("transition-transform duration-160 ease-out", showDetails && "rotate-90")} name="chevron-right" size="xs" />
         </Button>
       ) : (
-        <div className="flex min-w-0 items-start gap-2 text-neutral-600">
+        <div className="flex min-w-0 items-start gap-2 text-ink-faint">
           <ToolTitle event={event} />
         </div>
       )}

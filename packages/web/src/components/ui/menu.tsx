@@ -21,15 +21,15 @@ export function MenuItem(props: MenuItemProps) {
   return (
     <BaseMenu.Item
       className={cn(
-        "flex cursor-pointer items-center gap-2.5 rounded-xl corner-superellipse/1.3 px-2 py-1.5 text-left text-sm leading-5 outline-none transition-colors hover:bg-white/8 data-disabled:cursor-default data-disabled:opacity-45 data-highlighted:bg-white/8",
+        "flex cursor-pointer items-center gap-2.5 rounded-xl corner-superellipse/1.3 px-2 py-1.5 text-left text-sm leading-5 outline-none transition-colors hover:bg-overlay-pressed data-disabled:cursor-default data-disabled:opacity-45 data-highlighted:bg-overlay-pressed",
         className
       )}
       onClick={handleClick}
       {...itemProps}
     >
-      {icon && <span className="flex h-5 w-3 shrink-0 items-center justify-center text-neutral-300">{icon}</span>}
+      {icon && <span className="flex h-5 w-3 shrink-0 items-center justify-center text-ink">{icon}</span>}
       <span className="min-w-0 flex-1 truncate leading-5">{children}</span>
-      {trailing && <span className="ml-auto flex h-5 shrink-0 items-center justify-center text-neutral-300">{trailing}</span>}
+      {trailing && <span className="ml-auto flex h-5 shrink-0 items-center justify-center text-ink">{trailing}</span>}
     </BaseMenu.Item>
   );
 }
@@ -79,7 +79,7 @@ export default function Menu(props: MenuProps) {
         <BaseMenu.Positioner align={align} alignOffset={alignOffset} className="z-50 outline-none" side={side} sideOffset={sideOffset}>
           <BaseMenu.Popup
             className={cn(
-              "min-w-45 rounded-xl border border-white/10 bg-neutral-800/95 p-1 text-neutral-200 shadow-2xl shadow-black/35 backdrop-blur-3xl outline-none",
+              "min-w-45 rounded-xl border border-border bg-surface-contrast/95 p-1 text-ink shadow-2xl shadow-black/35 backdrop-blur-3xl outline-none",
               "origin-(--transform-origin) translate-y-0 scale-100 transform-gpu opacity-100 will-change-[opacity,transform] transition-[opacity,scale,translate] duration-200 ease-out data-closed:translate-y-1 data-closed:scale-[0.985] data-closed:opacity-0 data-ending-style:translate-y-1 data-ending-style:scale-[0.985] data-ending-style:opacity-0 data-starting-style:translate-y-1 data-starting-style:scale-[0.985] data-starting-style:opacity-0",
               className
             )}

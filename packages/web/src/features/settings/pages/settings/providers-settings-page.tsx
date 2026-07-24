@@ -101,11 +101,11 @@ export default function ProvidersSettingsPage() {
   return (
     <div className="scroll-fade-y min-h-0 flex-1 overflow-y-auto px-6 py-8 md:px-10">
       <div className="mx-auto w-full max-w-3xl">
-        <h1 className="text-3xl font-semibold tracking-tight text-neutral-200">Providers</h1>
-        <p className="mt-2 text-sm text-neutral-500">Connect model providers to use them.</p>
+        <h1 className="text-3xl font-semibold tracking-tight text-ink">Providers</h1>
+        <p className="mt-2 text-sm text-ink-muted">Connect model providers to use them.</p>
 
         {providersQuery.isPending && <ProvidersPageSkeleton />}
-        {providersQuery.error && <p className="mt-8 text-sm text-red-400">Unable to load providers.</p>}
+        {providersQuery.error && <p className="mt-8 text-sm text-diff-removed">Unable to load providers.</p>}
         {providersQuery.data && (
           <>
             <div className="mt-10 space-y-10">

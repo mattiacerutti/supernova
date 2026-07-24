@@ -17,7 +17,7 @@ export default function AssistantMessage(props: AssistantMessageProps) {
       <div className="max-w-3xl">
         {event.content.length > 0 && <AssistantMessageContent streaming={live}>{event.content}</AssistantMessageContent>}
         {event.content.length > 0 && !live && <MessageActions copyText={event.content} />}
-        {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
+        {error && <p className="mt-3 text-sm text-diff-removed">{error}</p>}
       </div>
     </article>
   );

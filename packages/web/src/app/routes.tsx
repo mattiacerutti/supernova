@@ -8,7 +8,7 @@ import SessionPage from "@/features/sessions/pages/session-page";
 function EmptySessionState() {
   return (
     <div className="grid flex-1 place-items-center px-6 py-10">
-      <p className="text-sm text-neutral-600">Select a session or start a new one.</p>
+      <p className="text-sm text-ink-faint">Select a session or start a new one.</p>
     </div>
   );
 }

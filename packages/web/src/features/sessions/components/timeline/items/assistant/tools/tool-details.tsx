@@ -25,7 +25,7 @@ function formatJson(value: unknown): string {
 
 function DetailText(props: {children: ReactNode; className?: string}) {
   const {children, className} = props;
-  return <p className={cn("min-w-0 wrap-break-word text-sm leading-none text-neutral-500", className)}>{children}</p>;
+  return <p className={cn("min-w-0 wrap-break-word text-sm leading-none text-ink-muted", className)}>{children}</p>;
 }
 
 function DefaultToolDetails(props: {tool: Tool}) {
@@ -34,7 +34,7 @@ function DefaultToolDetails(props: {tool: Tool}) {
   return (
     <div className="space-y-2">
       {tool.input && <ContentPanel className="font-mono">{formatJson(tool.input)}</ContentPanel>}
-      {tool.status === "error" && <DetailText className="text-red-300">{tool.error}</DetailText>}
+      {tool.status === "error" && <DetailText className="text-diff-removed">{tool.error}</DetailText>}
     </div>
   );
 }
@@ -51,13 +51,13 @@ function CommandToolDetails(props: {tool: Extract<Tool, {kind: "command"}>}) {
 
   return (
     <ContentPanel className="p-0 text-sm font-mono" scrollable={false}>
-      <div className="flex items-center justify-between bg-neutral-800 px-2.5 pb-1.5 pt-2.5 font-sans text-sm text-neutral-500">
+      <div className="flex items-center justify-between bg-surface-raised px-2.5 pb-1.5 pt-2.5 font-sans text-sm text-ink-muted">
         <span>Shell</span>
       </div>
       <div className="scroll-fade max-h-72 overflow-auto overscroll-contain" data-scrollable>
         <div className="flex flex-col gap-1.5 px-2.5 pb-2.5">
-          <pre className="whitespace-pre-wrap wrap-break-word text-neutral-200">$ {tool.input.command}</pre>
-          {hasOutput && <pre className={cn("whitespace-pre-wrap wrap-break-word", tool.status === "error" ? "text-red-300" : "text-neutral-400")}>{output}</pre>}
+          <pre className="whitespace-pre-wrap wrap-break-word text-ink">$ {tool.input.command}</pre>
+          {hasOutput && <pre className={cn("whitespace-pre-wrap wrap-break-word", tool.status === "error" ? "text-diff-removed" : "text-ink-muted")}>{output}</pre>}
           {tool.status === "completed" && tool.result.truncated && <DetailText className="mt-2 font-sans">Output was truncated.</DetailText>}
         </div>
       </div>
@@ -88,7 +88,7 @@ function ReadToolDetails(props: {tool: Extract<Tool, {kind: "file-read"}>}) {
     <div className="space-y-2">
       <DetailText>{lineWindow}</DetailText>
       {tool.status === "completed" && tool.result.truncated && <DetailText>Read output was truncated.</DetailText>}
-      {tool.status === "error" && <DetailText className="text-red-300">{tool.error}</DetailText>}
+      {tool.status === "error" && <DetailText className="text-diff-removed">{tool.error}</DetailText>}
     </div>
   );
 }
@@ -118,12 +118,12 @@ function FileMutationToolDetails(props: {tool: FileMutationTool}) {
 
   return (
     <ContentPanel className="p-0 text-sm" scrollable={false}>
-      <div className="flex items-center justify-between bg-neutral-800 px-2.5 pb-1.5 pt-2.5 font-sans text-sm text-neutral-500">
+      <div className="flex items-center justify-between bg-surface-raised px-2.5 pb-1.5 pt-2.5 font-sans text-sm text-ink-muted">
         <span className="min-w-0 truncate">{fileName(path)}</span>
       </div>
       <div className="scroll-fade max-h-72 overflow-auto overscroll-contain" data-scrollable>
         {fileDiff && <DiffViewer fileDiff={fileDiff} key={patch} />}
-        {tool.status === "error" && <p className="px-2.5 pb-2.5 text-sm leading-none text-red-300">{tool.error}</p>}
+        {tool.status === "error" && <p className="px-2.5 pb-2.5 text-sm leading-none text-diff-removed">{tool.error}</p>}
       </div>
     </ContentPanel>
   );

@@ -166,15 +166,15 @@ export default function ProjectListItem(props: ProjectListItemProps) {
     <li>
       <Button
         as="div"
-        className={cn("group flex w-full justify-between items-center gap-2 pl-2 pr-1 py-0.5 text-neutral-400 hover:text-neutral-300", actionsMenuOpen && "bg-white/7")}
+        className={cn("group flex w-full justify-between items-center gap-2 pl-2 pr-1 py-0.5 text-ink-muted hover:text-ink", actionsMenuOpen && "bg-overlay-hover")}
         onClick={handleToggle}
         variant="primary"
       >
         <div className="flex min-w-0 flex-1 flex-row gap-2 items-center">
-          <Icon className="text-neutral-400" name={expanded ? "folder-open" : "folder"} size="sm" />
+          <Icon className="text-ink-muted" name={expanded ? "folder-open" : "folder"} size="sm" />
           {renaming && (
             <input
-              className="min-w-0 flex-1 truncate bg-transparent text-sm text-neutral-400 outline-none"
+              className="min-w-0 flex-1 truncate bg-transparent text-sm text-ink-muted outline-none"
               onBlur={handleRenameBlur}
               onChange={handleRenameChange}
               onClick={handleRenameClick}
@@ -223,12 +223,12 @@ export default function ProjectListItem(props: ProjectListItemProps) {
 
       <div className={cn("overflow-hidden", sessionsExpanded && "py-0.5")}>
         {expanded && sessionsQuery.isPending && (
-          <span className="ml-10 inline-flex items-center justify-start gap-2 px-0 py-1 text-sm text-neutral-600">
+          <span className="ml-10 inline-flex items-center justify-start gap-2 px-0 py-1 text-sm text-ink-faint">
             Loading sessions
-            <span className="size-2.5 animate-spin rounded-full border border-neutral-600 border-t-neutral-300" aria-hidden="true" />
+            <span className="size-2.5 animate-spin rounded-full border border-border-strong border-t-ink" aria-hidden="true" />
           </span>
         )}
-        {expanded && sessionsQuery.error != null && <p className="px-8 py-1 text-sm text-red-400">Unable to load sessions.</p>}
+        {expanded && sessionsQuery.error != null && <p className="px-8 py-1 text-sm text-diff-removed">Unable to load sessions.</p>}
         <ul className="flex flex-col gap-0.5" ref={attachSessionListAutoAnimateRef}>
           {displayedSessions.map((session) => {
             const confirmingArchive = confirmingArchiveSessionId === session.id;
@@ -246,7 +246,7 @@ export default function ProjectListItem(props: ProjectListItemProps) {
               >
                 <Button
                   as="div"
-                  className={cn("group/session flex w-full items-center gap-2 py-1.5 pl-2 pr-1 text-left", selected && "bg-white/8 text-neutral-200")}
+                  className={cn("group/session flex w-full items-center gap-2 py-1.5 pl-2 pr-1 text-left", selected && "bg-overlay-pressed text-ink")}
                   onClick={() => handleOpenSession(session.id)}
                   variant="primary"
                 >
@@ -263,9 +263,9 @@ export default function ProjectListItem(props: ProjectListItemProps) {
                   </IconButton>
                   <SessionTitleText className="min-w-0 flex-1 truncate text-sm" title={session.title} />
                   <span className="grid w-12 shrink-0 place-items-center justify-items-end">
-                    <span className="col-start-1 row-start-1 w-full justify-self-end whitespace-nowrap pr-1.5 text-right text-xs text-neutral-500 group-hover/session:invisible">
+                    <span className="col-start-1 row-start-1 w-full justify-self-end whitespace-nowrap pr-1.5 text-right text-xs text-ink-muted group-hover/session:invisible">
                       {sessionStreaming ? (
-                        <span className="inline-block size-2 animate-spin rounded-full border border-neutral-600 border-t-neutral-300" aria-label="Session streaming" />
+                        <span className="inline-block size-2 animate-spin rounded-full border border-border-strong border-t-ink" aria-label="Session streaming" />
                       ) : (
                         session.updatedAt
                       )}
@@ -274,7 +274,7 @@ export default function ProjectListItem(props: ProjectListItemProps) {
                       className={cn(
                         "col-start-1 row-start-1 size-5 disabled:cursor-not-allowed disabled:opacity-50",
                         confirmingArchive
-                          ? "rounded-xl corner-superellipse/1.3 bg-red-500/25 text-red-500 hover:bg-red-500/35 hover:text-red-400"
+                          ? "rounded-xl corner-superellipse/1.3 bg-diff-removed-surface text-diff-removed hover:bg-diff-removed-surface hover:text-diff-removed"
                           : "invisible group-hover/session:visible"
                       )}
                       disabled={archiveProjectSessionMutation.isPending}
@@ -306,7 +306,7 @@ export default function ProjectListItem(props: ProjectListItemProps) {
           )}
         </ul>
 
-        {expanded && !sessionsQuery.isPending && sessionsQuery.error == null && !hasSessions && <p className="px-8 py-1 text-sm text-neutral-600">No sessions</p>}
+        {expanded && !sessionsQuery.isPending && sessionsQuery.error == null && !hasSessions && <p className="px-8 py-1 text-sm text-ink-faint">No sessions</p>}
       </div>
     </li>
   );

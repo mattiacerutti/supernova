@@ -19,14 +19,14 @@ export default function MessageAttachmentPreview(props: MessageAttachmentPreview
 
   if (imageUrl) {
     return (
-      <div className="size-24 overflow-hidden rounded-2xl corner-superellipse/1.4 bg-neutral-900 ring-1 ring-white/8">
+      <div className="size-24 overflow-hidden rounded-2xl corner-superellipse/1.4 bg-surface-inset ring-1 ring-border-muted">
         <img alt={attachment.name} className="block size-full object-cover object-center" src={imageUrl} />
       </div>
     );
   }
 
   return (
-    <div className="flex max-w-60 min-w-0 items-center gap-0.5 rounded-full border border-white/5 bg-neutral-800 px-3 py-2 text-neutral-100 ring-1 ring-white/5">
+    <div className="flex max-w-60 min-w-0 items-center gap-0.5 rounded-full border border-border-muted bg-surface-raised px-3 py-2 text-ink-strong ring-1 ring-border-muted">
       <div className="grid size-5 shrink-0 place-items-center">
         <Icon name="file" size="xs" />
       </div>

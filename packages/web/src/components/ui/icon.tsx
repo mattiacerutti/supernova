@@ -37,10 +37,13 @@ export type IconName =
   | "image"
   | "loader"
   | "maximize"
+  | "monitor"
+  | "moon"
   | "more-horizontal"
   | "new-session"
   | "panel-left"
   | "panel-top"
+  | "palette"
   | "paperclip"
   | "pin"
   | "plus"
@@ -94,10 +97,13 @@ const icons = {
   key: getStaticIcon(lucideIcons, "key-round"),
   loader: getStaticIcon(lucideIcons, "loader-circle"),
   maximize: getStaticIcon(lucideIcons, "maximize-2"),
+  monitor: getStaticIcon(lucideIcons, "monitor"),
+  moon: getStaticIcon(lucideIcons, "moon"),
   "more-horizontal": getStaticIcon(lucideIcons, "more-horizontal"),
   "new-session": getStaticIcon(cuidaIcons, "edit-outline"),
   "panel-left": getStaticIcon(tablerIcons, "layout-sidebar"),
   "panel-top": getStaticIcon(lucideIcons, "panel-top"),
+  palette: getStaticIcon(lucideIcons, "palette"),
   paperclip: getStaticIcon(lucideIcons, "paperclip"),
   pin: getStaticIcon(fluentIcons, "pin-12-regular"),
   plus: getStaticIcon(lucideIcons, "plus"),

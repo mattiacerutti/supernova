@@ -19,7 +19,7 @@ function UserMessageContent(props: {children: string}) {
 
         if (part.startsWith("`") && part.endsWith("`") && part.length > 2) {
           return (
-            <code className="rounded bg-white/8 px-1 py-0.5 font-mono text-xs text-neutral-200" key={key}>
+            <code className="rounded bg-overlay-pressed px-1 py-0.5 font-mono text-xs text-ink" key={key}>
               {part.slice(1, -1)}
             </code>
           );
@@ -36,8 +36,8 @@ function ReferenceContentPart(props: {part: Extract<NonNullable<UserMessageModel
   const iconName = part.kind === "skill" ? "skill" : part.value.endsWith("/") ? "folder" : "file";
 
   return (
-    <span className="inline-flex items-baseline gap-1 whitespace-nowrap align-baseline leading-[inherit] text-sky-300">
-      <Icon className="relative top-px size-[1em] text-sky-300" name={iconName} size="xs" />
+    <span className="inline-flex items-baseline gap-1 whitespace-nowrap align-baseline leading-[inherit] text-skill">
+      <Icon className="relative top-px size-[1em] text-skill" name={iconName} size="xs" />
       <span>{part.name}</span>
     </span>
   );
@@ -92,8 +92,8 @@ export default function UserMessage(props: UserMessageProps) {
 
         <div
           className={cn(
-            "max-w-full rounded-2xl corner-superellipse/1.3 bg-neutral-800 px-3.5 py-2 text-sm leading-relaxed wrap-break-word text-neutral-200",
-            !hasContent && "text-neutral-400"
+            "max-w-full rounded-2xl corner-superellipse/1.3 bg-surface-raised px-3.5 py-2 text-sm leading-relaxed wrap-break-word text-ink",
+            !hasContent && "text-ink-muted"
           )}
         >
           {hasContent ? <UserMessageStructuredContent message={message} /> : "(No content)"}

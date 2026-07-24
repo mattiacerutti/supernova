@@ -80,8 +80,8 @@ export default function NewSessionPage(props: NewSessionPageProps) {
       <div className="flex h-[min(calc(100svh-1rem),32rem)] w-[min(calc(100vw-2rem),48rem)] flex-col items-center justify-center overflow-visible">
         <div className="mb-8 flex flex-col items-center gap-3">
           <img src={appIconUrl} alt="Supernova" className="h-16 w-auto shrink-0" draggable={false} />
-          <h1 className="text-center text-4xl font-normal tracking-tight text-neutral-50">
-            What should we build in <i className="text-neutral-400">{projectName}</i>?
+          <h1 className="text-center text-4xl font-normal tracking-tight text-ink-strong">
+            What should we build in <i className="text-ink-muted">{projectName}</i>?
           </h1>
         </div>
         <div className="relative w-full">

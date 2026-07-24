@@ -35,13 +35,13 @@ export default function ProviderRow(props: ProviderRowProps) {
   };
 
   return (
-    <div className={cn("flex items-center gap-3 px-4 py-3 transition-colors hover:bg-white/3", !isFirst && "border-t border-white/7")}>
-      <div className="grid size-8 shrink-0 place-items-center rounded-lg bg-white/7 text-neutral-400">
+    <div className={cn("flex items-center gap-3 px-4 py-3 transition-colors hover:bg-overlay-hover", !isFirst && "border-t border-border-muted")}>
+      <div className="grid size-8 shrink-0 place-items-center rounded-lg bg-overlay-hover text-ink-muted">
         <Icon name="server" size="sm" />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-neutral-200">{provider.name}</p>
-        {sourceLabel && <p className="truncate text-xs text-neutral-600">{sourceLabel}</p>}
+        <p className="truncate text-sm font-medium text-ink">{provider.name}</p>
+        {sourceLabel && <p className="truncate text-xs text-ink-faint">{sourceLabel}</p>}
       </div>
       {provider.connected && (
         <Button className="w-auto shrink-0 px-3 text-xs" disabled={!provider.disconnectable || isDisconnecting} onClick={handleDisconnect} size="sm" variant="primary">

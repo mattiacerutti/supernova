@@ -25,11 +25,11 @@ function suggestionSections(items: readonly ComposerSuggestionItem[]): readonly 
 function SuggestionIcon(props: {readonly item: ComposerSuggestionItem}) {
   const {item} = props;
 
-  if (item.kind === "file") return <Icon className="shrink-0 text-neutral-500" name={item.path.endsWith("/") ? "folder" : "file"} size="xs" />;
-  if (item.kind === "skill") return <Icon className="shrink-0 text-neutral-500" name="skill" size="xs" />;
-  if (item.kind === "slash-command" && item.icon) return <Icon className="shrink-0 text-neutral-500" name={item.icon} size="xs" />;
+  if (item.kind === "file") return <Icon className="shrink-0 text-ink-muted" name={item.path.endsWith("/") ? "folder" : "file"} size="xs" />;
+  if (item.kind === "skill") return <Icon className="shrink-0 text-ink-muted" name="skill" size="xs" />;
+  if (item.kind === "slash-command" && item.icon) return <Icon className="shrink-0 text-ink-muted" name={item.icon} size="xs" />;
 
-  return <span className="w-3 shrink-0 text-center text-xs font-medium text-neutral-500">{item.kind.slice(0, 1).toUpperCase()}</span>;
+  return <span className="w-3 shrink-0 text-center text-xs font-medium text-ink-muted">{item.kind.slice(0, 1).toUpperCase()}</span>;
 }
 
 interface ComposerSuggestionItemRowProps {
@@ -47,7 +47,7 @@ function ComposerSuggestionItemRow(props: ComposerSuggestionItemRowProps) {
 
   return (
     <div
-      className={cn("group flex items-center gap-1 rounded-xl corner-superellipse/1.3", highlighted && "bg-white/6")}
+      className={cn("group flex items-center gap-1 rounded-xl corner-superellipse/1.3", highlighted && "bg-overlay-hover")}
       onMouseLeave={onHoverEnd}
       onPointerMove={onPointerHover}
       ref={(element) => {
@@ -64,8 +64,8 @@ function ComposerSuggestionItemRow(props: ComposerSuggestionItemRowProps) {
       >
         <SuggestionIcon item={item} />
         <span className="flex min-w-0 flex-1 items-baseline gap-2 text-sm">
-          <span className="shrink-0 font-medium text-neutral-300">{item.title}</span>
-          {detail && <span className="min-w-0 flex-1 truncate text-neutral-500">{detail}</span>}
+          <span className="shrink-0 font-medium text-ink">{item.title}</span>
+          {detail && <span className="min-w-0 flex-1 truncate text-ink-muted">{detail}</span>}
         </span>
       </Button>
     </div>
@@ -131,24 +131,24 @@ export default function ComposerSuggestionMenu(props: ComposerSuggestionMenuProp
     <div className="relative" onKeyDownCapture={handleKeyDownCapture}>
       {showLoadingPanel && (
         <div className="absolute -inset-x-3 bottom-full z-40 mb-4 opacity-100 delay-200 starting:opacity-0">
-          <div className="overflow-hidden rounded-2xl border border-white/10 bg-neutral-800/95 text-neutral-200 backdrop-blur-3xl">
+          <div className="overflow-hidden rounded-2xl border border-border bg-surface-contrast/95 text-ink backdrop-blur-3xl">
             <div className="scroll-fade-y max-h-64 overflow-y-auto p-1">
-              <p className="px-3 py-2 text-sm text-neutral-600">Loading suggestions...</p>
+              <p className="px-3 py-2 text-sm text-ink-faint">Loading suggestions...</p>
             </div>
           </div>
         </div>
       )}
       {showSettledPanel && (
         <div className="absolute -inset-x-3 bottom-full z-40 mb-4">
-          <div className="overflow-hidden rounded-2xl border border-white/10 bg-neutral-800/95 text-neutral-200 backdrop-blur-3xl">
+          <div className="overflow-hidden rounded-2xl border border-border bg-surface-contrast/95 text-ink backdrop-blur-3xl">
             <div className="scroll-fade-y max-h-64 overflow-y-auto p-1">
-              {query.isError && <p className="px-3 py-2 text-sm text-red-400">{query.error instanceof Error ? query.error.message : "Unable to load suggestions."}</p>}
-              {!query.isError && items.length === 0 && <p className="px-3 py-2 text-sm text-neutral-600">No items</p>}
+              {query.isError && <p className="px-3 py-2 text-sm text-diff-removed">{query.error instanceof Error ? query.error.message : "Unable to load suggestions."}</p>}
+              {!query.isError && items.length === 0 && <p className="px-3 py-2 text-sm text-ink-faint">No items</p>}
 
               {!query.isError &&
                 sections.map((section) => (
                   <div className="pb-1" key={section.title}>
-                    <p className="px-3 pb-1 pt-2 text-xs font-medium text-neutral-600">{section.title}</p>
+                    <p className="px-3 pb-1 pt-2 text-xs font-medium text-ink-faint">{section.title}</p>
                     {section.items.map((item) => (
                       <ComposerSuggestionItemRow
                         highlighted={item.index === visibleHighlightIndex}

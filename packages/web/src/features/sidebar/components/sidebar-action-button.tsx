@@ -17,7 +17,7 @@ export default function SidebarActionButton(props: SidebarActionButtonProps) {
 
   return (
     <Button className={cn("gap-2", className)} onClick={handleClick} size={size} variant={variant} {...buttonProps}>
-      <Icon className="text-neutral-400" name={action.icon} size="sm" />
+      <Icon className="text-ink-muted" name={action.icon} size="sm" />
       <span className="flex-1">{action.label}</span>
     </Button>
   );

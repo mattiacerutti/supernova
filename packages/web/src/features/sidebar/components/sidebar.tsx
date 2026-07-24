@@ -80,7 +80,7 @@ export default function Sidebar() {
       <div className="scroll-fade-y min-h-0 flex-1 overflow-y-auto px-3 pb-3">
         {pinnedProjects.length > 0 && (
           <div>
-            <Button className="group/pinned mb-2 flex h-6 w-full items-center justify-between px-2 text-neutral-500" onClick={togglePinnedCollapsed} variant="bare">
+            <Button className="group/pinned mb-2 flex h-6 w-full items-center justify-between px-2 text-ink-muted" onClick={togglePinnedCollapsed} variant="bare">
               <div className="flex items-center gap-1.5 text-left text-sm">
                 <span>Pinned</span>
                 <Icon
@@ -104,7 +104,7 @@ export default function Sidebar() {
           </div>
         )}
 
-        <Button as="div" className="group/projects mb-2 flex h-6 w-full items-center justify-between px-2 text-neutral-500" onClick={toggleProjectsCollapsed} variant="bare">
+        <Button as="div" className="group/projects mb-2 flex h-6 w-full items-center justify-between px-2 text-ink-muted" onClick={toggleProjectsCollapsed} variant="bare">
           <div className="flex items-center gap-1.5 text-left text-sm">
             <span>Projects</span>
             <Icon
@@ -134,7 +134,7 @@ export default function Sidebar() {
           data-expanded={!isProjectsCollapsed}
         >
           <ul className="overflow-hidden">
-            {regularProjects.length === 0 && <li className="px-2 py-1 text-sm text-neutral-600">Add a project to get started.</li>}
+            {regularProjects.length === 0 && <li className="px-2 py-1 text-sm text-ink-faint">Add a project to get started.</li>}
             {regularProjects.map((project) => (
               <ProjectListItem activeSessionId={activeSessionId} expanded={expandedProjects.has(project.id)} key={project.id} onToggle={toggleProject} project={project} />
             ))}
@@ -144,7 +144,7 @@ export default function Sidebar() {
 
       <div className="px-3 pb-2 pt-2">
         <Link
-          className="flex w-full items-center gap-2 rounded-xl corner-superellipse/1.3 px-2 py-1.5 text-left text-sm text-neutral-300 hover:bg-white/7 hover:text-white"
+          className="flex w-full items-center gap-2 rounded-xl corner-superellipse/1.3 px-2 py-1.5 text-left text-sm text-ink hover:bg-overlay-hover hover:text-ink-strong"
           to="/settings"
         >
           <Icon name="settings" size="sm" />

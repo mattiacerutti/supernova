@@ -41,11 +41,11 @@ function SessionSearchResult(props: SessionSearchResultProps) {
   const {highlighted, onSelect, ref, session} = props;
 
   return (
-    <div className={cn("group flex items-center gap-1 rounded-xl corner-superellipse/1.3", highlighted && "bg-white/6")} onClick={onSelect} ref={ref}>
+    <div className={cn("group flex items-center gap-1 rounded-xl corner-superellipse/1.3", highlighted && "bg-overlay-hover")} onClick={onSelect} ref={ref}>
       <div className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 px-3 py-2 text-left">
-        <Icon className="shrink-0 text-neutral-500" name="session" size="sm" />
-        <SessionTitleText className="min-w-0 flex-1 truncate text-[15px] text-neutral-200" title={session.title} />
-        <span className="shrink-0 text-xs text-neutral-500">{session.updatedAt}</span>
+        <Icon className="shrink-0 text-ink-muted" name="session" size="sm" />
+        <SessionTitleText className="min-w-0 flex-1 truncate text-[15px] text-ink" title={session.title} />
+        <span className="shrink-0 text-xs text-ink-muted">{session.updatedAt}</span>
       </div>
     </div>
   );
@@ -119,16 +119,16 @@ export default function SearchSessionsDialog(props: SearchSessionsDialogProps) {
         getItemKey={(row) => `${row.type}-${row.projectPath}-${row.id}`}
         isItemSelectable={(row) => row.type === "session"}
         items={rows}
-        listStatus={sessions.length === 0 && <p className="px-3 py-2 text-sm text-neutral-600">No matching sessions.</p>}
+        listStatus={sessions.length === 0 && <p className="px-3 py-2 text-sm text-ink-faint">No matching sessions.</p>}
         onActiveIndexChange={setActiveRowIndex}
         onSelect={handleOpenSession}
         renderInput={({onKeyDown}) => (
           <div className="shrink-0 pb-2 pt-4">
-            <div className="flex items-center gap-2 rounded-xl bg-white/3 px-3 py-2 text-neutral-500 ring-1 ring-white/5 focus-within:text-neutral-300 focus-within:ring-white/10">
+            <div className="flex items-center gap-2 rounded-xl bg-overlay-hover px-3 py-2 text-ink-muted ring-1 ring-border-muted focus-within:text-ink focus-within:ring-border">
               <Icon name="search" size="sm" />
               <input
                 autoFocus
-                className="min-w-0 flex-1 bg-transparent text-sm text-neutral-200 outline-none placeholder:text-neutral-600"
+                className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink-faint"
                 onChange={(event) => handleQueryChange(event.target.value)}
                 onKeyDown={onKeyDown}
                 placeholder="Search sessions"
@@ -139,7 +139,7 @@ export default function SearchSessionsDialog(props: SearchSessionsDialogProps) {
         )}
         renderItem={(row, _index, renderProps) =>
           row.type === "project" ? (
-            <p className="px-3 pb-1 pt-2 text-xs font-medium text-neutral-600">{row.projectName}</p>
+            <p className="px-3 pb-1 pt-2 text-xs font-medium text-ink-faint">{row.projectName}</p>
           ) : (
             <SessionSearchResult highlighted={renderProps.highlighted} onSelect={renderProps.select} ref={renderProps.ref} session={row} />
           )

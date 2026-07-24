@@ -16,7 +16,7 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
       <nav className="scroll-fade-y min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-1">
         <div className="space-y-0.5">
           <Link
-            className="flex w-full items-center gap-2.5 rounded-xl corner-superellipse/1.3 px-2 py-1.5 text-left text-sm text-neutral-300 hover:bg-white/7 hover:text-white"
+            className="flex w-full items-center gap-2.5 rounded-xl corner-superellipse/1.3 px-2 py-1.5 text-left text-sm text-ink hover:bg-overlay-hover hover:text-ink-strong"
             to="/"
           >
             <Icon name="arrow-left" size="sm" />
@@ -32,8 +32,8 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
               <li key={section.id}>
                 <Link
                   className={cn(
-                    "flex w-full items-center gap-2.5 rounded-xl corner-superellipse/1.3 px-2 py-1.5 text-left text-sm hover:bg-white/7 hover:text-white",
-                    isActive ? "bg-white/7 text-neutral-200" : "text-neutral-300"
+                    "flex w-full items-center gap-2.5 rounded-xl corner-superellipse/1.3 px-2 py-1.5 text-left text-sm hover:bg-overlay-hover hover:text-ink-strong",
+                    isActive ? "bg-overlay-hover text-ink" : "text-ink"
                   )}
                   params={{sectionId: section.id}}
                   to="/settings/$sectionId"

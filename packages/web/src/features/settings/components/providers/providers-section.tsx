@@ -13,8 +13,8 @@ export default function ProvidersSection(props: ProvidersSectionProps) {
 
   return (
     <section>
-      <h2 className="mb-3 text-sm font-medium text-neutral-400">{title}</h2>
-      <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/3">
+      <h2 className="mb-3 text-sm font-medium text-ink-muted">{title}</h2>
+      <div className="overflow-hidden rounded-2xl border border-border bg-overlay-hover">
         {providers.map((provider, index) => (
           <ProviderRow key={provider.id} isFirst={index === 0} onConnect={onConnect} onDisconnect={onDisconnect} provider={provider} />
         ))}

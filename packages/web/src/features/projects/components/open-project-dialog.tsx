@@ -27,13 +27,13 @@ function SuggestionItem(props: SuggestionItemProps) {
   const {name, parent, suffix} = formatSuggestionPath(path, homePath);
 
   return (
-    <div className={cn("group flex items-center gap-1 rounded-xl corner-superellipse/1.3", highlighted && "bg-white/6")} ref={ref}>
+    <div className={cn("group flex items-center gap-1 rounded-xl corner-superellipse/1.3", highlighted && "bg-overlay-hover")} ref={ref}>
       <Button className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 px-3 py-2 text-left" onClick={() => onAutocomplete(path)} variant="bare">
-        <Icon className="shrink-0 text-neutral-500" name="folder" size="sm" />
+        <Icon className="shrink-0 text-ink-muted" name="folder" size="sm" />
         <span className="min-w-0 flex-1 truncate text-[15px]">
-          {parent && <span className="text-neutral-500">{parent}</span>}
-          <span className="text-neutral-200">{name}</span>
-          <span className="text-neutral-500">{suffix}</span>
+          {parent && <span className="text-ink-muted">{parent}</span>}
+          <span className="text-ink">{name}</span>
+          <span className="text-ink-muted">{suffix}</span>
         </span>
       </Button>
     </div>
@@ -138,9 +138,9 @@ export default function OpenProjectDialog(props: OpenProjectDialogProps) {
   const isEmpty = !isLoading && !suggestionsQuery.isFetching && !hasError && suggestedFolders.length === 0 && !isShowingDefaults;
   const listStatus = (
     <>
-      {isLoading && <p className="px-3 py-2 text-sm text-neutral-600">Searching folders...</p>}
-      {hasError && <p className="px-3 py-2 text-sm text-red-400">Unable to search folders.</p>}
-      {isEmpty && <p className="px-3 py-2 text-sm text-neutral-600">No matching subfolders.</p>}
+      {isLoading && <p className="px-3 py-2 text-sm text-ink-faint">Searching folders...</p>}
+      {hasError && <p className="px-3 py-2 text-sm text-diff-removed">Unable to search folders.</p>}
+      {isEmpty && <p className="px-3 py-2 text-sm text-ink-faint">No matching subfolders.</p>}
     </>
   );
 
@@ -168,11 +168,11 @@ export default function OpenProjectDialog(props: OpenProjectDialogProps) {
           }}
           renderInput={({onKeyDown}) => (
             <div className="shrink-0 pb-2 pt-4">
-              <div className="flex items-center gap-2 rounded-xl bg-white/3 px-3 py-0.5 text-neutral-500 ring-1 ring-white/5 focus-within:text-neutral-300 focus-within:ring-white/10">
+              <div className="flex items-center gap-2 rounded-xl bg-overlay-hover px-3 py-0.5 text-ink-muted ring-1 ring-border-muted focus-within:text-ink focus-within:ring-border">
                 <Icon name="search" size="sm" />
                 <input
                   autoFocus
-                  className="min-w-0 flex-1 bg-transparent text-sm text-neutral-200 outline-none placeholder:text-neutral-600"
+                  className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink-faint"
                   onChange={(event) => handlePathChange(event.target.value)}
                   onKeyDown={onKeyDown}
                   placeholder="Search folders"
@@ -188,14 +188,14 @@ export default function OpenProjectDialog(props: OpenProjectDialogProps) {
                   title="Open project path"
                   variant="ghost"
                 >
-                  <Icon className="text-neutral-400" name="arrow-right" size="sm" />
+                  <Icon className="text-ink-muted" name="arrow-right" size="sm" />
                 </Button>
               </div>
             </div>
           )}
           renderItem={(row, _index, renderProps) =>
             row.type === "header" ? (
-              <p className="px-3 pb-1 pt-2 text-xs font-medium text-neutral-600">{row.title}</p>
+              <p className="px-3 pb-1 pt-2 text-xs font-medium text-ink-faint">{row.title}</p>
             ) : (
               <SuggestionItem highlighted={renderProps.highlighted} homePath={homePath} onAutocomplete={handleAutocomplete} path={row.path} ref={renderProps.ref} />
             )
@@ -215,22 +215,22 @@ export default function OpenProjectDialog(props: OpenProjectDialogProps) {
         title="Create folder?"
       >
         <div className="flex flex-col gap-5 pb-5 pt-3">
-          <p className="text-sm leading-6 text-neutral-400">
-            The folder <span className="text-neutral-200">{folderCreationPath}</span> does not exist. Create it and open it as a project?
+          <p className="text-sm leading-6 text-ink-muted">
+            The folder <span className="text-ink">{folderCreationPath}</span> does not exist. Create it and open it as a project?
           </p>
 
-          {createFolderMutation.error && <p className="text-sm text-red-400">Unable to create this folder.</p>}
+          {createFolderMutation.error && <p className="text-sm text-diff-removed">Unable to create this folder.</p>}
 
           <div className="flex justify-end gap-2">
             <Button
-              className="rounded-xl px-3 py-2 text-sm text-neutral-400 hover:bg-white/7 hover:text-neutral-100"
+              className="rounded-xl px-3 py-2 text-sm text-ink-muted hover:bg-overlay-hover hover:text-ink-strong"
               onClick={() => setFolderCreationDialogOpen(false)}
               variant="bare"
             >
               Cancel
             </Button>
             <Button
-              className="rounded-xl bg-white/10 px-3 py-2 text-sm text-neutral-100 hover:bg-white/15 disabled:hover:bg-white/10"
+              className="rounded-xl bg-overlay-pressed px-3 py-2 text-sm text-ink-strong hover:bg-overlay-strong disabled:hover:bg-overlay-pressed"
               disabled={createFolderMutation.isPending}
               onClick={() => void handleConfirmCreateFolder()}
               variant="bare"

@@ -31,8 +31,8 @@ function WorkEvent(props: WorkEventProps) {
 
   if (event.type === "reasoning") {
     return (
-      <div className="text-neutral-200">
-        <AssistantMessageContent className="text-neutral-300" streaming={live}>
+      <div className="text-ink">
+        <AssistantMessageContent className="text-ink" streaming={live}>
           {event.content}
         </AssistantMessageContent>
       </div>
@@ -71,14 +71,14 @@ export default function AssistantWork(props: AssistantWorkProps) {
   return (
     <section className="space-y-2">
       <Button
-        className="group inline-flex w-fit select-none gap-1.5 px-0 py-0 text-sm text-neutral-500 hover:text-neutral-400 items-center "
+        className="group inline-flex w-fit select-none gap-1.5 px-0 py-0 text-sm text-ink-muted hover:text-ink-muted items-center "
         onClick={handleToggle}
         variant="ghost"
       >
         <span>Worked for {formatDuration(item.durationMs)}</span>
         <Icon className={cn("transition-transform duration-160 ease-out", showExpanded && "rotate-90")} name="chevron-right" size="xs" />
       </Button>
-      <div className="h-px bg-white/7" />
+      <div className="h-px bg-overlay-hover" />
       <div
         className="grid grid-rows-[0fr] opacity-0 will-change-[grid-template-rows,opacity] transition-[grid-template-rows,opacity] duration-300 ease-in-out data-[expanded=true]:grid-rows-[1fr] data-[expanded=true]:opacity-100 data-[expanded=true]:mt-2"
         data-expanded={showExpanded}

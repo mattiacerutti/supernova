@@ -99,7 +99,7 @@ function SessionComposerAttachments(props: SessionComposerAttachmentsProps) {
         </div>
       )}
 
-      {attachments.isProcessing && <p className="px-1 pb-2 text-xs text-neutral-500">Preparing files...</p>}
+      {attachments.isProcessing && <p className="px-1 pb-2 text-xs text-ink-muted">Preparing files...</p>}
     </>
   );
 }
@@ -170,7 +170,7 @@ function SessionComposerAttachButton(props: SessionComposerAttachButtonProps) {
       <input accept={SESSION_ATTACHMENT_ACCEPT} className="hidden" disabled={disabled} multiple onChange={handleChange} ref={fileInputRef} type="file" />
       <IconButton
         label={label}
-        className="grid size-8 place-items-center rounded-full text-neutral-400 transition hover:bg-white/6 hover:text-neutral-100 disabled:cursor-default disabled:text-neutral-600 disabled:hover:bg-transparent"
+        className="grid size-8 place-items-center rounded-full text-ink-muted transition hover:bg-overlay-hover hover:text-ink-strong disabled:cursor-default disabled:text-ink-faint disabled:hover:bg-transparent"
         disabled={disabled}
         onClick={handleClick}
         size="none"
@@ -199,7 +199,7 @@ function SessionComposerSubmitButton(props: SessionComposerSubmitButtonProps) {
   return (
     <IconButton
       label={label}
-      className="grid size-9 place-items-center rounded-full bg-neutral-300 text-neutral-950 transition hover:bg-white disabled:cursor-default disabled:bg-white/10 disabled:text-neutral-500"
+      className="grid size-9 place-items-center rounded-full bg-ink text-ink-inverse transition hover:bg-ink-strong disabled:cursor-default disabled:bg-overlay-pressed disabled:text-ink-muted"
       disabled={disabled}
       onClick={onClick}
       size="none"
@@ -256,7 +256,7 @@ export default function SessionComposer(props: SessionComposerProps) {
       editorProps: {
         attributes: {
           class: cn(
-            "scroll-fade-y max-h-48 min-h-10 w-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent p-1 text-sm leading-5 text-neutral-200 outline-none",
+            "scroll-fade-y max-h-48 min-h-10 w-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent p-1 text-sm leading-5 text-ink outline-none",
             inputDisabled && "cursor-default opacity-60"
           ),
         },
@@ -303,7 +303,7 @@ export default function SessionComposer(props: SessionComposerProps) {
             <div className="pointer-events-auto">{topExtension}</div>
           </div>
         )}
-        <div className="relative z-10 rounded-3xl corner-superellipse/1.3 bg-[#2b2b2b] px-3 py-2 ring-1 ring-white/6 shadow-md">
+        <div className="relative z-10 rounded-3xl corner-superellipse/1.3 bg-surface-contrast px-3 py-2 ring-1 ring-border-muted shadow-md">
           <SessionComposerAttachments attachments={attachments} />
           <SessionComposerInput
             attachmentDisabled={attachmentDisabled}

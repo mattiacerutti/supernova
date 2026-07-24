@@ -118,8 +118,8 @@ function FileMutationToolTitle(props: {tool: FileMutationTool}) {
 
       {stats && (
         <span className="flex shrink-0 items-center gap-1 font-mono text-xs leading-none">
-          <span className="text-emerald-400">+{stats.additions}</span>
-          <span className="text-red-400">-{stats.deletions}</span>
+          <span className="text-diff-added">+{stats.additions}</span>
+          <span className="text-diff-removed">-{stats.deletions}</span>
         </span>
       )}
     </ToolTitleRow>
@@ -173,7 +173,7 @@ export default function ToolTitle(props: {event: ToolEvent}) {
   const pending = event.tool?.status === "pending";
 
   return (
-    <div className={pending ? "shimmer min-w-0 text-neutral-600" : "min-w-0"}>
+    <div className={pending ? "shimmer min-w-0 text-ink-faint" : "min-w-0"}>
       <ToolTitleContent event={event} />
     </div>
   );

@@ -95,7 +95,7 @@ export default function ComposerEditor(props: ComposerEditorProps) {
           </div>
           <EditorContent className={cn("relative z-10 col-start-1 row-start-1 min-h-10", className)} editor={editor} />
         </div>
-        {value.length === 0 && <div className="pointer-events-none absolute inset-x-0 top-0 p-1 text-sm font-light leading-5 text-white/25">{placeholder}</div>}
+        {value.length === 0 && <div className="pointer-events-none absolute inset-x-0 top-0 p-1 text-sm font-light leading-5 text-ink-strong/25">{placeholder}</div>}
       </ComposerSuggestionMenu>
     </div>
   );

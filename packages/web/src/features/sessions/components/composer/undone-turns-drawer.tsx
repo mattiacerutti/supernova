@@ -18,7 +18,7 @@ function UndoneTurnTitle(props: {readonly contentParts: readonly UserMessageCont
   const titleParts = contentParts.filter((part) => part.type === "text" || part.type === "reference");
   const hasTitle = titleParts.some((part) => part.type === "reference" || part.text.trim().length > 0);
 
-  if (!hasTitle) return <span className="text-neutral-500">(No content)</span>;
+  if (!hasTitle) return <span className="text-ink-muted">(No content)</span>;
 
   return (
     <span className="block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
@@ -26,8 +26,8 @@ function UndoneTurnTitle(props: {readonly contentParts: readonly UserMessageCont
         if (part.type === "text") return <span key={contentPartKey(part, index)}>{part.text}</span>;
 
         return (
-          <span className="mx-1 inline-flex items-baseline gap-1 whitespace-nowrap align-baseline leading-[inherit] text-sky-300" key={contentPartKey(part, index)}>
-            <Icon className="relative top-px size-[1em] text-sky-300" name={part.kind === "skill" ? "skill" : part.value.endsWith("/") ? "folder" : "file"} size="xs" />
+          <span className="mx-1 inline-flex items-baseline gap-1 whitespace-nowrap align-baseline leading-[inherit] text-skill" key={contentPartKey(part, index)}>
+            <Icon className="relative top-px size-[1em] text-skill" name={part.kind === "skill" ? "skill" : part.value.endsWith("/") ? "folder" : "file"} size="xs" />
             <span>{part.name}</span>
           </span>
         );
@@ -93,14 +93,14 @@ export default function UndoneTurnsDrawer(props: UndoneTurnsDrawerProps) {
           transition={DRAWER_TRANSITION}
         >
           <div className="min-h-0 min-w-0 overflow-hidden">
-            <div className="relative mx-px rounded-t-3xl corner-superellipse/1.3 border border-white/8 bg-[#151515] px-4 pb-7 pt-2.5">
+            <div className="relative mx-px rounded-t-3xl corner-superellipse/1.3 border border-border-muted bg-surface-recessed px-4 pb-7 pt-2.5">
               <div className={cn("flex items-center justify-between gap-3 px-1", expanded && "mb-3")}>
-                <div className="flex min-w-0 items-center gap-2 text-sm text-neutral-300">
+                <div className="flex min-w-0 items-center gap-2 text-sm text-ink">
                   <span className="shrink-0 font-medium">
                     {count} rolled back {count === 1 ? "message" : "messages"}
                   </span>
                   {!expanded && previewTurn && (
-                    <span className="min-w-0 truncate text-neutral-500">
+                    <span className="min-w-0 truncate text-ink-muted">
                       <UndoneTurnTitle contentParts={previewTurn.userMessage.contentParts} />
                     </span>
                   )}
@@ -135,7 +135,7 @@ export default function UndoneTurnsDrawer(props: UndoneTurnsDrawerProps) {
                           };
 
                           return (
-                            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-4 overflow-hidden px-1 text-sm text-neutral-200" key={turn.id}>
+                            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-4 overflow-hidden px-1 text-sm text-ink" key={turn.id}>
                               <div className="min-w-0 flex-1 overflow-hidden truncate whitespace-nowrap leading-relaxed">
                                 <UndoneTurnTitle contentParts={turn.userMessage.contentParts} />
                               </div>

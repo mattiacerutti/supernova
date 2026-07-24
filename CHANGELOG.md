@@ -8,11 +8,15 @@ All notable changes to Supernova are documented in this file.
 
 ### Added
 
+- Added a new Appearance settings tab, with customizable themes and fonts.
+
 ### Changed
 
 ### Fixed
 
 ### Removed
+
+- Removed the placeholder General settings tab.
 
 ## [0.0.1-beta.8]
 

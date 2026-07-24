@@ -27,12 +27,12 @@ export default function ThinkingLevelPicker(props: ThinkingLevelPickerProps) {
           variant="primary"
         >
           <span className="truncate">{selectedThinkingLabel}</span>
-          <Icon className="shrink-0 text-neutral-500" name="chevron-down" size="xs" />
+          <Icon className="shrink-0 text-ink-muted" name="chevron-down" size="xs" />
         </Button>
       )}
       triggerLabel="Select reasoning level"
     >
-      <div className="px-2 pb-2 text-sm text-neutral-500">Thinking Level</div>
+      <div className="px-2 pb-2 text-sm text-ink-muted">Thinking Level</div>
       <div className="space-y-1">
         {thinkingLevels.map((level) => {
           const selected = level.value === selectedThinkingLevel;

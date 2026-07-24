@@ -40,7 +40,7 @@ function SessionLoading(props: SessionLoadingProps) {
         cachedTitle ? (
           <span className="block truncate">{cachedTitle}</span>
         ) : (
-          <span className="block h-4 w-36 animate-pulse rounded-full bg-white/10" aria-label="Loading session title" />
+          <span className="block h-4 w-36 animate-pulse rounded-full bg-overlay-pressed" aria-label="Loading session title" />
         )
       }
     />
@@ -188,7 +188,7 @@ function SessionConversation(props: SessionConversationProps) {
       title={
         renaming ? (
           <input
-            className="block h-5 min-w-0 w-64 truncate border-0 bg-transparent p-0 text-sm font-medium leading-5 text-neutral-200 outline-none"
+            className="block h-5 min-w-0 w-64 truncate border-0 bg-transparent p-0 text-sm font-medium leading-5 text-ink outline-none"
             onBlur={handleRenameBlur}
             onChange={handleRenameChange}
             onClick={handleRenameClick}
@@ -221,7 +221,7 @@ export default function SessionPage(props: SessionPageProps) {
     if (error) {
       return (
         <div className="grid flex-1 place-items-center px-6 py-10">
-          <p className="text-sm text-red-300">Unable to load this session.</p>
+          <p className="text-sm text-diff-removed">Unable to load this session.</p>
         </div>
       );
     }

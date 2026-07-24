@@ -21,7 +21,7 @@ function ToastItem(props: {readonly toast: ToastObject}) {
     <Toast.Root
       className={cn(
         "absolute right-2 -bottom-1 z-[calc(1000-var(--toast-index))]",
-        "w-full rounded-2xl border border-white/10 bg-neutral-800 p-3",
+        "w-full rounded-2xl border border-border bg-surface-raised p-3",
         "select-text",
 
         // Stack tuning
@@ -57,7 +57,7 @@ function ToastItem(props: {readonly toast: ToastObject}) {
       <div className="grid grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_auto] gap-x-3 overflow-hidden" data-base-ui-swipe-ignore>
         <div className="col-start-1 row-start-1 min-w-0">
           {toast.title && (
-            <h2 className="m-0 wrap-break-word text-sm leading-6 text-neutral-200" id={titleId}>
+            <h2 className="m-0 wrap-break-word text-sm leading-6 text-ink" id={titleId}>
               {toast.title}
             </h2>
           )}
@@ -65,14 +65,14 @@ function ToastItem(props: {readonly toast: ToastObject}) {
 
         <Toast.Close
           aria-label="Close"
-          className="col-start-2 row-start-1 self-center flex items-center justify-center rounded-md p-1 text-neutral-400 transition-colors hover:bg-white/10 hover:text-neutral-100"
+          className="col-start-2 row-start-1 self-center flex items-center justify-center rounded-md p-1 text-ink-muted transition-colors hover:bg-overlay-pressed hover:text-ink-strong"
         >
           <Icon name="x" size="sm" />
         </Toast.Close>
 
         <div className="col-start-1 row-start-2 min-w-0">
           {toast.description && (
-            <p className="mt-0.5 mb-0 wrap-break-word text-xs text-neutral-400" id={descriptionId}>
+            <p className="mt-0.5 mb-0 wrap-break-word text-xs text-ink-muted" id={descriptionId}>
               {toast.description}
             </p>
           )}
