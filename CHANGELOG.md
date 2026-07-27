@@ -16,6 +16,7 @@ All notable changes to Supernova are documented in this file.
 
 ### Fixed
 
+- Fixed the new-chat Supernova logo visibility in light mode and improved its edge rendering in both themes.
 - Fixed long unbroken composer text wrapping instead of overflowing the input.
 
 ### Removed

@@ -1,7 +1,8 @@
 import type {UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 import {useQueryClient} from "@tanstack/react-query";
 import {useNavigate} from "@tanstack/react-router";
-import appIconUrl from "@assets/icon.png";
+import appIconLightUrl from "@assets/icon-black.png";
+import appIconDarkUrl from "@assets/icon-white.png";
 import AttachmentDropOverlay from "@/features/sessions/components/attachments/attachment-drop-overlay";
 import ModelPicker from "@/features/sessions/components/composer/pickers/model-picker";
 import ThinkingLevelPicker from "@/features/sessions/components/composer/pickers/thinking-level-picker";
@@ -14,6 +15,7 @@ import {useComposerDraft} from "@/features/sessions/hooks/use-composer-draft";
 import {useComposerModelSelection} from "@/features/sessions/hooks/use-composer-model-selection";
 import {newSessionComposerDraftKey} from "@/features/sessions/stores/composer-drafts-store";
 import {useSessionLiveStore} from "@/features/sessions/stores/session-live-store";
+import {useAppearanceStore} from "@/features/settings/stores/appearance-store";
 import {useAgentRpcClient} from "@/rpc/use-agent-rpc-client";
 import {showToast} from "@/components/ui/toast-manager";
 
@@ -29,6 +31,7 @@ export default function NewSessionPage(props: NewSessionPageProps) {
   const queryClient = useQueryClient();
   const rpcClient = useAgentRpcClient();
   const createSessionMutation = useCreateSession();
+  const resolvedMode = useAppearanceStore((state) => state.resolvedMode);
   const hydrateSession = useSessionLiveStore((state) => state.hydrateSession);
   const sendMessage = useSessionLiveStore((state) => state.sendMessage);
   const modelSelection = useComposerModelSelection();
@@ -79,7 +82,7 @@ export default function NewSessionPage(props: NewSessionPageProps) {
     <div {...composerAttachments.dropZoneProps} className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden px-4 pb-16 pt-4">
       <div className="flex h-[min(calc(100svh-1rem),32rem)] w-[min(calc(100vw-2rem),48rem)] flex-col items-center justify-center overflow-visible">
         <div className="mb-8 flex flex-col items-center gap-3">
-          <img src={appIconUrl} alt="Supernova" className="h-16 w-auto shrink-0" draggable={false} />
+          <img src={resolvedMode === "light" ? appIconLightUrl : appIconDarkUrl} alt="Supernova" className="h-16 w-22 shrink-0" draggable={false} />
           <h1 className="text-center text-4xl font-normal tracking-tight text-ink-strong">
             What should we build in <i className="text-ink-muted">{projectName}</i>?
           </h1>
