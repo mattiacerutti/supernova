@@ -256,7 +256,7 @@ export default function SessionComposer(props: SessionComposerProps) {
       editorProps: {
         attributes: {
           class: cn(
-            "scroll-fade-y max-h-48 min-h-10 w-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent p-1 text-sm leading-5 text-ink outline-none",
+            "scroll-fade-y max-h-48 min-h-10 w-full min-w-0 overflow-y-auto whitespace-pre-wrap wrap-anywhere bg-transparent p-1 text-sm leading-5 text-ink outline-none",
             inputDisabled && "cursor-default opacity-60"
           ),
         },

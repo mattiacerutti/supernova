@@ -16,6 +16,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Fixed
 
+- Fixed long unbroken composer text wrapping instead of overflowing the input.
+
 ### Removed
 
 - Removed the placeholder General settings tab.

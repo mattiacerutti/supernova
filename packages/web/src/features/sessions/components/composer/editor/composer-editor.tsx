@@ -86,14 +86,14 @@ export default function ComposerEditor(props: ComposerEditorProps) {
   return (
     <div onPasteCapture={handlePasteCapture}>
       <ComposerSuggestionMenu onSelect={selectSuggestion} onSubmit={onSubmit} open={suggestionOpen} query={suggestionQuery}>
-        <div className="grid">
+        <div className="grid min-w-0">
           {/* Reserve the editor's real text height before TipTap finishes mounting.
               This keeps timeline scroll restoration from running against a shorter
               composer when an undone message pre-fills the editor. */}
-          <div aria-hidden className="invisible col-start-1 row-start-1 max-h-48 min-h-10 overflow-hidden whitespace-pre-wrap break-words p-1 text-sm leading-5">
+          <div aria-hidden className="invisible col-start-1 row-start-1 max-h-48 min-h-10 min-w-0 overflow-hidden whitespace-pre-wrap wrap-anywhere p-1 text-sm leading-5">
             {value || "\u00a0"}
           </div>
-          <EditorContent className={cn("relative z-10 col-start-1 row-start-1 min-h-10", className)} editor={editor} />
+          <EditorContent className={cn("relative z-10 col-start-1 row-start-1 min-h-10 min-w-0", className)} editor={editor} />
         </div>
         {value.length === 0 && <div className="pointer-events-none absolute inset-x-0 top-0 p-1 text-sm font-light leading-5 text-ink-strong/25">{placeholder}</div>}
       </ComposerSuggestionMenu>
