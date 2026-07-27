@@ -3,7 +3,7 @@ import type {ChildProcessWithoutNullStreams} from "node:child_process";
 import {homedir} from "node:os";
 import {delimiter, join} from "node:path";
 import type {BrowserWindowConstructorOptions} from "electron";
-import {app, shell, BrowserWindow, ipcMain, nativeImage} from "electron";
+import {app, shell, BrowserWindow, ipcMain, nativeImage, nativeTheme} from "electron";
 import {electronApp, optimizer} from "@electron-toolkit/utils";
 import installExtension, {REACT_DEVELOPER_TOOLS} from "electron-devtools-installer";
 import windowState from "electron-window-state";
@@ -25,6 +25,10 @@ interface SpawnedServer {
 
 function registerDesktopIpc(): void {
   ipcMain.handle("desktop:get-server-url", () => server?.url);
+  ipcMain.handle("desktop:set-theme", (_, theme: unknown) => {
+    if (theme !== "dark" && theme !== "light" && theme !== "system") return;
+    nativeTheme.themeSource = theme;
+  });
   ipcMain.handle("desktop:open-in-finder", async (_, projectPath: unknown) => {
     if (typeof projectPath !== "string" || projectPath.trim().length === 0) {
       throw new Error("Project path is required to open Finder.");
@@ -114,7 +118,7 @@ function resolveRendererUrl(): string {
 
 function windowChromeOptions(): Pick<
   BrowserWindowConstructorOptions,
-  "backgroundColor" | "titleBarStyle" | "trafficLightPosition" | "transparent" | "vibrancy" | "visualEffectState"
+  "backgroundColor" | "titleBarStyle" | "trafficLightPosition" | "vibrancy" | "visualEffectState"
 > {
   if (process.platform !== "darwin") {
     return {};
@@ -124,9 +128,8 @@ function windowChromeOptions(): Pick<
     backgroundColor: "#00000000",
     titleBarStyle: "hiddenInset",
     trafficLightPosition: {x: 20, y: 17},
-    transparent: true,
-    vibrancy: "fullscreen-ui",
-    visualEffectState: "active",
+    vibrancy: "under-window",
+    visualEffectState: "followWindow",
   };
 }
 

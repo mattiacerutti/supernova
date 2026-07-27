@@ -19,7 +19,7 @@ export default function Dialog(props: DialogProps) {
   return (
     <BaseDialog.Root onOpenChange={onOpenChange} onOpenChangeComplete={onOpenChangeComplete} open={open}>
       <BaseDialog.Portal>
-        <BaseDialog.Backdrop className="fixed inset-0 z-50 bg-overlay-scrim opacity-100 backdrop-blur-[1px] transition-opacity duration-150 ease-out data-closed:opacity-0 data-ending-style:opacity-0 data-starting-style:opacity-0" />
+        <BaseDialog.Backdrop className="fixed inset-0 z-50 bg-overlay-scrim opacity-100 transition-opacity duration-150 ease-out data-closed:opacity-0 data-ending-style:opacity-0 data-starting-style:opacity-0" />
         <BaseDialog.Viewport className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center overflow-hidden">
           <div
             className={cn("relative z-50 flex h-[min(calc(100svh-1rem),32rem)] w-[min(calc(100vw-1rem),40rem)] flex-col items-center overflow-visible", containerClassName)}
@@ -27,7 +27,7 @@ export default function Dialog(props: DialogProps) {
           >
             <BaseDialog.Popup
               className={cn(
-                "pointer-events-auto flex max-h-full w-full flex-col overflow-hidden rounded-2xl border border-border bg-surface-inset",
+                "pointer-events-auto relative flex max-h-full w-full flex-col overflow-hidden rounded-2xl border border-border-muted bg-surface-deep shadow-lg/5 before:pointer-events-none before:absolute before:inset-0 before:bg-surface-elevated-secondary/72",
                 "origin-center translate-y-0 scale-100 transform-gpu opacity-100 will-change-[opacity,transform] transition-[opacity,scale,translate] duration-200 ease-out data-closed:translate-y-1 data-closed:scale-[0.985] data-closed:opacity-0 data-ending-style:translate-y-1 data-ending-style:scale-[0.985] data-ending-style:opacity-0 data-starting-style:translate-y-1 data-starting-style:scale-[0.985] data-starting-style:opacity-0",
                 className
               )}

@@ -131,7 +131,7 @@ export default function ComposerSuggestionMenu(props: ComposerSuggestionMenuProp
     <div className="relative" onKeyDownCapture={handleKeyDownCapture}>
       {showLoadingPanel && (
         <div className="absolute -inset-x-3 bottom-full z-40 mb-4 opacity-100 delay-200 starting:opacity-0">
-          <div className="overflow-hidden rounded-2xl border border-border bg-surface-contrast/95 text-ink backdrop-blur-3xl">
+          <div className="overflow-hidden rounded-2xl border border-border bg-surface-popover/70 text-ink backdrop-blur-[32px]">
             <div className="scroll-fade-y max-h-64 overflow-y-auto p-1">
               <p className="px-3 py-2 text-sm text-ink-faint">Loading suggestions...</p>
             </div>
@@ -140,7 +140,7 @@ export default function ComposerSuggestionMenu(props: ComposerSuggestionMenuProp
       )}
       {showSettledPanel && (
         <div className="absolute -inset-x-3 bottom-full z-40 mb-4">
-          <div className="overflow-hidden rounded-2xl border border-border bg-surface-contrast/95 text-ink backdrop-blur-3xl">
+          <div className="overflow-hidden rounded-2xl border border-border bg-surface-popover/70 text-ink backdrop-blur-[32px]">
             <div className="scroll-fade-y max-h-64 overflow-y-auto p-1">
               {query.isError && <p className="px-3 py-2 text-sm text-diff-removed">{query.error instanceof Error ? query.error.message : "Unable to load suggestions."}</p>}
               {!query.isError && items.length === 0 && <p className="px-3 py-2 text-sm text-ink-faint">No items</p>}

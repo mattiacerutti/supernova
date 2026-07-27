@@ -12,6 +12,7 @@ interface DesktopShell {
   integratedTitleBar: boolean;
   openInFinder: (projectPath: string) => Promise<void>;
   platform: string;
+  setTheme: (theme: "dark" | "light" | "system") => Promise<void>;
 }
 
 declare global {

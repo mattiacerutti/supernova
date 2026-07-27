@@ -51,7 +51,7 @@ function CommandToolDetails(props: {tool: Extract<Tool, {kind: "command"}>}) {
 
   return (
     <ContentPanel className="p-0 text-sm font-mono" scrollable={false}>
-      <div className="flex items-center justify-between bg-surface-raised px-2.5 pb-1.5 pt-2.5 font-sans text-sm text-ink-muted">
+      <div className="flex items-center justify-between px-2.5 pb-1.5 pt-2.5 font-sans text-sm text-ink-muted">
         <span>Shell</span>
       </div>
       <div className="scroll-fade max-h-72 overflow-auto overscroll-contain" data-scrollable>
@@ -118,7 +118,7 @@ function FileMutationToolDetails(props: {tool: FileMutationTool}) {
 
   return (
     <ContentPanel className="p-0 text-sm" scrollable={false}>
-      <div className="flex items-center justify-between bg-surface-raised px-2.5 pb-1.5 pt-2.5 font-sans text-sm text-ink-muted">
+      <div className="flex items-center justify-between px-2.5 pb-1.5 pt-2.5 font-sans text-sm text-ink-muted">
         <span className="min-w-0 truncate">{fileName(path)}</span>
       </div>
       <div className="scroll-fade max-h-72 overflow-auto overscroll-contain" data-scrollable>

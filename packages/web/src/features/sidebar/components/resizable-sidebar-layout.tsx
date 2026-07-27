@@ -54,7 +54,7 @@ export default function ResizableSidebarLayout(props: ResizableSidebarLayoutProp
 
   return (
     <main className={cn("h-svh overflow-hidden text-ink", desktopEnvironment && "desktop-window")}>
-      <section className={cn("relative flex h-full min-h-0 overflow-hidden", desktopEnvironment ? "desktop-window-frame desktop-sidebar-background" : "bg-surface-contrast")}>
+      <section className={cn("relative flex h-full min-h-0 overflow-hidden", desktopEnvironment ? "desktop-window-frame desktop-sidebar-background" : "bg-surface-sidebar")}>
         <div className={cn("desktop-titlebar absolute inset-x-0 top-0 z-10 flex h-12 items-center gap-1 pr-3", macEnvironment ? "pl-23" : "pl-3")}>{titlebarActions}</div>
 
         <div

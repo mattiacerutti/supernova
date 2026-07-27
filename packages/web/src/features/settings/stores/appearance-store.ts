@@ -53,6 +53,7 @@ function applyAppearance(mode: AppearanceMode, themeId: ThemeId): ResolvedAppear
   root.dataset.colorMode = resolvedMode;
   root.dataset.theme = theme.id;
   root.style.colorScheme = resolvedMode;
+  void window.desktopShell?.setTheme(mode).catch(() => undefined);
   return resolvedMode;
 }
 

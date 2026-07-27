@@ -39,8 +39,12 @@
   --color-surface-deep: var(--theme-surface-deep);
   --color-surface-raised: var(--theme-surface-raised);
   --color-surface-inset: var(--theme-surface-inset);
+  --color-surface-sidebar: var(--theme-surface-sidebar);
   --color-surface-contrast: var(--theme-surface-contrast);
   --color-surface-recessed: var(--theme-surface-recessed);
+  --color-surface-popover: var(--theme-surface-popover);
+  --color-surface-drawer: var(--theme-surface-drawer);
+  --color-surface-elevated-secondary: var(--theme-surface-elevated-secondary);
   --color-ink-strong: var(--theme-ink-strong);
   --color-ink: var(--theme-ink);
   --color-ink-muted: var(--theme-ink-muted);
@@ -54,10 +58,10 @@
   --color-overlay-strong: var(--theme-overlay-strong);
   --color-overlay-scrim: var(--theme-overlay-scrim);
   --color-accent: var(--theme-accent);
+  --color-accent-focus: var(--theme-accent-focus);
   --color-diff-added: var(--theme-diff-added);
   --color-diff-removed: var(--theme-diff-removed);
   --color-diff-removed-surface: var(--theme-diff-removed-surface);
-  --color-skill: var(--theme-skill);
   --font-sans: -apple-system, BlinkMacSystemFont, Inter, sans-serif;
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --text-sm: 0.85rem;
@@ -138,16 +142,24 @@
     background: transparent;
   }
 
+  /* The parent owns the sidebar material so the rounded content corner reveals
+     the same backing instead of bare window vibrancy. */
   .desktop-sidebar-background {
-    background: var(--theme-surface-contrast);
+    --sidebar-surface-opacity: 64%;
+    background: var(--theme-surface-sidebar);
   }
 
-  :root[data-translucent-sidebar="true"] .desktop-sidebar-background {
-    background: color-mix(in srgb, var(--theme-surface-contrast) 80%, transparent);
+  :root[data-color-mode="dark"] .desktop-sidebar-background {
+    --sidebar-surface-opacity: 72%;
+  }
+
+  :root[data-app-environment="mac"][data-translucent-sidebar="true"] .desktop-sidebar-background {
+    background: color-mix(in srgb, var(--theme-surface-sidebar) var(--sidebar-surface-opacity), transparent);
+    backdrop-filter: blur(8px) saturate(135%);
   }
 
   .desktop-window-frame {
-    box-shadow: inset 0 1px 0 var(--theme-border);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--theme-ink-strong) 2.5%, transparent);
   }
 
   .app-panel[data-sidebar-visible="false"] {

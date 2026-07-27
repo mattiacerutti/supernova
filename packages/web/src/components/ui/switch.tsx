@@ -11,7 +11,7 @@ export default function Switch(props: SwitchProps) {
   return (
     <BaseSwitch.Root
       className={cn(
-        "relative inline-flex h-6 w-10 shrink-0 cursor-pointer items-center rounded-full border border-border bg-surface-raised outline-none transition-colors data-checked:bg-accent focus-visible:ring-2 focus-visible:ring-accent/40 data-disabled:cursor-default data-disabled:opacity-50",
+        "relative inline-flex h-6 w-10 shrink-0 cursor-pointer items-center rounded-full border border-border bg-surface-raised outline-none transition-colors data-checked:border-accent data-checked:bg-accent focus-visible:ring-2 focus-visible:ring-accent-focus/60 data-disabled:cursor-default data-disabled:opacity-50",
         className
       )}
       {...switchProps}

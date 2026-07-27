@@ -14,7 +14,7 @@ export function SettingsCard(props: SettingsCardProps) {
   return (
     <section>
       <h2 className="mb-3 px-1 text-sm font-medium text-ink-strong">{title}</h2>
-      <div className="overflow-hidden rounded-2xl border border-border bg-overlay-hover divide-y divide-border-muted">{children}</div>
+      <div className="overflow-hidden rounded-2xl border border-border bg-surface-recessed divide-y divide-border-muted">{children}</div>
     </section>
   );
 }
@@ -71,7 +71,7 @@ export function SegmentedControl<T extends string>(props: SegmentedControlProps<
           <Button
             aria-checked={active}
             className={cn(
-              "inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl px-2.5 py-1.5 text-sm transition-colors sm:flex-none",
+              "inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl px-2.5 py-1.5 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent-focus/60 sm:flex-none",
               active ? "bg-overlay-pressed text-ink" : "text-ink-muted hover:bg-overlay-hover hover:text-ink"
             )}
             key={option.value}

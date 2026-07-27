@@ -8,7 +8,7 @@ const MAX_HIGHLIGHT_CACHE_MEMORY_BYTES = 50 * 1024 * 1024;
 
 export const CODE_HIGHLIGHT_THEMES = {
   dark: "github-dark",
-  light: "pierre-light",
+  light: "github-light",
 } as const;
 
 export type CodeHighlightTheme = (typeof CODE_HIGHLIGHT_THEMES)[keyof typeof CODE_HIGHLIGHT_THEMES];

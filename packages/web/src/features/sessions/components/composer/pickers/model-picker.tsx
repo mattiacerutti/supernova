@@ -52,7 +52,7 @@ export default function ModelPicker(props: ModelPickerProps) {
   return (
     <Menu
       align="end"
-      className="w-[min(20rem,calc(100vw-2rem))] overflow-hidden bg-surface-contrast backdrop-blur-none"
+      className="w-[min(20rem,calc(100vw-2rem))] overflow-hidden bg-surface-popover/70 backdrop-blur-[32px]"
       onOpenChange={handleOpenChange}
       open={open}
       sideOffset={10}
@@ -83,7 +83,7 @@ export default function ModelPicker(props: ModelPickerProps) {
           {sections.length === 0 && <div className="px-3 py-7 text-center text-sm text-ink-muted">No models found</div>}
           {sections.map((section) => (
             <div key={section.title}>
-              <div className="sticky top-0 z-10 mt-2 bg-surface-contrast p-2 px-2 text-sm font-medium text-ink-muted">{section.title}</div>
+              <div className="mt-2 p-2 px-2 text-sm font-medium text-ink-muted">{section.title}</div>
               <div className="space-y-0.5 pb-3">
                 {section.models.map((model) => {
                   const value = modelKey(model.providerId, model.id);

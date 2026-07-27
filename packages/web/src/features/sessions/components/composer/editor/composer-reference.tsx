@@ -11,11 +11,11 @@ export default function ComposerReference(props: NodeViewProps) {
   return (
     <NodeViewWrapper
       as="span"
-      className="inline-flex select-none items-baseline gap-1 whitespace-nowrap align-baseline leading-[inherit] text-skill"
+      className="inline-flex select-none items-baseline gap-1 whitespace-nowrap align-baseline leading-[inherit] text-accent"
       contentEditable={false}
       spellCheck={false}
     >
-      <Icon className="relative top-px size-[1em] text-skill" name={iconName} size="xs" />
+      <Icon className="relative top-px size-[1em] text-accent" name={iconName} size="xs" />
       <span>{name}</span>
     </NodeViewWrapper>
   );

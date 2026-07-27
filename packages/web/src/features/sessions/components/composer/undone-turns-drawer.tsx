@@ -26,8 +26,8 @@ function UndoneTurnTitle(props: {readonly contentParts: readonly UserMessageCont
         if (part.type === "text") return <span key={contentPartKey(part, index)}>{part.text}</span>;
 
         return (
-          <span className="mx-1 inline-flex items-baseline gap-1 whitespace-nowrap align-baseline leading-[inherit] text-skill" key={contentPartKey(part, index)}>
-            <Icon className="relative top-px size-[1em] text-skill" name={part.kind === "skill" ? "skill" : part.value.endsWith("/") ? "folder" : "file"} size="xs" />
+          <span className="mx-1 inline-flex items-baseline gap-1 whitespace-nowrap align-baseline leading-[inherit] text-accent" key={contentPartKey(part, index)}>
+            <Icon className="relative top-px size-[1em] text-accent" name={part.kind === "skill" ? "skill" : part.value.endsWith("/") ? "folder" : "file"} size="xs" />
             <span>{part.name}</span>
           </span>
         );
@@ -93,7 +93,7 @@ export default function UndoneTurnsDrawer(props: UndoneTurnsDrawerProps) {
           transition={DRAWER_TRANSITION}
         >
           <div className="min-h-0 min-w-0 overflow-hidden">
-            <div className="relative mx-px rounded-t-3xl corner-superellipse/1.3 border border-border-muted bg-surface-recessed px-4 pb-7 pt-2.5">
+            <div className="relative mx-px rounded-t-3xl corner-superellipse/1.3 border border-border-muted bg-surface-drawer px-4 pb-7 pt-2.5">
               <div className={cn("flex items-center justify-between gap-3 px-1", expanded && "mb-3")}>
                 <div className="flex min-w-0 items-center gap-2 text-sm text-ink">
                   <span className="shrink-0 font-medium">

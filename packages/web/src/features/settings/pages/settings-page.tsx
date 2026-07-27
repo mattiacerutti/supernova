@@ -19,7 +19,7 @@ export default function SettingsPage(props: SettingsPageProps) {
 
   return (
     <main className={cn("h-svh select-text overflow-hidden text-ink", desktopEnvironment && "desktop-window")}>
-      <section className={cn("relative flex h-full min-h-0 overflow-hidden", desktopEnvironment ? "desktop-window-frame desktop-sidebar-background" : "bg-surface-contrast")}>
+      <section className={cn("relative flex h-full min-h-0 overflow-hidden", desktopEnvironment ? "desktop-window-frame desktop-sidebar-background" : "bg-surface-sidebar")}>
         {macEnvironment && <div className="desktop-titlebar absolute inset-x-0 top-0 z-10 h-12" />}
         <div className="w-72 shrink-0 overflow-hidden">
           <SettingsSidebar activeSectionId={section.id} />

@@ -9,7 +9,7 @@ export default function ProvidersPageSkeleton() {
     <div aria-label="Loading providers" className="mt-10" role="status">
       <section aria-hidden="true">
         <h2 className="mb-3 text-sm font-medium text-ink-muted">Available</h2>
-        <div className="overflow-hidden rounded-2xl border border-border bg-overlay-hover">
+        <div className="overflow-hidden rounded-2xl border border-border bg-surface-recessed">
           {availableSkeletonRows.map((row, index) => (
             <ProviderSkeletonRow key={row} isFirst={index === 0} />
           ))}

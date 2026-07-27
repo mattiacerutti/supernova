@@ -12,6 +12,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+- Overhauled the default Supernova theme.
+
 ### Fixed
 
 ### Removed

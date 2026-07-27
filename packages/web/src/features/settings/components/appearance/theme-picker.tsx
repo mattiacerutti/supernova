@@ -4,7 +4,7 @@ import Menu, {MenuItem} from "@/components/ui/menu";
 import {appThemes, getAppTheme} from "@/features/settings/data/app-themes";
 import {useAppearanceStore} from "@/features/settings/stores/appearance-store";
 
-const preview = <span className="grid size-5 place-items-center rounded-md border border-border bg-surface-inset text-xs text-skill">Aa</span>;
+const preview = <span className="grid size-5 place-items-center rounded-md border border-border bg-surface-inset text-xs text-accent">Aa</span>;
 
 /** Selects the active app theme. */
 export default function ThemePicker() {

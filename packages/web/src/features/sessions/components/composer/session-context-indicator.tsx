@@ -52,7 +52,7 @@ export default function SessionContextIndicator(props: SessionContextIndicatorPr
   return (
     <Menu
       align="end"
-      className="w-56 overflow-hidden bg-surface-contrast backdrop-blur-none"
+      className="w-56 overflow-hidden backdrop-blur-none"
       sideOffset={10}
       trigger={(triggerProps) => (
         <Button {...triggerProps} className="grid size-7 place-items-center rounded-full p-0 text-ink" title={label} type="button" variant="primary">
@@ -63,7 +63,7 @@ export default function SessionContextIndicator(props: SessionContextIndicatorPr
     >
       <div className="space-y-3 p-2">
         <div className="flex items-center justify-between gap-4">
-          <span className="text-sm font-medium text-ink-muted">Context window</span>
+          <span className="text-sm font-medium text-ink-muted/45">Context window</span>
           <span className="shrink-0 text-sm font-medium tabular-nums text-ink">{context.usedTokens === null ? "?" : `${Math.round(percentage)}%`}</span>
         </div>
         <div className="h-1.5 overflow-hidden rounded-full bg-overlay-pressed">
