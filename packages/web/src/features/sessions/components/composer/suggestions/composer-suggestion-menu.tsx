@@ -85,6 +85,15 @@ export default function ComposerSuggestionMenu(props: ComposerSuggestionMenuProp
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
   const [hoveredSuggestionIndex, setHoveredSuggestionIndex] = useState<number | null>(null);
   const [selectionSource, setSelectionSource] = useState<"keyboard" | "mouse">("keyboard");
+  const [previousOpen, setPreviousOpen] = useState(open);
+
+  if (open !== previousOpen) {
+    setPreviousOpen(open);
+    setActiveSuggestionIndex(0);
+    setHoveredSuggestionIndex(null);
+    setSelectionSource("keyboard");
+  }
+
   const items = query.data ?? [];
   const sections = suggestionSections(items);
   const showLoadingPanel = open && query.isLoading;
