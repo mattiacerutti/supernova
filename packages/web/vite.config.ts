@@ -5,7 +5,7 @@ import babel from "@rolldown/plugin-babel";
 import tailwindcss from "@tailwindcss/vite";
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({mode}) => ({
   plugins: [
     react(),
     babel({
@@ -27,10 +27,18 @@ export default defineConfig({
     include: ["@pierre/diffs"],
   },
   resolve: {
-    alias: {
-      "@": resolve(__dirname, "src"),
-      "@assets": resolve(__dirname, "assets"),
-      "@e2e": resolve(__dirname, "tests/e2e"),
-    },
+    alias: [
+      ...(mode === "e2e"
+        ? [
+            {
+              find: /^@\/rpc\/agent-rpc-client$/,
+              replacement: resolve(__dirname, "tests/e2e/mocks/timeline-rpc-client.ts"),
+            },
+          ]
+        : []),
+      {find: "@assets", replacement: resolve(__dirname, "assets")},
+      {find: "@e2e", replacement: resolve(__dirname, "tests/e2e")},
+      {find: "@", replacement: resolve(__dirname, "src")},
+    ],
   },
-});
+}));

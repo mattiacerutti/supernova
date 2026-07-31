@@ -1,4 +1,5 @@
-import type {Session} from "@supernova/contracts/sessions/schemas";
+import {useMessageScroller} from "@shadcn/react/message-scroller";
+import type {Session, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 import {useCallback, useState} from "react";
 import type {AppEnvironment} from "@/app/app-environment";
 import ModelPicker from "@/features/sessions/components/composer/pickers/model-picker";
@@ -10,7 +11,7 @@ import UndoneTurnsDrawer from "@/features/sessions/components/composer/undone-tu
 import SessionActionsMenu from "@/features/sessions/components/session-actions-menu";
 import SessionLayout from "@/features/sessions/components/session-layout";
 import SessionTitleText from "@/features/sessions/components/session-title-text";
-import SessionTimeline from "@/features/sessions/components/timeline/session-timeline";
+import SessionTimeline, {SessionTimelineProvider} from "@/features/sessions/components/timeline/session-timeline";
 import {useRenameSession as useRenameSessionMutation} from "@/features/sessions/hooks/api/use-rename-session";
 import {useSession} from "@/features/sessions/hooks/api/use-session";
 import {useCachedSessionTitle} from "@/features/sessions/hooks/use-cached-session-title";
@@ -72,6 +73,7 @@ function SessionConversation(props: SessionConversationProps) {
   const composerDraftKey = sessionComposerDraftKey(session.id);
   const composerDraft = useComposerDraft({key: composerDraftKey});
   const stream = useSessionTimeline({modelReference: modelSelection.modelReference, sessionId: session.id, sessionTurns: session.turns});
+  const {scrollToEnd} = useMessageScroller();
   const [undoneDrawerHeight, setUndoneDrawerHeight] = useState(0);
 
   const composerDisabled = modelSelection.isPending || !modelSelection.modelReference;
@@ -90,6 +92,11 @@ function SessionConversation(props: SessionConversationProps) {
 
     if (!nextModel.capabilities.images) composerAttachments.removeUnsupportedImages();
     modelSelection.selectModel(value);
+  };
+
+  const handleSubmitMessage = (contentParts: readonly UserMessageContentPart[]): void => {
+    scrollToEnd({behavior: "auto"});
+    stream.submitMessage(contentParts);
   };
 
   const handleUndo = (): void => {
@@ -142,14 +149,19 @@ function SessionConversation(props: SessionConversationProps) {
             disabled={composerDisabled}
             draft={composerDraft}
             onInterrupt={stream.stopStreaming}
-            onSubmit={stream.submitMessage}
+            onSubmit={handleSubmitMessage}
             projectPath={session.projectPath}
             slashCommandActions={{...stream.slashCommandActions, redo: handleRedo, undo: handleUndo}}
             streamStatus={stream.streamStatus}
             toolbarControls={
               <div className="flex items-center gap-2">
                 <SessionContextIndicator context={session.context} />
-                <ModelPicker selectedModel={modelSelection.selectedModelDetails} disabled={composerDisabled} models={modelSelection.availableModels} onModelChange={handleModelChange} />
+                <ModelPicker
+                  selectedModel={modelSelection.selectedModelDetails}
+                  disabled={composerDisabled}
+                  models={modelSelection.availableModels}
+                  onModelChange={handleModelChange}
+                />
                 {thinkingLevels.length > 0 && (
                   <ThinkingLevelPicker
                     disabled={composerDisabled}
@@ -229,5 +241,9 @@ export default function SessionPage(props: SessionPageProps) {
     return <SessionLoading appEnvironment={appEnvironment} sessionId={sessionId} />;
   }
 
-  return <SessionConversation appEnvironment={appEnvironment} session={session} />;
+  return (
+    <SessionTimelineProvider sessionId={session.id}>
+      <SessionConversation appEnvironment={appEnvironment} session={session} />
+    </SessionTimelineProvider>
+  );
 }
