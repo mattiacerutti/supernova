@@ -1,13 +1,17 @@
-import {AgentRpcGroup} from "@supernova/contracts";
-import {Cause, Context, Effect, Exit, Fiber, Layer, ManagedRuntime} from "effect";
+import {Cause, Effect, Exit, Fiber, Layer, ManagedRuntime} from "effect";
 import {RpcClient, RpcSerialization} from "effect/unstable/rpc";
 import * as Socket from "effect/unstable/socket/Socket";
+import {
+  AgentRpcProtocolClientService,
+  makeAgentRpcProtocolClient,
+  type AgentRpcClientApi,
+  type AgentRpcClientFiber,
+  type AgentRpcExecute,
+  type AgentRpcRunOptions,
+} from "@/rpc/agent-rpc-client-api";
 
-const makeAgentRpcProtocolClient = RpcClient.make(AgentRpcGroup);
-
-export type AgentRpcProtocolClient = typeof makeAgentRpcProtocolClient extends Effect.Effect<infer Client, unknown, unknown> ? Client : never;
-type AgentRpcExecute<TSuccess, TError> = (client: AgentRpcProtocolClient) => Effect.Effect<TSuccess, TError, never>;
-type AgentRpcRunOptions = {readonly signal?: AbortSignal | undefined};
+export {AgentRpcProtocolClientService} from "@/rpc/agent-rpc-client-api";
+export type {AgentRpcClientApi, AgentRpcClientFiber, AgentRpcProtocolClient} from "@/rpc/agent-rpc-client-api";
 
 type AgentRpcRuntime = ManagedRuntime.ManagedRuntime<AgentRpcProtocolClientService, never>;
 
@@ -101,34 +105,10 @@ class AgentRpcClient implements AgentRpcClientApi {
   }
 }
 
-export class AgentRpcProtocolClientService extends Context.Service<AgentRpcProtocolClientService, AgentRpcProtocolClient>()("supernova/web/AgentRpcProtocolClientService") {}
-
-export interface AgentRpcClientApi {
-  readonly fork: <TSuccess, TError>(execute: AgentRpcExecute<TSuccess, TError>) => Promise<AgentRpcClientFiber>;
-  readonly run: <TSuccess, TError>(execute: AgentRpcExecute<TSuccess, TError>) => Promise<TSuccess>;
-  readonly runExit: <TSuccess, TError>(execute: AgentRpcExecute<TSuccess, TError>, options?: AgentRpcRunOptions) => Promise<Exit.Exit<TSuccess, TError>>;
-  readonly dispose: () => Promise<void>;
-}
-
-export interface AgentRpcClientFiber {
-  readonly completed: Promise<void>;
-  readonly interrupt: () => Promise<void>;
-}
-
 let sharedAgentRpcClient: AgentRpcClientApi | null = null;
 
 /** Initializes the shared app RPC client before React renders. */
 export async function getAgentRpcClient(): Promise<AgentRpcClientApi> {
-  async function createAgentRpcClient(): Promise<AgentRpcClientApi> {
-    if (import.meta.env.VITE_SUPERNOVA_E2E === "1") {
-      const {createE2eAgentRpcClient} = await import("@e2e/support/agent-rpc-client");
-      return createE2eAgentRpcClient();
-    }
-
-    return new AgentRpcClient(resolveAgentDesktopWsUrl());
-  }
-
-  sharedAgentRpcClient ??= await createAgentRpcClient();
+  sharedAgentRpcClient ??= new AgentRpcClient(resolveAgentDesktopWsUrl());
   return sharedAgentRpcClient;
 }
-

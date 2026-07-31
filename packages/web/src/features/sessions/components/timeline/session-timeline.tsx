@@ -2,7 +2,7 @@ import {elementScroll, useVirtualizer} from "@tanstack/react-virtual";
 import type {VirtualItem} from "@tanstack/react-virtual";
 import {AnimatePresence, motion, useReducedMotion} from "framer-motion";
 import {useLayoutEffect, useRef, useState} from "react";
-import type {UIEvent} from "react";
+import type {ReactNode, UIEvent} from "react";
 import {MessageScroller, MessageScrollerButton, MessageScrollerContent, MessageScrollerProvider, MessageScrollerViewport} from "@/components/ui/message-scroller";
 import SessionTimelineVirtualRow from "@/features/sessions/components/timeline/session-timeline-virtual-row";
 import type {TimelineVirtualItem} from "@/features/sessions/components/timeline/session-timeline-virtual-row";
@@ -75,6 +75,23 @@ function buildTimelineRows(input: {
   if (streamError) rows.push({id: `stream-error:${activeTurnId}`, message: streamError, turnId: activeTurnId, type: "stream-error"});
 
   return rows;
+}
+
+interface SessionTimelineProviderProps {
+  readonly children: ReactNode;
+  readonly sessionId: string;
+}
+
+/** Provides shared timeline commands to the conversation and transcript. */
+export function SessionTimelineProvider(props: SessionTimelineProviderProps) {
+  const {children, sessionId} = props;
+  const cached = timelineCache.get(sessionId);
+
+  return (
+    <MessageScrollerProvider autoScroll defaultScrollPosition={cached && !cached.wasAtEnd ? "start" : "end"} scrollEdgeThreshold={0}>
+      {children}
+    </MessageScrollerProvider>
+  );
 }
 
 interface SessionTimelineProps {
@@ -214,60 +231,58 @@ export default function SessionTimeline(props: SessionTimelineProps) {
         </div>
       )}
       {hasTimelineContent && (
-        <MessageScrollerProvider autoScroll defaultScrollPosition={cachedRef.current && !cachedRef.current.wasAtEnd ? "start" : "end"} scrollEdgeThreshold={0}>
-          <MessageScroller>
-            <MessageScrollerViewport
-              aria-label="Session timeline"
-              className={shouldRestoreCachedOffsetRef.current ? "invisible" : undefined}
-              onScroll={handleViewportScroll}
-              preserveScrollOnPrepend={false}
-              ref={viewportRef}
-            >
-              <MessageScrollerContent aria-busy={isStreaming} className="block min-h-full">
-                <div
-                  className="relative w-full"
-                  data-timeline-virtual-content
-                  ref={(element) => {
-                    virtualContentRef.current = element;
-                    virtualizer.containerRef(element);
-                  }}
-                >
-                  {virtualItems.map((virtualItem) => {
-                    const item = timelineRows[virtualItem.index];
-                    if (!item) return null;
+        <MessageScroller>
+          <MessageScrollerViewport
+            aria-label="Session timeline"
+            className={shouldRestoreCachedOffsetRef.current ? "invisible" : undefined}
+            onScroll={handleViewportScroll}
+            preserveScrollOnPrepend={false}
+            ref={viewportRef}
+          >
+            <MessageScrollerContent aria-busy={isStreaming} className="block min-h-full">
+              <div
+                className="relative w-full"
+                data-timeline-virtual-content
+                ref={(element) => {
+                  virtualContentRef.current = element;
+                  virtualizer.containerRef(element);
+                }}
+              >
+                {virtualItems.map((virtualItem) => {
+                  const item = timelineRows[virtualItem.index];
+                  if (!item) return null;
 
-                    return (
-                      <div className="absolute inset-s-0 w-full" data-index={virtualItem.index} key={virtualItem.key} ref={virtualizer.measureElement}>
-                        <SessionTimelineVirtualRow
-                          activeTurnId={activeTurnId}
-                          inlineStatusLabel={item.id === inlineStatusItemId ? inlineStatusLabel : undefined}
-                          item={item}
-                          onRevertToMessage={onRevertToMessage}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              </MessageScrollerContent>
-            </MessageScrollerViewport>
-            <AnimatePresence>
-              {scrollButtonVisible && (
-                <motion.div
-                  animate={{opacity: 1, scale: 1, x: "-50%", y: 0, transition: {duration: 0.2, ease: [0.23, 1, 0.32, 1]}}}
-                  className="absolute left-1/2 z-10"
-                  exit={{opacity: 0, scale: 0.95, x: "-50%", y: shouldReduceMotion ? 0 : "100%", transition: {duration: 0.4, ease: [0.7, 0, 0.84, 0]}}}
-                  initial={{opacity: 0, scale: 0.95, x: "-50%", y: shouldReduceMotion ? 0 : "100%"}}
-                  style={{bottom: `calc(1rem + ${bottomOverlayHeight}px)`}}
-                >
-                  <MessageScrollerButton
-                    behavior="auto"
-                    className="static translate-x-0 bg-surface text-ink-strong ring-border-strong transition-colors hover:bg-overlay-hover rtl:translate-x-0"
-                  />
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </MessageScroller>
-        </MessageScrollerProvider>
+                  return (
+                    <div className="absolute inset-s-0 w-full" data-index={virtualItem.index} key={virtualItem.key} ref={virtualizer.measureElement}>
+                      <SessionTimelineVirtualRow
+                        activeTurnId={activeTurnId}
+                        inlineStatusLabel={item.id === inlineStatusItemId ? inlineStatusLabel : undefined}
+                        item={item}
+                        onRevertToMessage={onRevertToMessage}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </MessageScrollerContent>
+          </MessageScrollerViewport>
+          <AnimatePresence>
+            {scrollButtonVisible && (
+              <motion.div
+                animate={{opacity: 1, scale: 1, x: "-50%", y: 0, transition: {duration: 0.2, ease: [0.23, 1, 0.32, 1]}}}
+                className="absolute left-1/2 z-10"
+                exit={{opacity: 0, scale: 0.95, x: "-50%", y: shouldReduceMotion ? 0 : "100%", transition: {duration: 0.4, ease: [0.7, 0, 0.84, 0]}}}
+                initial={{opacity: 0, scale: 0.95, x: "-50%", y: shouldReduceMotion ? 0 : "100%"}}
+                style={{bottom: `calc(1rem + ${bottomOverlayHeight}px)`}}
+              >
+                <MessageScrollerButton
+                  behavior="auto"
+                  className="static translate-x-0 bg-surface text-ink-strong ring-border-strong transition-colors hover:bg-overlay-hover rtl:translate-x-0"
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </MessageScroller>
       )}
     </div>
   );
