@@ -57,8 +57,9 @@ export function resolveTheme(variant: ThemeVariant) {
   const baseline = CONTRAST_BASELINE[mode];
   const surfaceDeep = dark ? mix(surface, "#000000", 0.16 + (contrast - baseline) * 0.0015) : mix(surface, ink, 0.04 + (contrast - baseline) * 0.0012);
   const surfaceRaised = alpha(ink, dark ? 0.04 + strength * 0.02 : 0.04);
-  const surfaceElevatedSecondary = alpha(ink, dark ? 0.02 + strength * 0.02 : 0.04);
-  const surfaceDrawer = `color-mix(in srgb, ${surfaceElevatedSecondary} 76%, ${surface} 24%)`;
+  const surfaceElevatedSecondaryOpacity = dark ? 0.02 + strength * 0.02 : 0.04;
+  const surfaceElevatedSecondary = alpha(ink, surfaceElevatedSecondaryOpacity);
+  const surfaceDrawer = mix(surface, ink, surfaceElevatedSecondaryOpacity * 0.76);
   const controlBase = mix(surface, dark ? ink : "#ffffff", dark ? 0.047 + strength * 0.05 : 0.09 + strength * 0.04);
   const surfaceControl = dark ? controlBase : `color-mix(in oklab, ${alpha(controlBase, 0.96)} 90%, transparent)`;
   const surfacePopover = mix(surface, dark ? ink : "#ffffff", dark ? 0.063 + strength * 0.08 : 0.16 + strength * 0.12);

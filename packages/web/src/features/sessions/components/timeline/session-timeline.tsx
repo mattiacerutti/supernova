@@ -256,7 +256,7 @@ export default function SessionTimeline(props: SessionTimelineProps) {
               >
                 <MessageScrollerButton
                   behavior="auto"
-                  className="static translate-x-0 bg-surface text-ink-strong ring-border-strong transition-colors hover:bg-overlay-hover rtl:translate-x-0"
+                  className="static translate-x-0 bg-surface text-ink-strong ring-border-strong transition-colors hover:bg-surface-popover rtl:translate-x-0"
                 />
               </motion.div>
             )}

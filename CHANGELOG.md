@@ -14,6 +14,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Fixed
 
+- Fixed timeline and composer overlays allowing message text to show through their backgrounds.
+
 ### Removed
 
 ## [0.0.1-beta.9]

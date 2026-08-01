@@ -52,7 +52,7 @@ export default function SessionContextIndicator(props: SessionContextIndicatorPr
   return (
     <Menu
       align="end"
-      className="w-56 overflow-hidden backdrop-blur-none"
+      className="w-56 overflow-hidden bg-surface-popover backdrop-blur-none"
       sideOffset={10}
       trigger={(triggerProps) => (
         <Button {...triggerProps} className="grid size-7 place-items-center rounded-full p-0 text-ink" title={label} type="button" variant="primary">
