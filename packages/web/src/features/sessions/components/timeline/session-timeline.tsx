@@ -136,7 +136,7 @@ export default function SessionTimeline(props: SessionTimelineProps) {
     getScrollElement: () => viewportRef.current,
     initialMeasurementsCache: cachedRef.current?.measurements,
     initialOffset: Number.MAX_SAFE_INTEGER,
-    overscan: 8,
+    overscan: 3,
     paddingEnd: TIMELINE_BOTTOM_PADDING_PX,
     scrollEndThreshold: 0,
     // TanStack adjusts scrollTop before notifying React about a measured size.
