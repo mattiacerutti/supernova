@@ -242,7 +242,7 @@ export default function SessionPage(props: SessionPageProps) {
   }
 
   return (
-    <SessionTimelineProvider sessionId={session.id}>
+    <SessionTimelineProvider>
       <SessionConversation appEnvironment={appEnvironment} session={session} />
     </SessionTimelineProvider>
   );

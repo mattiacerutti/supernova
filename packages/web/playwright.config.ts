@@ -33,7 +33,7 @@ export default defineConfig({
     video,
   },
   webServer: {
-    command: `bun run dev -- --mode e2e --host 127.0.0.1 --port ${port}`,
+    command: `bunx vite build --mode e2e && bunx vite preview --host 127.0.0.1 --port ${port} --strictPort`,
     reuseExistingServer: false,
     timeout: 120_000,
     url: baseURL,

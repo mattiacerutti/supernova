@@ -10,14 +10,12 @@ import type {SessionTimelineItem} from "@/features/sessions/types/session-timeli
 
 const TIMELINE_BOTTOM_PADDING_PX = 24;
 const TIMELINE_CACHE_LIMIT = 16;
-const TIMELINE_CACHE_END_THRESHOLD_PX = 5;
+const TIMELINE_END_THRESHOLD_PX = 5;
 const TIMELINE_FALLBACK_ITEM_SIZE = 86;
 const TIMELINE_SCROLL_BUTTON_THRESHOLD_PX = 50;
 
 interface TimelineCacheEntry {
   readonly measurements: VirtualItem[];
-  readonly scrollOffset: number;
-  readonly wasAtEnd: boolean;
 }
 
 const timelineCache = new Map<string, TimelineCacheEntry>();
@@ -79,16 +77,14 @@ function buildTimelineRows(input: {
 
 interface SessionTimelineProviderProps {
   readonly children: ReactNode;
-  readonly sessionId: string;
 }
 
 /** Provides shared timeline commands to the conversation and transcript. */
 export function SessionTimelineProvider(props: SessionTimelineProviderProps) {
-  const {children, sessionId} = props;
-  const cached = timelineCache.get(sessionId);
+  const {children} = props;
 
   return (
-    <MessageScrollerProvider autoScroll defaultScrollPosition={cached && !cached.wasAtEnd ? "start" : "end"} scrollEdgeThreshold={0}>
+    <MessageScrollerProvider autoScroll defaultScrollPosition="end" scrollEdgeThreshold={0}>
       {children}
     </MessageScrollerProvider>
   );
@@ -111,8 +107,8 @@ export default function SessionTimeline(props: SessionTimelineProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const virtualContentRef = useRef<HTMLDivElement>(null);
   const initialPositionFrameRef = useRef<number | null>(null);
-  const shouldRestoreCachedOffsetRef = useRef(true);
-  const tanStackFollowsEndRef = useRef(cachedRef.current?.wasAtEnd ?? cachedRef.current === undefined);
+  const shouldSetInitialPositionRef = useRef(true);
+  const tanStackFollowsEndRef = useRef(true);
 
   const hasTimelineContent = items.length > 0 || liveItems.length > 0 || isStreaming || streamError !== null;
   const timelineRows = hasTimelineContent ? buildTimelineRows({compacting, isStreaming, items, liveItems, streamError}) : [];
@@ -139,7 +135,7 @@ export default function SessionTimeline(props: SessionTimelineProps) {
     getItemKey: (index) => virtualRowKeys[index] ?? index,
     getScrollElement: () => viewportRef.current,
     initialMeasurementsCache: cachedRef.current?.measurements,
-    initialOffset: () => (cachedRef.current?.wasAtEnd ? Number.MAX_SAFE_INTEGER : (cachedRef.current?.scrollOffset ?? Number.MAX_SAFE_INTEGER)),
+    initialOffset: Number.MAX_SAFE_INTEGER,
     overscan: 8,
     paddingEnd: TIMELINE_BOTTOM_PADDING_PX,
     scrollEndThreshold: 0,
@@ -166,16 +162,7 @@ export default function SessionTimeline(props: SessionTimelineProps) {
   };
 
   useLayoutEffect(() => {
-    if (!hasTimelineContent || !shouldRestoreCachedOffsetRef.current) return;
-
-    const cached = cachedRef.current;
-    const viewport = viewportRef.current;
-    if (cached && !cached.wasAtEnd) {
-      shouldRestoreCachedOffsetRef.current = false;
-      virtualizer.scrollToOffset(cached.scrollOffset);
-      if (viewport) viewport.style.visibility = "visible";
-      return;
-    }
+    if (!hasTimelineContent || !shouldSetInitialPositionRef.current) return;
 
     // Message Scroller applies its default position before TanStack has
     // measured every row entering the bottom range. Keep the viewport hidden
@@ -187,8 +174,8 @@ export default function SessionTimeline(props: SessionTimelineProps) {
       if (!currentViewport) return;
 
       const bottomDistance = currentViewport.scrollHeight - currentViewport.clientHeight - currentViewport.scrollTop;
-      if (bottomDistance <= TIMELINE_CACHE_END_THRESHOLD_PX) {
-        shouldRestoreCachedOffsetRef.current = false;
+      if (bottomDistance <= TIMELINE_END_THRESHOLD_PX) {
+        shouldSetInitialPositionRef.current = false;
         currentViewport.style.visibility = "visible";
         return;
       }
@@ -208,16 +195,8 @@ export default function SessionTimeline(props: SessionTimelineProps) {
     () => () => {
       if (latestRowsLengthRef.current === 0) return;
 
-      const viewport = viewportRef.current;
-      const scrollOffset = viewport?.scrollTop ?? virtualizer.scrollOffset ?? 0;
-      const bottomDistance = viewport ? viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop : Number.POSITIVE_INFINITY;
-
       timelineCache.delete(sessionId);
-      timelineCache.set(sessionId, {
-        measurements: virtualizer.takeSnapshot(),
-        scrollOffset,
-        wasAtEnd: bottomDistance <= TIMELINE_CACHE_END_THRESHOLD_PX,
-      });
+      timelineCache.set(sessionId, {measurements: virtualizer.takeSnapshot()});
       while (timelineCache.size > TIMELINE_CACHE_LIMIT) timelineCache.delete(timelineCache.keys().next().value!);
     },
     [sessionId, virtualizer]
@@ -234,7 +213,7 @@ export default function SessionTimeline(props: SessionTimelineProps) {
         <MessageScroller>
           <MessageScrollerViewport
             aria-label="Session timeline"
-            className={shouldRestoreCachedOffsetRef.current ? "invisible" : undefined}
+            className={shouldSetInitialPositionRef.current ? "invisible" : undefined}
             onScroll={handleViewportScroll}
             preserveScrollOnPrepend={false}
             ref={viewportRef}

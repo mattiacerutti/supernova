@@ -10,6 +10,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+- Changed session timelines to reopen at the latest message instead of restoring the previous scroll position.
+
 ### Fixed
 
 ### Removed

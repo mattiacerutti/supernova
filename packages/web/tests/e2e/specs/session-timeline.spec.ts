@@ -124,6 +124,18 @@ test.describe("session timeline visual stability", () => {
     assertBottomLocked({samples: await timeline.recordStreamGrowth(60)});
   });
 
+  test("switching away and back opens a detached timeline at the bottom", async ({timeline}) => {
+    await timeline.detachFar();
+    await timeline.expectDetached();
+
+    await timeline.switchToOtherSession();
+    await timeline.resetVisualProbe();
+    await timeline.switchToMainSession();
+    await timeline.expectAtBottom();
+
+    assertBottomLocked({minimumFrameCount: 1, samples: await timeline.visualSamples()});
+  });
+
   test("clicking scroll to bottom while detached during streaming reattaches to auto-scroll", async ({timeline}) => {
     await timeline.sendMessage();
     await timeline.waitForLineGrowth(60);
