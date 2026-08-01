@@ -75,7 +75,14 @@ class TimelineRpcClient implements AgentRpcClientApi {
       getSession: ({sessionId}: {readonly sessionId: string}) => Effect.sync(() => this.session(sessionId)),
       listComposerSuggestions: () => Effect.succeed({items: []}),
       listFolderFiles: () => Effect.succeed({items: []}),
-      listFolderSuggestions: () => Effect.succeed({items: []}),
+      listFolderSuggestions: ({query}: {readonly query: string}) =>
+        Effect.succeed({
+          homePath: TIMELINE_PROJECT_PATH,
+          query,
+          queryPath: query || TIMELINE_PROJECT_PATH,
+          queryPathType: "directory",
+          suggestions: [],
+        }),
       listModels: () => Effect.succeed([timelineModelDetails]),
       listProjectSessions: () =>
         Effect.succeed({
