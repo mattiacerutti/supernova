@@ -12,6 +12,7 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+- Changed open-project browsing to cache directory entries, filter typed path segments locally, prefetch likely navigation destinations, and provide parent-directory navigation.
 - Overhauled the default Supernova theme.
 
 ### Fixed

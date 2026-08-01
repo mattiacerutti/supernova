@@ -1,35 +1,45 @@
 import type {Ref} from "react";
 import {useState} from "react";
+import {useQueryClient} from "@tanstack/react-query";
 import Button from "@/components/ui/button";
 import Dialog from "@/components/ui/dialog";
 import Icon from "@/components/ui/icon";
 import SearchableList from "@/features/projects/components/searchable-list";
 import {useCreateFolder} from "@/features/projects/hooks/api/use-create-folder";
-import {useListFolderSuggestions} from "@/features/projects/hooks/api/use-list-folder-suggestions";
-import {formatSuggestionPath, withTrailingProjectPathSeparator} from "@/features/projects/lib/project-paths";
+import {listFolderSuggestionsQueryOptions, useListFolderSuggestions} from "@/features/projects/hooks/api/use-list-folder-suggestions";
+import {
+  formatSuggestionPath,
+  getProjectBrowseDirectoryPath,
+  getProjectBrowseLeafPath,
+  getProjectBrowseParentPath,
+  hasTrailingProjectPathSeparator,
+  resolveProjectBrowsePath,
+  withTrailingProjectPathSeparator,
+} from "@/features/projects/lib/project-paths";
 import {useProjectsStore} from "@/features/projects/stores/projects-store";
 import {cn} from "@/lib/cn";
 
 type ProjectSearchRow =
   | {readonly id: "recent-projects" | "open-project"; readonly title: string; readonly type: "header"}
-  | {readonly kind: "folder" | "recent"; readonly path: string; readonly type: "suggestion"};
+  | {readonly kind: "folder" | "parent" | "recent"; readonly path: string; readonly type: "suggestion"};
 
 interface SuggestionItemProps {
   highlighted: boolean;
   homePath: string | undefined;
+  kind: "folder" | "parent" | "recent";
   onAutocomplete: (path: string) => void;
   path: string;
   ref: Ref<HTMLDivElement>;
 }
 
 function SuggestionItem(props: SuggestionItemProps) {
-  const {highlighted, homePath, onAutocomplete, path, ref} = props;
-  const {name, parent, suffix} = formatSuggestionPath(path, homePath);
+  const {highlighted, homePath, kind, onAutocomplete, path, ref} = props;
+  const {name, parent, suffix} = kind === "parent" ? {name: "..", parent: "", suffix: ""} : formatSuggestionPath(path, homePath);
 
   return (
     <div className={cn("group flex items-center gap-1 rounded-xl corner-superellipse/1.3", highlighted && "bg-overlay-hover")} ref={ref}>
       <Button className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 px-3 py-2 text-left" onClick={() => onAutocomplete(path)} variant="bare">
-        <Icon className="shrink-0 text-ink-muted" name="folder" size="sm" />
+        <Icon className="shrink-0 text-ink-muted" name={kind === "parent" ? "corner-left-up" : "folder"} size="sm" />
         <span className="min-w-0 flex-1 truncate text-[15px]">
           {parent && <span className="text-ink-muted">{parent}</span>}
           <span className="text-ink">{name}</span>
@@ -48,62 +58,79 @@ interface OpenProjectDialogProps {
 
 export default function OpenProjectDialog(props: OpenProjectDialogProps) {
   const {onClose, onOpenProject, open} = props;
-  const [activeRow, setActiveRow] = useState({index: 0, query: ""});
+  const [activeRowIndex, setActiveRowIndex] = useState(0);
+  const [browseGeneration, setBrowseGeneration] = useState(0);
   const [folderCreationDialogOpen, setFolderCreationDialogOpen] = useState(false);
   const [projectPath, setProjectPath] = useState("");
-  const [queryPath, setQueryPath] = useState("");
-  const suggestionsQuery = useListFolderSuggestions(queryPath);
+  const queryClient = useQueryClient();
+  const browseDirectoryPath = getProjectBrowseDirectoryPath(projectPath);
+  const browseLeafPath = getProjectBrowseLeafPath(projectPath);
+  const browseParentPath = getProjectBrowseParentPath(browseDirectoryPath);
+  const suggestionsQuery = useListFolderSuggestions(browseDirectoryPath);
   const createFolderMutation = useCreateFolder();
-
-  const displayStatus = suggestionsQuery.data;
-  const displayedQuery = displayStatus?.query ?? "";
-  const currentProjectPath = displayStatus?.query === queryPath ? queryPath : projectPath;
-  const activeRowIndex = activeRow.query === displayedQuery ? activeRow.index : 0;
-  const pathStatus = displayStatus?.query === currentProjectPath ? displayStatus : undefined;
-  const folderCreationPath = pathStatus?.queryPath;
-  const homePath = displayStatus?.homePath;
-
   const storedProjects = useProjectsStore((state) => state.projects);
-  const recentProjects = storedProjects.slice(0, 5);
-  const suggestedFolders = displayStatus?.suggestions ?? [];
 
-  const isShowingDefaults = currentProjectPath.trim().length === 0;
+  const currentResult = suggestionsQuery.data;
+  const recentProjects = storedProjects.slice(0, 5);
+  const lowerBrowseLeafPath = browseLeafPath.toLowerCase();
+  const showHiddenFolders = browseLeafPath.startsWith(".");
+  const suggestedFolders = (currentResult?.suggestions ?? []).filter(
+    (folder) => folder.name.toLowerCase().startsWith(lowerBrowseLeafPath) && (showHiddenFolders || !folder.name.startsWith("."))
+  );
+  const exactFolder = browseLeafPath.length > 0 ? suggestedFolders.find((folder) => folder.name === browseLeafPath) : undefined;
+  const resolvedProjectPath = currentResult
+    ? hasTrailingProjectPathSeparator(projectPath)
+      ? currentResult.queryPath
+      : (exactFolder?.path ?? resolveProjectBrowsePath(currentResult.queryPath, browseLeafPath))
+    : undefined;
+  const resolvedProjectPathType = hasTrailingProjectPathSeparator(projectPath) ? currentResult?.queryPathType : exactFolder ? "directory" : "missing";
+  const folderCreationPath = resolvedProjectPathType === "missing" ? resolvedProjectPath : undefined;
+  const isShowingDefaults = projectPath.trim().length === 0;
   const recentRows: ProjectSearchRow[] = isShowingDefaults ? recentProjects.map((project) => ({kind: "recent", path: project.path, type: "suggestion"})) : [];
   const folderRows: ProjectSearchRow[] = suggestedFolders.map((folder) => ({kind: "folder", path: folder.path, type: "suggestion"}));
   const rows: ProjectSearchRow[] = [
     ...(recentRows.length > 0 ? [{id: "recent-projects", title: "Recent projects", type: "header"} satisfies ProjectSearchRow, ...recentRows] : []),
     ...(isShowingDefaults ? [{id: "open-project", title: "Open project", type: "header"} satisfies ProjectSearchRow] : []),
+    ...(browseParentPath ? [{kind: "parent", path: browseParentPath, type: "suggestion"} satisfies ProjectSearchRow] : []),
     ...folderRows,
   ];
-
   const canSubmitPath =
-    currentProjectPath.trim().length > 0 &&
-    !!pathStatus &&
-    pathStatus.queryPathType !== "file" &&
+    projectPath.trim().length > 0 &&
+    !!resolvedProjectPath &&
+    resolvedProjectPathType !== "file" &&
     !suggestionsQuery.isFetching &&
     !createFolderMutation.isPending &&
     !folderCreationDialogOpen;
 
   const handleActiveRowIndexChange = (updater: number | ((current: number) => number)): void => {
-    setActiveRow((current) => ({index: typeof updater === "function" ? updater(current.query === displayedQuery ? current.index : 0) : updater, query: displayedQuery}));
+    const nextIndex = typeof updater === "function" ? updater(activeRowIndex) : updater;
+    const row = rows[nextIndex];
+    setActiveRowIndex(nextIndex);
+    if (row?.type === "suggestion" && row.kind === "folder") {
+      void queryClient.prefetchQuery(listFolderSuggestionsQueryOptions(withTrailingProjectPathSeparator(row.path)));
+    }
   };
 
   const handlePathChange = (value: string): void => {
-    createFolderMutation.reset();
+    const parentPath = getProjectBrowseParentPath(getProjectBrowseDirectoryPath(value));
+    if (parentPath) void queryClient.prefetchQuery(listFolderSuggestionsQueryOptions(parentPath));
     setProjectPath(value);
-    setQueryPath(value);
+    setActiveRowIndex(0);
   };
 
   const handleAutocomplete = (path: string): void => {
-    createFolderMutation.reset();
-    setQueryPath(withTrailingProjectPathSeparator(path));
+    const nextPath = withTrailingProjectPathSeparator(path);
+    void queryClient.prefetchQuery(listFolderSuggestionsQueryOptions(nextPath));
+    setProjectPath(nextPath);
+    setActiveRowIndex(0);
+    setBrowseGeneration((generation) => generation + 1);
   };
 
   const handleOpenPath = (): void => {
-    if (!canSubmitPath || !pathStatus) return;
+    if (!canSubmitPath || !resolvedProjectPath) return;
 
-    if (pathStatus.queryPathType === "directory") {
-      onOpenProject(pathStatus.queryPath);
+    if (resolvedProjectPathType === "directory") {
+      onOpenProject(resolvedProjectPath);
       return;
     }
 
@@ -127,22 +154,13 @@ export default function OpenProjectDialog(props: OpenProjectDialogProps) {
     if (nextOpen) return;
 
     createFolderMutation.reset();
-    setActiveRow({index: 0, query: ""});
+    setActiveRowIndex(0);
+    setBrowseGeneration(0);
     setFolderCreationDialogOpen(false);
     setProjectPath("");
-    setQueryPath("");
   };
 
-  const isLoading = suggestionsQuery.isPending && !suggestionsQuery.data;
-  const hasError = !!suggestionsQuery.error;
-  const isEmpty = !isLoading && !suggestionsQuery.isFetching && !hasError && suggestedFolders.length === 0 && !isShowingDefaults;
-  const listStatus = (
-    <>
-      {isLoading && <p className="px-3 py-2 text-sm text-ink-faint">Searching folders...</p>}
-      {hasError && <p className="px-3 py-2 text-sm text-diff-removed">Unable to search folders.</p>}
-      {isEmpty && <p className="px-3 py-2 text-sm text-ink-faint">No matching subfolders.</p>}
-    </>
-  );
+  const listStatus = suggestionsQuery.isError && <p className="px-3 py-2 text-sm text-diff-removed">Unable to search folders.</p>;
 
   return (
     <>
@@ -156,7 +174,7 @@ export default function OpenProjectDialog(props: OpenProjectDialogProps) {
       >
         <SearchableList
           activeIndex={activeRowIndex}
-          key={displayedQuery}
+          key={browseGeneration}
           getItemKey={(row) => (row.type === "header" ? row.id : `${row.kind}-${row.path}`)}
           isItemSelectable={(row) => row.type === "suggestion"}
           items={rows}
@@ -176,12 +194,12 @@ export default function OpenProjectDialog(props: OpenProjectDialogProps) {
                   onChange={(event) => handlePathChange(event.target.value)}
                   onKeyDown={onKeyDown}
                   placeholder="Search folders"
-                  value={currentProjectPath}
+                  value={projectPath}
                 />
 
                 <Button
                   disabled={!canSubmitPath}
-                  className={cn("size-8", pathStatus?.queryPathType === "file" && "pointer-events-none invisible")}
+                  className={cn("size-8", resolvedProjectPathType === "file" && "pointer-events-none invisible")}
                   onClick={handleOpenPath}
                   shape="icon"
                   size="sm"
@@ -197,7 +215,14 @@ export default function OpenProjectDialog(props: OpenProjectDialogProps) {
             row.type === "header" ? (
               <p className="px-3 pb-1 pt-2 text-xs font-medium text-ink-faint">{row.title}</p>
             ) : (
-              <SuggestionItem highlighted={renderProps.highlighted} homePath={homePath} onAutocomplete={handleAutocomplete} path={row.path} ref={renderProps.ref} />
+              <SuggestionItem
+                highlighted={renderProps.highlighted}
+                homePath={currentResult?.homePath}
+                kind={row.kind}
+                onAutocomplete={handleAutocomplete}
+                path={row.path}
+                ref={renderProps.ref}
+              />
             )
           }
         />
@@ -207,9 +232,6 @@ export default function OpenProjectDialog(props: OpenProjectDialogProps) {
         containerClassName="h-auto w-[min(calc(100vw-1rem),28rem)]"
         onOpenChange={(nextOpen) => {
           if (!nextOpen) setFolderCreationDialogOpen(false);
-        }}
-        onOpenChangeComplete={(nextOpen) => {
-          if (!nextOpen) createFolderMutation.reset();
         }}
         open={folderCreationDialogOpen}
         title="Create folder?"

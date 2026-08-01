@@ -26,6 +26,9 @@ describe("suggesting local folders", () => {
     expect(result.query).toBe(join(tempDir, "al"));
     expect(result.queryPathType).toBe("missing");
     expect(result.suggestions).toEqual([{name: "alpha", path: join(tempDir, "alpha")}]);
+
+    const directoryResult = await Effect.runPromise(listFolderSuggestions(`${tempDir}/`));
+    expect(directoryResult.suggestions.map((suggestion) => suggestion.name)).toEqual([".alpha-hidden", "alpha", "beta"]);
   });
 
   it("reports the exact query path type", async () => {

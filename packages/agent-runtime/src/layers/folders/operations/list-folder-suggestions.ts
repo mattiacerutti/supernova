@@ -38,7 +38,7 @@ function parseFolderQuery(query: string): ParsedFolderQuery {
 
 async function readChildDirectories(parentPath: string): Promise<string[]> {
   const entries = await readdir(parentPath, {withFileTypes: true}).catch(() => []);
-  return entries.filter((entry) => entry.isDirectory() && !entry.name.startsWith(".")).map((entry) => join(parentPath, entry.name));
+  return entries.filter((entry) => entry.isDirectory()).map((entry) => join(parentPath, entry.name));
 }
 
 async function readFolderPathType(path: string): Promise<"directory" | "file" | "missing"> {
@@ -53,10 +53,13 @@ async function listLocalFolderSuggestions(query: string): Promise<FolderSuggesti
   const parsedQuery = parseFolderQuery(query);
   const childDirectories = await readChildDirectories(parsedQuery.baseDir);
 
+  const showHidden = parsedQuery.searchTerm.length === 0 || parsedQuery.searchTerm.startsWith(".");
+  const lowerSearchTerm = parsedQuery.searchTerm.toLowerCase();
+
   return childDirectories
     .filter((folderPath) => {
-      if (parsedQuery.searchTerm.length === 0) return true;
-      return basename(folderPath).toLowerCase().includes(parsedQuery.searchTerm.toLowerCase());
+      const folderName = basename(folderPath);
+      return folderName.toLowerCase().startsWith(lowerSearchTerm) && (showHidden || !folderName.startsWith("."));
     })
     .toSorted((left, right) => left.localeCompare(right))
     .slice(0, MAX_SUGGESTIONS)

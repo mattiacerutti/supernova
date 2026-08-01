@@ -24,6 +24,7 @@ export type IconName =
   | "chevron-right"
   | "compact"
   | "copy"
+  | "corner-left-up"
   | "edit"
   | "file"
   | "filter"
@@ -84,6 +85,7 @@ const icons = {
   "chevron-right": getStaticIcon(lucideIcons, "chevron-right"),
   compact: getStaticIcon(lucideIcons, "minimize-2"),
   copy: getStaticIcon(lucideIcons, "copy"),
+  "corner-left-up": getStaticIcon(lucideIcons, "corner-left-up"),
   edit: getStaticIcon(cuidaIcons, "edit-outline"),
   file: getStaticIcon(lucideIcons, "file"),
   filter: getStaticIcon(lucideIcons, "list-filter"),
