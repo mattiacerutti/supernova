@@ -16,7 +16,7 @@ describe("manual Pi session compaction", () => {
   });
 
   it("publishes compaction lifecycle events and a refreshed session snapshot", async () => {
-    const pi = createPiTestRuntime();
+    const pi = await createPiTestRuntime();
     runtimes.push(pi);
     const {info, manager} = pi.createSession();
     pi.appendConversation(manager, {requestText: "Older request", assistantText: "Older response."});

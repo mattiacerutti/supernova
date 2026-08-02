@@ -1,7 +1,10 @@
 import {Schema} from "effect";
 import {ProviderLoginSession} from "../schemas";
 
-export const ProviderOAuthLoginStartPayload = Schema.Struct({
+export const ProviderLoginAuthType = Schema.Union([Schema.Literal("api_key"), Schema.Literal("oauth")]);
+
+export const ProviderLoginStartPayload = Schema.Struct({
+  authType: ProviderLoginAuthType,
   providerId: Schema.String,
 });
 
@@ -25,7 +28,8 @@ export class ProviderLoginError extends Schema.TaggedErrorClass<ProviderLoginErr
   message: Schema.String,
 }) {}
 
-export type ProviderOAuthLoginStartPayload = typeof ProviderOAuthLoginStartPayload.Type;
+export type ProviderLoginAuthType = typeof ProviderLoginAuthType.Type;
+export type ProviderLoginStartPayload = typeof ProviderLoginStartPayload.Type;
 export type ProviderLoginInputSubmitPayload = typeof ProviderLoginInputSubmitPayload.Type;
 export type ProviderLoginCancelPayload = typeof ProviderLoginCancelPayload.Type;
 export type ProviderLoginWatchPayload = typeof ProviderLoginWatchPayload.Type;

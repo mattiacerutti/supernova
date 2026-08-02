@@ -8,10 +8,9 @@ export function logoutProvider(providerId: string) {
   return Effect.gen(function* () {
     const piSdk = yield* PiSdkService;
 
-    return yield* Effect.try({
-      try: () => {
-        piSdk.authStorage.logout(providerId);
-        piSdk.modelRegistry.refresh();
+    return yield* Effect.tryPromise({
+      try: async () => {
+        await piSdk.modelRuntime.logout(providerId);
         return {providerId};
       },
       catch: (cause) => new ProviderLogoutError({cause, message: errorMessage(cause, "Failed to disconnect provider.")}),

@@ -1,5 +1,5 @@
 import type {AgentSession, PromptTemplate, SessionEntry, Skill} from "@earendil-works/pi-coding-agent";
-import {AuthStorage, createAgentSession, ModelRegistry, SessionManager, SettingsManager} from "@earendil-works/pi-coding-agent";
+import {createAgentSession, ModelRuntime, SessionManager, SettingsManager} from "@earendil-works/pi-coding-agent";
 import type {Api, FauxProviderRegistration} from "@earendil-works/pi-ai/compat";
 import {fauxAssistantMessage, fauxText, fauxThinking, registerFauxProvider} from "@earendil-works/pi-ai/compat";
 import {Effect, Fiber, Layer, ManagedRuntime, Stream} from "effect";
@@ -139,10 +139,9 @@ function sessionInfoFromManager(manager: PiSessionManager): PiSessionInfo {
   } satisfies PiSessionInfo;
 }
 
-function registerFauxModel(input: {authStorage: AuthStorage; faux: FauxProviderRegistration; modelRegistry: ModelRegistry}): void {
+async function registerFauxModel(input: {faux: FauxProviderRegistration; modelRuntime: ModelRuntime}): Promise<void> {
   const model = input.faux.getModel();
-  input.authStorage.setRuntimeApiKey(model.provider, "faux-key");
-  input.modelRegistry.registerProvider(model.provider, {
+  input.modelRuntime.registerProvider(model.provider, {
     api: input.faux.api as Api,
     apiKey: "faux-key",
     baseUrl: model.baseUrl,
@@ -159,9 +158,10 @@ function registerFauxModel(input: {authStorage: AuthStorage; faux: FauxProviderR
     })),
     name: "Anthropic",
   });
+  await input.modelRuntime.refresh({allowNetwork: false});
 }
 
-export function createPiTestRuntime(input?: {
+export async function createPiTestRuntime(input?: {
   readonly promptTemplates?: readonly PromptTemplate[];
   readonly reopenManagers?: boolean;
   readonly sessionDir?: string;
@@ -169,8 +169,7 @@ export function createPiTestRuntime(input?: {
   readonly skillContentByPath?: Readonly<Record<string, string>>;
   readonly skills?: readonly Skill[];
 }) {
-  const authStorage = AuthStorage.inMemory();
-  const modelRegistry = ModelRegistry.inMemory(authStorage);
+  const modelRuntime = await ModelRuntime.create({modelsPath: null});
   const faux = registerFauxProvider({
     api: selectedPiModel.api,
     models: [
@@ -189,7 +188,7 @@ export function createPiTestRuntime(input?: {
   const sessions = new Map<string, {info: PiSessionInfo; manager: PiSessionManager}>();
   let refreshCount = 0;
 
-  registerFauxModel({authStorage, faux, modelRegistry});
+  await registerFauxModel({faux, modelRuntime});
 
   const rememberSession = (manager: PiSessionManager) => {
     const info = sessionInfoFromManager(manager);
@@ -200,9 +199,8 @@ export function createPiTestRuntime(input?: {
   const agentSessionFactory: PiAgentSessionFactoryShape = {
     createAgentSession: ({cwd, sessionManager}) =>
       createAgentSession({
-        authStorage,
         cwd,
-        modelRegistry,
+        modelRuntime,
         noTools: "all",
         sessionManager,
         settingsManager: SettingsManager.inMemory(input?.settings),
@@ -220,12 +218,11 @@ export function createPiTestRuntime(input?: {
     },
   };
   const modelCatalog: PiModelCatalogShape = {
-    getAvailableModels: () => modelRegistry.getAvailable(),
-    getProviderDisplayName: (providerId) => modelRegistry.getProviderDisplayName(providerId),
-    refreshAuthAndModels: () => {
+    getAvailableModels: () => modelRuntime.getAvailableSnapshot(),
+    getProviderDisplayName: (providerId) => modelRuntime.getProvider(providerId)?.name ?? providerId,
+    refreshAuthAndModels: async () => {
       refreshCount++;
-      authStorage.reload();
-      modelRegistry.refresh();
+      await modelRuntime.refresh({allowNetwork: false});
     },
   };
   const titleGenerator: PiSessionTitleGeneratorShape = {
@@ -293,7 +290,7 @@ export function createPiTestRuntime(input?: {
     get refreshCount() {
       return refreshCount;
     },
-    modelRegistry,
+    modelRuntime,
     runWithSessions,
     runWithSessionRuntime,
     agentSessionFactory,

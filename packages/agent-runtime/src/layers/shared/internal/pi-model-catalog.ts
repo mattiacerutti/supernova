@@ -2,12 +2,12 @@ import {Context, Effect, Layer} from "effect";
 import {PiSdkService} from "@supernova/agent-runtime/layers/pi-sdk";
 import type {PiSdkServiceShape} from "@supernova/agent-runtime/layers/pi-sdk";
 
-export type PiModel = ReturnType<PiSdkServiceShape["modelRegistry"]["getAvailable"]>[number];
+export type PiModel = ReturnType<PiSdkServiceShape["modelRuntime"]["getModels"]>[number];
 
 export interface PiModelCatalogShape {
   readonly getAvailableModels: () => readonly PiModel[];
   readonly getProviderDisplayName: (providerId: string) => string;
-  readonly refreshAuthAndModels: () => void;
+  readonly refreshAuthAndModels: () => Promise<void>;
 }
 
 /** Private Pi model catalog capability used by session operations. */
@@ -19,11 +19,12 @@ export const PiModelCatalogLive = Layer.effect(
     const piSdk = yield* PiSdkService;
 
     return {
-      getAvailableModels: () => piSdk.modelRegistry.getAvailable(),
-      getProviderDisplayName: (providerId) => piSdk.modelRegistry.getProviderDisplayName(providerId),
-      refreshAuthAndModels: () => {
-        piSdk.authStorage.reload();
-        piSdk.modelRegistry.refresh();
+      getAvailableModels: () => piSdk.modelRuntime.getAvailableSnapshot(),
+      getProviderDisplayName: (providerId) => piSdk.modelRuntime.getProvider(providerId)?.name ?? providerId,
+      refreshAuthAndModels: async () => {
+        await piSdk.modelRuntime.refresh({allowNetwork: false});
+        const error = piSdk.modelRuntime.getError();
+        if (error) throw new Error(error);
       },
     };
   })

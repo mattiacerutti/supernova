@@ -1,11 +1,10 @@
 import {Context, Effect} from "effect";
 import type {Stream} from "effect";
 import type {
-  ProviderApiKeySetError,
+  ProviderLoginAuthType,
   ProviderLoginError,
   ProviderLogoutError,
   ProvidersListError,
-  ProviderApiKeySetResult,
   ProviderLogoutResult,
   ProvidersListResult,
 } from "@supernova/contracts/providers/procedures";
@@ -15,8 +14,7 @@ export interface ProvidersServiceShape {
   readonly list: () => Effect.Effect<ProvidersListResult, ProvidersListError>;
   readonly cancelLogin: (loginSessionId: string) => Effect.Effect<ProviderLoginSession, ProviderLoginError>;
   readonly logout: (providerId: string) => Effect.Effect<ProviderLogoutResult, ProviderLogoutError>;
-  readonly setApiKey: (providerId: string, apiKey: string) => Effect.Effect<ProviderApiKeySetResult, ProviderApiKeySetError>;
-  readonly startOAuthLogin: (providerId: string) => Effect.Effect<ProviderLoginSession, ProviderLoginError>;
+  readonly startLogin: (providerId: string, authType: ProviderLoginAuthType) => Effect.Effect<ProviderLoginSession, ProviderLoginError>;
   readonly submitLoginInput: (loginSessionId: string, input: string) => Effect.Effect<ProviderLoginSession, ProviderLoginError>;
   readonly watchLoginSession: (loginSessionId: string) => Stream.Stream<ProviderLoginSession, ProviderLoginError>;
 }

@@ -12,10 +12,9 @@ describe("Pi agent session factory", () => {
       setActiveToolsByName: vi.fn(),
     };
     const piSdk = {
-      authStorage: {},
       createAgentSession: vi.fn(async () => ({session})),
       createResourceLoader: vi.fn(() => resourceLoader),
-      modelRegistry: {},
+      modelRuntime: {},
     } as unknown as PiSdkServiceShape;
     const sessionManager = {} as Parameters<Awaited<ReturnType<typeof runFactory>>["createAgentSession"]>[0]["sessionManager"];
 
@@ -27,6 +26,7 @@ describe("Pi agent session factory", () => {
     expect(piSdk.createAgentSession).toHaveBeenCalledWith(
       expect.objectContaining({
         customTools: [expect.objectContaining({name: "web_fetch"})],
+        modelRuntime: piSdk.modelRuntime,
         resourceLoader,
         sessionManager,
       })

@@ -1,17 +1,14 @@
-import {AuthStorage, createAgentSession, ModelRegistry, SessionManager} from "@earendil-works/pi-coding-agent";
+import {createAgentSession, ModelRuntime, SessionManager} from "@earendil-works/pi-coding-agent";
 import type {ResourceLoader, SessionInfo} from "@earendil-works/pi-coding-agent";
-import {completeSimple} from "@earendil-works/pi-ai/compat";
 import {Context, Effect, Layer} from "effect";
 import {CustomPiResourceLoader} from "@supernova/agent-runtime/layers/pi-config";
 
 export type PiSessionInfo = SessionInfo;
 
 export interface PiSdkServiceShape {
-  readonly authStorage: ReturnType<typeof AuthStorage.create>;
-  readonly completeSimple: typeof completeSimple;
   readonly createAgentSession: typeof createAgentSession;
   readonly createResourceLoader: (input: {readonly projectPath: string}) => ResourceLoader;
-  readonly modelRegistry: ReturnType<typeof ModelRegistry.create>;
+  readonly modelRuntime: ModelRuntime;
   readonly SessionManager: typeof SessionManager;
 }
 
@@ -20,16 +17,13 @@ export class PiSdkService extends Context.Service<PiSdkService, PiSdkServiceShap
 
 export const PiSdkLive = Layer.effect(
   PiSdkService,
-  Effect.sync(() => {
-    const authStorage = AuthStorage.create();
-    const modelRegistry = ModelRegistry.create(authStorage);
+  Effect.gen(function* () {
+    const modelRuntime = yield* Effect.promise(() => ModelRuntime.create());
 
     return {
-      authStorage,
-      completeSimple,
       createAgentSession,
       createResourceLoader: ({projectPath}) => new CustomPiResourceLoader(projectPath),
-      modelRegistry,
+      modelRuntime,
       SessionManager,
     } satisfies PiSdkServiceShape;
   })

@@ -1,8 +1,5 @@
 import * as Rpc from "effect/unstable/rpc/Rpc";
 import {
-  ProviderApiKeySetError,
-  ProviderApiKeySetPayload,
-  ProviderApiKeySetResult,
   ProviderLoginError,
   ProviderLoginCancelPayload,
   ProviderLoginInputSubmitPayload,
@@ -14,7 +11,7 @@ import {
   ProvidersListError,
   ProvidersListPayload,
   ProvidersListResult,
-  ProviderOAuthLoginStartPayload,
+  ProviderLoginStartPayload,
 } from "@supernova/contracts/providers/procedures";
 
 export const ProvidersListRpc = Rpc.make("listProviders", {
@@ -23,15 +20,9 @@ export const ProvidersListRpc = Rpc.make("listProviders", {
   success: ProvidersListResult,
 });
 
-export const ProviderApiKeySetRpc = Rpc.make("setProviderApiKey", {
-  error: ProviderApiKeySetError,
-  payload: ProviderApiKeySetPayload,
-  success: ProviderApiKeySetResult,
-});
-
-export const ProviderOAuthLoginStartRpc = Rpc.make("startProviderOAuthLogin", {
+export const ProviderLoginStartRpc = Rpc.make("startProviderLogin", {
   error: ProviderLoginError,
-  payload: ProviderOAuthLoginStartPayload,
+  payload: ProviderLoginStartPayload,
   success: ProviderLoginResult,
 });
 
@@ -62,8 +53,7 @@ export const ProviderLogoutRpc = Rpc.make("logoutProvider", {
 
 export const ProviderRpcs = [
   ProvidersListRpc,
-  ProviderApiKeySetRpc,
-  ProviderOAuthLoginStartRpc,
+  ProviderLoginStartRpc,
   ProviderLoginInputSubmitRpc,
   ProviderLoginCancelRpc,
   ProviderLoginWatchRpc,

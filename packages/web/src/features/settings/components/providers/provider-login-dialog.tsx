@@ -1,40 +1,31 @@
 import type {FormEvent} from "react";
-import {useState} from "react";
-import type {ProviderLoginSession, ProviderLoginTextInput} from "@supernova/contracts/providers/schemas";
+import {useRef, useState} from "react";
+import type {ProviderLoginSession} from "@supernova/contracts/providers/schemas";
 import {Effect, Stream} from "effect";
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import Input from "@/components/ui/input";
-import AuthLink from "@/features/settings/components/providers/oauth/auth-link";
-import TextInputForm from "@/features/settings/components/providers/oauth/text-input-form";
+import AuthLink from "@/features/settings/components/providers/login/auth-link";
 import {useSubmitProviderLoginInput} from "@/features/settings/hooks/api/auth/use-submit-provider-login-input";
 import {useMountEffect} from "@/lib/use-mount-effect";
 import {useAgentRpcClient} from "@/rpc/use-agent-rpc-client";
 
-function isComplete(session: ProviderLoginSession | undefined): boolean {
-  return session?.step.type === "succeeded" || session?.step.type === "failed" || session?.step.type === "cancelled";
-}
-
-function activeTextInput(session: ProviderLoginSession | undefined): ProviderLoginTextInput | undefined {
-  if (!session) return undefined;
-  if (session.step.type === "prompt") return session.step.input;
-  if (session.step.type === "browser_auth") return session.step.manualInput;
-  return undefined;
-}
-
-interface ProviderOAuthContentProps {
+interface ProviderLoginContentProps {
   initialSession?: ProviderLoginSession;
   loginSessionId?: string;
   onClose: (cancelLogin: boolean) => void;
 }
 
-export default function ProviderOAuthContent(props: ProviderOAuthContentProps) {
+export default function ProviderLoginContent(props: ProviderLoginContentProps) {
   const {initialSession, loginSessionId, onClose} = props;
   const rpcClient = useAgentRpcClient();
   const submitInputMutation = useSubmitProviderLoginInput();
   const [session, setSession] = useState<ProviderLoginSession | undefined>(initialSession);
   const [input, setInput] = useState("");
   const [copiedCode, setCopiedCode] = useState(false);
+  const [pendingOptionId, setPendingOptionId] = useState<string | undefined>();
+  const [waitingForNextStep, setWaitingForNextStep] = useState(false);
+  const pendingStepKeyRef = useRef<string | undefined>(undefined);
 
   useMountEffect(() => {
     if (!loginSessionId) return;
@@ -42,7 +33,31 @@ export default function ProviderOAuthContent(props: ProviderOAuthContentProps) {
     let disposed = false;
     let interrupt: (() => Promise<void>) | undefined;
     void rpcClient
-      .fork((rpc) => rpc.watchProviderLoginSession({loginSessionId}).pipe(Stream.runForEach((nextSession) => Effect.sync(() => !disposed && setSession(nextSession)))))
+      .fork((rpc) =>
+        rpc.watchProviderLoginSession({loginSessionId}).pipe(
+          Stream.runForEach((nextSession) =>
+            Effect.sync(() => {
+              if (disposed || nextSession.step.type === "authenticating") return;
+
+              const pendingStepKey = pendingStepKeyRef.current;
+              if (!pendingStepKey) {
+                setSession(nextSession);
+                return;
+              }
+              if (JSON.stringify(nextSession.step) === pendingStepKey) {
+                setSession(nextSession);
+                return;
+              }
+
+              pendingStepKeyRef.current = undefined;
+              setPendingOptionId(undefined);
+              setWaitingForNextStep(false);
+              setInput("");
+              setSession(nextSession);
+            })
+          )
+        )
+      )
       .then((fiber) => {
         if (disposed) {
           void fiber.interrupt();
@@ -57,23 +72,28 @@ export default function ProviderOAuthContent(props: ProviderOAuthContentProps) {
     };
   });
 
-  const textInput = activeTextInput(session);
-  const complete = isComplete(session);
-  const canSubmitTextInput = !!loginSessionId && !!textInput && (textInput.allowEmpty || input.trim().length > 0);
-  const waitingForAuthorization = !complete && (session?.step.type === "browser_auth" || session?.step.type === "device_code");
+  const textInput = session?.step.type === "prompt" ? session.step.input : session?.step.type === "browser_auth" ? session.step.manualInput : undefined;
+  const complete = session?.step.type === "succeeded" || session?.step.type === "failed" || session?.step.type === "cancelled";
+  const canSubmitTextInput = !!loginSessionId && !!textInput && input.trim().length > 0;
+  const waitingForAuthorization = !waitingForNextStep && !complete && (session?.step.type === "browser_auth" || session?.step.type === "device_code");
 
   const handleClose = (): void => {
     onClose(!complete);
   };
 
-  const submitLoginInput = (value: string): void => {
-    if (!loginSessionId) return;
+  const submitLoginInput = (value: string, optionId?: string): void => {
+    if (!loginSessionId || !session) return;
 
+    pendingStepKeyRef.current = JSON.stringify(session.step);
+    setPendingOptionId(optionId);
+    setWaitingForNextStep(true);
     submitInputMutation.mutate(
       {input: value, loginSessionId},
       {
-        onSuccess: () => {
-          setInput("");
+        onError: () => {
+          pendingStepKeyRef.current = undefined;
+          setPendingOptionId(undefined);
+          setWaitingForNextStep(false);
         },
       }
     );
@@ -109,16 +129,28 @@ export default function ProviderOAuthContent(props: ProviderOAuthContentProps) {
             {session.step.options.map((option) => (
               <Button
                 className="flex w-full items-center justify-between rounded-xl corner-superellipse/1.3 px-3 py-2 text-left hover:bg-overlay-hover"
-                disabled={submitInputMutation.isPending}
+                disabled={waitingForNextStep}
                 key={option.id}
-                onClick={() => submitLoginInput(option.id)}
+                onClick={() => submitLoginInput(option.id, option.id)}
                 variant="bare"
               >
-                <span className="text-sm text-ink">{option.label}</span>
-                <Icon className="text-ink-muted" name="arrow-right" size="xs" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm text-ink">{option.label}</span>
+                  {option.description && <span className="block truncate text-xs text-ink-faint">{option.description}</span>}
+                </span>
+                <Icon className={pendingOptionId === option.id ? "animate-spin text-ink-muted" : "text-ink-muted"} name={pendingOptionId === option.id ? "loader" : "arrow-right"} size="xs" />
               </Button>
             ))}
           </div>
+        </div>
+      )}
+
+      {session?.step.type === "info" && (
+        <div className="space-y-2">
+          <p className="text-sm text-ink-muted">{session.step.message}</p>
+          {session.step.links.map((link) => (
+            <AuthLink href={link.url} key={link.url} label={link.label} />
+          ))}
         </div>
       )}
 
@@ -128,22 +160,24 @@ export default function ProviderOAuthContent(props: ProviderOAuthContentProps) {
             {session.step.instructions && <p className="text-sm text-ink-muted">{session.step.instructions}</p>}
             {session.step.authUrl && <AuthLink href={session.step.authUrl} />}
           </div>
-          {session.step.manualInput && (
-            <div className="space-y-2 pt-3">
-              <p className="text-xs text-ink-faint">{session.step.manualInput.message}</p>
-              <form id="provider-login-input-form" onSubmit={handleSubmit}>
-                <Input
-                  autoFocus
-                  disabled={submitInputMutation.isPending}
-                  id="provider-login-input"
-                  onChange={(event) => setInput(event.target.value)}
-                  placeholder={session.step.manualInput.placeholder}
-                  value={input}
-                />
-              </form>
-            </div>
-          )}
         </div>
+      )}
+
+      {textInput && (
+        <form className="space-y-2 pt-3" id="provider-login-input-form" onSubmit={handleSubmit}>
+          <label className="block text-sm text-ink" htmlFor="provider-login-input">
+            {textInput.message}
+          </label>
+          <Input
+            autoFocus
+            disabled={waitingForNextStep}
+            id="provider-login-input"
+            onChange={(event) => setInput(event.target.value)}
+            placeholder={textInput.placeholder}
+            type={textInput.secret ? "password" : "text"}
+            value={input}
+          />
+        </form>
       )}
 
       {session?.step.type === "device_code" && (
@@ -164,11 +198,7 @@ export default function ProviderOAuthContent(props: ProviderOAuthContentProps) {
         </div>
       )}
 
-      {session?.step.type === "prompt" && (
-        <TextInputForm disabled={submitInputMutation.isPending} input={session.step.input} onChange={setInput} onSubmit={handleSubmit} value={input} />
-      )}
-
-      {session?.progress && !complete && (
+      {session?.progress && !complete && !waitingForNextStep && (
         <div className="flex items-center gap-2 text-sm text-ink-muted">
           <Icon className="animate-spin text-ink-faint" name="loader" size="sm" />
           <span>{session.progress}</span>
@@ -185,14 +215,14 @@ export default function ProviderOAuthContent(props: ProviderOAuthContentProps) {
       {session?.step.type === "succeeded" && (
         <div className="flex items-center gap-2 py-2">
           <Icon className="text-diff-added" name="check" size="sm" />
-          <p className="text-sm text-diff-added">Provider connected successfully.</p>
+          <p className="text-sm text-diff-added">Provider configuration saved.</p>
         </div>
       )}
 
-      {(session?.step.type === "failed" || !loginSessionId) && (
+      {session?.step.type === "failed" && (
         <div className="flex items-center gap-2">
           <Icon className="text-diff-removed" name="x" size="sm" />
-          <p className="text-sm text-diff-removed">{session?.step.type === "failed" ? session.step.error : "Login failed. Please try again later."}</p>
+          <p className="text-sm text-diff-removed">{session.step.error}</p>
         </div>
       )}
 
@@ -205,7 +235,7 @@ export default function ProviderOAuthContent(props: ProviderOAuthContentProps) {
         {textInput && (
           <Button
             className="w-auto px-3 text-xs"
-            disabled={submitInputMutation.isPending || !canSubmitTextInput}
+            disabled={waitingForNextStep || !canSubmitTextInput}
             form="provider-login-input-form"
             size="sm"
             type="submit"

@@ -4,8 +4,7 @@ import {ProviderLoginSessions, ProviderLoginSessionsLive} from "@supernova/agent
 import {ProvidersService} from "@supernova/agent-runtime/services/providers-service";
 import {listProviders} from "@supernova/agent-runtime/layers/providers/operations/list-providers";
 import {logoutProvider} from "@supernova/agent-runtime/layers/providers/operations/logout-provider";
-import {setProviderApiKey} from "@supernova/agent-runtime/layers/providers/operations/set-provider-api-key";
-import {startProviderOAuthLogin} from "@supernova/agent-runtime/layers/providers/operations/start-provider-oauth-login";
+import {startProviderLogin} from "@supernova/agent-runtime/layers/providers/operations/start-provider-login";
 
 export const PiProvidersFromInternal = Layer.effect(
   ProvidersService,
@@ -17,9 +16,8 @@ export const PiProvidersFromInternal = Layer.effect(
       cancelLogin: loginSessions.cancel,
       list: () => listProviders().pipe(Effect.provideService(PiSdkService, piSdk)),
       logout: (providerId) => logoutProvider(providerId).pipe(Effect.provideService(PiSdkService, piSdk)),
-      setApiKey: (providerId, apiKey) => setProviderApiKey(providerId, apiKey).pipe(Effect.provideService(PiSdkService, piSdk)),
-      startOAuthLogin: (providerId) =>
-        startProviderOAuthLogin(providerId).pipe(Effect.provideService(PiSdkService, piSdk), Effect.provideService(ProviderLoginSessions, loginSessions)),
+      startLogin: (providerId, authType) =>
+        startProviderLogin(providerId, authType).pipe(Effect.provideService(PiSdkService, piSdk), Effect.provideService(ProviderLoginSessions, loginSessions)),
       submitLoginInput: loginSessions.submitInput,
       watchLoginSession: loginSessions.watch,
     };

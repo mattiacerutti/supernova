@@ -1,7 +1,8 @@
 import {mkdir, mkdtemp, readFile, writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
-import {AuthStorage, createAgentSession, ModelRegistry, SessionManager, SettingsManager} from "@earendil-works/pi-coding-agent";
+import {createAgentSession, ModelRuntime, SessionManager, SettingsManager} from "@earendil-works/pi-coding-agent";
+import {InMemoryCredentialStore} from "@earendil-works/pi-ai";
 import {Effect} from "effect";
 import {afterEach, describe, expect, it} from "vitest";
 import {PiSdkLive, PiSdkService} from "@supernova/agent-runtime/layers/pi-sdk";
@@ -30,6 +31,7 @@ async function createTestProject(): Promise<{agentDir: string; home: string; pro
 describe("Supernova Pi SDK config", () => {
   const originalHome = process.env.HOME;
   const originalPiCodingAgentDir = process.env.PI_CODING_AGENT_DIR;
+  const originalPiOffline = process.env.PI_OFFLINE;
   const tempDirs: string[] = [];
 
   afterEach(() => {
@@ -42,6 +44,11 @@ describe("Supernova Pi SDK config", () => {
       delete process.env.PI_CODING_AGENT_DIR;
     } else {
       process.env.PI_CODING_AGENT_DIR = originalPiCodingAgentDir;
+    }
+    if (originalPiOffline === undefined) {
+      delete process.env.PI_OFFLINE;
+    } else {
+      process.env.PI_OFFLINE = originalPiOffline;
     }
     cleanupTempDirs(tempDirs);
   });
@@ -83,12 +90,13 @@ describe("Supernova Pi SDK config", () => {
     expect(loader.getSkills().skills.map((skill) => skill.name)).toEqual(["project-skill", "repo-skill", "global-skill"]);
   });
 
-  it("creates Pi auth storage from the runtime agent directory when the layer starts", async () => {
+  it("creates Pi credential storage from the runtime agent directory when the layer starts", async () => {
     const home = await mkdtemp(join(tmpdir(), "supernova-home-"));
     const agentDir = join(home, ".supernova", "dev", "agent");
     tempDirs.push(home);
     process.env.HOME = home;
     process.env.PI_CODING_AGENT_DIR = agentDir;
+    process.env.PI_OFFLINE = "1";
 
     const piSdk = await Effect.runPromise(
       Effect.gen(function* () {
@@ -96,7 +104,10 @@ describe("Supernova Pi SDK config", () => {
       }).pipe(Effect.provide(PiSdkLive))
     );
 
-    piSdk.authStorage.set("openai", {type: "api_key", key: "test-key"});
+    await piSdk.modelRuntime.login("openai", "api_key", {
+      notify: () => undefined,
+      prompt: async () => "test-key",
+    });
 
     const authJson = JSON.parse(await readFile(join(agentDir, "auth.json"), "utf-8")) as Record<string, {type: string; key?: string}>;
     expect(authJson.openai).toEqual({type: "api_key", key: "test-key"});
@@ -141,11 +152,10 @@ describe("Supernova Pi SDK config", () => {
     expect(loader.getAppendSystemPrompt()).toEqual([]);
     expect(loader.getAgentsFiles().agentsFiles).toMatchObject([{content: "project instructions", path: join(project, "AGENTS.md")}]);
 
-    const authStorage = AuthStorage.inMemory();
+    const modelRuntime = await ModelRuntime.create({credentials: new InMemoryCredentialStore(), modelsPath: null});
     const {session} = await createAgentSession({
-      authStorage,
       cwd: project,
-      modelRegistry: ModelRegistry.inMemory(authStorage),
+      modelRuntime,
       noTools: "all",
       resourceLoader: loader,
       sessionManager: SessionManager.inMemory(project),

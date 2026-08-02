@@ -78,7 +78,7 @@ describe("sending messages through Pi sessions", () => {
   });
 
   it("publishes session lifecycle, live turn, and final session snapshots", async () => {
-    const pi = createPiTestRuntime();
+    const pi = await createPiTestRuntime();
     runtimes.push(pi);
     const {info, manager} = pi.createSession();
     pi.appendConversation(manager);
@@ -112,7 +112,7 @@ describe("sending messages through Pi sessions", () => {
   });
 
   it("sends authored text and images to the provider while displaying authored content parts", async () => {
-    const pi = createPiTestRuntime();
+    const pi = await createPiTestRuntime();
     runtimes.push(pi);
     const {info} = pi.createSession();
     const contentParts = [
@@ -154,7 +154,7 @@ describe("sending messages through Pi sessions", () => {
   });
 
   it("streams pending and completed auto-compaction as part of the live and final turn snapshots", async () => {
-    const pi = createPiTestRuntime();
+    const pi = await createPiTestRuntime();
     runtimes.push(pi);
     const {info, manager} = pi.createSession();
     pi.appendConversation(manager, {requestText: "Older request", assistantText: "Older response."});
@@ -175,7 +175,7 @@ describe("sending messages through Pi sessions", () => {
   });
 
   it("keeps pre-prompt compaction in the submitted turn", async () => {
-    const pi = createPiTestRuntime({settings: {compaction: {enabled: true, reserveTokens: 1000}}});
+    const pi = await createPiTestRuntime({settings: {compaction: {enabled: true, reserveTokens: 1000}}});
     runtimes.push(pi);
     const {info, manager} = pi.createSession();
     const largePreviousRequest = "x".repeat(selectedPiModel.contextWindow * 4);
@@ -218,7 +218,7 @@ describe("sending messages through Pi sessions", () => {
   it("keeps content-parts metadata on the active branch when session managers are reopened", async () => {
     const sessionDir = mkdtempSync(join(tmpdir(), "supernova-session-test-"));
     tempDirs.push(sessionDir);
-    const pi = createPiTestRuntime({reopenManagers: true, sessionDir});
+    const pi = await createPiTestRuntime({reopenManagers: true, sessionDir});
     runtimes.push(pi);
     const {info} = pi.createSession();
     pi.faux.setResponses([fauxAssistantMessage("First response."), fauxAssistantMessage("Second response."), fauxAssistantMessage("Third response.")]);
@@ -238,7 +238,7 @@ describe("sending messages through Pi sessions", () => {
   it("persists stable checkpoint entries around git-backed turns", async () => {
     const projectPath = await createGitProject();
     tempDirs.push(projectPath);
-    const pi = createPiTestRuntime();
+    const pi = await createPiTestRuntime();
     runtimes.push(pi);
     const {info, manager} = pi.createSession(projectPath);
     pi.faux.setResponses([
@@ -263,7 +263,7 @@ describe("sending messages through Pi sessions", () => {
   });
 
   it("keeps overflow compaction continuation in the same live turn", async () => {
-    const pi = createPiTestRuntime();
+    const pi = await createPiTestRuntime();
     runtimes.push(pi);
     const {info, manager} = pi.createSession();
     pi.appendConversation(manager, {requestText: "Older request", assistantText: "Older response."});
@@ -298,7 +298,7 @@ describe("sending messages through Pi sessions", () => {
   });
 
   it("rejects the command when the selected model is unavailable", async () => {
-    const pi = createPiTestRuntime();
+    const pi = await createPiTestRuntime();
     runtimes.push(pi);
     const {info} = pi.createSession();
 
@@ -309,7 +309,7 @@ describe("sending messages through Pi sessions", () => {
   });
 
   it("rejects the command when the session cannot be found", async () => {
-    const pi = createPiTestRuntime();
+    const pi = await createPiTestRuntime();
     runtimes.push(pi);
 
     await expect(pi.sendMessage({message: "Fix it", modelReference: selectedModelReference, sessionId: "missing-session"})).rejects.toThrow("Session not found.");
@@ -317,7 +317,7 @@ describe("sending messages through Pi sessions", () => {
   });
 
   it("aborts the active provider request only through abortSession", async () => {
-    const pi = createPiTestRuntime();
+    const pi = await createPiTestRuntime();
     runtimes.push(pi);
     const {info} = pi.createSession();
     let providerSignal: AbortSignal | undefined;

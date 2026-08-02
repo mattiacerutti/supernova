@@ -77,8 +77,16 @@ export class CustomPiResourceLoader implements ResourceLoader {
     return this.piLoader.getSystemPrompt();
   }
 
+  getSystemPromptSource(): ReturnType<ResourceLoader["getSystemPromptSource"]> {
+    return this.piLoader.getSystemPromptSource();
+  }
+
   getAppendSystemPrompt(): ReturnType<ResourceLoader["getAppendSystemPrompt"]> {
     return this.piLoader.getAppendSystemPrompt();
+  }
+
+  getAppendSystemPromptSources(): ReturnType<ResourceLoader["getAppendSystemPromptSources"]> {
+    return this.piLoader.getAppendSystemPromptSources();
   }
 
   extendResources(paths: Parameters<ResourceLoader["extendResources"]>[0]): void {

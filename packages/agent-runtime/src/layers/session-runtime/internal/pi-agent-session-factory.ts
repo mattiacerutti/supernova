@@ -23,10 +23,9 @@ export const PiAgentSessionFactoryLive = Layer.effect(
         await resourceLoader.reload();
 
         const created = await piSdk.createAgentSession({
-          authStorage: piSdk.authStorage,
           cwd,
           customTools: createPiCustomTools(),
-          modelRegistry: piSdk.modelRegistry,
+          modelRuntime: piSdk.modelRuntime,
           resourceLoader,
           sessionManager,
           settingsManager: SettingsManager.inMemory(),

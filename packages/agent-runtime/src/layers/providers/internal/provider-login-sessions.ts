@@ -4,6 +4,7 @@ import type {ProviderLoginSession, ProviderLoginStep} from "@supernova/contracts
 import {errorMessage} from "@supernova/agent-runtime/layers/providers/lib/provider-errors";
 
 interface LoginWaiter {
+  readonly cleanup: () => void;
   readonly reject: (error: Error) => void;
   readonly resolve: (input: string) => void;
 }
@@ -23,6 +24,7 @@ interface CreateLoginSessionInput {
 }
 
 interface WaitForInputOptions {
+  readonly signal?: AbortSignal;
   readonly step: ProviderLoginStep;
 }
 
@@ -39,7 +41,7 @@ export interface ProviderLoginSessionsShape {
   readonly watch: (loginSessionId: string) => Stream.Stream<ProviderLoginSession, ProviderLoginError>;
 }
 
-/** Owns in-flight provider OAuth sessions and broadcasts state changes. */
+/** Owns in-flight provider login sessions and broadcasts state changes. */
 export class ProviderLoginSessions extends Context.Service<ProviderLoginSessions, ProviderLoginSessionsShape>()("supernova/agent-runtime/ProviderLoginSessions") {}
 
 function toLoginSession(state: ProviderLoginSessionState): ProviderLoginSession {
@@ -79,6 +81,7 @@ export const ProviderLoginSessionsLive = Layer.effect(
       cancel: (loginSessionId) =>
         update(loginSessionId, (state) => {
           state.abortController.abort();
+          state.waiter?.cleanup();
           state.waiter?.reject(new Error("Login cancelled"));
           state.waiter = undefined;
           state.step = {type: "cancelled"};
@@ -97,6 +100,7 @@ export const ProviderLoginSessionsLive = Layer.effect(
       fail: (loginSessionId, error) =>
         update(loginSessionId, (state) => {
           state.step = {error, type: "failed"};
+          state.waiter?.cleanup();
           state.waiter = undefined;
         }),
       getAbortSignal: (loginSessionId) =>
@@ -112,6 +116,7 @@ export const ProviderLoginSessionsLive = Layer.effect(
         update(loginSessionId, (state) => {
           state.progress = "Connected";
           state.step = {type: "succeeded"};
+          state.waiter?.cleanup();
           state.waiter = undefined;
         }),
       submitInput: (loginSessionId, input) =>
@@ -121,6 +126,7 @@ export const ProviderLoginSessionsLive = Layer.effect(
           const waiter = state.waiter;
           state.waiter = undefined;
           state.step = {type: "authenticating"};
+          waiter.cleanup();
           waiter.resolve(input);
         }),
       updateStep: (loginSessionId, step) =>
@@ -131,8 +137,17 @@ export const ProviderLoginSessionsLive = Layer.effect(
         new Promise((resolve, reject) => {
           void Effect.runPromise(
             update(loginSessionId, (state) => {
+              const abort = () => {
+                if (state.waiter?.resolve !== resolve) return;
+                state.waiter = undefined;
+                reject(new Error("Login prompt cancelled"));
+              };
+              const cleanup = () => options.signal?.removeEventListener("abort", abort);
+
               state.step = options.step;
-              state.waiter = {reject, resolve};
+              state.waiter = {cleanup, reject, resolve};
+              options.signal?.addEventListener("abort", abort, {once: true});
+              if (options.signal?.aborted) abort();
             })
           ).catch(reject);
         }),

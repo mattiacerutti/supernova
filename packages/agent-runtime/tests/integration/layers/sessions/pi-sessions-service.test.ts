@@ -19,7 +19,7 @@ describe("Pi sessions service", () => {
   it("creates a persisted empty session", async () => {
     const sessionDir = await mkdtemp(join(tmpdir(), "supernova-sessions-"));
     tempDirs.push(sessionDir);
-    const pi = createPiTestRuntime({sessionDir});
+    const pi = await createPiTestRuntime({sessionDir});
     runtimes.push(pi);
 
     const session = await pi.runWithSessions(
@@ -36,7 +36,7 @@ describe("Pi sessions service", () => {
   });
 
   it("renames a persisted session", async () => {
-    const pi = createPiTestRuntime();
+    const pi = await createPiTestRuntime();
     runtimes.push(pi);
     const {info} = pi.createSession();
 
@@ -59,7 +59,7 @@ describe("Pi sessions service", () => {
   });
 
   it("loads turns from raw branch history instead of compacted context", async () => {
-    const pi = createPiTestRuntime();
+    const pi = await createPiTestRuntime();
     runtimes.push(pi);
     const {info, manager} = pi.createSession();
     manager.appendModelChange(selectedModelReference.providerId, selectedModelReference.id);
@@ -88,7 +88,7 @@ describe("Pi sessions service", () => {
   });
 
   it("refreshes credentials and model metadata before listing models", async () => {
-    const pi = createPiTestRuntime();
+    const pi = await createPiTestRuntime();
     runtimes.push(pi);
 
     const models = await pi.runWithSessions(
@@ -99,6 +99,8 @@ describe("Pi sessions service", () => {
     );
 
     expect(pi.refreshCount).toBe(1);
-    expect(models).toMatchObject([{id: "claude-sonnet", name: "Claude Sonnet", providerId: "anthropic", providerName: "Anthropic"}]);
+    expect(models).toEqual(
+      expect.arrayContaining([expect.objectContaining({id: "claude-sonnet", name: "Claude Sonnet", providerId: "anthropic", providerName: "Anthropic"})])
+    );
   });
 });

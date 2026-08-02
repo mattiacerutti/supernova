@@ -1,24 +1,23 @@
 import {useRef, useState} from "react";
+import type {ProviderLoginAuthType} from "@supernova/contracts/providers/procedures";
 import type {Provider} from "@supernova/contracts/providers/schemas";
 import Dialog from "@/components/ui/dialog";
-import ProviderApiKeyContent from "@/features/settings/components/providers/provider-api-key-dialog";
 import ProviderConnectMethodContent from "@/features/settings/components/providers/provider-connect-method-dialog";
-import ProviderOAuthContent from "@/features/settings/components/providers/provider-oauth-dialog";
+import ProviderLoginContent from "@/features/settings/components/providers/provider-login-dialog";
 import ProvidersPageSkeleton from "@/features/settings/components/providers/providers-page-skeleton";
 import ProvidersSection from "@/features/settings/components/providers/providers-section";
 import {useCancelProviderLogin} from "@/features/settings/hooks/api/auth/use-cancel-provider-login";
 import {useLogoutProvider} from "@/features/settings/hooks/api/auth/use-logout-provider";
-import {useStartProviderOAuthLogin} from "@/features/settings/hooks/api/auth/use-start-provider-oauth-login";
+import {useStartProviderLogin} from "@/features/settings/hooks/api/auth/use-start-provider-login";
 import {useListProviders} from "@/features/settings/hooks/api/use-list-providers";
 
-type ConnectMethod = "api_key" | "oauth";
-type ProviderDialogView = "api_key" | "method" | "oauth";
+type ProviderDialogView = "login" | "method";
 
 export default function ProvidersSettingsPage() {
   const providersQuery = useListProviders();
 
   const logoutMutation = useLogoutProvider();
-  const {isPending: isStartingOAuthLogin, data: loginSession, mutateAsync: startOAuthLoginMutation, reset: resetOAuthLoginMutation} = useStartProviderOAuthLogin();
+  const {data: loginSession, error: startLoginError, isPending: isStartingLogin, mutate: startLoginMutation, reset: resetLoginMutation, variables: pendingLoginInput} = useStartProviderLogin();
   const cancelLoginMutation = useCancelProviderLogin();
 
   const [selectedProvider, setSelectedProvider] = useState<Provider | undefined>();
@@ -40,28 +39,42 @@ export default function ProvidersSettingsPage() {
     if (open) return;
 
     const pendingClose = pendingCloseRef.current;
-    if (pendingClose.view === "oauth") {
+    if (pendingClose.view === "login") {
       void providersQuery.refetch();
       if (pendingClose.cancelLogin && pendingClose.loginSessionId) {
         cancelLoginMutation.mutate({loginSessionId: pendingClose.loginSessionId});
       }
     }
 
-    resetOAuthLoginMutation();
+    resetLoginMutation();
     setProviderDialogView(undefined);
     setSelectedProvider(undefined);
   };
 
-  const startOAuthLogin = async (provider: Provider) => {
-    await startOAuthLoginMutation({providerId: provider.id});
-    setProviderDialogView("oauth");
+  const startLogin = (provider: Provider, authType: ProviderLoginAuthType): void => {
+    pendingCloseRef.current = {cancelLogin: false, loginSessionId: undefined, view: undefined};
+    if (providerDialogView !== "method") setProviderDialogView("login");
+    startLoginMutation(
+      {authType, providerId: provider.id},
+      {
+        onError: () => setProviderDialogView("login"),
+        onSuccess: (session) => {
+          const pendingClose = pendingCloseRef.current;
+          if (pendingClose.cancelLogin && !pendingClose.loginSessionId) {
+            cancelLoginMutation.mutate({loginSessionId: session.loginSessionId});
+            return;
+          }
+          setProviderDialogView("login");
+        },
+      }
+    );
   };
 
   const handleDisconnect = async (provider: Provider) => {
     await logoutMutation.mutateAsync({providerId: provider.id});
   };
 
-  const handleConnect = async (provider: Provider) => {
+  const handleConnect = (provider: Provider): void => {
     const hasOAuth = provider.authTypes.includes("oauth");
     const hasApiKey = provider.authTypes.includes("api_key");
 
@@ -73,26 +86,15 @@ export default function ProvidersSettingsPage() {
       return;
     }
 
-    if (hasOAuth) {
+    if (hasOAuth || hasApiKey) {
       setProviderDialogOpen(true);
-      startOAuthLogin(provider);
-      return;
-    }
-
-    if (hasApiKey) {
-      setProviderDialogView("api_key");
-      setProviderDialogOpen(true);
+      startLogin(provider, hasOAuth ? "oauth" : "api_key");
     }
   };
 
-  const handleConnectMethod = (method: ConnectMethod): void => {
+  const handleConnectMethod = (method: ProviderLoginAuthType): void => {
     if (!selectedProvider) return;
-
-    if (method === "oauth") {
-      startOAuthLogin(selectedProvider);
-    } else {
-      setProviderDialogView("api_key");
-    }
+    startLogin(selectedProvider, method);
   };
 
   const connectedProviders = providersQuery.data?.filter((provider) => provider.connected) ?? [];
@@ -122,10 +124,12 @@ export default function ProvidersSettingsPage() {
               open={providerDialogOpen}
               title={`Connect ${selectedProvider?.name ?? "provider"}`}
             >
-              {providerDialogView === "method" && <ProviderConnectMethodContent onSelect={handleConnectMethod} isStartingOAuthLogin={isStartingOAuthLogin} />}
-              {providerDialogView === "api_key" && <ProviderApiKeyContent onClose={handleCloseProviderDialog} provider={selectedProvider} />}
-              {providerDialogView === "oauth" && (
-                <ProviderOAuthContent initialSession={loginSession} key={loginSessionId} loginSessionId={loginSessionId} onClose={handleCloseProviderDialog} />
+              {providerDialogView === "method" && (
+                <ProviderConnectMethodContent onSelect={handleConnectMethod} pendingMethod={isStartingLogin ? pendingLoginInput?.authType : undefined} />
+              )}
+              {providerDialogView === "login" && startLoginError && <p className="pb-4 pt-1 text-sm text-diff-removed">{startLoginError.message}</p>}
+              {providerDialogView === "login" && !startLoginError && (
+                <ProviderLoginContent initialSession={loginSession} key={loginSessionId} loginSessionId={loginSessionId} onClose={handleCloseProviderDialog} />
               )}
             </Dialog>
           </>

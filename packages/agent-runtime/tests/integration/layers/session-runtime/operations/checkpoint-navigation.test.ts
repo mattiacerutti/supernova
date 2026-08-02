@@ -49,7 +49,7 @@ function errorEvents(events: readonly SessionStreamEvent[]): Array<Extract<Sessi
 }
 
 async function runSessionCommand(input: {
-  readonly pi: ReturnType<typeof createPiTestRuntime>;
+  readonly pi: Awaited<ReturnType<typeof createPiTestRuntime>>;
   readonly run: (sessionRuntime: SessionRuntimeServiceShape) => Effect.Effect<void>;
 }): Promise<SessionStreamEvent[]> {
   const events: SessionStreamEvent[] = [];
@@ -79,7 +79,7 @@ async function runSessionCommand(input: {
 }
 
 async function runRejectedSessionCommand(input: {
-  readonly pi: ReturnType<typeof createPiTestRuntime>;
+  readonly pi: Awaited<ReturnType<typeof createPiTestRuntime>>;
   readonly run: (sessionRuntime: SessionRuntimeServiceShape) => Effect.Effect<void>;
 }): Promise<{readonly cause: unknown; readonly events: readonly SessionStreamEvent[]}> {
   const events: SessionStreamEvent[] = [];
@@ -124,7 +124,7 @@ describe("checkpoint navigation", () => {
   it("reverts directly before a selected turn and restores selected and later file changes", async () => {
     const projectPath = await createGitProject();
     tempDirs.push(projectPath);
-    const pi = createPiTestRuntime();
+    const pi = await createPiTestRuntime();
     runtimes.push(pi);
     const {info} = pi.createSession(projectPath);
     pi.faux.setResponses([
@@ -163,7 +163,7 @@ describe("checkpoint navigation", () => {
   it("preserves manual file changes made between turns when undoing the later turn", async () => {
     const projectPath = await createGitProject();
     tempDirs.push(projectPath);
-    const pi = createPiTestRuntime();
+    const pi = await createPiTestRuntime();
     runtimes.push(pi);
     const {info} = pi.createSession(projectPath);
     pi.faux.setResponses([
@@ -194,7 +194,7 @@ describe("checkpoint navigation", () => {
     const projectPath = await createGitProject();
     tempDirs.push(projectPath);
     await git(projectPath, ["branch", "-M", "main"]);
-    const pi = createPiTestRuntime();
+    const pi = await createPiTestRuntime();
     runtimes.push(pi);
     const {info} = pi.createSession(projectPath);
     pi.faux.setResponses([
@@ -226,7 +226,7 @@ describe("checkpoint navigation", () => {
   it("keeps checkpoint navigation revisions monotonic after a manual abort", async () => {
     const projectPath = await createProject();
     tempDirs.push(projectPath);
-    const pi = createPiTestRuntime();
+    const pi = await createPiTestRuntime();
     runtimes.push(pi);
     const {info} = pi.createSession(projectPath);
     pi.faux.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
@@ -317,7 +317,7 @@ describe("checkpoint navigation", () => {
   it("undoes and redoes one checkpoint while restoring files in both directions", async () => {
     const projectPath = await createGitProject();
     tempDirs.push(projectPath);
-    const pi = createPiTestRuntime();
+    const pi = await createPiTestRuntime();
     runtimes.push(pi);
     const {info} = pi.createSession(projectPath);
     pi.faux.setResponses([
@@ -364,7 +364,7 @@ describe("checkpoint navigation", () => {
   it("preserves git history and user files outside the checkpoint diff during undo and redo", async () => {
     const projectPath = await createGitProject();
     tempDirs.push(projectPath);
-    const pi = createPiTestRuntime();
+    const pi = await createPiTestRuntime();
     runtimes.push(pi);
     const {info} = pi.createSession(projectPath);
     pi.faux.setResponses([
@@ -415,7 +415,7 @@ describe("checkpoint navigation", () => {
   it("does not touch git stash entries during checkpoint undo", async () => {
     const projectPath = await createGitProject();
     tempDirs.push(projectPath);
-    const pi = createPiTestRuntime();
+    const pi = await createPiTestRuntime();
     runtimes.push(pi);
     const {info} = pi.createSession(projectPath);
     pi.faux.setResponses([
@@ -445,7 +445,7 @@ describe("checkpoint navigation", () => {
   it("reverts forward to selected undone turns", async () => {
     const projectPath = await createGitProject();
     tempDirs.push(projectPath);
-    const pi = createPiTestRuntime();
+    const pi = await createPiTestRuntime();
     runtimes.push(pi);
     const {info} = pi.createSession(projectPath);
     pi.faux.setResponses([
@@ -513,7 +513,7 @@ describe("checkpoint navigation", () => {
   it("publishes the restored checkpoint model when reverting backward and forward", async () => {
     const projectPath = await createProject();
     tempDirs.push(projectPath);
-    const pi = createPiTestRuntime();
+    const pi = await createPiTestRuntime();
     runtimes.push(pi);
     const {info} = pi.createSession(projectPath);
     const highModel = selectedModelReference;
@@ -535,7 +535,7 @@ describe("checkpoint navigation", () => {
   it("rebuilds provider context from the visible branch after undo", async () => {
     const projectPath = await createProject();
     tempDirs.push(projectPath);
-    const pi = createPiTestRuntime();
+    const pi = await createPiTestRuntime();
     runtimes.push(pi);
     const {info} = pi.createSession(projectPath);
     let providerUserTexts: string[] | undefined;
@@ -572,7 +572,7 @@ describe("checkpoint navigation", () => {
   it("clears redo turns as soon as a replacement message is accepted", async () => {
     const projectPath = await createProject();
     tempDirs.push(projectPath);
-    const pi = createPiTestRuntime();
+    const pi = await createPiTestRuntime();
     runtimes.push(pi);
     const {info} = pi.createSession(projectPath);
     pi.faux.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
@@ -633,7 +633,7 @@ describe("checkpoint navigation", () => {
   it("does not redo after a new branch diverges from an undone checkpoint", async () => {
     const projectPath = await createGitProject();
     tempDirs.push(projectPath);
-    const pi = createPiTestRuntime();
+    const pi = await createPiTestRuntime();
     runtimes.push(pi);
     const {info} = pi.createSession(projectPath);
     pi.faux.setResponses([
@@ -667,7 +667,7 @@ describe("checkpoint navigation", () => {
     const projectPath = await createProject();
     const sessionDir = mkdtempSync(join(tmpdir(), "supernova-checkpoint-session-"));
     tempDirs.push(projectPath, sessionDir);
-    const pi = createPiTestRuntime({reopenManagers: true, sessionDir});
+    const pi = await createPiTestRuntime({reopenManagers: true, sessionDir});
     runtimes.push(pi);
     const {info} = pi.createSession(projectPath);
     pi.faux.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
@@ -690,7 +690,7 @@ describe("checkpoint navigation", () => {
   it("undoes and redoes chat turns without restoring files outside a git repository", async () => {
     const projectPath = await createProject();
     tempDirs.push(projectPath);
-    const pi = createPiTestRuntime();
+    const pi = await createPiTestRuntime();
     runtimes.push(pi);
     const {info} = pi.createSession(projectPath);
     pi.faux.setResponses([
@@ -734,7 +734,7 @@ describe("checkpoint navigation", () => {
   it("reverts directly before a selected chat turn outside a git repository", async () => {
     const projectPath = await createProject();
     tempDirs.push(projectPath);
-    const pi = createPiTestRuntime();
+    const pi = await createPiTestRuntime();
     runtimes.push(pi);
     const {info} = pi.createSession(projectPath);
     pi.faux.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two"), fauxAssistantMessage("three")]);

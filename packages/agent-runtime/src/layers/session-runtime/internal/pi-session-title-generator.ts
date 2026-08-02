@@ -18,13 +18,7 @@ export const PiSessionTitleGeneratorLive = Layer.effect(
 
     return {
       generateSessionTitle: async ({contentParts, model}) => {
-        const requestAuth = await piSdk.modelRegistry.getApiKeyAndHeaders(model);
-        if (!requestAuth.ok) throw new Error("Failed to get API key and headers for the model.");
-
-        const response = await piSdk.completeSimple(model, sessionTitleContext({contentParts}), {
-          apiKey: requestAuth.apiKey,
-          env: requestAuth.env,
-          headers: requestAuth.headers,
+        const response = await piSdk.modelRuntime.completeSimple(model, sessionTitleContext({contentParts}), {
           maxTokens: sessionTitleMaxTokens,
         });
 

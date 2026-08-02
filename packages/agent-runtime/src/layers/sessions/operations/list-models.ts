@@ -10,7 +10,7 @@ export function listModels() {
 
     return yield* Effect.tryPromise({
       try: async () => {
-        modelCatalog.refreshAuthAndModels();
+        await modelCatalog.refreshAuthAndModels();
         const models = modelCatalog.getAvailableModels();
 
         return models.map((model) => toAgentModelDetails(model, modelCatalog.getProviderDisplayName(model.provider)));

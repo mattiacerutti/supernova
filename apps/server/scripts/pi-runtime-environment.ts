@@ -38,3 +38,4 @@ writeFileSync(join(PI_RUNTIME_PACKAGE_DIR, "package.json"), `${JSON.stringify(PI
 
 process.env["PI_PACKAGE_DIR"] = PI_RUNTIME_PACKAGE_DIR;
 process.env["PI_CODING_AGENT_DIR"] = resolveSupernovaAgentDir();
+process.env["PI_CODING_AGENT"] = "true";

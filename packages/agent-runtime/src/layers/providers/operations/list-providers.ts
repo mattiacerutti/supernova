@@ -1,8 +1,7 @@
 import {Effect} from "effect";
 import {ProvidersListError} from "@supernova/contracts/providers/procedures";
-import type {ProviderAuthSource, Provider} from "@supernova/contracts/providers/schemas";
+import type {ProviderAuthSource, Provider, ProviderAuthType} from "@supernova/contracts/providers/schemas";
 import {PiSdkService} from "@supernova/agent-runtime/layers/pi-sdk";
-import {EXTERNAL_AUTH_PROVIDERS} from "@supernova/agent-runtime/layers/providers/constants";
 import {errorMessage} from "@supernova/agent-runtime/layers/providers/lib/provider-errors";
 
 /** Maps Pi provider auth source values into shared provider auth source values. */
@@ -27,27 +26,28 @@ export function listProviders() {
   return Effect.gen(function* () {
     const piSdk = yield* PiSdkService;
 
-    return yield* Effect.try({
-      try: () => {
-        piSdk.modelRegistry.refresh();
-        piSdk.authStorage.reload();
+    return yield* Effect.tryPromise({
+      try: async () => {
+        await piSdk.modelRuntime.refresh({allowNetwork: false});
+        const storedProviderIds = new Set((await piSdk.modelRuntime.listCredentials()).map((credential) => credential.providerId));
 
-        const oauthProviderIds = new Set(piSdk.authStorage.getOAuthProviders().map((provider) => provider.id));
-        const modelProviderIds = new Set(piSdk.modelRegistry.getAll().map((model) => model.provider));
-        const providerIds = new Set([...modelProviderIds, ...oauthProviderIds]);
+        return piSdk.modelRuntime
+          .getProviders()
+          .map<Provider>((provider) => {
+            const status = piSdk.modelRuntime.getProviderAuthStatus(provider.id);
+            const authTypes: ProviderAuthType[] = [];
+            if (provider.auth.apiKey?.login) authTypes.push("api_key");
+            else if (provider.auth.apiKey) authTypes.push("external");
+            if (provider.auth.oauth) authTypes.push("oauth");
 
-        return Array.from(providerIds)
-          .filter((providerId) => !EXTERNAL_AUTH_PROVIDERS.has(providerId))
-          .map<Provider>((providerId) => {
-            const status = piSdk.modelRegistry.getProviderAuthStatus(providerId);
             return {
-              id: providerId,
-              name: piSdk.modelRegistry.getProviderDisplayName(providerId),
+              id: provider.id,
+              name: provider.name,
               source: normalizeSource(status.source),
               sourceLabel: status.label,
-              authTypes: oauthProviderIds.has(providerId) ? ["api_key", "oauth"] : ["api_key"],
-              connected: status.configured || status.source !== undefined,
-              disconnectable: status.source === "stored",
+              authTypes,
+              connected: status.configured,
+              disconnectable: storedProviderIds.has(provider.id),
             };
           })
           .sort((left, right) => left.name.localeCompare(right.name));
