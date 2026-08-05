@@ -1,3 +1,4 @@
+import type {Session} from "@supernova/contracts/sessions/schemas";
 import type {
   CompactSessionPayload,
   RedoCheckpointPayload,
@@ -51,6 +52,11 @@ export class SessionRuntimePool {
   /** Aborts active work for one session while preserving the retained runtime. */
   public async abortSession(sessionId: string): Promise<void> {
     await abortSession(this.runtimes.get(sessionId));
+  }
+
+  /** Returns the frozen committed session while its Pi branch is actively mutating. */
+  public getCommittedSession(sessionId: string): Session | undefined {
+    return this.runtimes.get(sessionId)?.getCommittedSession();
   }
 
   /** Aborts all retained runtimes during server/runtime shutdown. */

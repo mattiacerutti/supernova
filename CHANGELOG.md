@@ -15,6 +15,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Fixed
 
+- Fixed rejected message commands leaving a session unable to accept another message.
+- Fixed active user messages appearing twice after switching between streaming sessions.
 - Fixed timeline and composer overlays allowing message text to show through their backgrounds.
 
 ### Removed

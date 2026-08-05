@@ -211,7 +211,9 @@ describe("sending messages through Pi sessions", () => {
     );
     expect(finalSnapshot).toMatchObject({type: "session.snapshot"});
     expect(persistedTurn).toMatchObject({userMessage: {contentParts: [{text: "Continue after pre-prompt compaction", type: "text"}]}});
-    expect(persistedTurn?.events).toContainEqual(expect.objectContaining({status: "completed", summary: expect.stringContaining("Pre-prompt compacted summary."), type: "compaction"}));
+    expect(persistedTurn?.events).toContainEqual(
+      expect.objectContaining({status: "completed", summary: expect.stringContaining("Pre-prompt compacted summary."), type: "compaction"})
+    );
     expect(persistedTurn?.events).toContainEqual(expect.objectContaining({content: "Response after pre-prompt compaction.", type: "assistant"}));
   });
 
@@ -297,7 +299,7 @@ describe("sending messages through Pi sessions", () => {
     });
   });
 
-  it("rejects the command when the selected model is unavailable", async () => {
+  it("rejects an unavailable model without leaving the session locked", async () => {
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
     const {info} = pi.createSession();
@@ -305,7 +307,10 @@ describe("sending messages through Pi sessions", () => {
     await expect(pi.sendMessage({message: "Fix it", modelReference: {...selectedModelReference, id: "missing-model"}, sessionId: info.id})).rejects.toThrow(
       "Selected model is not available."
     );
-    expect(pi.faux.state.callCount).toBe(0);
+
+    pi.faux.setResponses([fauxAssistantMessage("Recovered.")]);
+    await pi.sendMessage({message: "Try again", modelReference: selectedModelReference, sessionId: info.id});
+    expect(pi.faux.state.callCount).toBe(1);
   });
 
   it("rejects the command when the session cannot be found", async () => {
@@ -316,10 +321,11 @@ describe("sending messages through Pi sessions", () => {
     expect(pi.faux.state.callCount).toBe(0);
   });
 
-  it("aborts the active provider request only through abortSession", async () => {
+  it("keeps committed reads stable while aborting an active provider request", async () => {
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const {info} = pi.createSession();
+    const {info, manager} = pi.createSession();
+    pi.appendConversation(manager);
     let providerSignal: AbortSignal | undefined;
     let releaseProvider: (() => void) | undefined;
     const providerStarted = new Promise<void>((resolve) => {
@@ -352,6 +358,14 @@ describe("sending messages through Pi sessions", () => {
         })
       );
       await providerStarted;
+      const committedSession = await pi.runWithSessionRuntime(
+        Effect.gen(function* () {
+          const sessionRuntime = yield* SessionRuntimeService;
+          return yield* sessionRuntime.getCommittedSession(info.id);
+        })
+      );
+      expect(committedSession?.turns.map((turn) => turn.userMessage.contentParts)).toEqual([[{text: "Existing request", type: "text"}]]);
+
       const abortRun = pi.runWithSessionRuntime(
         Effect.gen(function* () {
           const sessionRuntime = yield* SessionRuntimeService;

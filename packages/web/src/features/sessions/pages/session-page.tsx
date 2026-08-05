@@ -20,7 +20,6 @@ import {useComposerDraft} from "@/features/sessions/hooks/use-composer-draft";
 import {useComposerModelSelection} from "@/features/sessions/hooks/use-composer-model-selection";
 import {useSessionTimeline} from "@/features/sessions/hooks/use-session-timeline";
 import {sessionComposerDraftKey} from "@/features/sessions/stores/composer-drafts-store";
-import {useSessionLiveStore} from "@/features/sessions/stores/session-live-store";
 import {useInlineRename} from "@/hooks/use-inline-rename";
 
 interface SessionLoadingProps {
@@ -226,8 +225,7 @@ interface SessionPageProps {
 export default function SessionPage(props: SessionPageProps) {
   const {appEnvironment, sessionId} = props;
 
-  const {error} = useSession(sessionId);
-  const session = useSessionLiveStore((state) => state.sessions[sessionId]?.session);
+  const {data: session, error} = useSession(sessionId);
 
   if (!session) {
     if (error) {

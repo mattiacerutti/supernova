@@ -32,7 +32,6 @@ export default function NewSessionPage(props: NewSessionPageProps) {
   const rpcClient = useAgentRpcClient();
   const createSessionMutation = useCreateSession();
   const resolvedMode = useAppearanceStore((state) => state.resolvedMode);
-  const hydrateSession = useSessionLiveStore((state) => state.hydrateSession);
   const sendMessage = useSessionLiveStore((state) => state.sendMessage);
   const modelSelection = useComposerModelSelection();
 
@@ -69,7 +68,6 @@ export default function NewSessionPage(props: NewSessionPageProps) {
         },
         onSuccess: (session) => {
           queryClient.setQueryData(sessionQueryKey(session.id), session);
-          hydrateSession(session);
           modelSelection.assignToSession(session.id, modelReference);
           sendMessage({contentParts, modelReference, queryClient, rpcClient, sessionId: session.id});
           void navigate({params: {sessionId: session.id}, to: "/session/$sessionId"});
@@ -101,7 +99,12 @@ export default function NewSessionPage(props: NewSessionPageProps) {
               projectPath={projectPath}
               toolbarControls={
                 <div className="flex gap-2">
-                  <ModelPicker selectedModel={modelSelection.selectedModelDetails} disabled={composerDisabled} models={modelSelection.availableModels} onModelChange={handleModelChange} />
+                  <ModelPicker
+                    selectedModel={modelSelection.selectedModelDetails}
+                    disabled={composerDisabled}
+                    models={modelSelection.availableModels}
+                    onModelChange={handleModelChange}
+                  />
                   {thinkingLevels.length > 0 && (
                     <ThinkingLevelPicker
                       disabled={composerDisabled}

@@ -1,6 +1,6 @@
 import type {AgentSession} from "@earendil-works/pi-coding-agent";
 import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
-import type {ModelReference, SessionSummary} from "@supernova/contracts/sessions/schemas";
+import type {ModelReference, Session, SessionSummary} from "@supernova/contracts/sessions/schemas";
 import {Effect} from "effect";
 import type {PiModel, PiModelCatalogShape} from "@supernova/agent-runtime/layers/shared/internal/pi-model-catalog";
 import type {PiResourceCatalogShape} from "@supernova/agent-runtime/layers/shared/internal/pi-resource-catalog";
@@ -53,6 +53,7 @@ export class PiSessionRuntime {
 
   private activeSession: AgentSession | undefined;
   private activeTurn: ActiveTurn | undefined;
+  private committedSession: Session | undefined;
   private cancelled = false;
   private publishQueue: Promise<void> = Promise.resolve();
   private releasePromise: Promise<void> | undefined;
@@ -80,6 +81,8 @@ export class PiSessionRuntime {
 
   /** Marks this runtime as no longer running an accepted command. */
   public endWork(): void {
+    this.activeTurn = undefined;
+    this.committedSession = undefined;
     this.running = false;
   }
 
@@ -150,10 +153,21 @@ export class PiSessionRuntime {
     return this.activeSession;
   }
 
-  /** Sets the active turn and ensures Pi events are subscribed. */
-  public activateTurn(activeTurn: ActiveTurn): void {
+  /** Sets the active turn, freezes its committed base session, and ensures Pi events are subscribed. */
+  public activateTurn(activeTurn: ActiveTurn, openedSession: OpenedRuntimeSession): void {
     this.activeTurn = activeTurn;
+    this.committedSession = buildSessionSnapshot({
+      contextWindow: openedSession.model.contextWindow,
+      sessionInfo: openedSession.sessionInfo,
+      sessionManager: openedSession.sessionManager,
+      modelReference: openedSession.modelReference,
+    });
     if (!this.unsubscribe) this.subscribeToLiveUpdates();
+  }
+
+  /** Returns the committed session view while an active turn mutates Pi's branch. */
+  public getCommittedSession(): Session | undefined {
+    return this.running ? this.committedSession : undefined;
   }
 
   /** Clears active turn state for commands that do not own a user turn. */

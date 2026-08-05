@@ -8,10 +8,12 @@ import type {
   SessionStreamEvent,
   UndoCheckpointPayload,
 } from "@supernova/contracts/session-runtime/procedures";
+import type {Session} from "@supernova/contracts/sessions/schemas";
 
 export interface SessionRuntimeServiceShape {
   readonly abortSession: (sessionId: string) => Effect.Effect<void>;
   readonly compactSession: (input: CompactSessionPayload) => Effect.Effect<void>;
+  readonly getCommittedSession: (sessionId: string) => Effect.Effect<Session | undefined>;
   readonly redoCheckpoint: (input: RedoCheckpointPayload) => Effect.Effect<void>;
   readonly revertToMessage: (input: RevertToMessagePayload) => Effect.Effect<void>;
   readonly sendMessage: (input: SendMessagePayload) => Effect.Effect<void>;

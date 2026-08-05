@@ -25,6 +25,7 @@ export const PiSessionRuntimeFromInternal = Layer.effect(
     return {
       abortSession: (sessionId: string) => Effect.promise(() => pool.abortSession(sessionId)),
       compactSession: (input) => Effect.promise(() => pool.compactSession(input)),
+      getCommittedSession: (sessionId) => Effect.sync(() => pool.getCommittedSession(sessionId)),
       redoCheckpoint: (input) => Effect.promise(() => pool.redoCheckpoint(input)),
       revertToMessage: (input) => Effect.promise(() => pool.revertToMessage(input)),
       sendMessage: (input) => Effect.promise(() => pool.sendMessage(input)),
