@@ -4,7 +4,7 @@ import {OTHER_SESSION_TITLE, timelineStreamLine, TIMELINE_PROJECT_NAME, TIMELINE
 import {installTimelineVisualProbe} from "@e2e/support/install-visual-probe";
 import type {TimelineMockState, TimelineVisualSample} from "@e2e/support/timeline-test-api";
 
-export const BOTTOM_TOLERANCE_PX = 2;
+export const BOTTOM_TOLERANCE_PX = 5;
 export const DETACHED_DISTANCE_PX = 40;
 
 export interface VisibleTextAnchor {

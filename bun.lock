@@ -55,6 +55,7 @@
         "hono": "^4.11.2",
       },
       "devDependencies": {
+        "@earendil-works/pi-ai": "0.83.0",
         "@supernova/web": "workspace:*",
         "@types/node": "^22.19.1",
         "eslint": "^10.3.0",

@@ -22,6 +22,7 @@
     "prettier": "turbo run prettier && bun run prettier:scripts",
     "prettier:scripts": "prettier --check scripts --ignore-path .prettierignore",
     "test": "turbo run test",
+    "test:e2e": "bun run --filter @supernova/web test:e2e",
     "typecheck": "turbo run typecheck && bun run typecheck:scripts",
     "typecheck:scripts": "tsc --project scripts/tsconfig.json",
     "prepare": "husky"
