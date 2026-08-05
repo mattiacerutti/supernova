@@ -32,7 +32,10 @@ function createActiveTurn(): ActiveTurn {
       modelReference: selectedModelReference,
       sessionInfo,
     },
-    {} as unknown as PiSessionManager
+    {
+      buildSessionContext: () => ({messages: []}),
+      getBranch: () => [],
+    } as unknown as PiSessionManager
   );
 }
 

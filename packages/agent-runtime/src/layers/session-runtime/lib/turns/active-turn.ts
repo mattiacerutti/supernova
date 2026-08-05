@@ -1,5 +1,5 @@
 import type {AgentSession, CompactionResult} from "@earendil-works/pi-coding-agent";
-import type {ModelReference, Session, Turn} from "@supernova/contracts/sessions/schemas";
+import type {ModelReference, Session, SessionContextUsage, Turn} from "@supernova/contracts/sessions/schemas";
 import {toPiSessionSummary} from "@supernova/agent-runtime/layers/projects/pi-session-mapper";
 import type {PiSessionInfo, PiSessionManager} from "@supernova/agent-runtime/layers/shared/internal/pi-session-store";
 import {buildPiTurns} from "@supernova/agent-runtime/layers/shared/lib/turns-builder";
@@ -37,6 +37,7 @@ export class ActiveTurn {
   private readonly customEntries: readonly {readonly customType: string; readonly data: unknown}[];
   private readonly messageContext: SendMessageContext;
   private readonly modelReference: ModelReference;
+  private contextUsage: SessionContextUsage;
   /** Runtime-owned live transcript for this turn. */
   private readonly liveMessages: PiAgentMessage[] = [];
 
@@ -48,6 +49,17 @@ export class ActiveTurn {
     this.modelReference = input.modelReference;
     this.sessionInfo = input.sessionInfo;
     this.sessionManager = sessionManager;
+    this.contextUsage = this.buildContextUsage();
+  }
+
+  /** Latest context usage captured at a completed Pi message boundary. */
+  public get context(): SessionContextUsage {
+    return this.contextUsage;
+  }
+
+  /** Rebuilds live context usage after Pi persists a message or compaction boundary. */
+  public refreshContextUsage(): void {
+    this.contextUsage = this.buildContextUsage();
   }
 
   /** Prepared prompt text passed to Pi for this turn. */
@@ -170,7 +182,7 @@ export class ActiveTurn {
       session: {
         id: this.sessionInfo.id,
         modelReference: this.modelReference,
-        context: buildSessionContextUsage({contextWindow: this.contextWindow, entries: branch, messages: this.sessionManager.buildSessionContext().messages}),
+        context: this.buildContextUsage(),
         projectPath: this.sessionInfo.cwd,
         title: this.sessionManager.getSessionName() ?? summary.title,
         turns,
@@ -178,5 +190,13 @@ export class ActiveTurn {
         updatedAt: latestTurn?.completedAt ?? latestTurn?.startedAt ?? summary.updatedAt,
       },
     };
+  }
+
+  private buildContextUsage(): SessionContextUsage {
+    return buildSessionContextUsage({
+      contextWindow: this.contextWindow,
+      entries: this.sessionManager.getBranch(),
+      messages: this.sessionManager.buildSessionContext().messages,
+    });
   }
 }

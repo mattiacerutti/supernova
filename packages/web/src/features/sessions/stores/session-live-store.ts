@@ -1,6 +1,6 @@
 import type {QueryClient} from "@tanstack/react-query";
 import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
-import type {ModelReference, Session, Turn, UserMessage, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {ModelReference, Session, SessionContextUsage, Turn, UserMessage, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 import {create} from "zustand";
 import {showToast} from "@/components/ui/toast-manager";
 import {sessionQueryKey} from "@/features/sessions/hooks/api/use-session";
@@ -10,6 +10,8 @@ export type SessionLiveStatus = "checkpoint-navigating" | "compacting" | "idle" 
 
 export interface SessionLiveState {
   readonly error: string | null;
+  /** Latest streamed context usage, kept separate from committed React Query data. */
+  readonly liveContext: SessionContextUsage | null;
   /** Currently streaming turn, kept separate from committed React Query data. */
   readonly liveTurn: Turn | null;
   /** Latest server revision applied for this session. Older session-scoped events are ignored. */
@@ -33,7 +35,7 @@ function createInitialStreamTurn(input: {contentParts: readonly UserMessageConte
 
 /** Creates baseline event-derived state for sessions first seen from the global stream. */
 function emptyEntry(revision = 0): SessionLiveState {
-  return {error: null, liveTurn: null, revision, status: "idle"};
+  return {error: null, liveContext: null, liveTurn: null, revision, status: "idle"};
 }
 
 /** Normalizes command failures for user-facing messages. */
@@ -67,16 +69,17 @@ function reduceSessionEvent(entry: SessionLiveState, event: RevisionedSessionStr
     case "session.compaction.ended":
       return {...entry, status: entry.status === "stopping" ? "stopping" : entry.liveTurn ? "streaming" : "idle"};
     case "session.snapshot":
-      return {...entry, error: null, liveTurn: null, status: "idle"};
+      return {...entry, error: null, liveContext: null, liveTurn: null, status: "idle"};
     case "session.turn":
       return {
         ...entry,
         error: null,
+        liveContext: event.context,
         liveTurn: event.turn,
         status: entry.status === "compacting" || entry.status === "stopping" ? entry.status : "streaming",
       };
     case "session.error":
-      return {...entry, error: event.error, liveTurn: null, status: "idle"};
+      return {...entry, error: event.error, liveContext: null, liveTurn: null, status: "idle"};
   }
 }
 
@@ -149,7 +152,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
     queryClient.setQueryData<Session>(sessionQueryKey(sessionId), (session) => (session ? {...session, undoneTurns: []} : session));
     set((state) => {
       const entry = state.sessions[sessionId] ?? emptyEntry();
-      return {sessions: {...state.sessions, [sessionId]: {...entry, error: null, liveTurn, status: "streaming"}}};
+      return {sessions: {...state.sessions, [sessionId]: {...entry, error: null, liveContext: null, liveTurn, status: "streaming"}}};
     });
 
     void rpcClient
@@ -165,7 +168,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
           return {
             sessions: {
               ...state.sessions,
-              [sessionId]: {...currentEntry, error: errorMessage(cause, "Failed to send message."), liveTurn: null, status: "idle"},
+              [sessionId]: {...currentEntry, error: errorMessage(cause, "Failed to send message."), liveContext: null, liveTurn: null, status: "idle"},
             },
           };
         });

@@ -51,6 +51,9 @@ describe("manual Pi session compaction", () => {
 
     expect(events.find((event) => event.type === "session.compaction.started")).toMatchObject({sessionId: info.id, type: "session.compaction.started"});
     expect(events.find((event) => event.type === "session.compaction.ended")).toMatchObject({sessionId: info.id, type: "session.compaction.ended"});
-    expect(finalSnapshot?.session.turns.at(-1)?.events).toContainEqual(expect.objectContaining({summary: expect.stringContaining("Manual compacted summary."), type: "compaction"}));
+    expect(finalSnapshot?.session.context).toEqual({contextWindow: selectedPiModel.contextWindow, usedTokens: null});
+    expect(finalSnapshot?.session.turns.at(-1)?.events).toContainEqual(
+      expect.objectContaining({summary: expect.stringContaining("Manual compacted summary."), type: "compaction"})
+    );
   });
 });

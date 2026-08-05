@@ -5,8 +5,8 @@ import type {SessionContextUsage} from "@supernova/contracts/sessions/schemas";
 
 export type PiAgentMessage = AgentSession["messages"][number];
 
-function isSuccessfulAssistantMessage(message: PiAgentMessage): message is AssistantMessage {
-  return message.role === "assistant" && message.stopReason !== "aborted" && message.stopReason !== "error";
+function hasValidAssistantUsage(message: PiAgentMessage): message is AssistantMessage {
+  return message.role === "assistant" && message.stopReason !== "aborted" && message.stopReason !== "error" && calculateContextTokens(message.usage) > 0;
 }
 
 function findLatestCompactionIndex(entries: readonly SessionEntry[]): number {
@@ -20,9 +20,7 @@ function findLatestCompactionIndex(entries: readonly SessionEntry[]): number {
 function hasPostCompactionUsage(entries: readonly SessionEntry[], compactionIndex: number): boolean {
   for (let index = entries.length - 1; index > compactionIndex; index--) {
     const entry = entries[index];
-    if (entry?.type !== "message" || entry.message.role !== "assistant") continue;
-    if (!isSuccessfulAssistantMessage(entry.message)) return false;
-    return calculateContextTokens(entry.message.usage) > 0;
+    if (entry?.type === "message" && hasValidAssistantUsage(entry.message)) return true;
   }
 
   return false;
@@ -31,7 +29,7 @@ function hasPostCompactionUsage(entries: readonly SessionEntry[], compactionInde
 function findLatestAssistantUsage(messages: readonly PiAgentMessage[]): {readonly index: number; readonly usage: Usage} | undefined {
   for (let index = messages.length - 1; index >= 0; index--) {
     const message = messages[index];
-    if (!message || !isSuccessfulAssistantMessage(message)) continue;
+    if (!message || !hasValidAssistantUsage(message)) continue;
     return {index, usage: message.usage};
   }
 

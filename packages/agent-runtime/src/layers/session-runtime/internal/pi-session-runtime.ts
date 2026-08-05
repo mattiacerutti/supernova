@@ -263,9 +263,17 @@ export class PiSessionRuntime {
           void this.publishLiveTurn(activeTurn);
           break;
         case "message_update":
-        case "message_end":
           activeTurn.replaceLastLiveMessage(event.message);
           void this.publishLiveTurn(activeTurn);
+          break;
+        case "message_end":
+          activeTurn.replaceLastLiveMessage(event.message);
+          // Pi persists completed messages immediately after notifying subscribers.
+          // Defer the context refresh so it observes the newly committed branch entry.
+          void Promise.resolve().then(async () => {
+            activeTurn.refreshContextUsage();
+            await this.publishLiveTurn(activeTurn);
+          });
           break;
         case "tool_execution_start":
           activeTurn.recordToolExecutionStart({args: event.args, toolCallId: event.toolCallId});
@@ -278,6 +286,7 @@ export class PiSessionRuntime {
           break;
         case "compaction_end":
           activeTurn.completeLiveCompaction(event.result);
+          activeTurn.refreshContextUsage();
           void this.publishEvent({type: "session.compaction.ended", sessionId: this.sessionId});
           void this.publishLiveTurn(activeTurn);
           break;
@@ -293,7 +302,7 @@ export class PiSessionRuntime {
     const turn = activeTurn.buildLiveTurn();
     if (!turn) return;
 
-    await this.publishEvent({type: "session.turn", sessionId: this.sessionId, turn});
+    await this.publishEvent({type: "session.turn", sessionId: this.sessionId, context: activeTurn.context, turn});
   }
 
   private async publishSettledSnapshot(activeTurn: ActiveTurn): Promise<void> {

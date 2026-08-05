@@ -166,6 +166,7 @@ class TimelineRpcClient implements AgentRpcClientApi {
     this.publish({
       revision: this.nextRevision(),
       sessionId: TIMELINE_SESSION_ID,
+      context: this.session(TIMELINE_SESSION_ID).context,
       turn: timelineStreamTurn({contentParts, lineCount: this.lineCount, status: "streaming"}),
       type: "session.turn",
     });
@@ -186,6 +187,7 @@ class TimelineRpcClient implements AgentRpcClientApi {
       this.publish({
         revision: this.nextRevision(),
         sessionId: TIMELINE_SESSION_ID,
+        context: this.session(TIMELINE_SESSION_ID).context,
         turn: timelineStreamTurn({contentParts, lineCount: this.lineCount, status: "streaming"}),
         type: "session.turn",
       });

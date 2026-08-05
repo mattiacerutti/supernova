@@ -1,6 +1,6 @@
 import type {QueryClient} from "@tanstack/react-query";
 import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
-import type {ModelReference, Session, Turn, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {ModelReference, Session, SessionContextUsage, Turn, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 import {QueryClient as TanStackQueryClient} from "@tanstack/react-query";
 import {Effect, Stream} from "effect";
 import {afterEach, beforeEach, describe, expect, it, vi} from "vitest";
@@ -20,6 +20,7 @@ const model = {
 } satisfies ModelReference;
 
 const contentParts = [{text: "Fix this", type: "text"}] satisfies readonly UserMessageContentPart[];
+const contextUsage = {contextWindow: 200_000, usedTokens: 42_000} satisfies SessionContextUsage;
 
 function turn(input?: Partial<Turn>): Turn {
   return {
@@ -130,16 +131,16 @@ describe("session live store", () => {
     const rpcClient = streamRpcClient([
       {type: "connected"},
       {revision: 1, sessionId: "session-1", type: "session.agent.started"},
-      {revision: 2, sessionId: "session-1", turn: turn(), type: "session.turn"},
+      {revision: 2, sessionId: "session-1", context: contextUsage, turn: turn(), type: "session.turn"},
       {revision: 3, session: committedSession, sessionId: "session-1", type: "session.snapshot"},
-      {revision: 2, sessionId: "session-1", turn: turn({id: "stale"}), type: "session.turn"},
+      {revision: 2, sessionId: "session-1", context: contextUsage, turn: turn({id: "stale"}), type: "session.turn"},
     ]);
 
     disconnect = connectSessionEvents({queryClient, rpcClient});
 
     await waitUntil(() => {
       expect(queryClient.getQueryData(sessionQueryKey("session-1"))).toEqual(committedSession);
-      expect(useSessionLiveStore.getState().sessions["session-1"]).toMatchObject({liveTurn: null, revision: 3, status: "idle"});
+      expect(useSessionLiveStore.getState().sessions["session-1"]).toMatchObject({liveContext: null, liveTurn: null, revision: 3, status: "idle"});
     });
     expect(invalidateQueries).toHaveBeenCalledWith({queryKey: allSessionsQueryKey()});
   });
@@ -149,15 +150,19 @@ describe("session live store", () => {
     const rpcClient = streamRpcClient([
       {type: "connected"},
       {revision: 1, sessionId: "session-1", type: "session.agent.started"},
-      {revision: 2, sessionId: "session-1", turn: turn({id: "before-compaction"}), type: "session.turn"},
+      {revision: 2, sessionId: "session-1", context: contextUsage, turn: turn({id: "before-compaction"}), type: "session.turn"},
       {revision: 3, sessionId: "session-1", type: "session.compaction.started"},
-      {revision: 4, sessionId: "session-1", turn: turn({id: "during-compaction"}), type: "session.turn"},
+      {revision: 4, sessionId: "session-1", context: {...contextUsage, usedTokens: null}, turn: turn({id: "during-compaction"}), type: "session.turn"},
     ]);
 
     disconnect = connectSessionEvents({queryClient, rpcClient});
 
     await waitUntil(() => {
-      expect(useSessionLiveStore.getState().sessions["session-1"]).toMatchObject({liveTurn: {id: "during-compaction"}, status: "compacting"});
+      expect(useSessionLiveStore.getState().sessions["session-1"]).toMatchObject({
+        liveContext: {contextWindow: 200_000, usedTokens: null},
+        liveTurn: {id: "during-compaction"},
+        status: "compacting",
+      });
     });
   });
 
@@ -183,6 +188,7 @@ describe("session live store", () => {
       sessions: {
         "session-1": {
           error: null,
+          liveContext: contextUsage,
           liveTurn: stoppedTurn,
           revision: 1,
           status: "stopping",
@@ -194,7 +200,7 @@ describe("session live store", () => {
 
     await waitUntil(() => {
       expect(queryClient.getQueryData(sessionQueryKey("session-1"))).toEqual(committedSession);
-      expect(useSessionLiveStore.getState().sessions["session-1"]).toMatchObject({liveTurn: null, status: "idle"});
+      expect(useSessionLiveStore.getState().sessions["session-1"]).toMatchObject({liveContext: null, liveTurn: null, status: "idle"});
     });
   });
 
@@ -275,7 +281,7 @@ describe("session live store", () => {
   it("guards session commands while work is active", () => {
     const rpcClient = commandRpcClient();
     useSessionLiveStore.setState({
-      sessions: {"session-1": {error: null, liveTurn: turn(), revision: 1, status: "streaming"}},
+      sessions: {"session-1": {error: null, liveContext: contextUsage, liveTurn: turn(), revision: 1, status: "streaming"}},
     });
 
     useSessionLiveStore.getState().sendMessage({contentParts, modelReference: model, queryClient: createQueryClient(), rpcClient, sessionId: "session-1"});
@@ -288,7 +294,7 @@ describe("session live store", () => {
   it("marks a streaming turn as stopping when aborting", () => {
     const rpcClient = commandRpcClient();
     useSessionLiveStore.setState({
-      sessions: {"session-1": {error: null, liveTurn: turn(), revision: 1, status: "streaming"}},
+      sessions: {"session-1": {error: null, liveContext: contextUsage, liveTurn: turn(), revision: 1, status: "streaming"}},
     });
 
     useSessionLiveStore.getState().abortSession({rpcClient, sessionId: "session-1"});

@@ -18,6 +18,7 @@ All notable changes to Supernova are documented in this file.
 - Fixed rejected message commands leaving a session unable to accept another message.
 - Fixed active user messages appearing twice after switching between streaming sessions.
 - Fixed timeline and composer overlays allowing message text to show through their backgrounds.
+- Fixed context usage staying stale during active turns, appearing as zero when unknown, and losing valid measurements after compaction, aborts, or checkpoint navigation.
 
 ### Removed
 

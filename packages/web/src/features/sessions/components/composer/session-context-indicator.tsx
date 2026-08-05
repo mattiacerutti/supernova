@@ -4,6 +4,8 @@ import Menu from "@/components/ui/menu";
 
 const CIRCLE_RADIUS = 8;
 const CIRCLE_CIRCUMFERENCE = 2 * Math.PI * CIRCLE_RADIUS;
+const UNKNOWN_RING_DASH_LENGTH = 1.75;
+const UNKNOWN_RING_DASH_GAP = CIRCLE_CIRCUMFERENCE / 10 - UNKNOWN_RING_DASH_LENGTH;
 
 function formatTokens(tokens: number): string {
   return new Intl.NumberFormat("en-US").format(Math.max(0, Math.round(tokens)));
@@ -14,11 +16,33 @@ function formatContextTokens(tokens: number | null): string {
 }
 
 interface ContextUsageCircleProps {
-  readonly percentage: number;
+  readonly percentage: number | null;
 }
 
 function ContextUsageCircle(props: ContextUsageCircleProps) {
   const {percentage} = props;
+
+  if (percentage === null) {
+    return (
+      <span aria-hidden="true" className="relative grid size-5 place-items-center text-xs font-medium leading-none">
+        <svg className="absolute inset-0 size-5 -rotate-90" viewBox="0 0 20 20">
+          <circle className="stroke-border" cx="10" cy="10" fill="none" r={CIRCLE_RADIUS} strokeWidth="2" />
+          <circle
+            className="stroke-ink"
+            cx="10"
+            cy="10"
+            fill="none"
+            r={CIRCLE_RADIUS}
+            strokeDasharray={`${UNKNOWN_RING_DASH_LENGTH} ${UNKNOWN_RING_DASH_GAP}`}
+            strokeLinecap="round"
+            strokeWidth="2"
+          />
+        </svg>
+        <span>?</span>
+      </span>
+    );
+  }
+
   const clampedPercentage = Math.max(0, Math.min(100, percentage));
   const strokeOffset = CIRCLE_CIRCUMFERENCE * (1 - clampedPercentage / 100);
 
@@ -46,7 +70,7 @@ interface SessionContextIndicatorProps {
 
 export default function SessionContextIndicator(props: SessionContextIndicatorProps) {
   const {context} = props;
-  const percentage = context.contextWindow > 0 && context.usedTokens !== null ? (context.usedTokens / context.contextWindow) * 100 : 0;
+  const percentage = context.usedTokens === null ? null : context.contextWindow > 0 ? (context.usedTokens / context.contextWindow) * 100 : 0;
   const label = `${formatContextTokens(context.usedTokens)} / ${formatTokens(context.contextWindow)} tokens`;
 
   return (
@@ -64,10 +88,14 @@ export default function SessionContextIndicator(props: SessionContextIndicatorPr
       <div className="space-y-3 p-2">
         <div className="flex items-center justify-between gap-4">
           <span className="text-sm font-medium text-ink-muted/45">Context window</span>
-          <span className="shrink-0 text-sm font-medium tabular-nums text-ink">{context.usedTokens === null ? "?" : `${Math.round(percentage)}%`}</span>
+          <span className="shrink-0 text-sm font-medium tabular-nums text-ink">{percentage === null ? "?" : `${Math.round(percentage)}%`}</span>
         </div>
         <div className="h-1.5 overflow-hidden rounded-full bg-overlay-pressed">
-          <div className="h-full rounded-full bg-ink transition-[width] duration-300" style={{width: `${Math.max(0, Math.min(100, percentage))}%`}} />
+          {percentage === null ? (
+            <div className="h-full w-1/3 animate-pulse rounded-full bg-ink" />
+          ) : (
+            <div className="h-full rounded-full bg-ink transition-[width] duration-300" style={{width: `${Math.max(0, Math.min(100, percentage))}%`}} />
+          )}
         </div>
         <div className="space-y-1 text-xs leading-5">
           <div className="flex items-center justify-between gap-4 text-ink-muted">

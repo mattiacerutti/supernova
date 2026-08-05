@@ -5,12 +5,13 @@ import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {promisify} from "node:util";
 import {Effect, Fiber, Stream} from "effect";
+import type {AssistantMessage} from "@earendil-works/pi-ai";
 import {afterEach, describe, expect, it} from "vitest";
 import {SessionRuntimeService} from "@supernova/agent-runtime/services/session-runtime-service";
 import type {SessionRuntimeServiceShape} from "@supernova/agent-runtime/services/session-runtime-service";
 import {SessionsService} from "@supernova/agent-runtime/services/sessions-service";
 import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
-import {createPiTestRuntime, fauxAssistantMessage, selectedModelReference, waitUntil} from "@tests/support/layers/pi-session-test-utils";
+import {createPiTestRuntime, fauxAssistantMessage, selectedModelReference, selectedPiModel, waitUntil} from "@tests/support/layers/pi-session-test-utils";
 
 const execFilePromise = promisify(execFile);
 
@@ -46,6 +47,16 @@ function snapshotEvents(events: readonly SessionStreamEvent[]): Array<Extract<Se
 
 function errorEvents(events: readonly SessionStreamEvent[]): Array<Extract<SessionStreamEvent, {type: "session.error"}>> {
   return events.filter((event): event is Extract<SessionStreamEvent, {type: "session.error"}> => event.type === "session.error");
+}
+
+function assistantWithUsage(text: string, totalTokens: number, stopReason: AssistantMessage["stopReason"] = "stop"): AssistantMessage {
+  return {
+    ...fauxAssistantMessage(text, {stopReason}),
+    api: selectedPiModel.api,
+    model: selectedPiModel.id,
+    provider: selectedPiModel.provider,
+    usage: {cacheRead: 0, cacheWrite: 0, cost: {cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0}, input: totalTokens, output: 0, totalTokens},
+  };
 }
 
 async function runSessionCommand(input: {
@@ -530,6 +541,39 @@ describe("checkpoint navigation", () => {
 
     const restoreSecondEvents = await runSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.revertToMessage({sessionId: info.id, turnId: secondTurnId})});
     expect(snapshotEvents(restoreSecondEvents).at(-1)?.session.modelReference).toEqual(offModel);
+  });
+
+  it("keeps valid post-compaction usage when navigating to an aborted turn", async () => {
+    const projectPath = await createProject();
+    tempDirs.push(projectPath);
+    const pi = await createPiTestRuntime();
+    runtimes.push(pi);
+    const {info, manager} = pi.createSession(projectPath);
+    pi.appendConversation(manager, {requestText: "Older request", assistantText: "Older response."});
+    pi.appendConversation(manager, {requestText: "x".repeat(selectedPiModel.contextWindow * 4), assistantText: "Large response."});
+    pi.faux.setResponses([fauxAssistantMessage("Compacted summary.")]);
+
+    await runSessionCommand({
+      pi,
+      run: (sessionRuntime) => sessionRuntime.compactSession({modelReference: selectedModelReference, sessionId: info.id}),
+    });
+
+    pi.faux.setResponses([assistantWithUsage("Valid response.", 25_000), assistantWithUsage("Aborted response.", 0, "aborted")]);
+    const validEvents = await pi.sendMessage({message: "valid", modelReference: selectedModelReference, sessionId: info.id});
+    const abortedEvents = await pi.sendMessage({message: "abort", modelReference: selectedModelReference, sessionId: info.id});
+    const validContext = snapshotEvents(validEvents).at(-1)?.session.context.usedTokens;
+    const abortedContext = snapshotEvents(abortedEvents).at(-1)?.session.context.usedTokens;
+
+    if (validContext === null || validContext === undefined || abortedContext === null || abortedContext === undefined) {
+      throw new Error("Expected checkpoint snapshots to retain measurable context usage.");
+    }
+    expect(validContext).toBeGreaterThan(0);
+    expect(abortedContext).toBeGreaterThan(validContext);
+
+    await runSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.undoCheckpoint({sessionId: info.id})});
+    const redoEvents = await runSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.redoCheckpoint({sessionId: info.id})});
+
+    expect(snapshotEvents(redoEvents).at(-1)?.session.context.usedTokens).toBe(abortedContext);
   });
 
   it("rebuilds provider context from the visible branch after undo", async () => {

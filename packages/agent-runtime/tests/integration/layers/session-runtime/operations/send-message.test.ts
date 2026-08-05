@@ -109,6 +109,9 @@ describe("sending messages through Pi sessions", () => {
       },
       type: "session.snapshot",
     });
+    const liveContexts = turnEvents(events).map((event) => event.context.usedTokens);
+    expect(liveContexts.at(-1)).toEqual(finalSnapshot?.session.context.usedTokens);
+    expect(liveContexts.at(-1)).toBeGreaterThan(liveContexts[0]!);
   });
 
   it("sends authored text and images to the provider while displaying authored content parts", async () => {

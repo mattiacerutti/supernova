@@ -154,7 +154,7 @@ function SessionConversation(props: SessionConversationProps) {
             streamStatus={stream.streamStatus}
             toolbarControls={
               <div className="flex items-center gap-2">
-                <SessionContextIndicator context={session.context} />
+                <SessionContextIndicator context={stream.liveContext ?? session.context} />
                 <ModelPicker
                   selectedModel={modelSelection.selectedModelDetails}
                   disabled={composerDisabled}

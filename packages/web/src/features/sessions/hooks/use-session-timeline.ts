@@ -1,4 +1,4 @@
-import type {ModelReference, Turn, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {ModelReference, SessionContextUsage, Turn, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 import {useQueryClient} from "@tanstack/react-query";
 import {useMemo} from "react";
 import {buildCommittedTimelineItems, buildLiveTimelineItems} from "@/features/sessions/lib/timeline/build-session-timeline";
@@ -10,6 +10,7 @@ import {useAgentRpcClient} from "@/rpc/use-agent-rpc-client";
 
 interface UseSessionTimelineResult {
   committedTimelineItems: readonly SessionTimelineItem[];
+  liveContext: SessionContextUsage | null;
   liveTimelineItems: readonly SessionTimelineItem[];
   slashCommandActions: ClientSlashCommandActions;
   stopStreaming: () => void;
@@ -90,6 +91,7 @@ export function useSessionTimeline(input: UseSessionTimelineInput): UseSessionTi
   return {
     streamStatus,
     streamError: sessionState?.error ?? null,
+    liveContext: sessionState?.liveContext ?? null,
     committedTimelineItems,
     liveTimelineItems,
     slashCommandActions: {compact: triggerCompaction, redo, undo},
