@@ -1,4 +1,4 @@
-# Session Runtime Design
+# Session runtime
 
 ## Summary
 
@@ -37,7 +37,7 @@ The current design does not attempt to provide:
 
 Those capabilities would require different contracts and should not be inferred from the existing event stream.
 
-## Conceptual Model
+## Conceptual model
 
 ### A session is not one mutable object
 
@@ -45,24 +45,14 @@ Pi persists sessions as append-only trees. While an agent is running, Pi may app
 
 Supernova avoids exposing that mixture by maintaining two projections:
 
-```text
-┌──────────────────────────────────┐
-│ Committed Session                │
-│                                  │
-│ Settled turns                    │
-│ Context and model state          │
-│ Checkpoint-visible history       │
-└──────────────────────────────────┘
-                 +
-┌──────────────────────────────────┐
-│ Live Turn                        │
-│                                  │
-│ Submitted user message           │
-│ Current reasoning and tools      │
-│ Partial assistant output         │
-└──────────────────────────────────┘
-                 =
-          Rendered timeline
+```mermaid
+flowchart LR
+    committed["Committed Session<br/>Settled turns<br/>Context and model state<br/>Checkpoint-visible history"]
+    live["Live Turn<br/>Submitted user message<br/>Current reasoning and tools<br/>Partial assistant output"]
+    timeline[Rendered timeline]
+
+    committed --> timeline
+    live --> timeline
 ```
 
 The committed session remains stable throughout an active turn. The live turn may be replaced many times as new events arrive. When the run settles, a server snapshot replaces the committed session and the live turn disappears.
@@ -89,28 +79,33 @@ The committed session remains stable throughout an active turn. The live turn ma
 
 ## Architecture
 
-```text
-Browser
-┌───────────────────────────────────────────────────────────┐
-│ React Query                         Zustand               │
-│ committed Session                   live status + Turn    │
-└───────────────▲────────────────────────────▲──────────────┘
-                │ getSession / snapshots     │ session events
-                │                            │
-Server          │                            │
-┌───────────────┴────────────────────────────┴──────────────┐
-│ Agent RPC                                                 │
-│                                                           │
-│ SessionsService              SessionRuntimeService        │
-│ durable session operations   commands + global stream     │
-│             │                           │                 │
-│             │                 SessionRuntimePool          │
-│             │                   │        │                │
-│             └────────────── PiSessionRuntime per session  │
-│                                   │                       │
-│                            Pi AgentSession                │
-│                            Pi SessionManager              │
-└───────────────────────────────────────────────────────────┘
+```mermaid
+flowchart BT
+    subgraph server[Server]
+        rpc[Agent RPC]
+        sessions["SessionsService<br/>durable session operations"]
+        runtimeService["SessionRuntimeService<br/>commands and global stream"]
+        pool[SessionRuntimePool]
+        runtime[PiSessionRuntime per session]
+        agent[Pi AgentSession]
+        manager[Pi SessionManager]
+
+        rpc --> sessions
+        rpc --> runtimeService
+        runtimeService --> pool
+        pool --> runtime
+        sessions --> manager
+        runtime --> agent
+        runtime --> manager
+    end
+
+    subgraph browser[Browser]
+        query["React Query<br/>committed Session"]
+        liveStore["Zustand<br/>live status and Turn"]
+    end
+
+    rpc -->|getSession and snapshots| query
+    runtimeService -->|session events| liveStore
 ```
 
 ### Authority boundaries
@@ -127,13 +122,13 @@ Server          │                            │
 
 No full committed `Session` is duplicated into the live Zustand store. This is a deliberate source-of-truth rule, not a storage preference.
 
-## Runtime Lifecycle
+## Runtime lifecycle
 
 ### Runtime creation and retention
 
-The server keeps a `SessionRuntimePool` keyed by session ID. A runtime is created when the first runtime command targets that session and is retained until server disposal.
+The server keeps a `SessionRuntimePool` keyed by session ID. A runtime is created when the first runtime command targets that session. The current pool has no idle eviction, so the runtime remains retained for the lifetime of that server runtime.
 
-This gives each session:
+This gives each retained session:
 
 - one long-lived Pi `AgentSession`
 - one Pi event subscription
@@ -179,12 +174,16 @@ The command RPC confirms acceptance; it does not remain open for the entire prov
 
 At turn activation, the runtime builds and retains a committed `Session` before appending the new prompt entries. While that turn is running, the public `getSession` RPC returns this frozen session instead of remapping Pi's currently mutating branch.
 
-```text
-No active turn:
-  getSession → load current durable Pi session
+```mermaid
+flowchart TD
+    request[getSession]
+    active{Active user turn?}
+    durable[Load current durable Pi session]
+    frozen[Return frozen committed Session]
 
-Active user turn:
-  getSession → frozen committed Session
+    request --> active
+    active -->|No| durable
+    active -->|Yes| frozen
 ```
 
 This is a read-consistency boundary. It is not another durable store. The frozen value exists only for the active command and is released when work ends.
@@ -199,10 +198,14 @@ A `session.turn` event contains the **full current live turn**, not a patch. Cli
 
 This costs more bandwidth than granular deltas, but it makes event handling deterministic:
 
-```text
-previous liveTurn + session.turn event
-                  ↓
-          event.turn is the new state
+```mermaid
+flowchart LR
+    previous[Previous liveTurn]
+    event[session.turn event]
+    replacement["Next liveTurn = event.turn"]
+
+    previous -.->|discarded| replacement
+    event -->|full replacement| replacement
 ```
 
 There is no client-side merge algorithm for reasoning, assistant text, or tool calls.
@@ -219,7 +222,7 @@ The runtime waits for Pi's public settlement boundary before committing. It then
 
 The browser applies the snapshot to React Query and clears `liveTurn`. The active turn is now represented only by committed history.
 
-## Active Turns and Synthetic Entries
+## Active turns and synthetic entries
 
 ### Why synthetic entries exist
 
@@ -227,14 +230,18 @@ Supernova uses one shared mapper, `buildPiTurns`, to convert Pi session entries 
 
 Rather than maintain a second live-only turn mapper, the runtime adapts live messages into an in-memory synthetic Pi branch:
 
-```text
-Active-turn input + live Pi messages
-                 ↓
-       synthetic SessionEntry[]
-                 ↓
-            buildPiTurns
-                 ↓
-              Turn
+```mermaid
+flowchart LR
+    input[Active-turn input]
+    messages[Live Pi messages]
+    entries["Synthetic SessionEntry[]"]
+    mapper[buildPiTurns]
+    turn[Turn]
+
+    input --> entries
+    messages --> entries
+    entries --> mapper
+    mapper --> turn
 ```
 
 This keeps live and persisted rendering semantics aligned. Tool calls, reasoning, assistant messages, attachments, and compaction all pass through the same normalization logic.
@@ -261,7 +268,7 @@ Partial tool-call arguments are intentionally removed from streaming assistant u
 
 Live compaction uses a temporary synthetic compaction entry. It is completed when Pi supplies a result or removed if compaction does not produce one.
 
-## Event Model
+## Event model
 
 ### Public event categories
 
@@ -269,13 +276,15 @@ The global stream carries all session runtime activity:
 
 | Category   | Events                                                   | Purpose                                  |
 | ---------- | -------------------------------------------------------- | ---------------------------------------- |
-| Connection | `connected`, `heartbeat`, `server.disposed`              | Transport and server lifecycle           |
+| Connection | `connected`                                              | Marks a newly opened watch stream        |
 | Agent      | `session.agent.started`, `session.agent.ended`           | Provider-run lifecycle                   |
 | Live data  | `session.turn`                                           | Replaceable active-turn projection       |
 | Commit     | `session.snapshot`                                       | Authoritative committed session          |
 | Compaction | `session.compaction.started`, `session.compaction.ended` | Explicit compaction phase                |
 | Metadata   | `session.updated`                                        | Title and session-summary changes        |
 | Failure    | `session.error`                                          | Accepted command failed during execution |
+
+The contract also defines `heartbeat` and `server.disposed`, but the current server does not emit them. Do not build liveness or shutdown behavior around those variants without adding a producer and tests.
 
 Every session-scoped event includes a session ID and a revision. Revisions are monotonic within one retained runtime, not global across sessions or server restarts.
 
@@ -295,7 +304,7 @@ On a new connection, the browser invalidates committed session queries. This rep
 
 Transient browser reconnects retain existing live Zustand state and continue with later revisions. A fresh browser that connects in the middle of a quiet run may not reconstruct the full active turn until Pi emits another live event. Durable replay or an active-runtime bootstrap would be a separate feature.
 
-## Client State Model
+## Client state model
 
 The browser combines two owners rather than copying state between them.
 
@@ -334,7 +343,7 @@ The session event bridge owns:
 
 Separating transport lifecycle from the Zustand store keeps the store focused on state transitions and session commands.
 
-## Concurrency Model
+## Concurrency model
 
 ### Across sessions
 
@@ -362,25 +371,25 @@ Changing routes:
 
 The frozen committed read is what makes that final refetch safe during streaming.
 
-## Checkpoints and Branch Navigation
+## Checkpoints and branch navigation
 
 Pi sessions are append-only trees. Supernova adds workspace checkpoints around each accepted user turn:
 
-```text
-before-turn checkpoint
-        ↓
-user and agent work
-        ↓
-after-turn checkpoint
-        ↓
-checkpoint cursor
+```mermaid
+flowchart LR
+    before[Before-turn checkpoint]
+    work[User and agent work]
+    after[After-turn checkpoint]
+    cursor[Checkpoint cursor]
+
+    before --> work --> after --> cursor
 ```
 
-Undo, redo, and revert operations move the visible Pi branch and restore workspace files to the selected checkpoint. The browser may update the visible conversation optimistically, but the operation is complete only when the server publishes a new authoritative snapshot.
+Undo, redo, and revert operations move the visible Pi branch. In a Git project they also restore only paths changed between the current and target private checkpoint trees; they do not move `HEAD`, reset staged state, or use stash. In a non-Git project, conversation navigation still works but files are not restored. The browser may update the visible conversation optimistically, but the operation is complete only when the server publishes a new authoritative snapshot.
 
 Sending a replacement message invalidates the previous redo path before the new turn starts.
 
-## Failure and Recovery
+## Failure and recovery
 
 ### Command rejection
 
@@ -400,9 +409,9 @@ A browser disconnect only removes that subscriber. Server work continues. Reconn
 
 ### Server shutdown
 
-Server disposal aborts retained Pi work and disposes each runtime. Durable Pi entries and workspace checkpoints survive; in-memory active turns, event revisions, and event history do not.
+Process shutdown ends active provider work and loses in-memory active turns, revisions, and event history. Pi entries already written and Git checkpoint objects survive. The current stream does not publish a graceful shutdown event, and restart recovery is based on durable Pi state rather than replaying the interrupted runtime.
 
-## Design Decisions and Tradeoffs
+## Design decisions and tradeoffs
 
 ### Full live projections instead of deltas
 
@@ -436,7 +445,7 @@ Server disposal aborts retained Pi work and disposes each runtime. Durable Pi en
 
 **Cost:** a fresh client cannot reconstruct every active detail without a later event or a future runtime bootstrap mechanism.
 
-## System Invariants
+## System invariants
 
 Changes to this system should preserve the following:
 

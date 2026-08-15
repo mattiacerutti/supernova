@@ -1,4 +1,4 @@
-# Release Process
+# Release process
 
 Supernova releases are published by the manual GitHub Actions workflow at `.github/workflows/release.yml`.
 
@@ -20,18 +20,19 @@ When a release is run, the workflow moves the current `## [Unreleased]` entries 
 
 Do not create the version section manually.
 
-## Version Inputs
+## Version inputs
 
-The workflow has two inputs:
+The workflow has three inputs:
 
 - `version`: the version to release, for example `0.1.0` or `v0.1.0`
 - `prerelease`: whether to publish the GitHub Release as a prerelease
+- `signed`: whether desktop signing is enabled; defaults to `true`
 
 A leading `v` is optional. `v0.1.0` and `0.1.0` both publish tag `v0.1.0`.
 
 Versions with suffixes, such as `0.1.0-beta.1`, are automatically treated as prereleases. Prereleases are not marked as GitHub's latest release.
 
-## Release Workflow
+## Release workflow
 
 The workflow performs these steps:
 
@@ -39,12 +40,13 @@ The workflow performs these steps:
 2. Fails if the tag or GitHub Release already exists.
 3. Promotes `CHANGELOG.md` entries from `## [Unreleased]` into `## [x.y.z]`.
 4. Updates workspace package versions to `x.y.z`.
-5. Commits the changelog, package versions, and lockfile changes.
+5. Commits the changelog, package versions, and lockfile changes in a release-prep commit.
 6. Runs `bun run lint`, `bun run typecheck`, and `bun run test`.
-7. Builds desktop artifacts.
-8. Publishes the GitHub Release with the changelog section as release notes.
+7. Builds desktop artifacts for the platform matrix, with signing enabled or disabled from the workflow input.
+8. Pushes the release-prep commit to the triggering branch.
+9. Publishes the GitHub Release with the changelog section as release notes.
 
-## Release Artifacts
+## Release artifacts
 
 The workflow builds artifacts for:
 
@@ -63,7 +65,7 @@ The exact files come from Electron Builder configuration in `apps/desktop/electr
 - `.exe`
 - `.msi`
 
-## Manual Checklist
+## Manual checklist
 
 Before running a release:
 
@@ -72,5 +74,6 @@ Before running a release:
 3. Open GitHub Actions and run the `Release` workflow.
 4. Enter the release version.
 5. Set `prerelease` only for preview builds.
-6. Wait for the workflow to complete.
-7. Download and sanity-check the published artifacts.
+6. Leave `signed` enabled for production; disable it only for an intentional unsigned build. Signed builds fail when required signing secrets are missing.
+7. Wait for the workflow to complete and confirm the release-prep commit reached the triggering branch.
+8. Download and sanity-check the published artifacts.

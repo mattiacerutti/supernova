@@ -1,4 +1,4 @@
-# Desktop Icons
+# Desktop icons
 
 Desktop icon sources live in `apps/desktop/icons`.
 
@@ -24,9 +24,9 @@ apps/desktop/icons/
 
 The generator writes the selected variant into `apps/desktop/resources/icons`, which is the folder consumed by Electron and Electron Builder.
 
-## Source Files
+## Source files
 
-`macos.icon` is the Icon Composer bundle used for the packaged macOS app icon. It preserves Icon Composer-specific styling such as liquid glass and macOS icon theme compatability.
+`macos.icon` is the Icon Composer bundle used for the packaged macOS app icon. It preserves Icon Composer-specific styling such as liquid glass and macOS icon theme compatibility.
 
 `macos.png` is the 1024x1024 PNG exported from Icon Composer. It is used only for macOS-related generated files that need the Icon Composer render but cannot consume the `.icon` bundle directly (for example the dev dock preview or the .dmg icon).
 
@@ -34,7 +34,7 @@ The generator writes the selected variant into `apps/desktop/resources/icons`, w
 
 We do not reuse `macos.png` for Windows or Linux because the Icon Composer export includes macOS-specific diagonal light in the corners.
 
-## Generated Outputs
+## Generated outputs
 
 The generator creates these files in `apps/desktop/resources/icons`:
 
