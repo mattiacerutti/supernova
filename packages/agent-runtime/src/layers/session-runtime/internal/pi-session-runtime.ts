@@ -7,7 +7,7 @@ import type {PiModel, PiModelCatalogShape} from "@supernova/agent-runtime/layers
 import type {PiResourceCatalogShape} from "@supernova/agent-runtime/layers/shared/internal/pi-resource-catalog";
 import type {PiSessionManager, PiSessionStoreShape} from "@supernova/agent-runtime/layers/shared/internal/pi-session-store";
 import type {PiAgentSessionFactoryShape} from "@supernova/agent-runtime/layers/session-runtime/internal/pi-agent-session-factory";
-import type {SessionCheckpointStoreShape} from "@supernova/agent-runtime/layers/session-runtime/internal/session-checkpoint-store";
+import type {CheckpointStoreShape} from "@supernova/agent-runtime/layers/session-runtime/internal/checkpoint-store";
 import type {SessionEventBusShape} from "@supernova/agent-runtime/layers/session-runtime/internal/session-event-bus";
 import {CHECKPOINT_CURSOR_CUSTOM_TYPE, CHECKPOINT_CUSTOM_TYPE, invalidateCheckpointRedo} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-entries";
 import type {CheckpointEntry} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-entries";
@@ -25,7 +25,7 @@ export interface PiSessionRuntimeDependencies {
   readonly eventBus: SessionEventBusShape;
   readonly modelCatalog: PiModelCatalogShape;
   readonly resourceCatalog: PiResourceCatalogShape;
-  readonly checkpointStore: SessionCheckpointStoreShape;
+  readonly checkpointStore: CheckpointStoreShape;
   readonly sessionStore: PiSessionStoreShape;
 }
 
@@ -39,7 +39,7 @@ export class PiSessionRuntime {
   public readonly sessionId: string;
 
   private readonly agentSessionFactory: PiAgentSessionFactoryShape;
-  private readonly checkpointStore: SessionCheckpointStoreShape;
+  private readonly checkpointStore: CheckpointStoreShape;
   private readonly eventBus: SessionEventBusShape;
   private readonly modelCatalog: PiModelCatalogShape;
   private readonly sessionStore: PiSessionStoreShape;
@@ -211,11 +211,10 @@ export class PiSessionRuntime {
     if (!agentSession) throw new Error("Agent session is not initialized.");
 
     const sessionManager = agentSession.sessionManager;
-    await this.checkpointStore.restore({
+    await this.restoreCheckpoint({
       checkpointId: target.data.checkpointId,
-      cwd: sessionManager.getCwd(),
       fromCheckpointId: current.data.checkpointId,
-      sessionId: this.sessionId,
+      projectRoot: sessionManager.getCwd(),
     });
 
     sessionManager.branch(target.id);
@@ -261,9 +260,22 @@ export class PiSessionRuntime {
   }
 
   /** Captures a stable workspace checkpoint for the current session project. */
-  public async createCheckpoint(checkpointId: string): Promise<boolean> {
+  public async createCheckpoint(checkpointId: string): Promise<void> {
     const agentSession = await this.getAgentSession();
-    return this.checkpointStore.create({checkpointId, cwd: agentSession.sessionManager.getCwd(), sessionId: this.sessionId});
+    try {
+      await this.checkpointStore.capture({checkpointId, projectRoot: agentSession.sessionManager.getCwd(), sessionId: this.sessionId});
+    } catch {
+      throw new Error("Failed to capture workspace checkpoint.");
+    }
+  }
+
+  /** Restores only files changed between checkpoints into the worktree, leaving Git HEAD and staged state untouched. */
+  private async restoreCheckpoint(input: {readonly checkpointId: string; readonly fromCheckpointId: string; readonly projectRoot: string}): Promise<void> {
+    try {
+      await this.checkpointStore.restore({...input, sessionId: this.sessionId});
+    } catch {
+      throw new Error("Failed to restore workspace checkpoint.");
+    }
   }
 
   /** Creates or returns the long-lived Pi AgentSession for this runtime. */

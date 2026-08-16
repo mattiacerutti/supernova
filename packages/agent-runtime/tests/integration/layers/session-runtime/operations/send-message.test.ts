@@ -26,11 +26,6 @@ async function git(cwd: string, args: readonly string[]): Promise<void> {
   await execFilePromise("git", [...args], {cwd, encoding: "utf8"});
 }
 
-async function gitOutput(cwd: string, args: readonly string[]): Promise<string> {
-  const result = await execFilePromise("git", [...args], {cwd, encoding: "utf8"});
-  return result.stdout.trim();
-}
-
 async function createGitProject(): Promise<string> {
   const projectPath = mkdtempSync(join(tmpdir(), "supernova-send-message-git-"));
   await git(projectPath, ["init"]);
@@ -277,7 +272,6 @@ describe("sending messages through Pi sessions", () => {
     expect(checkpointEntries.map((entry) => (entry.data as {phase?: string}).phase)).toEqual(["before-turn", "after-turn"]);
     expect(checkpointId).toEqual(expect.any(String));
     expect(customEntries.some((entry) => entry.customType === "supernova.checkpoint-patch")).toBe(false);
-    await expect(gitOutput(projectPath, ["rev-parse", "--verify", `refs/supernova/checkpoints/${info.id}/${checkpointId}`])).resolves.toHaveLength(40);
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("after\n");
   });
 

@@ -443,7 +443,7 @@ describe("checkpoint navigation", () => {
     await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
     await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
     await writeFile(join(projectPath, "stashed-only.txt"), "stash me\n");
-    await git(projectPath, ["stash", "push", "--include-untracked", "-m", "manual stash"]);
+    await git(projectPath, ["stash", "push", "--include-untracked", "-m", "manual stash", "--", "stashed-only.txt"]);
 
     const undoEvents = await runSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.undoCheckpoint({sessionId: info.id})});
 
