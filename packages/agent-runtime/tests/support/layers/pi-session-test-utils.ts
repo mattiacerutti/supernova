@@ -1,3 +1,6 @@
+import {mkdtempSync, rmSync} from "node:fs";
+import {tmpdir} from "node:os";
+import {join} from "node:path";
 import type {AgentSession, PromptTemplate, SessionEntry, Skill} from "@earendil-works/pi-coding-agent";
 import {createAgentSession, ModelRuntime, SessionManager, SettingsManager} from "@earendil-works/pi-coding-agent";
 import type {Api, FauxProviderRegistration} from "@earendil-works/pi-ai/compat";
@@ -14,7 +17,7 @@ import {PiAgentSessionFactory} from "@supernova/agent-runtime/layers/session-run
 import type {PiAgentSessionFactoryShape} from "@supernova/agent-runtime/layers/session-runtime/internal/pi-agent-session-factory";
 import {PiSessionTitleGenerator} from "@supernova/agent-runtime/layers/session-runtime/internal/pi-session-title-generator";
 import type {PiSessionTitleGeneratorShape} from "@supernova/agent-runtime/layers/session-runtime/internal/pi-session-title-generator";
-import {SessionCheckpointStoreLive} from "@supernova/agent-runtime/layers/session-runtime/internal/session-checkpoint-store";
+import {makeCheckpointStoreLive} from "@supernova/agent-runtime/layers/session-runtime/internal/checkpoint-store";
 import {SessionEventBusLive} from "@supernova/agent-runtime/layers/session-runtime/internal/session-event-bus";
 import {PiSessionsFromInternal} from "@supernova/agent-runtime/layers/sessions/pi-sessions-live";
 import {SessionRuntimeService} from "@supernova/agent-runtime/services/session-runtime-service";
@@ -155,6 +158,8 @@ export async function createPiTestRuntime(input?: {
   readonly skillContentByPath?: Readonly<Record<string, string>>;
   readonly skills?: readonly Skill[];
 }) {
+  const checkpointStorageRoot = mkdtempSync(join(tmpdir(), "supernova-checkpoint-storage-"));
+  const defaultProjectRoot = mkdtempSync(join(tmpdir(), "supernova-test-project-"));
   const modelRuntime = await ModelRuntime.create({modelsPath: null});
   const faux = registerFauxProvider({
     api: selectedPiModel.api,
@@ -235,7 +240,8 @@ export async function createPiTestRuntime(input?: {
     Layer.succeed(PiSessionStore, sessionStore),
     Layer.succeed(PiSessionTitleGenerator, titleGenerator)
   );
-  const runtimeLive = PiSessionRuntimeFromInternal.pipe(Layer.provide(Layer.mergeAll(internalLive, SessionCheckpointStoreLive, SessionEventBusLive)));
+  const checkpointStoreLive = makeCheckpointStoreLive(checkpointStorageRoot);
+  const runtimeLive = PiSessionRuntimeFromInternal.pipe(Layer.provide(Layer.mergeAll(internalLive, checkpointStoreLive, SessionEventBusLive)));
   const sessionsLive = PiSessionsFromInternal.pipe(Layer.provide(internalLive));
   const runtime = ManagedRuntime.make(Layer.mergeAll(sessionsLive, runtimeLive));
   const runWithSessions = <A, E>(effect: Effect.Effect<A, E, SessionsService>) => runtime.runPromise(effect);
@@ -274,7 +280,7 @@ export async function createPiTestRuntime(input?: {
 
   return {
     appendConversation: (manager: PiSessionManager, options?: {assistantText?: string; requestText?: string}) => appendConversation(manager, options),
-    createSession: (projectPath = "/workspace") => sessionRecord(rememberSession(SessionManager.inMemory(projectPath))),
+    createSession: (projectPath = defaultProjectRoot) => sessionRecord(rememberSession(SessionManager.inMemory(projectPath))),
     faux,
     getSession: (sessionId: string) => {
       const manager = sessions.get(sessionId);
@@ -300,6 +306,8 @@ export async function createPiTestRuntime(input?: {
     unregister: () => {
       runtime.dispose();
       faux.unregister();
+      rmSync(checkpointStorageRoot, {force: true, recursive: true});
+      rmSync(defaultProjectRoot, {force: true, recursive: true});
     },
   };
 }

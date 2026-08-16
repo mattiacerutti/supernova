@@ -16,7 +16,13 @@ export const AgentRpcLive = AgentRpcGroup.toLayer(
 
     return {
       abortSession: ({sessionId}) => sessionRuntime.abortSession(sessionId),
-      archiveProjectSession: ({projectPath, sessionId}) => projects.archiveSession(projectPath, sessionId),
+      archiveProjectSession: ({projectPath, sessionId}) =>
+        Effect.gen(function* () {
+          yield* sessionRuntime.releaseSession(sessionId);
+          const archived = yield* projects.archiveSession(projectPath, sessionId);
+          yield* sessionRuntime.deleteSessionCheckpoints(projectPath, sessionId);
+          return archived;
+        }),
       cancelProviderLogin: ({loginSessionId}) => providers.cancelLogin(loginSessionId),
       compactSession: (input) => sessionRuntime.compactSession(input),
       createFolder: ({path}) => folders.create(path),

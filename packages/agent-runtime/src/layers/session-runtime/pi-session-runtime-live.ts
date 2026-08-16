@@ -5,7 +5,7 @@ import {PiResourceCatalog, PiResourceCatalogLive} from "@supernova/agent-runtime
 import {PiSessionStore, PiSessionStoreLive} from "@supernova/agent-runtime/layers/shared/internal/pi-session-store";
 import {PiAgentSessionFactory, PiAgentSessionFactoryLive} from "@supernova/agent-runtime/layers/session-runtime/internal/pi-agent-session-factory";
 import {PiSessionTitleGenerator, PiSessionTitleGeneratorLive} from "@supernova/agent-runtime/layers/session-runtime/internal/pi-session-title-generator";
-import {SessionCheckpointStore, SessionCheckpointStoreLive} from "@supernova/agent-runtime/layers/session-runtime/internal/session-checkpoint-store";
+import {CheckpointStore, CheckpointStoreLive} from "@supernova/agent-runtime/layers/session-runtime/internal/checkpoint-store";
 import {SessionEventBus, SessionEventBusLive} from "@supernova/agent-runtime/layers/session-runtime/internal/session-event-bus";
 import {SessionRuntimePool} from "@supernova/agent-runtime/layers/session-runtime/internal/session-runtime-pool";
 import {SessionRuntimeService} from "@supernova/agent-runtime/services/session-runtime-service";
@@ -14,19 +14,22 @@ export const PiSessionRuntimeFromInternal = Layer.effect(
   SessionRuntimeService,
   Effect.gen(function* () {
     const agentSessionFactory = yield* PiAgentSessionFactory;
-    const checkpointStore = yield* SessionCheckpointStore;
+    const checkpointStore = yield* CheckpointStore;
     const eventBus = yield* SessionEventBus;
     const modelCatalog = yield* PiModelCatalog;
     const resourceCatalog = yield* PiResourceCatalog;
     const sessionStore = yield* PiSessionStore;
     const titleGenerator = yield* PiSessionTitleGenerator;
     const pool = new SessionRuntimePool({agentSessionFactory, checkpointStore, eventBus, modelCatalog, resourceCatalog, sessionStore}, titleGenerator);
+    yield* Effect.addFinalizer(() => Effect.promise(() => pool.dispose()));
 
     return {
       abortSession: (sessionId: string) => Effect.promise(() => pool.abortSession(sessionId)),
       compactSession: (input) => Effect.promise(() => pool.compactSession(input)),
+      deleteSessionCheckpoints: (projectRoot, sessionId) => Effect.promise(() => pool.deleteSessionCheckpoints(projectRoot, sessionId)),
       getCommittedSession: (sessionId) => Effect.sync(() => pool.getCommittedSession(sessionId)),
       redoCheckpoint: (input) => Effect.promise(() => pool.redoCheckpoint(input)),
+      releaseSession: (sessionId) => Effect.promise(() => pool.releaseSession(sessionId)),
       revertToMessage: (input) => Effect.promise(() => pool.revertToMessage(input)),
       sendMessage: (input) => Effect.promise(() => pool.sendMessage(input)),
       undoCheckpoint: (input) => Effect.promise(() => pool.undoCheckpoint(input)),
@@ -41,7 +44,7 @@ const PiSessionRuntimeInternalLive = Layer.mergeAll(
   PiModelCatalogLive,
   PiResourceCatalogLive,
   PiSessionTitleGeneratorLive,
-  SessionCheckpointStoreLive,
+  CheckpointStoreLive,
   SessionEventBusLive
 );
 

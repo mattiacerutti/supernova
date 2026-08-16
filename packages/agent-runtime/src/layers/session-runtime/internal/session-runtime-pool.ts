@@ -62,6 +62,19 @@ export class SessionRuntimePool {
     return this.runtimes.get(sessionId)?.getCommittedSession();
   }
 
+  /** Releases a retained runtime before its durable session is archived. */
+  public async releaseSession(sessionId: string): Promise<void> {
+    const runtime = this.runtimes.get(sessionId);
+    if (!runtime) return;
+    this.runtimes.delete(sessionId);
+    await runtime.dispose();
+  }
+
+  /** Removes manifests and refs owned by an archived session. */
+  public async deleteSessionCheckpoints(projectRoot: string, sessionId: string): Promise<void> {
+    await this.dependencies.checkpointStore.deleteSession({projectRoot, sessionId});
+  }
+
   /** Aborts all retained runtimes during server/runtime shutdown. */
   public async dispose(): Promise<void> {
     await Promise.all([...this.runtimes.values()].map((runtime) => runtime.dispose()));

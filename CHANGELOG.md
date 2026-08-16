@@ -19,6 +19,7 @@ All notable changes to Supernova are documented in this file.
 - Changed session timelines to reopen at the latest message instead of restoring the previous scroll position.
 - Refined the default theme's colors for a calmer, more consistent interface.
 - Redesigned the composer menus, model picker, and dialog search fields for a more consistent look.
+- Changed workspace checkpoints to use app-owned shadow repositories with multi-repository snapshots, conflict-checked restores, rollback, and archived-session cleanup.
 
 ### Fixed
 
