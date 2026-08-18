@@ -89,8 +89,10 @@ export class TimelineDriver {
 
   /** Asserts that the active status is mounted after, rather than inside, the virtual canvas. */
   public async expectStatusOutsideVirtualization(): Promise<void> {
-    await expect(this.page.locator('[data-timeline-footer="streaming-status"]')).toBeVisible();
+    const footer = this.page.locator('[data-timeline-footer="streaming-status"]');
+    await expect(footer).toBeVisible();
     await expect(this.page.locator('[data-timeline-virtual-content] [data-timeline-footer="streaming-status"]')).toHaveCount(0);
+    expect(await footer.evaluate((element) => window.getComputedStyle(element).backgroundColor)).not.toBe("rgba(0, 0, 0, 0)");
   }
 
   /** Runs /undo and waits for the committed transcript to remove one turn. */

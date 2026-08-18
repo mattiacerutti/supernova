@@ -87,7 +87,12 @@ test.describe("session timeline visual stability", () => {
     expect(await timeline.isScrollable(), "the growing response should overflow the viewport").toBe(true);
     expect(await timeline.isFollowing(), "the first overflow must not detach auto-follow").toBe(true);
     await timeline.expectAtBottom();
-    assertBottomLocked({minimumFrameCount: 1, samples: await timeline.visualSamples(), sessionId: EMPTY_SESSION_ID});
+    const samples = await timeline.visualSamples();
+    const fittingFrames = visibleSamples(samples, EMPTY_SESSION_ID).filter((sample) => sample.scrollHeight <= sample.clientHeight);
+
+    assertBottomLocked({minimumFrameCount: 1, samples, sessionId: EMPTY_SESSION_ID});
+    expect(fittingFrames.length, "the stream should render while the new timeline still fits").toBeGreaterThanOrEqual(2);
+    expect(Math.max(...fittingFrames.map((sample) => sample.streamOffset)), "content should not animate before scrolling is possible").toBeLessThanOrEqual(0.5);
   });
 
   test("sending a message from the bottom auto-scrolls while streaming", async ({timeline}) => {
@@ -102,13 +107,32 @@ test.describe("session timeline visual stability", () => {
     expect(secondScrollTop, "the viewport should advance with the growing response").toBeGreaterThan(firstScrollTop);
   });
 
+  test("does not animate the first response paint", async ({timeline}) => {
+    await timeline.sendMessage();
+    await timeline.resetVisualProbe();
+
+    await timeline.waitForLineGrowth(2);
+    const samples = await timeline.visualSamples();
+    const firstResponseFrames = visibleSamples(samples, TIMELINE_SESSION_ID).filter((sample) => sample.lineCount === 2);
+
+    assertBottomLocked({minimumFrameCount: 1, samples});
+    expect(firstResponseFrames.length, "the first response should produce a painted frame").toBeGreaterThanOrEqual(1);
+    expect(Math.max(...firstResponseFrames.map((sample) => sample.streamOffset)), "the first response paint should appear without moving existing rows").toBeLessThanOrEqual(0.5);
+  });
+
   test("streamed content stays bottom-locked in the same frame while auto-following", async ({timeline}) => {
     await timeline.sendMessage();
     await timeline.waitForLineGrowth(30);
 
     const samples = await timeline.recordStreamGrowth(60);
+    const animatedFrames = visibleSamples(samples, TIMELINE_SESSION_ID).filter((sample) => sample.streamOffset > 0.5);
+    const footerPositions = animatedFrames.flatMap((sample) => (sample.statusFooterTop === null ? [] : [sample.statusFooterTop]));
 
     assertBottomLocked({samples});
+    expect(animatedFrames.length, "stream growth should animate independently of logical scrolling").toBeGreaterThanOrEqual(2);
+    expect(Math.max(...animatedFrames.map((sample) => sample.streamOffset)), "stream animation should remain bounded while catching up").toBeLessThanOrEqual(57);
+    expect(footerPositions.length, "the status footer should remain mounted during animation").toBe(animatedFrames.length);
+    expect(Math.max(...footerPositions) - Math.min(...footerPositions), "the status footer should stay fixed while stream rows animate").toBeLessThanOrEqual(1);
   });
 
   test("scrolling slightly up during streaming detaches from auto-scroll", async ({timeline}) => {

@@ -10,6 +10,7 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+- Changed streamed timeline growth to animate while auto-following.
 - Upgraded the Pi runtime dependency to 0.83.0 and expanded provider sign-in dialogs to support provider-defined authentication prompts.
 - Changed session timelines to reopen at the latest message instead of restoring the previous scroll position.
 - Refined the default theme's colors for a calmer, more consistent interface.

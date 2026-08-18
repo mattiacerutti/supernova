@@ -15,6 +15,8 @@ const TIMELINE_CACHE_LIMIT = 16;
 const TIMELINE_END_THRESHOLD_PX = 5;
 const TIMELINE_FALLBACK_ITEM_SIZE = 86;
 const TIMELINE_SCROLL_BUTTON_THRESHOLD_PX = 50;
+const TIMELINE_STREAM_SCROLL_ANIMATION_MS = 160;
+const TIMELINE_STREAM_SCROLL_MAX_OFFSET_PX = 56;
 
 interface TimelineCacheEntry {
   readonly measurements: VirtualItem[];
@@ -28,10 +30,6 @@ function hasLiveTimelineOutput(items: readonly SessionTimelineItem[]): boolean {
     if (item.type === "work") return item.events.length > 0;
     return item.type === "compaction";
   });
-}
-
-function hasPendingToolCall(items: readonly SessionTimelineItem[]): boolean {
-  return items.some((item) => item.type === "work" && item.events.some((event) => event.type === "tool" && event.tool?.status === "pending"));
 }
 
 function streamingStatusLabel(compacting: boolean): string {
@@ -103,14 +101,19 @@ export default function SessionTimeline(props: SessionTimelineProps) {
   const cachedRef = useRef(timelineCache.get(sessionId));
   const viewportRef = useRef<HTMLDivElement>(null);
   const virtualContentRef = useRef<HTMLDivElement>(null);
+  const streamContentRef = useRef<HTMLDivElement>(null);
   const initialPositionFrameRef = useRef<number | null>(null);
   const shouldSetInitialPositionRef = useRef(true);
+  const streamAnimationReadyRef = useRef(false);
+  const streamScrollAnimationRef = useRef<Animation | null>(null);
 
   const hasTimelineContent = items.length > 0 || liveItems.length > 0 || isStreaming || streamError !== null;
   const timelineRows = hasTimelineContent ? buildTimelineRows({items, liveItems, streamError}) : [];
   const activeTurnId = liveItems[0]?.turnId ?? null;
   const hasLiveOutput = hasLiveTimelineOutput(liveItems);
-  const statusLabel = isStreaming && !hasPendingToolCall(liveItems) ? streamingStatusLabel(compacting) : null;
+  if (!hasLiveOutput) streamAnimationReadyRef.current = false;
+
+  const statusLabel = isStreaming && liveItems ? streamingStatusLabel(compacting) : null;
   const pullStatusIntoLastMessage = hasLiveOutput && liveItems.at(-1)?.spacing === "message";
   const virtualRowKeys = buildVirtualRowKeys(timelineRows);
   const latestRowsLengthRef = useRef(timelineRows.length);
@@ -136,7 +139,30 @@ export default function SessionTimeline(props: SessionTimelineProps) {
     // Publish the new virtual height first so the browser does not clamp that
     // adjustment against the previous height and visibly correct a frame later.
     scrollToFn: (offset, options, instance) => {
-      if (virtualContentRef.current) virtualContentRef.current.style.height = `${instance.getTotalSize()}px`;
+      const viewport = viewportRef.current;
+      const virtualContent = virtualContentRef.current;
+      const streamContent = streamContentRef.current;
+      if (virtualContent) virtualContent.style.height = `${instance.getTotalSize()}px`;
+      const targetOffset = viewport ? Math.min(offset + (options.adjustments ?? 0), Math.max(0, viewport.scrollHeight - viewport.clientHeight)) : 0;
+      const scrollDelta = viewport ? targetOffset - viewport.scrollTop : 0;
+      if (
+        !shouldReduceMotion &&
+        isStreaming &&
+        !shouldSetInitialPositionRef.current &&
+        streamAnimationReadyRef.current &&
+        viewport &&
+        !viewport.dataset.scrollable?.includes("end") &&
+        scrollDelta > 0 &&
+        streamContent
+      ) {
+        const transform = window.getComputedStyle(streamContent).transform;
+        const currentOffset = transform === "none" ? 0 : new DOMMatrixReadOnly(transform).m42;
+        streamScrollAnimationRef.current?.cancel();
+        streamScrollAnimationRef.current = streamContent.animate(
+          [{transform: `translateY(${Math.min(Math.max(0, currentOffset) + scrollDelta, TIMELINE_STREAM_SCROLL_MAX_OFFSET_PX)}px)`}, {transform: "translateY(0)"}],
+          {duration: TIMELINE_STREAM_SCROLL_ANIMATION_MS, easing: "cubic-bezier(0.22, 1, 0.36, 1)"}
+        );
+      }
       elementScroll(offset, options, instance);
     },
   });
@@ -153,6 +179,17 @@ export default function SessionTimeline(props: SessionTimelineProps) {
     const viewport = event.currentTarget;
     setScrollButtonVisible(viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop >= TIMELINE_SCROLL_BUTTON_THRESHOLD_PX);
   };
+
+  useLayoutEffect(() => () => streamScrollAnimationRef.current?.cancel(), []);
+
+  useLayoutEffect(() => {
+    if (!hasLiveOutput) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      streamAnimationReadyRef.current = true;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [hasLiveOutput]);
 
   useLayoutEffect(() => {
     if (!hasTimelineContent || !shouldSetInitialPositionRef.current) return;
@@ -217,26 +254,31 @@ export default function SessionTimeline(props: SessionTimelineProps) {
           >
             <MessageScrollerContent aria-busy={isStreaming} className="block min-h-full">
               <div
-                className="relative w-full"
+                className="relative w-full overflow-clip"
                 data-timeline-virtual-content
                 ref={(element) => {
                   virtualContentRef.current = element;
                   virtualizer.containerRef(element);
                 }}
               >
-                {virtualItems.map((virtualItem) => {
-                  const item = timelineRows[virtualItem.index];
-                  if (!item) return null;
+                <div className="absolute inset-0" data-timeline-stream-content ref={streamContentRef}>
+                  {virtualItems.map((virtualItem) => {
+                    const item = timelineRows[virtualItem.index];
+                    if (!item) return null;
 
-                  return (
-                    <div className="absolute inset-s-0 w-full" data-index={virtualItem.index} key={virtualItem.key} ref={virtualizer.measureElement}>
-                      <SessionTimelineVirtualRow activeTurnId={activeTurnId} item={item} onRevertToMessage={onRevertToMessage} />
-                    </div>
-                  );
-                })}
+                    return (
+                      <div className="absolute inset-s-0 w-full" data-index={virtualItem.index} key={virtualItem.key} ref={virtualizer.measureElement}>
+                        <SessionTimelineVirtualRow activeTurnId={activeTurnId} item={item} onRevertToMessage={onRevertToMessage} />
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
               {statusLabel && (
-                <div className={cn("mx-auto w-full max-w-3xl px-5 pb-8 md:px-8", pullStatusIntoLastMessage && "-mt-4")} data-timeline-footer="streaming-status">
+                <div
+                  className={cn("relative z-10 mx-auto w-full max-w-3xl bg-surface px-5 pb-8 md:px-8", pullStatusIntoLastMessage && "-mt-6")}
+                  data-timeline-footer="streaming-status"
+                >
                   <p className="shimmer w-fit text-sm text-ink-faint">{statusLabel}</p>
                 </div>
               )}
