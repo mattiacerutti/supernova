@@ -1,6 +1,15 @@
 import {expect, test as base} from "@playwright/test";
 import type {Page} from "@playwright/test";
-import {OTHER_SESSION_TITLE, timelineStreamLine, TIMELINE_PROJECT_NAME, TIMELINE_PROJECT_PATH, TIMELINE_SESSION_ID, TIMELINE_SESSION_TITLE} from "@e2e/mocks/timeline-data";
+import {
+  EMPTY_SESSION_ID,
+  EMPTY_SESSION_TITLE,
+  OTHER_SESSION_TITLE,
+  timelineStreamLine,
+  TIMELINE_PROJECT_NAME,
+  TIMELINE_PROJECT_PATH,
+  TIMELINE_SESSION_ID,
+  TIMELINE_SESSION_TITLE,
+} from "@e2e/mocks/timeline-data";
 import {installTimelineVisualProbe} from "@e2e/support/install-visual-probe";
 import type {TimelineMockState, TimelineVisualSample} from "@e2e/support/timeline-test-api";
 
@@ -47,6 +56,15 @@ export class TimelineDriver {
   /** Opens the primary long session and waits for its timeline to become visible. */
   public async openMainSession(): Promise<void> {
     await this.openSession(TIMELINE_SESSION_ID, TIMELINE_SESSION_TITLE);
+  }
+
+  /** Creates an empty session and sends its first message through the new-session screen. */
+  public async startEmptySession(): Promise<void> {
+    const projectId = Buffer.from(encodeURIComponent(TIMELINE_PROJECT_PATH)).toString("base64").replaceAll("=", "");
+    await this.page.goto(`/session/new?projectId=${projectId}`, {waitUntil: "commit"});
+    await this.sendMessage();
+    await expect(this.page).toHaveURL(`/session/${EMPTY_SESSION_ID}`);
+    await expect(this.page.getByRole("heading", {name: EMPTY_SESSION_TITLE})).toBeVisible();
   }
 
   /** Navigates through the real sidebar to the second long session. */
@@ -258,6 +276,16 @@ export class TimelineDriver {
   /** Reads native bottom distance directly from the scroll viewport. */
   public async bottomDistance(): Promise<number> {
     return await this.timeline().evaluate((viewport) => viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop);
+  }
+
+  /** Reports whether the timeline remains attached to its latest content. */
+  public async isFollowing(): Promise<boolean> {
+    return await this.timeline().evaluate((viewport) => !viewport.dataset.scrollable?.includes("end"));
+  }
+
+  /** Reports whether timeline content has grown beyond the viewport. */
+  public async isScrollable(): Promise<boolean> {
+    return await this.timeline().evaluate((viewport) => viewport.scrollHeight > viewport.clientHeight);
   }
 
   /** Reads native scrollHeight directly from the scroll viewport. */

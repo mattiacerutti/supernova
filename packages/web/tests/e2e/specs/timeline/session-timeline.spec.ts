@@ -1,7 +1,7 @@
 import {BOTTOM_TOLERANCE_PX, DETACHED_DISTANCE_PX, expect, test} from "@e2e/support/timeline-fixture";
 import type {TimelineDriver, VisibleTextAnchor} from "@e2e/support/timeline-fixture";
 import type {TimelineVisualSample} from "@e2e/support/timeline-test-api";
-import {OTHER_SESSION_ID, TIMELINE_SESSION_ID} from "@e2e/mocks/timeline-data";
+import {EMPTY_SESSION_ID, OTHER_SESSION_ID, TIMELINE_SESSION_ID} from "@e2e/mocks/timeline-data";
 
 function visibleSamples(samples: readonly TimelineVisualSample[], sessionId: string): readonly TimelineVisualSample[] {
   return samples.filter((sample) => sample.visible && sample.pathname === `/session/${sessionId}`);
@@ -74,6 +74,19 @@ test.describe("session timeline visual stability", () => {
     await timeline.switchToOtherSession();
     await timeline.expectAtBottom();
     assertBottomLocked({minimumFrameCount: 1, samples: await timeline.visualSamples(), sessionId: OTHER_SESSION_ID});
+  });
+
+  test("keeps following when a new session first grows beyond the viewport", async ({timeline}) => {
+    await timeline.startEmptySession();
+    expect(await timeline.isScrollable(), "the initial response should still fit inside the viewport").toBe(false);
+    await timeline.resetVisualProbe();
+
+    await timeline.waitForLineGrowth(90);
+
+    expect(await timeline.isScrollable(), "the growing response should overflow the viewport").toBe(true);
+    expect(await timeline.isFollowing(), "the first overflow must not detach auto-follow").toBe(true);
+    await timeline.expectAtBottom();
+    assertBottomLocked({minimumFrameCount: 1, samples: await timeline.visualSamples(), sessionId: EMPTY_SESSION_ID});
   });
 
   test("sending a message from the bottom auto-scrolls while streaming", async ({timeline}) => {

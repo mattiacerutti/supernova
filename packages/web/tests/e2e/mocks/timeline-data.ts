@@ -6,6 +6,8 @@ export const TIMELINE_SESSION_ID = "timeline-session";
 export const TIMELINE_SESSION_TITLE = "Timeline stress session";
 export const OTHER_SESSION_ID = "other-session";
 export const OTHER_SESSION_TITLE = "Second long session";
+export const EMPTY_SESSION_ID = "empty-session";
+export const EMPTY_SESSION_TITLE = "Empty session";
 
 export const timelineModel = {
   id: "timeline-model",
@@ -64,11 +66,12 @@ function historySession(input: {readonly historyTurnCount: number; readonly id: 
   };
 }
 
-/** Creates the two long sessions used by every isolated browser test. */
+/** Creates the sessions used by every isolated browser test. */
 export function createTimelineSessions(): Map<string, Session> {
   const sessions = [
     historySession({historyTurnCount: 28, id: TIMELINE_SESSION_ID, title: TIMELINE_SESSION_TITLE}),
     historySession({historyTurnCount: 24, id: OTHER_SESSION_ID, title: OTHER_SESSION_TITLE}),
+    historySession({historyTurnCount: 0, id: EMPTY_SESSION_ID, title: EMPTY_SESSION_TITLE}),
   ];
 
   return new Map(sessions.map((session) => [session.id, session]));

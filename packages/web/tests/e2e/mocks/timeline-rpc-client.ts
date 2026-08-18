@@ -2,7 +2,15 @@ import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/proc
 import type {Session, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 import {Effect, Exit, Fiber, PubSub, Stream} from "effect";
 import {type AgentRpcClientApi, type AgentRpcClientFiber, type AgentRpcExecute, type AgentRpcProtocolClient, type AgentRpcRunOptions} from "@/rpc/agent-rpc-client-api";
-import {createTimelineSessions, timelineModelDetails, timelineSessionSummary, timelineStreamTurn, TIMELINE_PROJECT_PATH, TIMELINE_SESSION_ID} from "@e2e/mocks/timeline-data";
+import {
+  createTimelineSessions,
+  EMPTY_SESSION_ID,
+  timelineModelDetails,
+  timelineSessionSummary,
+  timelineStreamTurn,
+  TIMELINE_PROJECT_PATH,
+  TIMELINE_SESSION_ID,
+} from "@e2e/mocks/timeline-data";
 import type {TimelineMockState} from "@e2e/support/timeline-test-api";
 
 export {AgentRpcProtocolClientService} from "@/rpc/agent-rpc-client-api";
@@ -14,6 +22,7 @@ class TimelineRpcClient implements AgentRpcClientApi {
   private readonly events = Effect.runSync(PubSub.unbounded<SessionStreamEvent>());
   private readonly sessions = createTimelineSessions();
   private activeContentParts: readonly UserMessageContentPart[] | null = null;
+  private activeSessionId = TIMELINE_SESSION_ID;
   private lineCount = 0;
   private publishQueue: Promise<void> = Promise.resolve();
   private revision = 0;
@@ -70,7 +79,7 @@ class TimelineRpcClient implements AgentRpcClientApi {
       cancelProviderLogin: () => Effect.void,
       compactSession: () => Effect.void,
       createFolder: () => Effect.void,
-      createSession: () => Effect.succeed(this.session(TIMELINE_SESSION_ID)),
+      createSession: () => Effect.succeed(this.session(EMPTY_SESSION_ID)),
       getFolderStatus: () => Effect.succeed({exists: true, kind: "directory"}),
       getSession: ({sessionId}: {readonly sessionId: string}) => Effect.sync(() => this.session(sessionId)),
       listComposerSuggestions: () => Effect.succeed({items: []}),
@@ -94,7 +103,8 @@ class TimelineRpcClient implements AgentRpcClientApi {
       redoCheckpoint: ({sessionId}: {readonly sessionId: string}) => Effect.sync(() => this.redoCheckpoint(sessionId)),
       renameSession: ({sessionId}: {readonly sessionId: string}) => Effect.sync(() => this.session(sessionId)),
       revertToMessage: ({sessionId, turnId}: {readonly sessionId: string; readonly turnId: string}) => Effect.sync(() => this.revertToMessage(sessionId, turnId)),
-      sendMessage: ({contentParts}: {readonly contentParts: readonly UserMessageContentPart[]}) => Effect.sync(() => this.startStream(contentParts)),
+      sendMessage: ({contentParts, sessionId}: {readonly contentParts: readonly UserMessageContentPart[]; readonly sessionId: string}) =>
+        Effect.sync(() => this.startStream(sessionId, contentParts)),
       startProviderLogin: () => Effect.succeed({loginSessionId: "timeline-login", status: "completed"}),
       submitProviderLoginInput: () => Effect.void,
       undoCheckpoint: ({sessionId}: {readonly sessionId: string}) => Effect.sync(() => this.undoCheckpoint(sessionId)),
@@ -155,18 +165,19 @@ class TimelineRpcClient implements AgentRpcClientApi {
   }
 
   /** Starts a stream with one line, then waits for tests to request deterministic high-speed bursts. */
-  private startStream(contentParts: readonly UserMessageContentPart[]): void {
+  private startStream(sessionId: string, contentParts: readonly UserMessageContentPart[]): void {
     if (this.status === "streaming") return;
 
     this.activeContentParts = contentParts;
+    this.activeSessionId = sessionId;
     this.lineCount = 1;
     this.streamTargetLineCount = 1;
     this.status = "streaming";
-    this.publish({revision: this.nextRevision(), sessionId: TIMELINE_SESSION_ID, type: "session.agent.started"});
+    this.publish({revision: this.nextRevision(), sessionId, type: "session.agent.started"});
     this.publish({
       revision: this.nextRevision(),
-      sessionId: TIMELINE_SESSION_ID,
-      context: this.session(TIMELINE_SESSION_ID).context,
+      sessionId,
+      context: this.session(sessionId).context,
       turn: timelineStreamTurn({contentParts, lineCount: this.lineCount, status: "streaming"}),
       type: "session.turn",
     });
@@ -186,8 +197,8 @@ class TimelineRpcClient implements AgentRpcClientApi {
       const contentParts = this.activeContentParts ?? [{text: "Timeline test prompt", type: "text"}];
       this.publish({
         revision: this.nextRevision(),
-        sessionId: TIMELINE_SESSION_ID,
-        context: this.session(TIMELINE_SESSION_ID).context,
+        sessionId: this.activeSessionId,
+        context: this.session(this.activeSessionId).context,
         turn: timelineStreamTurn({contentParts, lineCount: this.lineCount, status: "streaming"}),
         type: "session.turn",
       });
@@ -217,7 +228,7 @@ class TimelineRpcClient implements AgentRpcClientApi {
     this.status = status;
     const contentParts = this.activeContentParts ?? [{text: "Timeline test prompt", type: "text"}];
     const completedTurn = timelineStreamTurn({contentParts, lineCount: Math.max(this.lineCount, 1), status: "completed"});
-    const previous = this.session(TIMELINE_SESSION_ID);
+    const previous = this.session(this.activeSessionId);
     const session = {...previous, turns: [...previous.turns, completedTurn], updatedAt: new Date().toISOString()};
     this.sessions.set(session.id, session);
     this.activeContentParts = null;
