@@ -1,3 +1,4 @@
+import {useMessageScroller, useMessageScrollerScrollable} from "@shadcn/react/message-scroller";
 import {elementScroll, useVirtualizer} from "@tanstack/react-virtual";
 import type {VirtualItem} from "@tanstack/react-virtual";
 import {AnimatePresence, motion, useReducedMotion} from "framer-motion";
@@ -103,12 +104,13 @@ interface SessionTimelineProps {
 
 export default function SessionTimeline(props: SessionTimelineProps) {
   const {bottomOverlayHeight = 0, compacting, isStreaming, items, liveItems, onRevertToMessage, sessionId, streamError} = props;
+  const {scrollToEnd} = useMessageScroller();
+  const {end: canScrollToEnd} = useMessageScrollerScrollable();
   const cachedRef = useRef(timelineCache.get(sessionId));
   const viewportRef = useRef<HTMLDivElement>(null);
   const virtualContentRef = useRef<HTMLDivElement>(null);
   const initialPositionFrameRef = useRef<number | null>(null);
   const shouldSetInitialPositionRef = useRef(true);
-  const tanStackFollowsEndRef = useRef(true);
 
   const hasTimelineContent = items.length > 0 || liveItems.length > 0 || isStreaming || streamError !== null;
   const timelineRows = hasTimelineContent ? buildTimelineRows({compacting, isStreaming, items, liveItems, streamError}) : [];
@@ -123,19 +125,15 @@ export default function SessionTimeline(props: SessionTimelineProps) {
 
   // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual owns mutable scroll state by design.
   const virtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
-    // Message Scroller owns follow intent. TanStack mirrors that intent only
-    // for row-size compensation, keeping a growing response visually stable
-    // without independently deciding whether to follow it.
-    anchorTo: tanStackFollowsEndRef.current ? "end" : "start",
+    anchorTo: "end",
     count: timelineRows.length,
     directDomUpdates: true,
     directDomUpdatesMode: "position",
     estimateSize: () => TIMELINE_FALLBACK_ITEM_SIZE,
-    followOnAppend: tanStackFollowsEndRef.current,
+    followOnAppend: true,
     getItemKey: (index) => virtualRowKeys[index] ?? index,
     getScrollElement: () => viewportRef.current,
     initialMeasurementsCache: cachedRef.current?.measurements,
-    initialOffset: Number.MAX_SAFE_INTEGER,
     overscan: 3,
     paddingEnd: TIMELINE_BOTTOM_PADDING_PX,
     scrollEndThreshold: 0,
@@ -152,12 +150,12 @@ export default function SessionTimeline(props: SessionTimelineProps) {
 
   const virtualItems = virtualizer.getVirtualItems();
 
+  useLayoutEffect(() => {
+    if (!canScrollToEnd) scrollToEnd({behavior: "auto"});
+  }, [canScrollToEnd, compacting, isStreaming, items, liveItems, scrollToEnd, streamError]);
+
   const handleViewportScroll = (event: UIEvent<HTMLDivElement>): void => {
     const viewport = event.currentTarget;
-    const followsEnd = !viewport.dataset.scrollable?.includes("end");
-    tanStackFollowsEndRef.current = followsEnd;
-    virtualizer.options.anchorTo = followsEnd ? "end" : "start";
-    virtualizer.options.followOnAppend = followsEnd;
     setScrollButtonVisible(viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop >= TIMELINE_SCROLL_BUTTON_THRESHOLD_PX);
   };
 
@@ -168,13 +166,17 @@ export default function SessionTimeline(props: SessionTimelineProps) {
     // measured every row entering the bottom range. Keep the viewport hidden
     // while TanStack reconciles those measurements, then reveal it on the
     // first frame that is already anchored to the measured bottom.
+    let previousScrollHeight = 0;
+    let stableFrameCount = 0;
     const settleAtBottom = (): void => {
-      virtualizer.scrollToEnd();
+      scrollToEnd({behavior: "auto"});
       const currentViewport = viewportRef.current;
       if (!currentViewport) return;
 
       const bottomDistance = currentViewport.scrollHeight - currentViewport.clientHeight - currentViewport.scrollTop;
-      if (bottomDistance <= TIMELINE_END_THRESHOLD_PX) {
+      stableFrameCount = bottomDistance <= TIMELINE_END_THRESHOLD_PX && currentViewport.scrollHeight === previousScrollHeight ? stableFrameCount + 1 : 0;
+      previousScrollHeight = currentViewport.scrollHeight;
+      if (stableFrameCount >= 2) {
         shouldSetInitialPositionRef.current = false;
         currentViewport.style.visibility = "visible";
         return;
@@ -183,13 +185,13 @@ export default function SessionTimeline(props: SessionTimelineProps) {
       initialPositionFrameRef.current = window.requestAnimationFrame(settleAtBottom);
     };
 
-    virtualizer.scrollToEnd();
+    scrollToEnd({behavior: "auto"});
     initialPositionFrameRef.current = window.requestAnimationFrame(settleAtBottom);
 
     return () => {
       if (initialPositionFrameRef.current !== null) window.cancelAnimationFrame(initialPositionFrameRef.current);
     };
-  }, [hasTimelineContent, virtualizer]);
+  }, [hasTimelineContent, scrollToEnd]);
 
   useLayoutEffect(
     () => () => {
