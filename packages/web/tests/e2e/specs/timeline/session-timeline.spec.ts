@@ -78,6 +78,7 @@ test.describe("session timeline visual stability", () => {
 
   test("keeps following when a new session first grows beyond the viewport", async ({timeline}) => {
     await timeline.startEmptySession();
+    await timeline.expectStatusOutsideVirtualization();
     expect(await timeline.isScrollable(), "the initial response should still fit inside the viewport").toBe(false);
     await timeline.resetVisualProbe();
 

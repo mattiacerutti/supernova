@@ -7,13 +7,6 @@ interface SpacerTimelineItem {
   readonly type: "bottom-spacer" | "top-spacer";
 }
 
-interface StreamingStatusTimelineItem {
-  readonly id: string;
-  readonly label: string;
-  readonly turnId: string;
-  readonly type: "streaming-status";
-}
-
 interface StreamErrorTimelineItem {
   readonly id: string;
   readonly message: string;
@@ -21,42 +14,23 @@ interface StreamErrorTimelineItem {
   readonly type: "stream-error";
 }
 
-export type TimelineVirtualItem = SessionTimelineItem | SpacerTimelineItem | StreamingStatusTimelineItem | StreamErrorTimelineItem;
+export type TimelineVirtualItem = SessionTimelineItem | SpacerTimelineItem | StreamErrorTimelineItem;
 
 function isSessionTimelineItem(item: TimelineVirtualItem): item is SessionTimelineItem {
   return item.type === "assistant" || item.type === "compaction" || item.type === "user" || item.type === "work";
 }
 
-interface StreamingStatusLabelProps {
-  readonly label: string;
-}
-
-function StreamingStatusLabel(props: StreamingStatusLabelProps) {
-  const {label} = props;
-
-  return <p className="shimmer w-fit text-sm text-ink-faint">{label}</p>;
-}
-
 interface SessionTimelineVirtualRowProps {
   readonly activeTurnId: string | null;
-  readonly inlineStatusLabel?: string;
   readonly item: TimelineVirtualItem;
   readonly onRevertToMessage?: (turnId: string) => void;
 }
 
 export default function SessionTimelineVirtualRow(props: SessionTimelineVirtualRowProps) {
-  const {activeTurnId, inlineStatusLabel, item, onRevertToMessage} = props;
+  const {activeTurnId, item, onRevertToMessage} = props;
 
   if (item.type === "top-spacer") return <div aria-hidden="true" className="h-6" data-timeline-row="top-spacer" />;
   if (item.type === "bottom-spacer") return <div aria-hidden="true" className="h-6" data-timeline-row="bottom-spacer" />;
-
-  if (item.type === "streaming-status") {
-    return (
-      <div className="mx-auto w-full max-w-3xl px-5 pb-8 md:px-8" data-timeline-row="streaming-status">
-        <StreamingStatusLabel label={item.label} />
-      </div>
-    );
-  }
 
   if (item.type === "stream-error") {
     return (
@@ -71,11 +45,6 @@ export default function SessionTimelineVirtualRow(props: SessionTimelineVirtualR
   return (
     <SessionTimelineItemFrame item={item}>
       <SessionTimelineRow item={item} onRevertToMessage={activeTurnId && item.turnId === activeTurnId ? undefined : onRevertToMessage} />
-      {inlineStatusLabel && (
-        <div className="mt-4" data-timeline-row="inline-streaming-status">
-          <StreamingStatusLabel label={inlineStatusLabel} />
-        </div>
-      )}
     </SessionTimelineItemFrame>
   );
 }
