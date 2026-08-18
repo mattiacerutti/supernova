@@ -87,6 +87,12 @@ export class TimelineDriver {
     await expect.poll(() => this.mockState().then((state) => state.status)).toBe("streaming");
   }
 
+  /** Asserts that the active status is mounted after, rather than inside, the virtual canvas. */
+  public async expectStatusOutsideVirtualization(): Promise<void> {
+    await expect(this.page.locator('[data-timeline-footer="streaming-status"]')).toBeVisible();
+    await expect(this.page.locator('[data-timeline-virtual-content] [data-timeline-footer="streaming-status"]')).toHaveCount(0);
+  }
+
   /** Runs /undo and waits for the committed transcript to remove one turn. */
   public async undoLatestWithSlashCommand(): Promise<void> {
     const before = await this.mockState();

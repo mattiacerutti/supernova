@@ -8,6 +8,7 @@ import {MessageScroller, MessageScrollerButton, MessageScrollerContent, MessageS
 import SessionTimelineVirtualRow from "@/features/sessions/components/timeline/session-timeline-virtual-row";
 import type {TimelineVirtualItem} from "@/features/sessions/components/timeline/session-timeline-virtual-row";
 import type {SessionTimelineItem} from "@/features/sessions/types/session-timeline-item";
+import {cn} from "@/lib/cn";
 
 const TIMELINE_BOTTOM_PADDING_PX = 24;
 const TIMELINE_CACHE_LIMIT = 16;
@@ -56,20 +57,13 @@ function buildVirtualRowKeys(rows: readonly TimelineVirtualItem[]): readonly str
 }
 
 function buildTimelineRows(input: {
-  readonly compacting: boolean;
-  readonly isStreaming: boolean;
   readonly items: readonly SessionTimelineItem[];
   readonly liveItems: readonly SessionTimelineItem[];
   readonly streamError: string | null;
 }): readonly TimelineVirtualItem[] {
-  const {compacting, isStreaming, items, liveItems, streamError} = input;
+  const {items, liveItems, streamError} = input;
   const rows: TimelineVirtualItem[] = [{id: "top-spacer", type: "top-spacer"}, ...items, ...liveItems];
   const activeTurnId = liveItems[0]?.turnId ?? items.at(-1)?.turnId ?? "session";
-  const streamingLabel = streamingStatusLabel(compacting);
-
-  if (isStreaming && !hasLiveTimelineOutput(liveItems) && !hasPendingToolCall(liveItems)) {
-    rows.push({id: `streaming-status:${activeTurnId}`, label: streamingLabel, turnId: activeTurnId, type: "streaming-status"});
-  }
 
   if (streamError) rows.push({id: `stream-error:${activeTurnId}`, message: streamError, turnId: activeTurnId, type: "stream-error"});
 
@@ -113,10 +107,11 @@ export default function SessionTimeline(props: SessionTimelineProps) {
   const shouldSetInitialPositionRef = useRef(true);
 
   const hasTimelineContent = items.length > 0 || liveItems.length > 0 || isStreaming || streamError !== null;
-  const timelineRows = hasTimelineContent ? buildTimelineRows({compacting, isStreaming, items, liveItems, streamError}) : [];
+  const timelineRows = hasTimelineContent ? buildTimelineRows({items, liveItems, streamError}) : [];
   const activeTurnId = liveItems[0]?.turnId ?? null;
-  const inlineStatusItemId = isStreaming && hasLiveTimelineOutput(liveItems) && !hasPendingToolCall(liveItems) ? liveItems.at(-1)?.id : undefined;
-  const inlineStatusLabel = inlineStatusItemId ? streamingStatusLabel(compacting) : undefined;
+  const hasLiveOutput = hasLiveTimelineOutput(liveItems);
+  const statusLabel = isStreaming && !hasPendingToolCall(liveItems) ? streamingStatusLabel(compacting) : null;
+  const pullStatusIntoLastMessage = hasLiveOutput && liveItems.at(-1)?.spacing === "message";
   const virtualRowKeys = buildVirtualRowKeys(timelineRows);
   const latestRowsLengthRef = useRef(timelineRows.length);
   const [scrollButtonVisible, setScrollButtonVisible] = useState(false);
@@ -235,16 +230,16 @@ export default function SessionTimeline(props: SessionTimelineProps) {
 
                   return (
                     <div className="absolute inset-s-0 w-full" data-index={virtualItem.index} key={virtualItem.key} ref={virtualizer.measureElement}>
-                      <SessionTimelineVirtualRow
-                        activeTurnId={activeTurnId}
-                        inlineStatusLabel={item.id === inlineStatusItemId ? inlineStatusLabel : undefined}
-                        item={item}
-                        onRevertToMessage={onRevertToMessage}
-                      />
+                      <SessionTimelineVirtualRow activeTurnId={activeTurnId} item={item} onRevertToMessage={onRevertToMessage} />
                     </div>
                   );
                 })}
               </div>
+              {statusLabel && (
+                <div className={cn("mx-auto w-full max-w-3xl px-5 pb-8 md:px-8", pullStatusIntoLastMessage && "-mt-4")} data-timeline-footer="streaming-status">
+                  <p className="shimmer w-fit text-sm text-ink-faint">{statusLabel}</p>
+                </div>
+              )}
             </MessageScrollerContent>
           </MessageScrollerViewport>
           <AnimatePresence>
