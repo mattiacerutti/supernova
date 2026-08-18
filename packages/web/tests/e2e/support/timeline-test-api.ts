@@ -18,6 +18,8 @@ export interface TimelineVisualSample {
   readonly pathname: string;
   readonly scrollHeight: number;
   readonly scrollTop: number;
+  readonly statusFooterTop: number | null;
+  readonly streamOffset: number;
   readonly source: "frame";
   readonly timestamp: number;
   readonly visible: boolean;

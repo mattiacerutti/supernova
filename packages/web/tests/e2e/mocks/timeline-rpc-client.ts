@@ -170,8 +170,8 @@ class TimelineRpcClient implements AgentRpcClientApi {
 
     this.activeContentParts = contentParts;
     this.activeSessionId = sessionId;
-    this.lineCount = 1;
-    this.streamTargetLineCount = 1;
+    this.lineCount = 0;
+    this.streamTargetLineCount = 0;
     this.status = "streaming";
     this.publish({revision: this.nextRevision(), sessionId, type: "session.agent.started"});
     this.publish({

@@ -9,6 +9,9 @@ export function installTimelineVisualProbe(): void {
     if (!viewport) return;
 
     const style = window.getComputedStyle(viewport);
+    const streamContent = viewport.querySelector<HTMLElement>("[data-timeline-stream-content]");
+    const streamTransform = streamContent ? window.getComputedStyle(streamContent).transform : "none";
+    const statusFooter = viewport.querySelector<HTMLElement>('[data-timeline-footer="streaming-status"]');
     samples.push({
       bottomDistance: viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop,
       clientHeight: viewport.clientHeight,
@@ -16,6 +19,8 @@ export function installTimelineVisualProbe(): void {
       pathname: window.location.pathname,
       scrollHeight: viewport.scrollHeight,
       scrollTop: viewport.scrollTop,
+      statusFooterTop: statusFooter?.getBoundingClientRect().top ?? null,
+      streamOffset: streamTransform === "none" ? 0 : new DOMMatrixReadOnly(streamTransform).m42,
       source: "frame",
       timestamp: performance.now(),
       visible: style.display !== "none" && style.visibility !== "hidden",

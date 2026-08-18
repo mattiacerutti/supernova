@@ -95,12 +95,13 @@ export function timelineStreamTurn(input: {
 }): Turn {
   const lines = Array.from({length: input.lineCount}, (_, index) => timelineStreamLine(index + 1));
   const completedAt = input.status === "completed" ? timestamp(100_000 + input.lineCount) : undefined;
+  const content = input.lineCount > 0 ? ["Extreme-speed streamed response:", ...lines].join("\n") : "";
 
   return {
     completedAt,
     events: [
       {
-        content: ["Extreme-speed streamed response:", ...lines].join("\n"),
+        content,
         id: "timeline-stream-assistant",
         timestamp: timestamp(90_000),
         type: "assistant",
