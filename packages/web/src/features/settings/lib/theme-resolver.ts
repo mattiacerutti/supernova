@@ -23,69 +23,16 @@ const CONTRAST_BASELINE = {
   light: 45,
 } as const;
 
-function hexToRgb(hex: string): readonly [number, number, number] {
-  const value = Number.parseInt(hex.slice(1), 16);
-  return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
-}
-
 function mix(first: string, second: string, amount: number): string {
-  const from = hexToRgb(first);
-  const to = hexToRgb(second);
-  const clampedAmount = Math.min(Math.max(amount, 0), 1);
-  const channel = (index: number) => Math.round(from[index]! + (to[index]! - from[index]!) * clampedAmount);
-  return `#${channel(0).toString(16).padStart(2, "0")}${channel(1).toString(16).padStart(2, "0")}${channel(2).toString(16).padStart(2, "0")}`;
+  return `color-mix(in srgb, ${first}, ${second} ${Math.min(Math.max(amount, 0), 1) * 100}%)`;
 }
 
 function alpha(color: string, opacity: number): string {
-  const [red, green, blue] = hexToRgb(color);
-  const normalizedOpacity = Math.round(Math.min(Math.max(opacity, 0), 1) * 1_000) / 1_000;
-  return `rgb(${red} ${green} ${blue} / ${normalizedOpacity})`;
+  return `rgb(from ${color} r g b / ${Math.round(Math.min(Math.max(opacity, 0), 1) * 1_000) / 1_000})`;
 }
 
-function hexToHsl(hex: string): readonly [number, number, number] {
-  const [redChannel, greenChannel, blueChannel] = hexToRgb(hex);
-  const red = redChannel / 255;
-  const green = greenChannel / 255;
-  const blue = blueChannel / 255;
-  const max = Math.max(red, green, blue);
-  const min = Math.min(red, green, blue);
-  const lightness = (max + min) / 2;
-  if (max === min) return [0, 0, lightness];
-  const delta = max - min;
-  const saturation = lightness > 0.5 ? delta / (2 - max - min) : delta / (max + min);
-  let hue: number;
-  if (max === red) hue = (green - blue) / delta + (green < blue ? 6 : 0);
-  else if (max === green) hue = (blue - red) / delta + 2;
-  else hue = (red - green) / delta + 4;
-  return [hue / 6, saturation, lightness];
-}
-
-function hslToHex(hue: number, saturation: number, lightness: number): string {
-  const chroma = lightness < 0.5 ? lightness * (1 + saturation) : lightness + saturation - lightness * saturation;
-  const base = 2 * lightness - chroma;
-  const channel = (offset: number) => {
-    let t = hue + offset;
-    if (t < 0) t += 1;
-    if (t > 1) t -= 1;
-    let value = base;
-    if (t < 1 / 6) value = base + (chroma - base) * 6 * t;
-    else if (t < 1 / 2) value = chroma;
-    else if (t < 2 / 3) value = base + (chroma - base) * (2 / 3 - t) * 6;
-    return Math.round(value * 255)
-      .toString(16)
-      .padStart(2, "0");
-  };
-  return `#${channel(1 / 3)}${channel(0)}${channel(-1 / 3)}`;
-}
-
-/**
- * Shifts a color's lightness (and optionally scales its saturation) in HSL
- * space. Unlike mixing toward white, this keeps the hue vivid instead of
- * washing it out toward pastel.
- */
 function adjustColor(color: string, lightnessDelta: number, saturationScale = 1): string {
-  const [hue, saturation, lightness] = hexToHsl(color);
-  return hslToHex(hue, Math.min(Math.max(saturation * saturationScale, 0), 1), Math.min(Math.max(lightness + lightnessDelta, 0), 1));
+  return `hsl(from ${color} h calc(s * ${saturationScale}) calc(l + ${lightnessDelta * 100}))`;
 }
 
 function normalizeContrastStrength(contrast: number, variant: ThemeVariant["variant"]): number {
@@ -97,10 +44,12 @@ function normalizeContrastStrength(contrast: number, variant: ThemeVariant["vari
 /** Resolves compact theme seeds into the runtime colors consumed by the UI. */
 export function resolveTheme(variant: ThemeVariant) {
   const {accent, contrast, ink, semanticColors, surface} = variant.theme;
+
   const mode = variant.variant;
   const dark = mode === "dark";
   const strength = normalizeContrastStrength(contrast, mode);
   const baseline = CONTRAST_BASELINE[mode];
+
   const surfaceDeep = dark ? mix(surface, "#000000", 0.16 + (contrast - baseline) * 0.0015) : mix(surface, ink, 0.04 + (contrast - baseline) * 0.0012);
   const surfaceRaised = alpha(ink, dark ? 0.04 + strength * 0.02 : 0.04);
   const surfaceElevatedSecondaryOpacity = dark ? 0.02 + strength * 0.02 : 0.04;
