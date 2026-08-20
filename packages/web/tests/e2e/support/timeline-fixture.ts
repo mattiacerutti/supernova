@@ -85,6 +85,7 @@ export class TimelineDriver {
     await this.page.getByRole("button", {name: "Send message"}).click();
     await expect(this.page.getByRole("button", {name: "Stop streaming"})).toBeVisible();
     await expect.poll(() => this.mockState().then((state) => state.status)).toBe("streaming");
+    await this.expectAtBottom();
   }
 
   /** Asserts that the active status is mounted after, rather than inside, the virtual canvas. */
@@ -220,6 +221,31 @@ export class TimelineDriver {
     await this.timeline().hover();
     await this.page.mouse.wheel(0, deltaY);
     await expect.poll(async () => this.visibleFrameSamples(await this.visualSamples()).length).toBeGreaterThan(initialFrameCount);
+  }
+
+  /** Applies a native upward wheel gesture over the timeline without asserting detachment. */
+  public async scrollUp(deltaY: number): Promise<void> {
+    await this.timeline().hover();
+    await this.page.mouse.wheel(0, -deltaY);
+  }
+
+  /** Measures the newest rendered message containing the text, relative to the viewport top. */
+  public async messageViewportTop(text: string): Promise<number> {
+    return await this.page.evaluate((messageText) => {
+      const viewport = document.querySelector<HTMLElement>('[aria-label="Session timeline"]');
+      if (!viewport) throw new Error("Session timeline is not available");
+
+      const matches = [...viewport.querySelectorAll<HTMLElement>("article")].filter((element) => element.textContent?.includes(messageText));
+      const target = matches.at(-1);
+      if (!target) throw new Error("The sent user message is not rendered");
+
+      return target.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
+    }, text);
+  }
+
+  /** Reads the current height of the lossy fake space below an anchored message. */
+  public async fakeSpaceHeight(): Promise<number> {
+    return await this.page.locator("[data-timeline-fake-space]").evaluate((element) => element.getBoundingClientRect().height);
   }
 
   /** Reaches the bottom through a native wheel gesture, without assigning scrollTop. */

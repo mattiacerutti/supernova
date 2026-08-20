@@ -65,7 +65,7 @@ function MessageScrollerButton(props: ComponentProps<typeof MessageScrollerPrimi
   return (
     <MessageScrollerPrimitive.Button
       className={cn(
-        "absolute inset-s-1/2 z-10 grid size-9 -translate-x-1/2 place-items-center rounded-full bg-surface-popover text-ink-strong opacity-100 inset-ring-1 inset-ring-border-strong transition-[translate,scale,opacity,background-color] duration-200 hover:bg-surface-control data-[active=false]:pointer-events-none data-[active=false]:scale-95 data-[active=false]:opacity-0 data-[active=false]:duration-400 data-[active=false]:ease-[cubic-bezier(0.7,0,0.84,0)] data-[active=true]:translate-y-0 data-[active=true]:scale-100 data-[active=true]:ease-[cubic-bezier(0.23,1,0.32,1)] data-[direction=end]:bottom-4 data-[direction=end]:data-[active=false]:translate-y-full data-[direction=start]:top-4 data-[direction=start]:data-[active=false]:-translate-y-full rtl:translate-x-1/2 data-[direction=start]:[&_svg]:rotate-180",
+        "absolute inset-s-1/2 z-10 grid size-9 -translate-x-1/2 place-items-center rounded-full bg-surface-popover text-ink-strong inset-ring-1 inset-ring-border-strong transition-colors duration-200 hover:bg-surface-control data-[active=false]:pointer-events-none data-[direction=end]:bottom-4 data-[direction=start]:top-4 rtl:translate-x-1/2 data-[direction=start]:[&_svg]:rotate-180",
         className
       )}
       data-direction={direction}

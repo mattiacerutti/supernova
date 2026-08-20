@@ -16,6 +16,7 @@ export interface TimelineVisualSample {
   readonly clientHeight: number;
   readonly lineCount: number;
   readonly pathname: string;
+  readonly scrollButtonVisible: boolean;
   readonly scrollHeight: number;
   readonly scrollTop: number;
   readonly statusFooterTop: number | null;
