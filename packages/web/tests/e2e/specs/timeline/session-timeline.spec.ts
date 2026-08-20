@@ -81,12 +81,22 @@ test.describe("session timeline visual stability", () => {
 
   test("opens long uncached sessions at the bottom", async ({timeline}) => {
     await timeline.expectAtBottom();
-    assertBottomLocked({minimumFrameCount: 1, samples: await timeline.visualSamples()});
+    const initialSamples = await timeline.visualSamples();
+    assertBottomLocked({minimumFrameCount: 1, samples: initialSamples});
+    expect(
+      initialSamples.find((sample) => sample.pathname === `/session/${TIMELINE_SESSION_ID}` && sample.scrollButtonVisible),
+      "the scroll-to-latest button should stay hidden while the initial position settles"
+    ).toBeUndefined();
 
     await timeline.resetVisualProbe();
     await timeline.switchToOtherSession();
     await timeline.expectAtBottom();
-    assertBottomLocked({minimumFrameCount: 1, samples: await timeline.visualSamples(), sessionId: OTHER_SESSION_ID});
+    const switchedSamples = await timeline.visualSamples();
+    assertBottomLocked({minimumFrameCount: 1, samples: switchedSamples, sessionId: OTHER_SESSION_ID});
+    expect(
+      switchedSamples.find((sample) => sample.pathname === `/session/${OTHER_SESSION_ID}` && sample.scrollButtonVisible),
+      "the scroll-to-latest button should stay hidden while a switched session settles"
+    ).toBeUndefined();
   });
 
   test("keeps following when a new session first grows beyond the viewport", async ({timeline}) => {
