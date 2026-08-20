@@ -24,7 +24,7 @@ export default function ComposerAttachmentPreview(props: ComposerAttachmentPrevi
 
   if (imageUrl) {
     return (
-      <div className="relative size-24 overflow-hidden rounded-2xl corner-superellipse/1.4 bg-surface-inset ring-1 ring-border-muted">
+      <div className="relative size-24 overflow-hidden rounded-2xl corner-superellipse/1.4 bg-surface-control ring-1 ring-border-muted">
         <img alt={attachment.name} className="block size-full object-cover object-center" src={imageUrl} />
         <button
           aria-label={`Remove ${attachment.name}`}
@@ -40,7 +40,7 @@ export default function ComposerAttachmentPreview(props: ComposerAttachmentPrevi
 
   return (
     <div className="relative flex w-72 max-w-full min-w-0 items-center gap-3 rounded-2xl border border-border-muted bg-surface-raised/70 py-2 pl-2 pr-9 ring-1 ring-border-muted">
-      <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-surface-inset text-ink">
+      <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-surface-control text-ink">
         <Icon name="file" size="md" />
       </div>
 

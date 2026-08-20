@@ -4,7 +4,7 @@ import IconButton from "@/components/ui/icon-button";
 export default function SessionComposerSkeleton() {
   return (
     <div className="px-4 pb-4 md:px-6">
-      <div className="mx-auto max-w-3xl rounded-3xl corner-superellipse/1.3 bg-surface-contrast px-3 py-2 ring-1 ring-border-muted shadow-md">
+      <div className="mx-auto max-w-3xl rounded-3xl corner-superellipse/1.3 bg-surface-control px-3 py-2 ring-1 ring-border-muted shadow-md">
         <textarea
           className="scroll-fade-y max-h-48 min-h-10 w-full resize-none overflow-y-auto bg-transparent p-1 text-sm text-ink outline-none field-sizing-content placeholder:text-md placeholder:font-light placeholder:text-ink-strong/25 disabled:cursor-default"
           disabled

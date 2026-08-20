@@ -160,7 +160,7 @@ export default function OpenProjectDialog(props: OpenProjectDialogProps) {
     setProjectPath("");
   };
 
-  const listStatus = suggestionsQuery.isError && <p className="px-3 py-2 text-sm text-diff-removed">Unable to search folders.</p>;
+  const listStatus = suggestionsQuery.isError && <p className="px-3 py-2 text-sm text-danger-ink">Unable to search folders.</p>;
 
   return (
     <>
@@ -241,7 +241,7 @@ export default function OpenProjectDialog(props: OpenProjectDialogProps) {
             The folder <span className="text-ink">{folderCreationPath}</span> does not exist. Create it and open it as a project?
           </p>
 
-          {createFolderMutation.error && <p className="text-sm text-diff-removed">Unable to create this folder.</p>}
+          {createFolderMutation.error && <p className="text-sm text-danger-ink">Unable to create this folder.</p>}
 
           <div className="flex justify-end gap-2">
             <Button

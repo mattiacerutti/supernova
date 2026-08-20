@@ -231,7 +231,7 @@ export default function SessionPage(props: SessionPageProps) {
     if (error) {
       return (
         <div className="grid flex-1 place-items-center px-6 py-10">
-          <p className="text-sm text-diff-removed">Unable to load this session.</p>
+          <p className="text-sm text-danger-ink">Unable to load this session.</p>
         </div>
       );
     }

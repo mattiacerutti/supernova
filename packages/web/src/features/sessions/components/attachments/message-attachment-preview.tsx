@@ -19,7 +19,7 @@ export default function MessageAttachmentPreview(props: MessageAttachmentPreview
 
   if (imageUrl) {
     return (
-      <div className="size-24 overflow-hidden rounded-2xl corner-superellipse/1.4 bg-surface-inset ring-1 ring-border-muted">
+      <div className="size-24 overflow-hidden rounded-2xl corner-superellipse/1.4 bg-surface-control ring-1 ring-border-muted">
         <img alt={attachment.name} className="block size-full object-cover object-center" src={imageUrl} />
       </div>
     );
