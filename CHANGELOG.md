@@ -19,6 +19,7 @@ All notable changes to Supernova are documented in this file.
 
 ### Fixed
 
+- Fixed OAuth-backed providers failing to send messages in packaged desktop builds.
 - Fixed the scroll-to-latest button briefly appearing while opening a session.
 - Fixed new session timelines failing to follow responses when they first grew beyond the viewport.
 - Fixed rejected message commands leaving a session unable to accept another message.
