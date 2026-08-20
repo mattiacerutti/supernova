@@ -1,5 +1,4 @@
-import {useMessageScroller} from "@shadcn/react/message-scroller";
-import type {Session, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {Session} from "@supernova/contracts/sessions/schemas";
 import {useCallback, useState} from "react";
 import type {AppEnvironment} from "@/app/app-environment";
 import ModelPicker from "@/features/sessions/components/composer/pickers/model-picker";
@@ -72,7 +71,6 @@ function SessionConversation(props: SessionConversationProps) {
   const composerDraftKey = sessionComposerDraftKey(session.id);
   const composerDraft = useComposerDraft({key: composerDraftKey});
   const stream = useSessionTimeline({modelReference: modelSelection.modelReference, sessionId: session.id, sessionTurns: session.turns});
-  const {scrollToEnd} = useMessageScroller();
   const [undoneDrawerHeight, setUndoneDrawerHeight] = useState(0);
 
   const composerDisabled = modelSelection.isPending || !modelSelection.modelReference;
@@ -91,11 +89,6 @@ function SessionConversation(props: SessionConversationProps) {
 
     if (!nextModel.capabilities.images) composerAttachments.removeUnsupportedImages();
     modelSelection.selectModel(value);
-  };
-
-  const handleSubmitMessage = (contentParts: readonly UserMessageContentPart[]): void => {
-    scrollToEnd({behavior: "auto"});
-    stream.submitMessage(contentParts);
   };
 
   const handleUndo = (): void => {
@@ -148,7 +141,7 @@ function SessionConversation(props: SessionConversationProps) {
             disabled={composerDisabled}
             draft={composerDraft}
             onInterrupt={stream.stopStreaming}
-            onSubmit={handleSubmitMessage}
+            onSubmit={stream.submitMessage}
             projectPath={session.projectPath}
             slashCommandActions={{...stream.slashCommandActions, redo: handleRedo, undo: handleUndo}}
             streamStatus={stream.streamStatus}

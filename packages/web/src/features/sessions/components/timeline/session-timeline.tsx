@@ -1,5 +1,5 @@
 import {useMessageScroller, useMessageScrollerScrollable} from "@shadcn/react/message-scroller";
-import {elementScroll, useVirtualizer} from "@tanstack/react-virtual";
+import {defaultRangeExtractor, elementScroll, useVirtualizer} from "@tanstack/react-virtual";
 import type {VirtualItem} from "@tanstack/react-virtual";
 import {AnimatePresence, motion, useReducedMotion} from "framer-motion";
 import {useLayoutEffect, useRef, useState} from "react";
@@ -10,6 +10,7 @@ import type {TimelineVirtualItem} from "@/features/sessions/components/timeline/
 import type {SessionTimelineItem} from "@/features/sessions/types/session-timeline-item";
 import {cn} from "@/lib/cn";
 
+const TIMELINE_ANCHOR_TOP_MARGIN_PX = 24;
 const TIMELINE_BOTTOM_PADDING_PX = 24;
 const TIMELINE_CACHE_LIMIT = 16;
 const TIMELINE_END_THRESHOLD_PX = 5;
@@ -102,6 +103,10 @@ export default function SessionTimeline(props: SessionTimelineProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const virtualContentRef = useRef<HTMLDivElement>(null);
   const streamContentRef = useRef<HTMLDivElement>(null);
+  const fakeSpaceRef = useRef<HTMLDivElement>(null);
+  const fakeSpaceHeightRef = useRef(0);
+  const realContentHeightRef = useRef<number | null>(null);
+  const programmaticScrollTargetRef = useRef<number | null>(null);
   const initialPositionFrameRef = useRef<number | null>(null);
   const shouldSetInitialPositionRef = useRef(true);
   const streamAnimationReadyRef = useRef(false);
@@ -121,6 +126,42 @@ export default function SessionTimeline(props: SessionTimelineProps) {
   const shouldReduceMotion = useReducedMotion();
   latestRowsLengthRef.current = timelineRows.length;
 
+  const liveUserRowId = liveItems[0]?.type === "user" ? liveItems[0].id : null;
+  const liveUserRowIndex = liveUserRowId === null ? -1 : 1 + items.length;
+  const previousLiveUserRowIdRef = useRef(liveUserRowId);
+
+  const setFakeSpaceHeight = (height: number): void => {
+    fakeSpaceHeightRef.current = height;
+    if (fakeSpaceRef.current) fakeSpaceRef.current.style.height = `${height}px`;
+  };
+
+  const finishProgrammaticScroll = (): void => {
+    programmaticScrollTargetRef.current = null;
+    viewportRef.current?.style.removeProperty("scroll-behavior");
+  };
+
+  // Fake space is lossy: growth and upward scrolling only consume it. When
+  // real content shrinks, replace that height to prevent scrollTop clamping.
+  const syncFakeSpace = (viewport: HTMLDivElement): void => {
+    const currentHeight = fakeSpaceHeightRef.current;
+    const realContentHeight = viewport.scrollHeight - currentHeight;
+    const previousRealContentHeight = realContentHeightRef.current ?? realContentHeight;
+    realContentHeightRef.current = realContentHeight;
+    if (currentHeight === 0) return;
+
+    const programmaticTarget = programmaticScrollTargetRef.current;
+    const shrinkDelta = previousRealContentHeight - realContentHeight;
+    if (shrinkDelta > 0) {
+      setFakeSpaceHeight(currentHeight + shrinkDelta);
+      if (programmaticTarget === null) viewport.scrollTop = Math.min(viewport.scrollTop + shrinkDelta, Math.max(0, viewport.scrollHeight - viewport.clientHeight));
+      return;
+    }
+
+    const requiredHeight = (programmaticTarget ?? viewport.scrollTop) + viewport.clientHeight - realContentHeight;
+    const nextHeight = Math.max(0, Math.min(currentHeight, requiredHeight));
+    if (nextHeight !== currentHeight) setFakeSpaceHeight(nextHeight);
+  };
+
   // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual owns mutable scroll state by design.
   const virtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
     anchorTo: "end",
@@ -134,6 +175,11 @@ export default function SessionTimeline(props: SessionTimelineProps) {
     initialMeasurementsCache: cachedRef.current?.measurements,
     overscan: 3,
     paddingEnd: TIMELINE_BOTTOM_PADDING_PX,
+    rangeExtractor: (range) => {
+      const indexes = defaultRangeExtractor(range);
+      if (liveUserRowIndex < 0 || indexes.includes(liveUserRowIndex)) return indexes;
+      return [...indexes, liveUserRowIndex].toSorted((left, right) => left - right);
+    },
     scrollEndThreshold: 0,
     // TanStack adjusts scrollTop before notifying React about a measured size.
     // Publish the new virtual height first so the browser does not clamp that
@@ -143,6 +189,11 @@ export default function SessionTimeline(props: SessionTimelineProps) {
       const virtualContent = virtualContentRef.current;
       const streamContent = streamContentRef.current;
       if (virtualContent) virtualContent.style.height = `${instance.getTotalSize()}px`;
+      // While fake space is active the anchored message stays put: growth
+      // consumes the space in place, so any virtualizer-driven scroll is a
+      // stale follow target and must be dropped.
+      if (viewport) syncFakeSpace(viewport);
+      if (fakeSpaceHeightRef.current > 0) return;
       const targetOffset = viewport ? Math.min(offset + (options.adjustments ?? 0), Math.max(0, viewport.scrollHeight - viewport.clientHeight)) : 0;
       const scrollDelta = viewport ? targetOffset - viewport.scrollTop : 0;
       if (
@@ -171,16 +222,77 @@ export default function SessionTimeline(props: SessionTimelineProps) {
 
   const virtualItems = virtualizer.getVirtualItems();
 
+  // Anchors a freshly sent message near the viewport top: fake space below it
+  // makes that position the scroll end, so auto-follow holds the message there
+  // while the response streams into the space. When the timeline is too short
+  // to move the message that far, this naturally degrades to no scroll at all.
   useLayoutEffect(() => {
+    const previousRowId = previousLiveUserRowIdRef.current;
+    previousLiveUserRowIdRef.current = liveUserRowId;
+    if (liveUserRowId === null || liveUserRowId === previousRowId) return;
+
+    programmaticScrollTargetRef.current = Number.POSITIVE_INFINITY;
+    setScrollButtonVisible(false);
+    const frame = window.requestAnimationFrame(() => {
+      if (programmaticScrollTargetRef.current === null) return;
+
+      const viewport = viewportRef.current;
+      const rowElement = viewport?.querySelector<HTMLElement>(`[data-index="${liveUserRowIndex}"]`);
+      if (!viewport || !rowElement) {
+        finishProgrammaticScroll();
+        return;
+      }
+      if (!shouldReduceMotion) viewport.style.scrollBehavior = "smooth";
+
+      const rowOffset = rowElement.getBoundingClientRect().top - viewport.getBoundingClientRect().top + viewport.scrollTop;
+      const anchorOffset = Math.max(0, rowOffset - TIMELINE_ANCHOR_TOP_MARGIN_PX);
+      const realContentHeight = viewport.scrollHeight - fakeSpaceHeightRef.current;
+      realContentHeightRef.current = realContentHeight;
+      setFakeSpaceHeight(Math.max(0, anchorOffset + viewport.clientHeight - realContentHeight));
+
+      const maxScrollTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+      if (maxScrollTop <= viewport.scrollTop) {
+        finishProgrammaticScroll();
+        return;
+      }
+
+      programmaticScrollTargetRef.current = maxScrollTop;
+      scrollToEnd({behavior: shouldReduceMotion ? "auto" : "smooth"});
+      if (shouldReduceMotion) finishProgrammaticScroll();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [liveUserRowId, liveUserRowIndex, scrollToEnd, shouldReduceMotion]);
+
+  // Consume fake space before the follow effect below so streamed growth keeps
+  // the scroll end (and therefore the anchored message) exactly where it is.
+  useLayoutEffect(() => {
+    const viewport = viewportRef.current;
+    if (viewport) syncFakeSpace(viewport);
+  });
+
+  useLayoutEffect(() => {
+    // A competing automatic follow scroll must not cut a protected smooth
+    // transition short; each transition already ends at the scroll end.
+    if (programmaticScrollTargetRef.current !== null) return;
     if (!canScrollToEnd) scrollToEnd({behavior: "auto"});
   }, [canScrollToEnd, compacting, isStreaming, items, liveItems, scrollToEnd, streamError]);
 
   const handleViewportScroll = (event: UIEvent<HTMLDivElement>): void => {
     const viewport = event.currentTarget;
-    setScrollButtonVisible(viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop >= TIMELINE_SCROLL_BUTTON_THRESHOLD_PX);
+    const bottomDistance = viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop;
+    const isProgrammaticScroll = programmaticScrollTargetRef.current !== null;
+    if (isProgrammaticScroll && bottomDistance <= 1) finishProgrammaticScroll();
+    syncFakeSpace(viewport);
+    setScrollButtonVisible(!isProgrammaticScroll && viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop >= TIMELINE_SCROLL_BUTTON_THRESHOLD_PX);
   };
 
-  useLayoutEffect(() => () => streamScrollAnimationRef.current?.cancel(), []);
+  useLayoutEffect(
+    () => () => {
+      streamScrollAnimationRef.current?.cancel();
+      viewportRef.current?.style.removeProperty("scroll-behavior");
+    },
+    []
+  );
 
   useLayoutEffect(() => {
     if (!hasLiveOutput) return;
@@ -249,6 +361,8 @@ export default function SessionTimeline(props: SessionTimelineProps) {
             aria-label="Session timeline"
             className={shouldSetInitialPositionRef.current ? "invisible" : undefined}
             onScroll={handleViewportScroll}
+            onTouchMove={finishProgrammaticScroll}
+            onWheel={finishProgrammaticScroll}
             preserveScrollOnPrepend={false}
             ref={viewportRef}
           >
@@ -282,6 +396,7 @@ export default function SessionTimeline(props: SessionTimelineProps) {
                   <p className="shimmer w-fit text-sm text-ink-faint">{statusLabel}</p>
                 </div>
               )}
+              <div aria-hidden="true" className="shrink-0" data-timeline-fake-space ref={fakeSpaceRef} />
             </MessageScrollerContent>
           </MessageScrollerViewport>
           <AnimatePresence>
@@ -289,7 +404,7 @@ export default function SessionTimeline(props: SessionTimelineProps) {
               <motion.div
                 animate={{opacity: 1, scale: 1, x: "-50%", y: 0, transition: {duration: 0.2, ease: [0.23, 1, 0.32, 1]}}}
                 className="absolute left-1/2 z-10"
-                exit={{opacity: 0, scale: 0.95, x: "-50%", y: shouldReduceMotion ? 0 : "100%", transition: {duration: 0.4, ease: [0.7, 0, 0.84, 0]}}}
+                exit={{opacity: 0, x: "-50%", transition: {duration: 0}}}
                 initial={{opacity: 0, scale: 0.95, x: "-50%", y: shouldReduceMotion ? 0 : "100%"}}
                 style={{bottom: `calc(1rem + ${bottomOverlayHeight}px)`}}
               >
