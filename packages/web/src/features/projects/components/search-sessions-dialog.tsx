@@ -4,6 +4,8 @@ import {useQueries} from "@tanstack/react-query";
 import {useNavigate} from "@tanstack/react-router";
 import Dialog from "@/components/ui/dialog";
 import Icon from "@/components/ui/icon";
+import {MenuLabel} from "@/components/ui/menu";
+import SearchField from "@/components/ui/search-field";
 import SearchableList from "@/features/projects/components/searchable-list";
 import {listProjectSessionsQueryOptions} from "@/features/projects/hooks/api/use-list-project-sessions";
 import {useProjectList} from "@/features/projects/hooks/use-project-list";
@@ -122,24 +124,20 @@ export default function SearchSessionsDialog(props: SearchSessionsDialogProps) {
         listStatus={sessions.length === 0 && <p className="px-3 py-2 text-sm text-ink-faint">No matching sessions.</p>}
         onActiveIndexChange={setActiveRowIndex}
         onSelect={handleOpenSession}
+        className="pt-1"
         renderInput={({onKeyDown}) => (
-          <div className="shrink-0 pb-2 pt-4">
-            <div className="flex items-center gap-2 rounded-xl bg-overlay-hover px-3 py-2 text-ink-muted ring-1 ring-border-muted focus-within:text-ink focus-within:ring-border">
-              <Icon name="search" size="sm" />
-              <input
-                autoFocus
-                className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink-faint"
-                onChange={(event) => handleQueryChange(event.target.value)}
-                onKeyDown={onKeyDown}
-                placeholder="Search sessions"
-                value={query}
-              />
-            </div>
-          </div>
+          <SearchField
+            autoFocus
+            className="-mx-5 mt-3 px-5"
+            onChange={(event) => handleQueryChange(event.target.value)}
+            onKeyDown={onKeyDown}
+            placeholder="Search sessions"
+            value={query}
+          />
         )}
         renderItem={(row, _index, renderProps) =>
           row.type === "project" ? (
-            <p className="px-3 pb-1 pt-2 text-xs font-medium text-ink-faint">{row.projectName}</p>
+            <MenuLabel className="pb-1 text-xs">{row.projectName}</MenuLabel>
           ) : (
             <SessionSearchResult highlighted={renderProps.highlighted} onSelect={renderProps.select} ref={renderProps.ref} session={row} />
           )

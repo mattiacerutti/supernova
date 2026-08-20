@@ -34,6 +34,13 @@ export function MenuItem(props: MenuItemProps) {
   );
 }
 
+/** Renders a section heading inside a menu or menu-like floating panel. */
+export function MenuLabel(props: {readonly children: ReactNode; readonly className?: string}) {
+  const {children, className} = props;
+
+  return <div className={cn("px-2 pb-2 pt-2 text-sm text-ink-faint", className)}>{children}</div>;
+}
+
 interface MenuProps {
   align?: ComponentProps<typeof BaseMenu.Positioner>["align"];
   alignOffset?: ComponentProps<typeof BaseMenu.Positioner>["alignOffset"];
@@ -79,7 +86,7 @@ export default function Menu(props: MenuProps) {
         <BaseMenu.Positioner align={align} alignOffset={alignOffset} className="z-50 outline-none" side={side} sideOffset={sideOffset}>
           <BaseMenu.Popup
             className={cn(
-              "min-w-45 rounded-xl border border-border bg-surface-popover/95 p-1 text-ink shadow-2xl shadow-black/35 backdrop-blur-3xl outline-none",
+              "min-w-45 overflow-hidden rounded-xl border border-border bg-surface-drawer p-1 text-ink shadow-2xl shadow-black/35 outline-none",
               "origin-(--transform-origin) translate-y-0 scale-100 transform-gpu opacity-100 will-change-[opacity,transform] transition-[opacity,scale,translate] duration-200 ease-out data-closed:translate-y-1 data-closed:scale-[0.985] data-closed:opacity-0 data-ending-style:translate-y-1 data-ending-style:scale-[0.985] data-ending-style:opacity-0 data-starting-style:translate-y-1 data-starting-style:scale-[0.985] data-starting-style:opacity-0",
               className
             )}

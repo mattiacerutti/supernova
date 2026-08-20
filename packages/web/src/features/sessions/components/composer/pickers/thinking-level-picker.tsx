@@ -1,7 +1,7 @@
 import type {ThinkingLevelOption} from "@supernova/contracts/sessions/schemas";
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
-import Menu, {MenuItem} from "@/components/ui/menu";
+import Menu, {MenuItem, MenuLabel} from "@/components/ui/menu";
 
 interface ThinkingLevelPickerProps {
   disabled: boolean;
@@ -17,7 +17,7 @@ export default function ThinkingLevelPicker(props: ThinkingLevelPickerProps) {
   return (
     <Menu
       align="end"
-      className="w-40 rounded-2xl bg-surface-popover/70 pt-3 backdrop-blur-[32px]"
+      className="w-40"
       trigger={(triggerProps) => (
         <Button
           {...triggerProps}
@@ -32,13 +32,13 @@ export default function ThinkingLevelPicker(props: ThinkingLevelPickerProps) {
       )}
       triggerLabel="Select reasoning level"
     >
-      <div className="px-2 pb-2 text-sm text-ink-muted/45">Thinking Level</div>
-      <div className="space-y-1">
+      <MenuLabel>Thinking level</MenuLabel>
+      <div className="space-y-0.5">
         {thinkingLevels.map((level) => {
           const selected = level.value === selectedThinkingLevel;
 
           return (
-            <MenuItem key={level.value} onClick={() => onThinkingLevelChange(level.value)} trailing={selected && <Icon name="check" size="sm" />}>
+            <MenuItem key={level.value} onClick={() => onThinkingLevelChange(level.value)} trailing={selected && <Icon name="check" size="xs" />}>
               {level.label}
             </MenuItem>
           );

@@ -4,6 +4,8 @@ import {useQueryClient} from "@tanstack/react-query";
 import Button from "@/components/ui/button";
 import Dialog from "@/components/ui/dialog";
 import Icon from "@/components/ui/icon";
+import {MenuLabel} from "@/components/ui/menu";
+import SearchField from "@/components/ui/search-field";
 import SearchableList from "@/features/projects/components/searchable-list";
 import {useCreateFolder} from "@/features/projects/hooks/api/use-create-folder";
 import {listFolderSuggestionsQueryOptions, useListFolderSuggestions} from "@/features/projects/hooks/api/use-list-folder-suggestions";
@@ -160,7 +162,11 @@ export default function OpenProjectDialog(props: OpenProjectDialogProps) {
     setProjectPath("");
   };
 
-  const listStatus = suggestionsQuery.isError && <p className="px-3 py-2 text-sm text-danger-ink">Unable to search folders.</p>;
+  const listStatus = suggestionsQuery.isError ? (
+    <p className="px-3 py-2 text-sm text-danger-ink">Unable to search folders.</p>
+  ) : (
+    folderRows.length === 0 && !suggestionsQuery.isFetching && <p className="px-3 py-2 text-sm text-ink-faint">No matching folders.</p>
+  );
 
   return (
     <>
@@ -184,19 +190,15 @@ export default function OpenProjectDialog(props: OpenProjectDialogProps) {
           onTab={(row) => {
             if (row.type === "suggestion") handleAutocomplete(row.path);
           }}
+          className="pt-1"
           renderInput={({onKeyDown}) => (
-            <div className="shrink-0 pb-2 pt-4">
-              <div className="flex items-center gap-2 rounded-xl bg-overlay-hover px-3 py-0.5 text-ink-muted ring-1 ring-border-muted focus-within:text-ink focus-within:ring-border">
-                <Icon name="search" size="sm" />
-                <input
-                  autoFocus
-                  className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink-faint"
-                  onChange={(event) => handlePathChange(event.target.value)}
-                  onKeyDown={onKeyDown}
-                  placeholder="Search folders"
-                  value={projectPath}
-                />
-
+            <SearchField
+              autoFocus
+              className="-mx-5 mt-3 px-5"
+              onChange={(event) => handlePathChange(event.target.value)}
+              onKeyDown={onKeyDown}
+              placeholder="Search folders"
+              trailing={
                 <Button
                   disabled={!canSubmitPath}
                   className={cn("size-8", resolvedProjectPathType === "file" && "pointer-events-none invisible")}
@@ -208,12 +210,13 @@ export default function OpenProjectDialog(props: OpenProjectDialogProps) {
                 >
                   <Icon className="text-ink-muted" name="arrow-right" size="sm" />
                 </Button>
-              </div>
-            </div>
+              }
+              value={projectPath}
+            />
           )}
           renderItem={(row, _index, renderProps) =>
             row.type === "header" ? (
-              <p className="px-3 pb-1 pt-2 text-xs font-medium text-ink-faint">{row.title}</p>
+              <MenuLabel className="pb-1 text-xs">{row.title}</MenuLabel>
             ) : (
               <SuggestionItem
                 highlighted={renderProps.highlighted}

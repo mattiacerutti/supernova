@@ -3,6 +3,7 @@ import type {KeyboardEvent, ReactNode} from "react";
 import {useState} from "react";
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
+import {MenuLabel} from "@/components/ui/menu";
 import type {ComposerSuggestionItem} from "@/features/sessions/types/composer-suggestion";
 import {cn} from "@/lib/cn";
 
@@ -32,6 +33,23 @@ function SuggestionIcon(props: {readonly item: ComposerSuggestionItem}) {
   return <span className="w-3 shrink-0 text-center text-xs font-medium text-ink-muted">{item.kind.slice(0, 1).toUpperCase()}</span>;
 }
 
+interface SuggestionPanelProps {
+  readonly children: ReactNode;
+  readonly className?: string;
+}
+
+function SuggestionPanel(props: SuggestionPanelProps) {
+  const {children, className} = props;
+
+  return (
+    <div className={cn("absolute -inset-x-3 bottom-full z-40 mb-4", className)}>
+      <div className="overflow-hidden rounded-xl border border-border bg-surface-drawer text-ink">
+        <div className="scroll-fade-y max-h-64 overflow-y-auto p-1">{children}</div>
+      </div>
+    </div>
+  );
+}
+
 interface ComposerSuggestionItemRowProps {
   readonly highlighted: boolean;
   readonly item: ComposerSuggestionItem;
@@ -47,7 +65,7 @@ function ComposerSuggestionItemRow(props: ComposerSuggestionItemRowProps) {
 
   return (
     <div
-      className={cn("group flex items-center gap-1 rounded-xl corner-superellipse/1.3", highlighted && "bg-overlay-hover")}
+      className={cn("group flex items-center gap-1 rounded-xl corner-superellipse/1.3", highlighted && "bg-overlay-pressed")}
       onMouseLeave={onHoverEnd}
       onPointerMove={onPointerHover}
       ref={(element) => {
@@ -57,7 +75,7 @@ function ComposerSuggestionItemRow(props: ComposerSuggestionItemRowProps) {
       }}
     >
       <Button
-        className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 px-3 py-1.5 text-left"
+        className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 px-2 py-1.5 text-left"
         onClick={onSelect}
         onPointerDown={(event) => event.preventDefault()}
         variant="bare"
@@ -139,41 +157,33 @@ export default function ComposerSuggestionMenu(props: ComposerSuggestionMenuProp
   return (
     <div className="relative" onKeyDownCapture={handleKeyDownCapture}>
       {showLoadingPanel && (
-        <div className="absolute -inset-x-3 bottom-full z-40 mb-4 opacity-100 delay-200 starting:opacity-0">
-          <div className="overflow-hidden rounded-2xl border border-border bg-surface-popover/70 text-ink backdrop-blur-[32px]">
-            <div className="scroll-fade-y max-h-64 overflow-y-auto p-1">
-              <p className="px-3 py-2 text-sm text-ink-faint">Loading suggestions...</p>
-            </div>
-          </div>
-        </div>
+        <SuggestionPanel className="opacity-100 delay-200 starting:opacity-0">
+          <p className="px-3 py-2 text-sm text-ink-faint">Loading suggestions...</p>
+        </SuggestionPanel>
       )}
       {showSettledPanel && (
-        <div className="absolute -inset-x-3 bottom-full z-40 mb-4">
-          <div className="overflow-hidden rounded-2xl border border-border bg-surface-popover/70 text-ink backdrop-blur-[32px]">
-            <div className="scroll-fade-y max-h-64 overflow-y-auto p-1">
-              {query.isError && <p className="px-3 py-2 text-sm text-danger-ink">{query.error instanceof Error ? query.error.message : "Unable to load suggestions."}</p>}
-              {!query.isError && items.length === 0 && <p className="px-3 py-2 text-sm text-ink-faint">No items</p>}
+        <SuggestionPanel>
+          {query.isError && <p className="px-3 py-2 text-sm text-danger-ink">{query.error instanceof Error ? query.error.message : "Unable to load suggestions."}</p>}
+          {!query.isError && items.length === 0 && <p className="px-3 py-2 text-sm text-ink-faint">No items</p>}
 
-              {!query.isError &&
-                sections.map((section) => (
-                  <div className="pb-1" key={section.title}>
-                    <p className="px-3 pb-1 pt-2 text-xs font-medium text-ink-faint">{section.title}</p>
-                    {section.items.map((item) => (
-                      <ComposerSuggestionItemRow
-                        highlighted={item.index === visibleHighlightIndex}
-                        item={item}
-                        key={`${item.kind}-${item.id}`}
-                        onHoverEnd={() => setHoveredSuggestionIndex(null)}
-                        onPointerHover={() => handleSuggestionHoverStart(item.index)}
-                        onSelect={() => onSelect(item)}
-                        shouldScrollIntoView={selectionSource === "keyboard" && hoveredSuggestionIndex === null && item.index === highlightedIndex}
-                      />
-                    ))}
-                  </div>
+          {!query.isError &&
+            sections.map((section) => (
+              <div className="pb-1" key={section.title}>
+                <MenuLabel>{section.title}</MenuLabel>
+                {section.items.map((item) => (
+                  <ComposerSuggestionItemRow
+                    highlighted={item.index === visibleHighlightIndex}
+                    item={item}
+                    key={`${item.kind}-${item.id}`}
+                    onHoverEnd={() => setHoveredSuggestionIndex(null)}
+                    onPointerHover={() => handleSuggestionHoverStart(item.index)}
+                    onSelect={() => onSelect(item)}
+                    shouldScrollIntoView={selectionSource === "keyboard" && hoveredSuggestionIndex === null && item.index === highlightedIndex}
+                  />
                 ))}
-            </div>
-          </div>
-        </div>
+              </div>
+            ))}
+        </SuggestionPanel>
       )}
       {children}
     </div>
