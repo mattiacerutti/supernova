@@ -1,6 +1,7 @@
 import {mkdirSync, writeFileSync} from "node:fs";
 import {homedir, tmpdir} from "node:os";
 import {join, resolve} from "node:path";
+import {registerBunOAuthFlows} from "@earendil-works/pi-ai/bun-oauth";
 
 type SupernovaStateMode = "dev" | "userdata";
 
@@ -39,3 +40,7 @@ writeFileSync(join(PI_RUNTIME_PACKAGE_DIR, "package.json"), `${JSON.stringify(PI
 process.env["PI_PACKAGE_DIR"] = PI_RUNTIME_PACKAGE_DIR;
 process.env["PI_CODING_AGENT_DIR"] = resolveSupernovaAgentDir();
 process.env["PI_CODING_AGENT"] = "true";
+
+// Pi keeps OAuth implementations behind bundler-opaque dynamic imports. The
+// packaged server is a standalone bundle, so register Pi's static loaders.
+registerBunOAuthFlows();
