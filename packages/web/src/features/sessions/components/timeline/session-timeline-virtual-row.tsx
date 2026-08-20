@@ -61,7 +61,7 @@ export default function SessionTimelineVirtualRow(props: SessionTimelineVirtualR
   if (item.type === "stream-error") {
     return (
       <div className="mx-auto w-full max-w-3xl px-5 pb-6 md:px-8" data-timeline-row="stream-error">
-        <p className="text-sm text-diff-removed">{item.message}</p>
+        <p className="text-sm text-danger-ink">{item.message}</p>
       </div>
     );
   }

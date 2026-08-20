@@ -38,9 +38,9 @@
   --color-surface: var(--theme-surface);
   --color-surface-deep: var(--theme-surface-deep);
   --color-surface-raised: var(--theme-surface-raised);
-  --color-surface-inset: var(--theme-surface-inset);
+  --color-surface-control: var(--theme-surface-control);
   --color-surface-sidebar: var(--theme-surface-sidebar);
-  --color-surface-contrast: var(--theme-surface-contrast);
+  --color-surface-sidebar-translucent: var(--theme-surface-sidebar-translucent);
   --color-surface-recessed: var(--theme-surface-recessed);
   --color-surface-popover: var(--theme-surface-popover);
   --color-surface-drawer: var(--theme-surface-drawer);
@@ -58,10 +58,12 @@
   --color-overlay-strong: var(--theme-overlay-strong);
   --color-overlay-scrim: var(--theme-overlay-scrim);
   --color-accent: var(--theme-accent);
+  --color-accent-ink: var(--theme-accent-ink);
   --color-accent-focus: var(--theme-accent-focus);
   --color-diff-added: var(--theme-diff-added);
   --color-diff-removed: var(--theme-diff-removed);
   --color-diff-removed-surface: var(--theme-diff-removed-surface);
+  --color-danger-ink: var(--theme-danger-ink);
   --font-sans: -apple-system, BlinkMacSystemFont, Inter, sans-serif;
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --text-sm: 0.85rem;
@@ -145,16 +147,11 @@
   /* The parent owns the sidebar material so the rounded content corner reveals
      the same backing instead of bare window vibrancy. */
   .desktop-sidebar-background {
-    --sidebar-surface-opacity: 64%;
     background: var(--theme-surface-sidebar);
   }
 
-  :root[data-color-mode="dark"] .desktop-sidebar-background {
-    --sidebar-surface-opacity: 72%;
-  }
-
   :root[data-app-environment="mac"][data-translucent-sidebar="true"] .desktop-sidebar-background {
-    background: color-mix(in srgb, var(--theme-surface-sidebar) var(--sidebar-surface-opacity), transparent);
+    background: var(--theme-surface-sidebar-translucent);
     backdrop-filter: blur(8px) saturate(135%);
   }
 

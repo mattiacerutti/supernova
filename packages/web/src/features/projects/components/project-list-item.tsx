@@ -228,7 +228,7 @@ export default function ProjectListItem(props: ProjectListItemProps) {
             <span className="size-2.5 animate-spin rounded-full border border-border-strong border-t-ink" aria-hidden="true" />
           </span>
         )}
-        {expanded && sessionsQuery.error != null && <p className="px-8 py-1 text-sm text-diff-removed">Unable to load sessions.</p>}
+        {expanded && sessionsQuery.error != null && <p className="px-8 py-1 text-sm text-danger-ink">Unable to load sessions.</p>}
         <ul className="flex flex-col gap-0.5" ref={attachSessionListAutoAnimateRef}>
           {displayedSessions.map((session) => {
             const confirmingArchive = confirmingArchiveSessionId === session.id;
@@ -274,7 +274,7 @@ export default function ProjectListItem(props: ProjectListItemProps) {
                       className={cn(
                         "col-start-1 row-start-1 size-5 disabled:cursor-not-allowed disabled:opacity-50",
                         confirmingArchive
-                          ? "rounded-xl corner-superellipse/1.3 bg-diff-removed-surface text-diff-removed hover:bg-diff-removed-surface hover:text-diff-removed"
+                          ? "rounded-xl corner-superellipse/1.3 bg-diff-removed-surface text-danger-ink hover:bg-diff-removed-surface hover:text-danger-ink"
                           : "invisible group-hover/session:visible"
                       )}
                       disabled={archiveProjectSessionMutation.isPending}

@@ -303,7 +303,7 @@ export default function SessionComposer(props: SessionComposerProps) {
             <div className="pointer-events-auto">{topExtension}</div>
           </div>
         )}
-        <div className="relative z-10 rounded-3xl corner-superellipse/1.3 bg-surface-contrast px-3 py-2 ring-1 ring-border-muted shadow-md">
+        <div className="relative z-10 rounded-3xl corner-superellipse/1.3 bg-surface-control px-3 py-2 ring-1 ring-border-muted shadow-md">
           <SessionComposerAttachments attachments={attachments} />
           <SessionComposerInput
             attachmentDisabled={attachmentDisabled}

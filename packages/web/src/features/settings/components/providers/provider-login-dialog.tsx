@@ -221,8 +221,8 @@ export default function ProviderLoginContent(props: ProviderLoginContentProps) {
 
       {session?.step.type === "failed" && (
         <div className="flex items-center gap-2">
-          <Icon className="text-diff-removed" name="x" size="sm" />
-          <p className="text-sm text-diff-removed">{session.step.error}</p>
+          <Icon className="text-danger-ink" name="x" size="sm" />
+          <p className="text-sm text-danger-ink">{session.step.error}</p>
         </div>
       )}
 

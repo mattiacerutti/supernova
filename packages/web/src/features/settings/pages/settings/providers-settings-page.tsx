@@ -107,7 +107,7 @@ export default function ProvidersSettingsPage() {
         <p className="mt-2 text-sm text-ink-muted">Connect model providers to use them.</p>
 
         {providersQuery.isPending && <ProvidersPageSkeleton />}
-        {providersQuery.error && <p className="mt-8 text-sm text-diff-removed">Unable to load providers.</p>}
+        {providersQuery.error && <p className="mt-8 text-sm text-danger-ink">Unable to load providers.</p>}
         {providersQuery.data && (
           <>
             <div className="mt-10 space-y-10">
@@ -127,7 +127,7 @@ export default function ProvidersSettingsPage() {
               {providerDialogView === "method" && (
                 <ProviderConnectMethodContent onSelect={handleConnectMethod} pendingMethod={isStartingLogin ? pendingLoginInput?.authType : undefined} />
               )}
-              {providerDialogView === "login" && startLoginError && <p className="pb-4 pt-1 text-sm text-diff-removed">{startLoginError.message}</p>}
+              {providerDialogView === "login" && startLoginError && <p className="pb-4 pt-1 text-sm text-danger-ink">{startLoginError.message}</p>}
               {providerDialogView === "login" && !startLoginError && (
                 <ProviderLoginContent initialSession={loginSession} key={loginSessionId} loginSessionId={loginSessionId} onClose={handleCloseProviderDialog} />
               )}

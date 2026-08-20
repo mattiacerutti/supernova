@@ -16,7 +16,7 @@ export default function Switch(props: SwitchProps) {
       )}
       {...switchProps}
     >
-      <BaseSwitch.Thumb className="block size-4.5 translate-x-0.5 rounded-full bg-white transition-transform data-checked:translate-x-4.5" />
+      <BaseSwitch.Thumb className="block size-4.5 translate-x-0.5 rounded-full bg-white ring-1 ring-black/10 transition-transform data-checked:translate-x-4.5" />
     </BaseSwitch.Root>
   );
 }
