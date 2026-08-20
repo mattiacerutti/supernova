@@ -283,7 +283,11 @@ export default function SessionTimeline(props: SessionTimelineProps) {
     const isProgrammaticScroll = programmaticScrollTargetRef.current !== null;
     if (isProgrammaticScroll && bottomDistance <= 1) finishProgrammaticScroll();
     syncFakeSpace(viewport);
-    setScrollButtonVisible(!isProgrammaticScroll && viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop >= TIMELINE_SCROLL_BUTTON_THRESHOLD_PX);
+    setScrollButtonVisible(
+      !shouldSetInitialPositionRef.current &&
+        !isProgrammaticScroll &&
+        viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop >= TIMELINE_SCROLL_BUTTON_THRESHOLD_PX
+    );
   };
 
   useLayoutEffect(
