@@ -1,6 +1,6 @@
 import type {SessionContextUsage} from "@supernova/contracts/sessions/schemas";
 import Button from "@/components/ui/button";
-import Menu from "@/components/ui/menu";
+import Menu, {MenuLabel} from "@/components/ui/menu";
 
 const CIRCLE_RADIUS = 8;
 const CIRCLE_CIRCUMFERENCE = 2 * Math.PI * CIRCLE_RADIUS;
@@ -76,7 +76,7 @@ export default function SessionContextIndicator(props: SessionContextIndicatorPr
   return (
     <Menu
       align="end"
-      className="w-56 overflow-hidden bg-surface-popover backdrop-blur-none"
+      className="w-56"
       sideOffset={10}
       trigger={(triggerProps) => (
         <Button {...triggerProps} className="grid size-7 place-items-center rounded-full p-0 text-ink" title={label} type="button" variant="primary">
@@ -85,11 +85,11 @@ export default function SessionContextIndicator(props: SessionContextIndicatorPr
       )}
       triggerLabel="Show context usage"
     >
-      <div className="space-y-3 p-2">
-        <div className="flex items-center justify-between gap-4">
-          <span className="text-sm font-medium text-ink-muted/45">Context window</span>
-          <span className="shrink-0 text-sm font-medium tabular-nums text-ink">{percentage === null ? "?" : `${Math.round(percentage)}%`}</span>
-        </div>
+      <MenuLabel className="flex items-center justify-between gap-4">
+        <span>Context window</span>
+        <span className="shrink-0 tabular-nums text-ink">{percentage === null ? "?" : `${Math.round(percentage)}%`}</span>
+      </MenuLabel>
+      <div className="space-y-3 px-2 pb-1 pt-1.5">
         <div className="h-1.5 overflow-hidden rounded-full bg-overlay-pressed">
           {percentage === null ? (
             <div className="h-full w-1/3 animate-pulse rounded-full bg-ink" />

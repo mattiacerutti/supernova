@@ -13,6 +13,7 @@ All notable changes to Supernova are documented in this file.
 - Upgraded the Pi runtime dependency to 0.83.0 and expanded provider sign-in dialogs to support provider-defined authentication prompts.
 - Changed session timelines to reopen at the latest message instead of restoring the previous scroll position.
 - Refined the default theme's colors for a calmer, more consistent interface.
+- Redesigned the composer menus, model picker, and dialog search fields for a more consistent look.
 
 ### Fixed
 
@@ -22,6 +23,7 @@ All notable changes to Supernova are documented in this file.
 - Fixed context usage staying stale during active turns, appearing as zero when unknown, and losing valid measurements after compaction, aborts, or checkpoint navigation.
 - Fixed error notifications letting underlying message text show through their background.
 - Fixed the scroll-to-latest button's outline letting timeline messages show through it.
+- Fixed the open-project dialog not showing a message when no folders match.
 
 ### Removed
 
