@@ -1,7 +1,7 @@
 import {useMessageScroller, useMessageScrollerScrollable} from "@shadcn/react/message-scroller";
 import {defaultRangeExtractor, elementScroll, useVirtualizer} from "@tanstack/react-virtual";
 import type {VirtualItem} from "@tanstack/react-virtual";
-import {AnimatePresence, motion, useReducedMotion} from "framer-motion";
+import {animate, AnimatePresence, motion, useReducedMotion} from "framer-motion";
 import {useLayoutEffect, useRef, useState} from "react";
 import type {ReactNode, UIEvent} from "react";
 import {Marker, MarkerContent} from "@/components/ui/marker";
@@ -11,20 +11,24 @@ import type {TimelineVirtualItem} from "@/features/sessions/components/timeline/
 import type {SessionTimelineItem} from "@/features/sessions/types/session-timeline-item";
 import {cn} from "@/lib/cn";
 
+// Controls how long a newly sent message takes to move toward the viewport top.
+const TIMELINE_ANCHOR_SCROLL_DURATION_MS = 350;
+// Leaves a small gap above a newly sent message after it is anchored.
 const TIMELINE_ANCHOR_TOP_MARGIN_PX = 24;
+// Leaves trailing space after the final virtualized timeline row.
 const TIMELINE_BOTTOM_PADDING_PX = 32;
+// Bounds retained measurement snapshots used when switching between sessions.
 const TIMELINE_CACHE_LIMIT = 16;
+// Allows this much bottom-distance error while the initial position settles.
 const TIMELINE_END_THRESHOLD_PX = 5;
-const TIMELINE_FALLBACK_ITEM_SIZE = 86;
+// Shows the scroll-to-latest button after the user moves this far from the bottom.
 const TIMELINE_SCROLL_BUTTON_THRESHOLD_PX = 50;
+// Lets streamed rows visually catch up after auto-follow instantly advances scrollTop.
 const TIMELINE_STREAM_SCROLL_ANIMATION_MS = 160;
+// Caps that catch-up distance when a stream update adds a large amount of content.
 const TIMELINE_STREAM_SCROLL_MAX_OFFSET_PX = 56;
 
-interface TimelineCacheEntry {
-  readonly measurements: VirtualItem[];
-}
-
-const timelineCache = new Map<string, TimelineCacheEntry>();
+const timelineCache = new Map<string, VirtualItem[]>();
 
 function hasLiveTimelineOutput(items: readonly SessionTimelineItem[]): boolean {
   return items.some((item) => {
@@ -32,10 +36,6 @@ function hasLiveTimelineOutput(items: readonly SessionTimelineItem[]): boolean {
     if (item.type === "work") return item.events.length > 0;
     return item.type === "compaction";
   });
-}
-
-function streamingStatusLabel(compacting: boolean): string {
-  return compacting ? "Compacting context" : "Thinking";
 }
 
 /** Keeps virtual row identity stable when live event ids change on settlement. */
@@ -100,15 +100,15 @@ export default function SessionTimeline(props: SessionTimelineProps) {
   const {bottomOverlayHeight = 0, compacting, isStreaming, items, liveItems, onRevertToMessage, sessionId, streamError} = props;
   const {scrollToEnd} = useMessageScroller();
   const {end: canScrollToEnd} = useMessageScrollerScrollable();
-  const cachedRef = useRef(timelineCache.get(sessionId));
+  const cachedMeasurementsRef = useRef(timelineCache.get(sessionId));
   const viewportRef = useRef<HTMLDivElement>(null);
   const virtualContentRef = useRef<HTMLDivElement>(null);
   const streamContentRef = useRef<HTMLDivElement>(null);
-  const fakeSpaceRef = useRef<HTMLDivElement>(null);
-  const fakeSpaceHeightRef = useRef(0);
+  const anchorSpaceRef = useRef<HTMLDivElement>(null);
+  const anchorSpaceHeightRef = useRef(0);
   const realContentHeightRef = useRef<number | null>(null);
-  const programmaticScrollTargetRef = useRef<number | null>(null);
-  const initialPositionFrameRef = useRef<number | null>(null);
+  const anchorScrollTargetRef = useRef<number | null>(null);
+  const anchorScrollAnimationRef = useRef<ReturnType<typeof animate> | null>(null);
   const shouldSetInitialPositionRef = useRef(true);
   const streamAnimationReadyRef = useRef(false);
   const streamScrollAnimationRef = useRef<Animation | null>(null);
@@ -119,48 +119,47 @@ export default function SessionTimeline(props: SessionTimelineProps) {
   const hasLiveOutput = hasLiveTimelineOutput(liveItems);
   if (!hasLiveOutput) streamAnimationReadyRef.current = false;
 
-  const statusLabel = isStreaming && liveItems ? streamingStatusLabel(compacting) : null;
+  const statusLabel = isStreaming ? (compacting ? "Compacting context" : "Thinking") : null;
   const pullStatusIntoLastMessage = hasLiveOutput && liveItems.at(-1)?.spacing === "message";
   const virtualRowKeys = buildVirtualRowKeys(timelineRows);
-  const latestRowsLengthRef = useRef(timelineRows.length);
   const [scrollButtonVisible, setScrollButtonVisible] = useState(false);
   const shouldReduceMotion = useReducedMotion();
-  latestRowsLengthRef.current = timelineRows.length;
 
-  const liveUserRowId = liveItems[0]?.type === "user" ? liveItems[0].id : null;
-  const liveUserRowIndex = liveUserRowId === null ? -1 : 1 + items.length;
-  const previousLiveUserRowIdRef = useRef(liveUserRowId);
+  const hasLiveUserRow = liveItems[0]?.type === "user";
+  const liveUserRowIndex = hasLiveUserRow ? 1 + items.length : -1;
+  const previousHasLiveUserRowRef = useRef(hasLiveUserRow);
 
-  const setFakeSpaceHeight = (height: number): void => {
-    fakeSpaceHeightRef.current = height;
-    if (fakeSpaceRef.current) fakeSpaceRef.current.style.height = `${height}px`;
+  const setAnchorSpaceHeight = (height: number): void => {
+    anchorSpaceHeightRef.current = height;
+    if (anchorSpaceRef.current) anchorSpaceRef.current.style.height = `${height}px`;
   };
 
-  const finishProgrammaticScroll = (): void => {
-    programmaticScrollTargetRef.current = null;
-    viewportRef.current?.style.removeProperty("scroll-behavior");
+  const stopAnchorScroll = (): void => {
+    anchorScrollAnimationRef.current?.stop();
+    anchorScrollAnimationRef.current = null;
+    anchorScrollTargetRef.current = null;
   };
 
-  // Fake space is lossy: growth and upward scrolling only consume it. When
+  // Anchor space is lossy: growth and upward scrolling only consume it. When
   // real content shrinks, replace that height to prevent scrollTop clamping.
-  const syncFakeSpace = (viewport: HTMLDivElement): void => {
-    const currentHeight = fakeSpaceHeightRef.current;
+  const syncAnchorSpace = (viewport: HTMLDivElement): void => {
+    const currentHeight = anchorSpaceHeightRef.current;
     const realContentHeight = viewport.scrollHeight - currentHeight;
     const previousRealContentHeight = realContentHeightRef.current ?? realContentHeight;
     realContentHeightRef.current = realContentHeight;
     if (currentHeight === 0) return;
 
-    const programmaticTarget = programmaticScrollTargetRef.current;
+    const anchorScrollTarget = anchorScrollTargetRef.current;
     const shrinkDelta = previousRealContentHeight - realContentHeight;
     if (shrinkDelta > 0) {
-      setFakeSpaceHeight(currentHeight + shrinkDelta);
-      if (programmaticTarget === null) viewport.scrollTop = Math.min(viewport.scrollTop + shrinkDelta, Math.max(0, viewport.scrollHeight - viewport.clientHeight));
+      setAnchorSpaceHeight(currentHeight + shrinkDelta);
+      if (anchorScrollTarget === null) viewport.scrollTop = Math.min(viewport.scrollTop + shrinkDelta, Math.max(0, viewport.scrollHeight - viewport.clientHeight));
       return;
     }
 
-    const requiredHeight = (programmaticTarget ?? viewport.scrollTop) + viewport.clientHeight - realContentHeight;
+    const requiredHeight = (anchorScrollTarget ?? viewport.scrollTop) + viewport.clientHeight - realContentHeight;
     const nextHeight = Math.max(0, Math.min(currentHeight, requiredHeight));
-    if (nextHeight !== currentHeight) setFakeSpaceHeight(nextHeight);
+    if (nextHeight !== currentHeight) setAnchorSpaceHeight(nextHeight);
   };
 
   // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual owns mutable scroll state by design.
@@ -169,11 +168,11 @@ export default function SessionTimeline(props: SessionTimelineProps) {
     count: timelineRows.length,
     directDomUpdates: true,
     directDomUpdatesMode: "position",
-    estimateSize: () => TIMELINE_FALLBACK_ITEM_SIZE,
+    estimateSize: () => 86,
     followOnAppend: true,
     getItemKey: (index) => virtualRowKeys[index] ?? index,
     getScrollElement: () => viewportRef.current,
-    initialMeasurementsCache: cachedRef.current?.measurements,
+    initialMeasurementsCache: cachedMeasurementsRef.current,
     overscan: 3,
     paddingEnd: TIMELINE_BOTTOM_PADDING_PX,
     rangeExtractor: (range) => {
@@ -190,11 +189,10 @@ export default function SessionTimeline(props: SessionTimelineProps) {
       const virtualContent = virtualContentRef.current;
       const streamContent = streamContentRef.current;
       if (virtualContent) virtualContent.style.height = `${instance.getTotalSize()}px`;
-      // While fake space is active the anchored message stays put: growth
-      // consumes the space in place, so any virtualizer-driven scroll is a
-      // stale follow target and must be dropped.
-      if (viewport) syncFakeSpace(viewport);
-      if (fakeSpaceHeightRef.current > 0) return;
+      // While anchor space is active the message stays put: growth consumes
+      // the space in place, so stale virtualizer follow targets are ignored.
+      if (viewport) syncAnchorSpace(viewport);
+      if (anchorSpaceHeightRef.current > 0) return;
       const targetOffset = viewport ? Math.min(offset + (options.adjustments ?? 0), Math.max(0, viewport.scrollHeight - viewport.clientHeight)) : 0;
       const scrollDelta = viewport ? targetOffset - viewport.scrollTop : 0;
       if (
@@ -223,76 +221,79 @@ export default function SessionTimeline(props: SessionTimelineProps) {
 
   const virtualItems = virtualizer.getVirtualItems();
 
-  // Anchors a freshly sent message near the viewport top: fake space below it
-  // makes that position the scroll end, so auto-follow holds the message there
-  // while the response streams into the space. When the timeline is too short
-  // to move the message that far, this naturally degrades to no scroll at all.
+  // Anchors a freshly sent message near the viewport top. Space below it makes
+  // that position the scroll end and is consumed as the response grows.
   useLayoutEffect(() => {
-    const previousRowId = previousLiveUserRowIdRef.current;
-    previousLiveUserRowIdRef.current = liveUserRowId;
-    if (liveUserRowId === null || liveUserRowId === previousRowId) return;
+    const hadLiveUserRow = previousHasLiveUserRowRef.current;
+    previousHasLiveUserRowRef.current = hasLiveUserRow;
+    if (!hasLiveUserRow || hadLiveUserRow) return;
 
-    programmaticScrollTargetRef.current = Number.POSITIVE_INFINITY;
-    setScrollButtonVisible(false);
+    // The message paints at the bottom on this frame, so anchoring waits for
+    // the next one: the scroll then eases up from where the message appeared.
     const frame = window.requestAnimationFrame(() => {
-      if (programmaticScrollTargetRef.current === null) return;
-
       const viewport = viewportRef.current;
       const rowElement = viewport?.querySelector<HTMLElement>(`[data-index="${liveUserRowIndex}"]`);
-      if (!viewport || !rowElement) {
-        finishProgrammaticScroll();
-        return;
-      }
-      if (!shouldReduceMotion) viewport.style.scrollBehavior = "smooth";
+      if (!viewport || !rowElement) return;
 
+      stopAnchorScroll();
       const rowOffset = rowElement.getBoundingClientRect().top - viewport.getBoundingClientRect().top + viewport.scrollTop;
       const anchorOffset = Math.max(0, rowOffset - TIMELINE_ANCHOR_TOP_MARGIN_PX);
-      const realContentHeight = viewport.scrollHeight - fakeSpaceHeightRef.current;
+      const realContentHeight = viewport.scrollHeight - anchorSpaceHeightRef.current;
       realContentHeightRef.current = realContentHeight;
-      setFakeSpaceHeight(Math.max(0, anchorOffset + viewport.clientHeight - realContentHeight));
+      setScrollButtonVisible(false);
+      setAnchorSpaceHeight(Math.max(0, anchorOffset + viewport.clientHeight - realContentHeight));
 
-      const maxScrollTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
-      if (maxScrollTop <= viewport.scrollTop) {
-        finishProgrammaticScroll();
+      const anchorScrollTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+      if (anchorScrollTop <= viewport.scrollTop) return;
+
+      anchorScrollTargetRef.current = anchorScrollTop;
+      if (shouldReduceMotion) {
+        viewport.scrollTop = anchorScrollTop;
+        stopAnchorScroll();
         return;
       }
 
-      programmaticScrollTargetRef.current = maxScrollTop;
-      scrollToEnd({behavior: shouldReduceMotion ? "auto" : "smooth"});
-      if (shouldReduceMotion) finishProgrammaticScroll();
+      anchorScrollAnimationRef.current = animate(viewport.scrollTop, anchorScrollTop, {
+        duration: TIMELINE_ANCHOR_SCROLL_DURATION_MS / 1_000,
+        ease: (progress) => 1 - (1 - progress) ** 3,
+        onComplete: () => {
+          anchorScrollAnimationRef.current = null;
+          anchorScrollTargetRef.current = null;
+        },
+        onUpdate: (scrollTop) => {
+          viewport.scrollTop = scrollTop;
+        },
+      });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [liveUserRowId, liveUserRowIndex, scrollToEnd, shouldReduceMotion]);
+  }, [hasLiveUserRow, liveUserRowIndex, shouldReduceMotion]);
 
-  // Consume fake space before the follow effect below so streamed growth keeps
-  // the scroll end (and therefore the anchored message) exactly where it is.
+  // Consume anchor space before auto-follow can move the viewport.
   useLayoutEffect(() => {
     const viewport = viewportRef.current;
-    if (viewport) syncFakeSpace(viewport);
+    if (viewport) syncAnchorSpace(viewport);
   });
 
   useLayoutEffect(() => {
     // A competing automatic follow scroll must not cut a protected smooth
     // transition short; each transition already ends at the scroll end.
-    if (programmaticScrollTargetRef.current !== null) return;
+    if (anchorScrollTargetRef.current !== null) return;
     if (!canScrollToEnd) scrollToEnd({behavior: "auto"});
   }, [canScrollToEnd, compacting, isStreaming, items, liveItems, scrollToEnd, streamError]);
 
   const handleViewportScroll = (event: UIEvent<HTMLDivElement>): void => {
     const viewport = event.currentTarget;
-    const bottomDistance = viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop;
-    const isProgrammaticScroll = programmaticScrollTargetRef.current !== null;
-    if (isProgrammaticScroll && bottomDistance <= 1) finishProgrammaticScroll();
-    syncFakeSpace(viewport);
+    const isAnchorScrolling = anchorScrollTargetRef.current !== null;
+    syncAnchorSpace(viewport);
     setScrollButtonVisible(
-      !shouldSetInitialPositionRef.current && !isProgrammaticScroll && viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop >= TIMELINE_SCROLL_BUTTON_THRESHOLD_PX
+      !shouldSetInitialPositionRef.current && !isAnchorScrolling && viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop >= TIMELINE_SCROLL_BUTTON_THRESHOLD_PX
     );
   };
 
   useLayoutEffect(
     () => () => {
       streamScrollAnimationRef.current?.cancel();
-      viewportRef.current?.style.removeProperty("scroll-behavior");
+      stopAnchorScroll();
     },
     []
   );
@@ -313,6 +314,7 @@ export default function SessionTimeline(props: SessionTimelineProps) {
     // measured every row entering the bottom range. Keep the viewport hidden
     // while TanStack reconciles those measurements, then reveal it on the
     // first frame that is already anchored to the measured bottom.
+    let frame = 0;
     let previousScrollHeight = 0;
     let stableFrameCount = 0;
     const settleAtBottom = (): void => {
@@ -329,23 +331,21 @@ export default function SessionTimeline(props: SessionTimelineProps) {
         return;
       }
 
-      initialPositionFrameRef.current = window.requestAnimationFrame(settleAtBottom);
+      frame = window.requestAnimationFrame(settleAtBottom);
     };
 
     scrollToEnd({behavior: "auto"});
-    initialPositionFrameRef.current = window.requestAnimationFrame(settleAtBottom);
+    frame = window.requestAnimationFrame(settleAtBottom);
 
-    return () => {
-      if (initialPositionFrameRef.current !== null) window.cancelAnimationFrame(initialPositionFrameRef.current);
-    };
+    return () => window.cancelAnimationFrame(frame);
   }, [hasTimelineContent, scrollToEnd]);
 
   useLayoutEffect(
     () => () => {
-      if (latestRowsLengthRef.current === 0) return;
+      if (virtualizer.options.count === 0) return;
 
       timelineCache.delete(sessionId);
-      timelineCache.set(sessionId, {measurements: virtualizer.takeSnapshot()});
+      timelineCache.set(sessionId, virtualizer.takeSnapshot());
       while (timelineCache.size > TIMELINE_CACHE_LIMIT) timelineCache.delete(timelineCache.keys().next().value!);
     },
     [sessionId, virtualizer]
@@ -364,8 +364,8 @@ export default function SessionTimeline(props: SessionTimelineProps) {
             aria-label="Session timeline"
             className={shouldSetInitialPositionRef.current ? "invisible" : undefined}
             onScroll={handleViewportScroll}
-            onTouchMove={finishProgrammaticScroll}
-            onWheel={finishProgrammaticScroll}
+            onTouchMove={stopAnchorScroll}
+            onWheel={stopAnchorScroll}
             preserveScrollOnPrepend={false}
             ref={viewportRef}
           >
@@ -405,7 +405,7 @@ export default function SessionTimeline(props: SessionTimelineProps) {
                   )}
                 </div>
               )}
-              <div aria-hidden="true" className="shrink-0" data-timeline-fake-space ref={fakeSpaceRef} />
+              <div aria-hidden="true" className="shrink-0" data-timeline-fake-space ref={anchorSpaceRef} />
             </MessageScrollerContent>
           </MessageScrollerViewport>
           <AnimatePresence>

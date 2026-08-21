@@ -42,9 +42,11 @@ function assertAnimatedScroll(input: {readonly end: number; readonly label: stri
   const {end, label, samples, start} = input;
   const frames = visibleSamples(samples, TIMELINE_SESSION_ID).filter((sample) => sample.source === "frame" && sample.scrollTop > start + 1 && sample.scrollTop < end - 1);
   const duration = (frames.at(-1)?.timestamp ?? 0) - (frames[0]?.timestamp ?? 0);
+  const quarterFrame = frames.find((sample) => sample.scrollTop >= start + (end - start) / 4);
 
   expect(frames.length, `${label} should span multiple rendered frames`).toBeGreaterThanOrEqual(4);
   expect(duration, `${label} should be visibly animated`).toBeGreaterThanOrEqual(40);
+  expect((quarterFrame?.timestamp ?? Number.POSITIVE_INFINITY) - (frames[0]?.timestamp ?? 0), `${label} should move immediately instead of easing in`).toBeLessThanOrEqual(40);
   expect(
     frames.find((sample) => sample.scrollButtonVisible),
     "the scroll-to-latest button should stay hidden during automatic scrolling"
