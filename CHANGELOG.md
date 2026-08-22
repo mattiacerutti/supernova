@@ -19,6 +19,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Fixed
 
+- Fixed opening uncached sessions repeatedly parsing every saved Pi session.
+- Fixed failed session title generation persisting a placeholder instead of falling back to the first user message.
 - Fixed OAuth-backed providers failing to send messages in packaged desktop builds.
 - Fixed the scroll-to-latest button briefly appearing while opening a session.
 - Fixed new session timelines failing to follow responses when they first grew beyond the viewport.

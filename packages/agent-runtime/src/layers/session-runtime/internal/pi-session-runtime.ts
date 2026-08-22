@@ -4,7 +4,7 @@ import type {ModelReference, Session, SessionSummary} from "@supernova/contracts
 import {Effect} from "effect";
 import type {PiModel, PiModelCatalogShape} from "@supernova/agent-runtime/layers/shared/internal/pi-model-catalog";
 import type {PiResourceCatalogShape} from "@supernova/agent-runtime/layers/shared/internal/pi-resource-catalog";
-import type {PiSessionInfo, PiSessionManager, PiSessionStoreShape} from "@supernova/agent-runtime/layers/shared/internal/pi-session-store";
+import type {PiSessionManager, PiSessionStoreShape} from "@supernova/agent-runtime/layers/shared/internal/pi-session-store";
 import type {PiAgentSessionFactoryShape} from "@supernova/agent-runtime/layers/session-runtime/internal/pi-agent-session-factory";
 import type {PiSessionTitleGeneratorShape} from "@supernova/agent-runtime/layers/session-runtime/internal/pi-session-title-generator";
 import type {SessionCheckpointStoreShape} from "@supernova/agent-runtime/layers/session-runtime/internal/session-checkpoint-store";
@@ -18,7 +18,6 @@ type RevisionedSessionStreamEvent = Extract<SessionStreamEvent, {readonly revisi
 type UnrevisionedSessionStreamEvent = RevisionedSessionStreamEvent extends infer Event ? (Event extends {readonly revision: number} ? Omit<Event, "revision"> : never) : never;
 
 export interface OpenedRuntimeSession {
-  readonly sessionInfo: PiSessionInfo;
   readonly model: PiModel;
   readonly modelReference: ModelReference;
   readonly titleWasGenerated: boolean;
@@ -118,11 +117,11 @@ export class PiSessionRuntime {
 
   /** Opens the durable Pi session and applies command-scoped model settings when provided. */
   public async openSession(sessionId: string, modelReference?: ModelReference): Promise<OpenedRuntimeSession> {
-    const {info: sessionInfo, manager: sessionManager} = await this.sessionStore.openSessionById(sessionId);
+    const sessionManager = await this.sessionStore.openSessionById(sessionId);
 
     const initialModelState = modelReference ? {model: findSelectedModel(this.modelCatalog, modelReference), modelReference} : this.resolveCurrentModel(sessionManager);
 
-    const openedSession = {...initialModelState, sessionInfo, sessionManager, titleWasGenerated: false};
+    const openedSession = {...initialModelState, sessionManager, titleWasGenerated: false};
     const agentSession = await this.getAgentSession(openedSession);
 
     if (modelReference) {
@@ -146,7 +145,7 @@ export class PiSessionRuntime {
   /** Creates or reuses the long-lived Pi AgentSession. */
   private async getAgentSession(openedSession: OpenedRuntimeSession): Promise<AgentSession> {
     if (!this.activeSession) {
-      const {session} = await this.agentSessionFactory.createAgentSession({cwd: openedSession.sessionInfo.cwd, sessionManager: openedSession.sessionManager});
+      const {session} = await this.agentSessionFactory.createAgentSession({cwd: openedSession.sessionManager.getCwd(), sessionManager: openedSession.sessionManager});
       this.activeSession = session;
     }
 
@@ -158,7 +157,6 @@ export class PiSessionRuntime {
     this.activeTurn = activeTurn;
     this.committedSession = buildSessionSnapshot({
       contextWindow: openedSession.model.contextWindow,
-      sessionInfo: openedSession.sessionInfo,
       sessionManager: openedSession.sessionManager,
       modelReference: openedSession.modelReference,
     });
@@ -214,7 +212,7 @@ export class PiSessionRuntime {
   /** Publishes session update event containing new session metadata. */
   public async publishSessionUpdate(openedSession: OpenedRuntimeSession): Promise<void> {
     if (!openedSession.titleWasGenerated) return;
-    await this.publishEvent({type: "session.updated", projectPath: openedSession.sessionInfo.cwd, sessionId: this.sessionId, summary: this.sessionSummary(openedSession)});
+    await this.publishEvent({type: "session.updated", projectPath: openedSession.sessionManager.getCwd(), sessionId: this.sessionId, summary: this.sessionSummary(openedSession)});
   }
 
   /** Publishes a committed snapshot for commands that do not own an active turn. */
@@ -224,7 +222,6 @@ export class PiSessionRuntime {
       sessionId: this.sessionId,
       session: buildSessionSnapshot({
         contextWindow: openedSession.model.contextWindow,
-        sessionInfo: openedSession.sessionInfo,
         sessionManager: openedSession.sessionManager,
         modelReference: openedSession.modelReference,
       }),
@@ -295,7 +292,7 @@ export class PiSessionRuntime {
   }
 
   private sessionSummary(openedSession: OpenedRuntimeSession): SessionSummary {
-    return {id: openedSession.sessionInfo.id, title: openedSession.sessionManager.getSessionName() ?? "Untitled session", updatedAt: new Date().toISOString()};
+    return {id: openedSession.sessionManager.getSessionId(), title: openedSession.sessionManager.getSessionName() ?? "Untitled session", updatedAt: new Date().toISOString()};
   }
 
   private async publishLiveTurn(activeTurn: ActiveTurn): Promise<void> {

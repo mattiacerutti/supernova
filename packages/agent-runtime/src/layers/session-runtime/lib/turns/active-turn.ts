@@ -1,9 +1,9 @@
 import type {AgentSession, CompactionResult} from "@earendil-works/pi-coding-agent";
 import type {ModelReference, Session, SessionContextUsage, Turn} from "@supernova/contracts/sessions/schemas";
-import {toPiSessionSummary} from "@supernova/agent-runtime/layers/projects/pi-session-mapper";
-import type {PiSessionInfo, PiSessionManager} from "@supernova/agent-runtime/layers/shared/internal/pi-session-store";
+import type {PiSessionManager} from "@supernova/agent-runtime/layers/shared/internal/pi-session-store";
 import {buildPiTurns} from "@supernova/agent-runtime/layers/shared/lib/turns-builder";
 import {buildSessionContextUsage} from "@supernova/agent-runtime/layers/session-runtime/lib/session-context-usage";
+import {sessionTitle, sessionUpdatedAt} from "@supernova/agent-runtime/layers/session-runtime/lib/session-snapshot";
 import {createLiveBranchEntries} from "@supernova/agent-runtime/layers/session-runtime/lib/turns/live-branch-entries";
 import type {SendMessageContext} from "@supernova/agent-runtime/layers/session-runtime/lib/user-message/send-message-context";
 
@@ -19,7 +19,6 @@ function stripToolArguments(message: PiAgentMessage): PiAgentMessage {
 }
 
 export interface ActiveTurnInput {
-  readonly sessionInfo: PiSessionInfo;
   readonly baseParentId: string | null;
   readonly contextWindow: number;
   readonly customEntries?: readonly {readonly customType: string; readonly data: unknown}[];
@@ -31,7 +30,6 @@ export interface ActiveTurnInput {
 export class ActiveTurn {
   private readonly sessionManager: PiSessionManager;
 
-  private readonly sessionInfo: PiSessionInfo;
   private readonly baseParentId: string | null;
   private readonly contextWindow: number;
   private readonly customEntries: readonly {readonly customType: string; readonly data: unknown}[];
@@ -47,7 +45,6 @@ export class ActiveTurn {
     this.customEntries = input.customEntries ?? [];
     this.messageContext = input.messageContext;
     this.modelReference = input.modelReference;
-    this.sessionInfo = input.sessionInfo;
     this.sessionManager = sessionManager;
     this.contextUsage = this.buildContextUsage();
   }
@@ -165,7 +162,7 @@ export class ActiveTurn {
       contentParts: this.messageContext.contentParts,
       messages: this.liveMessages,
       parentId: this.baseParentId,
-      sessionId: this.sessionInfo.id,
+      sessionId: this.sessionManager.getSessionId(),
     });
     const [turn] = buildPiTurns(liveEntries, this.modelReference);
     return turn ? ({...turn, status: "streaming"} satisfies Turn) : undefined;
@@ -175,19 +172,17 @@ export class ActiveTurn {
   public buildSettledSnapshot(): {session: Session} {
     const branch = this.sessionManager.getBranch();
     const turns = buildPiTurns(branch, this.modelReference);
-    const summary = toPiSessionSummary(this.sessionInfo);
-    const latestTurn = turns.at(-1);
 
     return {
       session: {
-        id: this.sessionInfo.id,
+        id: this.sessionManager.getSessionId(),
         modelReference: this.modelReference,
         context: this.buildContextUsage(),
-        projectPath: this.sessionInfo.cwd,
-        title: this.sessionManager.getSessionName() ?? summary.title,
+        projectPath: this.sessionManager.getCwd(),
+        title: sessionTitle(this.sessionManager, branch),
         turns,
         undoneTurns: [],
-        updatedAt: latestTurn?.completedAt ?? latestTurn?.startedAt ?? summary.updatedAt,
+        updatedAt: sessionUpdatedAt(this.sessionManager, turns),
       },
     };
   }

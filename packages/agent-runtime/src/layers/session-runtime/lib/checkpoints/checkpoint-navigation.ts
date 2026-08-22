@@ -76,7 +76,7 @@ export async function navigateToCheckpoint(runtime: PiSessionRuntime, openedSess
   runtime.clearActiveTurn();
   await runtime.restoreCheckpoint({
     checkpointId: input.target.data.checkpointId,
-    cwd: openedSession.sessionInfo.cwd,
+    cwd: openedSession.sessionManager.getCwd(),
     fromCheckpointId: input.current.data.checkpointId,
   });
 
