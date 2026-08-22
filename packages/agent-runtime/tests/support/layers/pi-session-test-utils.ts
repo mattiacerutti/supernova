@@ -8,7 +8,7 @@ import type {PiModelCatalogShape} from "@supernova/agent-runtime/layers/shared/i
 import {PiResourceCatalog} from "@supernova/agent-runtime/layers/shared/internal/pi-resource-catalog";
 import type {PiResourceCatalogShape} from "@supernova/agent-runtime/layers/shared/internal/pi-resource-catalog";
 import {PiSessionStore} from "@supernova/agent-runtime/layers/shared/internal/pi-session-store";
-import type {PiSessionInfo, PiSessionManager, PiSessionStoreShape} from "@supernova/agent-runtime/layers/shared/internal/pi-session-store";
+import type {PiSessionManager, PiSessionStoreShape} from "@supernova/agent-runtime/layers/shared/internal/pi-session-store";
 import {PiSessionRuntimeFromInternal} from "@supernova/agent-runtime/layers/session-runtime/pi-session-runtime-live";
 import {PiAgentSessionFactory} from "@supernova/agent-runtime/layers/session-runtime/internal/pi-agent-session-factory";
 import type {PiAgentSessionFactoryShape} from "@supernova/agent-runtime/layers/session-runtime/internal/pi-agent-session-factory";
@@ -125,20 +125,6 @@ function appendConversation(manager: PiSessionManager, input?: {assistantText?: 
   manager.appendMessage(fauxAssistantMessage(assistantText, {timestamp: 2}));
 }
 
-function sessionInfoFromManager(manager: PiSessionManager): PiSessionInfo {
-  return {
-    allMessagesText: "",
-    created: new Date("2026-01-01T00:00:00.000Z"),
-    cwd: manager.getCwd(),
-    firstMessage: "",
-    id: manager.getSessionId(),
-    messageCount: manager.buildSessionContext().messages.length,
-    modified: new Date("2026-01-01T00:00:00.000Z"),
-    name: manager.getSessionName(),
-    path: manager.getSessionFile() ?? `memory://${manager.getSessionId()}`,
-  } satisfies PiSessionInfo;
-}
-
 async function registerFauxModel(input: {faux: FauxProviderRegistration; modelRuntime: ModelRuntime}): Promise<void> {
   const model = input.faux.getModel();
   input.modelRuntime.registerProvider(model.provider, {
@@ -185,16 +171,19 @@ export async function createPiTestRuntime(input?: {
     ],
     provider: selectedPiModel.provider,
   });
-  const sessions = new Map<string, {info: PiSessionInfo; manager: PiSessionManager}>();
+  const sessions = new Map<string, PiSessionManager>();
   let refreshCount = 0;
 
   await registerFauxModel({faux, modelRuntime});
 
   const rememberSession = (manager: PiSessionManager) => {
-    const info = sessionInfoFromManager(manager);
-    sessions.set(info.id, {info, manager});
-    return {info, manager};
+    sessions.set(manager.getSessionId(), manager);
+    return manager;
   };
+  const sessionRecord = (manager: PiSessionManager) => ({
+    info: {cwd: manager.getCwd(), id: manager.getSessionId(), path: manager.getSessionFile() ?? `memory://${manager.getSessionId()}`},
+    manager,
+  });
 
   const agentSessionFactory: PiAgentSessionFactoryShape = {
     createAgentSession: ({cwd, sessionManager}) =>
@@ -207,14 +196,13 @@ export async function createPiTestRuntime(input?: {
       }),
   };
   const sessionStore: PiSessionStoreShape = {
-    createSessionManager: (projectPath) => rememberSession(input?.sessionDir ? SessionManager.create(projectPath, input.sessionDir) : SessionManager.inMemory(projectPath)).manager,
+    createSessionManager: (projectPath) => rememberSession(input?.sessionDir ? SessionManager.create(projectPath, input.sessionDir) : SessionManager.inMemory(projectPath)),
     openSessionById: async (sessionId) => {
-      const session = sessions.get(sessionId);
-      if (!session) throw new Error("Session not found.");
-      const sessionFile = session.manager.getSessionFile();
-      if (input?.reopenManagers && input.sessionDir && sessionFile)
-        return {info: {...session.info, path: sessionFile}, manager: SessionManager.open(sessionFile, input.sessionDir)};
-      return session;
+      const sessionManager = sessions.get(sessionId);
+      if (!sessionManager) throw new Error("Session not found.");
+      const sessionFile = sessionManager.getSessionFile();
+      if (input?.reopenManagers && input.sessionDir && sessionFile) return SessionManager.open(sessionFile, input.sessionDir);
+      return sessionManager;
     },
   };
   const modelCatalog: PiModelCatalogShape = {
@@ -284,9 +272,12 @@ export async function createPiTestRuntime(input?: {
 
   return {
     appendConversation: (manager: PiSessionManager, options?: {assistantText?: string; requestText?: string}) => appendConversation(manager, options),
-    createSession: (projectPath = "/workspace") => rememberSession(SessionManager.inMemory(projectPath)),
+    createSession: (projectPath = "/workspace") => sessionRecord(rememberSession(SessionManager.inMemory(projectPath))),
     faux,
-    getSession: (sessionId: string) => sessions.get(sessionId),
+    getSession: (sessionId: string) => {
+      const manager = sessions.get(sessionId);
+      return manager ? sessionRecord(manager) : undefined;
+    },
     get refreshCount() {
       return refreshCount;
     },

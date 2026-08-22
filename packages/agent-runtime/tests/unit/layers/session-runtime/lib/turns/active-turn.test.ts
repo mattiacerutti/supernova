@@ -1,6 +1,6 @@
 import {describe, expect, it} from "vitest";
 import {ActiveTurn} from "@supernova/agent-runtime/layers/session-runtime/lib/turns/active-turn";
-import type {PiSessionInfo, PiSessionManager} from "@supernova/agent-runtime/layers/shared/internal/pi-session-store";
+import type {PiSessionManager} from "@supernova/agent-runtime/layers/shared/internal/pi-session-store";
 import type {SendMessageContext} from "@supernova/agent-runtime/layers/session-runtime/lib/user-message/send-message-context";
 import type {Tool, ToolTurnEvent} from "@supernova/contracts/sessions/schemas";
 import {piAgentMessage, selectedModelReference} from "@tests/support/layers/pi-session-test-utils";
@@ -12,29 +12,17 @@ function createActiveTurn(): ActiveTurn {
     images: [],
     prompt: "Read the file",
   };
-  const sessionInfo = {
-    allMessagesText: "",
-    created: new Date("2026-01-01T00:00:00.000Z"),
-    cwd: "/workspace",
-    firstMessage: "",
-    id: "session-1",
-    messageCount: 0,
-    modified: new Date("2026-01-01T00:00:00.000Z"),
-    name: "Test session",
-    path: "memory://session-1",
-  } satisfies PiSessionInfo;
-
   return new ActiveTurn(
     {
       baseParentId: null,
       contextWindow: 200_000,
       messageContext,
       modelReference: selectedModelReference,
-      sessionInfo,
     },
     {
       buildSessionContext: () => ({messages: []}),
       getBranch: () => [],
+      getSessionId: () => "session-1",
     } as unknown as PiSessionManager
   );
 }

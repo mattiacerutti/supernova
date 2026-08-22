@@ -15,15 +15,16 @@ async function openSession(runtime: PiSessionRuntime, input: SendMessagePayload)
 
   if (openedSession.sessionManager.getSessionName() !== undefined) return openedSession;
 
-  const title = await runtime.titleGenerator.generateSessionTitle({contentParts: input.contentParts, model: openedSession.model}).catch(() => "Unknown session");
-  openedSession.sessionManager.appendSessionInfo(title);
+  const title = await runtime.titleGenerator.generateSessionTitle({contentParts: input.contentParts, model: openedSession.model}).catch(() => undefined);
+  if (!title?.trim()) return openedSession;
 
+  openedSession.sessionManager.appendSessionInfo(title);
   return {...openedSession, titleWasGenerated: true};
 }
 
 async function createActiveTurn(runtime: PiSessionRuntime, openedSession: OpenedRuntimeSession, input: SendMessagePayload): Promise<ActiveTurn> {
   const sessionManager = openedSession.sessionManager;
-  const messageContext = await prepareSendMessageContext(input, {projectPath: openedSession.sessionInfo.cwd, resourceCatalog: runtime.resourceCatalog});
+  const messageContext = await prepareSendMessageContext(input, {projectPath: sessionManager.getCwd(), resourceCatalog: runtime.resourceCatalog});
 
   // Once a replacement message is accepted, the old redo path is no longer valid even before the turn settles.
   invalidateCheckpointRedo(openedSession);
@@ -32,12 +33,11 @@ async function createActiveTurn(runtime: PiSessionRuntime, openedSession: Opened
   const customEntries = [];
 
   const checkpointId = randomUUID();
-  await runtime.createCheckpoint({checkpointId, cwd: openedSession.sessionInfo.cwd});
+  await runtime.createCheckpoint({checkpointId, cwd: sessionManager.getCwd()});
   customEntries.push({customType: CHECKPOINT_CUSTOM_TYPE, data: {checkpointId, phase: "before-turn"}});
 
   return new ActiveTurn(
     {
-      sessionInfo: openedSession.sessionInfo,
       contextWindow: openedSession.model.contextWindow,
       customEntries,
       modelReference: openedSession.modelReference,
@@ -68,7 +68,7 @@ export async function sendMessage(runtime: PiSessionRuntime, input: SendMessageP
           const checkpointId = randomUUID();
 
           //NOTE: Every time a message is sent, we create a checkpoint to capture the session state after the turn is completed.
-          await runtime.createCheckpoint({checkpointId, cwd: openedSession.sessionInfo.cwd});
+          await runtime.createCheckpoint({checkpointId, cwd: openedSession.sessionManager.getCwd()});
           openedSession.sessionManager.appendCustomEntry(CHECKPOINT_CUSTOM_TYPE, {checkpointId, phase: "after-turn"});
 
           //NOTE: Sending a message should always reset the tree navigation, so we append a cursor pointing at the new checkpoint.

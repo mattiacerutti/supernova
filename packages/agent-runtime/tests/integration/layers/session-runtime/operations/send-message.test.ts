@@ -6,7 +6,7 @@ import {mkdtempSync, rmSync} from "node:fs";
 import {readFile, writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
-import {afterEach, describe, expect, it} from "vitest";
+import {afterEach, describe, expect, it, vi} from "vitest";
 import {SessionRuntimeService} from "@supernova/agent-runtime/services/session-runtime-service";
 import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
 import {
@@ -112,6 +112,19 @@ describe("sending messages through Pi sessions", () => {
     const liveContexts = turnEvents(events).map((event) => event.context.usedTokens);
     expect(liveContexts.at(-1)).toEqual(finalSnapshot?.session.context.usedTokens);
     expect(liveContexts.at(-1)).toBeGreaterThan(liveContexts[0]!);
+  });
+
+  it("uses the first user message without persisting a fallback when title generation fails", async () => {
+    const pi = await createPiTestRuntime();
+    runtimes.push(pi);
+    const {info, manager} = pi.createSession();
+    vi.spyOn(pi.titleGenerator, "generateSessionTitle").mockRejectedValue(new Error("Title generation failed"));
+    pi.faux.setResponses([fauxAssistantMessage("Done.")]);
+
+    const events = await pi.sendMessage({message: "Fix the flaky tests", modelReference: selectedModelReference, sessionId: info.id});
+
+    expect(manager.getSessionName()).toBeUndefined();
+    expect(snapshotEvents(events).at(-1)?.session.title).toBe("Fix the flaky tests");
   });
 
   it("sends authored text and images to the provider while displaying authored content parts", async () => {

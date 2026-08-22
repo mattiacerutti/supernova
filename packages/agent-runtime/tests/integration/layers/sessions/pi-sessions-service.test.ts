@@ -75,6 +75,7 @@ describe("Pi sessions service", () => {
       })
     );
 
+    expect(session.title).toBe("Before compaction");
     expect(session.turns).toMatchObject([
       {
         events: [
