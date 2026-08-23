@@ -118,8 +118,12 @@ function resolveRendererUrl(): string {
 
 function windowChromeOptions(): Pick<
   BrowserWindowConstructorOptions,
-  "backgroundColor" | "titleBarStyle" | "trafficLightPosition" | "vibrancy" | "visualEffectState"
+  "backgroundColor" | "backgroundMaterial" | "titleBarStyle" | "trafficLightPosition" | "vibrancy" | "visualEffectState"
 > {
+  if (process.platform === "win32") {
+    return {backgroundMaterial: "acrylic"};
+  }
+
   if (process.platform !== "darwin") {
     return {};
   }
