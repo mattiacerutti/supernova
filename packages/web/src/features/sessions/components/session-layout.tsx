@@ -16,7 +16,7 @@ interface SessionLayoutProps {
 
 export default function SessionLayout(props: SessionLayoutProps) {
   const {appEnvironment, attachmentDropOverlayVisible = false, attachmentDropZoneProps, composer, timeline, title, titleActions} = props;
-  const titleOffset = appEnvironment === "mac" ? "left-48" : appEnvironment === "web" ? "left-12" : "left-20";
+  const titleOffset = appEnvironment === "mac" ? "left-48" : appEnvironment === "web" ? "left-12" : "left-29";
 
   return (
     <div {...attachmentDropZoneProps} className="relative flex min-h-0 min-w-0 flex-1 flex-col">
