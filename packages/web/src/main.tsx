@@ -1,28 +1,19 @@
+import type {DesktopApi} from "@supernova/contracts/desktop/api";
 import {StrictMode} from "react";
 import {createRoot} from "react-dom/client";
 import App from "@/app/app";
-import {getAppEnvironment} from "@/app/app-environment";
 import AppProviders from "@/app/providers";
 import {initializeAppearance} from "@/features/settings/stores/appearance-store";
 import {getAgentRpcClient} from "@/rpc/agent-rpc-client";
 import "@/app/styles.css";
 
-interface DesktopShell {
-  getServerUrl: () => Promise<string | undefined>;
-  integratedTitleBar: boolean;
-  openInFinder: (projectPath: string) => Promise<void>;
-  platform: string;
-  setTheme: (theme: "dark" | "light" | "system") => Promise<void>;
-}
-
 declare global {
   interface Window {
-    desktopShell?: DesktopShell;
+    desktopApi?: DesktopApi;
   }
 }
 
-const desktopShell = window.desktopShell;
-const appEnvironment = getAppEnvironment(desktopShell?.platform);
+const appEnvironment = window.desktopApi?.environment ?? "web";
 
 document.documentElement.dataset.appEnvironment = appEnvironment;
 initializeAppearance();

@@ -8,6 +8,10 @@
       "types": "./src/index.ts",
       "import": "./src/index.ts"
     },
+    "./desktop/api": {
+      "types": "./src/desktop/api.ts",
+      "import": "./src/desktop/api.ts"
+    },
     "./*/rpc": {
       "types": "./src/*/rpc.ts",
       "import": "./src/*/rpc.ts"

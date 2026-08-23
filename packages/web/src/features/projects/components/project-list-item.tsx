@@ -82,7 +82,7 @@ export default function ProjectListItem(props: ProjectListItemProps) {
   const canShowLessSessions = visibleSessionLimit > INITIAL_SESSION_LIMIT;
   const canShowMoreSessions = expanded && hasHiddenSessions;
   const canShowLessAtEnd = expanded && canShowLessSessions && !canShowMoreSessions;
-  const canOpenInFinder = window.desktopShell?.platform === "darwin";
+  const canOpenInFinder = window.desktopApi?.environment === "mac";
 
   const handleToggle = (): void => {
     onToggle(project.id);
@@ -142,7 +142,7 @@ export default function ProjectListItem(props: ProjectListItemProps) {
   };
 
   const handleOpenInFinder = (): void => {
-    void window.desktopShell?.openInFinder(project.path);
+    void window.desktopApi?.openDirectory(project.path);
   };
 
   const handleLoadMoreSessions = (): void => {

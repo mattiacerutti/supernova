@@ -1,6 +1,6 @@
 import type {HTMLAttributes, ReactNode} from "react";
 import {LayoutGroup, motion} from "framer-motion";
-import type {AppEnvironment} from "@/app/app-environment";
+import type {AppEnvironment} from "@/lib/app-environment";
 import AttachmentDropOverlay from "@/features/sessions/components/attachments/attachment-drop-overlay";
 import {cn} from "@/lib/cn";
 

@@ -1,3 +1,4 @@
+import type {DesktopTheme} from "@supernova/contracts/desktop/api";
 import {create} from "zustand";
 import {persist} from "zustand/middleware";
 import {defaultTheme, getAppTheme} from "@/features/settings/data/app-themes";
@@ -10,20 +11,19 @@ const SYSTEM_DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
 export const DEFAULT_UI_FONT = "-apple-system, BlinkMacSystemFont, Inter, sans-serif";
 export const DEFAULT_CODE_FONT = '"SFMono-Regular", Consolas, "Liberation Mono", monospace';
 
-export type AppearanceMode = "dark" | "light" | "system";
-export type ResolvedAppearanceMode = Exclude<AppearanceMode, "system">;
+export type ResolvedAppearanceMode = Exclude<DesktopTheme, "system">;
 
 interface AppearanceState {
   readonly codeFont: string | undefined;
   readonly fontSmoothing: boolean;
-  readonly mode: AppearanceMode;
+  readonly mode: DesktopTheme;
   readonly resolvedMode: ResolvedAppearanceMode;
   readonly themeId: ThemeId;
   readonly translucentSidebar: boolean;
   readonly uiFont: string | undefined;
   readonly setCodeFont: (font: string | undefined) => void;
   readonly setFontSmoothing: (enabled: boolean) => void;
-  readonly setMode: (mode: AppearanceMode) => void;
+  readonly setMode: (mode: DesktopTheme) => void;
   readonly setThemeId: (themeId: ThemeId) => void;
   readonly setTranslucentSidebar: (enabled: boolean) => void;
   readonly setUiFont: (font: string | undefined) => void;
@@ -41,7 +41,7 @@ function applyFont(property: "--font-mono" | "--font-sans", font: string | undef
   }
 }
 
-function applyAppearance(mode: AppearanceMode, themeId: ThemeId): ResolvedAppearanceMode {
+function applyAppearance(mode: DesktopTheme, themeId: ThemeId): ResolvedAppearanceMode {
   const resolvedMode = mode === "system" ? getSystemMode() : mode;
   const root = document.documentElement;
   const theme = getAppTheme(themeId);
@@ -53,7 +53,7 @@ function applyAppearance(mode: AppearanceMode, themeId: ThemeId): ResolvedAppear
   root.dataset.colorMode = resolvedMode;
   root.dataset.theme = theme.id;
   root.style.colorScheme = resolvedMode;
-  void window.desktopShell?.setTheme(mode).catch(() => undefined);
+  void window.desktopApi?.setNativeTheme(mode).catch(() => undefined);
   return resolvedMode;
 }
 
@@ -82,7 +82,6 @@ export const useAppearanceStore = create<AppearanceState>()(
         set((state) => ({themeId, resolvedMode: applyAppearance(state.mode, themeId)}));
       },
       setTranslucentSidebar: (translucentSidebar) => {
-        document.documentElement.dataset.translucentSidebar = String(translucentSidebar);
         set({translucentSidebar});
       },
       setUiFont: (uiFont) => {
@@ -110,7 +109,6 @@ export function initializeAppearance(): void {
   applyFont("--font-sans", state.uiFont);
   applyFont("--font-mono", state.codeFont);
   document.documentElement.dataset.fontSmoothing = String(state.fontSmoothing);
-  document.documentElement.dataset.translucentSidebar = String(state.translucentSidebar);
   useAppearanceStore.setState({resolvedMode: applyAppearance(state.mode, state.themeId)});
 
   window.matchMedia(SYSTEM_DARK_MODE_QUERY).addEventListener("change", () => {

@@ -1,5 +1,5 @@
 import {createRootRouteWithContext, createRoute, createRouter} from "@tanstack/react-router";
-import type {AppEnvironment} from "@/app/app-environment";
+import type {AppEnvironment} from "@/lib/app-environment";
 import {HomeLayoutRoute, HomeRoute, NewSessionRoute, RootRoute, SessionRoute, SettingsRoute, SettingsSectionRoute} from "@/app/routes";
 
 interface RouterContext {

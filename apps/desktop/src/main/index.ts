@@ -7,6 +7,7 @@ import {app, shell, BrowserWindow, ipcMain, nativeImage, nativeTheme} from "elec
 import {electronApp, optimizer} from "@electron-toolkit/utils";
 import installExtension, {REACT_DEVELOPER_TOOLS} from "electron-devtools-installer";
 import windowState from "electron-window-state";
+import {DESKTOP_IPC_CHANNELS} from "@/shared/desktop-ipc";
 
 declare const SUPERNOVA_IS_DEV: boolean;
 declare const SUPERNOVA_SERVER_ENTRY: string;
@@ -24,17 +25,16 @@ interface SpawnedServer {
 }
 
 function registerDesktopIpc(): void {
-  ipcMain.handle("desktop:get-server-url", () => server?.url);
-  ipcMain.handle("desktop:set-theme", (_, theme: unknown) => {
+  ipcMain.handle(DESKTOP_IPC_CHANNELS.setNativeTheme, (_, theme: unknown) => {
     if (theme !== "dark" && theme !== "light" && theme !== "system") return;
     nativeTheme.themeSource = theme;
   });
-  ipcMain.handle("desktop:open-in-finder", async (_, projectPath: unknown) => {
-    if (typeof projectPath !== "string" || projectPath.trim().length === 0) {
-      throw new Error("Project path is required to open Finder.");
+  ipcMain.handle(DESKTOP_IPC_CHANNELS.openDirectory, async (_, path: unknown) => {
+    if (typeof path !== "string" || path.trim().length === 0) {
+      throw new Error("A directory path is required.");
     }
 
-    const errorMessage = await shell.openPath(projectPath);
+    const errorMessage = await shell.openPath(path);
     if (errorMessage) {
       throw new Error(errorMessage);
     }

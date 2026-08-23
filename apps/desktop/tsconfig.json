@@ -3,6 +3,9 @@
   "include": ["electron.vite.config.*", "src/main/**/*", "src/preload/**/*"],
   "compilerOptions": {
     "lib": ["ES2023", "DOM"],
+    "paths": {
+      "@/*": ["./src/*"]
+    },
     "types": ["electron-vite/node"]
   }
 }

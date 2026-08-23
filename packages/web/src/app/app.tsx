@@ -1,13 +1,13 @@
 import {RouterProvider} from "@tanstack/react-router";
-import type {AppEnvironment} from "@/app/app-environment";
+import type {AppEnvironment} from "@/lib/app-environment";
 import {router} from "@/app/router";
 
 interface AppProps {
-  appEnvironment?: AppEnvironment;
+  appEnvironment: AppEnvironment;
 }
 
 export default function App(props: AppProps) {
-  const {appEnvironment = "web"} = props;
+  const {appEnvironment} = props;
 
   return <RouterProvider context={{appEnvironment}} router={router} />;
 }

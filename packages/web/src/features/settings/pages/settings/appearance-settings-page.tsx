@@ -4,9 +4,9 @@ import Switch from "@/components/ui/switch";
 import {SegmentedControl, SettingsCard, SettingsRow} from "@/features/settings/components/appearance/settings-controls";
 import ThemePicker from "@/features/settings/components/appearance/theme-picker";
 import {DEFAULT_CODE_FONT, DEFAULT_UI_FONT, useAppearanceStore} from "@/features/settings/stores/appearance-store";
-import type {AppearanceMode} from "@/features/settings/stores/appearance-store";
+import type {DesktopTheme} from "@supernova/contracts/desktop/api";
 
-const modeOptions: ReadonlyArray<{icon: React.ReactNode; label: string; value: AppearanceMode}> = [
+const modeOptions: ReadonlyArray<{icon: React.ReactNode; label: string; value: DesktopTheme}> = [
   {icon: <Icon name="monitor" size="xs" />, label: "System", value: "system"},
   {icon: <Icon name="sun" size="xs" />, label: "Light", value: "light"},
   {icon: <Icon name="moon" size="xs" />, label: "Dark", value: "dark"},

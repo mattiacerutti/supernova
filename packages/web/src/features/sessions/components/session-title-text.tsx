@@ -33,7 +33,11 @@ export default function SessionTitleText(props: SessionTitleTextProps) {
   };
 
   return (
-    <span className={cn(className, revealing && "session-title-reveal")} key={title} onAnimationEnd={handleAnimationEnd}>
+    <span
+      className={cn(className, revealing && "origin-left animate-[session-title-reveal_520ms_cubic-bezier(0.22,1,0.36,1)_both]")}
+      key={title}
+      onAnimationEnd={handleAnimationEnd}
+    >
       {title}
     </span>
   );

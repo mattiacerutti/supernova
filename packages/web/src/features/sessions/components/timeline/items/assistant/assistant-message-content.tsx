@@ -10,6 +10,9 @@ import {useAppearanceStore} from "@/features/settings/stores/appearance-store";
 import {CODE_HIGHLIGHT_THEMES, getCachedHighlightedCode, highlightCode} from "@/lib/code-highlighting";
 import {cn} from "@/lib/cn";
 
+const SHIKI_CLASS_NAME =
+  "scroll-fade-x overflow-x-auto [&_pre]:m-0 [&_pre]:min-w-full [&_pre]:w-max [&_pre]:p-0 [&_pre]:!bg-transparent [&_code]:font-mono [&_code]:text-[0.8125rem] [&_code]:leading-6";
+
 function languageFromClassName(className: string | undefined): string | undefined {
   return className?.match(/language-([^\s]+)/)?.[1];
 }
@@ -21,19 +24,19 @@ function HighlightedCode(props: {code: string; language?: string}) {
   const cachedHtml = getCachedHighlightedCode({code, language, theme});
 
   if (cachedHtml) {
-    return <div className="session-markdown-shiki scroll-fade-x overflow-x-auto" dangerouslySetInnerHTML={{__html: cachedHtml}} />;
+    return <div className={SHIKI_CLASS_NAME} dangerouslySetInnerHTML={{__html: cachedHtml}} />;
   }
 
   const html = use(highlightCode({code, language, theme}));
 
-  return <div className="session-markdown-shiki scroll-fade-x overflow-x-auto" dangerouslySetInnerHTML={{__html: html}} />;
+  return <div className={SHIKI_CLASS_NAME} dangerouslySetInnerHTML={{__html: html}} />;
 }
 
 function PlainCode(props: {code: string}) {
   const {code} = props;
 
   return (
-    <div className="session-markdown-shiki scroll-fade-x overflow-x-auto">
+    <div className={SHIKI_CLASS_NAME}>
       <pre>
         <code>{code}</code>
       </pre>
@@ -95,7 +98,7 @@ function StreamingFadeText(props: StreamingFadeTextProps) {
     <>
       {children.slice(0, chunkStartIndex)}
       {chunks.map((chunk) => (
-        <span className="session-stream-fade-in" key={chunk.index}>
+        <span className="animate-[session-stream-fade-in_300ms_ease-out_both] motion-reduce:animate-none" key={chunk.index}>
           {chunk.text}
         </span>
       ))}

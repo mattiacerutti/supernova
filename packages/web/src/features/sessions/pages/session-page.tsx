@@ -1,6 +1,6 @@
 import type {Session} from "@supernova/contracts/sessions/schemas";
 import {useCallback, useState} from "react";
-import type {AppEnvironment} from "@/app/app-environment";
+import type {AppEnvironment} from "@/lib/app-environment";
 import ModelPicker from "@/features/sessions/components/composer/pickers/model-picker";
 import ThinkingLevelPicker from "@/features/sessions/components/composer/pickers/thinking-level-picker";
 import SessionComposer from "@/features/sessions/components/composer/session-composer";

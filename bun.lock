@@ -22,6 +22,7 @@
       "version": "0.0.1-beta.9",
       "dependencies": {
         "@electron-toolkit/utils": "^4.0.0",
+        "@supernova/contracts": "workspace:*",
         "@types/bun": "^1.3.14",
         "electron-window-state": "^5.0.3",
       },

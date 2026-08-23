@@ -1,12 +1,13 @@
 import {useRouter, useRouterState, useCanGoBack} from "@tanstack/react-router";
 import type {ReactNode} from "react";
-import type {AppEnvironment} from "@/app/app-environment";
-import {isDesktopEnvironment} from "@/app/app-environment";
+import type {AppEnvironment} from "@/lib/app-environment";
+import {isDesktopEnvironment} from "@/lib/app-environment";
 import Icon from "@/components/ui/icon";
 import IconButton from "@/components/ui/icon-button";
-import ResizableSidebarLayout from "@/features/sidebar/components/resizable-sidebar-layout";
+import SidebarLayout from "@/features/sidebar/components/sidebar-layout";
 import Sidebar from "@/features/sidebar/components/sidebar";
 import {useSidebarVisibility} from "@/features/sidebar/hooks/use-sidebar-visibility";
+import {useSidebarSectionsStore} from "@/features/sidebar/stores/sidebar-store";
 
 interface HomePageProps {
   appEnvironment: AppEnvironment;
@@ -16,6 +17,8 @@ interface HomePageProps {
 export default function HomePage(props: HomePageProps) {
   const {appEnvironment, children} = props;
   const {sidebarVisible, toggleSidebar} = useSidebarVisibility();
+  const sidebarWidth = useSidebarSectionsStore((state) => state.sidebarWidth);
+  const setSidebarWidth = useSidebarSectionsStore((state) => state.setSidebarWidth);
   const router = useRouter();
 
   useRouterState({
@@ -57,8 +60,16 @@ export default function HomePage(props: HomePageProps) {
   );
 
   return (
-    <ResizableSidebarLayout appEnvironment={appEnvironment} sidebar={<Sidebar />} sidebarVisible={sidebarVisible} titlebarActions={titlebarActions}>
+    <SidebarLayout
+      appEnvironment={appEnvironment}
+      contentClassName="px-4 pb-3 pt-1"
+      onSidebarWidthChange={setSidebarWidth}
+      sidebar={<Sidebar />}
+      sidebarVisible={sidebarVisible}
+      sidebarWidth={sidebarWidth}
+      titlebarActions={titlebarActions}
+    >
       {children}
-    </ResizableSidebarLayout>
+    </SidebarLayout>
   );
 }
