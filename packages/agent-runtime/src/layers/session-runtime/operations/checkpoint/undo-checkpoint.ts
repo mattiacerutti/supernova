@@ -1,7 +1,6 @@
-import type {UndoCheckpointPayload} from "@supernova/contracts/session-runtime/procedures";
 import {CheckpointNavigationError} from "@supernova/contracts/session-runtime/procedures";
-import {isCheckpointEntry, latestCheckpointCursor, navigateToCheckpoint} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-navigation";
-import type {CheckpointEntry} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-navigation";
+import {isCheckpointEntry, latestCheckpointCursor} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-entries";
+import type {CheckpointEntry} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-entries";
 import type {SessionEntry} from "@earendil-works/pi-coding-agent";
 import {PiSessionRuntime} from "@supernova/agent-runtime/layers/session-runtime/internal/pi-session-runtime";
 
@@ -17,21 +16,21 @@ function findUndoTarget(branch: readonly SessionEntry[], currentIndex: number): 
 }
 
 /** Moves the session and workspace back to the previous checkpoint. */
-export async function undoCheckpoint(runtime: PiSessionRuntime, input: UndoCheckpointPayload): Promise<void> {
+export async function undoCheckpoint(runtime: PiSessionRuntime): Promise<void> {
   runtime.beginWork();
   try {
-    const openedSession = await runtime.openSession(input.sessionId);
-    const cursor = latestCheckpointCursor(openedSession.sessionManager.getEntries());
+    const sessionManager = await runtime.getSessionManager();
+    const cursor = latestCheckpointCursor(sessionManager.getEntries());
     if (!cursor) throw new Error("Checkpoint cursor was not found.");
 
-    const branch = openedSession.sessionManager.getBranch(cursor.leafEntryId);
+    const branch = sessionManager.getBranch(cursor.leafEntryId);
     const currentIndex = branch.findIndex((entry) => entry.id === cursor.nodeEntryId);
     const current = branch[currentIndex];
     const target = currentIndex === -1 ? undefined : findUndoTarget(branch, currentIndex);
 
     if (!current || !isCheckpointEntry(current) || !target) throw new Error("No checkpoint is available to undo.");
 
-    await navigateToCheckpoint(runtime, openedSession, {current, cursorLeafEntryId: cursor.leafEntryId, target});
+    await runtime.navigateToCheckpoint(target, current, cursor.leafEntryId);
   } catch (cause) {
     throw new CheckpointNavigationError({cause, message: cause instanceof Error ? cause.message : "Failed to undo checkpoint."});
   } finally {

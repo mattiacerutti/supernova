@@ -3,7 +3,7 @@ import type {ModelReference, Session, Turn} from "@supernova/contracts/sessions/
 import {buildSessionContextUsage} from "@supernova/agent-runtime/layers/session-runtime/lib/session-context-usage";
 import type {PiSessionManager} from "@supernova/agent-runtime/layers/shared/internal/pi-session-store";
 import {buildPiTurns} from "@supernova/agent-runtime/layers/shared/lib/turns-builder";
-import {latestCheckpointCursor} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-navigation";
+import {latestCheckpointCursor} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-entries";
 
 /** Builds turns hidden behind the current checkpoint cursor and available for redo. */
 export function buildUndoneTurns(input: {readonly sessionManager: PiSessionManager; readonly modelReference: ModelReference}): Session["undoneTurns"] {
