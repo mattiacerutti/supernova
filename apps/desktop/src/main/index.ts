@@ -138,7 +138,8 @@ function iconsDir(): string {
 }
 
 function iconPath(): string {
-  return join(iconsDir(), "icon.png");
+  const filename = process.platform === "win32" ? "icon.ico" : "icon.png";
+  return join(iconsDir(), filename);
 }
 
 // Keep Chromium profile state, localStorage, cookies, and DevTools state isolated

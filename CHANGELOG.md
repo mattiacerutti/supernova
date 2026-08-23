@@ -20,6 +20,7 @@ All notable changes to Supernova are documented in this file.
 ### Fixed
 
 - Fixed session titles overlapping the forward navigation button when the sidebar was closed on Windows and Linux.
+- Fixed the Windows title-bar app icon appearing pixelated at small display sizes.
 - Fixed opening uncached sessions repeatedly parsing every saved Pi session.
 - Fixed failed session title generation persisting a placeholder instead of falling back to the first user message.
 - Fixed OAuth-backed providers failing to send messages in packaged desktop builds.
