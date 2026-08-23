@@ -1,8 +1,12 @@
 import type {SessionEntry, SessionMessageEntry} from "@earendil-works/pi-coding-agent";
 import type {RevertToMessagePayload} from "@supernova/contracts/session-runtime/procedures";
 import {CheckpointNavigationError} from "@supernova/contracts/session-runtime/procedures";
-import {isCheckpointAfterTurnEntry, isCheckpointEntry, latestCheckpointCursor, navigateToCheckpoint} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-navigation";
-import type {CheckpointEntry} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-navigation";
+import {
+  isCheckpointAfterTurnEntry,
+  isCheckpointEntry,
+  latestCheckpointCursor,
+} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-entries";
+import type {CheckpointEntry} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-entries";
 import {PiSessionRuntime} from "@supernova/agent-runtime/layers/session-runtime/internal/pi-session-runtime";
 
 function isTargetUserEntry(entry: SessionEntry, turnId: string): entry is SessionMessageEntry {
@@ -21,11 +25,11 @@ function findCheckpointAfter(branch: readonly SessionEntry[], index: number): Ch
 export async function revertToMessage(runtime: PiSessionRuntime, input: RevertToMessagePayload): Promise<void> {
   runtime.beginWork();
   try {
-    const openedSession = await runtime.openSession(input.sessionId);
-    const cursor = latestCheckpointCursor(openedSession.sessionManager.getEntries());
+    const sessionManager = await runtime.getSessionManager();
+    const cursor = latestCheckpointCursor(sessionManager.getEntries());
     if (!cursor) throw new Error("Checkpoint cursor was not found.");
 
-    const branch = openedSession.sessionManager.getBranch(cursor.leafEntryId);
+    const branch = sessionManager.getBranch(cursor.leafEntryId);
 
     // The cursor parent is the visible checkpoint. The leaf branch also includes
     // redoable turns, so comparing indexes tells us whether the target is visible
@@ -40,7 +44,7 @@ export async function revertToMessage(runtime: PiSessionRuntime, input: RevertTo
 
     if (nodeIndex === -1 || targetIndex === -1 || !target || !current || !isCheckpointEntry(current)) throw new Error("Checkpoint target was not found.");
 
-    await navigateToCheckpoint(runtime, openedSession, {current, cursorLeafEntryId: cursor.leafEntryId, target});
+    await runtime.navigateToCheckpoint(target, current, cursor.leafEntryId);
   } catch (cause) {
     throw new CheckpointNavigationError({cause, message: cause instanceof Error ? cause.message : "Failed to revert session."});
   } finally {

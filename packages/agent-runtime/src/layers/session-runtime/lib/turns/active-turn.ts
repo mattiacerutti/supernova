@@ -1,9 +1,8 @@
 import type {AgentSession, CompactionResult} from "@earendil-works/pi-coding-agent";
-import type {ModelReference, Session, SessionContextUsage, Turn} from "@supernova/contracts/sessions/schemas";
+import type {ModelReference, SessionContextUsage, Turn} from "@supernova/contracts/sessions/schemas";
 import type {PiSessionManager} from "@supernova/agent-runtime/layers/shared/internal/pi-session-store";
 import {buildPiTurns} from "@supernova/agent-runtime/layers/shared/lib/turns-builder";
 import {buildSessionContextUsage} from "@supernova/agent-runtime/layers/session-runtime/lib/session-context-usage";
-import {sessionTitle, sessionUpdatedAt} from "@supernova/agent-runtime/layers/session-runtime/lib/session-snapshot";
 import {createLiveBranchEntries} from "@supernova/agent-runtime/layers/session-runtime/lib/turns/live-branch-entries";
 import type {SendMessageContext} from "@supernova/agent-runtime/layers/session-runtime/lib/user-message/send-message-context";
 
@@ -166,25 +165,6 @@ export class ActiveTurn {
     });
     const [turn] = buildPiTurns(liveEntries, this.modelReference);
     return turn ? ({...turn, status: "streaming"} satisfies Turn) : undefined;
-  }
-
-  /** Builds the authoritative committed snapshot after Pi has persisted and drained the turn. */
-  public buildSettledSnapshot(): {session: Session} {
-    const branch = this.sessionManager.getBranch();
-    const turns = buildPiTurns(branch, this.modelReference);
-
-    return {
-      session: {
-        id: this.sessionManager.getSessionId(),
-        modelReference: this.modelReference,
-        context: this.buildContextUsage(),
-        projectPath: this.sessionManager.getCwd(),
-        title: sessionTitle(this.sessionManager, branch),
-        turns,
-        undoneTurns: [],
-        updatedAt: sessionUpdatedAt(this.sessionManager, turns),
-      },
-    };
   }
 
   private buildContextUsage(): SessionContextUsage {

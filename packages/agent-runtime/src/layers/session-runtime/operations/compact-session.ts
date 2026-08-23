@@ -6,14 +6,12 @@ export async function compactSession(runtime: PiSessionRuntime, input: CompactSe
   runtime.beginWork();
 
   try {
-    const openedSession = await runtime.openSession(input.sessionId, input.modelReference);
-
-    runtime.clearActiveTurn();
+    await runtime.selectModel(input.modelReference);
 
     await runtime.publishEvent({type: "session.compaction.started", sessionId: runtime.sessionId});
     await runtime.compactActiveSession();
     await runtime.publishEvent({type: "session.compaction.ended", sessionId: runtime.sessionId});
-    await runtime.publishSessionSnapshot(openedSession);
+    await runtime.publishSessionSnapshot();
   } catch (cause) {
     await runtime.publishEvent({type: "session.compaction.ended", sessionId: runtime.sessionId});
     await runtime.publishEvent({

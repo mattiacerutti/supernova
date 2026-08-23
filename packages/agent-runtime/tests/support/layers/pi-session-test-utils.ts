@@ -172,6 +172,7 @@ export async function createPiTestRuntime(input?: {
     provider: selectedPiModel.provider,
   });
   const sessions = new Map<string, PiSessionManager>();
+  let openCount = 0;
   let refreshCount = 0;
 
   await registerFauxModel({faux, modelRuntime});
@@ -198,6 +199,7 @@ export async function createPiTestRuntime(input?: {
   const sessionStore: PiSessionStoreShape = {
     createSessionManager: (projectPath) => rememberSession(input?.sessionDir ? SessionManager.create(projectPath, input.sessionDir) : SessionManager.inMemory(projectPath)),
     openSessionById: async (sessionId) => {
+      openCount++;
       const sessionManager = sessions.get(sessionId);
       if (!sessionManager) throw new Error("Session not found.");
       const sessionFile = sessionManager.getSessionFile();
@@ -282,6 +284,9 @@ export async function createPiTestRuntime(input?: {
       return refreshCount;
     },
     modelRuntime,
+    get openCount() {
+      return openCount;
+    },
     runWithSessions,
     runWithSessionRuntime,
     agentSessionFactory,

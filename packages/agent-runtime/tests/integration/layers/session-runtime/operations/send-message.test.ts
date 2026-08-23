@@ -233,7 +233,7 @@ describe("sending messages through Pi sessions", () => {
     expect(persistedTurn?.events).toContainEqual(expect.objectContaining({content: "Response after pre-prompt compaction.", type: "assistant"}));
   });
 
-  it("keeps content-parts metadata on the active branch when session managers are reopened", async () => {
+  it("reuses the runtime session manager across commands", async () => {
     const sessionDir = mkdtempSync(join(tmpdir(), "supernova-session-test-"));
     tempDirs.push(sessionDir);
     const pi = await createPiTestRuntime({reopenManagers: true, sessionDir});
@@ -251,6 +251,7 @@ describe("sending messages through Pi sessions", () => {
       [{text: "second", type: "text"}],
       [{text: "third", type: "text"}],
     ]);
+    expect(pi.openCount).toBe(1);
   });
 
   it("persists stable checkpoint entries around git-backed turns", async () => {
@@ -334,6 +335,42 @@ describe("sending messages through Pi sessions", () => {
     runtimes.push(pi);
 
     await expect(pi.sendMessage({message: "Fix it", modelReference: selectedModelReference, sessionId: "missing-session"})).rejects.toThrow("Session not found.");
+    expect(pi.faux.state.callCount).toBe(0);
+  });
+
+  it("does not prompt Pi when aborted during message preparation", async () => {
+    const pi = await createPiTestRuntime();
+    runtimes.push(pi);
+    const {info} = pi.createSession();
+    let completeTitleGeneration: (() => void) | undefined;
+    const titleGenerationStarted = new Promise<void>((resolveStarted) => {
+      vi.spyOn(pi.titleGenerator, "generateSessionTitle").mockImplementation(
+        () =>
+          new Promise<string>((resolveTitle) => {
+            completeTitleGeneration = () => resolveTitle("Generated title");
+            resolveStarted();
+          })
+      );
+    });
+    pi.faux.setResponses([fauxAssistantMessage("Should not run.")]);
+
+    const sendRun = pi.runWithSessionRuntime(
+      Effect.gen(function* () {
+        const sessionRuntime = yield* SessionRuntimeService;
+        yield* sessionRuntime.sendMessage({contentParts: [{text: "Fix it", type: "text"}], modelReference: selectedModelReference, sessionId: info.id});
+      })
+    );
+
+    await titleGenerationStarted;
+    await pi.runWithSessionRuntime(
+      Effect.gen(function* () {
+        const sessionRuntime = yield* SessionRuntimeService;
+        yield* sessionRuntime.abortSession(info.id);
+      })
+    );
+    completeTitleGeneration?.();
+    await expect(sendRun).rejects.toThrow("Session was cancelled.");
+
     expect(pi.faux.state.callCount).toBe(0);
   });
 

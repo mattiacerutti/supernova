@@ -14,19 +14,22 @@ import {compactSession} from "@supernova/agent-runtime/layers/session-runtime/op
 import {sendMessage} from "@supernova/agent-runtime/layers/session-runtime/operations/send-message";
 import {PiSessionRuntime} from "@supernova/agent-runtime/layers/session-runtime/internal/pi-session-runtime";
 import type {PiSessionRuntimeDependencies} from "@supernova/agent-runtime/layers/session-runtime/internal/pi-session-runtime";
+import type {PiSessionTitleGeneratorShape} from "@supernova/agent-runtime/layers/session-runtime/internal/pi-session-title-generator";
 
 /** Keeps one long-lived command runtime per active session. */
 export class SessionRuntimePool {
   private readonly dependencies: PiSessionRuntimeDependencies;
   private readonly runtimes = new Map<string, PiSessionRuntime>();
+  private readonly titleGenerator: PiSessionTitleGeneratorShape;
 
-  public constructor(dependencies: PiSessionRuntimeDependencies) {
+  public constructor(dependencies: PiSessionRuntimeDependencies, titleGenerator: PiSessionTitleGeneratorShape) {
     this.dependencies = dependencies;
+    this.titleGenerator = titleGenerator;
   }
 
   /** Starts accepted message work on the target session runtime. */
   public async sendMessage(input: SendMessagePayload): Promise<void> {
-    await sendMessage(this.getOrCreateRuntime(input.sessionId), input);
+    await sendMessage(this.getOrCreateRuntime(input.sessionId), this.titleGenerator, input);
   }
 
   /** Starts manual compaction on the target session runtime. */
@@ -41,12 +44,12 @@ export class SessionRuntimePool {
 
   /** Moves the session back to the previous checkpoint. */
   public async undoCheckpoint(input: UndoCheckpointPayload): Promise<void> {
-    await undoCheckpoint(this.getOrCreateRuntime(input.sessionId), input);
+    await undoCheckpoint(this.getOrCreateRuntime(input.sessionId));
   }
 
   /** Moves the session forward to the next checkpoint after an undo. */
   public async redoCheckpoint(input: RedoCheckpointPayload): Promise<void> {
-    await redoCheckpoint(this.getOrCreateRuntime(input.sessionId), input);
+    await redoCheckpoint(this.getOrCreateRuntime(input.sessionId));
   }
 
   /** Aborts active work for one session while preserving the retained runtime. */

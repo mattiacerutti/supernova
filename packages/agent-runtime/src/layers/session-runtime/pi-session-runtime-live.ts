@@ -20,7 +20,7 @@ export const PiSessionRuntimeFromInternal = Layer.effect(
     const resourceCatalog = yield* PiResourceCatalog;
     const sessionStore = yield* PiSessionStore;
     const titleGenerator = yield* PiSessionTitleGenerator;
-    const pool = new SessionRuntimePool({agentSessionFactory, checkpointStore, eventBus, modelCatalog, resourceCatalog, sessionStore, titleGenerator});
+    const pool = new SessionRuntimePool({agentSessionFactory, checkpointStore, eventBus, modelCatalog, resourceCatalog, sessionStore}, titleGenerator);
 
     return {
       abortSession: (sessionId: string) => Effect.promise(() => pool.abortSession(sessionId)),

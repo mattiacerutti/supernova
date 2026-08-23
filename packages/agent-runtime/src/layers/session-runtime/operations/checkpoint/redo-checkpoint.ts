@@ -1,7 +1,10 @@
-import type {RedoCheckpointPayload} from "@supernova/contracts/session-runtime/procedures";
 import {CheckpointNavigationError} from "@supernova/contracts/session-runtime/procedures";
 import type {SessionEntry} from "@earendil-works/pi-coding-agent";
-import {isCheckpointAfterTurnEntry, isCheckpointEntry, latestCheckpointCursor, navigateToCheckpoint} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-navigation";
+import {
+  isCheckpointAfterTurnEntry,
+  isCheckpointEntry,
+  latestCheckpointCursor,
+} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-entries";
 import {PiSessionRuntime} from "@supernova/agent-runtime/layers/session-runtime/internal/pi-session-runtime";
 
 function findRedoTarget(branch: readonly SessionEntry[], currentIndex: number) {
@@ -12,15 +15,15 @@ function findRedoTarget(branch: readonly SessionEntry[], currentIndex: number) {
 }
 
 /** Moves the session and workspace forward along the most recently undone path. */
-export async function redoCheckpoint(runtime: PiSessionRuntime, input: RedoCheckpointPayload): Promise<void> {
+export async function redoCheckpoint(runtime: PiSessionRuntime): Promise<void> {
   runtime.beginWork();
   try {
-    const openedSession = await runtime.openSession(input.sessionId);
-    const cursor = latestCheckpointCursor(openedSession.sessionManager.getEntries());
+    const sessionManager = await runtime.getSessionManager();
+    const cursor = latestCheckpointCursor(sessionManager.getEntries());
 
     if (!cursor || cursor.nodeEntryId === cursor.leafEntryId) throw new Error("No checkpoint is available to redo.");
 
-    const branch = openedSession.sessionManager.getBranch(cursor.leafEntryId);
+    const branch = sessionManager.getBranch(cursor.leafEntryId);
     const nodeIndex = branch.findIndex((entry) => entry.id === cursor.nodeEntryId);
     if (nodeIndex === -1) throw new Error("No checkpoint is available to redo.");
 
@@ -30,7 +33,7 @@ export async function redoCheckpoint(runtime: PiSessionRuntime, input: RedoCheck
     const target = findRedoTarget(branch, nodeIndex);
     if (!target) throw new Error("No checkpoint is available to redo.");
 
-    await navigateToCheckpoint(runtime, openedSession, {current, cursorLeafEntryId: cursor.leafEntryId, target});
+    await runtime.navigateToCheckpoint(target, current, cursor.leafEntryId);
   } catch (cause) {
     throw new CheckpointNavigationError({cause, message: cause instanceof Error ? cause.message : "Failed to redo checkpoint."});
   } finally {
