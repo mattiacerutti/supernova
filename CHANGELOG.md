@@ -8,6 +8,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Added
 
+- Added native Windows translucency to the sidebar, matching the existing macOS appearance setting.
+
 ### Changed
 
 - Changed new user messages to be scrolled to the top when sent.

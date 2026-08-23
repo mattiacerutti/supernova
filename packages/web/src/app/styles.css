@@ -150,7 +150,7 @@
     background: var(--theme-surface-sidebar);
   }
 
-  :root[data-app-environment="mac"][data-translucent-sidebar="true"] .desktop-sidebar-background {
+  :root:is([data-app-environment="mac"], [data-app-environment="windows"])[data-translucent-sidebar="true"] .desktop-sidebar-background {
     background: var(--theme-surface-sidebar-translucent);
     backdrop-filter: blur(8px) saturate(135%);
   }
