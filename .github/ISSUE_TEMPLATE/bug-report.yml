@@ -1,0 +1,50 @@
+name: Bug report
+description: Report something that is broken or behaving unexpectedly.
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before opening an issue, search for duplicates and try to reproduce the problem on the latest version.
+
+        Keep the report short and include a screenshot or video for UI issues.
+
+        Write the report in your own words. Do not submit AI-generated diagnoses without first verifying.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe what you did, what you expected, and what happened instead.
+      placeholder: I tried to X, expected Y, but got Z.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Provide the shortest sequence that reliably triggers the problem.
+      placeholder: |
+        1. Open Supernova
+        2. Do X
+        3. Observe Y
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Supernova version
+      placeholder: 0.0.1
+    validations:
+      required: true
+
+  - type: input
+    id: operating-system
+    attributes:
+      label: Operating system
+      placeholder: macOS 15.2, Windows 11, or Ubuntu 24.04
+    validations:
+      required: true
