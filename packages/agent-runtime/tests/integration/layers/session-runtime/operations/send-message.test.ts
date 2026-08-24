@@ -7,6 +7,7 @@ import {readFile, writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {afterEach, describe, expect, it, vi} from "vitest";
+import type {CheckpointStoreShape} from "@supernova/agent-runtime/layers/session-runtime/internal/checkpoint-store";
 import {SessionRuntimeService} from "@supernova/agent-runtime/services/session-runtime-service";
 import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
 import {
@@ -273,6 +274,36 @@ describe("sending messages through Pi sessions", () => {
     expect(checkpointId).toEqual(expect.any(String));
     expect(customEntries.some((entry) => entry.customType === "supernova.checkpoint-patch")).toBe(false);
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("after\n");
+  });
+
+  it("publishes a generic error without an after-turn checkpoint or cursor when settled capture fails", async () => {
+    let captureCount = 0;
+    const checkpointStore: CheckpointStoreShape = {
+      capture: async () => {
+        captureCount++;
+        if (captureCount === 2) throw new Error("Sensitive Git failure");
+      },
+      deleteSession: async () => undefined,
+      restore: async () => undefined,
+    };
+    const pi = await createPiTestRuntime({checkpointStore});
+    runtimes.push(pi);
+    const {info, manager} = pi.createSession();
+    pi.faux.setResponses([fauxAssistantMessage("Changed files.")]);
+
+    const events = await pi.sendMessage({message: "change files", modelReference: selectedModelReference, sessionId: info.id});
+    const customEntries = manager.getBranch().filter((entry) => entry.type === "custom");
+
+    expect(events.find((event) => event.type === "session.error")).toMatchObject({
+      error: "Failed to capture workspace checkpoint.",
+      type: "session.error",
+    });
+    expect(events.some((event) => event.type === "session.snapshot")).toBe(false);
+    expect(customEntries.filter((entry) => entry.customType === "supernova.checkpoint").map((entry) => (entry.data as {phase?: string}).phase)).toEqual([
+      "before-turn",
+    ]);
+    expect(customEntries.some((entry) => entry.customType === "supernova.checkpoint-cursor")).toBe(false);
+    expect(pi.faux.state.callCount).toBe(1);
   });
 
   it("keeps overflow compaction continuation in the same live turn", async () => {

@@ -1,12 +1,13 @@
 import {execFile} from "node:child_process";
 import {mkdtempSync, rmSync} from "node:fs";
-import {readFile, writeFile} from "node:fs/promises";
+import {mkdir, readFile, rm, writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {promisify} from "node:util";
 import {Effect, Fiber, Stream} from "effect";
 import type {AssistantMessage} from "@earendil-works/pi-ai";
 import {afterEach, describe, expect, it} from "vitest";
+import type {CheckpointStoreShape} from "@supernova/agent-runtime/layers/session-runtime/internal/checkpoint-store";
 import {SessionRuntimeService} from "@supernova/agent-runtime/services/session-runtime-service";
 import type {SessionRuntimeServiceShape} from "@supernova/agent-runtime/services/session-runtime-service";
 import {SessionsService} from "@supernova/agent-runtime/services/sessions-service";
@@ -24,15 +25,30 @@ async function gitOutput(cwd: string, args: readonly string[]): Promise<string> 
   return result.stdout.trim();
 }
 
+async function initializeGitRepository(repositoryPath: string, fileName: string, contents = "initial\n"): Promise<void> {
+  await git(repositoryPath, ["init"]);
+  await git(repositoryPath, ["config", "user.email", "test@example.com"]);
+  await git(repositoryPath, ["config", "user.name", "Test User"]);
+  await writeFile(join(repositoryPath, fileName), contents);
+  await git(repositoryPath, ["add", "."]);
+  await git(repositoryPath, ["commit", "-m", "initial"]);
+}
+
 async function createGitProject(): Promise<string> {
   const projectPath = mkdtempSync(join(tmpdir(), "supernova-checkpoint-navigation-"));
-  await git(projectPath, ["init"]);
-  await git(projectPath, ["config", "user.email", "test@example.com"]);
-  await git(projectPath, ["config", "user.name", "Test User"]);
-  await writeFile(join(projectPath, "file.txt"), "initial\n");
-  await git(projectPath, ["add", "."]);
-  await git(projectPath, ["commit", "-m", "initial"]);
+  await initializeGitRepository(projectPath, "file.txt");
   return projectPath;
+}
+
+async function createGitProjectWithChild(): Promise<{readonly childPath: string; readonly projectPath: string}> {
+  const projectPath = await createGitProject();
+  const childPath = join(projectPath, "child");
+  await writeFile(join(projectPath, ".gitignore"), "child/\n");
+  await git(projectPath, ["add", ".gitignore"]);
+  await git(projectPath, ["commit", "-m", "ignore child repository"]);
+  await mkdir(childPath);
+  await initializeGitRepository(childPath, "child.txt");
+  return {childPath, projectPath};
 }
 
 async function createProject(): Promise<string> {
@@ -40,6 +56,24 @@ async function createProject(): Promise<string> {
   await writeFile(join(projectPath, "file.txt"), "initial\n");
   return projectPath;
 }
+
+const unavailableChildRepositoryCases = [
+  {
+    expectedContents: undefined,
+    name: "removed",
+    mutate: (childPath: string) => rm(childPath, {force: true, recursive: true}),
+  },
+  {
+    expectedContents: "child two\n",
+    name: "replaced",
+    mutate: async (childPath: string) => {
+      await rm(childPath, {force: true, recursive: true});
+      await mkdir(childPath);
+      // Matching the current checkpoint tree ensures replacement detection does not rely on a file conflict.
+      await initializeGitRepository(childPath, "child.txt", "child two\n");
+    },
+  },
+] as const;
 
 function snapshotEvents(events: readonly SessionStreamEvent[]): Array<Extract<SessionStreamEvent, {type: "session.snapshot"}>> {
   return events.filter((event): event is Extract<SessionStreamEvent, {type: "session.snapshot"}> => event.type === "session.snapshot");
@@ -423,6 +457,253 @@ describe("checkpoint navigation", () => {
     await expect(gitOutput(projectPath, ["diff", "--cached", "--name-only"])).resolves.toContain("redo-staged.txt");
   });
 
+  it("undoes and redoes sibling repositories in a non-Git workspace without touching loose root files", async () => {
+    const projectPath = mkdtempSync(join(tmpdir(), "supernova-checkpoint-workspace-"));
+    const firstRepository = join(projectPath, "first");
+    const secondRepository = join(projectPath, "second");
+    tempDirs.push(projectPath);
+    await mkdir(firstRepository);
+    await mkdir(secondRepository);
+    await initializeGitRepository(firstRepository, "first.txt");
+    await initializeGitRepository(secondRepository, "second.txt");
+    await writeFile(join(projectPath, "loose.txt"), "initial loose\n");
+
+    const pi = await createPiTestRuntime();
+    runtimes.push(pi);
+    const {info} = pi.createSession(projectPath);
+    pi.faux.setResponses([
+      async () => {
+        await writeFile(join(firstRepository, "first.txt"), "first one\n");
+        await writeFile(join(secondRepository, "second.txt"), "second one\n");
+        await writeFile(join(projectPath, "loose.txt"), "loose one\n");
+        return fauxAssistantMessage("one");
+      },
+      async () => {
+        await writeFile(join(firstRepository, "first.txt"), "first two\n");
+        await writeFile(join(secondRepository, "second.txt"), "second two\n");
+        await writeFile(join(projectPath, "loose.txt"), "loose two\n");
+        return fauxAssistantMessage("two");
+      },
+    ]);
+
+    await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
+
+    const undoEvents = await runSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.undoCheckpoint({sessionId: info.id})});
+
+    expect(errorEvents(undoEvents)).toEqual([]);
+    await expect(readFile(join(firstRepository, "first.txt"), "utf8")).resolves.toBe("first one\n");
+    await expect(readFile(join(secondRepository, "second.txt"), "utf8")).resolves.toBe("second one\n");
+    await expect(readFile(join(projectPath, "loose.txt"), "utf8")).resolves.toBe("loose two\n");
+
+    const redoEvents = await runSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.redoCheckpoint({sessionId: info.id})});
+
+    expect(errorEvents(redoEvents)).toEqual([]);
+    await expect(readFile(join(firstRepository, "first.txt"), "utf8")).resolves.toBe("first two\n");
+    await expect(readFile(join(secondRepository, "second.txt"), "utf8")).resolves.toBe("second two\n");
+    await expect(readFile(join(projectPath, "loose.txt"), "utf8")).resolves.toBe("loose two\n");
+  });
+
+  it("undoes and redoes changes across root and direct child repositories without touching independent Git state", async () => {
+    const {childPath, projectPath} = await createGitProjectWithChild();
+    tempDirs.push(projectPath);
+    const pi = await createPiTestRuntime();
+    runtimes.push(pi);
+    const {info} = pi.createSession(projectPath);
+    pi.faux.setResponses([
+      async () => {
+        await writeFile(join(projectPath, "file.txt"), "root one\n");
+        await writeFile(join(childPath, "child.txt"), "child one\n");
+        return fauxAssistantMessage("one");
+      },
+      async () => {
+        await writeFile(join(projectPath, "file.txt"), "root two\n");
+        await writeFile(join(projectPath, "root-agent.txt"), "root agent\n");
+        await writeFile(join(childPath, "child.txt"), "child two\n");
+        await writeFile(join(childPath, "child-agent.txt"), "child agent\n");
+        return fauxAssistantMessage("two");
+      },
+    ]);
+
+    await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
+    await writeFile(join(projectPath, "root-manual.txt"), "root manual\n");
+    await writeFile(join(childPath, "child-manual.txt"), "child manual\n");
+    await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
+
+    const rootHead = await gitOutput(projectPath, ["rev-parse", "HEAD"]);
+    const childHead = await gitOutput(childPath, ["rev-parse", "HEAD"]);
+    await writeFile(join(projectPath, "root-staged.txt"), "root staged\n");
+    await git(projectPath, ["add", "root-staged.txt"]);
+    await writeFile(join(childPath, "child-staged.txt"), "child staged\n");
+    await git(childPath, ["add", "child-staged.txt"]);
+
+    const undoEvents = await runSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.undoCheckpoint({sessionId: info.id})});
+
+    expect(errorEvents(undoEvents)).toEqual([]);
+    await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("root one\n");
+    await expect(readFile(join(childPath, "child.txt"), "utf8")).resolves.toBe("child one\n");
+    await expect(readFile(join(projectPath, "root-agent.txt"), "utf8")).rejects.toThrow();
+    await expect(readFile(join(childPath, "child-agent.txt"), "utf8")).rejects.toThrow();
+    await expect(readFile(join(projectPath, "root-manual.txt"), "utf8")).resolves.toBe("root manual\n");
+    await expect(readFile(join(childPath, "child-manual.txt"), "utf8")).resolves.toBe("child manual\n");
+    await expect(gitOutput(projectPath, ["rev-parse", "HEAD"])).resolves.toBe(rootHead);
+    await expect(gitOutput(childPath, ["rev-parse", "HEAD"])).resolves.toBe(childHead);
+    await expect(gitOutput(projectPath, ["diff", "--cached", "--name-only"])).resolves.toContain("root-staged.txt");
+    await expect(gitOutput(childPath, ["diff", "--cached", "--name-only"])).resolves.toContain("child-staged.txt");
+
+    const redoEvents = await runSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.redoCheckpoint({sessionId: info.id})});
+
+    expect(errorEvents(redoEvents)).toEqual([]);
+    await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("root two\n");
+    await expect(readFile(join(childPath, "child.txt"), "utf8")).resolves.toBe("child two\n");
+    await expect(readFile(join(projectPath, "root-agent.txt"), "utf8")).resolves.toBe("root agent\n");
+    await expect(readFile(join(childPath, "child-agent.txt"), "utf8")).resolves.toBe("child agent\n");
+    await expect(readFile(join(projectPath, "root-manual.txt"), "utf8")).resolves.toBe("root manual\n");
+    await expect(readFile(join(childPath, "child-manual.txt"), "utf8")).resolves.toBe("child manual\n");
+    await expect(gitOutput(projectPath, ["rev-parse", "HEAD"])).resolves.toBe(rootHead);
+    await expect(gitOutput(childPath, ["rev-parse", "HEAD"])).resolves.toBe(childHead);
+    await expect(gitOutput(projectPath, ["diff", "--cached", "--name-only"])).resolves.toContain("root-staged.txt");
+    await expect(gitOutput(childPath, ["diff", "--cached", "--name-only"])).resolves.toContain("child-staged.txt");
+  });
+
+  it("rejects multi-repository undo before mutating any repository or session state when a child has conflicting changes", async () => {
+    const {childPath, projectPath} = await createGitProjectWithChild();
+    tempDirs.push(projectPath);
+    const pi = await createPiTestRuntime();
+    runtimes.push(pi);
+    const {info} = pi.createSession(projectPath);
+    pi.faux.setResponses([
+      async () => {
+        await writeFile(join(projectPath, "file.txt"), "root one\n");
+        await writeFile(join(childPath, "child.txt"), "child one\n");
+        return fauxAssistantMessage("one");
+      },
+      async () => {
+        await writeFile(join(projectPath, "file.txt"), "root two\n");
+        await writeFile(join(childPath, "child.txt"), "child two\n");
+        return fauxAssistantMessage("two");
+      },
+    ]);
+
+    await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
+    await writeFile(join(childPath, "child.txt"), "manual conflict\n");
+
+    const {cause, events} = await runRejectedSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.undoCheckpoint({sessionId: info.id})});
+    const loaded = await pi.runWithSessions(
+      Effect.gen(function* () {
+        const sessions = yield* SessionsService;
+        return yield* sessions.get(info.id);
+      })
+    );
+
+    expect(cause).toMatchObject({message: "Failed to restore workspace checkpoint."});
+    expect(errorEvents(events)).toEqual([]);
+    expect(snapshotEvents(events)).toEqual([]);
+    expect(loaded.turns.map((turn) => turn.userMessage.contentParts[0])).toEqual([
+      {text: "one", type: "text"},
+      {text: "two", type: "text"},
+    ]);
+    expect(loaded.undoneTurns).toEqual([]);
+    await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("root two\n");
+    await expect(readFile(join(childPath, "child.txt"), "utf8")).resolves.toBe("manual conflict\n");
+  });
+
+  it("preserves a direct child repository created during a turn when undoing and redoing its parent changes", async () => {
+    const projectPath = await createGitProject();
+    const childPath = join(projectPath, "child");
+    tempDirs.push(projectPath);
+    const pi = await createPiTestRuntime();
+    runtimes.push(pi);
+    const {info} = pi.createSession(projectPath);
+    pi.faux.setResponses([
+      async () => {
+        await writeFile(join(projectPath, "file.txt"), "one\n");
+        return fauxAssistantMessage("one");
+      },
+      async () => {
+        await writeFile(join(projectPath, "file.txt"), "two\n");
+        await mkdir(childPath);
+        await git(childPath, ["init"]);
+        await git(childPath, ["config", "user.email", "test@example.com"]);
+        await git(childPath, ["config", "user.name", "Test User"]);
+        await writeFile(join(childPath, "child.txt"), "created by turn\n");
+        await git(childPath, ["add", "."]);
+        await git(childPath, ["commit", "-m", "created by turn"]);
+        return fauxAssistantMessage("two");
+      },
+    ]);
+
+    await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
+    const childHead = await gitOutput(childPath, ["rev-parse", "HEAD"]);
+
+    const undoEvents = await runSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.undoCheckpoint({sessionId: info.id})});
+
+    expect(errorEvents(undoEvents)).toEqual([]);
+    await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("one\n");
+    await expect(readFile(join(childPath, "child.txt"), "utf8")).resolves.toBe("created by turn\n");
+    await expect(gitOutput(childPath, ["rev-parse", "HEAD"])).resolves.toBe(childHead);
+
+    await writeFile(join(childPath, "child.txt"), "manual after undo\n");
+    const rejectedRedo = await runRejectedSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.redoCheckpoint({sessionId: info.id})});
+    expect(rejectedRedo.cause).toMatchObject({message: "Failed to restore workspace checkpoint."});
+    await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("one\n");
+    await expect(readFile(join(childPath, "child.txt"), "utf8")).resolves.toBe("manual after undo\n");
+
+    await writeFile(join(childPath, "child.txt"), "created by turn\n");
+    const redoEvents = await runSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.redoCheckpoint({sessionId: info.id})});
+
+    expect(errorEvents(redoEvents)).toEqual([]);
+    await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("two\n");
+    await expect(readFile(join(childPath, "child.txt"), "utf8")).resolves.toBe("created by turn\n");
+    await expect(gitOutput(childPath, ["rev-parse", "HEAD"])).resolves.toBe(childHead);
+  });
+
+  it.each(unavailableChildRepositoryCases)(
+    "rejects undo without partially restoring the parent when a checkpoint child repository is $name",
+    async ({expectedContents, mutate}) => {
+      const {childPath, projectPath} = await createGitProjectWithChild();
+      tempDirs.push(projectPath);
+      const pi = await createPiTestRuntime();
+      runtimes.push(pi);
+      const {info} = pi.createSession(projectPath);
+      pi.faux.setResponses([
+        async () => {
+          await writeFile(join(projectPath, "file.txt"), "root one\n");
+          await writeFile(join(childPath, "child.txt"), "child one\n");
+          return fauxAssistantMessage("one");
+        },
+        async () => {
+          await writeFile(join(projectPath, "file.txt"), "root two\n");
+          await writeFile(join(childPath, "child.txt"), "child two\n");
+          return fauxAssistantMessage("two");
+        },
+      ]);
+
+      await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
+      await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
+      await mutate(childPath);
+
+      const {cause, events} = await runRejectedSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.undoCheckpoint({sessionId: info.id})});
+      const loaded = await pi.runWithSessions(
+        Effect.gen(function* () {
+          const sessions = yield* SessionsService;
+          return yield* sessions.get(info.id);
+        })
+      );
+
+      expect(cause).toMatchObject({message: "Failed to restore workspace checkpoint."});
+      expect(errorEvents(events)).toEqual([]);
+      expect(snapshotEvents(events)).toEqual([]);
+      expect(loaded.turns).toHaveLength(2);
+      expect(loaded.undoneTurns).toEqual([]);
+      await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("root two\n");
+      if (expectedContents === undefined) await expect(readFile(join(childPath, "child.txt"), "utf8")).rejects.toThrow();
+      else await expect(readFile(join(childPath, "child.txt"), "utf8")).resolves.toBe(expectedContents);
+    }
+  );
+
   it("does not touch git stash entries during checkpoint undo", async () => {
     const projectPath = await createGitProject();
     tempDirs.push(projectPath);
@@ -672,6 +953,47 @@ describe("checkpoint navigation", () => {
       ]);
       expect(loaded.undoneTurns).toEqual([]);
     });
+  });
+
+  it("preserves the redo path and skips provider work when before-turn capture fails", async () => {
+    let rejectCapture = false;
+    const checkpointStore: CheckpointStoreShape = {
+      capture: async () => {
+        if (rejectCapture) throw new Error("Sensitive Git failure");
+      },
+      deleteSession: async () => undefined,
+      restore: async () => undefined,
+    };
+    const pi = await createPiTestRuntime({checkpointStore});
+    runtimes.push(pi);
+    const {info} = pi.createSession();
+    pi.faux.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two"), fauxAssistantMessage("must not run")]);
+
+    await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
+    await runSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.undoCheckpoint({sessionId: info.id})});
+    rejectCapture = true;
+
+    await expect(pi.sendMessage({message: "replacement", modelReference: selectedModelReference, sessionId: info.id})).rejects.toThrow(
+      "Failed to capture workspace checkpoint."
+    );
+    const loadedAfterFailure = await pi.runWithSessions(
+      Effect.gen(function* () {
+        const sessions = yield* SessionsService;
+        return yield* sessions.get(info.id);
+      })
+    );
+
+    expect(loadedAfterFailure.turns.map((turn) => turn.userMessage.contentParts[0])).toEqual([{text: "one", type: "text"}]);
+    expect(loadedAfterFailure.undoneTurns.map((turn) => turn.userMessage.contentParts[0])).toEqual([{text: "two", type: "text"}]);
+    expect(pi.faux.state.callCount).toBe(2);
+
+    rejectCapture = false;
+    const redoEvents = await runSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.redoCheckpoint({sessionId: info.id})});
+    expect(snapshotEvents(redoEvents).at(-1)?.session.turns.map((turn) => turn.userMessage.contentParts[0])).toEqual([
+      {text: "one", type: "text"},
+      {text: "two", type: "text"},
+    ]);
   });
 
   it("does not redo after a new branch diverges from an undone checkpoint", async () => {
