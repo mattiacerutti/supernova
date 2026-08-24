@@ -41,3 +41,5 @@ apps/desktop/resources/icons
 
 # Finder (MacOS) folder config
 .DS_Store
+
+.context
