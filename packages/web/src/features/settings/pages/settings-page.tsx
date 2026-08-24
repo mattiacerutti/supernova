@@ -20,10 +20,10 @@ export default function SettingsPage(props: SettingsPageProps) {
     <SidebarLayout
       appEnvironment={appEnvironment}
       className="select-text"
-      contentClassName="pt-6"
       sidebar={<SettingsSidebar activeSectionId={section.id} />}
       sidebarWidth={SETTINGS_SIDEBAR_WIDTH}
     >
+      <div className="h-11 shrink-0" />
       {section.id === "appearance" && <AppearanceSettingsPage />}
       {section.id === "providers" && <ProvidersSettingsPage />}
     </SidebarLayout>
