@@ -38,6 +38,7 @@ All notable changes to Supernova are documented in this file.
 - Fixed context usage staying stale during active turns, appearing as zero when unknown, and losing valid measurements after compaction, aborts, or checkpoint navigation.
 - Fixed error notifications letting underlying message text show through their background.
 - Fixed the scroll-to-latest button's outline letting timeline messages show through it.
+- Fixed undoing or reverting a just-anchored message leaving blank space in the timeline instead of pinning the previous turn to the bottom.
 - Fixed the open-project dialog not showing a message when no folders match.
 
 ### Removed

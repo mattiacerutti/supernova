@@ -318,6 +318,22 @@ test.describe("session timeline visual stability", () => {
     assertBottomLocked({samples});
   });
 
+  test("/undo of an anchored message collapses the fake space and pins the previous turn to the bottom", async ({timeline}) => {
+    const messageText = "Anchor a message that will be undone";
+    await timeline.sendMessage(messageText);
+    await expect.poll(() => timeline.messageViewportTop(messageText), {message: "the sent message should settle near the viewport top"}).toBeLessThanOrEqual(30);
+    await timeline.waitForLineGrowth(5);
+    await timeline.abortMessage();
+    const beforeScrollHeight = await timeline.scrollHeight();
+    expect(await timeline.fakeSpaceHeight(), "the aborted anchored turn should leave fake space behind").toBeGreaterThan(0);
+
+    await timeline.undoLatestWithSlashCommand();
+
+    await expect.poll(() => timeline.fakeSpaceHeight(), {message: "reverting the anchored turn should collapse its fake space"}).toBe(0);
+    expect(await timeline.scrollHeight(), "the reverted turn's blank space must not survive the undo").toBeLessThan(beforeScrollHeight);
+    await timeline.expectAtBottom();
+  });
+
   test("/undo from a detached position removes the latest message without moving visible content", async ({timeline}) => {
     await timeline.detachFar();
     const before = await timeline.captureVisibleTextAnchor();

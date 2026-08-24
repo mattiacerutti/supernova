@@ -12,7 +12,7 @@ import type {SessionTimelineItem} from "@/features/sessions/types/session-timeli
 import {cn} from "@/lib/cn";
 
 // Controls how long a newly sent message takes to move toward the viewport top.
-const TIMELINE_ANCHOR_SCROLL_DURATION_MS = 350;
+const TIMELINE_ANCHOR_SCROLL_DURATION_MS = 700;
 // Leaves a small gap above a newly sent message after it is anchored.
 const TIMELINE_ANCHOR_TOP_MARGIN_PX = 24;
 // Leaves trailing space after the final virtualized timeline row.
@@ -128,6 +128,11 @@ export default function SessionTimeline(props: SessionTimelineProps) {
   const hasLiveUserRow = liveItems[0]?.type === "user";
   const liveUserRowIndex = hasLiveUserRow ? 1 + items.length : -1;
   const previousHasLiveUserRowRef = useRef(hasLiveUserRow);
+
+  // Distinct so a settling turn rendered by both projections counts once. The
+  // count only decreases when checkpoint navigation reverts turns away.
+  const turnCount = new Set([...items, ...liveItems].map((item) => item.turnId)).size;
+  const previousTurnCountRef = useRef(turnCount);
 
   const setAnchorSpaceHeight = (height: number): void => {
     anchorSpaceHeightRef.current = height;
@@ -255,7 +260,7 @@ export default function SessionTimeline(props: SessionTimelineProps) {
 
       anchorScrollAnimationRef.current = animate(viewport.scrollTop, anchorScrollTop, {
         duration: TIMELINE_ANCHOR_SCROLL_DURATION_MS / 1_000,
-        ease: (progress) => 1 - (1 - progress) ** 3,
+        ease: [0.16, 1, 0.3, 1],
         onComplete: () => {
           anchorScrollAnimationRef.current = null;
           anchorScrollTargetRef.current = null;
@@ -267,6 +272,20 @@ export default function SessionTimeline(props: SessionTimelineProps) {
     });
     return () => window.cancelAnimationFrame(frame);
   }, [hasLiveUserRow, liveUserRowIndex, shouldReduceMotion]);
+
+  // Anchor space only exists so a sent message can hold the viewport top while
+  // its response grows below. When a revert removes turns that purpose is gone,
+  // so collapse the space instead of letting it swallow the removed height.
+  useLayoutEffect(() => {
+    const turnsReverted = turnCount < previousTurnCountRef.current;
+    previousTurnCountRef.current = turnCount;
+    if (!turnsReverted || anchorSpaceHeightRef.current === 0) return;
+
+    stopAnchorScroll();
+    setAnchorSpaceHeight(0);
+    realContentHeightRef.current = null;
+    scrollToEnd({behavior: "auto"});
+  }, [scrollToEnd, turnCount]);
 
   // Consume anchor space before auto-follow can move the viewport.
   useLayoutEffect(() => {
@@ -353,12 +372,7 @@ export default function SessionTimeline(props: SessionTimelineProps) {
 
   return (
     <div className="relative min-h-0 flex-1 select-text">
-      {!hasTimelineContent && (
-        <div className="flex min-h-full items-center justify-center px-5 pb-8 pt-6 md:px-8">
-          <p className="text-center text-sm text-ink-faint">No messages yet.</p>
-        </div>
-      )}
-      {hasTimelineContent && (
+      {hasTimelineContent ? (
         <MessageScroller>
           <MessageScrollerViewport
             aria-label="Session timeline"
@@ -422,6 +436,10 @@ export default function SessionTimeline(props: SessionTimelineProps) {
             )}
           </AnimatePresence>
         </MessageScroller>
+      ) : (
+        <div className="flex min-h-full items-center justify-center px-5 pb-8 pt-6 md:px-8">
+          <p className="text-center text-sm text-ink-faint">No messages yet.</p>
+        </div>
       )}
     </div>
   );
