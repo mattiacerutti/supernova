@@ -20,7 +20,7 @@ export default function SessionLayout(props: SessionLayoutProps) {
 
   return (
     <div {...attachmentDropZoneProps} className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-      <header className="-mx-4 flex min-w-0 shrink-0 items-center justify-between border-b border-border-muted px-4 pb-3 pt-2.5">
+      <header className="-mx-4 flex min-w-0 shrink-0 items-center justify-between px-4 pb-3 pt-2.5">
         <LayoutGroup>
           <div className={cn("sticky z-20 flex h-5 min-w-0 items-center gap-1.5 overflow-visible", titleOffset)}>
             <motion.h1 className="min-w-0 max-w-xs truncate text-sm font-medium leading-5 text-ink" layout="position" transition={{duration: 0.18, ease: "easeOut"}}>

@@ -26,7 +26,7 @@ export default function AppearanceSettingsPage() {
   const uiFont = useAppearanceStore((state) => state.uiFont);
 
   return (
-    <div className="scroll-fade-y min-h-0 flex-1 overflow-y-auto px-6 py-8 md:px-10">
+    <div className="scroll-fade-y mr-0.5 min-h-0 flex-1 overflow-y-auto px-6 py-8 md:px-10">
       <div className="mx-auto w-full max-w-3xl">
         <h1 className="text-3xl font-semibold tracking-tight text-ink-strong">Appearance</h1>
         <p className="mt-2 text-sm text-ink-muted">Customize Supernova’s theme and typography.</p>

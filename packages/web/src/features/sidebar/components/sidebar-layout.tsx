@@ -93,7 +93,7 @@ export default function SidebarLayout(props: SidebarLayoutProps) {
 
         <section
           className={cn(
-            "flex h-full min-h-0 min-w-0 flex-1 flex-col rounded-xl border-l-[0.1px] border-border-strong bg-surface",
+            "flex h-full min-h-0 min-w-0 flex-1 flex-col rounded-xl bg-surface",
             !sidebarVisible && "animate-[app-panel-flush-left_200ms_step-end_forwards]",
             contentClassName
           )}

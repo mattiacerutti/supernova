@@ -9,9 +9,12 @@ function resolveDesktopEnvironment(): DesktopEnvironment {
 }
 
 const desktopApi = {
+  closeWindow: () => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.closeWindow),
   environment: resolveDesktopEnvironment(),
+  minimizeWindow: () => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.minimizeWindow),
   openDirectory: (path) => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.openDirectory, path),
   setNativeTheme: (theme) => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.setNativeTheme, theme),
+  toggleMaximizeWindow: () => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.toggleMaximizeWindow),
 } satisfies DesktopApi;
 
 contextBridge.exposeInMainWorld("desktopApi", desktopApi);

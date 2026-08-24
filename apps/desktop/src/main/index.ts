@@ -25,6 +25,22 @@ interface SpawnedServer {
 }
 
 function registerDesktopIpc(): void {
+  ipcMain.handle(DESKTOP_IPC_CHANNELS.minimizeWindow, (event) => {
+    BrowserWindow.fromWebContents(event.sender)?.minimize();
+  });
+  ipcMain.handle(DESKTOP_IPC_CHANNELS.toggleMaximizeWindow, (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window) return;
+
+    if (window.isMaximized()) {
+      window.unmaximize();
+    } else {
+      window.maximize();
+    }
+  });
+  ipcMain.handle(DESKTOP_IPC_CHANNELS.closeWindow, (event) => {
+    BrowserWindow.fromWebContents(event.sender)?.close();
+  });
   ipcMain.handle(DESKTOP_IPC_CHANNELS.setNativeTheme, (_, theme: unknown) => {
     if (theme !== "dark" && theme !== "light" && theme !== "system") return;
     nativeTheme.themeSource = theme;
@@ -121,7 +137,7 @@ function windowChromeOptions(): Pick<
   "backgroundColor" | "backgroundMaterial" | "titleBarStyle" | "trafficLightPosition" | "vibrancy" | "visualEffectState"
 > {
   if (process.platform === "win32") {
-    return {backgroundMaterial: "acrylic"};
+    return {backgroundMaterial: "acrylic", titleBarStyle: "hidden"};
   }
 
   if (process.platform !== "darwin") {

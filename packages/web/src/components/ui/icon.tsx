@@ -38,6 +38,7 @@ export type IconName =
   | "image"
   | "loader"
   | "maximize"
+  | "minus"
   | "monitor"
   | "moon"
   | "more-horizontal"
@@ -57,6 +58,7 @@ export type IconName =
   | "settings"
   | "shield"
   | "skill"
+  | "square"
   | "star"
   | "star-filled"
   | "stop"
@@ -99,6 +101,7 @@ const icons = {
   key: getStaticIcon(lucideIcons, "key-round"),
   loader: getStaticIcon(lucideIcons, "loader-circle"),
   maximize: getStaticIcon(lucideIcons, "maximize-2"),
+  minus: getStaticIcon(lucideIcons, "minus"),
   monitor: getStaticIcon(lucideIcons, "monitor"),
   moon: getStaticIcon(lucideIcons, "moon"),
   "more-horizontal": getStaticIcon(lucideIcons, "more-horizontal"),
@@ -118,6 +121,7 @@ const icons = {
   settings: getStaticIcon(lucideIcons, "settings"),
   shield: getStaticIcon(lucideIcons, "shield"),
   skill: getStaticIcon(mingcuteIcons, "tool-line"),
+  square: getStaticIcon(lucideIcons, "square"),
   star: getStaticIcon(lucideIcons, "star"),
   "star-filled": getStaticIcon(iconoirIcons, "star-solid"),
   stop: getStaticIcon(materialSymbolsIcons, "stop-rounded"),

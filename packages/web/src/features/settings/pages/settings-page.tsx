@@ -1,5 +1,6 @@
-import type {AppEnvironment} from "@/lib/app-environment";
+import WindowControls from "@/app/window-controls";
 import SidebarLayout from "@/features/sidebar/components/sidebar-layout";
+import type {AppEnvironment} from "@/lib/app-environment";
 import SettingsSidebar from "@/features/settings/components/sidebar/settings-sidebar";
 import {getSettingsSection} from "@/features/settings/data/settings-sections";
 import AppearanceSettingsPage from "@/features/settings/pages/settings/appearance-settings-page";
@@ -23,6 +24,7 @@ export default function SettingsPage(props: SettingsPageProps) {
       contentClassName="pt-6"
       sidebar={<SettingsSidebar activeSectionId={section.id} />}
       sidebarWidth={SETTINGS_SIDEBAR_WIDTH}
+      titlebarActions={appEnvironment === "windows" ? <WindowControls /> : undefined}
     >
       {section.id === "appearance" && <AppearanceSettingsPage />}
       {section.id === "providers" && <ProvidersSettingsPage />}

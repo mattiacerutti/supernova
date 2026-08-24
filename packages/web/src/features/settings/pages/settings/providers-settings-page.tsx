@@ -101,7 +101,7 @@ export default function ProvidersSettingsPage() {
   const otherProviders = providersQuery.data?.filter((provider) => !provider.connected) ?? [];
 
   return (
-    <div className="scroll-fade-y min-h-0 flex-1 overflow-y-auto px-6 py-8 md:px-10">
+    <div className="scroll-fade-y mr-0.5 min-h-0 flex-1 overflow-y-auto px-6 py-8 md:px-10">
       <div className="mx-auto w-full max-w-3xl">
         <h1 className="text-3xl font-semibold tracking-tight text-ink">Providers</h1>
         <p className="mt-2 text-sm text-ink-muted">Connect model providers to use them.</p>
