@@ -129,6 +129,11 @@ export default function SessionTimeline(props: SessionTimelineProps) {
   const liveUserRowIndex = hasLiveUserRow ? 1 + items.length : -1;
   const previousHasLiveUserRowRef = useRef(hasLiveUserRow);
 
+  // Distinct so a settling turn rendered by both projections counts once. The
+  // count only decreases when checkpoint navigation reverts turns away.
+  const turnCount = new Set([...items, ...liveItems].map((item) => item.turnId)).size;
+  const previousTurnCountRef = useRef(turnCount);
+
   const setAnchorSpaceHeight = (height: number): void => {
     anchorSpaceHeightRef.current = height;
     if (anchorSpaceRef.current) anchorSpaceRef.current.style.height = `${height}px`;
@@ -267,6 +272,20 @@ export default function SessionTimeline(props: SessionTimelineProps) {
     });
     return () => window.cancelAnimationFrame(frame);
   }, [hasLiveUserRow, liveUserRowIndex, shouldReduceMotion]);
+
+  // Anchor space only exists so a sent message can hold the viewport top while
+  // its response grows below. When a revert removes turns that purpose is gone,
+  // so collapse the space instead of letting it swallow the removed height.
+  useLayoutEffect(() => {
+    const turnsReverted = turnCount < previousTurnCountRef.current;
+    previousTurnCountRef.current = turnCount;
+    if (!turnsReverted || anchorSpaceHeightRef.current === 0) return;
+
+    stopAnchorScroll();
+    setAnchorSpaceHeight(0);
+    realContentHeightRef.current = null;
+    scrollToEnd({behavior: "auto"});
+  }, [scrollToEnd, turnCount]);
 
   // Consume anchor space before auto-follow can move the viewport.
   useLayoutEffect(() => {
