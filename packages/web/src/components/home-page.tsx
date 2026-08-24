@@ -1,6 +1,5 @@
 import {useRouter, useRouterState, useCanGoBack} from "@tanstack/react-router";
 import type {ReactNode} from "react";
-import WindowControls from "@/app/window-controls";
 import type {AppEnvironment} from "@/lib/app-environment";
 import {isDesktopEnvironment} from "@/lib/app-environment";
 import Icon from "@/components/ui/icon";
@@ -57,7 +56,6 @@ export default function HomePage(props: HomePageProps) {
           </IconButton>
         </>
       )}
-      {appEnvironment === "windows" && <WindowControls />}
     </>
   );
 

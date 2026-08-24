@@ -12,7 +12,7 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
-- Changed Windows to integrate window controls into the app header instead of using a separate title bar.
+- Changed Windows to use native window controls integrated into the app header instead of a separate title bar.
 - Changed the desktop content panel to use surface contrast instead of rectangular border and divider lines.
 - Changed new user messages to be scrolled to the top when sent.
 - Changed streamed timeline growth to animate while auto-following.

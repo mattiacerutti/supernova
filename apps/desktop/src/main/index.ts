@@ -18,6 +18,7 @@ let server: SpawnedServer | undefined;
 const DEV_WEB_URL = "http://localhost:5173";
 const PROD_DESKTOP_SERVER_PORT = 4318;
 const USER_DATA_DIR_NAME = SUPERNOVA_IS_DEV ? "supernova-dev" : "supernova";
+const WINDOWS_TITLE_BAR_OVERLAY = {color: "#00000000", height: 48, symbolColor: "#FFFFFFFF"} as const;
 
 interface SpawnedServer {
   process: ChildProcessWithoutNullStreams;
@@ -25,25 +26,12 @@ interface SpawnedServer {
 }
 
 function registerDesktopIpc(): void {
-  ipcMain.handle(DESKTOP_IPC_CHANNELS.minimizeWindow, (event) => {
-    BrowserWindow.fromWebContents(event.sender)?.minimize();
-  });
-  ipcMain.handle(DESKTOP_IPC_CHANNELS.toggleMaximizeWindow, (event) => {
-    const window = BrowserWindow.fromWebContents(event.sender);
-    if (!window) return;
-
-    if (window.isMaximized()) {
-      window.unmaximize();
-    } else {
-      window.maximize();
-    }
-  });
-  ipcMain.handle(DESKTOP_IPC_CHANNELS.closeWindow, (event) => {
-    BrowserWindow.fromWebContents(event.sender)?.close();
-  });
   ipcMain.handle(DESKTOP_IPC_CHANNELS.setNativeTheme, (_, theme: unknown) => {
     if (theme !== "dark" && theme !== "light" && theme !== "system") return;
     nativeTheme.themeSource = theme;
+    if (process.platform === "win32") {
+      mainWindow?.setTitleBarOverlay(WINDOWS_TITLE_BAR_OVERLAY);
+    }
   });
   ipcMain.handle(DESKTOP_IPC_CHANNELS.openDirectory, async (_, path: unknown) => {
     if (typeof path !== "string" || path.trim().length === 0) {
@@ -134,10 +122,14 @@ function resolveRendererUrl(): string {
 
 function windowChromeOptions(): Pick<
   BrowserWindowConstructorOptions,
-  "backgroundColor" | "backgroundMaterial" | "titleBarStyle" | "trafficLightPosition" | "vibrancy" | "visualEffectState"
+  "backgroundColor" | "backgroundMaterial" | "titleBarOverlay" | "titleBarStyle" | "trafficLightPosition" | "vibrancy" | "visualEffectState"
 > {
   if (process.platform === "win32") {
-    return {backgroundMaterial: "acrylic", titleBarStyle: "hidden"};
+    return {
+      backgroundMaterial: "acrylic",
+      titleBarOverlay: WINDOWS_TITLE_BAR_OVERLAY,
+      titleBarStyle: "hidden",
+    };
   }
 
   if (process.platform !== "darwin") {

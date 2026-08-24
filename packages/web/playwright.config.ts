@@ -26,7 +26,7 @@ export default defineConfig({
     {
       fullyParallel: true,
       name: "timeline",
-      testMatch: ["app/**/*.spec.ts", "timeline/**/*.spec.ts"],
+      testMatch: "timeline/**/*.spec.ts",
       use: {...browser, baseURL: timelineBaseURL},
       workers: process.env.CI ? 2 : 4,
     },

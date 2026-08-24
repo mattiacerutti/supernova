@@ -65,7 +65,7 @@ export default function SidebarLayout(props: SidebarLayoutProps) {
           (macEnvironment || appEnvironment === "windows") && translucentSidebar && "bg-surface-sidebar-translucent backdrop-blur-sm backdrop-saturate-[1.35]"
         )}
       >
-        {(titlebarActions != null || macEnvironment) && (
+        {(titlebarActions != null || macEnvironment || appEnvironment === "windows") && (
           <div className={cn("absolute inset-x-0 top-0 z-10 flex h-12 items-center gap-1 pr-3 [-webkit-app-region:drag]", macEnvironment ? "pl-23" : "pl-3")}>
             {titlebarActions}
           </div>
