@@ -151,7 +151,7 @@ interface RepositoryIdentity {
 }
 ```
 
-`repositoryId` is the SHA-256 hash of the canonical worktree root and canonical Git directory. This distinguishes replaced repositories and linked worktrees that share objects but have different Git directories.
+`repositoryId` is the SHA-256 hash of the canonical worktree root, canonical Git directory, and stable filesystem identity of that Git directory. This distinguishes repositories replaced in place and linked worktrees that share objects but have different Git directories.
 
 Discovered repositories are sorted by project-relative root. If a root repository contains a discovered direct child repository, the child root is excluded from the parent's capture and restore path set.
 

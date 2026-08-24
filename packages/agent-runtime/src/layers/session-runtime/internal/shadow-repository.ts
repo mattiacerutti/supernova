@@ -166,7 +166,8 @@ async function discoverCandidate(candidate: string, projectRoot: string): Promis
   if (objectFormatValue !== "sha1" && objectFormatValue !== "sha256") throw new Error("Unsupported Git object format.");
 
   const [gitDir, objectDir] = await Promise.all([realpath(gitDirValue), realpath(objectDirValue)]);
-  const repositoryId = digest(`${canonicalCandidate}\0${gitDir}`);
+  const gitDirMetadata = await stat(gitDir);
+  const repositoryId = digest(`${canonicalCandidate}\0${gitDir}\0${gitDirMetadata.dev}\0${gitDirMetadata.ino}\0${gitDirMetadata.birthtimeMs}`);
   const projectRelativeRoot = relative(projectRoot, canonicalCandidate);
   if (!isWithin(projectRoot, canonicalCandidate)) return undefined;
 
@@ -276,10 +277,8 @@ async function createSnapshotTree(repository: DiscoveredRepository): Promise<str
 
     const tracked = nulPaths((await runGit(shadowArgs(repository, ["ls-files", "-z"]), {env})).stdout).filter((path) => !isExcludedPath(path, repository.excludedRoots));
     if (tracked.length > 0) {
-      await runGit(shadowArgs(repository, ["update-index", "--no-assume-unchanged", "--no-skip-worktree", "-z", "--stdin"]), {
-        env,
-        input: Buffer.from(`${tracked.join("\0")}\0`),
-      });
+      const indexEntries = (await runGit(shadowArgs(repository, ["ls-files", "--stage", "-z"]), {env})).stdout;
+      await runGit(shadowArgs(repository, ["update-index", "-z", "--index-info"]), {env, input: Buffer.from(indexEntries)});
     }
     await runGitResult(shadowArgs(repository, ["update-index", "--really-refresh"]), {env});
 

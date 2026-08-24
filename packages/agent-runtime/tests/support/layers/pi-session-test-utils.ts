@@ -17,7 +17,8 @@ import {PiAgentSessionFactory} from "@supernova/agent-runtime/layers/session-run
 import type {PiAgentSessionFactoryShape} from "@supernova/agent-runtime/layers/session-runtime/internal/pi-agent-session-factory";
 import {PiSessionTitleGenerator} from "@supernova/agent-runtime/layers/session-runtime/internal/pi-session-title-generator";
 import type {PiSessionTitleGeneratorShape} from "@supernova/agent-runtime/layers/session-runtime/internal/pi-session-title-generator";
-import {makeCheckpointStoreLive} from "@supernova/agent-runtime/layers/session-runtime/internal/checkpoint-store";
+import {CheckpointStore, makeCheckpointStoreLive} from "@supernova/agent-runtime/layers/session-runtime/internal/checkpoint-store";
+import type {CheckpointStoreShape} from "@supernova/agent-runtime/layers/session-runtime/internal/checkpoint-store";
 import {SessionEventBusLive} from "@supernova/agent-runtime/layers/session-runtime/internal/session-event-bus";
 import {PiSessionsFromInternal} from "@supernova/agent-runtime/layers/sessions/pi-sessions-live";
 import {SessionRuntimeService} from "@supernova/agent-runtime/services/session-runtime-service";
@@ -151,6 +152,7 @@ async function registerFauxModel(input: {faux: FauxProviderRegistration; modelRu
 }
 
 export async function createPiTestRuntime(input?: {
+  readonly checkpointStore?: CheckpointStoreShape;
   readonly promptTemplates?: readonly PromptTemplate[];
   readonly reopenManagers?: boolean;
   readonly sessionDir?: string;
@@ -240,7 +242,7 @@ export async function createPiTestRuntime(input?: {
     Layer.succeed(PiSessionStore, sessionStore),
     Layer.succeed(PiSessionTitleGenerator, titleGenerator)
   );
-  const checkpointStoreLive = makeCheckpointStoreLive(checkpointStorageRoot);
+  const checkpointStoreLive = input?.checkpointStore ? Layer.succeed(CheckpointStore, input.checkpointStore) : makeCheckpointStoreLive(checkpointStorageRoot);
   const runtimeLive = PiSessionRuntimeFromInternal.pipe(Layer.provide(Layer.mergeAll(internalLive, checkpointStoreLive, SessionEventBusLive)));
   const sessionsLive = PiSessionsFromInternal.pipe(Layer.provide(internalLive));
   const runtime = ManagedRuntime.make(Layer.mergeAll(sessionsLive, runtimeLive));
