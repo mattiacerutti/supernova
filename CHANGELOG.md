@@ -12,6 +12,7 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+- Changed Windows to use native window controls integrated into the app header instead of a separate title bar.
 - Changed new user messages to be scrolled to the top when sent.
 - Changed streamed timeline growth to animate while auto-following.
 - Upgraded the Pi runtime dependency to 0.83.0 and expanded provider sign-in dialogs to support provider-defined authentication prompts.

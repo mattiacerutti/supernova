@@ -296,7 +296,7 @@ export default function SessionComposer(props: SessionComposerProps) {
   };
 
   return (
-    <div className="relative z-20 px-4 pb-4 md:px-6">
+    <div className="relative z-20 px-4 pb-7 md:px-6">
       <div className="relative mx-auto max-w-3xl">
         {topExtension && (
           <div className="pointer-events-none absolute inset-x-0 bottom-full z-0">

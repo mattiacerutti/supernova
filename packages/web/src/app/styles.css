@@ -174,17 +174,3 @@
     transform: translateX(0);
   }
 }
-
-@keyframes app-panel-flush-left {
-  0% {
-    border-left-color: var(--theme-border);
-    border-bottom-left-radius: 1.5rem;
-    border-top-left-radius: 1.5rem;
-  }
-
-  100% {
-    border-left-color: transparent;
-    border-bottom-left-radius: 0;
-    border-top-left-radius: 0;
-  }
-}

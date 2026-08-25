@@ -17,13 +17,8 @@ export default function SettingsPage(props: SettingsPageProps) {
   const section = getSettingsSection(sectionId);
 
   return (
-    <SidebarLayout
-      appEnvironment={appEnvironment}
-      className="select-text"
-      contentClassName="pt-6"
-      sidebar={<SettingsSidebar activeSectionId={section.id} />}
-      sidebarWidth={SETTINGS_SIDEBAR_WIDTH}
-    >
+    <SidebarLayout appEnvironment={appEnvironment} className="select-text" sidebar={<SettingsSidebar activeSectionId={section.id} />} sidebarWidth={SETTINGS_SIDEBAR_WIDTH}>
+      <div className="h-12 shrink-0" />
       {section.id === "appearance" && <AppearanceSettingsPage />}
       {section.id === "providers" && <ProvidersSettingsPage />}
     </SidebarLayout>

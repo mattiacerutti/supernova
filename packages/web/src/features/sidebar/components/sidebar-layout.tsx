@@ -9,7 +9,6 @@ interface SidebarLayoutProps {
   appEnvironment: AppEnvironment;
   children: ReactNode;
   className?: string;
-  contentClassName?: string;
   onSidebarWidthChange?: (width: number) => void;
   sidebar: ReactNode;
   sidebarVisible?: boolean;
@@ -18,7 +17,7 @@ interface SidebarLayoutProps {
 }
 
 export default function SidebarLayout(props: SidebarLayoutProps) {
-  const {appEnvironment, children, className, contentClassName, onSidebarWidthChange, sidebar, sidebarVisible = true, sidebarWidth, titlebarActions} = props;
+  const {appEnvironment, children, className, onSidebarWidthChange, sidebar, sidebarVisible = true, sidebarWidth, titlebarActions} = props;
   const translucentSidebar = useAppearanceStore((state) => state.translucentSidebar);
   const [resizing, setResizing] = useState(false);
   const desktopEnvironment = isDesktopEnvironment(appEnvironment);
@@ -65,7 +64,7 @@ export default function SidebarLayout(props: SidebarLayoutProps) {
           (macEnvironment || appEnvironment === "windows") && translucentSidebar && "bg-surface-sidebar-translucent backdrop-blur-sm backdrop-saturate-[1.35]"
         )}
       >
-        {(titlebarActions != null || macEnvironment) && (
+        {(titlebarActions != null || macEnvironment || appEnvironment === "windows") && (
           <div className={cn("absolute inset-x-0 top-0 z-10 flex h-12 items-center gap-1 pr-3 [-webkit-app-region:drag]", macEnvironment ? "pl-23" : "pl-3")}>
             {titlebarActions}
           </div>
@@ -81,7 +80,7 @@ export default function SidebarLayout(props: SidebarLayoutProps) {
         >
           <div
             className={cn(
-              "h-full transition-opacity duration-200 ease-out",
+              "h-full pt-12 transition-opacity duration-200 ease-out",
               resizable ? "w-screen md:w-(--sidebar-width)" : "w-(--sidebar-width)",
               sidebarVisible ? "opacity-100" : "opacity-0"
             )}
@@ -93,9 +92,8 @@ export default function SidebarLayout(props: SidebarLayoutProps) {
 
         <section
           className={cn(
-            "flex h-full min-h-0 min-w-0 flex-1 flex-col rounded-xl border-l-[0.1px] border-border-strong bg-surface",
-            !sidebarVisible && "animate-[app-panel-flush-left_200ms_step-end_forwards]",
-            contentClassName
+            "flex h-full min-h-0 min-w-0 flex-1 flex-col border-l-[0.1px] bg-surface",
+            sidebarVisible ? "rounded-xl border-border-strong" : "rounded-r-xl border-l-transparent transition-[border-color,border-radius] delay-200 duration-0"
           )}
         >
           {children}

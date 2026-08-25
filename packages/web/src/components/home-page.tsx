@@ -62,7 +62,6 @@ export default function HomePage(props: HomePageProps) {
   return (
     <SidebarLayout
       appEnvironment={appEnvironment}
-      contentClassName="px-4 pb-3 pt-1"
       onSidebarWidthChange={setSidebarWidth}
       sidebar={<Sidebar />}
       sidebarVisible={sidebarVisible}
