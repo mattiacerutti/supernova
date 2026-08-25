@@ -70,7 +70,7 @@ export default function Sidebar() {
   };
 
   return (
-    <aside className="flex h-svh w-full shrink-0 flex-col pt-14">
+    <aside className="flex h-full w-full shrink-0 flex-col">
       <div className="space-y-0.5 px-3 pb-4 pt-1">
         {sidebarActions.map((action) => (
           <SidebarActionButton action={action} key={action.id} onClick={handleSidebarActionClick} />

@@ -12,7 +12,7 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
   const {activeSectionId} = props;
 
   return (
-    <aside className="flex h-svh w-full shrink-0 flex-col pt-14 md:w-72">
+    <aside className="flex h-full w-full shrink-0 flex-col md:w-72">
       <nav className="scroll-fade-y min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-1">
         <div className="space-y-0.5">
           <Link

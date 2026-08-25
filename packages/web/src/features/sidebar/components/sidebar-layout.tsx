@@ -9,7 +9,6 @@ interface SidebarLayoutProps {
   appEnvironment: AppEnvironment;
   children: ReactNode;
   className?: string;
-  contentClassName?: string;
   onSidebarWidthChange?: (width: number) => void;
   sidebar: ReactNode;
   sidebarVisible?: boolean;
@@ -18,7 +17,7 @@ interface SidebarLayoutProps {
 }
 
 export default function SidebarLayout(props: SidebarLayoutProps) {
-  const {appEnvironment, children, className, contentClassName, onSidebarWidthChange, sidebar, sidebarVisible = true, sidebarWidth, titlebarActions} = props;
+  const {appEnvironment, children, className, onSidebarWidthChange, sidebar, sidebarVisible = true, sidebarWidth, titlebarActions} = props;
   const translucentSidebar = useAppearanceStore((state) => state.translucentSidebar);
   const [resizing, setResizing] = useState(false);
   const desktopEnvironment = isDesktopEnvironment(appEnvironment);
@@ -81,7 +80,7 @@ export default function SidebarLayout(props: SidebarLayoutProps) {
         >
           <div
             className={cn(
-              "h-full transition-opacity duration-200 ease-out",
+              "h-full pt-12 transition-opacity duration-200 ease-out",
               resizable ? "w-screen md:w-(--sidebar-width)" : "w-(--sidebar-width)",
               sidebarVisible ? "opacity-100" : "opacity-0"
             )}
@@ -94,10 +93,7 @@ export default function SidebarLayout(props: SidebarLayoutProps) {
         <section
           className={cn(
             "flex h-full min-h-0 min-w-0 flex-1 flex-col border-l-[0.1px] bg-surface",
-            sidebarVisible
-              ? "rounded-xl border-border-strong"
-              : "rounded-r-xl border-l-transparent transition-[border-color,border-radius] delay-200 duration-0",
-            contentClassName
+            sidebarVisible ? "rounded-xl border-border-strong" : "rounded-r-xl border-l-transparent transition-[border-color,border-radius] delay-200 duration-0"
           )}
         >
           {children}
