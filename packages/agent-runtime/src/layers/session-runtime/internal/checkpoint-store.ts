@@ -3,6 +3,7 @@ import {mkdir, readFile, realpath, rename, rm, stat, writeFile} from "node:fs/pr
 import {homedir} from "node:os";
 import {dirname, isAbsolute, join, relative, resolve, sep} from "node:path";
 import {Context, Effect, Layer} from "effect";
+import {KeyedMutex} from "@supernova/agent-runtime/layers/shared/lib/keyed-mutex";
 import {
   applyRestorePlan,
   buildRestorePlan,
@@ -144,6 +145,7 @@ async function loadManifest(
 class CheckpointStoreImpl implements CheckpointStoreShape {
   private lastMaintenanceAt = Date.now();
   private maintenance: Promise<void> | undefined;
+  private readonly projectLocks = new KeyedMutex<string>();
   private readonly storageRoot: string;
   private readonly timer: NodeJS.Timeout;
 
@@ -159,6 +161,29 @@ class CheckpointStoreImpl implements CheckpointStoreShape {
 
   public async capture(input: {readonly checkpointId: string; readonly projectRoot: string; readonly sessionId: string}): Promise<void> {
     const projectRoot = await canonicalProjectRoot(input.projectRoot);
+    await this.projectLocks.withLock(projectRoot, () => this.captureProject(projectRoot, input));
+  }
+
+  public async restore(input: {readonly checkpointId: string; readonly fromCheckpointId: string; readonly projectRoot: string; readonly sessionId: string}): Promise<void> {
+    const projectRoot = await canonicalProjectRoot(input.projectRoot);
+    await this.projectLocks.withLock(projectRoot, () => this.restoreProject(projectRoot, input));
+  }
+
+  public async deleteSession(input: {readonly projectRoot: string; readonly sessionId: string}): Promise<void> {
+    try {
+      const projectRoot = await canonicalProjectRoot(input.projectRoot);
+      const projectStorage = projectStorageRoot(this.storageRoot, projectRoot);
+      await deleteSessionRefs(join(projectStorage, "repositories"), input.sessionId);
+      await rm(join(projectStorage, "manifests", digest(input.sessionId)), {force: true, recursive: true});
+    } catch {
+      return;
+    } finally {
+      this.scheduleMaintenance();
+    }
+  }
+
+  /** Captures every discovered repository and publishes the manifest. Requires the project lock. */
+  private async captureProject(projectRoot: string, input: {readonly checkpointId: string; readonly sessionId: string}): Promise<void> {
     const projectStorage = projectStorageRoot(this.storageRoot, projectRoot);
     const repositoriesRoot = join(projectStorage, "repositories");
     const repositories = await discoverRepositories(projectRoot, repositoriesRoot);
@@ -184,8 +209,8 @@ class CheckpointStoreImpl implements CheckpointStoreShape {
     }
   }
 
-  public async restore(input: {readonly checkpointId: string; readonly fromCheckpointId: string; readonly projectRoot: string; readonly sessionId: string}): Promise<void> {
-    const projectRoot = await canonicalProjectRoot(input.projectRoot);
+  /** Reconciles manifests and applies the workspace restore. Requires the project lock. */
+  private async restoreProject(projectRoot: string, input: {readonly checkpointId: string; readonly fromCheckpointId: string; readonly sessionId: string}): Promise<void> {
     const projectStorage = projectStorageRoot(this.storageRoot, projectRoot);
     const repositoriesRoot = join(projectStorage, "repositories");
     const [currentManifest, targetManifest, repositories] = await Promise.all([
@@ -224,19 +249,6 @@ class CheckpointStoreImpl implements CheckpointStoreShape {
     } catch (cause) {
       for (const plan of touched.toReversed()) await rollbackRestorePlan(plan).catch(() => undefined);
       throw cause;
-    }
-  }
-
-  public async deleteSession(input: {readonly projectRoot: string; readonly sessionId: string}): Promise<void> {
-    try {
-      const projectRoot = await canonicalProjectRoot(input.projectRoot);
-      const projectStorage = projectStorageRoot(this.storageRoot, projectRoot);
-      await deleteSessionRefs(join(projectStorage, "repositories"), input.sessionId);
-      await rm(join(projectStorage, "manifests", digest(input.sessionId)), {force: true, recursive: true});
-    } catch {
-      return;
-    } finally {
-      this.scheduleMaintenance();
     }
   }
 

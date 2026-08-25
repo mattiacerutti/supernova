@@ -55,6 +55,22 @@ function runCheckpoint<A>(storageRoot: string, effect: Effect.Effect<A, never, C
   return Effect.runPromise(effect.pipe(Effect.provide(makeCheckpointStoreLive(storageRoot))));
 }
 
+const CONCURRENCY_FIXTURE_FILES = 40;
+
+/** Writes enough tracked content that a restore holds the worktree for a measurable window. */
+async function writeConcurrencyFixture(repo: string, marker: string): Promise<void> {
+  await Promise.all(
+    Array.from({length: CONCURRENCY_FIXTURE_FILES}, (_unused, index) => writeFile(join(repo, `concurrent-${index}.txt`), `${marker}\n${`${marker} line ${index}\n`.repeat(512)}`))
+  );
+}
+
+/** Returns the tree recorded for the project root repository in a checkpoint manifest. */
+async function rootTreeId(storageRoot: string, projectRoot: string, checkpointId: string): Promise<string> {
+  const manifestPath = join(storageRoot, "projects", hash(await realpath(projectRoot)), "manifests", hash(sessionId), `${hash(checkpointId)}.json`);
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  return manifest.repositories.find((repository: {relativeRoot: string}) => repository.relativeRoot === ".").treeId;
+}
+
 function capture(storageRoot: string, projectRoot: string, checkpointId: string): Promise<void> {
   return runCheckpoint(
     storageRoot,
@@ -246,9 +262,7 @@ describe("checkpoint store", () => {
     await capture(storageRoot, repo, "baseline");
 
     const projectStorage = join(storageRoot, "projects", hash(await realpath(repo)));
-    const baselineManifest = JSON.parse(
-      await readFile(join(projectStorage, "manifests", hash(sessionId), `${hash("baseline")}.json`), "utf8")
-    );
+    const baselineManifest = JSON.parse(await readFile(join(projectStorage, "manifests", hash(sessionId), `${hash("baseline")}.json`), "utf8"));
     const rootState = baselineManifest.repositories.find((repository: {relativeRoot: string}) => repository.relativeRoot === ".");
     const childState = baselineManifest.repositories.find((repository: {relativeRoot: string}) => repository.relativeRoot === "child");
     const rootShadowGitDir = join(projectStorage, "repositories", rootState.repositoryId, "git");
@@ -259,9 +273,7 @@ describe("checkpoint store", () => {
     await expect(capture(storageRoot, repo, "incomplete")).rejects.toThrow();
 
     await expect(stat(join(projectStorage, "manifests", hash(sessionId), `${hash("incomplete")}.json`))).rejects.toThrow();
-    await expect(
-      gitOutput(repo, ["--git-dir", rootShadowGitDir, "rev-parse", "--verify", checkpointRefName(sessionId, "incomplete")])
-    ).rejects.toThrow();
+    await expect(gitOutput(repo, ["--git-dir", rootShadowGitDir, "rev-parse", "--verify", checkpointRefName(sessionId, "incomplete")])).rejects.toThrow();
   });
 
   it("rolls back earlier repositories when a later restore refuses to remove nested Git metadata", async () => {
@@ -375,5 +387,65 @@ describe("checkpoint store", () => {
     const parentTree = manifest.repositories.find((repository: {relativeRoot: string}) => repository.relativeRoot === ".");
     const parentGitDir = join(projectStorage, "repositories", parentTree.repositoryId, "git");
     await expect(gitOutput(repo, ["--git-dir", parentGitDir, "ls-tree", "-r", "--name-only", parentTree.treeId])).resolves.not.toContain("child/");
+  });
+
+  it("captures a consistent workspace when a capture runs during a restore", async () => {
+    const repo = await createRepo();
+    const storageRoot = mkdtempSync(join(tmpdir(), "supernova-checkpoint-storage-"));
+    tempDirs.push(repo, storageRoot);
+    await writeConcurrencyFixture(repo, "before");
+    await git(repo, ["add", "."]);
+    await git(repo, ["commit", "-m", "concurrency fixture"]);
+    await capture(storageRoot, repo, "before");
+    await writeConcurrencyFixture(repo, "after");
+    await capture(storageRoot, repo, "after");
+
+    const results = await runCheckpoint(
+      storageRoot,
+      Effect.gen(function* () {
+        const store = yield* CheckpointStore;
+        return yield* Effect.promise(() =>
+          Promise.allSettled([
+            store.restore({checkpointId: "before", fromCheckpointId: "after", projectRoot: repo, sessionId}),
+            store.capture({checkpointId: "concurrent", projectRoot: repo, sessionId}),
+          ])
+        );
+      })
+    );
+
+    expect(results.map(({status}) => status)).toEqual(["fulfilled", "fulfilled"]);
+    const [beforeTree, afterTree, concurrentTree] = await Promise.all(["before", "after", "concurrent"].map((checkpointId) => rootTreeId(storageRoot, repo, checkpointId)));
+    // The capture either precedes or follows the restore. A torn read would
+    // record a tree matching neither checkpoint.
+    expect([afterTree, beforeTree]).toContain(concurrentTree);
+  });
+
+  it("serializes concurrent restores instead of interleaving worktree mutations", async () => {
+    const repo = await createRepo();
+    const storageRoot = mkdtempSync(join(tmpdir(), "supernova-checkpoint-storage-"));
+    tempDirs.push(repo, storageRoot);
+    await writeConcurrencyFixture(repo, "before");
+    await git(repo, ["add", "."]);
+    await git(repo, ["commit", "-m", "concurrency fixture"]);
+    await capture(storageRoot, repo, "before");
+    await writeConcurrencyFixture(repo, "after");
+    await capture(storageRoot, repo, "after");
+
+    const results = await runCheckpoint(
+      storageRoot,
+      Effect.gen(function* () {
+        const store = yield* CheckpointStore;
+        const restoreToBefore = () => store.restore({checkpointId: "before", fromCheckpointId: "after", projectRoot: repo, sessionId});
+        return yield* Effect.promise(() => Promise.allSettled([restoreToBefore(), restoreToBefore()]));
+      })
+    );
+
+    // The second restore observes the completed first restore, so its conflict
+    // check rejects instead of mutating a partially restored worktree.
+    expect(results.filter(({status}) => status === "fulfilled")).toHaveLength(1);
+    expect(results.filter(({status}) => status === "rejected")).toHaveLength(1);
+
+    await capture(storageRoot, repo, "verification");
+    await expect(rootTreeId(storageRoot, repo, "verification")).resolves.toBe(await rootTreeId(storageRoot, repo, "before"));
   });
 });

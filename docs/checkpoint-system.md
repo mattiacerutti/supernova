@@ -497,14 +497,23 @@ Objects available only through the source repository alternate remain dependent 
 - Session archival releases the runtime before moving the session file or deleting checkpoint refs.
 - Runtime-layer shutdown disposes all retained runtimes.
 
-The checkpoint store does not provide a workspace-wide or cross-process mutation lock. Concurrent sessions or processes that modify the same affected paths can race; conflict detection narrows the risk but is not a locking mechanism.
+The checkpoint store serializes capture and restore per canonical project root with an
+in-process keyed lock. Concurrent sessions in the same project queue instead of observing
+each other mid-operation, so a capture never records a partially restored worktree and two
+restores never interleave worktree mutations. Different projects remain fully concurrent,
+and session cleanup is not serialized because ref deletion and manifest removal are
+independent of worktree state.
+
+The lock is process-local and project-scoped. It does not protect against a second
+Supernova process, against two overlapping project roots that share one worktree, or
+against agent tool writes that run outside checkpoint operations.
 
 ## Accepted limitations
 
 - A process crash during restore can leave a partially restored workspace.
 - Restore is not atomic across repositories.
 - There is no startup restore journal or recovery pass.
-- There is no workspace-level or cross-process lock.
+- There is no cross-process lock, and agent tool writes are not serialized against checkpoint operations.
 - Discovery includes only the project root and immediate child repositories.
 - Loose files outside discovered repositories are ignored.
 - Untracked files larger than 2 MiB are ignored; tracked files remain uncapped.
