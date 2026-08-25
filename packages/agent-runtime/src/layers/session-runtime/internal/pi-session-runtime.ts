@@ -9,8 +9,13 @@ import type {PiSessionManager, PiSessionStoreShape} from "@supernova/agent-runti
 import type {PiAgentSessionFactoryShape} from "@supernova/agent-runtime/layers/session-runtime/internal/pi-agent-session-factory";
 import type {CheckpointStoreShape} from "@supernova/agent-runtime/layers/session-runtime/internal/checkpoint-store";
 import type {SessionEventBusShape} from "@supernova/agent-runtime/layers/session-runtime/internal/session-event-bus";
-import {CHECKPOINT_CURSOR_CUSTOM_TYPE, CHECKPOINT_CUSTOM_TYPE, invalidateCheckpointRedo} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-entries";
-import type {CheckpointEntry} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-entries";
+import {
+  CHECKPOINT_CURSOR_CUSTOM_TYPE,
+  CHECKPOINT_CUSTOM_TYPE,
+  invalidateCheckpointRedo,
+  isCapturedCheckpoint,
+} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-entries";
+import type {CheckpointEntry, CheckpointStatus} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-entries";
 import {buildSessionSnapshot} from "@supernova/agent-runtime/layers/session-runtime/lib/session-snapshot";
 import {findSelectedModel} from "@supernova/agent-runtime/layers/session-runtime/lib/models/selected-model";
 import {toPiThinkingLevel} from "@supernova/agent-runtime/layers/session-runtime/lib/models/thinking-levels";
@@ -147,9 +152,11 @@ export class PiSessionRuntime {
   }
 
   /** Accepts and starts one prepared user turn, returning its background completion. */
-  public startTurn(input: {readonly beforeCheckpointId: string; readonly messageContext: SendMessageContext; readonly title: string | undefined}): {
-    readonly completion: Promise<void>;
-  } {
+  public startTurn(input: {
+    readonly beforeCheckpoint: {readonly checkpointId: string; readonly status: CheckpointStatus};
+    readonly messageContext: SendMessageContext;
+    readonly title: string | undefined;
+  }): {readonly completion: Promise<void>} {
     if (this.cancelled) throw new Error("Session was cancelled.");
 
     const agentSession = this.agentSession;
@@ -166,7 +173,12 @@ export class PiSessionRuntime {
       {
         baseParentId: sessionManager.getBranch().at(-1)?.id ?? null,
         contextWindow: selectedModel.model.contextWindow,
-        customEntries: [{customType: CHECKPOINT_CUSTOM_TYPE, data: {checkpointId: input.beforeCheckpointId, phase: "before-turn"}}],
+        customEntries: [
+          {
+            customType: CHECKPOINT_CUSTOM_TYPE,
+            data: {checkpointId: input.beforeCheckpoint.checkpointId, phase: "before-turn", status: input.beforeCheckpoint.status},
+          },
+        ],
         messageContext: input.messageContext,
         modelReference: selectedModel.modelReference,
       },
@@ -190,8 +202,8 @@ export class PiSessionRuntime {
       await this.waitForPiSettlement();
 
       const afterTurnCheckpointId = randomUUID();
-      await this.createCheckpoint(afterTurnCheckpointId);
-      sessionManager.appendCustomEntry(CHECKPOINT_CUSTOM_TYPE, {checkpointId: afterTurnCheckpointId, phase: "after-turn"});
+      const afterTurnStatus = await this.createCheckpoint(afterTurnCheckpointId);
+      sessionManager.appendCustomEntry(CHECKPOINT_CUSTOM_TYPE, {checkpointId: afterTurnCheckpointId, phase: "after-turn", status: afterTurnStatus});
       sessionManager.appendCustomEntry(CHECKPOINT_CURSOR_CUSTOM_TYPE, {leafEntryId: sessionManager.getLeafId()});
 
       await this.publishSessionSnapshot();
@@ -205,17 +217,24 @@ export class PiSessionRuntime {
     return this.running ? this.committedSession : undefined;
   }
 
-  /** Restores the workspace and moves the active Pi session to a checkpoint. */
+  /**
+   * Restores the workspace and moves the active Pi session to a checkpoint.
+   *
+   * Workspace files are restored only when both boundaries have durable manifests.
+   * An uncovered boundary moves the conversation alone, leaving files as they are.
+   */
   public async navigateToCheckpoint(target: CheckpointEntry, current: CheckpointEntry, cursorLeafEntryId: string): Promise<void> {
     const agentSession = this.agentSession;
     if (!agentSession) throw new Error("Agent session is not initialized.");
 
     const sessionManager = agentSession.sessionManager;
-    await this.restoreCheckpoint({
-      checkpointId: target.data.checkpointId,
-      fromCheckpointId: current.data.checkpointId,
-      projectRoot: sessionManager.getCwd(),
-    });
+    if (isCapturedCheckpoint(target) && isCapturedCheckpoint(current)) {
+      await this.restoreCheckpoint({
+        checkpointId: target.data.checkpointId,
+        fromCheckpointId: current.data.checkpointId,
+        projectRoot: sessionManager.getCwd(),
+      });
+    }
 
     sessionManager.branch(target.id);
     sessionManager.appendCustomEntry(CHECKPOINT_CURSOR_CUSTOM_TYPE, {leafEntryId: cursorLeafEntryId});
@@ -259,13 +278,19 @@ export class PiSessionRuntime {
     return this.cancelled;
   }
 
-  /** Captures a stable workspace checkpoint for the current session project. */
-  public async createCheckpoint(checkpointId: string): Promise<void> {
+  /**
+   * Captures a workspace checkpoint for the current session project.
+   *
+   * Capture is best-effort: a failure leaves the boundary uncovered instead of
+   * rejecting the command, so provider work is never blocked by checkpoint storage.
+   */
+  public async createCheckpoint(checkpointId: string): Promise<CheckpointStatus> {
     const agentSession = await this.getAgentSession();
     try {
       await this.checkpointStore.capture({checkpointId, projectRoot: agentSession.sessionManager.getCwd(), sessionId: this.sessionId});
+      return "captured";
     } catch {
-      throw new Error("Failed to capture workspace checkpoint.");
+      return "failed";
     }
   }
 

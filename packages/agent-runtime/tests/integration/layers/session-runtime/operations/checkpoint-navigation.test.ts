@@ -955,7 +955,7 @@ describe("checkpoint navigation", () => {
     });
   });
 
-  it("preserves the redo path and skips provider work when before-turn capture fails", async () => {
+  it("runs the turn from an uncovered before-turn checkpoint when capture fails after an undo", async () => {
     let rejectCapture = false;
     const checkpointStore: CheckpointStoreShape = {
       capture: async () => {
@@ -966,34 +966,39 @@ describe("checkpoint navigation", () => {
     };
     const pi = await createPiTestRuntime({checkpointStore});
     runtimes.push(pi);
-    const {info} = pi.createSession();
-    pi.faux.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two"), fauxAssistantMessage("must not run")]);
+    const {info, manager} = pi.createSession();
+    pi.faux.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two"), fauxAssistantMessage("replacement")]);
 
     await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
     await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
     await runSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.undoCheckpoint({sessionId: info.id})});
     rejectCapture = true;
 
-    await expect(pi.sendMessage({message: "replacement", modelReference: selectedModelReference, sessionId: info.id})).rejects.toThrow(
-      "Failed to capture workspace checkpoint."
-    );
+    const events = await pi.sendMessage({message: "replacement", modelReference: selectedModelReference, sessionId: info.id});
     const loadedAfterFailure = await pi.runWithSessions(
       Effect.gen(function* () {
         const sessions = yield* SessionsService;
         return yield* sessions.get(info.id);
       })
     );
+    const checkpointEntries = manager
+      .getBranch()
+      .filter((entry) => entry.type === "custom")
+      .filter((entry) => entry.customType === "supernova.checkpoint");
 
-    expect(loadedAfterFailure.turns.map((turn) => turn.userMessage.contentParts[0])).toEqual([{text: "one", type: "text"}]);
-    expect(loadedAfterFailure.undoneTurns.map((turn) => turn.userMessage.contentParts[0])).toEqual([{text: "two", type: "text"}]);
-    expect(pi.faux.state.callCount).toBe(2);
-
-    rejectCapture = false;
-    const redoEvents = await runSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.redoCheckpoint({sessionId: info.id})});
-    expect(snapshotEvents(redoEvents).at(-1)?.session.turns.map((turn) => turn.userMessage.contentParts[0])).toEqual([
+    // The turn proceeds and branches from the undone checkpoint, so the redo path is
+    // replaced rather than preserved. Its boundaries record the failed capture.
+    expect(errorEvents(events)).toEqual([]);
+    expect(loadedAfterFailure.turns.map((turn) => turn.userMessage.contentParts[0])).toEqual([
       {text: "one", type: "text"},
-      {text: "two", type: "text"},
+      {text: "replacement", type: "text"},
     ]);
+    expect(loadedAfterFailure.undoneTurns).toEqual([]);
+    expect(checkpointEntries.map((entry) => entry.data).slice(-2)).toEqual([
+      {checkpointId: expect.any(String), phase: "before-turn", status: "failed"},
+      {checkpointId: expect.any(String), phase: "after-turn", status: "failed"},
+    ]);
+    expect(pi.faux.state.callCount).toBe(3);
   });
 
   it("does not redo after a new branch diverges from an undone checkpoint", async () => {
@@ -1118,6 +1123,71 @@ describe("checkpoint navigation", () => {
     expect(errorEvents(revertEvents)).toEqual([]);
     expect(
       snapshotEvents(revertEvents)
+        .at(-1)
+        ?.session.turns.map((turn) => turn.userMessage.contentParts[0])
+    ).toEqual([{text: "one", type: "text"}]);
+  });
+
+  it("moves the conversation without restoring files when a checkpoint boundary is not covered", async () => {
+    const projectPath = await createProject();
+    tempDirs.push(projectPath);
+    const restoreCalls: Array<{readonly checkpointId: string; readonly fromCheckpointId: string}> = [];
+    let captureCount = 0;
+    const checkpointStore: CheckpointStoreShape = {
+      capture: async () => {
+        captureCount++;
+        // Fails the second turn's after-turn capture, leaving that boundary uncovered.
+        if (captureCount === 4) throw new Error("Sensitive Git failure");
+      },
+      deleteSession: async () => undefined,
+      restore: async ({checkpointId, fromCheckpointId}) => {
+        restoreCalls.push({checkpointId, fromCheckpointId});
+      },
+    };
+    const pi = await createPiTestRuntime({checkpointStore});
+    runtimes.push(pi);
+    const {info} = pi.createSession(projectPath);
+    pi.faux.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
+
+    await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
+
+    const undoEvents = await runSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.undoCheckpoint({sessionId: info.id})});
+
+    expect(errorEvents(undoEvents)).toEqual([]);
+    expect(restoreCalls).toEqual([]);
+    expect(
+      snapshotEvents(undoEvents)
+        .at(-1)
+        ?.session.turns.map((turn) => turn.userMessage.contentParts[0])
+    ).toEqual([{text: "one", type: "text"}]);
+  });
+
+  it("restores files when both checkpoint boundaries are covered", async () => {
+    const projectPath = await createProject();
+    tempDirs.push(projectPath);
+    const restoreCalls: Array<{readonly checkpointId: string; readonly fromCheckpointId: string}> = [];
+    const checkpointStore: CheckpointStoreShape = {
+      capture: async () => undefined,
+      deleteSession: async () => undefined,
+      restore: async ({checkpointId, fromCheckpointId}) => {
+        restoreCalls.push({checkpointId, fromCheckpointId});
+      },
+    };
+    const pi = await createPiTestRuntime({checkpointStore});
+    runtimes.push(pi);
+    const {info} = pi.createSession(projectPath);
+    pi.faux.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
+
+    await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
+
+    const undoEvents = await runSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.undoCheckpoint({sessionId: info.id})});
+
+    expect(errorEvents(undoEvents)).toEqual([]);
+    expect(restoreCalls).toEqual([{checkpointId: expect.any(String), fromCheckpointId: expect.any(String)}]);
+    expect(
+      snapshotEvents(undoEvents)
         .at(-1)
         ?.session.turns.map((turn) => turn.userMessage.contentParts[0])
     ).toEqual([{text: "one", type: "text"}]);

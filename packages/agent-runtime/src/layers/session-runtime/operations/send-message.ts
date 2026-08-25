@@ -32,10 +32,10 @@ export async function sendMessage(runtime: PiSessionRuntime, titleGenerator: PiS
     });
 
     const checkpointId = randomUUID();
-    await runtime.createCheckpoint(checkpointId);
+    const checkpointStatus = await runtime.createCheckpoint(checkpointId);
     await runtime.selectModel(selectedModel);
 
-    const {completion} = runtime.startTurn({beforeCheckpointId: checkpointId, messageContext, title: generatedTitle});
+    const {completion} = runtime.startTurn({beforeCheckpoint: {checkpointId, status: checkpointStatus}, messageContext, title: generatedTitle});
 
     void completion
       .catch(async (cause) => {

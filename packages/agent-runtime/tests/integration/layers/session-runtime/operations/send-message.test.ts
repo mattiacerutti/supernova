@@ -276,7 +276,35 @@ describe("sending messages through Pi sessions", () => {
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("after\n");
   });
 
-  it("publishes a generic error without an after-turn checkpoint or cursor when settled capture fails", async () => {
+  it("runs the turn with an uncovered before-turn checkpoint when the initial capture fails", async () => {
+    let captureCount = 0;
+    const checkpointStore: CheckpointStoreShape = {
+      capture: async () => {
+        captureCount++;
+        if (captureCount === 1) throw new Error("Sensitive Git failure");
+      },
+      deleteSession: async () => undefined,
+      restore: async () => undefined,
+    };
+    const pi = await createPiTestRuntime({checkpointStore});
+    runtimes.push(pi);
+    const {info, manager} = pi.createSession();
+    pi.faux.setResponses([fauxAssistantMessage("Changed files.")]);
+
+    const events = await pi.sendMessage({message: "change files", modelReference: selectedModelReference, sessionId: info.id});
+    const customEntries = manager.getBranch().filter((entry) => entry.type === "custom");
+    const checkpointEntries = customEntries.filter((entry) => entry.customType === "supernova.checkpoint");
+
+    expect(events.filter((event) => event.type === "session.error")).toEqual([]);
+    expect(checkpointEntries.map((entry) => entry.data)).toEqual([
+      {checkpointId: expect.any(String), phase: "before-turn", status: "failed"},
+      {checkpointId: expect.any(String), phase: "after-turn", status: "captured"},
+    ]);
+    expect(snapshotEvents(events).at(-1)?.session.turns.at(-1)?.userMessage.contentParts).toEqual([{text: "change files", type: "text"}]);
+    expect(pi.faux.state.callCount).toBe(1);
+  });
+
+  it("commits the turn with an uncovered after-turn checkpoint when settled capture fails", async () => {
     let captureCount = 0;
     const checkpointStore: CheckpointStoreShape = {
       capture: async () => {
@@ -294,15 +322,13 @@ describe("sending messages through Pi sessions", () => {
     const events = await pi.sendMessage({message: "change files", modelReference: selectedModelReference, sessionId: info.id});
     const customEntries = manager.getBranch().filter((entry) => entry.type === "custom");
 
-    expect(events.find((event) => event.type === "session.error")).toMatchObject({
-      error: "Failed to capture workspace checkpoint.",
-      type: "session.error",
-    });
-    expect(events.some((event) => event.type === "session.snapshot")).toBe(false);
-    expect(customEntries.filter((entry) => entry.customType === "supernova.checkpoint").map((entry) => (entry.data as {phase?: string}).phase)).toEqual([
-      "before-turn",
+    expect(events.filter((event) => event.type === "session.error")).toEqual([]);
+    expect(customEntries.filter((entry) => entry.customType === "supernova.checkpoint").map((entry) => entry.data)).toEqual([
+      {checkpointId: expect.any(String), phase: "before-turn", status: "captured"},
+      {checkpointId: expect.any(String), phase: "after-turn", status: "failed"},
     ]);
-    expect(customEntries.some((entry) => entry.customType === "supernova.checkpoint-cursor")).toBe(false);
+    expect(customEntries.some((entry) => entry.customType === "supernova.checkpoint-cursor")).toBe(true);
+    expect(snapshotEvents(events).at(-1)?.session.turns.at(-1)?.userMessage.contentParts).toEqual([{text: "change files", type: "text"}]);
     expect(pi.faux.state.callCount).toBe(1);
   });
 

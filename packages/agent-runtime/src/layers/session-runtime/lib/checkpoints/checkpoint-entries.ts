@@ -6,11 +6,17 @@ export const CHECKPOINT_CURSOR_CUSTOM_TYPE = "supernova.checkpoint-cursor";
 
 export type CheckpointPhase = "before-turn" | "after-turn";
 
+/** Whether a checkpoint boundary has durable workspace state behind it. */
+// TODO: Nothing produces "disabled" yet. It is reserved for the setting that turns off workspace checkpointing.
+export type CheckpointStatus = "captured" | "disabled" | "failed";
+
 interface CheckpointEntryData {
   /** Unique identifier for the checkpoint, used for git restoration. */
   readonly checkpointId: string;
   /** Position of this checkpoint around a user turn. */
   readonly phase: CheckpointPhase;
+  /** Coverage of this boundary. Entries written before this field existed are captured. */
+  readonly status?: CheckpointStatus;
 }
 
 interface CheckpointCursorEntryData {
@@ -34,6 +40,11 @@ export function isCheckpointEntry(entry: SessionEntry): entry is CheckpointEntry
 
 export function isCheckpointAfterTurnEntry(entry: SessionEntry): entry is CheckpointEntry {
   return isCheckpointEntry(entry) && entry.data.phase === "after-turn";
+}
+
+/** Returns whether a checkpoint boundary has a durable workspace manifest behind it. */
+export function isCapturedCheckpoint(entry: CheckpointEntry): boolean {
+  return (entry.data.status ?? "captured") === "captured";
 }
 
 function isCheckpointCursorEntry(entry: SessionEntry): entry is CheckpointCursorEntry {
