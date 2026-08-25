@@ -83,6 +83,7 @@ Architecture:
   - `bun run test`
   - `bun run typecheck`
   - `bun run lint`
+  - `bun run prettier`
 - Before editing a file, check whether its package directory contain a nested `AGENTS.md` and read it. Follow those local instructions in addition to this root file for files under that scope.
 
 ## Reference Repositories

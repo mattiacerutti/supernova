@@ -70,11 +70,7 @@ export default function AssistantWork(props: AssistantWorkProps) {
 
   return (
     <section className="space-y-2">
-      <Button
-        className="group inline-flex w-fit select-none gap-1.5 px-0 py-0 text-sm text-ink-muted hover:text-ink-muted items-center "
-        onClick={handleToggle}
-        variant="ghost"
-      >
+      <Button className="group inline-flex w-fit select-none gap-1.5 px-0 py-0 text-sm text-ink-muted hover:text-ink-muted items-center " onClick={handleToggle} variant="ghost">
         <span>Worked for {formatDuration(item.durationMs)}</span>
         <Icon className={cn("transition-transform duration-160 ease-out", showExpanded && "rotate-90")} name="chevron-right" size="xs" />
       </Button>

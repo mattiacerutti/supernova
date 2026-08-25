@@ -32,7 +32,11 @@ export default function ProviderConnectMethodContent(props: ProviderConnectMetho
         >
           <Icon name="key" size="sm" />
           <span className="flex-1 text-sm text-ink">Use an API key</span>
-          <Icon className={pendingMethod === "api_key" ? "animate-spin text-ink-muted" : "text-ink-muted"} name={pendingMethod === "api_key" ? "loader" : "arrow-right"} size="xs" />
+          <Icon
+            className={pendingMethod === "api_key" ? "animate-spin text-ink-muted" : "text-ink-muted"}
+            name={pendingMethod === "api_key" ? "loader" : "arrow-right"}
+            size="xs"
+          />
         </Button>
       </div>
     </div>

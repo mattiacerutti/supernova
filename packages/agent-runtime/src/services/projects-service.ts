@@ -1,10 +1,5 @@
 import {Context, Effect} from "effect";
-import type {
-  ProjectSessionArchiveError,
-  ProjectSessionsListError,
-  ProjectSessionArchiveResult,
-  ProjectSessionsListResult,
-} from "@supernova/contracts/projects/procedures";
+import type {ProjectSessionArchiveError, ProjectSessionsListError, ProjectSessionArchiveResult, ProjectSessionsListResult} from "@supernova/contracts/projects/procedures";
 
 export interface ProjectsServiceShape {
   readonly archiveSession: (projectPath: string, sessionId: string) => Effect.Effect<ProjectSessionArchiveResult, ProjectSessionArchiveError>;

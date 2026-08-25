@@ -10,7 +10,8 @@ interface CreateSessionMutationInput {
 export function useCreateSession() {
   return useMutation(
     eq.mutationOptions({
-      mutationFn: (input: CreateSessionMutationInput) => Effect.flatMap(Effect.service(AgentRpcProtocolClientService), (rpc) => rpc.createSession({projectPath: input.projectPath})),
+      mutationFn: (input: CreateSessionMutationInput) =>
+        Effect.flatMap(Effect.service(AgentRpcProtocolClientService), (rpc) => rpc.createSession({projectPath: input.projectPath})),
     })
   );
 }

@@ -17,7 +17,14 @@ export default function ProvidersSettingsPage() {
   const providersQuery = useListProviders();
 
   const logoutMutation = useLogoutProvider();
-  const {data: loginSession, error: startLoginError, isPending: isStartingLogin, mutate: startLoginMutation, reset: resetLoginMutation, variables: pendingLoginInput} = useStartProviderLogin();
+  const {
+    data: loginSession,
+    error: startLoginError,
+    isPending: isStartingLogin,
+    mutate: startLoginMutation,
+    reset: resetLoginMutation,
+    variables: pendingLoginInput,
+  } = useStartProviderLogin();
   const cancelLoginMutation = useCancelProviderLogin();
 
   const [selectedProvider, setSelectedProvider] = useState<Provider | undefined>();

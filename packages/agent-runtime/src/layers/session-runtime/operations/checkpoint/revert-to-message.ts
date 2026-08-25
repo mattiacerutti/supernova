@@ -1,11 +1,7 @@
 import type {SessionEntry, SessionMessageEntry} from "@earendil-works/pi-coding-agent";
 import type {RevertToMessagePayload} from "@supernova/contracts/session-runtime/procedures";
 import {CheckpointNavigationError} from "@supernova/contracts/session-runtime/procedures";
-import {
-  isCheckpointAfterTurnEntry,
-  isCheckpointEntry,
-  latestCheckpointCursor,
-} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-entries";
+import {isCheckpointAfterTurnEntry, isCheckpointEntry, latestCheckpointCursor} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-entries";
 import type {CheckpointEntry} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-entries";
 import {PiSessionRuntime} from "@supernova/agent-runtime/layers/session-runtime/internal/pi-session-runtime";
 

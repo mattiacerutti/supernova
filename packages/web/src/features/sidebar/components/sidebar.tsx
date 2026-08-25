@@ -16,7 +16,8 @@ import type {SidebarActionId} from "@/features/sidebar/types/sidebar";
 import {sidebarActions} from "@/features/sidebar/stores/sidebar-store";
 
 export default function Sidebar() {
-  const {collapseAllProjects, expandProject, expandedProjects, isPinnedCollapsed, isProjectsCollapsed, togglePinnedCollapsed, toggleProject, toggleProjectsCollapsed} = useSidebarSections();
+  const {collapseAllProjects, expandProject, expandedProjects, isPinnedCollapsed, isProjectsCollapsed, togglePinnedCollapsed, toggleProject, toggleProjectsCollapsed} =
+    useSidebarSections();
   const location = useLocation();
 
   const projects = useProjectList();

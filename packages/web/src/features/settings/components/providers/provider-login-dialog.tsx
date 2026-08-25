@@ -138,7 +138,11 @@ export default function ProviderLoginContent(props: ProviderLoginContentProps) {
                   <span className="block text-sm text-ink">{option.label}</span>
                   {option.description && <span className="block truncate text-xs text-ink-faint">{option.description}</span>}
                 </span>
-                <Icon className={pendingOptionId === option.id ? "animate-spin text-ink-muted" : "text-ink-muted"} name={pendingOptionId === option.id ? "loader" : "arrow-right"} size="xs" />
+                <Icon
+                  className={pendingOptionId === option.id ? "animate-spin text-ink-muted" : "text-ink-muted"}
+                  name={pendingOptionId === option.id ? "loader" : "arrow-right"}
+                  size="xs"
+                />
               </Button>
             ))}
           </div>
@@ -233,14 +237,7 @@ export default function ProviderLoginContent(props: ProviderLoginContentProps) {
           {complete ? "Close" : "Cancel"}
         </Button>
         {textInput && (
-          <Button
-            className="w-auto px-3 text-xs"
-            disabled={waitingForNextStep || !canSubmitTextInput}
-            form="provider-login-input-form"
-            size="sm"
-            type="submit"
-            variant="primary"
-          >
+          <Button className="w-auto px-3 text-xs" disabled={waitingForNextStep || !canSubmitTextInput} form="provider-login-input-form" size="sm" type="submit" variant="primary">
             Continue
           </Button>
         )}

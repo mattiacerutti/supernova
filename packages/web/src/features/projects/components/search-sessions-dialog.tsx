@@ -69,15 +69,17 @@ export default function SearchSessionsDialog(props: SearchSessionsDialogProps) {
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const sessions = projectSessionQueries.flatMap((projectSessionsQuery) =>
     (projectSessionsQuery.data?.sessions ?? [])
-      .map((session): SessionSearchResultRow => ({
-        id: session.id,
-        projectName: projectNamesByPath.get(projectSessionsQuery.data?.projectPath ?? "") ?? projectSessionsQuery.data?.projectPath ?? "Unknown project",
-        projectPath: projectSessionsQuery.data?.projectPath ?? "",
-        timestamp: Date.parse(session.updatedAt),
-        title: session.title,
-        type: "session",
-        updatedAt: formatUpdatedAt(session.updatedAt),
-      }))
+      .map(
+        (session): SessionSearchResultRow => ({
+          id: session.id,
+          projectName: projectNamesByPath.get(projectSessionsQuery.data?.projectPath ?? "") ?? projectSessionsQuery.data?.projectPath ?? "Unknown project",
+          projectPath: projectSessionsQuery.data?.projectPath ?? "",
+          timestamp: Date.parse(session.updatedAt),
+          title: session.title,
+          type: "session",
+          updatedAt: formatUpdatedAt(session.updatedAt),
+        })
+      )
       .filter((session) => normalizedQuery.length === 0 || session.title.toLocaleLowerCase().includes(normalizedQuery))
       .toSorted((left, right) => right.timestamp - left.timestamp)
   );

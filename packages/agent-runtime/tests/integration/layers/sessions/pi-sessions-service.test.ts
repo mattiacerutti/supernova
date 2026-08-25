@@ -100,8 +100,6 @@ describe("Pi sessions service", () => {
     );
 
     expect(pi.refreshCount).toBe(1);
-    expect(models).toEqual(
-      expect.arrayContaining([expect.objectContaining({id: "claude-sonnet", name: "Claude Sonnet", providerId: "anthropic", providerName: "Anthropic"})])
-    );
+    expect(models).toEqual(expect.arrayContaining([expect.objectContaining({id: "claude-sonnet", name: "Claude Sonnet", providerId: "anthropic", providerName: "Anthropic"})]));
   });
 });

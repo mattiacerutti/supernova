@@ -14,9 +14,7 @@ import {showToast} from "@/components/ui/toast-manager";
 
 export type ComposerAttachmentDropZoneProps = Pick<HTMLAttributes<HTMLDivElement>, "onDragEnter" | "onDragLeave" | "onDragOver" | "onDrop">;
 
-export type ComposerAttachmentsUpdate =
-  | readonly UserMessageAttachmentPart[]
-  | ((attachments: readonly UserMessageAttachmentPart[]) => readonly UserMessageAttachmentPart[]);
+export type ComposerAttachmentsUpdate = readonly UserMessageAttachmentPart[] | ((attachments: readonly UserMessageAttachmentPart[]) => readonly UserMessageAttachmentPart[]);
 
 export interface ComposerAttachmentsController {
   readonly addFiles: (files: readonly File[]) => void;

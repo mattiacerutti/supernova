@@ -51,11 +51,4 @@ export const ProviderLogoutRpc = Rpc.make("logoutProvider", {
   success: ProviderLogoutResult,
 });
 
-export const ProviderRpcs = [
-  ProvidersListRpc,
-  ProviderLoginStartRpc,
-  ProviderLoginInputSubmitRpc,
-  ProviderLoginCancelRpc,
-  ProviderLoginWatchRpc,
-  ProviderLogoutRpc,
-] as const;
+export const ProviderRpcs = [ProvidersListRpc, ProviderLoginStartRpc, ProviderLoginInputSubmitRpc, ProviderLoginCancelRpc, ProviderLoginWatchRpc, ProviderLogoutRpc] as const;

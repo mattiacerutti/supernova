@@ -137,9 +137,7 @@ test.describe("session timeline visual stability", () => {
     const messageText = "Anchor this message at the top of the timeline";
     await timeline.sendMessage(messageText);
 
-    await expect
-      .poll(() => timeline.messageViewportTop(messageText), {message: "the sent message should settle near the viewport top"})
-      .toBeLessThanOrEqual(30);
+    await expect.poll(() => timeline.messageViewportTop(messageText), {message: "the sent message should settle near the viewport top"}).toBeLessThanOrEqual(30);
     expect(await timeline.messageViewportTop(messageText), "the sent message should not overshoot the viewport top").toBeGreaterThanOrEqual(0);
     expect(await timeline.fakeSpaceHeight(), "fake space should back the anchored position").toBeGreaterThan(0);
     await timeline.expectAtBottom();

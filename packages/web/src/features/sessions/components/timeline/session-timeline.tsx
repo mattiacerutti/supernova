@@ -284,9 +284,7 @@ export default function SessionTimeline(props: SessionTimelineProps) {
     if (isProgrammaticScroll && bottomDistance <= 1) finishProgrammaticScroll();
     syncFakeSpace(viewport);
     setScrollButtonVisible(
-      !shouldSetInitialPositionRef.current &&
-        !isProgrammaticScroll &&
-        viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop >= TIMELINE_SCROLL_BUTTON_THRESHOLD_PX
+      !shouldSetInitialPositionRef.current && !isProgrammaticScroll && viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop >= TIMELINE_SCROLL_BUTTON_THRESHOLD_PX
     );
   };
 
@@ -412,10 +410,7 @@ export default function SessionTimeline(props: SessionTimelineProps) {
                 initial={{opacity: 0, scale: 0.95, x: "-50%", y: shouldReduceMotion ? 0 : "100%"}}
                 style={{bottom: `calc(1rem + ${bottomOverlayHeight}px)`}}
               >
-                <MessageScrollerButton
-                  behavior="auto"
-                  className="static translate-x-0 bg-surface transition-colors hover:bg-surface-popover rtl:translate-x-0"
-                />
+                <MessageScrollerButton behavior="auto" className="static translate-x-0 bg-surface transition-colors hover:bg-surface-popover rtl:translate-x-0" />
               </motion.div>
             )}
           </AnimatePresence>

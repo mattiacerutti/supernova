@@ -147,11 +147,9 @@ export class PiSessionRuntime {
   }
 
   /** Accepts and starts one prepared user turn, returning its background completion. */
-  public startTurn(input: {
-    readonly beforeCheckpointId: string;
-    readonly messageContext: SendMessageContext;
-    readonly title: string | undefined;
-  }): {readonly completion: Promise<void>} {
+  public startTurn(input: {readonly beforeCheckpointId: string; readonly messageContext: SendMessageContext; readonly title: string | undefined}): {
+    readonly completion: Promise<void>;
+  } {
     if (this.cancelled) throw new Error("Session was cancelled.");
 
     const agentSession = this.agentSession;

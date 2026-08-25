@@ -13,3 +13,7 @@ if (process.versions.bun !== expectedBunVersion) {
   throw new Error(`This repo requires bun@${expectedBunVersion}, but you are using bun@${process.versions.bun}`);
 }
 '
+
+bun run prettier
+bun run lint
+bun run typecheck
