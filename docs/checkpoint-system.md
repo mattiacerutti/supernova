@@ -37,7 +37,7 @@ The architecture is divided into four responsibilities:
 
 ## Core invariants
 
-1. A Pi file-checkpoint entry is appended only after its workspace manifest is durable.
+1. A Pi file-checkpoint entry claiming coverage is appended only after its workspace manifest is durable.
 2. A checkpoint manifest is published only after every covered repository has a tree and private ref.
 3. Workspace restoration completes and verifies before the Pi branch or cursor moves.
 4. Restore mutates only paths changed between the current and target checkpoint trees.
@@ -55,6 +55,7 @@ Supernova stores two Pi custom-entry types.
 interface CheckpointEntryData {
   readonly checkpointId: string;
   readonly phase: "before-turn" | "after-turn";
+  readonly status?: "captured" | "disabled" | "failed";
 }
 
 interface CheckpointCursorEntryData {
@@ -66,6 +67,41 @@ interface CheckpointCursorEntryData {
 - `supernova.checkpoint-cursor` records the visible checkpoint and the redo leaf.
 - The cursor entry's parent is the currently visible checkpoint node.
 - `leafEntryId` is the end of the branch that remains available for redo.
+
+### Checkpoint coverage
+
+`status` records whether a boundary has a durable workspace manifest behind it.
+
+| Status               | Meaning                                                                 |
+| -------------------- | ----------------------------------------------------------------------- |
+| `captured` or absent | A manifest exists for `checkpointId`. Absent entries predate the field. |
+| `failed`             | Capture failed. No manifest was published.                              |
+| `disabled`           | Checkpointing was off for this turn. No capture was attempted.          |
+
+Every turn appends both boundary entries and a cursor regardless of coverage, so turn
+boundaries and conversation navigation stay intact when no workspace state was captured.
+Workspace restoration requires both the current and target boundary to be captured;
+otherwise navigation moves the conversation alone and leaves files untouched.
+
+Both boundaries are required because a selective restore needs both trees: the plan is the
+delta between them, and the conflict check compares the worktree against the current tree.
+With no current tree there is no delta to compute and no way to separate agent changes from
+manual edits, so a captured target cannot be restored on its own.
+
+### Crossing an uncovered boundary
+
+Navigating across an uncovered boundary moves the conversation while the worktree stays
+where the turn left it, so conversation position and workspace state diverge. That
+divergence is not tracked, and it has two consequences on later navigation:
+
+- The next restore between two captured boundaries compares the worktree against the current
+  checkpoint tree. If the uncovered turns changed any path in that delta, the conflict check
+  fails and the restore is refused until a new turn re-baselines the workspace.
+- If the uncovered turns changed only unrelated paths, the restore proceeds and leaves a
+  mixed workspace: the restored delta is reverted while the uncovered changes remain.
+
+Both outcomes are the ordinary conflict semantics applied to a workspace that drifted from
+its checkpoint. Neither is reported as an uncovered-boundary problem.
 
 ```mermaid
 flowchart LR
@@ -111,21 +147,23 @@ Before starting provider work, `sendMessage()`:
 
 1. Opens the Pi session.
 2. Generates a checkpoint ID.
-3. Captures the before-turn workspace state.
+3. Captures the before-turn workspace state and records the resulting status.
 4. Invalidates an old redo path if the user is branching from an undone checkpoint.
 5. Queues the before-turn checkpoint entry on the active turn.
-
-Redo is invalidated only after capture succeeds, so a command rejected during capture leaves the existing navigation path intact.
 
 After Pi settles, it:
 
 1. Generates another checkpoint ID.
-2. Captures the after-turn workspace state.
+2. Captures the after-turn workspace state and records the resulting status.
 3. Appends the after-turn checkpoint entry.
 4. Appends a cursor pointing to the new leaf.
 5. Publishes the settled session snapshot.
 
-If before-turn capture fails, the command rejects before provider work starts. If after-turn capture fails, no after-turn checkpoint or cursor is appended and the session emits a generic error.
+Capture is best-effort. A failed capture marks that boundary `failed` and the turn continues:
+provider work still runs, the after-turn entry and cursor are still appended, and the settled
+snapshot is still published. The turn stays navigable, but navigation across that boundary
+does not restore files. Because the turn proceeds, a turn started from an undone checkpoint
+invalidates the redo path whether or not its capture succeeded.
 
 A workspace with no discovered Git repositories still receives valid manifests with empty `repositories` arrays. Conversation undo, redo, and revert therefore continue to work without changing loose files.
 
@@ -405,7 +443,7 @@ Safety trees are not referenced after the restore call and are eventually eligib
 
 ### Conversation commit
 
-`navigateToCheckpoint()` calls `PiSessionRuntime.restoreCheckpoint()` before mutating Pi state. Only after restore succeeds does it:
+`navigateToCheckpoint()` calls `PiSessionRuntime.restoreCheckpoint()` before mutating Pi state, and only when both the current and target boundaries are captured. Only after restore succeeds, or is skipped because a boundary is uncovered, does it:
 
 1. Branch the Pi `SessionManager` to the target checkpoint entry.
 2. Append a checkpoint cursor preserving the redo leaf.
@@ -440,12 +478,12 @@ Checkpoint storage uses ordinary exceptions internally.
 
 At session boundaries:
 
-- Capture failures become `Failed to capture workspace checkpoint.`
+- Capture failures are absorbed and recorded as a `failed` checkpoint boundary instead of failing the turn.
 - Restore failures become `Failed to restore workspace checkpoint.`
 - Internal Git commands, paths, tree IDs, and manifest details are not sent to clients.
 - Checkpoint failures are not logged by the checkpoint system.
 
-The store uses `Promise<void>` rather than booleans so callers cannot accidentally treat a failed capture as a valid checkpoint.
+The store uses `Promise<void>` rather than booleans so callers cannot accidentally treat a failed capture as a valid checkpoint. `PiSessionRuntime.createCheckpoint()` converts that rejection into a boundary status, which is the only place a capture failure is interpreted.
 
 ## Session archival and cleanup
 
@@ -520,4 +558,5 @@ against agent tool writes that run outside checkpoint operations.
 - Empty directories, ownership, ACLs, and extended attributes are not captured.
 - Source object alternates make some checkpoint objects depend on source repository retention.
 - Existing checkpoint data formerly stored in user repositories is not migrated or read.
+- Uncovered checkpoint boundaries are not surfaced to clients, so a turn without workspace coverage looks like any other turn.
 - There is no configurable storage budget or checkpoint-management UI.
