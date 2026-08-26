@@ -167,7 +167,7 @@ async function discoverCandidate(candidate: string, projectRoot: string): Promis
 
   const [gitDir, objectDir] = await Promise.all([realpath(gitDirValue), realpath(objectDirValue)]);
   const gitDirMetadata = await stat(gitDir);
-  const repositoryId = digest(`${canonicalCandidate}\0${gitDir}\0${gitDirMetadata.dev}\0${gitDirMetadata.ino}\0${gitDirMetadata.birthtimeMs}`);
+  const repositoryId = digest(`${canonicalCandidate}\0${gitDir}\0${gitDirMetadata.ino}`);
   const projectRelativeRoot = relative(projectRoot, canonicalCandidate);
   if (!isWithin(projectRoot, canonicalCandidate)) return undefined;
 
