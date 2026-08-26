@@ -235,7 +235,7 @@ Each discovered user worktree has one bare, app-owned shadow repository. It:
 - Stores new checkpoint objects and refs.
 - Uses the user worktree as the command worktree.
 - Uses the source repository's object directory through `objects/info/alternates`.
-- Disables automatic Git garbage collection with `gc.auto=0`.
+- Pins its prune window with `gc.pruneExpire=7.days` and leaves Git's automatic maintenance enabled.
 - Applies `core.autocrlf=false`, `core.longpaths=true`, and `core.symlinks=true` to checkpoint commands.
 
 Capture and restore use temporary indexes under the operating-system temporary directory. Capture seeds its temporary index by copying the source index when available, then refreshes that private copy from the actual worktree. This reuses unchanged object IDs and filesystem metadata without introducing a shared mutable checkpoint index or application-level lock. Repositories without a source index fall back to an empty temporary index. The user's index is never used for writes, and temporary indexes are removed after each operation.
@@ -526,9 +526,18 @@ Cleanup never deletes another session's refs or automatically removes a shared s
 
 ## Maintenance and retention
 
-Automatic Git GC is disabled in every shadow repository. The production store installs one unref'ed daily timer per storage root and also checks the same interval after capture and session cleanup.
+Shadow repositories keep Git's automatic maintenance enabled and pin the prune window in
+their own configuration:
 
-Maintenance walks initialized shadow repositories and runs:
+```sh
+git config gc.pruneExpire 7.days
+```
+
+Local configuration takes precedence over the user's global configuration, so the prune
+window is owned by the app even though the schedule is not. Git packs and prunes on its own
+loose-object heuristic, triggered by the index writes capture already performs. Session
+cleanup additionally runs an explicit pass so freeing a session reclaims promptly instead of
+waiting for that heuristic:
 
 ```sh
 git gc --prune=7.days
@@ -536,13 +545,16 @@ git gc --prune=7.days
 
 Properties of this policy:
 
-- Trees reachable from retained session refs remain protected.
+- Trees reachable from retained session refs remain protected, so nothing expires while it is still referenced.
 - Objects unique to deleted checkpoints become unreachable after ref deletion.
 - Unreachable objects older than seven days may be reclaimed.
-- `--prune=now` is never used.
+- A user's `gc.pruneExpire` or `gc.auto` cannot shorten the window or disable pinning, because local configuration wins.
 - Fresh objects created before a capture ref is published have a seven-day safety window.
-- Maintenance failures are silently ignored and retried on a later interval.
-- No application-level cleanup lock is used.
+- Maintenance failures are ignored. Git records `gc.log` and pauses its own automatic maintenance after a failure, so a repeatedly failing repository stops being packed; storage then grows, but no history is lost.
+- No application-level cleanup lock is used. Git takes its own lock, and automatic maintenance detaches rather than blocking capture.
+
+There is no retention policy beyond ref deletion: refs live until their session is archived,
+and nothing removes shadow repositories orphaned by a changed repository identity.
 
 Objects available only through the source repository alternate remain dependent on the source repository retaining them. Rewriting source history followed by aggressive source GC can therefore make an old checkpoint incomplete even while its shadow ref remains.
 
