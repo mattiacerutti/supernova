@@ -408,6 +408,7 @@ describe("checkpoint store", () => {
     // The prune window must come from the shadow repository, not the user's global config.
     await expect(gitOutput(repo, ["--git-dir", shadowGitDir, "config", "--local", "--get", "gc.pruneExpire"])).resolves.toBe("7.days");
     await expect(gitOutput(repo, ["--git-dir", shadowGitDir, "config", "--local", "--get", "gc.auto"])).rejects.toThrow();
+    await expect(gitOutput(repo, ["--git-dir", shadowGitDir, "config", "--local", "--get", "core.fsmonitor"])).resolves.toBe("false");
   });
 
   it("keeps direct child repositories out of their parent snapshot", async () => {

@@ -17,7 +17,7 @@ import {
   rollbackRestorePlan,
   verifyCheckpointRef,
 } from "@supernova/agent-runtime/layers/session-runtime/internal/shadow-repository";
-import type {DiscoveredRepository, RepositoryCheckpointState, RepositoryRestorePlan} from "@supernova/agent-runtime/layers/session-runtime/internal/shadow-repository";
+import type {RepositoryCheckpointState, RepositoryRestorePlan} from "@supernova/agent-runtime/layers/session-runtime/internal/shadow-repository";
 
 const HASH_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 const REPOSITORY_ID_PATTERN = /^[0-9a-f]{64}$/;
@@ -189,13 +189,18 @@ class CheckpointStoreImpl implements CheckpointStoreShape {
     const projectStorage = projectStorageRoot(this.storageRoot, projectRoot);
     const repositoriesRoot = join(projectStorage, "repositories");
     const repositories = await discoverRepositories(projectRoot, repositoriesRoot);
-    const captured: Array<{readonly repository: DiscoveredRepository; readonly state: RepositoryCheckpointState}> = [];
+
+    // Repositories own separate shadow storage and temporary indexes, so they capture concurrently.
+    const results = await Promise.allSettled(repositories.map((repository) => captureRepository(repository, input.sessionId, input.checkpointId)));
+    const captured = repositories.flatMap((repository, index) => {
+      const result = results[index];
+      return result?.status === "fulfilled" ? [{repository, state: result.value}] : [];
+    });
 
     try {
-      for (const repository of repositories) {
-        const state = await captureRepository(repository, input.sessionId, input.checkpointId);
-        captured.push({repository, state});
-      }
+      const rejected = results.find((result) => result.status === "rejected");
+      if (rejected) throw rejected.reason;
+
       await writeManifest(manifestPath(projectStorage, input.sessionId, input.checkpointId), {
         checkpointId: input.checkpointId,
         projectRoot,

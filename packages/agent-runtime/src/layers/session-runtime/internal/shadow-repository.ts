@@ -4,7 +4,7 @@ import {copyFile, lstat, mkdir, mkdtemp, readdir, realpath, rm, stat, writeFile}
 import {tmpdir} from "node:os";
 import {basename, dirname, isAbsolute, join, relative, resolve, sep} from "node:path";
 
-const GIT_CONFIG = ["-c", "core.autocrlf=false", "-c", "core.longpaths=true", "-c", "core.symlinks=true"];
+const GIT_CONFIG = ["-c", "core.autocrlf=false", "-c", "core.fsmonitor=false", "-c", "core.longpaths=true", "-c", "core.symlinks=true"];
 const HASH_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 const MAX_GIT_OUTPUT_BYTES = 128 * 1024 * 1024;
 const MAX_UNTRACKED_FILE_BYTES = 2 * 1024 * 1024;
@@ -215,6 +215,7 @@ async function ensureShadowRepository(repository: DiscoveredRepository): Promise
   if (!initialized) {
     await runGit([`--git-dir=${repository.shadowGitDir}`, "config", "gc.pruneExpire", PRUNE_EXPIRY]);
     await runGit([`--git-dir=${repository.shadowGitDir}`, "config", "core.autocrlf", "false"]);
+    await runGit([`--git-dir=${repository.shadowGitDir}`, "config", "core.fsmonitor", "false"]);
     await runGit([`--git-dir=${repository.shadowGitDir}`, "config", "core.longpaths", "true"]);
     await runGit([`--git-dir=${repository.shadowGitDir}`, "config", "core.symlinks", "true"]);
   }
@@ -224,6 +225,11 @@ async function ensureShadowRepository(repository: DiscoveredRepository): Promise
 
 function isExcludedPath(path: string, excludedRoots: readonly string[]): boolean {
   return excludedRoots.some((root) => path === root || path.startsWith(`${root}/`));
+}
+
+/** Parses `ls-files -v` records. A lowercase tag marks `assume-unchanged`, and `S` marks `skip-worktree`. */
+function parseIndexEntries(output: string): ReadonlyArray<{readonly flagged: boolean; readonly path: string}> {
+  return nulPaths(output).map((record) => ({flagged: /^(?:S|[a-z]) /.test(record), path: record.slice(2)}));
 }
 
 async function existingFilePaths(paths: readonly string[], root: string, sizeLimit?: number): Promise<readonly string[]> {
@@ -276,10 +282,14 @@ async function createSnapshotTree(repository: DiscoveredRepository): Promise<str
       });
     }
 
-    const tracked = nulPaths((await runGit(shadowArgs(repository, ["ls-files", "-z"]), {env})).stdout).filter((path) => !isExcludedPath(path, repository.excludedRoots));
-    if (tracked.length > 0) {
-      const indexEntries = (await runGit(shadowArgs(repository, ["ls-files", "--stage", "-z"]), {env})).stdout;
-      await runGit(shadowArgs(repository, ["update-index", "-z", "--index-info"]), {env, input: Buffer.from(indexEntries)});
+    const indexEntries = parseIndexEntries((await runGit(shadowArgs(repository, ["ls-files", "-v", "-z"]), {env})).stdout);
+    const tracked = indexEntries.map((entry) => entry.path).filter((path) => !isExcludedPath(path, repository.excludedRoots));
+    const flagged = indexEntries.filter((entry) => entry.flagged).map((entry) => entry.path);
+    if (flagged.length > 0) {
+      // Both flags hide worktree changes, and the two options cannot be combined in one call.
+      const paths = Buffer.from(`${flagged.join("\0")}\0`);
+      await runGit(shadowArgs(repository, ["update-index", "--no-skip-worktree", "-z", "--stdin"]), {env, input: paths});
+      await runGit(shadowArgs(repository, ["update-index", "--no-assume-unchanged", "-z", "--stdin"]), {env, input: paths});
     }
     await runGitResult(shadowArgs(repository, ["update-index", "--really-refresh"]), {env});
 

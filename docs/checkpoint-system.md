@@ -236,7 +236,7 @@ Each discovered user worktree has one bare, app-owned shadow repository. It:
 - Uses the user worktree as the command worktree.
 - Uses the source repository's object directory through `objects/info/alternates`.
 - Pins its prune window with `gc.pruneExpire=7.days` and leaves Git's automatic maintenance enabled.
-- Applies `core.autocrlf=false`, `core.longpaths=true`, and `core.symlinks=true` to checkpoint commands.
+- Applies `core.autocrlf=false`, `core.fsmonitor=false`, `core.longpaths=true`, and `core.symlinks=true` to checkpoint commands. Disabling the filesystem monitor keeps checkpoint commands from starting or consulting a daemon for the user's worktree, and keeps monitor state copied from the user's index from being trusted.
 
 Capture and restore use temporary indexes under the operating-system temporary directory. Capture seeds its temporary index by copying the source index when available, then refreshes that private copy from the actual worktree. This reuses unchanged object IDs and filesystem metadata without introducing a shared mutable checkpoint index or application-level lock. Repositories without a source index fall back to an empty temporary index. The user's index is never used for writes, and temporary indexes are removed after each operation.
 
@@ -314,12 +314,14 @@ sequenceDiagram
   Store-->>Send: success
 ```
 
-For each repository, capture:
+Repositories capture concurrently. Each owns a separate shadow repository and a private
+temporary index, so no state is shared between them, and the project lock still serializes the
+capture as a whole against other checkpoint work. For each repository, capture:
 
 1. Creates a private temporary index.
 2. Copies the source index when available, otherwise initializes an empty tree.
 3. Removes discovered child repository roots owned by another snapshot.
-4. Clears `skip-worktree` and `assume-unchanged` flags in the temporary copy, then refreshes cached index metadata against the actual worktree.
+4. Clears `skip-worktree` and `assume-unchanged` in the temporary copy, for the entries that carry them, then refreshes cached index metadata against the actual worktree. Both flags stop Git from reporting worktree changes, so an unflagged copy is what makes capture see the real files. Only flagged entries are rewritten, which keeps the cost proportional to flagged files rather than to repository size and preserves the copied index's cached directory trees.
 5. Lists changed tracked paths and untracked, non-ignored paths.
 6. Keeps tracked files regardless of size or ignore status.
 7. Keeps untracked files and symlinks up to and including 2 MiB.
