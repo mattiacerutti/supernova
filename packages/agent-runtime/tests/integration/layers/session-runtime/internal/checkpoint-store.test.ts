@@ -1,7 +1,7 @@
 import {execFile} from "node:child_process";
 import {createHash} from "node:crypto";
 import {existsSync, mkdtempSync, rmSync} from "node:fs";
-import {chmod, mkdir, readFile, readlink, realpath, rm, stat, symlink, writeFile} from "node:fs/promises";
+import {chmod, mkdir, readdir, readFile, readlink, realpath, rm, stat, symlink, writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {promisify} from "node:util";
@@ -370,6 +370,28 @@ describe("checkpoint store", () => {
       await expect(gitOutput(repo, ["--git-dir", shadowGitDir, "rev-parse", "--verify", ownedRepository.refName])).rejects.toThrow();
       await expect(gitOutput(repo, ["--git-dir", shadowGitDir, "rev-parse", "--verify", retainedManifest.repositories[index].refName])).resolves.toHaveLength(40);
     }
+  });
+
+  it("keeps one repository identity across ordinary Git activity", async () => {
+    const repo = await createRepo();
+    const storageRoot = mkdtempSync(join(tmpdir(), "supernova-checkpoint-storage-"));
+    tempDirs.push(repo, storageRoot);
+
+    await capture(storageRoot, repo, "first");
+    // Branch switches, commits, and ref writes all touch .git metadata.
+    await git(repo, ["checkout", "-b", "other"]);
+    await writeFile(join(repo, "tracked.txt"), "committed on other\n");
+    await git(repo, ["commit", "-am", "other"]);
+    await git(repo, ["checkout", "-"]);
+    await capture(storageRoot, repo, "second");
+
+    const projectStorage = join(storageRoot, "projects", hash(await realpath(repo)));
+    const [first, second] = await Promise.all(
+      ["first", "second"].map(async (checkpointId) => JSON.parse(await readFile(join(projectStorage, "manifests", hash(sessionId), `${hash(checkpointId)}.json`), "utf8")))
+    );
+
+    expect(second.repositories[0].repositoryId).toBe(first.repositories[0].repositoryId);
+    await expect(readdir(join(projectStorage, "repositories"))).resolves.toHaveLength(1);
   });
 
   it("keeps direct child repositories out of their parent snapshot", async () => {
