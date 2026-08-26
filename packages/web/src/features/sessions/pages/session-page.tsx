@@ -1,6 +1,7 @@
 import type {Session} from "@supernova/contracts/sessions/schemas";
 import {useCallback, useState} from "react";
 import type {AppEnvironment} from "@/lib/app-environment";
+import CheckpointConflictDialog from "@/features/sessions/components/checkpoint-conflict-dialog";
 import ModelPicker from "@/features/sessions/components/composer/pickers/model-picker";
 import ThinkingLevelPicker from "@/features/sessions/components/composer/pickers/thinking-level-picker";
 import SessionComposer from "@/features/sessions/components/composer/session-composer";
@@ -127,86 +128,89 @@ function SessionConversation(props: SessionConversationProps) {
   }, []);
 
   return (
-    <SessionLayout
-      appEnvironment={appEnvironment}
-      attachmentDropOverlayVisible={composerAttachments.isDraggingFiles}
-      attachmentDropZoneProps={composerAttachments.dropZoneProps}
-      composer={
-        modelSelection.isPending ? (
-          <SessionComposerSkeleton />
-        ) : (
-          <SessionComposer
-            key={`${composerDraftKey}:${composerDraft.revision}`}
-            attachments={composerAttachments}
-            disabled={composerDisabled}
-            draft={composerDraft}
-            onInterrupt={stream.stopStreaming}
-            onSubmit={stream.submitMessage}
-            projectPath={session.projectPath}
-            slashCommandActions={{...stream.slashCommandActions, redo: handleRedo, undo: handleUndo}}
-            streamStatus={stream.streamStatus}
-            toolbarControls={
-              <div className="flex items-center gap-2">
-                <SessionContextIndicator context={stream.liveContext ?? session.context} />
-                <ModelPicker
-                  selectedModel={modelSelection.selectedModelDetails}
-                  disabled={composerDisabled}
-                  models={modelSelection.availableModels}
-                  onModelChange={handleModelChange}
-                />
-                {thinkingLevels.length > 0 && (
-                  <ThinkingLevelPicker
+    <>
+      <SessionLayout
+        appEnvironment={appEnvironment}
+        attachmentDropOverlayVisible={composerAttachments.isDraggingFiles}
+        attachmentDropZoneProps={composerAttachments.dropZoneProps}
+        composer={
+          modelSelection.isPending ? (
+            <SessionComposerSkeleton />
+          ) : (
+            <SessionComposer
+              key={`${composerDraftKey}:${composerDraft.revision}`}
+              attachments={composerAttachments}
+              disabled={composerDisabled}
+              draft={composerDraft}
+              onInterrupt={stream.stopStreaming}
+              onSubmit={stream.submitMessage}
+              projectPath={session.projectPath}
+              slashCommandActions={{...stream.slashCommandActions, redo: handleRedo, undo: handleUndo}}
+              streamStatus={stream.streamStatus}
+              toolbarControls={
+                <div className="flex items-center gap-2">
+                  <SessionContextIndicator context={stream.liveContext ?? session.context} />
+                  <ModelPicker
+                    selectedModel={modelSelection.selectedModelDetails}
                     disabled={composerDisabled}
-                    onThinkingLevelChange={modelSelection.selectThinkingLevel}
-                    selectedThinkingLabel={modelSelection.selectedThinkingLabel}
-                    selectedThinkingLevel={modelSelection.modelReference?.thinkingLevel}
-                    thinkingLevels={thinkingLevels}
+                    models={modelSelection.availableModels}
+                    onModelChange={handleModelChange}
                   />
-                )}
-              </div>
-            }
-            topExtension={
-              <UndoneTurnsDrawer
-                disabled={composerActionDisabled}
-                onHeightChange={handleUndoneDrawerHeightChange}
-                onRevertToMessage={handleRestoreUndoneTurn}
-                turns={session.undoneTurns}
-              />
-            }
+                  {thinkingLevels.length > 0 && (
+                    <ThinkingLevelPicker
+                      disabled={composerDisabled}
+                      onThinkingLevelChange={modelSelection.selectThinkingLevel}
+                      selectedThinkingLabel={modelSelection.selectedThinkingLabel}
+                      selectedThinkingLevel={modelSelection.modelReference?.thinkingLevel}
+                      thinkingLevels={thinkingLevels}
+                    />
+                  )}
+                </div>
+              }
+              topExtension={
+                <UndoneTurnsDrawer
+                  disabled={composerActionDisabled}
+                  onHeightChange={handleUndoneDrawerHeightChange}
+                  onRevertToMessage={handleRestoreUndoneTurn}
+                  turns={session.undoneTurns}
+                />
+              }
+            />
+          )
+        }
+        timeline={
+          <SessionTimeline
+            key={session.id}
+            bottomOverlayHeight={undoneDrawerHeight}
+            compacting={stream.streamStatus === "compacting"}
+            isStreaming={stream.streamStatus === "streaming" || stream.streamStatus === "compacting"}
+            items={stream.committedTimelineItems}
+            liveItems={stream.liveTimelineItems}
+            onRevertToMessage={handleRevertToMessage}
+            sessionId={session.id}
+            streamError={stream.streamError}
           />
-        )
-      }
-      timeline={
-        <SessionTimeline
-          key={session.id}
-          bottomOverlayHeight={undoneDrawerHeight}
-          compacting={stream.streamStatus === "compacting"}
-          isStreaming={stream.streamStatus === "streaming" || stream.streamStatus === "compacting"}
-          items={stream.committedTimelineItems}
-          liveItems={stream.liveTimelineItems}
-          onRevertToMessage={handleRevertToMessage}
-          sessionId={session.id}
-          streamError={stream.streamError}
-        />
-      }
-      title={
-        renaming ? (
-          <input
-            className="block h-5 min-w-0 w-64 truncate border-0 bg-transparent p-0 text-sm font-medium leading-5 text-ink outline-none"
-            onBlur={handleRenameBlur}
-            onChange={handleRenameChange}
-            onClick={handleRenameClick}
-            onFocus={handleRenameFocus}
-            onKeyDown={handleRenameKeyDown}
-            ref={renameInputRef}
-            value={draftName}
-          />
-        ) : (
-          <SessionTitleText className="block truncate" title={session.title} />
-        )
-      }
-      titleActions={<SessionActionsMenu onRename={startRenaming} projectPath={session.projectPath} sessionId={session.id} sessionTitle={session.title} />}
-    />
+        }
+        title={
+          renaming ? (
+            <input
+              className="block h-5 min-w-0 w-64 truncate border-0 bg-transparent p-0 text-sm font-medium leading-5 text-ink outline-none"
+              onBlur={handleRenameBlur}
+              onChange={handleRenameChange}
+              onClick={handleRenameClick}
+              onFocus={handleRenameFocus}
+              onKeyDown={handleRenameKeyDown}
+              ref={renameInputRef}
+              value={draftName}
+            />
+          ) : (
+            <SessionTitleText className="block truncate" title={session.title} />
+          )
+        }
+        titleActions={<SessionActionsMenu onRename={startRenaming} projectPath={session.projectPath} sessionId={session.id} sessionTitle={session.title} />}
+      />
+      <CheckpointConflictDialog onCancel={stream.checkpointConflict.cancel} onConfirm={stream.checkpointConflict.confirm} open={stream.checkpointConflict.open} />
+    </>
   );
 }
 

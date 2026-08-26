@@ -35,7 +35,13 @@ interface WorkspaceCheckpointManifest {
 export interface CheckpointStoreShape {
   readonly capture: (input: {readonly checkpointId: string; readonly projectRoot: string; readonly sessionId: string}) => Promise<void>;
   readonly deleteSession: (input: {readonly projectRoot: string; readonly sessionId: string}) => Promise<void>;
-  readonly restore: (input: {readonly checkpointId: string; readonly fromCheckpointId: string; readonly projectRoot: string; readonly sessionId: string}) => Promise<void>;
+  readonly restore: (input: {
+    readonly checkpointId: string;
+    readonly force: boolean;
+    readonly fromCheckpointId: string;
+    readonly projectRoot: string;
+    readonly sessionId: string;
+  }) => Promise<void>;
 }
 
 /** Owns durable checkpoint manifests and coordinates app-private shadow repositories. */
@@ -164,7 +170,13 @@ class CheckpointStoreImpl implements CheckpointStoreShape {
     await this.projectLocks.withLock(projectRoot, () => this.captureProject(projectRoot, input));
   }
 
-  public async restore(input: {readonly checkpointId: string; readonly fromCheckpointId: string; readonly projectRoot: string; readonly sessionId: string}): Promise<void> {
+  public async restore(input: {
+    readonly checkpointId: string;
+    readonly force: boolean;
+    readonly fromCheckpointId: string;
+    readonly projectRoot: string;
+    readonly sessionId: string;
+  }): Promise<void> {
     const projectRoot = await canonicalProjectRoot(input.projectRoot);
     await this.projectLocks.withLock(projectRoot, () => this.restoreProject(projectRoot, input));
   }
@@ -210,7 +222,10 @@ class CheckpointStoreImpl implements CheckpointStoreShape {
   }
 
   /** Reconciles manifests and applies the workspace restore. Requires the project lock. */
-  private async restoreProject(projectRoot: string, input: {readonly checkpointId: string; readonly fromCheckpointId: string; readonly sessionId: string}): Promise<void> {
+  private async restoreProject(
+    projectRoot: string,
+    input: {readonly checkpointId: string; readonly force: boolean; readonly fromCheckpointId: string; readonly sessionId: string}
+  ): Promise<void> {
     const projectStorage = projectStorageRoot(this.storageRoot, projectRoot);
     const repositoriesRoot = join(projectStorage, "repositories");
     const [currentManifest, targetManifest, repositories] = await Promise.all([
@@ -237,7 +252,7 @@ class CheckpointStoreImpl implements CheckpointStoreShape {
         if (!(await repositoryMatchesTree(repository, target.treeId))) throw new Error("A target-only repository does not match its checkpoint.");
         continue;
       }
-      plans.push(await buildRestorePlan(repository, current, target));
+      plans.push(await buildRestorePlan(repository, current, target, input.force));
     }
 
     const touched: RepositoryRestorePlan[] = [];

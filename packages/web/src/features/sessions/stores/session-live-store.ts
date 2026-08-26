@@ -1,4 +1,5 @@
 import type {QueryClient} from "@tanstack/react-query";
+import {CheckpointConflictError} from "@supernova/contracts/session-runtime/procedures";
 import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
 import type {ModelReference, Session, SessionContextUsage, Turn, UserMessage, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 import {create} from "zustand";
@@ -7,6 +8,9 @@ import {sessionQueryKey} from "@/features/sessions/hooks/api/use-session";
 import type {AgentRpcClientApi, AgentRpcProtocolClient} from "@/rpc/agent-rpc-client";
 
 export type SessionLiveStatus = "checkpoint-navigating" | "compacting" | "idle" | "stopping" | "streaming";
+
+/** Result of a checkpoint navigation command, so callers can confirm and retry a refused restore. */
+export type CheckpointNavigationOutcome = "applied" | "conflict" | "failed";
 
 export interface SessionLiveState {
   readonly error: string | null;
@@ -98,6 +102,8 @@ interface CompactSessionInput {
 }
 
 interface CheckpointNavigationInput {
+  /** Set when retrying after the user confirmed discarding manual workspace changes. */
+  readonly force?: boolean;
   readonly queryClient: QueryClient;
   readonly rpcClient: AgentRpcClientApi;
   readonly sessionId: string;
@@ -112,11 +118,11 @@ interface SessionLiveStoreState {
   readonly abortSession: (input: {rpcClient: AgentRpcClientApi; sessionId: string}) => void;
   readonly applyEvent: (event: SessionStreamEvent) => boolean;
   readonly compactSession: (input: CompactSessionInput) => void;
-  readonly redoCheckpoint: (input: CheckpointNavigationInput) => void;
+  readonly redoCheckpoint: (input: CheckpointNavigationInput) => Promise<CheckpointNavigationOutcome>;
   readonly resetRevisions: () => void;
-  readonly revertToMessage: (input: RevertToMessageInput) => void;
+  readonly revertToMessage: (input: RevertToMessageInput) => Promise<CheckpointNavigationOutcome>;
   readonly sendMessage: (input: SendSessionMessageInput) => void;
-  readonly undoCheckpoint: (input: CheckpointNavigationInput) => void;
+  readonly undoCheckpoint: (input: CheckpointNavigationInput) => Promise<CheckpointNavigationOutcome>;
 }
 
 export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) => {
@@ -228,10 +234,10 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
       optimisticTurnId: (session: Session) => string | undefined;
       title: string;
     }
-  ): void => {
+  ): Promise<CheckpointNavigationOutcome> => {
     const {execute, optimisticTurnId, queryClient, rpcClient, sessionId, title} = input;
     const current = get().sessions[sessionId];
-    if (current && current.status !== "idle") return;
+    if (current && current.status !== "idle") return Promise.resolve("failed");
 
     const previousSession = queryClient.getQueryData<Session>(sessionQueryKey(sessionId));
     const turnId = previousSession ? optimisticTurnId(previousSession) : undefined;
@@ -243,45 +249,45 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
       return {sessions: {...state.sessions, [sessionId]: {...entry, error: null, status: "checkpoint-navigating"}}};
     });
 
-    void rpcClient
+    return rpcClient
       .run((rpc) => execute(rpc))
-      .catch((cause: unknown) => {
-        showToast(title, errorMessage(cause, "The session checkpoint could not be changed."));
+      .then((): CheckpointNavigationOutcome => "applied")
+      .catch((cause: unknown): CheckpointNavigationOutcome => {
+        const conflict = cause instanceof CheckpointConflictError;
+        if (!conflict) showToast(title, errorMessage(cause, "The session checkpoint could not be changed."));
         if (previousSession) queryClient.setQueryData(sessionQueryKey(sessionId), previousSession);
         set((state) => {
           const entry = state.sessions[sessionId];
           if (!entry) return state;
           return {sessions: {...state.sessions, [sessionId]: {...entry, status: "idle"}}};
         });
+        return conflict ? "conflict" : "failed";
       });
   };
 
-  const undoCheckpoint = (input: CheckpointNavigationInput): void => {
+  const undoCheckpoint = (input: CheckpointNavigationInput): Promise<CheckpointNavigationOutcome> =>
     runCheckpointNavigation({
       ...input,
-      execute: (rpc) => rpc.undoCheckpoint({sessionId: input.sessionId}),
+      execute: (rpc) => rpc.undoCheckpoint({force: input.force, sessionId: input.sessionId}),
       optimisticTurnId: (session) => session.turns.at(-1)?.id,
       title: "Unable to undo checkpoint",
     });
-  };
 
-  const redoCheckpoint = (input: CheckpointNavigationInput): void => {
+  const redoCheckpoint = (input: CheckpointNavigationInput): Promise<CheckpointNavigationOutcome> =>
     runCheckpointNavigation({
       ...input,
-      execute: (rpc) => rpc.redoCheckpoint({sessionId: input.sessionId}),
+      execute: (rpc) => rpc.redoCheckpoint({force: input.force, sessionId: input.sessionId}),
       optimisticTurnId: (session) => session.undoneTurns[0]?.id,
       title: "Unable to redo checkpoint",
     });
-  };
 
-  const revertToMessage = (input: RevertToMessageInput): void => {
+  const revertToMessage = (input: RevertToMessageInput): Promise<CheckpointNavigationOutcome> =>
     runCheckpointNavigation({
       ...input,
-      execute: (rpc) => rpc.revertToMessage({sessionId: input.sessionId, turnId: input.turnId}),
+      execute: (rpc) => rpc.revertToMessage({force: input.force, sessionId: input.sessionId, turnId: input.turnId}),
       optimisticTurnId: () => input.turnId,
       title: "Unable to revert message",
     });
-  };
 
   return {abortSession, applyEvent, compactSession, redoCheckpoint, resetRevisions, revertToMessage, sendMessage, sessions: {}, undoCheckpoint};
 });

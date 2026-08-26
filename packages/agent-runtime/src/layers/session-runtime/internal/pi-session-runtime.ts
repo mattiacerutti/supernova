@@ -8,6 +8,7 @@ import type {PiResourceCatalogShape} from "@supernova/agent-runtime/layers/share
 import type {PiSessionManager, PiSessionStoreShape} from "@supernova/agent-runtime/layers/shared/internal/pi-session-store";
 import type {PiAgentSessionFactoryShape} from "@supernova/agent-runtime/layers/session-runtime/internal/pi-agent-session-factory";
 import type {CheckpointStoreShape} from "@supernova/agent-runtime/layers/session-runtime/internal/checkpoint-store";
+import {CheckpointConflictError} from "@supernova/agent-runtime/layers/session-runtime/internal/shadow-repository";
 import type {SessionEventBusShape} from "@supernova/agent-runtime/layers/session-runtime/internal/session-event-bus";
 import {
   CHECKPOINT_CURSOR_CUSTOM_TYPE,
@@ -222,15 +223,23 @@ export class PiSessionRuntime {
    *
    * Workspace files are restored only when both boundaries have durable manifests.
    * An uncovered boundary moves the conversation alone, leaving files as they are.
+   * `force` discards conflicting manual changes; it bypasses no other preflight check.
    */
-  public async navigateToCheckpoint(target: CheckpointEntry, current: CheckpointEntry, cursorLeafEntryId: string): Promise<void> {
+  public async navigateToCheckpoint(input: {
+    readonly current: CheckpointEntry;
+    readonly cursorLeafEntryId: string;
+    readonly force: boolean;
+    readonly target: CheckpointEntry;
+  }): Promise<void> {
     const agentSession = this.agentSession;
     if (!agentSession) throw new Error("Agent session is not initialized.");
 
+    const {current, cursorLeafEntryId, force, target} = input;
     const sessionManager = agentSession.sessionManager;
     if (isCapturedCheckpoint(target) && isCapturedCheckpoint(current)) {
       await this.restoreCheckpoint({
         checkpointId: target.data.checkpointId,
+        force,
         fromCheckpointId: current.data.checkpointId,
         projectRoot: sessionManager.getCwd(),
       });
@@ -295,10 +304,11 @@ export class PiSessionRuntime {
   }
 
   /** Restores only files changed between checkpoints into the worktree, leaving Git HEAD and staged state untouched. */
-  private async restoreCheckpoint(input: {readonly checkpointId: string; readonly fromCheckpointId: string; readonly projectRoot: string}): Promise<void> {
+  private async restoreCheckpoint(input: {readonly checkpointId: string; readonly force: boolean; readonly fromCheckpointId: string; readonly projectRoot: string}): Promise<void> {
     try {
       await this.checkpointStore.restore({...input, sessionId: this.sessionId});
-    } catch {
+    } catch (cause) {
+      if (cause instanceof CheckpointConflictError) throw cause;
       throw new Error("Failed to restore workspace checkpoint.");
     }
   }

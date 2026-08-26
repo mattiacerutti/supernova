@@ -44,12 +44,12 @@ export class SessionRuntimePool {
 
   /** Moves the session back to the previous checkpoint. */
   public async undoCheckpoint(input: UndoCheckpointPayload): Promise<void> {
-    await undoCheckpoint(this.getOrCreateRuntime(input.sessionId));
+    await undoCheckpoint(this.getOrCreateRuntime(input.sessionId), input);
   }
 
   /** Moves the session forward to the next checkpoint after an undo. */
   public async redoCheckpoint(input: RedoCheckpointPayload): Promise<void> {
-    await redoCheckpoint(this.getOrCreateRuntime(input.sessionId));
+    await redoCheckpoint(this.getOrCreateRuntime(input.sessionId), input);
   }
 
   /** Aborts active work for one session while preserving the retained runtime. */

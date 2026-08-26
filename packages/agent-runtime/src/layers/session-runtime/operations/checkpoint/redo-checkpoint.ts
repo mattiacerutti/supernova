@@ -1,4 +1,4 @@
-import {CheckpointNavigationError} from "@supernova/contracts/session-runtime/procedures";
+import type {RedoCheckpointPayload} from "@supernova/contracts/session-runtime/procedures";
 import type {SessionEntry} from "@earendil-works/pi-coding-agent";
 import {isCheckpointAfterTurnEntry, isCheckpointEntry, latestCheckpointCursor} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-entries";
 import {PiSessionRuntime} from "@supernova/agent-runtime/layers/session-runtime/internal/pi-session-runtime";
@@ -11,7 +11,7 @@ function findRedoTarget(branch: readonly SessionEntry[], currentIndex: number) {
 }
 
 /** Moves the session and workspace forward along the most recently undone path. */
-export async function redoCheckpoint(runtime: PiSessionRuntime): Promise<void> {
+export async function redoCheckpoint(runtime: PiSessionRuntime, input: RedoCheckpointPayload): Promise<void> {
   runtime.beginWork();
   try {
     const sessionManager = await runtime.getSessionManager();
@@ -29,9 +29,7 @@ export async function redoCheckpoint(runtime: PiSessionRuntime): Promise<void> {
     const target = findRedoTarget(branch, nodeIndex);
     if (!target) throw new Error("No checkpoint is available to redo.");
 
-    await runtime.navigateToCheckpoint(target, current, cursor.leafEntryId);
-  } catch (cause) {
-    throw new CheckpointNavigationError({cause, message: cause instanceof Error ? cause.message : "Failed to redo checkpoint."});
+    await runtime.navigateToCheckpoint({current, cursorLeafEntryId: cursor.leafEntryId, force: input.force ?? false, target});
   } finally {
     runtime.endWork();
   }

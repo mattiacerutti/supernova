@@ -1,4 +1,4 @@
-import {CheckpointNavigationError} from "@supernova/contracts/session-runtime/procedures";
+import type {UndoCheckpointPayload} from "@supernova/contracts/session-runtime/procedures";
 import {isCheckpointEntry, latestCheckpointCursor} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-entries";
 import type {CheckpointEntry} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-entries";
 import type {SessionEntry} from "@earendil-works/pi-coding-agent";
@@ -16,7 +16,7 @@ function findUndoTarget(branch: readonly SessionEntry[], currentIndex: number): 
 }
 
 /** Moves the session and workspace back to the previous checkpoint. */
-export async function undoCheckpoint(runtime: PiSessionRuntime): Promise<void> {
+export async function undoCheckpoint(runtime: PiSessionRuntime, input: UndoCheckpointPayload): Promise<void> {
   runtime.beginWork();
   try {
     const sessionManager = await runtime.getSessionManager();
@@ -30,9 +30,7 @@ export async function undoCheckpoint(runtime: PiSessionRuntime): Promise<void> {
 
     if (!current || !isCheckpointEntry(current) || !target) throw new Error("No checkpoint is available to undo.");
 
-    await runtime.navigateToCheckpoint(target, current, cursor.leafEntryId);
-  } catch (cause) {
-    throw new CheckpointNavigationError({cause, message: cause instanceof Error ? cause.message : "Failed to undo checkpoint."});
+    await runtime.navigateToCheckpoint({current, cursorLeafEntryId: cursor.leafEntryId, force: input.force ?? false, target});
   } finally {
     runtime.endWork();
   }

@@ -7,6 +7,7 @@ import {PiAgentSessionFactory, PiAgentSessionFactoryLive} from "@supernova/agent
 import {PiSessionTitleGenerator, PiSessionTitleGeneratorLive} from "@supernova/agent-runtime/layers/session-runtime/internal/pi-session-title-generator";
 import {CheckpointStore, CheckpointStoreLive} from "@supernova/agent-runtime/layers/session-runtime/internal/checkpoint-store";
 import {SessionEventBus, SessionEventBusLive} from "@supernova/agent-runtime/layers/session-runtime/internal/session-event-bus";
+import {asCheckpointNavigationError} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-navigation-error";
 import {SessionRuntimePool} from "@supernova/agent-runtime/layers/session-runtime/internal/session-runtime-pool";
 import {SessionRuntimeService} from "@supernova/agent-runtime/services/session-runtime-service";
 
@@ -28,11 +29,11 @@ export const PiSessionRuntimeFromInternal = Layer.effect(
       compactSession: (input) => Effect.promise(() => pool.compactSession(input)),
       deleteSessionCheckpoints: (projectRoot, sessionId) => Effect.promise(() => pool.deleteSessionCheckpoints(projectRoot, sessionId)),
       getCommittedSession: (sessionId) => Effect.sync(() => pool.getCommittedSession(sessionId)),
-      redoCheckpoint: (input) => Effect.promise(() => pool.redoCheckpoint(input)),
+      redoCheckpoint: (input) => Effect.tryPromise({try: () => pool.redoCheckpoint(input), catch: asCheckpointNavigationError}),
       releaseSession: (sessionId) => Effect.promise(() => pool.releaseSession(sessionId)),
-      revertToMessage: (input) => Effect.promise(() => pool.revertToMessage(input)),
+      revertToMessage: (input) => Effect.tryPromise({try: () => pool.revertToMessage(input), catch: asCheckpointNavigationError}),
       sendMessage: (input) => Effect.promise(() => pool.sendMessage(input)),
-      undoCheckpoint: (input) => Effect.promise(() => pool.undoCheckpoint(input)),
+      undoCheckpoint: (input) => Effect.tryPromise({try: () => pool.undoCheckpoint(input), catch: asCheckpointNavigationError}),
       watchEvents: () => Stream.concat(Stream.make({type: "connected"} satisfies SessionStreamEvent), eventBus.stream()),
     };
   })

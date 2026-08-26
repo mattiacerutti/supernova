@@ -397,11 +397,24 @@ async function replaceTreePathsWithWorktree(repository: DiscoveredRepository, ba
   });
 }
 
-export async function buildRestorePlan(repository: DiscoveredRepository, current: RepositoryCheckpointState, target: RepositoryCheckpointState): Promise<RepositoryRestorePlan> {
+/** Raised when the worktree no longer matches the current checkpoint on a path the restore would change. */
+export class CheckpointConflictError extends Error {
+  public constructor() {
+    super("Workspace files changed after the current checkpoint.");
+    this.name = "CheckpointConflictError";
+  }
+}
+
+export async function buildRestorePlan(
+  repository: DiscoveredRepository,
+  current: RepositoryCheckpointState,
+  target: RepositoryCheckpointState,
+  force: boolean
+): Promise<RepositoryRestorePlan> {
   const operations = await diffTreePaths(repository, current.treeId, target.treeId);
   const affectedPaths = [...new Set([...operations.deletePaths, ...operations.restorePaths])].sort();
   const safetyTreeId = await replaceTreePathsWithWorktree(repository, current.treeId, affectedPaths);
-  if (safetyTreeId !== current.treeId) throw new Error("Workspace files changed after the current checkpoint.");
+  if (safetyTreeId !== current.treeId && !force) throw new CheckpointConflictError();
 
   return {
     affectedPaths,

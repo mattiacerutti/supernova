@@ -1,14 +1,16 @@
 import type {ModelReference, SessionContextUsage, Turn, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 import {useQueryClient} from "@tanstack/react-query";
-import {useMemo} from "react";
+import {useMemo, useState} from "react";
 import {buildCommittedTimelineItems, buildLiveTimelineItems} from "@/features/sessions/lib/timeline/build-session-timeline";
 import type {ClientSlashCommandActions} from "@/features/sessions/lib/composer/client-slash-commands";
 import {useSessionLiveStore} from "@/features/sessions/stores/session-live-store";
-import type {SessionLiveStatus} from "@/features/sessions/stores/session-live-store";
+import type {CheckpointNavigationOutcome, SessionLiveStatus} from "@/features/sessions/stores/session-live-store";
 import type {SessionTimelineItem} from "@/features/sessions/types/session-timeline-item";
 import {useAgentRpcClient} from "@/rpc/use-agent-rpc-client";
 
 interface UseSessionTimelineResult {
+  /** Pending confirmation for a restore that would discard manual workspace changes. */
+  readonly checkpointConflict: {readonly cancel: () => void; readonly confirm: () => void; readonly open: boolean};
   committedTimelineItems: readonly SessionTimelineItem[];
   liveContext: SessionContextUsage | null;
   liveTimelineItems: readonly SessionTimelineItem[];
@@ -30,6 +32,13 @@ export function useSessionTimeline(input: UseSessionTimelineInput): UseSessionTi
   const {modelReference, sessionId, sessionTurns} = input;
   const queryClient = useQueryClient();
   const rpcClient = useAgentRpcClient();
+  const [forceNavigation, setForceNavigation] = useState<(() => void) | null>(null);
+
+  /** Runs a navigation command and holds its forced retry when the workspace conflicts. */
+  const navigate = async (run: () => Promise<CheckpointNavigationOutcome>, retryWithForce: () => Promise<CheckpointNavigationOutcome>): Promise<void> => {
+    const outcome = await run();
+    if (outcome === "conflict") setForceNavigation(() => () => void retryWithForce());
+  };
 
   const sessionState = useSessionLiveStore((state) => state.sessions[sessionId]);
   const abortSession = useSessionLiveStore((state) => state.abortSession);
@@ -73,22 +82,39 @@ export function useSessionTimeline(input: UseSessionTimelineInput): UseSessionTi
   const undo = (): void => {
     if (streamStatus !== "idle") return;
 
-    undoCheckpoint({queryClient, rpcClient, sessionId});
+    void navigate(
+      () => undoCheckpoint({queryClient, rpcClient, sessionId}),
+      () => undoCheckpoint({force: true, queryClient, rpcClient, sessionId})
+    );
   };
 
   const redo = (): void => {
     if (streamStatus !== "idle") return;
 
-    redoCheckpoint({queryClient, rpcClient, sessionId});
+    void navigate(
+      () => redoCheckpoint({queryClient, rpcClient, sessionId}),
+      () => redoCheckpoint({force: true, queryClient, rpcClient, sessionId})
+    );
   };
 
   const revertToMessage = (turnId: string): void => {
     if (streamStatus !== "idle") return;
 
-    revertSessionToMessage({queryClient, rpcClient, sessionId, turnId});
+    void navigate(
+      () => revertSessionToMessage({queryClient, rpcClient, sessionId, turnId}),
+      () => revertSessionToMessage({force: true, queryClient, rpcClient, sessionId, turnId})
+    );
   };
 
   return {
+    checkpointConflict: {
+      cancel: () => setForceNavigation(null),
+      confirm: () => {
+        forceNavigation?.();
+        setForceNavigation(null);
+      },
+      open: forceNavigation !== null,
+    },
     streamStatus,
     streamError: sessionState?.error ?? null,
     liveContext: sessionState?.liveContext ?? null,
