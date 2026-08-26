@@ -86,7 +86,7 @@ function restore(storageRoot: string, projectRoot: string, fromCheckpointId: str
     storageRoot,
     Effect.gen(function* () {
       const store = yield* CheckpointStore;
-      yield* Effect.promise(() => store.restore({checkpointId, fromCheckpointId, projectRoot, sessionId}));
+      yield* Effect.promise(() => store.restore({checkpointId, force: false, fromCheckpointId, projectRoot, sessionId}));
     })
   );
 }
@@ -406,7 +406,7 @@ describe("checkpoint store", () => {
         const store = yield* CheckpointStore;
         return yield* Effect.promise(() =>
           Promise.allSettled([
-            store.restore({checkpointId: "before", fromCheckpointId: "after", projectRoot: repo, sessionId}),
+            store.restore({checkpointId: "before", force: false, fromCheckpointId: "after", projectRoot: repo, sessionId}),
             store.capture({checkpointId: "concurrent", projectRoot: repo, sessionId}),
           ])
         );
@@ -435,7 +435,7 @@ describe("checkpoint store", () => {
       storageRoot,
       Effect.gen(function* () {
         const store = yield* CheckpointStore;
-        const restoreToBefore = () => store.restore({checkpointId: "before", fromCheckpointId: "after", projectRoot: repo, sessionId});
+        const restoreToBefore = () => store.restore({checkpointId: "before", force: false, fromCheckpointId: "after", projectRoot: repo, sessionId});
         return yield* Effect.promise(() => Promise.allSettled([restoreToBefore(), restoreToBefore()]));
       })
     );

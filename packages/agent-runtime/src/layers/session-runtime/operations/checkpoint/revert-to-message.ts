@@ -1,6 +1,5 @@
 import type {SessionEntry, SessionMessageEntry} from "@earendil-works/pi-coding-agent";
 import type {RevertToMessagePayload} from "@supernova/contracts/session-runtime/procedures";
-import {CheckpointNavigationError} from "@supernova/contracts/session-runtime/procedures";
 import {isCheckpointAfterTurnEntry, isCheckpointEntry, latestCheckpointCursor} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-entries";
 import type {CheckpointEntry} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-entries";
 import {PiSessionRuntime} from "@supernova/agent-runtime/layers/session-runtime/internal/pi-session-runtime";
@@ -40,9 +39,7 @@ export async function revertToMessage(runtime: PiSessionRuntime, input: RevertTo
 
     if (nodeIndex === -1 || targetIndex === -1 || !target || !current || !isCheckpointEntry(current)) throw new Error("Checkpoint target was not found.");
 
-    await runtime.navigateToCheckpoint(target, current, cursor.leafEntryId);
-  } catch (cause) {
-    throw new CheckpointNavigationError({cause, message: cause instanceof Error ? cause.message : "Failed to revert session."});
+    await runtime.navigateToCheckpoint({current, cursorLeafEntryId: cursor.leafEntryId, force: input.force ?? false, target});
   } finally {
     runtime.endWork();
   }

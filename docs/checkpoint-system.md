@@ -43,9 +43,9 @@ The architecture is divided into four responsibilities:
 4. Restore mutates only paths changed between the current and target checkpoint trees.
 5. The user's Git `HEAD`, branch, index, refs, and stash are never changed.
 6. A direct child repository owns its subtree; a parent repository snapshot excludes that subtree.
-7. Manual changes to affected paths cause restore to fail before mutation.
+7. Manual changes to affected paths cause restore to fail before mutation unless the caller forces it.
 8. Checkpoint storage never writes refs, indexes, commits, or other metadata into the user's `.git` directory.
-9. Client-facing checkpoint failures are generic and are not logged by the checkpoint boundary.
+9. Client-facing checkpoint failures are generic, apart from the workspace-conflict error, and are not logged by the checkpoint boundary.
 
 ## Conversation checkpoint model
 
@@ -382,9 +382,23 @@ interface RepositoryRestorePlan {
 - Restore paths are added or modified in the target tree.
 - Affected paths are the union of both sets.
 
-The planner builds a safety tree by starting from the current checkpoint tree and replacing only affected paths with their actual worktree state. If that safety tree differs from the expected current tree, an affected path was manually changed and restore fails before mutation.
+The planner builds a safety tree by starting from the current checkpoint tree and replacing only affected paths with their actual worktree state. If that safety tree differs from the expected current tree, an affected path was manually changed and restore fails before mutation with a `CheckpointConflictError`.
 
 Manual changes outside the affected path set are intentionally ignored and preserved.
+
+### Forced restores
+
+Navigation payloads accept `force`. A forced restore skips the safety-tree equality check and
+overwrites the conflicting paths, which permanently discards those manual changes; nothing
+pins the pre-force worktree state. `force` bypasses that single check and nothing else:
+missing or invalid manifests, unresolvable refs, missing or replaced repositories, the nested
+`.git` refusal, and post-apply verification all still fail.
+
+Clients are expected to attempt navigation without `force`, and to retry with it only after
+the user confirms discarding their changes in response to a `CheckpointConflictError`. The
+conflict error names no paths, so the confirmation is a blanket acknowledgement rather than a
+review of specific files. The workspace can also change between the refusal and the retry;
+`force` discards whatever conflicts at the moment it runs.
 
 ### Applying and verifying
 
@@ -479,9 +493,16 @@ Checkpoint storage uses ordinary exceptions internally.
 At session boundaries:
 
 - Capture failures are absorbed and recorded as a `failed` checkpoint boundary instead of failing the turn.
-- Restore failures become `Failed to restore workspace checkpoint.`
+- Workspace conflicts become `CheckpointConflictError`, the one non-generic checkpoint failure, so clients can offer a forced retry. It carries a fixed message and no paths.
+- Every other restore failure becomes `CheckpointGenericError` with `Failed to restore workspace checkpoint.`
 - Internal Git commands, paths, tree IDs, and manifest details are not sent to clients.
 - Checkpoint failures are not logged by the checkpoint system.
+
+`CheckpointNavigationError` is the union of those two and is the declared error for the undo,
+redo, and revert procedures. Navigation operations throw ordinary exceptions; the runtime
+service boundary wraps each command in `Effect.tryPromise` and classifies whatever was thrown
+with `asCheckpointNavigationError()`. That is the single place a navigation failure becomes a
+client-facing error.
 
 The store uses `Promise<void>` rather than booleans so callers cannot accidentally treat a failed capture as a valid checkpoint. `PiSessionRuntime.createCheckpoint()` converts that rejection into a boundary status, which is the only place a capture failure is interpreted.
 
