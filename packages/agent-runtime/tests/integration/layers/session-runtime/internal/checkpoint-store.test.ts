@@ -394,6 +394,22 @@ describe("checkpoint store", () => {
     await expect(readdir(join(projectStorage, "repositories"))).resolves.toHaveLength(1);
   });
 
+  it("pins the prune window in shadow repositories and leaves automatic Git maintenance enabled", async () => {
+    const repo = await createRepo();
+    const storageRoot = mkdtempSync(join(tmpdir(), "supernova-checkpoint-storage-"));
+    tempDirs.push(repo, storageRoot);
+
+    await capture(storageRoot, repo, "cp-1");
+
+    const projectStorage = join(storageRoot, "projects", hash(await realpath(repo)));
+    const manifest = JSON.parse(await readFile(join(projectStorage, "manifests", hash(sessionId), `${hash("cp-1")}.json`), "utf8"));
+    const shadowGitDir = join(projectStorage, "repositories", manifest.repositories[0].repositoryId, "git");
+
+    // The prune window must come from the shadow repository, not the user's global config.
+    await expect(gitOutput(repo, ["--git-dir", shadowGitDir, "config", "--local", "--get", "gc.pruneExpire"])).resolves.toBe("7.days");
+    await expect(gitOutput(repo, ["--git-dir", shadowGitDir, "config", "--local", "--get", "gc.auto"])).rejects.toThrow();
+  });
+
   it("keeps direct child repositories out of their parent snapshot", async () => {
     const repo = await createRepo();
     const storageRoot = mkdtempSync(join(tmpdir(), "supernova-checkpoint-storage-"));

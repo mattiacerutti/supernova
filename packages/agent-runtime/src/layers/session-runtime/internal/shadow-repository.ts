@@ -8,6 +8,7 @@ const GIT_CONFIG = ["-c", "core.autocrlf=false", "-c", "core.longpaths=true", "-
 const HASH_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 const MAX_GIT_OUTPUT_BYTES = 128 * 1024 * 1024;
 const MAX_UNTRACKED_FILE_BYTES = 2 * 1024 * 1024;
+const PRUNE_EXPIRY = "7.days";
 
 interface GitOutput {
   readonly stderr: string;
@@ -212,7 +213,7 @@ async function ensureShadowRepository(repository: DiscoveredRepository): Promise
   }
 
   if (!initialized) {
-    await runGit([`--git-dir=${repository.shadowGitDir}`, "config", "gc.auto", "0"]);
+    await runGit([`--git-dir=${repository.shadowGitDir}`, "config", "gc.pruneExpire", PRUNE_EXPIRY]);
     await runGit([`--git-dir=${repository.shadowGitDir}`, "config", "core.autocrlf", "false"]);
     await runGit([`--git-dir=${repository.shadowGitDir}`, "config", "core.longpaths", "true"]);
     await runGit([`--git-dir=${repository.shadowGitDir}`, "config", "core.symlinks", "true"]);
@@ -513,10 +514,15 @@ export async function deleteSessionRefs(repositoriesRoot: string, sessionId: str
   }
 }
 
-export async function maintainShadowRepositories(storageRoot: string): Promise<void> {
-  const projects = await listDirectories(join(storageRoot, "projects"));
-  for (const project of projects) {
-    const repositories = await listDirectories(join(project, "repositories"));
-    for (const repository of repositories) await runGitResult([`--git-dir=${join(repository, "git")}`, "gc", "--prune=7.days"]);
+/**
+ * Reclaims unreachable objects for one project's shadow repositories.
+ *
+ * Shadow repositories keep automatic Git maintenance enabled with a pinned prune window, so
+ * this only exists to reclaim promptly after refs are deleted instead of waiting for Git's
+ * loose-object heuristic.
+ */
+export async function collectShadowGarbage(repositoriesRoot: string): Promise<void> {
+  for (const repository of await listDirectories(repositoriesRoot)) {
+    await runGitResult([`--git-dir=${join(repository, "git")}`, "gc", `--prune=${PRUNE_EXPIRY}`]);
   }
 }

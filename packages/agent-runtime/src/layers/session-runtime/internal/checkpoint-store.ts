@@ -2,17 +2,17 @@ import {createHash, randomUUID} from "node:crypto";
 import {mkdir, readFile, realpath, rename, rm, stat, writeFile} from "node:fs/promises";
 import {homedir} from "node:os";
 import {dirname, isAbsolute, join, relative, resolve, sep} from "node:path";
-import {Context, Effect, Layer} from "effect";
+import {Context, Layer} from "effect";
 import {KeyedMutex} from "@supernova/agent-runtime/layers/shared/lib/keyed-mutex";
 import {
   applyRestorePlan,
   buildRestorePlan,
   captureRepository,
   checkpointRefName,
+  collectShadowGarbage,
   deleteCheckpointRef,
   deleteSessionRefs,
   discoverRepositories,
-  maintainShadowRepositories,
   repositoryMatchesTree,
   rollbackRestorePlan,
   verifyCheckpointRef,
@@ -21,7 +21,6 @@ import type {DiscoveredRepository, RepositoryCheckpointState, RepositoryRestoreP
 
 const HASH_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 const REPOSITORY_ID_PATTERN = /^[0-9a-f]{64}$/;
-const MAINTENANCE_INTERVAL_MS = 24 * 60 * 60 * 1_000;
 const MANIFEST_VERSION = 1;
 
 interface WorkspaceCheckpointManifest {
@@ -149,20 +148,11 @@ async function loadManifest(
 }
 
 class CheckpointStoreImpl implements CheckpointStoreShape {
-  private lastMaintenanceAt = Date.now();
-  private maintenance: Promise<void> | undefined;
   private readonly projectLocks = new KeyedMutex<string>();
   private readonly storageRoot: string;
-  private readonly timer: NodeJS.Timeout;
 
   public constructor(storageRoot?: string) {
     this.storageRoot = resolve(storageRoot ?? defaultStorageRoot());
-    this.timer = setInterval(() => void this.runMaintenance(), MAINTENANCE_INTERVAL_MS);
-    this.timer.unref();
-  }
-
-  public dispose(): void {
-    clearInterval(this.timer);
   }
 
   public async capture(input: {readonly checkpointId: string; readonly projectRoot: string; readonly sessionId: string}): Promise<void> {
@@ -185,12 +175,12 @@ class CheckpointStoreImpl implements CheckpointStoreShape {
     try {
       const projectRoot = await canonicalProjectRoot(input.projectRoot);
       const projectStorage = projectStorageRoot(this.storageRoot, projectRoot);
-      await deleteSessionRefs(join(projectStorage, "repositories"), input.sessionId);
+      const repositoriesRoot = join(projectStorage, "repositories");
+      await deleteSessionRefs(repositoriesRoot, input.sessionId);
       await rm(join(projectStorage, "manifests", digest(input.sessionId)), {force: true, recursive: true});
+      await collectShadowGarbage(repositoriesRoot);
     } catch {
       return;
-    } finally {
-      this.scheduleMaintenance();
     }
   }
 
@@ -216,8 +206,6 @@ class CheckpointStoreImpl implements CheckpointStoreShape {
     } catch (cause) {
       await Promise.all(captured.map(({repository, state}) => deleteCheckpointRef(repository, state.refName)));
       throw cause;
-    } finally {
-      this.scheduleMaintenance();
     }
   }
 
@@ -266,31 +254,10 @@ class CheckpointStoreImpl implements CheckpointStoreShape {
       throw cause;
     }
   }
-
-  private scheduleMaintenance(): void {
-    if (Date.now() - this.lastMaintenanceAt < MAINTENANCE_INTERVAL_MS) return;
-    void this.runMaintenance();
-  }
-
-  private async runMaintenance(): Promise<void> {
-    if (this.maintenance) return this.maintenance;
-    this.lastMaintenanceAt = Date.now();
-    this.maintenance = maintainShadowRepositories(this.storageRoot).finally(() => {
-      this.maintenance = undefined;
-    });
-    return this.maintenance;
-  }
 }
 
 export function makeCheckpointStoreLive(storageRoot?: string) {
-  return Layer.effect(
-    CheckpointStore,
-    Effect.gen(function* () {
-      const store = new CheckpointStoreImpl(storageRoot);
-      yield* Effect.addFinalizer(() => Effect.sync(() => store.dispose()));
-      return store;
-    })
-  );
+  return Layer.succeed(CheckpointStore, new CheckpointStoreImpl(storageRoot));
 }
 
 export const CheckpointStoreLive = makeCheckpointStoreLive();
