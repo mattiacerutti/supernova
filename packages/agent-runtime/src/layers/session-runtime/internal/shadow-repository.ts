@@ -145,8 +145,24 @@ async function discoverCandidate(candidate: string, projectRoot: string): Promis
     return undefined;
   }
 
-  const topLevel = await optionalGit(["-C", canonicalCandidate, "rev-parse", "--show-toplevel"]);
-  if (!topLevel) return undefined;
+  // One invocation for every value, because spawning Git per candidate dominates discovery.
+  const output = await optionalGit([
+    "-C",
+    canonicalCandidate,
+    "rev-parse",
+    "--show-toplevel",
+    "--is-bare-repository",
+    "--absolute-git-dir",
+    "--show-object-format",
+    "--path-format=absolute",
+    "--git-path",
+    "objects",
+    "--git-path",
+    "index",
+  ]);
+  const [topLevel, bare, gitDirValue, objectFormatValue, objectDirValue, sourceIndexPath] = output?.split("\n").map((line) => line.trim()) ?? [];
+  if (!topLevel || bare !== "false" || !gitDirValue || !objectDirValue || !sourceIndexPath) return undefined;
+  if (objectFormatValue !== "sha1" && objectFormatValue !== "sha256") throw new Error("Unsupported Git object format.");
 
   let canonicalTopLevel: string;
   try {
@@ -155,16 +171,6 @@ async function discoverCandidate(candidate: string, projectRoot: string): Promis
     return undefined;
   }
   if (canonicalTopLevel !== canonicalCandidate) return undefined;
-
-  const [bare, gitDirValue, objectDirValue, objectFormatValue, sourceIndexPath] = await Promise.all([
-    optionalGit(["-C", canonicalCandidate, "rev-parse", "--is-bare-repository"]),
-    optionalGit(["-C", canonicalCandidate, "rev-parse", "--absolute-git-dir"]),
-    optionalGit(["-C", canonicalCandidate, "rev-parse", "--path-format=absolute", "--git-path", "objects"]),
-    optionalGit(["-C", canonicalCandidate, "rev-parse", "--show-object-format"]),
-    optionalGit(["-C", canonicalCandidate, "rev-parse", "--path-format=absolute", "--git-path", "index"]),
-  ]);
-  if (bare !== "false" || !gitDirValue || !objectDirValue || !sourceIndexPath) return undefined;
-  if (objectFormatValue !== "sha1" && objectFormatValue !== "sha256") throw new Error("Unsupported Git object format.");
 
   const [gitDir, objectDir] = await Promise.all([realpath(gitDirValue), realpath(objectDirValue)]);
   const gitDirMetadata = await stat(gitDir);
@@ -183,12 +189,25 @@ async function discoverCandidate(candidate: string, projectRoot: string): Promis
   };
 }
 
+/** Cheap check that avoids spawning Git for directories that cannot be a worktree root. */
+async function hasGitEntry(candidate: string): Promise<boolean> {
+  try {
+    await lstat(join(candidate, ".git"));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function discoverRepositories(projectRoot: string, repositoriesRoot: string): Promise<readonly DiscoveredRepository[]> {
   const candidates = [projectRoot];
   const children = await readdir(projectRoot, {withFileTypes: true});
   for (const child of children) if (child.isDirectory()) candidates.push(join(projectRoot, child.name));
 
-  const discovered = (await Promise.all(candidates.map((candidate) => discoverCandidate(candidate, projectRoot)))).filter(
+  const repositoryCandidates = (await Promise.all(candidates.map(async (candidate) => ((await hasGitEntry(candidate)) ? candidate : undefined)))).filter(
+    (candidate): candidate is string => candidate !== undefined
+  );
+  const discovered = (await Promise.all(repositoryCandidates.map((candidate) => discoverCandidate(candidate, projectRoot)))).filter(
     (repository): repository is RepositoryIdentity => repository !== undefined
   );
   discovered.sort((left, right) => left.relativeRoot.localeCompare(right.relativeRoot));
@@ -232,6 +251,51 @@ function parseIndexEntries(output: string): ReadonlyArray<{readonly flagged: boo
   return nulPaths(output).map((record) => ({flagged: /^(?:S|[a-z]) /.test(record), path: record.slice(2)}));
 }
 
+/** Returns the remainder of a record after the given number of spaces, which is how porcelain v2 delimits paths. */
+function fieldAfterSpaces(record: string, spaces: number): string | undefined {
+  let offset = -1;
+  for (let count = 0; count < spaces; count++) {
+    offset = record.indexOf(" ", offset + 1);
+    if (offset === -1) return undefined;
+  }
+  return record.slice(offset + 1) || undefined;
+}
+
+/**
+ * Parses `status --porcelain=v2 -z` into the paths capture has to stage.
+ *
+ * Changed paths are those whose worktree differs from the index, plus paths deleted from the index
+ * relative to `HEAD`, which no worktree comparison would report.
+ */
+function parseStatus(output: string): {readonly changed: readonly string[]; readonly untracked: readonly string[]} {
+  const changed = new Set<string>();
+  const untracked: string[] = [];
+  const records = nulPaths(output);
+
+  for (let index = 0; index < records.length; index++) {
+    const record = records[index]!;
+    if (record.startsWith("? ")) {
+      untracked.push(record.slice(2));
+      continue;
+    }
+    if (record.startsWith("1 ")) {
+      const path = fieldAfterSpaces(record, 8);
+      const [staged, worktree] = [record[2], record[3]];
+      if (path && (worktree !== "." || staged === "D")) changed.add(path);
+      continue;
+    }
+    if (record.startsWith("u ")) {
+      const path = fieldAfterSpaces(record, 10);
+      if (path) changed.add(path);
+      continue;
+    }
+    // Renames are disabled, but a rename record would carry its original path in a second field.
+    if (record.startsWith("2 ")) index++;
+  }
+
+  return {changed: [...changed], untracked};
+}
+
 async function existingFilePaths(paths: readonly string[], root: string, sizeLimit?: number): Promise<readonly string[]> {
   const files: string[] = [];
   for (const path of paths) {
@@ -263,13 +327,11 @@ async function createSnapshotTree(repository: DiscoveredRepository): Promise<str
   await ensureShadowRepository(repository);
 
   return withTemporaryIndex(async (indexPath) => {
-    let seeded = false;
     try {
       await copyFile(repository.sourceIndexPath, indexPath);
       const sourceIndexDirectory = dirname(repository.sourceIndexPath);
       const sharedIndexes = (await readdir(sourceIndexDirectory)).filter((name) => name.startsWith("sharedindex."));
       await Promise.all(sharedIndexes.map((name) => copyFile(join(sourceIndexDirectory, name), join(dirname(indexPath), name)).catch(() => undefined)));
-      seeded = true;
     } catch {
       await runGit(shadowArgs(repository, ["read-tree", "--empty"]), {env: {...process.env, GIT_INDEX_FILE: indexPath}});
     }
@@ -283,7 +345,6 @@ async function createSnapshotTree(repository: DiscoveredRepository): Promise<str
     }
 
     const indexEntries = parseIndexEntries((await runGit(shadowArgs(repository, ["ls-files", "-v", "-z"]), {env})).stdout);
-    const tracked = indexEntries.map((entry) => entry.path).filter((path) => !isExcludedPath(path, repository.excludedRoots));
     const flagged = indexEntries.filter((entry) => entry.flagged).map((entry) => entry.path);
     if (flagged.length > 0) {
       // Both flags hide worktree changes, and the two options cannot be combined in one call.
@@ -291,24 +352,15 @@ async function createSnapshotTree(repository: DiscoveredRepository): Promise<str
       await runGit(shadowArgs(repository, ["update-index", "--no-skip-worktree", "-z", "--stdin"]), {env, input: paths});
       await runGit(shadowArgs(repository, ["update-index", "--no-assume-unchanged", "-z", "--stdin"]), {env, input: paths});
     }
-    await runGitResult(shadowArgs(repository, ["update-index", "--really-refresh"]), {env});
 
-    const headOutput = await optionalGit(["-C", repository.root, "ls-tree", "-r", "--name-only", "-z", "HEAD"]);
-    const headPaths = headOutput ? nulPaths(headOutput) : [];
-    let changed: readonly string[];
-    if (seeded) {
-      const worktreeChanges = nulPaths((await runGit(shadowArgs(repository, ["diff-files", "--name-only", "-z"]), {env})).stdout);
-      const indexPaths = new Set(tracked);
-      const stagedDeletions = headPaths.filter((path) => !indexPaths.has(path));
-      changed = [...new Set([...worktreeChanges, ...stagedDeletions])];
-    } else {
-      changed = headPaths;
-    }
-
-    changed = changed.filter((path) => !isExcludedPath(path, repository.excludedRoots));
-    const untracked = nulPaths((await runGit(shadowArgs(repository, ["ls-files", "--others", "--exclude-standard", "-z"]), {env})).stdout).filter(
-      (path) => !isExcludedPath(path, repository.excludedRoots)
+    // One status reports worktree changes, staged deletions, and untracked paths, and refreshes the
+    // index while doing it. Renames stay off so a delete and add pair is never collapsed, and
+    // submodules are skipped so status never recurses into them.
+    const status = parseStatus(
+      (await runGit(shadowArgs(repository, ["status", "--porcelain=v2", "-z", "--no-renames", "--ignore-submodules=all", "--untracked-files=all", "--ignored=no"]), {env})).stdout
     );
+    const changed = status.changed.filter((path) => !isExcludedPath(path, repository.excludedRoots));
+    const untracked = status.untracked.filter((path) => !isExcludedPath(path, repository.excludedRoots));
     const trackedFiles = await existingFilePaths(changed, repository.root);
     const untrackedFiles = await existingFilePaths(untracked, repository.root, MAX_UNTRACKED_FILE_BYTES);
 
