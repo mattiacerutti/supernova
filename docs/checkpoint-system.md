@@ -321,8 +321,8 @@ capture as a whole against other checkpoint work. For each repository, capture:
 1. Creates a private temporary index.
 2. Copies the source index when available, otherwise initializes an empty tree.
 3. Removes discovered child repository roots owned by another snapshot.
-4. Clears `skip-worktree` and `assume-unchanged` in the temporary copy, for the entries that carry them, then refreshes cached index metadata against the actual worktree. Both flags stop Git from reporting worktree changes, so an unflagged copy is what makes capture see the real files. Only flagged entries are rewritten, which keeps the cost proportional to flagged files rather than to repository size and preserves the copied index's cached directory trees.
-5. Lists changed tracked paths and untracked, non-ignored paths.
+4. Clears `skip-worktree` and `assume-unchanged` in the temporary copy, for the entries that carry them. Both flags stop Git from reporting worktree changes, so an unflagged copy is what makes capture see the real files. Only flagged entries are rewritten, which keeps the cost proportional to flagged files rather than to repository size and preserves the copied index's cached directory trees.
+5. Reads changed tracked paths, staged deletions, and untracked, non-ignored paths in one status pass, which also refreshes cached index metadata against the actual worktree. Renames are disabled so a delete and add pair is never collapsed, and submodules are skipped so the pass never recurses into them.
 6. Keeps tracked files regardless of size or ignore status.
 7. Keeps untracked files and symlinks up to and including 2 MiB.
 8. Skips ignored untracked files, untracked files above 2 MiB, directories, and missing paths.

@@ -411,6 +411,36 @@ describe("checkpoint store", () => {
     await expect(gitOutput(repo, ["--git-dir", shadowGitDir, "config", "--local", "--get", "core.fsmonitor"])).resolves.toBe("false");
   });
 
+  it("captures staged deletions whether or not the file remains in the worktree", async () => {
+    const repo = await createRepo();
+    const storageRoot = mkdtempSync(join(tmpdir(), "supernova-checkpoint-storage-"));
+    tempDirs.push(repo, storageRoot);
+    await writeFile(join(repo, "unstaged-copy.txt"), "kept on disk\n");
+    await git(repo, ["add", "unstaged-copy.txt"]);
+    await git(repo, ["commit", "-m", "add second file"]);
+    await capture(storageRoot, repo, "before");
+
+    // `git rm` drops the file from the index and the worktree.
+    await git(repo, ["rm", "-q", "deleted.txt"]);
+    // `git rm --cached` drops it from the index only, so it becomes an untracked file on disk.
+    await git(repo, ["rm", "-q", "--cached", "unstaged-copy.txt"]);
+    await capture(storageRoot, repo, "after");
+
+    await expect(stat(join(repo, "deleted.txt"))).rejects.toThrow();
+    await expect(readFile(join(repo, "unstaged-copy.txt"), "utf8")).resolves.toBe("kept on disk\n");
+
+    await restore(storageRoot, repo, "after", "before");
+
+    // The tracked deletion is undone, and the file left on disk is untouched because both trees hold it.
+    await expect(readFile(join(repo, "deleted.txt"), "utf8")).resolves.toBe("delete me\n");
+    await expect(readFile(join(repo, "unstaged-copy.txt"), "utf8")).resolves.toBe("kept on disk\n");
+
+    await restore(storageRoot, repo, "before", "after");
+
+    await expect(stat(join(repo, "deleted.txt"))).rejects.toThrow();
+    await expect(readFile(join(repo, "unstaged-copy.txt"), "utf8")).resolves.toBe("kept on disk\n");
+  });
+
   it("keeps direct child repositories out of their parent snapshot", async () => {
     const repo = await createRepo();
     const storageRoot = mkdtempSync(join(tmpdir(), "supernova-checkpoint-storage-"));
