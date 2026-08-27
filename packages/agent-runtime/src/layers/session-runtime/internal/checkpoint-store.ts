@@ -1,14 +1,13 @@
-import {createHash, randomUUID} from "node:crypto";
+import {randomUUID} from "node:crypto";
 import {mkdir, readFile, realpath, rename, rm, stat, writeFile} from "node:fs/promises";
 import {homedir} from "node:os";
-import {dirname, isAbsolute, join, relative, resolve, sep} from "node:path";
+import {dirname, isAbsolute, join, resolve} from "node:path";
 import {Context, Layer} from "effect";
 import {KeyedMutex} from "@supernova/agent-runtime/layers/shared/lib/keyed-mutex";
 import {
   applyRestorePlan,
   buildRestorePlan,
   captureRepository,
-  checkpointRefName,
   collectShadowGarbage,
   deleteCheckpointRef,
   deleteSessionRefs,
@@ -18,6 +17,8 @@ import {
   verifyCheckpointRef,
 } from "@supernova/agent-runtime/layers/session-runtime/internal/shadow-repository";
 import type {RepositoryCheckpointState, RepositoryRestorePlan} from "@supernova/agent-runtime/layers/session-runtime/internal/shadow-repository";
+import {checkpointRefName, digest} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-keys";
+import {isWithin} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/git-paths";
 
 const HASH_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 const REPOSITORY_ID_PATTERN = /^[0-9a-f]{64}$/;
@@ -46,17 +47,8 @@ export interface CheckpointStoreShape {
 /** Owns durable checkpoint manifests and coordinates app-private shadow repositories. */
 export class CheckpointStore extends Context.Service<CheckpointStore, CheckpointStoreShape>()("supernova/agent-runtime/CheckpointStore") {}
 
-function digest(value: string): string {
-  return createHash("sha256").update(value).digest("hex");
-}
-
 function repositoryKey(state: Pick<RepositoryCheckpointState, "relativeRoot" | "repositoryId">): string {
   return `${state.repositoryId}\0${state.relativeRoot}`;
-}
-
-function isWithin(root: string, path: string): boolean {
-  const relativePath = relative(root, path);
-  return relativePath === "" || (!relativePath.startsWith(`..${sep}`) && relativePath !== ".." && !isAbsolute(relativePath));
 }
 
 function validateRelativeRoot(projectRoot: string, relativeRoot: unknown): string {

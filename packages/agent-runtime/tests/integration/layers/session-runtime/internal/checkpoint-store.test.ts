@@ -8,7 +8,7 @@ import {promisify} from "node:util";
 import {Effect} from "effect";
 import {afterEach, describe, expect, it} from "vitest";
 import {CheckpointStore, makeCheckpointStoreLive} from "@supernova/agent-runtime/layers/session-runtime/internal/checkpoint-store";
-import {checkpointRefName} from "@supernova/agent-runtime/layers/session-runtime/internal/shadow-repository";
+import {checkpointRefName} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-keys";
 
 const execFilePromise = promisify(execFile);
 const sessionId = "test-session";
