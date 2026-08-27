@@ -1,24 +1,37 @@
-import {spawn} from "node:child_process";
-import {createHash} from "node:crypto";
 import {copyFile, lstat, mkdir, mkdtemp, readdir, realpath, rm, stat, writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
-import {basename, dirname, isAbsolute, join, relative, resolve, sep} from "node:path";
+import {basename, dirname, join, relative, resolve} from "node:path";
+import {
+  addPaths,
+  clearIndexFlags,
+  collectGarbage,
+  createShadowRepository,
+  deleteRef,
+  diffTrees,
+  listFlaggedPaths,
+  listRefs,
+  listTreePaths,
+  readEmptyTree,
+  readRepositoryInfo,
+  readTree,
+  readWorkspaceStatus,
+  removeCachedPaths,
+  removeIndexPaths,
+  resolveRefTree,
+  restoreWorktreePaths,
+  writeRef,
+  writeTree,
+} from "@supernova/agent-runtime/layers/session-runtime/internal/git/git-commands";
+import type {GitObjectFormat, GitTarget} from "@supernova/agent-runtime/layers/session-runtime/internal/git/git-commands";
+import {checkpointRefName, checkpointSessionRefPrefix, digest} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/checkpoint-keys";
+import {isExcludedPath, isWithin, slashPath, topmostPaths, validateGitPath} from "@supernova/agent-runtime/layers/session-runtime/lib/checkpoints/git-paths";
 
-const GIT_CONFIG = ["-c", "core.autocrlf=false", "-c", "core.fsmonitor=false", "-c", "core.longpaths=true", "-c", "core.symlinks=true"];
-const HASH_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
-const MAX_GIT_OUTPUT_BYTES = 128 * 1024 * 1024;
 const MAX_UNTRACKED_FILE_BYTES = 2 * 1024 * 1024;
-const PRUNE_EXPIRY = "7.days";
-
-interface GitOutput {
-  readonly stderr: string;
-  readonly stdout: string;
-}
 
 interface RepositoryIdentity {
   readonly gitDir: string;
   readonly objectDir: string;
-  readonly objectFormat: "sha1" | "sha256";
+  readonly objectFormat: GitObjectFormat;
   readonly relativeRoot: string;
   readonly repositoryId: string;
   readonly root: string;
@@ -46,147 +59,16 @@ export interface RepositoryRestorePlan {
   readonly targetTreeId: string;
 }
 
-function digest(value: string): string {
-  return createHash("sha256").update(value).digest("hex");
-}
-
-function slashPath(value: string): string {
-  return value.split(sep).join("/");
-}
-
-export function checkpointRefName(sessionId: string, checkpointId: string): string {
-  return `${checkpointSessionRefPrefix(sessionId)}${digest(checkpointId)}`;
-}
-
-export function checkpointSessionRefPrefix(sessionId: string): string {
-  return `refs/supernova/${digest(sessionId)}/`;
-}
-
-function encodePathspecs(paths: readonly string[]): Buffer {
-  return Buffer.from(`${paths.map((path) => `:(top,literal)${path}`).join("\0")}\0`);
-}
-
-function nulPaths(value: string): readonly string[] {
-  return value.split("\0").filter(Boolean);
-}
-
-function isWithin(root: string, path: string): boolean {
-  const relativePath = relative(root, path);
-  return relativePath === "" || (!relativePath.startsWith(`..${sep}`) && relativePath !== ".." && !isAbsolute(relativePath));
-}
-
-function validateGitPath(path: string): void {
-  if (path.length === 0 || isAbsolute(path) || path.includes("\0")) throw new Error("Checkpoint contains an unsafe repository path.");
-  const segments = path.split("/");
-  if (segments.some((segment) => segment.length === 0 || segment === "." || segment === "..")) throw new Error("Checkpoint contains an unsafe repository path.");
-}
-
-async function runGitResult(
-  args: readonly string[],
-  options: {readonly cwd?: string; readonly env?: NodeJS.ProcessEnv; readonly input?: Buffer} = {}
-): Promise<GitOutput & {readonly code: number}> {
-  return new Promise((complete) => {
-    const child = spawn("git", [...args], {cwd: options.cwd, env: options.env ?? process.env});
-    const stdout: Buffer[] = [];
-    const stderr: Buffer[] = [];
-    let stdoutBytes = 0;
-    let stderrBytes = 0;
-    let completed = false;
-
-    function finish(code: number, errorMessage?: string): void {
-      if (completed) return;
-      completed = true;
-      complete({
-        code,
-        stderr: errorMessage ?? Buffer.concat(stderr).toString("utf8"),
-        stdout: Buffer.concat(stdout).toString("utf8"),
-      });
-    }
-
-    child.stdout.on("data", (chunk: Buffer) => {
-      stdoutBytes += chunk.byteLength;
-      if (stdoutBytes <= MAX_GIT_OUTPUT_BYTES) stdout.push(chunk);
-      else child.kill();
-    });
-    child.stderr.on("data", (chunk: Buffer) => {
-      stderrBytes += chunk.byteLength;
-      if (stderrBytes <= MAX_GIT_OUTPUT_BYTES) stderr.push(chunk);
-      else child.kill();
-    });
-    child.on("error", (cause) => finish(1, cause.message));
-    child.on("close", (code) => finish(code ?? 1));
-    child.stdin.on("error", () => undefined);
-    child.stdin.end(options.input);
-  });
-}
-
-async function runGit(args: readonly string[], options: {readonly cwd?: string; readonly env?: NodeJS.ProcessEnv; readonly input?: Buffer} = {}): Promise<GitOutput> {
-  const output = await runGitResult(args, options);
-  if (output.code !== 0) throw new Error(`Git checkpoint command failed: ${output.stderr.trim() || args.join(" ")}`);
-  return output;
-}
-
-async function optionalGit(args: readonly string[], options: {readonly cwd?: string; readonly env?: NodeJS.ProcessEnv} = {}): Promise<string | undefined> {
-  const output = await runGitResult(args, options);
-  const value = output.stdout.trim();
-  return output.code === 0 && value.length > 0 ? value : undefined;
-}
-
-function shadowArgs(repository: Pick<DiscoveredRepository, "root" | "shadowGitDir">, args: readonly string[]): readonly string[] {
-  return [...GIT_CONFIG, `--git-dir=${repository.shadowGitDir}`, `--work-tree=${repository.root}`, ...args];
-}
-
-async function discoverCandidate(candidate: string, projectRoot: string): Promise<RepositoryIdentity | undefined> {
-  let canonicalCandidate: string;
-  try {
-    canonicalCandidate = await realpath(candidate);
-    if (!(await stat(canonicalCandidate)).isDirectory()) return undefined;
-  } catch {
-    return undefined;
+/** Raised when the worktree no longer matches the current checkpoint on a path the restore would change. */
+export class CheckpointConflictError extends Error {
+  public constructor() {
+    super("Workspace files changed after the current checkpoint.");
+    this.name = "CheckpointConflictError";
   }
+}
 
-  // One invocation for every value, because spawning Git per candidate dominates discovery.
-  const output = await optionalGit([
-    "-C",
-    canonicalCandidate,
-    "rev-parse",
-    "--show-toplevel",
-    "--is-bare-repository",
-    "--absolute-git-dir",
-    "--show-object-format",
-    "--path-format=absolute",
-    "--git-path",
-    "objects",
-    "--git-path",
-    "index",
-  ]);
-  const [topLevel, bare, gitDirValue, objectFormatValue, objectDirValue, sourceIndexPath] = output?.split("\n").map((line) => line.trim()) ?? [];
-  if (!topLevel || bare !== "false" || !gitDirValue || !objectDirValue || !sourceIndexPath) return undefined;
-  if (objectFormatValue !== "sha1" && objectFormatValue !== "sha256") throw new Error("Unsupported Git object format.");
-
-  let canonicalTopLevel: string;
-  try {
-    canonicalTopLevel = await realpath(topLevel);
-  } catch {
-    return undefined;
-  }
-  if (canonicalTopLevel !== canonicalCandidate) return undefined;
-
-  const [gitDir, objectDir] = await Promise.all([realpath(gitDirValue), realpath(objectDirValue)]);
-  const gitDirMetadata = await stat(gitDir);
-  const repositoryId = digest(`${canonicalCandidate}\0${gitDir}\0${gitDirMetadata.ino}`);
-  const projectRelativeRoot = relative(projectRoot, canonicalCandidate);
-  if (!isWithin(projectRoot, canonicalCandidate)) return undefined;
-
-  return {
-    gitDir,
-    objectDir,
-    objectFormat: objectFormatValue,
-    relativeRoot: projectRelativeRoot === "" ? "." : slashPath(projectRelativeRoot),
-    repositoryId,
-    root: canonicalCandidate,
-    sourceIndexPath,
-  };
+function shadowTarget(repository: DiscoveredRepository): GitTarget {
+  return {gitDir: repository.shadowGitDir, worktree: repository.root};
 }
 
 /** Cheap check that avoids spawning Git for directories that cannot be a worktree root. */
@@ -199,6 +81,44 @@ async function hasGitEntry(candidate: string): Promise<boolean> {
   }
 }
 
+async function discoverCandidate(candidate: string, projectRoot: string): Promise<RepositoryIdentity | undefined> {
+  let canonicalCandidate: string;
+  try {
+    canonicalCandidate = await realpath(candidate);
+    if (!(await stat(canonicalCandidate)).isDirectory()) return undefined;
+  } catch {
+    return undefined;
+  }
+
+  const info = await readRepositoryInfo(canonicalCandidate);
+  if (!info || info.bare) return undefined;
+
+  let canonicalTopLevel: string;
+  try {
+    canonicalTopLevel = await realpath(info.topLevel);
+  } catch {
+    return undefined;
+  }
+  // A directory inside a repository reports that repository's root, so only its root is a candidate.
+  if (canonicalTopLevel !== canonicalCandidate) return undefined;
+  if (!isWithin(projectRoot, canonicalCandidate)) return undefined;
+
+  const [gitDir, objectDir] = await Promise.all([realpath(info.gitDir), realpath(info.objectDir)]);
+  const gitDirMetadata = await stat(gitDir);
+  const projectRelativeRoot = relative(projectRoot, canonicalCandidate);
+
+  return {
+    gitDir,
+    objectDir,
+    objectFormat: info.objectFormat,
+    relativeRoot: projectRelativeRoot === "" ? "." : slashPath(projectRelativeRoot),
+    repositoryId: digest(`${canonicalCandidate}\0${gitDir}\0${gitDirMetadata.ino}`),
+    root: canonicalCandidate,
+    sourceIndexPath: info.indexPath,
+  };
+}
+
+/** Finds the project root and its immediate child repositories, and assigns each one its shadow storage. */
 export async function discoverRepositories(projectRoot: string, repositoriesRoot: string): Promise<readonly DiscoveredRepository[]> {
   const candidates = [projectRoot];
   const children = await readdir(projectRoot, {withFileTypes: true});
@@ -220,90 +140,29 @@ export async function discoverRepositories(projectRoot: string, repositoriesRoot
   });
 }
 
+/** Creates the shadow repository on first use and keeps it pointed at the source object database. */
 async function ensureShadowRepository(repository: DiscoveredRepository): Promise<void> {
   await mkdir(dirname(repository.shadowGitDir), {recursive: true});
-  const headPath = join(repository.shadowGitDir, "HEAD");
   let initialized = true;
   try {
-    await stat(headPath);
+    await stat(join(repository.shadowGitDir, "HEAD"));
   } catch {
     initialized = false;
-    await runGit(["init", "--bare", `--object-format=${repository.objectFormat}`, repository.shadowGitDir]);
   }
 
-  if (!initialized) {
-    await runGit([`--git-dir=${repository.shadowGitDir}`, "config", "gc.pruneExpire", PRUNE_EXPIRY]);
-    await runGit([`--git-dir=${repository.shadowGitDir}`, "config", "core.autocrlf", "false"]);
-    await runGit([`--git-dir=${repository.shadowGitDir}`, "config", "core.fsmonitor", "false"]);
-    await runGit([`--git-dir=${repository.shadowGitDir}`, "config", "core.longpaths", "true"]);
-    await runGit([`--git-dir=${repository.shadowGitDir}`, "config", "core.symlinks", "true"]);
-  }
+  if (!initialized) await createShadowRepository(repository.shadowGitDir, repository.objectFormat);
   await mkdir(join(repository.shadowGitDir, "objects", "info"), {recursive: true});
   await writeFile(join(repository.shadowGitDir, "objects", "info", "alternates"), `${repository.objectDir}\n`);
 }
 
-function isExcludedPath(path: string, excludedRoots: readonly string[]): boolean {
-  return excludedRoots.some((root) => path === root || path.startsWith(`${root}/`));
-}
-
-/** Parses `ls-files -v` records. A lowercase tag marks `assume-unchanged`, and `S` marks `skip-worktree`. */
-function parseIndexEntries(output: string): ReadonlyArray<{readonly flagged: boolean; readonly path: string}> {
-  return nulPaths(output).map((record) => ({flagged: /^(?:S|[a-z]) /.test(record), path: record.slice(2)}));
-}
-
-/** Returns the remainder of a record after the given number of spaces, which is how porcelain v2 delimits paths. */
-function fieldAfterSpaces(record: string, spaces: number): string | undefined {
-  let offset = -1;
-  for (let count = 0; count < spaces; count++) {
-    offset = record.indexOf(" ", offset + 1);
-    if (offset === -1) return undefined;
-  }
-  return record.slice(offset + 1) || undefined;
-}
-
-/**
- * Parses `status --porcelain=v2 -z` into the paths capture has to stage.
- *
- * Changed paths are those whose worktree differs from the index, plus paths deleted from the index
- * relative to `HEAD`, which no worktree comparison would report.
- */
-function parseStatus(output: string): {readonly changed: readonly string[]; readonly untracked: readonly string[]} {
-  const changed = new Set<string>();
-  const untracked: string[] = [];
-  const records = nulPaths(output);
-
-  for (let index = 0; index < records.length; index++) {
-    const record = records[index]!;
-    if (record.startsWith("? ")) {
-      untracked.push(record.slice(2));
-      continue;
-    }
-    if (record.startsWith("1 ")) {
-      const path = fieldAfterSpaces(record, 8);
-      const [staged, worktree] = [record[2], record[3]];
-      if (path && (worktree !== "." || staged === "D")) changed.add(path);
-      continue;
-    }
-    if (record.startsWith("u ")) {
-      const path = fieldAfterSpaces(record, 10);
-      if (path) changed.add(path);
-      continue;
-    }
-    // Renames are disabled, but a rename record would carry its original path in a second field.
-    if (record.startsWith("2 ")) index++;
-  }
-
-  return {changed: [...changed], untracked};
-}
-
+/** Filters candidate paths down to files and symlinks that exist now, optionally within a size limit. */
 async function existingFilePaths(paths: readonly string[], root: string, sizeLimit?: number): Promise<readonly string[]> {
   const files: string[] = [];
   for (const path of paths) {
     if (path === ".git" || path.startsWith(".git/") || path.includes("/.git/")) continue;
-    const absolutePath = join(root, ...path.split("/"));
     let metadata;
     try {
-      metadata = await lstat(absolutePath);
+      metadata = await lstat(join(root, ...path.split("/")));
     } catch {
       continue;
     }
@@ -314,6 +173,7 @@ async function existingFilePaths(paths: readonly string[], root: string, sizeLim
   return files;
 }
 
+/** Runs work against a private index, so no checkpoint operation shares mutable index state. */
 async function withTemporaryIndex<T>(run: (indexPath: string) => Promise<T>): Promise<T> {
   const directory = await mkdtemp(join(tmpdir(), "supernova-checkpoint-"));
   try {
@@ -323,102 +183,64 @@ async function withTemporaryIndex<T>(run: (indexPath: string) => Promise<T>): Pr
   }
 }
 
+/** Seeds the private index from the user's index, which reuses its object ids and cached file metadata. */
+async function seedIndex(repository: DiscoveredRepository, target: GitTarget, indexPath: string): Promise<void> {
+  try {
+    await copyFile(repository.sourceIndexPath, indexPath);
+    const sourceIndexDirectory = dirname(repository.sourceIndexPath);
+    const sharedIndexes = (await readdir(sourceIndexDirectory)).filter((name) => name.startsWith("sharedindex."));
+    await Promise.all(sharedIndexes.map((name) => copyFile(join(sourceIndexDirectory, name), join(dirname(indexPath), name)).catch(() => undefined)));
+  } catch {
+    await readEmptyTree(target, indexPath);
+  }
+}
+
+/** Builds a tree describing the current worktree, excluding paths owned by a child repository. */
 async function createSnapshotTree(repository: DiscoveredRepository): Promise<string> {
   await ensureShadowRepository(repository);
+  const target = shadowTarget(repository);
 
   return withTemporaryIndex(async (indexPath) => {
-    try {
-      await copyFile(repository.sourceIndexPath, indexPath);
-      const sourceIndexDirectory = dirname(repository.sourceIndexPath);
-      const sharedIndexes = (await readdir(sourceIndexDirectory)).filter((name) => name.startsWith("sharedindex."));
-      await Promise.all(sharedIndexes.map((name) => copyFile(join(sourceIndexDirectory, name), join(dirname(indexPath), name)).catch(() => undefined)));
-    } catch {
-      await runGit(shadowArgs(repository, ["read-tree", "--empty"]), {env: {...process.env, GIT_INDEX_FILE: indexPath}});
-    }
+    await seedIndex(repository, target, indexPath);
+    await removeCachedPaths(target, indexPath, repository.excludedRoots);
+    await clearIndexFlags(target, indexPath, await listFlaggedPaths(target, indexPath));
 
-    const env = {...process.env, GIT_INDEX_FILE: indexPath};
-    if (repository.excludedRoots.length > 0) {
-      await runGit(shadowArgs(repository, ["rm", "-r", "--cached", "--ignore-unmatch", "--pathspec-from-file=-", "--pathspec-file-nul"]), {
-        env,
-        input: encodePathspecs(repository.excludedRoots),
-      });
-    }
-
-    const indexEntries = parseIndexEntries((await runGit(shadowArgs(repository, ["ls-files", "-v", "-z"]), {env})).stdout);
-    const flagged = indexEntries.filter((entry) => entry.flagged).map((entry) => entry.path);
-    if (flagged.length > 0) {
-      // Both flags hide worktree changes, and the two options cannot be combined in one call.
-      const paths = Buffer.from(`${flagged.join("\0")}\0`);
-      await runGit(shadowArgs(repository, ["update-index", "--no-skip-worktree", "-z", "--stdin"]), {env, input: paths});
-      await runGit(shadowArgs(repository, ["update-index", "--no-assume-unchanged", "-z", "--stdin"]), {env, input: paths});
-    }
-
-    // One status reports worktree changes, staged deletions, and untracked paths, and refreshes the
-    // index while doing it. Renames stay off so a delete and add pair is never collapsed, and
-    // submodules are skipped so status never recurses into them.
-    const status = parseStatus(
-      (await runGit(shadowArgs(repository, ["status", "--porcelain=v2", "-z", "--no-renames", "--ignore-submodules=all", "--untracked-files=all", "--ignored=no"]), {env})).stdout
-    );
+    const status = await readWorkspaceStatus(target, indexPath);
     const changed = status.changed.filter((path) => !isExcludedPath(path, repository.excludedRoots));
     const untracked = status.untracked.filter((path) => !isExcludedPath(path, repository.excludedRoots));
     const trackedFiles = await existingFilePaths(changed, repository.root);
     const untrackedFiles = await existingFilePaths(untracked, repository.root, MAX_UNTRACKED_FILE_BYTES);
 
-    if (changed.length > 0) {
-      await runGit(shadowArgs(repository, ["update-index", "--force-remove", "-z", "--stdin"]), {
-        env,
-        input: Buffer.from(`${changed.join("\0")}\0`),
-      });
-    }
-    const stagePaths = [...new Set([...trackedFiles, ...untrackedFiles])];
-    if (stagePaths.length > 0) {
-      await runGit(shadowArgs(repository, ["add", "-f", "--sparse", "--pathspec-from-file=-", "--pathspec-file-nul"]), {
-        env,
-        input: encodePathspecs(stagePaths),
-      });
-    }
+    // Removing first lets a rebuilt entry represent a deletion, a mode change, or a type change.
+    await removeIndexPaths(target, indexPath, changed);
+    await addPaths(target, indexPath, [...new Set([...trackedFiles, ...untrackedFiles])]);
 
-    const treeId = (await runGit(shadowArgs(repository, ["write-tree"]), {env})).stdout.trim();
-    if (!HASH_PATTERN.test(treeId)) throw new Error("Git returned an invalid checkpoint tree.");
-    return treeId;
+    return writeTree(target, indexPath);
   });
 }
 
+/** Captures one repository and publishes the private ref that pins its tree. */
 export async function captureRepository(repository: DiscoveredRepository, sessionId: string, checkpointId: string): Promise<RepositoryCheckpointState> {
   const treeId = await createSnapshotTree(repository);
   const refName = checkpointRefName(sessionId, checkpointId);
-  await runGit([`--git-dir=${repository.shadowGitDir}`, "update-ref", refName, treeId]);
+  await writeRef(repository.shadowGitDir, refName, treeId);
   return {refName, relativeRoot: repository.relativeRoot, repositoryId: repository.repositoryId, treeId};
 }
 
+/** Removes a checkpoint ref, used to clean up after an incomplete capture. */
 export async function deleteCheckpointRef(repository: Pick<DiscoveredRepository, "shadowGitDir">, ref: string): Promise<void> {
-  await runGitResult([`--git-dir=${repository.shadowGitDir}`, "update-ref", "-d", ref]);
+  await deleteRef(repository.shadowGitDir, ref);
 }
 
+/** Confirms a manifest's ref still resolves to the tree the manifest recorded. */
 export async function verifyCheckpointRef(repository: DiscoveredRepository, state: RepositoryCheckpointState): Promise<void> {
   await ensureShadowRepository(repository);
-  const resolvedTree = (await runGit([`--git-dir=${repository.shadowGitDir}`, "rev-parse", `${state.refName}^{tree}`])).stdout.trim();
-  if (resolvedTree !== state.treeId) throw new Error("Checkpoint ref does not resolve to its recorded tree.");
+  if ((await resolveRefTree(repository.shadowGitDir, state.refName)) !== state.treeId) throw new Error("Checkpoint ref does not resolve to its recorded tree.");
 }
 
-async function diffTreePaths(
-  repository: DiscoveredRepository,
-  fromTreeId: string,
-  targetTreeId: string
-): Promise<{readonly deletePaths: readonly string[]; readonly restorePaths: readonly string[]}> {
-  const output = await runGit(shadowArgs(repository, ["diff", "--name-status", "--no-renames", "-z", fromTreeId, targetTreeId]));
-  const fields = nulPaths(output.stdout);
-  const deletePaths: string[] = [];
-  const restorePaths: string[] = [];
-  for (let index = 0; index < fields.length; index += 2) {
-    const status = fields[index];
-    const path = fields[index + 1];
-    if (!status || !path || isExcludedPath(path, repository.excludedRoots)) continue;
-    validateGitPath(path);
-    if (status.startsWith("D")) deletePaths.push(path);
-    else restorePaths.push(path);
-  }
-  return {deletePaths, restorePaths};
+/** Returns whether the current worktree already matches a tree, used for repositories a target claims but the current checkpoint does not. */
+export async function repositoryMatchesTree(repository: DiscoveredRepository, treeId: string): Promise<boolean> {
+  return (await createSnapshotTree(repository)) === treeId;
 }
 
 async function assertNoSymlinkAncestor(repositoryRoot: string, path: string): Promise<void> {
@@ -437,56 +259,41 @@ async function assertNoSymlinkAncestor(repositoryRoot: string, path: string): Pr
   }
 }
 
+/** Writes a tree whose affected paths carry the worktree's actual current content. */
 async function replaceTreePathsWithWorktree(repository: DiscoveredRepository, baseTreeId: string, affectedPaths: readonly string[]): Promise<string> {
   for (const path of affectedPaths) await assertNoSymlinkAncestor(repository.root, path);
+  const target = shadowTarget(repository);
 
   return withTemporaryIndex(async (indexPath) => {
-    const env = {...process.env, GIT_INDEX_FILE: indexPath};
-    await runGit(shadowArgs(repository, ["read-tree", baseTreeId]), {env});
-    if (affectedPaths.length > 0) {
-      await runGit(shadowArgs(repository, ["update-index", "--force-remove", "-z", "--stdin"]), {
-        env,
-        input: Buffer.from(`${affectedPaths.join("\0")}\0`),
-      });
-    }
-    const existingPaths = await existingFilePaths(affectedPaths, repository.root);
-    if (existingPaths.length > 0) {
-      await runGit(shadowArgs(repository, ["add", "-f", "--sparse", "--pathspec-from-file=-", "--pathspec-file-nul"]), {
-        env,
-        input: encodePathspecs(existingPaths),
-      });
-    }
-    return (await runGit(shadowArgs(repository, ["write-tree"]), {env})).stdout.trim();
+    await readTree(target, indexPath, baseTreeId);
+    await removeIndexPaths(target, indexPath, affectedPaths);
+    await addPaths(target, indexPath, await existingFilePaths(affectedPaths, repository.root));
+    return writeTree(target, indexPath);
   });
 }
 
-/** Raised when the worktree no longer matches the current checkpoint on a path the restore would change. */
-export class CheckpointConflictError extends Error {
-  public constructor() {
-    super("Workspace files changed after the current checkpoint.");
-    this.name = "CheckpointConflictError";
-  }
-}
-
+/**
+ * Plans one repository's restore and detects manual changes before anything is written.
+ *
+ * The safety tree records the worktree's actual state for affected paths. When it differs from the
+ * current checkpoint an affected path was changed by hand, which `force` discards.
+ */
 export async function buildRestorePlan(
   repository: DiscoveredRepository,
   current: RepositoryCheckpointState,
   target: RepositoryCheckpointState,
   force: boolean
 ): Promise<RepositoryRestorePlan> {
-  const operations = await diffTreePaths(repository, current.treeId, target.treeId);
-  const affectedPaths = [...new Set([...operations.deletePaths, ...operations.restorePaths])].sort();
+  const changes = (await diffTrees(shadowTarget(repository), current.treeId, target.treeId)).filter((change) => !isExcludedPath(change.path, repository.excludedRoots));
+  for (const change of changes) validateGitPath(change.path);
+
+  const deletePaths = changes.filter((change) => change.deleted).map((change) => change.path);
+  const restorePaths = changes.filter((change) => !change.deleted).map((change) => change.path);
+  const affectedPaths = [...new Set([...deletePaths, ...restorePaths])].sort();
   const safetyTreeId = await replaceTreePathsWithWorktree(repository, current.treeId, affectedPaths);
   if (safetyTreeId !== current.treeId && !force) throw new CheckpointConflictError();
 
-  return {
-    affectedPaths,
-    deletePaths: operations.deletePaths,
-    repository,
-    restorePaths: operations.restorePaths,
-    safetyTreeId,
-    targetTreeId: target.treeId,
-  };
+  return {affectedPaths, deletePaths, repository, restorePaths, safetyTreeId, targetTreeId: target.treeId};
 }
 
 async function containsGitMetadata(path: string): Promise<boolean> {
@@ -503,11 +310,7 @@ async function containsGitMetadata(path: string): Promise<boolean> {
   return false;
 }
 
-function topmostPaths(paths: readonly string[]): readonly string[] {
-  const ordered = [...new Set(paths)].sort((left, right) => left.split("/").length - right.split("/").length || left.localeCompare(right));
-  return ordered.filter((path, index) => !ordered.slice(0, index).some((parent) => path.startsWith(`${parent}/`)));
-}
-
+/** Removes affected paths before restoring, which is what makes file and directory transitions work. */
 async function removeWorktreePaths(repository: DiscoveredRepository, paths: readonly string[]): Promise<void> {
   for (const path of topmostPaths(paths)) {
     validateGitPath(path);
@@ -519,72 +322,48 @@ async function removeWorktreePaths(repository: DiscoveredRepository, paths: read
   }
 }
 
-async function treePaths(repository: DiscoveredRepository, treeId: string, candidates: readonly string[]): Promise<readonly string[]> {
-  if (candidates.length === 0) return [];
-  const output = await runGit(shadowArgs(repository, ["ls-tree", "-r", "--name-only", "-z", treeId, "--"]));
-  const candidateSet = new Set(candidates);
-  return nulPaths(output.stdout).filter((path) => candidateSet.has(path));
-}
-
-async function restoreTreePaths(repository: DiscoveredRepository, treeId: string, paths: readonly string[]): Promise<void> {
-  if (paths.length === 0) return;
-  await withTemporaryIndex(async (indexPath) => {
-    await runGit(shadowArgs(repository, ["read-tree", treeId]), {env: {...process.env, GIT_INDEX_FILE: indexPath}});
-    await runGit(shadowArgs(repository, ["restore", "--source", treeId, "--worktree", "--pathspec-from-file=-", "--pathspec-file-nul"]), {
-      env: {...process.env, GIT_INDEX_FILE: indexPath},
-      input: encodePathspecs(paths),
-    });
-  });
-}
-
 async function applyTree(repository: DiscoveredRepository, treeId: string, affectedPaths: readonly string[], restorePaths: readonly string[]): Promise<void> {
   await removeWorktreePaths(repository, affectedPaths);
-  await restoreTreePaths(repository, treeId, restorePaths);
+  await withTemporaryIndex((indexPath) => restoreWorktreePaths(shadowTarget(repository), indexPath, treeId, restorePaths));
 }
 
+/** Applies one repository's plan and verifies the affected paths match the target tree exactly. */
 export async function applyRestorePlan(plan: RepositoryRestorePlan): Promise<void> {
   await applyTree(plan.repository, plan.targetTreeId, plan.affectedPaths, plan.restorePaths);
   const verificationTreeId = await replaceTreePathsWithWorktree(plan.repository, plan.targetTreeId, plan.affectedPaths);
   if (verificationTreeId !== plan.targetTreeId) throw new Error("Workspace checkpoint verification failed.");
 }
 
+/** Restores affected paths from the plan's safety tree after a failed apply. */
 export async function rollbackRestorePlan(plan: RepositoryRestorePlan): Promise<void> {
-  const restorePaths = await treePaths(plan.repository, plan.safetyTreeId, plan.affectedPaths);
+  const treePathSet = new Set(await listTreePaths(shadowTarget(plan.repository), plan.safetyTreeId));
+  const restorePaths = plan.affectedPaths.filter((path) => treePathSet.has(path));
   await applyTree(plan.repository, plan.safetyTreeId, plan.affectedPaths, restorePaths);
 }
 
-async function listDirectories(path: string): Promise<readonly string[]> {
+async function listShadowGitDirs(repositoriesRoot: string): Promise<readonly string[]> {
   try {
-    return (await readdir(path, {withFileTypes: true})).filter((entry) => entry.isDirectory()).map((entry) => join(path, entry.name));
+    const entries = await readdir(repositoriesRoot, {withFileTypes: true});
+    return entries.filter((entry) => entry.isDirectory()).map((entry) => join(repositoriesRoot, entry.name, "git"));
   } catch {
     return [];
   }
 }
 
-export async function repositoryMatchesTree(repository: DiscoveredRepository, treeId: string): Promise<boolean> {
-  return (await createSnapshotTree(repository)) === treeId;
-}
-
+/** Removes every checkpoint ref owned by one session, leaving other sessions untouched. */
 export async function deleteSessionRefs(repositoriesRoot: string, sessionId: string): Promise<void> {
-  const repositories = await listDirectories(repositoriesRoot);
   const prefix = checkpointSessionRefPrefix(sessionId);
-  for (const repositoryPath of repositories) {
-    const gitDir = join(repositoryPath, "git");
-    const refs = await optionalGit([`--git-dir=${gitDir}`, "for-each-ref", "--format=%(refname)", prefix]);
-    if (!refs) continue;
-    for (const ref of refs.split("\n").filter(Boolean)) await runGitResult([`--git-dir=${gitDir}`, "update-ref", "-d", ref]);
+  for (const gitDir of await listShadowGitDirs(repositoriesRoot)) {
+    for (const ref of await listRefs(gitDir, prefix)) await deleteRef(gitDir, ref);
   }
 }
 
 /**
  * Reclaims unreachable objects for one project's shadow repositories.
  *
- * Shadow repositories keep automatic Git maintenance enabled with a pinned prune window, so
- * this only exists to reclaim promptly after refs are deleted instead of waiting for Git's
- * loose-object heuristic.
+ * Shadow repositories keep automatic Git maintenance enabled with a pinned prune window, so this
+ * only exists to reclaim promptly after refs are deleted instead of waiting for Git's heuristic.
  */
 export async function collectShadowGarbage(repositoriesRoot: string): Promise<void> {
-  for (const repository of await listDirectories(repositoriesRoot)) {
-    await runGitResult([`--git-dir=${join(repository, "git")}`, "gc", `--prune=${PRUNE_EXPIRY}`]);
-  }
+  for (const gitDir of await listShadowGitDirs(repositoriesRoot)) await collectGarbage(gitDir);
 }
