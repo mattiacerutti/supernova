@@ -7,7 +7,6 @@ export const CHECKPOINT_CURSOR_CUSTOM_TYPE = "supernova.checkpoint-cursor";
 export type CheckpointPhase = "before-turn" | "after-turn";
 
 /** Whether a checkpoint boundary has durable workspace state behind it. */
-// TODO: Nothing produces "disabled" yet. It is reserved for the setting that turns off workspace checkpointing.
 export type CheckpointStatus = "captured" | "disabled" | "failed";
 
 interface CheckpointEntryData {

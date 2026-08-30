@@ -3,6 +3,7 @@ import {useQueryClient} from "@tanstack/react-query";
 import {useMemo, useState} from "react";
 import {buildCommittedTimelineItems, buildLiveTimelineItems} from "@/features/sessions/lib/timeline/build-session-timeline";
 import type {ClientSlashCommandActions} from "@/features/sessions/lib/composer/client-slash-commands";
+import {useGeneralSettingsStore} from "@/features/settings/stores/general-settings-store";
 import {useSessionLiveStore} from "@/features/sessions/stores/session-live-store";
 import type {CheckpointNavigationOutcome, SessionLiveStatus} from "@/features/sessions/stores/session-live-store";
 import type {SessionTimelineItem} from "@/features/sessions/types/session-timeline-item";
@@ -34,10 +35,12 @@ export function useSessionTimeline(input: UseSessionTimelineInput): UseSessionTi
   const rpcClient = useAgentRpcClient();
   const [forceNavigation, setForceNavigation] = useState<(() => void) | null>(null);
 
-  /** Runs a navigation command and holds its forced retry when the workspace conflicts. */
+  /** Runs a navigation command and holds its forced retry when the workspace conflicts, or forces immediately when confirmation is off. */
   const navigate = async (run: () => Promise<CheckpointNavigationOutcome>, retryWithForce: () => Promise<CheckpointNavigationOutcome>): Promise<void> => {
     const outcome = await run();
-    if (outcome === "conflict") setForceNavigation(() => () => void retryWithForce());
+    if (outcome !== "conflict") return;
+    if (useGeneralSettingsStore.getState().confirmCheckpointConflicts) setForceNavigation(() => () => void retryWithForce());
+    else await retryWithForce();
   };
 
   const sessionState = useSessionLiveStore((state) => state.sessions[sessionId]);

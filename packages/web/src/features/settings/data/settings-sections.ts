@@ -1,9 +1,10 @@
 import type {ComponentType} from "react";
 import type {IconName} from "@/components/ui/icon";
 import AppearanceSection from "@/features/settings/pages/sections/appearance-section";
+import GeneralSection from "@/features/settings/pages/sections/general-section";
 import ProvidersSection from "@/features/settings/pages/sections/providers-section";
 
-export type SettingsSectionId = "appearance" | "providers";
+export type SettingsSectionId = "appearance" | "general" | "providers";
 
 export interface SettingsSection {
   Component: ComponentType;
@@ -14,6 +15,13 @@ export interface SettingsSection {
 }
 
 export const settingsSections: readonly SettingsSection[] = [
+  {
+    Component: GeneralSection,
+    description: "Configure Supernova's core behavior and defaults.",
+    icon: "settings",
+    id: "general",
+    label: "General",
+  },
   {
     Component: AppearanceSection,
     description: "Customize Supernova's theme, typography, and interface.",
@@ -30,7 +38,7 @@ export const settingsSections: readonly SettingsSection[] = [
   },
 ];
 
-export const defaultSettingsSectionId: SettingsSectionId = "appearance";
+export const defaultSettingsSectionId: SettingsSectionId = "general";
 
 /** Returns the section for the given id. Throws for unknown ids. */
 export function getSettingsSection(sectionId: string): SettingsSection {

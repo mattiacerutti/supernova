@@ -31,11 +31,12 @@ export async function sendMessage(runtime: PiSessionRuntime, titleGenerator: PiS
       resourceCatalog: runtime.resourceCatalog,
     });
 
+    const captureCheckpoints = input.captureCheckpoints ?? true;
     const checkpointId = randomUUID();
-    const checkpointStatus = await runtime.createCheckpoint(checkpointId);
+    const checkpointStatus = await runtime.createCheckpoint(checkpointId, captureCheckpoints);
     await runtime.selectModel(selectedModel);
 
-    const {completion} = runtime.startTurn({beforeCheckpoint: {checkpointId, status: checkpointStatus}, messageContext, title: generatedTitle});
+    const {completion} = runtime.startTurn({beforeCheckpoint: {checkpointId, status: checkpointStatus}, captureCheckpoints, messageContext, title: generatedTitle});
 
     void completion
       .catch(async (cause) => {

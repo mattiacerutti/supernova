@@ -155,6 +155,7 @@ export class PiSessionRuntime {
   /** Accepts and starts one prepared user turn, returning its background completion. */
   public startTurn(input: {
     readonly beforeCheckpoint: {readonly checkpointId: string; readonly status: CheckpointStatus};
+    readonly captureCheckpoints: boolean;
     readonly messageContext: SendMessageContext;
     readonly title: string | undefined;
   }): {readonly completion: Promise<void>} {
@@ -203,7 +204,7 @@ export class PiSessionRuntime {
       await this.waitForPiSettlement();
 
       const afterTurnCheckpointId = randomUUID();
-      const afterTurnStatus = await this.createCheckpoint(afterTurnCheckpointId);
+      const afterTurnStatus = await this.createCheckpoint(afterTurnCheckpointId, input.captureCheckpoints);
       sessionManager.appendCustomEntry(CHECKPOINT_CUSTOM_TYPE, {checkpointId: afterTurnCheckpointId, phase: "after-turn", status: afterTurnStatus});
       sessionManager.appendCustomEntry(CHECKPOINT_CURSOR_CUSTOM_TYPE, {leafEntryId: sessionManager.getLeafId()});
 
@@ -293,7 +294,8 @@ export class PiSessionRuntime {
    * Capture is best-effort: a failure leaves the boundary uncovered instead of
    * rejecting the command, so provider work is never blocked by checkpoint storage.
    */
-  public async createCheckpoint(checkpointId: string): Promise<CheckpointStatus> {
+  public async createCheckpoint(checkpointId: string, capture: boolean): Promise<CheckpointStatus> {
+    if (!capture) return "disabled";
     const agentSession = await this.getAgentSession();
     try {
       await this.checkpointStore.capture({checkpointId, projectRoot: agentSession.sessionManager.getCwd(), sessionId: this.sessionId});
