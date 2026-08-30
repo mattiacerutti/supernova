@@ -276,6 +276,32 @@ describe("sending messages through Pi sessions", () => {
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("after\n");
   });
 
+  it("skips both captures and records disabled checkpoints when the payload turns capture off", async () => {
+    let captureCount = 0;
+    const checkpointStore: CheckpointStoreShape = {
+      capture: async () => {
+        captureCount++;
+      },
+      deleteSession: async () => undefined,
+      restore: async () => undefined,
+    };
+    const pi = await createPiTestRuntime({checkpointStore});
+    runtimes.push(pi);
+    const {info, manager} = pi.createSession();
+    pi.faux.setResponses([fauxAssistantMessage("Changed files.")]);
+
+    const events = await pi.sendMessage({captureCheckpoints: false, message: "change files", modelReference: selectedModelReference, sessionId: info.id});
+    const customEntries = manager.getBranch().filter((entry) => entry.type === "custom");
+    const checkpointEntries = customEntries.filter((entry) => entry.customType === "supernova.checkpoint");
+
+    expect(captureCount).toBe(0);
+    expect(events.filter((event) => event.type === "session.error")).toEqual([]);
+    expect(checkpointEntries.map((entry) => entry.data)).toEqual([
+      {checkpointId: expect.any(String), phase: "before-turn", status: "disabled"},
+      {checkpointId: expect.any(String), phase: "after-turn", status: "disabled"},
+    ]);
+  });
+
   it("runs the turn with an uncovered before-turn checkpoint when the initial capture fails", async () => {
     let captureCount = 0;
     const checkpointStore: CheckpointStoreShape = {

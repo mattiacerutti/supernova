@@ -3,6 +3,7 @@ import {CheckpointConflictError} from "@supernova/contracts/session-runtime/proc
 import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
 import type {ModelReference, Session, SessionContextUsage, Turn, UserMessage, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 import {create} from "zustand";
+import {useGeneralSettingsStore} from "@/features/settings/stores/general-settings-store";
 import {showToast} from "@/components/ui/toast-manager";
 import {sessionQueryKey} from "@/features/sessions/hooks/api/use-session";
 import type {AgentRpcClientApi, AgentRpcProtocolClient} from "@/rpc/agent-rpc-client";
@@ -162,7 +163,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
     });
 
     void rpcClient
-      .run((rpc) => rpc.sendMessage({contentParts, modelReference, sessionId}))
+      .run((rpc) => rpc.sendMessage({captureCheckpoints: useGeneralSettingsStore.getState().captureCheckpoints, contentParts, modelReference, sessionId}))
       .catch((cause: unknown) => {
         const entry = get().sessions[sessionId];
         if (!entry || entry.revision !== previousRevision) return;
