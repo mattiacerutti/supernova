@@ -32,8 +32,8 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
               <li key={section.id}>
                 <Link
                   className={cn(
-                    "flex w-full items-center gap-2.5 rounded-xl corner-superellipse/1.3 px-2 py-1.5 text-left text-sm hover:bg-overlay-hover hover:text-ink-strong",
-                    isActive ? "bg-overlay-hover text-ink" : "text-ink"
+                    "flex w-full items-center gap-2.5 rounded-xl corner-superellipse/1.3 px-2 py-1.5 text-left text-sm text-ink hover:bg-overlay-hover hover:text-ink-strong",
+                    isActive && "bg-overlay-hover"
                   )}
                   params={{sectionId: section.id}}
                   to="/settings/$sectionId"

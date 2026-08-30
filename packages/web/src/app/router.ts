@@ -1,6 +1,7 @@
-import {createRootRouteWithContext, createRoute, createRouter} from "@tanstack/react-router";
+import {createRootRouteWithContext, createRoute, createRouter, redirect} from "@tanstack/react-router";
 import type {AppEnvironment} from "@/lib/app-environment";
-import {HomeLayoutRoute, HomeRoute, NewSessionRoute, RootRoute, SessionRoute, SettingsRoute, SettingsSectionRoute} from "@/app/routes";
+import {HomeLayoutRoute, HomeRoute, NewSessionRoute, RootRoute, SessionRoute, SettingsSectionRoute} from "@/app/routes";
+import {defaultSettingsSectionId, settingsSections} from "@/features/settings/data/settings-sections";
 
 interface RouterContext {
   appEnvironment: AppEnvironment;
@@ -25,7 +26,9 @@ const indexRoute = createRoute({
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "settings",
-  component: SettingsRoute,
+  beforeLoad: () => {
+    throw redirect({params: {sectionId: defaultSettingsSectionId}, to: "/settings/$sectionId"});
+  },
 });
 
 const sessionRoute = createRoute({
@@ -43,6 +46,11 @@ const newSessionRoute = createRoute({
 const settingsSectionRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "settings/$sectionId",
+  beforeLoad: ({params}) => {
+    if (!settingsSections.some((section) => section.id === params.sectionId)) {
+      throw redirect({params: {sectionId: defaultSettingsSectionId}, to: "/settings/$sectionId"});
+    }
+  },
   component: SettingsSectionRoute,
 });
 

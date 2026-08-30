@@ -1,9 +1,9 @@
 import type {DesktopTheme} from "@supernova/contracts/desktop/api";
 import {create} from "zustand";
 import {persist} from "zustand/middleware";
-import {defaultTheme, getAppTheme} from "@/features/settings/data/app-themes";
-import type {ThemeId} from "@/features/settings/data/app-themes";
-import {resolveTheme} from "@/features/settings/lib/theme-resolver";
+import {defaultTheme, getAppTheme} from "@/features/settings/lib/themes";
+import type {ThemeId} from "@/features/settings/lib/themes";
+import {resolveTheme} from "@/features/settings/lib/themes";
 
 const APPEARANCE_STORAGE_KEY = "supernova-appearance";
 const SYSTEM_DARK_MODE_QUERY = "(prefers-color-scheme: dark)";

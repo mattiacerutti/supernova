@@ -48,12 +48,6 @@ export function NewSessionRoute() {
   return <NewSessionPage projectName={project.name} projectPath={project.path} />;
 }
 
-export function SettingsRoute() {
-  const {appEnvironment} = useRouteContext({from: "__root__"});
-
-  return <SettingsPage appEnvironment={appEnvironment} />;
-}
-
 export function SettingsSectionRoute() {
   const {appEnvironment} = useRouteContext({from: "__root__"});
   const {sectionId} = useParams({from: "/settings/$sectionId"});

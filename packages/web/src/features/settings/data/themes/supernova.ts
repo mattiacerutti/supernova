@@ -1,4 +1,4 @@
-import type {ThemeVariant} from "@/features/settings/lib/theme-resolver";
+import type {ThemeVariant} from "@/features/settings/lib/themes";
 
 const dark = {
   codeThemeId: "github-dark",

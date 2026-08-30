@@ -1,3 +1,5 @@
+import {supernovaTheme} from "@/features/settings/data/themes/supernova";
+
 export interface ThemeVariant {
   readonly codeThemeId: string;
   readonly theme: {
@@ -103,4 +105,13 @@ export function resolveTheme(variant: ThemeVariant) {
     "diff-removed-surface": alpha(semanticColors.diffRemoved, dark ? 0.23 : 0.15),
     "danger-ink": dangerInk,
   } as const;
+}
+
+export const appThemes = [supernovaTheme] as const;
+export const defaultTheme = supernovaTheme;
+export type ThemeId = (typeof appThemes)[number]["id"];
+
+/** Returns the selected bundled theme or the default theme. */
+export function getAppTheme(themeId: string) {
+  return appThemes.find((theme) => theme.id === themeId) ?? defaultTheme;
 }

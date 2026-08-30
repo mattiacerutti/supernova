@@ -5,8 +5,8 @@ import {Effect, Stream} from "effect";
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import Input from "@/components/ui/input";
-import AuthLink from "@/features/settings/components/providers/login/auth-link";
-import {useSubmitProviderLoginInput} from "@/features/settings/hooks/api/auth/use-submit-provider-login-input";
+import AuthLink from "@/features/settings/components/providers/auth-link";
+import {useSubmitProviderLoginInput} from "@/features/settings/hooks/api/providers/use-submit-provider-login-input";
 import {useMountEffect} from "@/lib/use-mount-effect";
 import {useAgentRpcClient} from "@/rpc/use-agent-rpc-client";
 
@@ -193,7 +193,12 @@ export default function ProviderLoginContent(props: ProviderLoginContentProps) {
           <div className="space-y-1 pt-3">
             <div className="flex items-center gap-3">
               <code className="select-all whitespace-nowrap font-mono text-lg font-semibold tracking-widest text-ink-strong">{session.step.userCode}</code>
-              <Button className="w-auto shrink-0 px-2.5 py-1 text-xs" onClick={handleCopyDeviceCode} size="sm" variant="primary">
+              <Button
+                className="w-auto shrink-0 rounded-xl bg-overlay-pressed px-2.5 py-1 text-xs text-ink hover:bg-overlay-strong hover:text-ink-strong"
+                onClick={handleCopyDeviceCode}
+                size="sm"
+                variant="primary"
+              >
                 {copiedCode ? "Copied" : "Copy"}
               </Button>
             </div>
@@ -233,11 +238,17 @@ export default function ProviderLoginContent(props: ProviderLoginContentProps) {
       {session?.step.type === "cancelled" && <p className="text-sm text-ink-muted">Login cancelled.</p>}
 
       <div className="flex justify-end gap-2 pt-2">
-        <Button className="w-auto px-3 text-xs" onClick={handleClose} size="sm" variant="primary">
+        <Button className="rounded-xl px-3 py-2 text-sm text-ink-muted hover:bg-overlay-hover hover:text-ink-strong" onClick={handleClose} variant="bare">
           {complete ? "Close" : "Cancel"}
         </Button>
         {textInput && (
-          <Button className="w-auto px-3 text-xs" disabled={waitingForNextStep || !canSubmitTextInput} form="provider-login-input-form" size="sm" type="submit" variant="primary">
+          <Button
+            className="rounded-xl bg-overlay-pressed px-3 py-2 text-sm text-ink-strong hover:bg-overlay-strong disabled:hover:bg-overlay-pressed"
+            disabled={waitingForNextStep || !canSubmitTextInput}
+            form="provider-login-input-form"
+            type="submit"
+            variant="bare"
+          >
             Continue
           </Button>
         )}
