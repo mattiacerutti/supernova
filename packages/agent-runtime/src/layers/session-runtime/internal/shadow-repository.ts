@@ -105,6 +105,9 @@ async function discoverCandidate(candidate: string, projectRoot: string): Promis
 
   const [gitDir, objectDir] = await Promise.all([realpath(info.gitDir), realpath(info.objectDir)]);
   const gitDirMetadata = await stat(gitDir);
+  // Some filesystems report ctime as the birth time, and a Git directory's ctime changes on
+  // ordinary activity. Zero keeps the identity stable there at the cost of inode-only precision.
+  const birthTime = gitDirMetadata.birthtimeMs === gitDirMetadata.ctimeMs ? 0 : gitDirMetadata.birthtimeMs;
   const projectRelativeRoot = relative(projectRoot, canonicalCandidate);
 
   return {
@@ -112,7 +115,7 @@ async function discoverCandidate(candidate: string, projectRoot: string): Promis
     objectDir,
     objectFormat: info.objectFormat,
     relativeRoot: projectRelativeRoot === "" ? "." : slashPath(projectRelativeRoot),
-    repositoryId: digest(`${canonicalCandidate}\0${gitDir}\0${gitDirMetadata.ino}`),
+    repositoryId: digest(`${canonicalCandidate}\0${gitDir}\0${gitDirMetadata.ino}\0${birthTime}`),
     root: canonicalCandidate,
     sourceIndexPath: info.indexPath,
   };
