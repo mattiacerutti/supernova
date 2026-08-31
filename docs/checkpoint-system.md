@@ -189,7 +189,7 @@ interface RepositoryIdentity {
 }
 ```
 
-`repositoryId` is the SHA-256 hash of the canonical worktree root, the canonical Git directory, and that directory's inode number. Paths distinguish linked worktrees that share objects, and the inode distinguishes a repository recreated in place.
+`repositoryId` is the SHA-256 hash of the canonical worktree root, the canonical Git directory, and that directory's inode number and birth time. Paths distinguish linked worktrees that share objects, and the inode pair distinguishes a repository recreated in place: filesystems such as ext4 recycle freed inode numbers immediately, so the number alone can collide, while the birth time separates two lives of the same inode. Some filesystems cannot store a birth time and report the ctime in its place, which changes on ordinary Git activity; a birth time equal to the ctime is therefore treated as zero, falling back to inode-only identity instead of churning.
 
 Discovered repositories are sorted by project-relative root. If a root repository contains a discovered direct child repository, the child root is excluded from the parent's capture and restore path set.
 
