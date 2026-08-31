@@ -5,8 +5,12 @@ import {optionalGit, runGit, runGitResult} from "@supernova/agent-runtime/layers
  *
  * Disabling the filesystem monitor keeps checkpoint commands from starting or consulting a daemon for
  * the user's worktree, and keeps monitor state copied from the user's index from being trusted.
+ *
+ * Symlink support is pinned off on Windows, where creating symlinks requires elevation Git for
+ * Windows usually lacks; pinning `true` there would make every restore that writes a symlink fail.
  */
-const PINNED_CONFIG = ["-c", "core.autocrlf=false", "-c", "core.fsmonitor=false", "-c", "core.longpaths=true", "-c", "core.symlinks=true"];
+const SYMLINKS_MODE = process.platform === "win32" ? "false" : "true";
+const PINNED_CONFIG = ["-c", "core.autocrlf=false", "-c", "core.fsmonitor=false", "-c", "core.longpaths=true", "-c", `core.symlinks=${SYMLINKS_MODE}`];
 const HASH_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 const PRUNE_EXPIRY = "7.days";
 
@@ -106,7 +110,7 @@ export async function createShadowRepository(gitDir: string, objectFormat: GitOb
     ["core.autocrlf", "false"],
     ["core.fsmonitor", "false"],
     ["core.longpaths", "true"],
-    ["core.symlinks", "true"],
+    ["core.symlinks", SYMLINKS_MODE],
   ];
   for (const [key, value] of settings) await runGit([`--git-dir=${gitDir}`, "config", key, value]);
 }
