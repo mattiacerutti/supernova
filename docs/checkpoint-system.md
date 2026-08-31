@@ -236,7 +236,7 @@ Each discovered user worktree has one bare, app-owned shadow repository. It:
 - Uses the user worktree as the command worktree.
 - Uses the source repository's object directory through `objects/info/alternates`.
 - Pins its prune window with `gc.pruneExpire=7.days` and leaves Git's automatic maintenance enabled.
-- Applies `core.autocrlf=false`, `core.fsmonitor=false`, `core.longpaths=true`, and `core.symlinks=true` to checkpoint commands. Disabling the filesystem monitor keeps checkpoint commands from starting or consulting a daemon for the user's worktree, and keeps monitor state copied from the user's index from being trusted.
+- Applies `core.autocrlf=false`, `core.fsmonitor=false`, `core.longpaths=true`, and `core.symlinks=true` (`false` on Windows, where symlink creation requires elevation Git for Windows usually lacks) to checkpoint commands. Disabling the filesystem monitor keeps checkpoint commands from starting or consulting a daemon for the user's worktree, and keeps monitor state copied from the user's index from being trusted.
 
 Capture and restore use temporary indexes under the operating-system temporary directory. Capture seeds its temporary index by copying the source index when available, then refreshes that private copy from the actual worktree. This reuses unchanged object IDs and filesystem metadata without introducing a shared mutable checkpoint index or application-level lock. Repositories without a source index fall back to an empty temporary index. The user's index is never used for writes, and temporary indexes are removed after each operation.
 
@@ -591,6 +591,7 @@ against agent tool writes that run outside checkpoint operations.
 - Loose files outside discovered repositories are ignored.
 - Untracked files larger than 2 MiB are ignored; tracked files remain uncapped.
 - Empty directories, ownership, ACLs, and extended attributes are not captured.
+- On Windows, checkpoint commands run with `core.symlinks=false`, so a checkout that uses real symlinks has them captured by content and restored as regular files.
 - Source object alternates make some checkpoint objects depend on source repository retention.
 - Existing checkpoint data formerly stored in user repositories is not migrated or read.
 - Uncovered checkpoint boundaries are not surfaced to clients, so a turn without workspace coverage looks like any other turn.
