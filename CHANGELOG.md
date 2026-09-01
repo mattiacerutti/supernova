@@ -20,6 +20,8 @@ All notable changes to Supernova are documented in this file.
 - Refined the default theme's colors for a calmer, more consistent interface.
 - Redesigned the composer menus, model picker, and dialog search fields for a more consistent look.
 - Changed workspace checkpoints to use app-owned shadow repositories with multi-repository snapshots, conflict-checked restores, rollback, and archived-session cleanup.
+- Refined work and compaction status rows with bordered and separator conversation markers, including a shimmer while compaction is in progress.
+- Increased the timeline's bottom spacing to keep the latest message slightly above the composer.
 
 ### Fixed
 

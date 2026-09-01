@@ -4,6 +4,7 @@ import type {VirtualItem} from "@tanstack/react-virtual";
 import {AnimatePresence, motion, useReducedMotion} from "framer-motion";
 import {useLayoutEffect, useRef, useState} from "react";
 import type {ReactNode, UIEvent} from "react";
+import {Marker, MarkerContent} from "@/components/ui/marker";
 import {MessageScroller, MessageScrollerButton, MessageScrollerContent, MessageScrollerProvider, MessageScrollerViewport} from "@/components/ui/message-scroller";
 import SessionTimelineVirtualRow from "@/features/sessions/components/timeline/session-timeline-virtual-row";
 import type {TimelineVirtualItem} from "@/features/sessions/components/timeline/session-timeline-virtual-row";
@@ -11,7 +12,7 @@ import type {SessionTimelineItem} from "@/features/sessions/types/session-timeli
 import {cn} from "@/lib/cn";
 
 const TIMELINE_ANCHOR_TOP_MARGIN_PX = 24;
-const TIMELINE_BOTTOM_PADDING_PX = 24;
+const TIMELINE_BOTTOM_PADDING_PX = 32;
 const TIMELINE_CACHE_LIMIT = 16;
 const TIMELINE_END_THRESHOLD_PX = 5;
 const TIMELINE_FALLBACK_ITEM_SIZE = 86;
@@ -395,7 +396,13 @@ export default function SessionTimeline(props: SessionTimelineProps) {
                   className={cn("relative z-10 mx-auto w-full max-w-3xl bg-surface px-5 pb-8 md:px-8", pullStatusIntoLastMessage && "-mt-6")}
                   data-timeline-footer="streaming-status"
                 >
-                  <p className="shimmer w-fit text-sm text-ink-faint">{statusLabel}</p>
+                  {compacting ? (
+                    <Marker role="status" variant="separator">
+                      <MarkerContent className="shimmer text-ink-faint">{statusLabel}</MarkerContent>
+                    </Marker>
+                  ) : (
+                    <p className="shimmer w-fit text-sm text-ink-faint">{statusLabel}</p>
+                  )}
                 </div>
               )}
               <div aria-hidden="true" className="shrink-0" data-timeline-fake-space ref={fakeSpaceRef} />

@@ -1,6 +1,6 @@
 import {useState} from "react";
-import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
+import {Marker, MarkerContent} from "@/components/ui/marker";
 import MessageActions from "@/features/sessions/components/timeline/items/actions/message-actions";
 import AssistantMessageContent from "@/features/sessions/components/timeline/items/assistant/assistant-message-content";
 import ToolEvent from "@/features/sessions/components/timeline/items/assistant/tools/tool-event";
@@ -70,11 +70,10 @@ export default function AssistantWork(props: AssistantWorkProps) {
 
   return (
     <section className="space-y-2">
-      <Button className="group inline-flex w-fit select-none gap-1.5 px-0 py-0 text-sm text-ink-muted hover:text-ink-muted items-center " onClick={handleToggle} variant="ghost">
-        <span>Worked for {formatDuration(item.durationMs)}</span>
+      <Marker className="cursor-pointer select-none gap-1.5 px-0 pt-0 hover:text-ink-muted" onClick={handleToggle} render={<button type="button" />} variant="border">
+        <MarkerContent>Worked for {formatDuration(item.durationMs)}</MarkerContent>
         <Icon className={cn("transition-transform duration-160 ease-out", showExpanded && "rotate-90")} name="chevron-right" size="xs" />
-      </Button>
-      <div className="h-px bg-overlay-hover" />
+      </Marker>
       <div
         className="grid grid-rows-[0fr] opacity-0 will-change-[grid-template-rows,opacity] transition-[grid-template-rows,opacity] duration-300 ease-in-out data-[expanded=true]:grid-rows-[1fr] data-[expanded=true]:opacity-100 data-[expanded=true]:mt-2"
         data-expanded={showExpanded}
