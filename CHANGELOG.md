@@ -8,6 +8,16 @@ All notable changes to Supernova are documented in this file.
 
 ### Added
 
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.0.1-beta.10]
+
+### Added
+
 - Added native Windows translucency to the sidebar, matching the existing macOS appearance setting.
 
 ### Changed
@@ -40,8 +50,6 @@ All notable changes to Supernova are documented in this file.
 - Fixed the scroll-to-latest button's outline letting timeline messages show through it.
 - Fixed undoing or reverting a just-anchored message leaving blank space in the timeline instead of pinning the previous turn to the bottom.
 - Fixed the open-project dialog not showing a message when no folders match.
-
-### Removed
 
 ## [0.0.1-beta.9]
 
