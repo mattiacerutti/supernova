@@ -32,14 +32,12 @@ export default function ProvidersSection() {
   return (
     <>
       {providersQuery.isPending && <ProvidersSkeleton />}
-      {providersQuery.error && <p className="text-sm text-danger-ink">Unable to load providers.</p>}
+      {providersQuery.error && <p className="px-3 text-sm text-danger-ink sm:px-4">Unable to load providers.</p>}
       {providersQuery.data && (
         <>
-          <div className="overflow-hidden rounded-xl corner-superellipse/1.3 bg-surface-raised">
-            <SearchField className="border-b-0" onChange={(event) => setSearch(event.target.value)} placeholder="Search providers" value={search} />
-          </div>
+          <SearchField className="mx-3 px-0 sm:mx-4" onChange={(event) => setSearch(event.target.value)} placeholder="Search providers" value={search} />
 
-          {matchingProviders.length === 0 && <p className="px-2 text-sm text-ink-faint">No providers match your search.</p>}
+          {matchingProviders.length === 0 && <p className="px-3 text-sm text-ink-faint sm:px-4">No providers match your search.</p>}
           {connectedProviders.length > 0 && <ProviderGroup onConnect={connectFlow.connect} onDisconnect={handleDisconnect} providers={connectedProviders} title="Connected" />}
           {otherProviders.length > 0 && <ProviderGroup onConnect={connectFlow.connect} onDisconnect={handleDisconnect} providers={otherProviders} title="Available" />}
 

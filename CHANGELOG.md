@@ -10,7 +10,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
-### Fixed
+- Redesigned the settings pages with flat, uncontained sections, larger section headers, a wider content column, and a breadcrumb header.
+- Changed the theme setting from a dropdown to a card library that previews each theme's light and dark palettes.
 
 ### Removed
 

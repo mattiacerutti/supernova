@@ -238,12 +238,12 @@ export default function ProviderLoginContent(props: ProviderLoginContentProps) {
       {session?.step.type === "cancelled" && <p className="text-sm text-ink-muted">Login cancelled.</p>}
 
       <div className="flex justify-end gap-2 pt-2">
-        <Button className="rounded-xl px-3 py-2 text-sm text-ink-muted hover:bg-overlay-hover hover:text-ink-strong" onClick={handleClose} variant="bare">
+        <Button className="rounded-xl corner-superellipse/1.3 px-3 py-2 text-sm text-ink-muted hover:bg-overlay-hover hover:text-ink-strong" onClick={handleClose} variant="bare">
           {complete ? "Close" : "Cancel"}
         </Button>
         {textInput && (
           <Button
-            className="rounded-xl bg-overlay-pressed px-3 py-2 text-sm text-ink-strong hover:bg-overlay-strong disabled:hover:bg-overlay-pressed"
+            className="rounded-xl corner-superellipse/1.3 bg-overlay-pressed px-3 py-2 text-sm text-ink-strong hover:bg-overlay-strong disabled:hover:bg-overlay-pressed"
             disabled={waitingForNextStep || !canSubmitTextInput}
             form="provider-login-input-form"
             type="submit"

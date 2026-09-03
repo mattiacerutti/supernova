@@ -8,7 +8,6 @@ export type SettingsSectionId = "appearance" | "general" | "providers";
 
 export interface SettingsSection {
   Component: ComponentType;
-  description: string;
   icon: IconName;
   id: SettingsSectionId;
   label: string;
@@ -17,21 +16,18 @@ export interface SettingsSection {
 export const settingsSections: readonly SettingsSection[] = [
   {
     Component: GeneralSection,
-    description: "Configure Supernova's core behavior and defaults.",
     icon: "settings",
     id: "general",
     label: "General",
   },
   {
     Component: AppearanceSection,
-    description: "Customize Supernova's theme, typography, and interface.",
     icon: "palette",
     id: "appearance",
     label: "Appearance",
   },
   {
     Component: ProvidersSection,
-    description: "Connect model providers and manage their credentials.",
     icon: "server",
     id: "providers",
     label: "Providers",

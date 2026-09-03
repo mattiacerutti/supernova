@@ -47,12 +47,12 @@ export default function ProviderRow(props: ProviderRowProps) {
       };
 
   return (
-    <div className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-overlay-hover">
+    <div className="flex items-center gap-3 px-3 py-2.5 sm:px-4">
       <div className="grid size-8 shrink-0 place-items-center rounded-lg corner-superellipse/1.3 bg-surface-control text-sm font-medium text-ink-muted">
         {provider.name.charAt(0).toUpperCase()}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm text-ink">{provider.name}</p>
+        <p className="truncate text-sm font-medium text-ink-strong">{provider.name}</p>
         {sourceLabel && (
           <p className="flex items-center gap-1.5 truncate text-xs text-ink-faint">
             <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-diff-added" />

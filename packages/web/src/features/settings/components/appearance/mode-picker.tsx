@@ -32,7 +32,7 @@ export default function ModePicker() {
           <Button aria-checked={active} className="group flex w-full flex-col gap-2" key={option.value} onClick={() => setMode(option.value)} role="radio">
             <div
               className={cn(
-                "relative aspect-[16/10] w-full overflow-hidden rounded-xl transition-shadow",
+                "relative aspect-[16/10] w-full overflow-hidden rounded-xl corner-superellipse/1.3 transition-shadow",
                 active ? "ring-2 ring-accent" : "ring-1 ring-border group-hover:ring-border-strong"
               )}
             >

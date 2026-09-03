@@ -2,39 +2,40 @@ import type {ReactNode} from "react";
 
 interface SettingsGroupProps {
   children: ReactNode;
-  contained?: boolean;
   title: string;
 }
 
 export function SettingsGroup(props: SettingsGroupProps) {
-  const {children, contained = true, title} = props;
+  const {children, title} = props;
 
   return (
-    <section>
-      <h2 className="mb-2.5 px-2 text-sm text-ink-muted">{title}</h2>
-      {contained ? <div className="overflow-hidden rounded-2xl corner-superellipse/1.3 bg-surface-raised divide-y divide-border-muted">{children}</div> : children}
+    <section className="space-y-1.5">
+      <h2 className="mx-3 flex min-h-8 items-center border-b border-border-muted pb-1.5 text-lg font-semibold tracking-tight text-ink-strong sm:mx-4">{title}</h2>
+      <div className="space-y-1">{children}</div>
     </section>
   );
 }
 
 interface SettingsRowProps {
-  control: ReactNode;
+  children?: ReactNode;
+  control?: ReactNode;
   description?: string;
   title: string;
 }
 
 export function SettingsRow(props: SettingsRowProps) {
-  const {control, description, title} = props;
+  const {children, control, description, title} = props;
 
   return (
-    <div className="px-4 py-2.5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0 flex-1">
-          <h3 className="flex min-h-6 items-center text-sm text-ink">{title}</h3>
-          {description && <p className="text-xs leading-4 text-ink-muted">{description}</p>}
+    <div className="rounded-xl corner-superellipse/1.3 px-3 py-3 sm:px-4">
+      <div className="flex flex-col gap-3 sm:grid sm:grid-cols-[minmax(0,1fr)_minmax(10rem,auto)] sm:items-center sm:gap-8">
+        <div className="min-w-0 flex-1 space-y-1">
+          <h3 className="flex min-h-5 items-center text-sm font-medium text-ink-strong">{title}</h3>
+          {description && <p className="max-w-xl text-xs leading-relaxed text-ink-muted">{description}</p>}
         </div>
-        <div className="w-full shrink-0 sm:w-auto">{control}</div>
+        {control && <div className="flex w-full shrink-0 items-center sm:w-auto sm:justify-end">{control}</div>}
       </div>
+      {children && <div className="pt-3">{children}</div>}
     </div>
   );
 }

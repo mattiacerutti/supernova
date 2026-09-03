@@ -1,7 +1,7 @@
 import Input from "@/components/ui/input";
 import Switch from "@/components/ui/switch";
 import ModePicker from "@/features/settings/components/appearance/mode-picker";
-import ThemePicker from "@/features/settings/components/appearance/theme-picker";
+import ThemeLibrary from "@/features/settings/components/appearance/theme-library";
 import {SettingsGroup, SettingsRow} from "@/features/settings/components/settings-group";
 import {DEFAULT_CODE_FONT, DEFAULT_UI_FONT, useAppearanceStore} from "@/features/settings/stores/appearance-store";
 
@@ -18,11 +18,16 @@ export default function AppearanceSection() {
   return (
     <>
       <SettingsGroup title="Theme">
-        <SettingsRow control={<ThemePicker />} title="Theme" />
-      </SettingsGroup>
-
-      <SettingsGroup contained={false} title="Color mode">
-        <ModePicker />
+        <SettingsRow description="Pick the colors used across the interface." title="Color palette">
+          <div className="max-w-xl">
+            <ThemeLibrary />
+          </div>
+        </SettingsRow>
+        <SettingsRow description="Choose how the theme follows your system appearance." title="Color mode">
+          <div className="max-w-xl">
+            <ModePicker />
+          </div>
+        </SettingsRow>
       </SettingsGroup>
 
       <SettingsGroup title="Typography">
@@ -37,6 +42,7 @@ export default function AppearanceSection() {
               value={uiFont ?? ""}
             />
           }
+          description="Font used across the interface. Leave empty for the system default."
           title="UI font"
         />
         <SettingsRow
@@ -50,6 +56,7 @@ export default function AppearanceSection() {
               value={codeFont ?? ""}
             />
           }
+          description="Font used for code blocks, tool output, and diffs. Leave empty for the default monospace."
           title="Code font"
         />
         <SettingsRow
