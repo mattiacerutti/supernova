@@ -14,6 +14,7 @@ import {useInlineRename} from "@/hooks/use-inline-rename";
 import {useProjectsStore} from "@/features/projects/stores/projects-store";
 import {sessionQueryOptions} from "@/features/sessions/hooks/api/use-session";
 import {useSessionLiveStore} from "@/features/sessions/stores/session-live-store";
+import {hasUnseenActivity, useSessionVisitsStore} from "@/features/sessions/stores/session-visits-store";
 import SessionTitleText from "@/features/sessions/components/session-title-text";
 import {formatUpdatedAt} from "@/features/projects/utils/format-updated-at";
 import {cn} from "@/lib/cn";
@@ -43,6 +44,7 @@ export default function ProjectListItem(props: ProjectListItemProps) {
   const toggleSessionPinned = useProjectsStore((state) => state.toggleSessionPinned);
   const toggleProjectPinned = useProjectsStore((state) => state.toggleProjectPinned);
   const sessionLiveStates = useSessionLiveStore((state) => state.sessions);
+  const sessionVisits = useSessionVisitsStore((state) => state.visits);
   const archiveProjectSessionMutation = useArchiveProjectSession();
   const {
     draftName,
@@ -235,6 +237,7 @@ export default function ProjectListItem(props: ProjectListItemProps) {
             const selected = location.pathname === `/session/${session.id}`;
             const sessionLive = sessionLiveStates[session.id];
             const sessionStreaming = sessionLive?.status === "streaming" || sessionLive?.status === "stopping" || sessionLive?.status === "compacting";
+            const sessionUnseen = !sessionStreaming && hasUnseenActivity({activityAtMs: session.timestamp, visitedAt: sessionVisits[session.id]});
 
             return (
               <li
@@ -266,6 +269,8 @@ export default function ProjectListItem(props: ProjectListItemProps) {
                     <span className="col-start-1 row-start-1 w-full justify-self-end whitespace-nowrap pr-1.5 text-right text-xs text-ink-muted group-hover/session:invisible">
                       {sessionStreaming ? (
                         <span className="inline-block size-2 animate-spin rounded-full border border-border-strong border-t-ink" aria-label="Session streaming" />
+                      ) : sessionUnseen ? (
+                        <span className="inline-block size-1.5 rounded-full bg-accent" aria-label="Finished while closed" role="status" />
                       ) : (
                         session.updatedAt
                       )}

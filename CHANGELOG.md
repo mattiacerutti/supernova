@@ -8,6 +8,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Added
 
+- Added dot on the sidebar to indicate sessions with unseen activity.
+
 ### Changed
 
 - Redesigned the settings pages with flat, uncontained sections, larger section headers, a wider content column, and a breadcrumb header.

@@ -6,6 +6,7 @@ import {create} from "zustand";
 import {useGeneralSettingsStore} from "@/features/settings/stores/general-settings-store";
 import {showToast} from "@/components/ui/toast-manager";
 import {sessionQueryKey} from "@/features/sessions/hooks/api/use-session";
+import {useSessionVisitsStore} from "@/features/sessions/stores/session-visits-store";
 import type {AgentRpcClientApi, AgentRpcProtocolClient} from "@/rpc/agent-rpc-client";
 
 export type SessionLiveStatus = "checkpoint-navigating" | "compacting" | "idle" | "stopping" | "streaming";
@@ -61,6 +62,13 @@ function optimisticRevertToMessage(session: Session, turnId: string): Session {
 
 type RevisionedSessionStreamEvent = Extract<SessionStreamEvent, {readonly revision: number}>;
 
+/** The session's latest activity timestamp, for events that carry authoritative session data. */
+function sessionEventActivityAt(event: RevisionedSessionStreamEvent): string | null {
+  if (event.type === "session.snapshot") return event.session.updatedAt;
+  if (event.type === "session.updated") return event.summary.updatedAt;
+  return null;
+}
+
 /** Reduces one accepted server event into ephemeral session state. */
 function reduceSessionEvent(entry: SessionLiveState, event: RevisionedSessionStreamEvent): SessionLiveState {
   switch (event.type) {
@@ -115,6 +123,8 @@ interface RevertToMessageInput extends CheckpointNavigationInput {
 }
 
 interface SessionLiveStoreState {
+  /** Session currently open in the main view; its activity is stamped as seen. */
+  readonly activeSessionId: string | null;
   readonly sessions: Record<string, SessionLiveState | undefined>;
   readonly abortSession: (input: {rpcClient: AgentRpcClientApi; sessionId: string}) => void;
   readonly applyEvent: (event: SessionStreamEvent) => boolean;
@@ -123,6 +133,7 @@ interface SessionLiveStoreState {
   readonly resetRevisions: () => void;
   readonly revertToMessage: (input: RevertToMessageInput) => Promise<CheckpointNavigationOutcome>;
   readonly sendMessage: (input: SendSessionMessageInput) => void;
+  readonly setActiveSession: (sessionId: string | null) => void;
   readonly undoCheckpoint: (input: CheckpointNavigationInput) => Promise<CheckpointNavigationOutcome>;
 }
 
@@ -139,7 +150,18 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
       const entry = {...(current ?? emptyEntry()), revision: event.revision};
       return {sessions: {...state.sessions, [event.sessionId]: reduceSessionEvent(entry, event)}};
     });
+
+    // Activity in the open session is seen as it happens. Stamping the
+    // activity time rather than now keeps a later completion unseen.
+    const activityAt = applied ? sessionEventActivityAt(event) : null;
+    if (activityAt !== null && event.sessionId === get().activeSessionId) {
+      useSessionVisitsStore.getState().markSessionVisited(event.sessionId, activityAt);
+    }
     return applied;
+  };
+
+  const setActiveSession = (sessionId: string | null): void => {
+    set((state) => (state.activeSessionId === sessionId ? state : {activeSessionId: sessionId}));
   };
 
   const resetRevisions = (): void => {
@@ -290,5 +312,17 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
       title: "Unable to revert message",
     });
 
-  return {abortSession, applyEvent, compactSession, redoCheckpoint, resetRevisions, revertToMessage, sendMessage, sessions: {}, undoCheckpoint};
+  return {
+    abortSession,
+    activeSessionId: null,
+    applyEvent,
+    compactSession,
+    redoCheckpoint,
+    resetRevisions,
+    revertToMessage,
+    sendMessage,
+    sessions: {},
+    setActiveSession,
+    undoCheckpoint,
+  };
 });

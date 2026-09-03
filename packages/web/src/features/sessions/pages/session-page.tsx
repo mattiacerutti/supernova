@@ -20,7 +20,10 @@ import {useComposerDraft} from "@/features/sessions/hooks/use-composer-draft";
 import {useComposerModelSelection} from "@/features/sessions/hooks/use-composer-model-selection";
 import {useSessionTimeline} from "@/features/sessions/hooks/use-session-timeline";
 import {sessionComposerDraftKey} from "@/features/sessions/stores/composer-drafts-store";
+import {useSessionLiveStore} from "@/features/sessions/stores/session-live-store";
+import {useSessionVisitsStore} from "@/features/sessions/stores/session-visits-store";
 import {useInlineRename} from "@/hooks/use-inline-rename";
+import {useMountEffect} from "@/lib/use-mount-effect";
 
 interface SessionLoadingProps {
   readonly appEnvironment: AppEnvironment;
@@ -55,7 +58,12 @@ interface SessionConversationProps {
 function SessionConversation(props: SessionConversationProps) {
   const {appEnvironment, session} = props;
 
+  const markSessionVisited = useSessionVisitsStore((state) => state.markSessionVisited);
   const renameSessionMutation = useRenameSessionMutation();
+
+  // Opening a session clears its unseen activity. The route remounts this
+  // page per session, so the stamp lands once per open.
+  useMountEffect(() => markSessionVisited(session.id, session.updatedAt));
   const {
     draftName,
     handleBlur: handleRenameBlur,
@@ -222,7 +230,14 @@ interface SessionPageProps {
 export default function SessionPage(props: SessionPageProps) {
   const {appEnvironment, sessionId} = props;
 
+  const setActiveSession = useSessionLiveStore((state) => state.setActiveSession);
   const {data: session, error} = useSession(sessionId);
+
+  // The route remounts this page per session via key={sessionId}.
+  useMountEffect(() => {
+    setActiveSession(sessionId);
+    return () => setActiveSession(null);
+  });
 
   if (!session) {
     if (error) {

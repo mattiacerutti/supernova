@@ -8,6 +8,7 @@ import {afterEach, beforeEach, describe, expect, it, vi} from "vitest";
 import {allSessionsQueryKey, sessionQueryKey} from "@/features/sessions/hooks/api/use-session";
 import {connectSessionEvents} from "@/features/sessions/lib/streaming/session-event-stream";
 import {useSessionLiveStore} from "@/features/sessions/stores/session-live-store";
+import {hasUnseenActivity, useSessionVisitsStore} from "@/features/sessions/stores/session-visits-store";
 import type {AgentRpcClientApi, AgentRpcClientFiber, AgentRpcProtocolClient} from "@/rpc/agent-rpc-client";
 
 vi.mock("@/rpc/agent-rpc-client", () => ({
@@ -115,13 +116,15 @@ describe("session live store", () => {
   beforeEach(() => {
     vi.stubGlobal("window", {clearTimeout, setTimeout});
     disconnect();
-    useSessionLiveStore.setState({sessions: {}});
+    useSessionLiveStore.setState({activeSessionId: null, sessions: {}});
+    useSessionVisitsStore.setState({visits: {}});
   });
 
   afterEach(() => {
     disconnect();
     disconnect = () => undefined;
-    useSessionLiveStore.setState({sessions: {}});
+    useSessionLiveStore.setState({activeSessionId: null, sessions: {}});
+    useSessionVisitsStore.setState({visits: {}});
     vi.unstubAllGlobals();
   });
 
@@ -334,5 +337,27 @@ describe("session live store", () => {
 
     expect(useSessionLiveStore.getState().sessions["session-1"]).toMatchObject({status: "stopping"});
     expect(rpcClient.run).toHaveBeenCalledOnce();
+  });
+
+  it("stamps the open session as visited when authoritative activity arrives", () => {
+    const {applyEvent, setActiveSession} = useSessionLiveStore.getState();
+    setActiveSession("session-open");
+
+    applyEvent({revision: 1, session: session({id: "session-open", updatedAt: "2026-01-01T00:05:00.000Z"}), sessionId: "session-open", type: "session.snapshot"});
+    applyEvent({revision: 1, session: session({updatedAt: "2026-01-01T00:05:00.000Z"}), sessionId: "session-1", type: "session.snapshot"});
+
+    expect(useSessionVisitsStore.getState().visits).toEqual({"session-open": "2026-01-01T00:05:00.000Z"});
+  });
+
+  it("keeps visit stamps at the activity time so later activity stays unseen", () => {
+    const {applyEvent, setActiveSession} = useSessionLiveStore.getState();
+    setActiveSession("session-1");
+    applyEvent({revision: 1, session: session({updatedAt: "2026-01-01T00:05:00.000Z"}), sessionId: "session-1", type: "session.snapshot"});
+
+    setActiveSession(null);
+    applyEvent({revision: 2, session: session({updatedAt: "2026-01-01T00:09:00.000Z"}), sessionId: "session-1", type: "session.snapshot"});
+
+    expect(useSessionVisitsStore.getState().visits["session-1"]).toBe("2026-01-01T00:05:00.000Z");
+    expect(hasUnseenActivity({activityAtMs: Date.parse("2026-01-01T00:09:00.000Z"), visitedAt: useSessionVisitsStore.getState().visits["session-1"]})).toBe(true);
   });
 });
