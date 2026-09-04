@@ -8,6 +8,16 @@ All notable changes to Supernova are documented in this file.
 
 ### Added
 
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.0.1-beta.11]
+
+### Added
+
 - Added dot on the sidebar to indicate sessions with unseen activity.
 - Added drag-and-drop reordering of sidebar projects.
 
@@ -20,8 +30,6 @@ All notable changes to Supernova are documented in this file.
 ### Fixed
 
 - Fixed new lines being cut off at the bottom of a fully expanded composer instead of scrolling into view.
-
-### Removed
 
 ## [0.0.1-beta.10]
 
