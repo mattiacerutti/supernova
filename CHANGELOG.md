@@ -9,6 +9,7 @@ All notable changes to Supernova are documented in this file.
 ### Added
 
 - Added dot on the sidebar to indicate sessions with unseen activity.
+- Added drag-and-drop reordering of sidebar projects.
 
 ### Changed
 

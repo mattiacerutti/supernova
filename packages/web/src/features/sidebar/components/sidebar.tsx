@@ -6,7 +6,7 @@ import type {MouseEvent} from "react";
 import {useState} from "react";
 import SidebarActionButton from "@/features/sidebar/components/sidebar-action-button";
 import OpenProjectDialog from "@/features/projects/components/open-project-dialog";
-import ProjectListItem from "@/features/projects/components/project-list-item";
+import SortableProjectList from "@/features/projects/components/sortable-project-list";
 import SearchSessionsDialog from "@/features/projects/components/search-sessions-dialog";
 import {useProjectList} from "@/features/projects/hooks/use-project-list";
 import {useProjectsStore} from "@/features/projects/stores/projects-store";
@@ -96,11 +96,13 @@ export default function Sidebar() {
               className="grid grid-rows-[0fr] opacity-0 transition-[grid-template-rows,opacity] duration-160 ease-out data-[expanded=true]:grid-rows-[1fr] data-[expanded=true]:opacity-100"
               data-expanded={!isPinnedCollapsed}
             >
-              <ul className="overflow-hidden pb-3">
-                {pinnedProjects.map((project) => (
-                  <ProjectListItem activeSessionId={activeSessionId} expanded={expandedProjects.has(project.id)} key={project.id} onToggle={toggleProject} project={project} />
-                ))}
-              </ul>
+              <SortableProjectList
+                activeSessionId={activeSessionId}
+                className="overflow-hidden mb-3"
+                expandedProjectIds={expandedProjects}
+                onToggleProject={toggleProject}
+                projects={pinnedProjects}
+              />
             </div>
           </div>
         )}
@@ -134,12 +136,17 @@ export default function Sidebar() {
           className="grid grid-rows-[0fr] opacity-0 transition-[grid-template-rows,opacity] duration-160 ease-out data-[expanded=true]:grid-rows-[1fr] data-[expanded=true]:opacity-100"
           data-expanded={!isProjectsCollapsed}
         >
-          <ul className="overflow-hidden">
-            {regularProjects.length === 0 && <li className="px-2 py-1 text-sm text-ink-faint">Add a project to get started.</li>}
-            {regularProjects.map((project) => (
-              <ProjectListItem activeSessionId={activeSessionId} expanded={expandedProjects.has(project.id)} key={project.id} onToggle={toggleProject} project={project} />
-            ))}
-          </ul>
+          {regularProjects.length === 0 ? (
+            <p className="overflow-hidden px-2 py-1 text-sm text-ink-faint">Add a project to get started.</p>
+          ) : (
+            <SortableProjectList
+              activeSessionId={activeSessionId}
+              className="overflow-hidden"
+              expandedProjectIds={expandedProjects}
+              onToggleProject={toggleProject}
+              projects={regularProjects}
+            />
+          )}
         </div>
       </div>
 

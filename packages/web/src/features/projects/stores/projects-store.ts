@@ -18,6 +18,7 @@ interface ProjectsState {
   readonly addProject: (projectPath: string) => StoredProject | undefined;
   readonly removeProject: (projectId: string) => void;
   readonly renameProject: (projectId: string, name: string) => void;
+  readonly reorderProject: (projectId: string, targetProjectId: string) => void;
   readonly toggleProjectPinned: (projectId: string) => void;
   readonly toggleSessionPinned: (projectId: string, sessionId: string) => void;
 }
@@ -57,6 +58,17 @@ export const useProjectsStore = create<ProjectsState>()(
         set((state) => ({
           projects: state.projects.map((project) => (project.id === projectId ? {...project, name: trimmedName} : project)),
         }));
+      },
+      reorderProject: (projectId, targetProjectId) => {
+        set((state) => {
+          const movedProject = state.projects.find((project) => project.id === projectId);
+          const toIndex = state.projects.findIndex((project) => project.id === targetProjectId);
+          if (!movedProject || toIndex === -1 || projectId === targetProjectId) return state;
+
+          const projects = state.projects.filter((project) => project.id !== projectId);
+          projects.splice(toIndex, 0, movedProject);
+          return {projects};
+        });
       },
       toggleSessionPinned: (projectId, sessionId) => {
         set((state) => ({

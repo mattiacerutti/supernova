@@ -24,13 +24,14 @@ const SESSION_LIMIT_INCREMENT = 5;
 
 interface ProjectListItemProps {
   activeSessionId: string;
+  dragging: boolean;
   expanded: boolean;
   project: ProjectListProject;
   onToggle: (projectId: string) => void;
 }
 
 export default function ProjectListItem(props: ProjectListItemProps) {
-  const {activeSessionId, expanded, onToggle, project} = props;
+  const {activeSessionId, dragging, expanded, onToggle, project} = props;
 
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
   const [visibleSessionLimit, setVisibleSessionLimit] = useState(INITIAL_SESSION_LIMIT);
@@ -76,8 +77,8 @@ export default function ProjectListItem(props: ProjectListItemProps) {
   const unpinnedSessions = sessions.filter((session) => !session.pinned);
   const visibleSessionIds = new Set([...pinnedSessions, ...unpinnedSessions.slice(0, visibleSessionLimit), ...(activeSession ? [activeSession] : [])].map((session) => session.id));
   const visibleSessions = sessions.filter((session) => visibleSessionIds.has(session.id));
-  const displayedSessions = expanded ? visibleSessions : activeSession ? [activeSession] : [];
-  const sessionsExpanded = expanded || activeSession != null;
+  const displayedSessions = expanded ? visibleSessions : activeSession && !dragging ? [activeSession] : [];
+  const sessionsExpanded = expanded || (activeSession != null && !dragging);
 
   const hasSessions = sessions.length > 0;
   const hasHiddenSessions = unpinnedSessions.some((session) => !visibleSessionIds.has(session.id));
@@ -165,7 +166,7 @@ export default function ProjectListItem(props: ProjectListItemProps) {
   }, []);
 
   return (
-    <li>
+    <>
       <Button
         as="div"
         className={cn("group flex w-full justify-between items-center gap-2 pl-2 pr-1 py-0.5 text-ink-muted hover:text-ink", actionsMenuOpen && "bg-overlay-hover")}
@@ -182,6 +183,7 @@ export default function ProjectListItem(props: ProjectListItemProps) {
               onClick={handleRenameClick}
               onFocus={handleRenameFocus}
               onKeyDown={handleRenameKeyDown}
+              onPointerDown={(event) => event.stopPropagation()}
               ref={renameInputRef}
               value={draftName}
             />
@@ -223,15 +225,15 @@ export default function ProjectListItem(props: ProjectListItemProps) {
         </div>
       </Button>
 
-      <div className={cn("overflow-hidden", sessionsExpanded && "py-0.5")}>
-        {expanded && sessionsQuery.isPending && (
-          <span className="ml-10 inline-flex items-center justify-start gap-2 px-0 py-1 text-sm text-ink-faint">
-            Loading sessions
-            <span className="size-2.5 animate-spin rounded-full border border-border-strong border-t-ink" aria-hidden="true" />
-          </span>
-        )}
-        {expanded && sessionsQuery.error != null && <p className="px-8 py-1 text-sm text-danger-ink">Unable to load sessions.</p>}
+      <div className={cn("overflow-hidden", sessionsExpanded && "py-0.5")} onPointerDown={(event) => event.stopPropagation()}>
         <ul className="flex flex-col gap-0.5" ref={attachSessionListAutoAnimateRef}>
+          {expanded && sessionsQuery.isPending && (
+            <li className="ml-10 inline-flex items-center justify-start gap-2 px-0 py-1 text-sm text-ink-faint">
+              Loading sessions
+              <span className="size-2.5 animate-spin rounded-full border border-border-strong border-t-ink" aria-hidden="true" />
+            </li>
+          )}
+          {expanded && sessionsQuery.error != null && <li className="px-8 py-1 text-sm text-danger-ink">Unable to load sessions.</li>}
           {displayedSessions.map((session) => {
             const confirmingArchive = confirmingArchiveSessionId === session.id;
             const selected = location.pathname === `/session/${session.id}`;
@@ -309,10 +311,10 @@ export default function ProjectListItem(props: ProjectListItemProps) {
               </Button>
             </li>
           )}
-        </ul>
 
-        {expanded && !sessionsQuery.isPending && sessionsQuery.error == null && !hasSessions && <p className="px-8 py-1 text-sm text-ink-faint">No sessions</p>}
+          {expanded && !sessionsQuery.isPending && sessionsQuery.error == null && !hasSessions && <li className="px-8 py-1 text-sm text-ink-faint">No sessions</li>}
+        </ul>
       </div>
-    </li>
+    </>
   );
 }
