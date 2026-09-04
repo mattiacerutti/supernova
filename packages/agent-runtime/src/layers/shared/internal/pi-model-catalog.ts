@@ -13,6 +13,7 @@ export interface PiModelCatalogShape {
 /** Private Pi model catalog capability used by session operations. */
 export class PiModelCatalog extends Context.Service<PiModelCatalog, PiModelCatalogShape>()("supernova/agent-runtime/PiModelCatalog") {}
 
+// TODO: Revisit ModelRuntime ownership: model callers use this capability while provider callers access PiSdkService directly. Consider separate model and provider capabilities so operations do not mix abstraction levels.
 export const PiModelCatalogLive = Layer.effect(
   PiModelCatalog,
   Effect.gen(function* () {
@@ -22,7 +23,7 @@ export const PiModelCatalogLive = Layer.effect(
       getAvailableModels: () => piSdk.modelRuntime.getAvailableSnapshot(),
       getProviderDisplayName: (providerId) => piSdk.modelRuntime.getProvider(providerId)?.name ?? providerId,
       refreshAuthAndModels: async () => {
-        await piSdk.modelRuntime.refresh({allowNetwork: false});
+        await piSdk.modelRuntime.refresh({allowNetwork: true, signal: AbortSignal.timeout(15_000)});
         const error = piSdk.modelRuntime.getError();
         if (error) throw new Error(error);
       },
