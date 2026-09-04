@@ -93,7 +93,7 @@ export default function UndoneTurnsDrawer(props: UndoneTurnsDrawerProps) {
           transition={DRAWER_TRANSITION}
         >
           <div className="min-h-0 min-w-0 overflow-hidden">
-            <div className="relative mx-px rounded-t-3xl corner-superellipse/1.3 border border-border-muted bg-surface-drawer px-4 pb-7 pt-2.5">
+            <div className="relative mx-2 overflow-hidden rounded-t-3xl corner-superellipse/1.3 bg-surface-recessed px-4 pb-7 pt-2.5 inset-ring-1 inset-ring-border-muted">
               <div className={cn("flex items-center justify-between gap-3 px-1", expanded && "mb-3")}>
                 <div className="flex min-w-0 items-center gap-2 text-sm text-ink">
                   <span className="shrink-0 font-medium">
