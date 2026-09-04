@@ -95,7 +95,6 @@ export default function NewSessionPage(props: NewSessionPageProps) {
               disabled={composerDisabled}
               draft={composerDraft}
               onSubmit={handleSubmit}
-              placeholder="Ask anything."
               projectPath={projectPath}
               toolbarControls={
                 <div className="flex gap-2">

@@ -54,6 +54,18 @@ function clipboardFiles(event: ComposerClipboardEvent): File[] {
   });
 }
 
+// Tiptap's setHardBreak inserts via insertContent, which never marks the
+// transaction with scrollIntoView. In the height-capped composer that leaves a
+// freshly added line cut off at the bottom, so chain the scroll explicitly.
+const ComposerHardBreak = HardBreak.extend({
+  addKeyboardShortcuts() {
+    return {
+      "Mod-Enter": () => this.editor.chain().setHardBreak().scrollIntoView().run(),
+      "Shift-Enter": () => this.editor.chain().setHardBreak().scrollIntoView().run(),
+    };
+  },
+});
+
 const ComposerReferenceNode = Node.create({
   addAttributes() {
     return {
@@ -232,7 +244,7 @@ export default function SessionComposer(props: SessionComposerProps) {
     draft,
     onInterrupt,
     onSubmit,
-    placeholder = "Ask for follow-up changes",
+    placeholder = "Ask anything, @ to add files, or / for commands",
     projectPath,
     slashCommandActions,
     streamStatus = "idle",
@@ -261,7 +273,7 @@ export default function SessionComposer(props: SessionComposerProps) {
           ),
         },
       },
-      extensions: [Document, Paragraph, Text, HardBreak, History, ComposerReferenceNode, createSuggestionExtension(setSuggestionMatch)],
+      extensions: [Document, Paragraph, Text, ComposerHardBreak, History, ComposerReferenceNode, createSuggestionExtension(setSuggestionMatch)],
       onCreate: ({editor: currentEditor}) => {
         setDraftText(currentEditor.getText());
         if (draft.contentParts.length > 0) draft.setEditableContentParts?.(editorToContentParts(currentEditor));

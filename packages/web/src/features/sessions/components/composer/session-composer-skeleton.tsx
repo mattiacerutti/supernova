@@ -8,7 +8,7 @@ export default function SessionComposerSkeleton() {
         <textarea
           className="scroll-fade-y max-h-48 min-h-10 w-full resize-none overflow-y-auto bg-transparent p-1 text-sm text-ink outline-none field-sizing-content placeholder:text-md placeholder:font-light placeholder:text-ink-strong/25 disabled:cursor-default"
           disabled
-          placeholder="Ask for follow-up changes"
+          placeholder="Ask anything, @ to add files, or / for commands"
           rows={1}
           value=""
           readOnly
