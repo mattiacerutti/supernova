@@ -5,6 +5,7 @@ import {animate, AnimatePresence, motion, useReducedMotion} from "framer-motion"
 import {useLayoutEffect, useRef, useState} from "react";
 import type {ReactNode, UIEvent} from "react";
 import {Marker, MarkerContent} from "@/components/ui/marker";
+import MatrixLoader from "@/components/ui/matrix-loader";
 import {MessageScroller, MessageScrollerButton, MessageScrollerContent, MessageScrollerProvider, MessageScrollerViewport} from "@/components/ui/message-scroller";
 import SessionTimelineVirtualRow from "@/features/sessions/components/timeline/session-timeline-virtual-row";
 import type {TimelineVirtualItem} from "@/features/sessions/components/timeline/session-timeline-virtual-row";
@@ -415,7 +416,10 @@ export default function SessionTimeline(props: SessionTimelineProps) {
                       <MarkerContent className="shimmer text-ink-faint">{statusLabel}</MarkerContent>
                     </Marker>
                   ) : (
-                    <p className="shimmer w-fit text-sm text-ink-faint">{statusLabel}</p>
+                    <p className="flex w-fit items-center gap-2.5 text-sm text-ink-faint" role="status">
+                      <MatrixLoader />
+                      <span className="shimmer">{statusLabel}</span>
+                    </p>
                   )}
                 </div>
               )}

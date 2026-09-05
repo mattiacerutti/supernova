@@ -9,6 +9,7 @@ All notable changes to Supernova are documented in this file.
 ### Added
 
 - Added 24-hour message times beside copy actions, with user message actions ordered as time, copy, and revert.
+- Added a matrix-style dot animation beside the Thinking label, respecting reduced-motion preferences.
 
 ### Changed
 
