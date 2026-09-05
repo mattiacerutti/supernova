@@ -98,7 +98,7 @@ export default function UserMessage(props: UserMessageProps) {
         >
           {hasContent ? <UserMessageStructuredContent message={message} /> : "(No content)"}
         </div>
-        <MessageActions align="end" copyText={copyText} onRevert={onRevertToMessage ? handleRevert : undefined} />
+        <MessageActions align="end" copyText={copyText} onRevert={onRevertToMessage ? handleRevert : undefined} timestamp={message.timestamp} />
       </div>
     </article>
   );
