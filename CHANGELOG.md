@@ -8,6 +8,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Added
 
+- Added 24-hour message times beside copy actions, with user message actions ordered as time, copy, and revert.
+
 ### Changed
 
 - Changed sidebar sessions to show the same actions menu as session headers, with inline renaming in the sidebar.
