@@ -1,5 +1,6 @@
 {
   "name": "@supernova/desktop",
+  "productName": "Supernova",
   "private": true,
   "version": "0.0.1-beta.11",
   "homepage": "https://github.com/mattiacerutti/supernova",
