@@ -16,7 +16,7 @@ const TIMELINE_ANCHOR_SCROLL_DURATION_MS = 700;
 // Leaves a small gap above a newly sent message after it is anchored.
 const TIMELINE_ANCHOR_TOP_MARGIN_PX = 24;
 // Leaves trailing space after the final virtualized timeline row.
-const TIMELINE_BOTTOM_PADDING_PX = 32;
+const TIMELINE_BOTTOM_PADDING_PX = 16;
 // Bounds retained measurement snapshots used when switching between sessions.
 const TIMELINE_CACHE_LIMIT = 16;
 // Allows this much bottom-distance error while the initial position settles.
