@@ -6,7 +6,7 @@ import {closestCenter, DndContext, DragOverlay, MeasuringStrategy, PointerSensor
 import {restrictToParentElement, restrictToVerticalAxis} from "@dnd-kit/modifiers";
 import {SortableContext, useSortable, verticalListSortingStrategy} from "@dnd-kit/sortable";
 import {CSS} from "@dnd-kit/utilities";
-import ProjectListItem from "@/features/projects/components/project-list-item";
+import ProjectListItem from "@/features/projects/components/project-list/project-list-item";
 import {useProjectsStore} from "@/features/projects/stores/projects-store";
 import type {ProjectListProject} from "@/features/projects/types/project-list";
 import {cn} from "@/lib/cn";

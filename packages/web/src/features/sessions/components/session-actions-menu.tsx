@@ -1,23 +1,27 @@
 import {useState} from "react";
-import {useNavigate} from "@tanstack/react-router";
+import {useLocation, useNavigate} from "@tanstack/react-router";
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import Menu, {MenuItem} from "@/components/ui/menu";
 import {useArchiveProjectSession} from "@/features/projects/hooks/api/use-archive-project-session";
 import {useProjectsStore} from "@/features/projects/stores/projects-store";
+import {cn} from "@/lib/cn";
 
 interface SessionActionsMenuProps {
   readonly onRename: () => void;
+  readonly triggerClassName?: string;
   readonly projectPath: string;
   readonly sessionId: string;
   readonly sessionTitle: string;
 }
 
+/** Shares session actions between the header and sidebar. */
 export default function SessionActionsMenu(props: SessionActionsMenuProps) {
-  const {onRename, projectPath, sessionId, sessionTitle} = props;
+  const {onRename, projectPath, sessionId, sessionTitle, triggerClassName} = props;
 
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const project = useProjectsStore((state) => state.projects.find((candidate) => candidate.path === projectPath));
   const toggleSessionPinned = useProjectsStore((state) => state.toggleSessionPinned);
   const archiveProjectSessionMutation = useArchiveProjectSession();
@@ -33,7 +37,9 @@ export default function SessionActionsMenu(props: SessionActionsMenuProps) {
       {projectPath, sessionId},
       {
         onSuccess: () => {
-          void navigate({replace: true, search: project ? {projectId: project.id} : {}, to: "/session/new"});
+          if (location.pathname === `/session/${sessionId}`) {
+            void navigate({replace: true, search: project ? {projectId: project.id} : {}, to: "/session/new"});
+          }
         },
       }
     );
@@ -44,7 +50,7 @@ export default function SessionActionsMenu(props: SessionActionsMenuProps) {
       onOpenChange={setActionsMenuOpen}
       open={actionsMenuOpen}
       trigger={(triggerProps) => (
-        <Button {...triggerProps} className="size-7 text-ink-muted hover:text-ink" shape="icon" size="md" variant="ghost">
+        <Button {...triggerProps} className={cn("size-7 text-ink-muted hover:text-ink", triggerClassName)} shape="icon" size="md" variant="ghost">
           <Icon name="more-horizontal" size="xs" />
         </Button>
       )}

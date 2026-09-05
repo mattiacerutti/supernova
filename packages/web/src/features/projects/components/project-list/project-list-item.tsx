@@ -8,14 +8,13 @@ import Icon from "@/components/ui/icon";
 import IconButton from "@/components/ui/icon-button";
 import Menu, {MenuItem} from "@/components/ui/menu";
 import type {ProjectListProject} from "@/features/projects/types/project-list";
-import {useArchiveProjectSession} from "@/features/projects/hooks/api/use-archive-project-session";
+import ProjectSessionListItem from "@/features/projects/components/project-list/project-session-list-item";
 import {useListProjectSessions} from "@/features/projects/hooks/api/use-list-project-sessions";
 import {useInlineRename} from "@/hooks/use-inline-rename";
 import {useProjectsStore} from "@/features/projects/stores/projects-store";
 import {sessionQueryOptions} from "@/features/sessions/hooks/api/use-session";
 import {useSessionLiveStore} from "@/features/sessions/stores/session-live-store";
 import {hasUnseenActivity, useSessionVisitsStore} from "@/features/sessions/stores/session-visits-store";
-import SessionTitleText from "@/features/sessions/components/session-title-text";
 import {formatUpdatedAt} from "@/features/projects/utils/format-updated-at";
 import {cn} from "@/lib/cn";
 
@@ -35,7 +34,6 @@ export default function ProjectListItem(props: ProjectListItemProps) {
 
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
   const [visibleSessionLimit, setVisibleSessionLimit] = useState(INITIAL_SESSION_LIMIT);
-  const [confirmingArchiveSessionId, setConfirmingArchiveSessionId] = useState<string | null>(null);
   const animatedSessionListsRef = useRef(new WeakSet<HTMLElement>());
   const location = useLocation();
   const navigate = useNavigate();
@@ -46,7 +44,6 @@ export default function ProjectListItem(props: ProjectListItemProps) {
   const toggleProjectPinned = useProjectsStore((state) => state.toggleProjectPinned);
   const sessionLiveStates = useSessionLiveStore((state) => state.sessions);
   const sessionVisits = useSessionVisitsStore((state) => state.visits);
-  const archiveProjectSessionMutation = useArchiveProjectSession();
   const {
     draftName,
     handleBlur: handleRenameBlur,
@@ -99,32 +96,6 @@ export default function ProjectListItem(props: ProjectListItemProps) {
     toggleProjectPinned(project.id);
   };
 
-  const handleToggleSessionPinned = (event: MouseEvent<HTMLButtonElement>, sessionId: string): void => {
-    event.stopPropagation();
-    toggleSessionPinned(project.id, sessionId);
-  };
-
-  const handleArchiveSession = (event: MouseEvent<HTMLButtonElement>, sessionId: string): void => {
-    event.stopPropagation();
-
-    if (confirmingArchiveSessionId !== sessionId) {
-      setConfirmingArchiveSessionId(sessionId);
-      return;
-    }
-
-    setConfirmingArchiveSessionId(null);
-    archiveProjectSessionMutation.mutate(
-      {projectPath: project.path, sessionId},
-      {
-        onSuccess: () => {
-          if (location.pathname === `/session/${sessionId}`) {
-            void navigate({replace: true, search: {projectId: project.id}, to: "/session/new"});
-          }
-        },
-      }
-    );
-  };
-
   const handleOpenSession = (sessionId: string): void => {
     void navigate({params: {sessionId}, to: "/session/$sessionId"});
   };
@@ -138,10 +109,6 @@ export default function ProjectListItem(props: ProjectListItemProps) {
   const handleNewSession = (event: MouseEvent<HTMLButtonElement>): void => {
     event.stopPropagation();
     void navigate({search: {projectId: project.id}, to: "/session/new"});
-  };
-
-  const handleSessionMouseLeave = (sessionId: string): void => {
-    if (confirmingArchiveSessionId === sessionId) setConfirmingArchiveSessionId(null);
   };
 
   const handleOpenInFinder = (): void => {
@@ -235,64 +202,23 @@ export default function ProjectListItem(props: ProjectListItemProps) {
           )}
           {expanded && sessionsQuery.error != null && <li className="px-8 py-1 text-sm text-danger-ink">Unable to load sessions.</li>}
           {displayedSessions.map((session) => {
-            const confirmingArchive = confirmingArchiveSessionId === session.id;
             const selected = location.pathname === `/session/${session.id}`;
             const sessionLive = sessionLiveStates[session.id];
             const sessionStreaming = sessionLive?.status === "streaming" || sessionLive?.status === "stopping" || sessionLive?.status === "compacting";
             const sessionUnseen = !sessionStreaming && hasUnseenActivity({activityAtMs: session.timestamp, visitedAt: sessionVisits[session.id]});
 
             return (
-              <li
+              <ProjectSessionListItem
                 key={session.id}
-                onFocusCapture={() => handlePrefetchSession(session.id)}
-                onMouseLeave={() => handleSessionMouseLeave(session.id)}
-                onPointerDown={() => handlePrefetchSession(session.id)}
-                onPointerEnter={() => handlePrefetchSession(session.id)}
-              >
-                <Button
-                  as="div"
-                  className={cn("group/session flex w-full items-center gap-2 py-1.5 pl-2 pr-1 text-left", selected && "bg-overlay-pressed text-ink")}
-                  onClick={() => handleOpenSession(session.id)}
-                  variant="primary"
-                >
-                  <IconButton
-                    className={cn("group/pin-toggle size-4 shrink-0", !session.pinned && "invisible group-hover/session:visible")}
-                    label={session.pinned ? "Unpin session" : "Pin session"}
-                    onClick={(event) => handleToggleSessionPinned(event, session.id)}
-                  >
-                    <Icon
-                      className="origin-center transition-transform duration-250 ease-[cubic-bezier(0.2,0.9,0.2,1.15)] group-active/pin-toggle:scale-85 group-active/pin-toggle:-rotate-8 motion-reduce:transition-none"
-                      name="pin"
-                      size="xs"
-                    />
-                  </IconButton>
-                  <SessionTitleText className="min-w-0 flex-1 truncate text-sm" title={session.title} />
-                  <span className="grid w-12 shrink-0 place-items-center justify-items-end">
-                    <span className="col-start-1 row-start-1 w-full justify-self-end whitespace-nowrap pr-1.5 text-right text-xs text-ink-muted group-hover/session:invisible">
-                      {sessionStreaming ? (
-                        <span className="inline-block size-2 animate-spin rounded-full border border-border-strong border-t-ink" aria-label="Session streaming" />
-                      ) : sessionUnseen ? (
-                        <span className="inline-block size-1.5 rounded-full bg-accent" aria-label="Finished while closed" role="status" />
-                      ) : (
-                        session.updatedAt
-                      )}
-                    </span>
-                    <IconButton
-                      className={cn(
-                        "col-start-1 row-start-1 size-5 disabled:cursor-not-allowed disabled:opacity-50",
-                        confirmingArchive
-                          ? "rounded-xl corner-superellipse/1.3 bg-diff-removed-surface text-danger-ink hover:bg-diff-removed-surface hover:text-danger-ink"
-                          : "invisible group-hover/session:visible"
-                      )}
-                      disabled={archiveProjectSessionMutation.isPending}
-                      label={confirmingArchive ? "Confirm archive session" : "Archive session"}
-                      onClick={(event) => handleArchiveSession(event, session.id)}
-                    >
-                      <Icon name={confirmingArchive ? "x" : "archive"} size="xs" />
-                    </IconButton>
-                  </span>
-                </Button>
-              </li>
+                onOpen={() => handleOpenSession(session.id)}
+                onPrefetch={() => handlePrefetchSession(session.id)}
+                onTogglePinned={() => toggleSessionPinned(project.id, session.id)}
+                projectPath={project.path}
+                selected={selected}
+                session={session}
+                streaming={sessionStreaming}
+                unseen={sessionUnseen}
+              />
             );
           })}
 

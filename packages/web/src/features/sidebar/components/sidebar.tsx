@@ -6,7 +6,7 @@ import type {MouseEvent} from "react";
 import {useState} from "react";
 import SidebarActionButton from "@/features/sidebar/components/sidebar-action-button";
 import OpenProjectDialog from "@/features/projects/components/open-project-dialog";
-import SortableProjectList from "@/features/projects/components/sortable-project-list";
+import SortableProjectList from "@/features/projects/components/project-list/sortable-project-list";
 import SearchSessionsDialog from "@/features/projects/components/search-sessions-dialog";
 import {useProjectList} from "@/features/projects/hooks/use-project-list";
 import {useProjectsStore} from "@/features/projects/stores/projects-store";

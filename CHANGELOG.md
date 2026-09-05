@@ -10,6 +10,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+- Changed sidebar sessions to show the same actions menu as session headers, with inline renaming in the sidebar.
+
 ### Fixed
 
 ### Removed
