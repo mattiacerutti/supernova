@@ -9,6 +9,7 @@
     "lint": "eslint --cache .",
     "prettier": "prettier --check . --ignore-path ../../.prettierignore",
     "typecheck": "tsc --noEmit",
+    "test": "bun test tests",
     "generate:icons": "bun ./scripts/generate-icons.ts --variant=prod",
     "generate:icons:dev": "bun ./scripts/generate-icons.ts --variant=dev",
     "predev": "bun ./scripts/generate-icons.ts --variant=dev --if-missing",
@@ -25,11 +26,13 @@
   },
   "dependencies": {
     "@electron-toolkit/utils": "^4.0.0",
-    "@supernova/contracts": "workspace:*",
-    "@types/bun": "^1.3.14",
     "electron-window-state": "^5.0.3"
   },
   "devDependencies": {
+    "@supernova/contracts": "workspace:*",
+    "@types/bun": "^1.3.14",
+    "@supernova/server": "workspace:*",
+    "@supernova/web": "workspace:*",
     "@ctjs/png2icons": "^3.0.3",
     "@electron-toolkit/eslint-config-ts": "^3.1.0",
     "vite": "^7.2.6",

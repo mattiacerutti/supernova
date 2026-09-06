@@ -4,7 +4,7 @@ import {createRoot} from "react-dom/client";
 import App from "@/app/app";
 import AppProviders from "@/app/providers";
 import {initializeAppearance} from "@/features/settings/stores/appearance-store";
-import {getAgentRpcClient} from "@/rpc/agent-rpc-client";
+import {getRpcClient} from "@/rpc/transport/client";
 import "@/app/styles.css";
 
 declare global {
@@ -18,7 +18,7 @@ const appEnvironment = window.desktopApi?.environment ?? "web";
 document.documentElement.dataset.appEnvironment = appEnvironment;
 initializeAppearance();
 
-const rpcClient = await getAgentRpcClient();
+const rpcClient = await getRpcClient();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

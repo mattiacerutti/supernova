@@ -16,7 +16,7 @@ import {useComposerModelSelection} from "@/features/sessions/hooks/use-composer-
 import {newSessionComposerDraftKey} from "@/features/sessions/stores/composer-drafts-store";
 import {useSessionLiveStore} from "@/features/sessions/stores/session-live-store";
 import {useAppearanceStore} from "@/features/settings/stores/appearance-store";
-import {useAgentRpcClient} from "@/rpc/use-agent-rpc-client";
+import {useRpcClient} from "@/rpc/use-rpc-client";
 import {showToast} from "@/components/ui/toast-manager";
 
 interface NewSessionPageProps {
@@ -29,7 +29,7 @@ export default function NewSessionPage(props: NewSessionPageProps) {
 
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const rpcClient = useAgentRpcClient();
+  const rpcClient = useRpcClient();
   const createSessionMutation = useCreateSession();
   const resolvedMode = useAppearanceStore((state) => state.resolvedMode);
   const sendMessage = useSessionLiveStore((state) => state.sendMessage);

@@ -7,7 +7,7 @@ import {useGeneralSettingsStore} from "@/features/settings/stores/general-settin
 import {showToast} from "@/components/ui/toast-manager";
 import {sessionQueryKey} from "@/features/sessions/hooks/api/use-session";
 import {useSessionVisitsStore} from "@/features/sessions/stores/session-visits-store";
-import type {AgentRpcClientApi, AgentRpcProtocolClient} from "@/rpc/agent-rpc-client";
+import type {RpcClient, RpcProtocolClient} from "@/rpc/transport/protocol";
 
 export type SessionLiveStatus = "checkpoint-navigating" | "compacting" | "idle" | "stopping" | "streaming";
 
@@ -100,13 +100,13 @@ interface SendSessionMessageInput {
   readonly contentParts: readonly UserMessageContentPart[];
   readonly modelReference: ModelReference;
   readonly queryClient: QueryClient;
-  readonly rpcClient: AgentRpcClientApi;
+  readonly rpcClient: RpcClient;
   readonly sessionId: string;
 }
 
 interface CompactSessionInput {
   readonly modelReference: ModelReference;
-  readonly rpcClient: AgentRpcClientApi;
+  readonly rpcClient: RpcClient;
   readonly sessionId: string;
 }
 
@@ -114,7 +114,7 @@ interface CheckpointNavigationInput {
   /** Set when retrying after the user confirmed discarding manual workspace changes. */
   readonly force?: boolean;
   readonly queryClient: QueryClient;
-  readonly rpcClient: AgentRpcClientApi;
+  readonly rpcClient: RpcClient;
   readonly sessionId: string;
 }
 
@@ -126,7 +126,7 @@ interface SessionLiveStoreState {
   /** Session currently open in the main view; its activity is stamped as seen. */
   readonly activeSessionId: string | null;
   readonly sessions: Record<string, SessionLiveState | undefined>;
-  readonly abortSession: (input: {rpcClient: AgentRpcClientApi; sessionId: string}) => void;
+  readonly abortSession: (input: {rpcClient: RpcClient; sessionId: string}) => void;
   readonly applyEvent: (event: SessionStreamEvent) => boolean;
   readonly compactSession: (input: CompactSessionInput) => void;
   readonly redoCheckpoint: (input: CheckpointNavigationInput) => Promise<CheckpointNavigationOutcome>;
@@ -204,7 +204,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
       });
   };
 
-  const abortSession = (input: {rpcClient: AgentRpcClientApi; sessionId: string}): void => {
+  const abortSession = (input: {rpcClient: RpcClient; sessionId: string}): void => {
     const {rpcClient, sessionId} = input;
     const stream = get().sessions[sessionId];
     if (!stream || (stream.status !== "streaming" && stream.status !== "stopping")) return;
@@ -253,7 +253,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
 
   const runCheckpointNavigation = (
     input: CheckpointNavigationInput & {
-      execute: (rpc: AgentRpcProtocolClient) => ReturnType<AgentRpcProtocolClient["undoCheckpoint"]>;
+      execute: (rpc: RpcProtocolClient) => ReturnType<RpcProtocolClient["undoCheckpoint"]>;
       optimisticTurnId: (session: Session) => string | undefined;
       title: string;
     }

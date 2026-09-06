@@ -5,11 +5,14 @@ import {defineConfig, devices} from "@playwright/test";
 const timelinePort = Number(process.env.PLAYWRIGHT_PORT ?? 5174);
 const runtimePort = Number(process.env.PLAYWRIGHT_RUNTIME_PORT ?? 4318);
 const timelineBaseURL = `http://127.0.0.1:${timelinePort}`;
-const runtimeBaseURL = `http://127.0.0.1:${runtimePort}`;
+const runtimeWebPort = Number(process.env.PLAYWRIGHT_RUNTIME_WEB_PORT ?? 5175);
+const runtimeBaseURL = `http://127.0.0.1:${runtimeWebPort}`;
+const runtimeApiURL = `http://127.0.0.1:${runtimePort}`;
 const browserChannel = process.env.PLAYWRIGHT_BROWSER_CHANNEL;
 const video = process.env.PLAYWRIGHT_VIDEO === "on" ? "on" : "retain-on-failure";
 const e2eRoot = process.env.SUPERNOVA_E2E_ROOT ?? join(tmpdir(), "supernova-runtime-e2e");
-const timelineClientDir = join(tmpdir(), "supernova-timeline-e2e-client");
+const timelineClientDir = `${e2eRoot}-timeline-client`;
+const runtimeClientDir = `${e2eRoot}-runtime-client`;
 process.env.SUPERNOVA_E2E_ROOT = e2eRoot;
 
 const browser = {
@@ -55,7 +58,7 @@ export default defineConfig({
       url: timelineBaseURL,
     },
     {
-      command: 'rm -rf "$SUPERNOVA_E2E_ROOT" && bunx vite build --mode e2e-runtime && bun run --filter @supernova/server build:e2e && node ../../apps/server/dist/e2e-server.js',
+      command: 'rm -rf "$SUPERNOVA_E2E_ROOT" && bun run --filter @supernova/server build:e2e && node ../../apps/server/dist/e2e-server.js',
       env: {
         ...process.env,
         PI_OFFLINE: "1",
@@ -65,7 +68,14 @@ export default defineConfig({
       },
       reuseExistingServer: false,
       timeout: 120_000,
-      url: `${runtimeBaseURL}/health`,
+      url: `${runtimeApiURL}/health`,
+    },
+    {
+      command: `bunx vite build --mode e2e-runtime --outDir "${runtimeClientDir}" --emptyOutDir && bunx vite preview --host 127.0.0.1 --port ${runtimeWebPort} --strictPort --outDir "${runtimeClientDir}"`,
+      env: {...process.env, SUPERNOVA_SERVER_URL: runtimeApiURL},
+      reuseExistingServer: false,
+      timeout: 120_000,
+      url: runtimeBaseURL,
     },
   ],
 });

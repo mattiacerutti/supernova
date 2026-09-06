@@ -1,31 +1,60 @@
 #!/usr/bin/env node
-// Pi needs package metadata before agent-runtime imports it. Keep this first so
-// PI_PACKAGE_DIR points at Supernova's generated package.json before Pi loads.
-import "../scripts/pi-runtime-environment";
-import {Command, InvalidArgumentError} from "commander";
-import {DEFAULT_HOST, DEFAULT_PORT, startServer} from "@/runtime";
-import {registerBundledToolsPath} from "@/tools-path";
+// Configure Pi before importing the runtime.
+import "@/environment";
+import {Command, Option} from "commander";
+import {DEFAULT_HOST, DEFAULT_PORT, parsePort, startServer} from "@/server";
+import {registerBundledToolsPath} from "@/tools";
 
-registerBundledToolsPath();
+/** Runs the headless API and owns its signal/parent-disconnect lifecycle. */
+async function main(): Promise<void> {
+  registerBundledToolsPath();
 
-function parsePort(value: string): number {
-  const port = Number(value);
-  if (!Number.isInteger(port) || port < 0 || port > 65_535) {
-    throw new InvalidArgumentError("Port must be an integer between 0 and 65535.");
-  }
-  return port;
+  const program = new Command()
+    .name("supernova-server")
+    .description("Start the Supernova API server (no UI).")
+    .addOption(new Option("--host <host>", "Host to bind").env("SUPERNOVA_SERVER_HOST").default(DEFAULT_HOST))
+    .addOption(new Option("--port <port>", "Port to bind; 0 selects an available port").env("SUPERNOVA_SERVER_PORT").argParser(parsePort).default(DEFAULT_PORT))
+    .showHelpAfterError();
+
+  // Electron's Node mode has Node argv, not Electron's GUI argv convention.
+  program.parse(process.argv.slice(2), {from: "user"});
+
+  const startup = startServer(program.opts<{host: string; port: number}>());
+  let stopping = false;
+
+  const stop = async (): Promise<void> => {
+    if (stopping) return;
+    stopping = true;
+
+    const deadline = setTimeout(() => process.exit(1), 5_000);
+    deadline.unref();
+
+    try {
+      const server = await startup.catch(() => undefined);
+      await server?.close();
+    } catch (error) {
+      console.error(error);
+      process.exitCode = 1;
+    } finally {
+      clearTimeout(deadline);
+      if (process.connected) process.disconnect();
+    }
+  };
+
+  process.on("SIGINT", () => void stop());
+  process.on("SIGTERM", () => void stop());
+  process.once("disconnect", () => void stop());
+
+  const server = await startup;
+  if (stopping) return;
+
+  process.send?.({type: "ready", url: server.url});
+  console.log(`Supernova API listening at ${server.url}`);
 }
 
-const program = new Command()
-  .name("supernova-server")
-  .description("Start the Supernova server.")
-  .option("--host <host>", "Host to bind", DEFAULT_HOST)
-  .option("--port <port>", "Port to bind", parsePort, DEFAULT_PORT)
-  .showHelpAfterError();
+void main().catch((error: unknown) => {
+  console.error(error instanceof Error ? error.message || String(error) : error);
+  process.exitCode = 1;
 
-program.parse();
-
-const options = program.opts<{host: string; port: number}>();
-const server = await startServer({host: options.host, port: options.port});
-
-console.log(`Supernova server listening at ${server.url}`);
+  if (process.connected) process.disconnect();
+});

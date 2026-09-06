@@ -25,10 +25,10 @@ If a tradeoff is required, choose correctness and robustness over short-term con
 ## High-Level Architecture
 
 ```text
-apps/server    → Node server + user-facing CLI. Owns Pi runtime, workspace access, HTTP/WebSocket APIs, and serves the web client.
-apps/desktop   → Electron shell. Starts/embeds the server and loads the server URL.
+apps/server    → Headless Node API + user-facing CLI. Owns Pi runtime, workspace access, and HTTP/WebSocket APIs. Never hosts or bundles the UI.
+apps/desktop   → Electron shell. Starts a local API child and loads its own bundled web UI.
 
-packages/web            → React/Vite client bundle consumed by the server. No native/filesystem assumptions.
+packages/web            → Independently hosted React/Vite client bundle. No native/filesystem assumptions.
 packages/agent-runtime  → Agent runtime services and provider SDK integrations (Node-only), consumed by the server.
 packages/contracts      → Shared Effect schemas, RPC definitions, and domain contracts used by server and web.
 ```
@@ -37,16 +37,19 @@ packages/contracts      → Shared Effect schemas, RPC definitions, and domain c
 
 ```text
 Standalone server:
-user terminal → supernova-server → server owns runtime/filesystem/workspaces → browser connects to server URL
+user terminal → supernova-server → server owns runtime/filesystem/workspaces (no UI)
+
+Browser development:
+dev launcher → local API child + Vite UI host → browser connects through the UI host's WebSocket proxy
 
 Desktop app:
-Electron app → spawns bundled server → server owns runtime/filesystem/workspaces → BrowserWindow loads server URL
+Electron app → spawns bundled API on an OS-assigned port → BrowserWindow loads supernova://app and connects to the API endpoint supplied by preload
 ```
 
 - The **server process** is the authority for native capabilities: Pi runtime, workspace filesystem access, subprocesses, shell/git, credentials, sessions, and API/WebSocket routing.
 - The **web package** is a pure client UI. It must communicate with server APIs and must not assume browser-local filesystem/native access.
 - The **contracts package** defines shared API/RPC boundaries and serializable domain types. Keep it environment-neutral and free of runtime ownership logic.
-- The **desktop app** is a convenience shell and OS integration layer. It should not own web serving or Pi runtime logic.
+- The **desktop app** is a convenience shell and OS integration layer. It owns bundled renderer asset loading, not API web serving or Pi runtime logic.
 - Remote/LAN browser access means operations happen on the machine running `apps/server`, not the machine running the browser.
 
 ## Tech Stack

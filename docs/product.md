@@ -94,7 +94,7 @@ Supernova adapts this state into one consistent interface; it does not implement
 
 ### Desktop and browser
 
-The standalone server serves the browser client and WebSocket RPC. The Electron app packages that same server and client, then adds native window chrome, persisted geometry, host-path opening, shell-environment import, icons, and managed server lifecycle.
+The standalone server exposes only the API and WebSocket RPC; the browser client is hosted separately. Electron packages the API and web assets separately, loads its own renderer at a stable app origin, and starts a local API child on an OS-assigned port. It adds native window chrome, persisted geometry, host-path opening, shell-environment import, icons, and managed server lifecycle. The client endpoint is independent of UI hosting; remote selection and authentication remain future work.
 
 Electron is an operating-system shell, not a second agent runtime. Browser behavior remains independent of Electron-only capabilities.
 

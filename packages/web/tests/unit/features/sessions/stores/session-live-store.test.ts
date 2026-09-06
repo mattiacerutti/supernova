@@ -9,10 +9,10 @@ import {allSessionsQueryKey, sessionQueryKey} from "@/features/sessions/hooks/ap
 import {connectSessionEvents} from "@/features/sessions/lib/streaming/session-event-stream";
 import {useSessionLiveStore} from "@/features/sessions/stores/session-live-store";
 import {hasUnseenActivity, useSessionVisitsStore} from "@/features/sessions/stores/session-visits-store";
-import type {AgentRpcClientApi, AgentRpcClientFiber, AgentRpcProtocolClient} from "@/rpc/agent-rpc-client";
+import type {RpcClient, RpcClientFiber, RpcProtocolClient} from "@/rpc/transport/protocol";
 
-vi.mock("@/rpc/agent-rpc-client", () => ({
-  AgentRpcProtocolClientService: class AgentRpcProtocolClientService {},
+vi.mock("@/rpc/transport/client", () => ({
+  RpcProtocolClientService: class RpcProtocolClientService {},
 }));
 
 const model = {
@@ -70,28 +70,28 @@ async function waitUntil(assertion: () => void | Promise<void>): Promise<void> {
   throw lastError instanceof Error ? lastError : new Error("Timed out waiting for condition.");
 }
 
-function streamRpcClient(events: readonly SessionStreamEvent[]): AgentRpcClientApi {
+function streamRpcClient(events: readonly SessionStreamEvent[]): RpcClient {
   let interrupted = false;
   return {
     dispose: vi.fn(async () => undefined),
     fork: vi.fn(async (execute) => {
-      void Effect.runPromise(execute({watchEvents: () => Stream.fromIterable(events)} as unknown as AgentRpcProtocolClient));
+      void Effect.runPromise(execute({watchEvents: () => Stream.fromIterable(events)} as unknown as RpcProtocolClient));
       return {
         completed: new Promise<void>(() => undefined),
         interrupt: vi.fn(async () => {
           interrupted = true;
         }),
-      } satisfies AgentRpcClientFiber;
+      } satisfies RpcClientFiber;
     }),
     run: vi.fn(async () => undefined),
     runExit: vi.fn(),
     get interrupted() {
       return interrupted;
     },
-  } as AgentRpcClientApi & {readonly interrupted: boolean};
+  } as RpcClient & {readonly interrupted: boolean};
 }
 
-function commandRpcClient(input?: {readonly rejectNavigation?: boolean; readonly rejectSend?: boolean}): AgentRpcClientApi {
+function commandRpcClient(input?: {readonly rejectNavigation?: boolean; readonly rejectSend?: boolean}): RpcClient {
   return {
     dispose: vi.fn(async () => undefined),
     fork: vi.fn(),
@@ -103,11 +103,11 @@ function commandRpcClient(input?: {readonly rejectNavigation?: boolean; readonly
         revertToMessage: () => (input?.rejectNavigation ? Effect.fail(new Error("Checkpoint unavailable")) : Effect.void),
         sendMessage: () => (input?.rejectSend ? Effect.fail(new Error("Model unavailable")) : Effect.void),
         undoCheckpoint: () => (input?.rejectNavigation ? Effect.fail(new Error("Checkpoint unavailable")) : Effect.void),
-      } as unknown as AgentRpcProtocolClient;
+      } as unknown as RpcProtocolClient;
       return await Effect.runPromise(execute(protocol));
     }),
     runExit: vi.fn(),
-  } as AgentRpcClientApi;
+  } as RpcClient;
 }
 
 describe("session live store", () => {
@@ -236,11 +236,11 @@ describe("session live store", () => {
             forceFlags.push(payload.force);
             return payload.force ? Effect.void : Effect.fail(new CheckpointConflictError({message: "Restoring this checkpoint would discard changes made after it."}));
           },
-        } as unknown as AgentRpcProtocolClient;
+        } as unknown as RpcProtocolClient;
         return await Effect.runPromise(execute(protocol));
       }),
       runExit: vi.fn(),
-    } as AgentRpcClientApi;
+    } as RpcClient;
     const queryClient = createQueryClient();
     const before = session({turns: [turn({id: "kept"}), turn({id: "undone"})]});
     queryClient.setQueryData(sessionQueryKey("session-1"), before);
@@ -261,26 +261,26 @@ describe("session live store", () => {
     const cases = [
       {
         name: "undo",
-        run: (queryClient: QueryClient, rpcClient: AgentRpcClientApi) => useSessionLiveStore.getState().undoCheckpoint({queryClient, rpcClient, sessionId: "session-1"}),
+        run: (queryClient: QueryClient, rpcClient: RpcClient) => useSessionLiveStore.getState().undoCheckpoint({queryClient, rpcClient, sessionId: "session-1"}),
         before: session({turns: [turn({id: "kept"}), turn({id: "undone"})], undoneTurns: [turn({id: "redoable"})]}),
         after: {turns: ["kept"], undoneTurns: ["undone", "redoable"]},
       },
       {
         name: "redo",
-        run: (queryClient: QueryClient, rpcClient: AgentRpcClientApi) => useSessionLiveStore.getState().redoCheckpoint({queryClient, rpcClient, sessionId: "session-1"}),
+        run: (queryClient: QueryClient, rpcClient: RpcClient) => useSessionLiveStore.getState().redoCheckpoint({queryClient, rpcClient, sessionId: "session-1"}),
         before: session({turns: [turn({id: "kept"})], undoneTurns: [turn({id: "restored"}), turn({id: "still-undone"})]}),
         after: {turns: ["kept", "restored"], undoneTurns: ["still-undone"]},
       },
       {
         name: "revert visible message",
-        run: (queryClient: QueryClient, rpcClient: AgentRpcClientApi) =>
+        run: (queryClient: QueryClient, rpcClient: RpcClient) =>
           useSessionLiveStore.getState().revertToMessage({queryClient, rpcClient, sessionId: "session-1", turnId: "reverted"}),
         before: session({turns: [turn({id: "kept"}), turn({id: "reverted"}), turn({id: "also-reverted"})], undoneTurns: [turn({id: "redoable"})]}),
         after: {turns: ["kept"], undoneTurns: ["reverted", "also-reverted", "redoable"]},
       },
       {
         name: "restore undone message",
-        run: (queryClient: QueryClient, rpcClient: AgentRpcClientApi) =>
+        run: (queryClient: QueryClient, rpcClient: RpcClient) =>
           useSessionLiveStore.getState().revertToMessage({queryClient, rpcClient, sessionId: "session-1", turnId: "restored"}),
         before: session({turns: [turn({id: "kept"})], undoneTurns: [turn({id: "restored-after"}), turn({id: "restored"}), turn({id: "still-undone"})]}),
         after: {turns: ["kept", "restored-after", "restored"], undoneTurns: ["still-undone"]},

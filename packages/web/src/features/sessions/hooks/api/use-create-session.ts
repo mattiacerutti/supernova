@@ -1,7 +1,7 @@
 import {useMutation} from "@tanstack/react-query";
 import {Effect} from "effect";
 import {eq} from "@/rpc/effect-query";
-import {AgentRpcProtocolClientService} from "@/rpc/agent-rpc-client";
+import {RpcProtocolClientService} from "@/rpc/transport/client";
 
 interface CreateSessionMutationInput {
   projectPath: string;
@@ -10,8 +10,7 @@ interface CreateSessionMutationInput {
 export function useCreateSession() {
   return useMutation(
     eq.mutationOptions({
-      mutationFn: (input: CreateSessionMutationInput) =>
-        Effect.flatMap(Effect.service(AgentRpcProtocolClientService), (rpc) => rpc.createSession({projectPath: input.projectPath})),
+      mutationFn: (input: CreateSessionMutationInput) => Effect.flatMap(Effect.service(RpcProtocolClientService), (rpc) => rpc.createSession({projectPath: input.projectPath})),
     })
   );
 }

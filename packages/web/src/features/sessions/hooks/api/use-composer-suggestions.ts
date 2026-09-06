@@ -12,7 +12,7 @@ import type {
 import {clientSlashCommandSuggestions} from "@/features/sessions/lib/composer/client-slash-commands";
 import type {ClientSlashCommandActions} from "@/features/sessions/lib/composer/client-slash-commands";
 import {eq} from "@/rpc/effect-query";
-import {AgentRpcProtocolClientService} from "@/rpc/agent-rpc-client";
+import {RpcProtocolClientService} from "@/rpc/transport/client";
 
 function fileSuggestion(item: FolderFile): ComposerFileReferenceSuggestionItem {
   return {
@@ -54,7 +54,7 @@ export function useComposerSuggestions(projectPath: string, match: ComposerSugge
       queryFn: () => {
         if (!match) return Effect.die(new Error("Match is required")) as Effect.Effect<ComposerSuggestionItem[]>;
 
-        return Effect.flatMap(Effect.service(AgentRpcProtocolClientService), (rpc): Effect.Effect<ComposerSuggestionItem[], {_tag: string}, never> => {
+        return Effect.flatMap(Effect.service(RpcProtocolClientService), (rpc): Effect.Effect<ComposerSuggestionItem[], {_tag: string}, never> => {
           if (match.kind === "file") {
             return rpc.listFolderFiles({projectPath, query: match.query}).pipe(
               Effect.map((result) => {

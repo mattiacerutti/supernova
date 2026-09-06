@@ -1,11 +1,11 @@
 {
   "extends": "../../tsconfig.base.json",
-  "include": ["electron.vite.config.*", "src/main/**/*", "src/preload/**/*"],
+  "include": ["electron.vite.config.*", "src/**/*", "tests/**/*"],
   "compilerOptions": {
     "lib": ["ES2023", "DOM"],
     "paths": {
       "@/*": ["./src/*"]
     },
-    "types": ["electron-vite/node"]
+    "types": ["electron-vite/node", "bun"]
   }
 }

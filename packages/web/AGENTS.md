@@ -51,7 +51,7 @@
 
 - Use `effect-query` for RPC-backed React Query hooks.
 - Prefer `eq.queryOptions` and `eq.mutationOptions` over manually wrapping RPC calls with an imperative client runner.
-- Use `Effect.gen` for RPC effects and get the RPC client from `AgentRpcProtocolClientService` so typed RPC failures are preserved.
+- Use `Effect.gen` for RPC effects and get the RPC client from `RpcProtocolClientService` so typed RPC failures are preserved.
 
 ## Testing
 

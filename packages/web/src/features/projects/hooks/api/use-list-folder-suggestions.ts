@@ -1,7 +1,7 @@
 import {useQuery} from "@tanstack/react-query";
 import {Effect} from "effect";
 import {eq} from "@/rpc/effect-query";
-import {AgentRpcProtocolClientService} from "@/rpc/agent-rpc-client";
+import {RpcProtocolClientService} from "@/rpc/transport/client";
 
 export function allFolderSuggestionsQueryKey() {
   return ["agent", "folder", "suggestions"] as const;
@@ -14,7 +14,7 @@ export function listFolderSuggestionsQueryKey(query: string) {
 /** Builds shared query options for browsing local folders. */
 export function listFolderSuggestionsQueryOptions(query: string) {
   return eq.queryOptions({
-    queryFn: () => Effect.flatMap(Effect.service(AgentRpcProtocolClientService), (rpc) => rpc.listFolderSuggestions({query})),
+    queryFn: () => Effect.flatMap(Effect.service(RpcProtocolClientService), (rpc) => rpc.listFolderSuggestions({query})),
     queryKey: listFolderSuggestionsQueryKey(query),
     staleTime: 30_000,
   });

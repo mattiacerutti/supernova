@@ -3,7 +3,7 @@ import {Effect} from "effect";
 import type {Session} from "@supernova/contracts/sessions/schemas";
 import {listProjectSessionsQueryKey} from "@/features/projects/hooks/api/use-list-project-sessions";
 import {sessionQueryKey} from "@/features/sessions/hooks/api/use-session";
-import {AgentRpcProtocolClientService} from "@/rpc/agent-rpc-client";
+import {RpcProtocolClientService} from "@/rpc/transport/client";
 import {eq} from "@/rpc/effect-query";
 
 interface RenameSessionInput {
@@ -20,7 +20,7 @@ export function useRenameSession() {
 
   return useMutation(
     eq.mutationOptions({
-      mutationFn: (input: RenameSessionInput) => Effect.flatMap(Effect.service(AgentRpcProtocolClientService), (rpc) => rpc.renameSession(input)),
+      mutationFn: (input: RenameSessionInput) => Effect.flatMap(Effect.service(RpcProtocolClientService), (rpc) => rpc.renameSession(input)),
       onMutate: (input): RenameSessionMutationContext => {
         const previousSession = queryClient.getQueryData<Session>(sessionQueryKey(input.sessionId));
         if (!previousSession) return {};

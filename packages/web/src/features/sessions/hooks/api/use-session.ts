@@ -3,7 +3,7 @@ import type {Session} from "@supernova/contracts/sessions/schemas";
 import {Effect} from "effect";
 import {useSyncExternalStore} from "react";
 import {eq} from "@/rpc/effect-query";
-import {AgentRpcProtocolClientService} from "@/rpc/agent-rpc-client";
+import {RpcProtocolClientService} from "@/rpc/transport/client";
 
 export function allSessionsQueryKey() {
   return ["session"] as const;
@@ -15,7 +15,7 @@ export function sessionQueryKey(sessionId: string) {
 
 export function sessionQueryOptions(sessionId: string) {
   return eq.queryOptions({
-    queryFn: () => Effect.flatMap(Effect.service(AgentRpcProtocolClientService), (rpc) => rpc.getSession({sessionId})),
+    queryFn: () => Effect.flatMap(Effect.service(RpcProtocolClientService), (rpc) => rpc.getSession({sessionId})),
     queryKey: sessionQueryKey(sessionId),
     refetchOnWindowFocus: false,
   });

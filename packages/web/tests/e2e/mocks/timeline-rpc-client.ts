@@ -1,7 +1,7 @@
 import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
 import type {Session, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 import {Effect, Exit, Fiber, PubSub, Stream} from "effect";
-import {type AgentRpcClientApi, type AgentRpcClientFiber, type AgentRpcExecute, type AgentRpcProtocolClient, type AgentRpcRunOptions} from "@/rpc/agent-rpc-client-api";
+import type {RpcClient, RpcClientFiber, RpcExecute, RpcProtocolClient, RpcRunOptions} from "@/rpc/transport/protocol";
 import {
   createTimelineSessions,
   EMPTY_SESSION_ID,
@@ -13,12 +13,12 @@ import {
 } from "@e2e/mocks/timeline-data";
 import type {TimelineMockState} from "@e2e/support/timeline-test-api";
 
-export {AgentRpcProtocolClientService} from "@/rpc/agent-rpc-client-api";
-export type {AgentRpcClientApi, AgentRpcClientFiber, AgentRpcProtocolClient} from "@/rpc/agent-rpc-client-api";
+export {RpcProtocolClientService} from "@/rpc/transport/protocol";
+export type {RpcClient, RpcClientFiber, RpcProtocolClient} from "@/rpc/transport/protocol";
 
 const STREAM_LINES_PER_FRAME = 2;
 
-class TimelineRpcClient implements AgentRpcClientApi {
+class TimelineRpcClient implements RpcClient {
   private readonly events = Effect.runSync(PubSub.unbounded<SessionStreamEvent>());
   private readonly sessions = createTimelineSessions();
   private activeContentParts: readonly UserMessageContentPart[] | null = null;
@@ -47,7 +47,7 @@ class TimelineRpcClient implements AgentRpcClientApi {
     await Effect.runPromise(PubSub.shutdown(this.events));
   }
 
-  public async fork<TSuccess, TError>(execute: AgentRpcExecute<TSuccess, TError>): Promise<AgentRpcClientFiber> {
+  public async fork<TSuccess, TError>(execute: RpcExecute<TSuccess, TError>): Promise<RpcClientFiber> {
     const fiber = Effect.runFork(execute(this.protocol()));
 
     return {
@@ -56,11 +56,11 @@ class TimelineRpcClient implements AgentRpcClientApi {
     };
   }
 
-  public async run<TSuccess, TError>(execute: AgentRpcExecute<TSuccess, TError>): Promise<TSuccess> {
+  public async run<TSuccess, TError>(execute: RpcExecute<TSuccess, TError>): Promise<TSuccess> {
     return await Effect.runPromise(execute(this.protocol()));
   }
 
-  public async runExit<TSuccess, TError>(execute: AgentRpcExecute<TSuccess, TError>, options?: AgentRpcRunOptions): Promise<Exit.Exit<TSuccess, TError>> {
+  public async runExit<TSuccess, TError>(execute: RpcExecute<TSuccess, TError>, options?: RpcRunOptions): Promise<Exit.Exit<TSuccess, TError>> {
     return (await Effect.runPromiseExit(execute(this.protocol()), options)) as Exit.Exit<TSuccess, TError>;
   }
 
@@ -72,7 +72,7 @@ class TimelineRpcClient implements AgentRpcClientApi {
   }
 
   /** Exposes the same protocol boundary consumed by the real application. */
-  private protocol(): AgentRpcProtocolClient {
+  private protocol(): RpcProtocolClient {
     return {
       abortSession: () => Effect.sync(() => this.settleStream("aborted")),
       archiveProjectSession: () => Effect.void,
@@ -110,7 +110,7 @@ class TimelineRpcClient implements AgentRpcClientApi {
       undoCheckpoint: ({sessionId}: {readonly sessionId: string}) => Effect.sync(() => this.undoCheckpoint(sessionId)),
       watchEvents: () => Stream.concat(Stream.succeed({type: "connected"} as const), Stream.fromPubSub(this.events)),
       watchProviderLoginSession: () => Stream.empty,
-    } as unknown as AgentRpcProtocolClient;
+    } as unknown as RpcProtocolClient;
   }
 
   /** Serializes publications so revisions arrive in exactly the order generated. */
@@ -241,7 +241,7 @@ class TimelineRpcClient implements AgentRpcClientApi {
 let sharedClient: TimelineRpcClient | null = null;
 
 /** Initializes the isolated in-browser timeline RPC mock used by Playwright. */
-export async function getAgentRpcClient(): Promise<AgentRpcClientApi> {
+export async function getRpcClient(): Promise<RpcClient> {
   sharedClient ??= new TimelineRpcClient();
   return sharedClient;
 }

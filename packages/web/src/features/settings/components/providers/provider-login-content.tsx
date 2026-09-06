@@ -8,7 +8,7 @@ import Input from "@/components/ui/input";
 import AuthLink from "@/features/settings/components/providers/auth-link";
 import {useSubmitProviderLoginInput} from "@/features/settings/hooks/api/providers/use-submit-provider-login-input";
 import {useMountEffect} from "@/lib/use-mount-effect";
-import {useAgentRpcClient} from "@/rpc/use-agent-rpc-client";
+import {useRpcClient} from "@/rpc/use-rpc-client";
 
 interface ProviderLoginContentProps {
   initialSession?: ProviderLoginSession;
@@ -18,7 +18,7 @@ interface ProviderLoginContentProps {
 
 export default function ProviderLoginContent(props: ProviderLoginContentProps) {
   const {initialSession, loginSessionId, onClose} = props;
-  const rpcClient = useAgentRpcClient();
+  const rpcClient = useRpcClient();
   const submitInputMutation = useSubmitProviderLoginInput();
   const [session, setSession] = useState<ProviderLoginSession | undefined>(initialSession);
   const [input, setInput] = useState("");

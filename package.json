@@ -8,15 +8,15 @@
     "apps/*"
   ],
   "scripts": {
-    "dev:server": "turbo run dev --filter=@supernova/web --filter=@supernova/server",
-    "dev:desktop": "turbo run dev --filter=@supernova/web --filter=@supernova/server --filter=@supernova/desktop",
+    "dev:server": "bun scripts/dev.ts",
+    "dev:desktop": "bun scripts/dev.ts --desktop",
     "start:server": "turbo run start --filter=@supernova/server",
     "start:desktop": "turbo run start --filter=@supernova/desktop",
     "build": "turbo run build",
-    "package:desktop": "turbo run build --filter=@supernova/server && turbo run package:unpack --filter=@supernova/desktop --",
-    "package:desktop:win": "turbo run build --filter=@supernova/server && turbo run package:win --filter=@supernova/desktop --",
-    "package:desktop:mac": "turbo run build --filter=@supernova/server && turbo run package:mac --filter=@supernova/desktop --",
-    "package:desktop:linux": "turbo run build --filter=@supernova/server && turbo run package:linux --filter=@supernova/desktop --",
+    "package:desktop": "turbo run package:unpack --filter=@supernova/desktop --",
+    "package:desktop:win": "turbo run package:win --filter=@supernova/desktop --",
+    "package:desktop:mac": "turbo run package:mac --filter=@supernova/desktop --",
+    "package:desktop:linux": "turbo run package:linux --filter=@supernova/desktop --",
     "lint": "turbo run lint && bun run lint:scripts",
     "lint:scripts": "eslint scripts",
     "prettier": "turbo run prettier && bun run prettier:scripts",
@@ -31,6 +31,8 @@
     "@tanstack/virtual-core@3.17.0": "patches/@tanstack%2Fvirtual-core@3.17.0.patch"
   },
   "devDependencies": {
+    "@supernova/server": "workspace:*",
+    "vite": "^8.0.10",
     "@types/node": "^22.19.1",
     "eslint": "^10.3.0",
     "husky": "^9.1.7",

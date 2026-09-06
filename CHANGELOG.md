@@ -6,6 +6,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Breaking Changes
 
+- Changed packaged desktop storage to a stable app origin; browser-local preferences and project lists from earlier desktop builds are not carried over. Server-side sessions and credentials are unchanged.
+
 ### Added
 
 - Added 24-hour message times beside copy actions, with user message actions ordered as time, copy, and revert.
@@ -14,10 +16,12 @@ All notable changes to Supernova are documented in this file.
 ### Changed
 
 - Changed sidebar sessions to show the same actions menu as session headers, with inline renaming in the sidebar.
+- Changed macOS and Linux desktop launches to inherit the full login-shell environment, with broader shell support and a fallback for interactive startup failures.
 
 ### Fixed
 
 - Fixed the macOS About menu showing the package name instead of Supernova.
+- Fixed local startup port conflicts by assigning available API ports and reporting occupied explicit ports clearly.
 
 ### Removed
 

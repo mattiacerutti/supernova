@@ -3,8 +3,6 @@ import {homedir, tmpdir} from "node:os";
 import {join, resolve} from "node:path";
 import {registerBunOAuthFlows} from "@earendil-works/pi-ai/bun-oauth";
 
-type SupernovaStateMode = "dev" | "userdata";
-
 const PI_RUNTIME_PACKAGE_DIR = join(tmpdir(), "pi-runtime-package");
 const PI_RUNTIME_PACKAGE_JSON = {
   piConfig: {
@@ -12,23 +10,18 @@ const PI_RUNTIME_PACKAGE_JSON = {
   },
 };
 
-function expandHomePath(path: string): string {
-  if (path === "~") return homedir();
-  if (path.startsWith("~/") || path.startsWith("~\\")) return join(homedir(), path.slice(2));
-  return path;
-}
+/** Expands the configured home and keeps development state separate from normal runs. */
+function resolveAgentDirectory(): string {
+  let home = process.env.SUPERNOVA_HOME?.trim() || join(homedir(), ".supernova");
 
-function resolveSupernovaHome(): string {
-  const configuredHome = process.env.SUPERNOVA_HOME?.trim();
-  return resolve(expandHomePath(configuredHome && configuredHome.length > 0 ? configuredHome : join(homedir(), ".supernova")));
-}
+  if (home === "~") {
+    home = homedir();
+  } else if (home.startsWith("~/") || home.startsWith("~\\")) {
+    home = join(homedir(), home.slice(2));
+  }
 
-function resolveSupernovaStateMode(): SupernovaStateMode {
-  return process.env.SUPERNOVA_SERVER_DEV === "1" ? "dev" : "userdata";
-}
-
-function resolveSupernovaAgentDir(): string {
-  return join(resolveSupernovaHome(), resolveSupernovaStateMode(), "agent");
+  const mode = process.env.SUPERNOVA_SERVER_DEV === "1" ? "dev" : "userdata";
+  return join(resolve(home), mode, "agent");
 }
 
 // Pi reads package.json during module initialization to derive runtime metadata
@@ -38,7 +31,7 @@ mkdirSync(PI_RUNTIME_PACKAGE_DIR, {recursive: true});
 writeFileSync(join(PI_RUNTIME_PACKAGE_DIR, "package.json"), `${JSON.stringify(PI_RUNTIME_PACKAGE_JSON, null, 2)}\n`);
 
 process.env["PI_PACKAGE_DIR"] = PI_RUNTIME_PACKAGE_DIR;
-process.env["PI_CODING_AGENT_DIR"] = resolveSupernovaAgentDir();
+process.env["PI_CODING_AGENT_DIR"] = resolveAgentDirectory();
 process.env["PI_CODING_AGENT"] = "true";
 
 // Pi keeps OAuth implementations behind bundler-opaque dynamic imports. The

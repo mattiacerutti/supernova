@@ -51,14 +51,6 @@ bun install
 bun run dev:desktop
 ```
 
-This starts the web client, server, and Electron app. To use Supernova in a browser instead:
-
-```bash
-bun run dev:server
-```
-
-The development server runs at `http://localhost:5173`.
-
 ## Development
 
 ```bash

@@ -1,10 +1,10 @@
-import "@scripts/pi-runtime-environment";
+import "@/environment";
 import {existsSync, mkdirSync, writeFileSync} from "node:fs";
 import {setTimeout} from "node:timers/promises";
 import type {Context} from "@earendil-works/pi-ai";
 import {fauxAssistantMessage, registerFauxProvider} from "@earendil-works/pi-ai/compat";
 import type {FauxResponseFactory} from "@earendil-works/pi-ai/providers/faux";
-import {startServer} from "@/runtime";
+import {startServer} from "@/server";
 
 const E2E_PROVIDER_ID = "supernova-e2e";
 const E2E_MODEL_ID = "supernova-e2e-model";

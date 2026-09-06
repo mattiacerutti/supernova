@@ -1,4 +1,4 @@
-import {resolve} from "path";
+import {resolve} from "node:path";
 import {defineConfig} from "vite";
 import react, {reactCompilerPreset} from "@vitejs/plugin-react";
 import babel from "@rolldown/plugin-babel";
@@ -9,15 +9,18 @@ export default defineConfig(({mode}) => ({
   plugins: [
     react(),
     babel({
+      cwd: __dirname,
       presets: [reactCompilerPreset()],
     }),
     tailwindcss(),
   ],
   server: {
-    port: 5173,
+    // Keep the UI origin stable so localStorage survives development restarts.
+    host: "127.0.0.1",
+    port: 48371,
     proxy: {
       "/ws": {
-        target: "ws://localhost:4317",
+        target: process.env.SUPERNOVA_SERVER_URL ?? "http://127.0.0.1:4317",
         ws: true,
       },
     },
@@ -31,7 +34,7 @@ export default defineConfig(({mode}) => ({
       ...(mode === "e2e"
         ? [
             {
-              find: /^@\/rpc\/agent-rpc-client$/,
+              find: /^@\/rpc\/transport\/client$/,
               replacement: resolve(__dirname, "tests/e2e/mocks/timeline-rpc-client.ts"),
             },
           ]

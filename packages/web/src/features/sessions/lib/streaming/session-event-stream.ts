@@ -6,10 +6,10 @@ import {Effect, Stream} from "effect";
 import {allProjectSessionsQueryKey, listProjectSessionsQueryKey} from "@/features/projects/hooks/api/use-list-project-sessions";
 import {allSessionsQueryKey, sessionQueryKey} from "@/features/sessions/hooks/api/use-session";
 import {useSessionLiveStore} from "@/features/sessions/stores/session-live-store";
-import type {AgentRpcClientApi, AgentRpcClientFiber} from "@/rpc/agent-rpc-client";
+import type {RpcClient, RpcClientFiber} from "@/rpc/transport/protocol";
 
 let connectionGeneration = 0;
-let fiber: AgentRpcClientFiber | null = null;
+let fiber: RpcClientFiber | null = null;
 let isConnecting = false;
 let reconnectTimer: number | null = null;
 
@@ -63,7 +63,7 @@ function applyEvent(input: {event: SessionStreamEvent; queryClient: QueryClient}
 
 interface ConnectSessionEventsInput {
   readonly queryClient: QueryClient;
-  readonly rpcClient: AgentRpcClientApi;
+  readonly rpcClient: RpcClient;
 }
 
 /** Connects the global session event stream and returns its cleanup. */

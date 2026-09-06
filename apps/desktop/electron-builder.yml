@@ -3,17 +3,18 @@ productName: Supernova
 directories:
   buildResources: resources
 files:
-  - "!**/.vscode/*"
-  - "!src/*"
-  - "!electron.vite.config.{js,ts,mjs,cjs}"
-  - "!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}"
-  - "!{.env,.env.*,.npmrc,pnpm-lock.yaml}"
-  - "!tsconfig.json"
+  - out/**
+  - package.json
 extraResources:
   - from: resources/icons
     to: icons
   - from: ../server/dist
     to: server
+    filter:
+      - cli.js
+      - tools/**
+  - from: ../../packages/web/dist
+    to: web
 win:
   executableName: supernova
   icon: icons/icon.ico

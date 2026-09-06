@@ -3,30 +3,32 @@
   "private": true,
   "version": "0.0.1-beta.11",
   "type": "module",
+  "exports": {
+    "./process": "./src/process.ts"
+  },
   "bin": {
     "supernova-server": "./dist/cli.js"
   },
   "scripts": {
-    "dev": "SUPERNOVA_SERVER_DEV=1 bun --watch src/bootstrap.ts",
+    "dev": "SUPERNOVA_SERVER_DEV=1 bun --watch src/cli.ts",
     "start": "node dist/cli.js",
-    "build": "rm -rf dist && bun build src/cli.ts src/bootstrap.ts --target node --outdir dist && cp -R ../../packages/web/dist dist/client && bun scripts/prepare-tools.ts",
-    "build:e2e": "bun run build && bun build scripts/e2e-server.ts --target node --outfile dist/e2e-server.js",
+    "build": "rm -rf dist && bun build src/cli.ts --target node --outdir dist && bun scripts/prepare-tools.ts",
+    "test": "bun test tests",
+    "build:e2e": "bun run build && bun build tests/support/e2e-server.ts --target node --outfile dist/e2e-server.js",
     "lint": "eslint .",
     "prettier": "prettier --check . --ignore-path ../../.prettierignore",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@effect/platform-node": "4.0.0-beta.60",
-    "@hono/node-server": "^1.19.6",
     "@supernova/agent-runtime": "workspace:*",
     "@supernova/contracts": "workspace:*",
-    "hono": "^4.11.2",
     "commander": "^14.0.2",
     "effect": "4.0.0-beta.60"
   },
   "devDependencies": {
+    "@types/bun": "^1.3.14",
     "@earendil-works/pi-ai": "0.83.0",
-    "@supernova/web": "workspace:*",
     "@types/node": "^22.19.1",
     "eslint": "^10.3.0",
     "typescript": "^5.9.3",

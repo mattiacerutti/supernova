@@ -7,7 +7,7 @@ import {useGeneralSettingsStore} from "@/features/settings/stores/general-settin
 import {useSessionLiveStore} from "@/features/sessions/stores/session-live-store";
 import type {CheckpointNavigationOutcome, SessionLiveStatus} from "@/features/sessions/stores/session-live-store";
 import type {SessionTimelineItem} from "@/features/sessions/types/session-timeline-item";
-import {useAgentRpcClient} from "@/rpc/use-agent-rpc-client";
+import {useRpcClient} from "@/rpc/use-rpc-client";
 
 interface UseSessionTimelineResult {
   /** Pending confirmation for a restore that would discard manual workspace changes. */
@@ -32,7 +32,7 @@ interface UseSessionTimelineInput {
 export function useSessionTimeline(input: UseSessionTimelineInput): UseSessionTimelineResult {
   const {modelReference, sessionId, sessionTurns} = input;
   const queryClient = useQueryClient();
-  const rpcClient = useAgentRpcClient();
+  const rpcClient = useRpcClient();
   const [forceNavigation, setForceNavigation] = useState<(() => void) | null>(null);
 
   /** Runs a navigation command and holds its forced retry when the workspace conflicts, or forces immediately when confirmation is off. */
