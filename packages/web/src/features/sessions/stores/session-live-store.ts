@@ -12,7 +12,14 @@ import type {RpcClient, RpcProtocolClient} from "@/rpc/transport/protocol";
 export type SessionLiveStatus = "checkpoint-navigating" | "compacting" | "idle" | "stopping" | "streaming";
 
 /** Result of a checkpoint navigation command, so callers can confirm and retry a refused restore. */
-export type CheckpointNavigationOutcome = "applied" | "conflict" | "uncaptured" | "failed";
+export type CheckpointNavigationOutcome = "applied" | "failed" | CheckpointNavigationConfirmation;
+
+/** Owns one optimistic navigation until the user cancels or retries the same command with force. */
+export interface CheckpointNavigationConfirmation {
+  readonly reason: "conflict" | "uncaptured";
+  readonly cancel: () => void;
+  readonly confirm: () => Promise<CheckpointNavigationOutcome>;
+}
 
 export interface SessionLiveState {
   readonly error: string | null;
@@ -253,7 +260,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
 
   const runCheckpointNavigation = (
     input: CheckpointNavigationInput & {
-      execute: (rpc: RpcProtocolClient) => ReturnType<RpcProtocolClient["undoCheckpoint"]>;
+      execute: (rpc: RpcProtocolClient, force: boolean | undefined) => ReturnType<RpcProtocolClient["undoCheckpoint"]>;
       optimisticTurnId: (session: Session) => string | undefined;
       title: string;
     }
@@ -272,26 +279,51 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
       return {sessions: {...state.sessions, [sessionId]: {...entry, error: null, status: "checkpoint-navigating"}}};
     });
 
-    return rpcClient
-      .run((rpc) => execute(rpc))
-      .then((): CheckpointNavigationOutcome => "applied")
-      .catch((cause: unknown): CheckpointNavigationOutcome => {
-        const outcome = cause instanceof CheckpointConflictError ? "conflict" : cause instanceof CheckpointUncapturedError ? "uncaptured" : "failed";
-        if (outcome === "failed") showToast(title, errorMessage(cause, "The session checkpoint could not be changed."));
-        if (previousSession) queryClient.setQueryData(sessionQueryKey(sessionId), previousSession);
-        set((state) => {
-          const entry = state.sessions[sessionId];
-          if (!entry) return state;
-          return {sessions: {...state.sessions, [sessionId]: {...entry, status: "idle"}}};
+    const previousRevision = current?.revision ?? 0;
+    const rollback = (): void => {
+      const entry = get().sessions[sessionId];
+      // A newer server event supersedes this optimistic operation.
+      if (!entry || entry.revision !== previousRevision || entry.status !== "checkpoint-navigating") return;
+      if (previousSession) queryClient.setQueryData(sessionQueryKey(sessionId), previousSession);
+      set((state) => ({sessions: {...state.sessions, [sessionId]: {...entry, status: "idle"}}}));
+    };
+
+    const executeNavigation = (force: boolean | undefined): Promise<CheckpointNavigationOutcome> =>
+      rpcClient
+        .run((rpc) => execute(rpc, force))
+        .then((): CheckpointNavigationOutcome => "applied")
+        .catch((cause: unknown): CheckpointNavigationOutcome => {
+          const reason = cause instanceof CheckpointConflictError ? "conflict" : cause instanceof CheckpointUncapturedError ? "uncaptured" : undefined;
+          if (reason && !force) {
+            let pending = true;
+            return {
+              reason,
+              cancel: () => {
+                if (!pending) return;
+                pending = false;
+                rollback();
+              },
+              confirm: () => {
+                if (!pending) return Promise.resolve("failed");
+                pending = false;
+                const entry = get().sessions[sessionId];
+                if (!entry || entry.revision !== previousRevision || entry.status !== "checkpoint-navigating") return Promise.resolve("failed");
+                return executeNavigation(true);
+              },
+            };
+          }
+          showToast(title, errorMessage(cause, "The session checkpoint could not be changed."));
+          rollback();
+          return "failed";
         });
-        return outcome;
-      });
+
+    return executeNavigation(input.force);
   };
 
   const undoCheckpoint = (input: CheckpointNavigationInput): Promise<CheckpointNavigationOutcome> =>
     runCheckpointNavigation({
       ...input,
-      execute: (rpc) => rpc.undoCheckpoint({force: input.force, sessionId: input.sessionId}),
+      execute: (rpc, force) => rpc.undoCheckpoint({force, sessionId: input.sessionId}),
       optimisticTurnId: (session) => session.turns.at(-1)?.id,
       title: "Unable to undo checkpoint",
     });
@@ -299,7 +331,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
   const redoCheckpoint = (input: CheckpointNavigationInput): Promise<CheckpointNavigationOutcome> =>
     runCheckpointNavigation({
       ...input,
-      execute: (rpc) => rpc.redoCheckpoint({force: input.force, sessionId: input.sessionId}),
+      execute: (rpc, force) => rpc.redoCheckpoint({force, sessionId: input.sessionId}),
       optimisticTurnId: (session) => session.undoneTurns[0]?.id,
       title: "Unable to redo checkpoint",
     });
@@ -307,7 +339,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
   const revertToMessage = (input: RevertToMessageInput): Promise<CheckpointNavigationOutcome> =>
     runCheckpointNavigation({
       ...input,
-      execute: (rpc) => rpc.revertToMessage({force: input.force, sessionId: input.sessionId, turnId: input.turnId}),
+      execute: (rpc, force) => rpc.revertToMessage({force, sessionId: input.sessionId, turnId: input.turnId}),
       optimisticTurnId: () => input.turnId,
       title: "Unable to revert message",
     });

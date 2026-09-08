@@ -225,19 +225,23 @@ describe("session live store", () => {
     expect(queryClient.getQueryData(sessionQueryKey("session-1"))).toEqual(previousSession);
   });
 
-  it.each([
-    {outcome: "conflict", error: new CheckpointConflictError({message: "Conflicting changes."})},
-    {outcome: "uncaptured", error: new CheckpointUncapturedError({message: "No current snapshot."})},
-  ])("reports $outcome and applies the navigation when retried with force", async ({outcome, error}) => {
+  it.each(
+    [
+      {outcome: "conflict", error: new CheckpointConflictError({message: "Conflicting changes."})},
+      {outcome: "uncaptured", error: new CheckpointUncapturedError({message: "No current snapshot."})},
+    ].flatMap((item) =>
+      ["confirm", "cancel", "failed retry"].flatMap((decision) => ["undoCheckpoint", "redoCheckpoint", "revertToMessage"].map((operation) => ({...item, decision, operation})))
+    )
+  )("keeps $operation optimistic on $outcome until $decision", async ({outcome, error, decision, operation}) => {
     const forceFlags: Array<boolean | undefined> = [];
     const rpcClient = {
       dispose: vi.fn(async () => undefined),
       fork: vi.fn(),
       run: vi.fn(async (execute) => {
         const protocol = {
-          undoCheckpoint: (payload: {readonly force?: boolean}) => {
+          [operation]: (payload: {readonly force?: boolean}) => {
             forceFlags.push(payload.force);
-            return payload.force ? Effect.void : Effect.fail(error);
+            return payload.force ? (decision === "failed retry" ? Effect.fail(new Error("Restore failed")) : Effect.void) : Effect.fail(error);
           },
         } as unknown as RpcProtocolClient;
         return await Effect.runPromise(execute(protocol));
@@ -245,19 +249,42 @@ describe("session live store", () => {
       runExit: vi.fn(),
     } as RpcClient;
     const queryClient = createQueryClient();
-    const before = session({turns: [turn({id: "kept"}), turn({id: "undone"})]});
+    const before = session({turns: [turn({id: "kept"}), turn({id: "undone"})], undoneTurns: [turn({id: "redoable"}), turn({id: "later"})]});
     queryClient.setQueryData(sessionQueryKey("session-1"), before);
+    const input = {queryClient, rpcClient, sessionId: "session-1", turnId: "undone"};
+    const store = useSessionLiveStore.getState();
+    const refused = await (operation === "undoCheckpoint"
+      ? store.undoCheckpoint(input)
+      : operation === "redoCheckpoint"
+        ? store.redoCheckpoint(input)
+        : store.revertToMessage(input));
 
-    const refused = await useSessionLiveStore.getState().undoCheckpoint({queryClient, rpcClient, sessionId: "session-1"});
+    expect(typeof refused).toBe("object");
+    if (typeof refused === "string") throw new Error("Expected confirmation.");
+    expect(refused.reason).toBe(outcome);
+    const optimisticTurns = operation === "redoCheckpoint" ? ["kept", "undone", "redoable"] : ["kept"];
+    expect(queryClient.getQueryData<Session>(sessionQueryKey("session-1"))?.turns.map((item) => item.id)).toEqual(optimisticTurns);
+    expect(useSessionLiveStore.getState().sessions["session-1"]?.status).toBe("checkpoint-navigating");
+    expect(await store.undoCheckpoint(input)).toBe("failed");
+    store.sendMessage({...input, contentParts, modelReference: model});
+    expect(forceFlags).toEqual([undefined]);
 
-    expect(refused).toBe(outcome);
-    expect(queryClient.getQueryData<Session>(sessionQueryKey("session-1"))?.turns.map((item) => item.id)).toEqual(["kept", "undone"]);
-
-    const forced = await useSessionLiveStore.getState().undoCheckpoint({force: true, queryClient, rpcClient, sessionId: "session-1"});
-
-    expect(forced).toBe("applied");
-    expect(forceFlags).toEqual([undefined, true]);
-    expect(queryClient.getQueryData<Session>(sessionQueryKey("session-1"))?.turns.map((item) => item.id)).toEqual(["kept"]);
+    if (decision === "cancel") {
+      refused.cancel();
+      expect(await refused.confirm()).toBe("failed");
+      expect(forceFlags).toEqual([undefined]);
+    } else {
+      expect(await refused.confirm()).toBe(decision === "confirm" ? "applied" : "failed");
+      refused.cancel();
+      expect(await refused.confirm()).toBe("failed");
+      expect(forceFlags).toEqual([undefined, true]);
+    }
+    if (decision === "confirm") {
+      expect(queryClient.getQueryData<Session>(sessionQueryKey("session-1"))?.turns.map((item) => item.id)).toEqual(optimisticTurns);
+    } else {
+      expect(queryClient.getQueryData(sessionQueryKey("session-1"))).toEqual(before);
+      expect(useSessionLiveStore.getState().sessions["session-1"]?.status).toBe("idle");
+    }
   });
 
   it("optimistically moves turns when navigating checkpoints and rolls back failures", async () => {
