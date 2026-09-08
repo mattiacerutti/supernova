@@ -2,7 +2,7 @@
   "name": "@supernova/desktop",
   "productName": "Supernova",
   "private": true,
-  "version": "0.0.1-beta.11",
+  "version": "0.1.0",
   "homepage": "https://github.com/mattiacerutti/supernova",
   "main": "./out/main/index.js",
   "scripts": {

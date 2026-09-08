@@ -6,6 +6,18 @@ All notable changes to Supernova are documented in this file.
 
 ### Breaking Changes
 
+### Added
+
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.1.0]
+
+### Breaking Changes
+
 - Changed packaged desktop storage to a stable app origin; browser-local preferences and project lists from earlier desktop builds are not carried over. Server-side sessions and credentials are unchanged.
 
 ### Added
@@ -24,8 +36,6 @@ All notable changes to Supernova are documented in this file.
 
 - Fixed the macOS About menu showing the package name instead of Supernova.
 - Fixed local startup port conflicts by assigning available API ports and reporting occupied explicit ports clearly.
-
-### Removed
 
 ## [0.0.1-beta.11]
 
