@@ -12,6 +12,8 @@ All notable changes to Supernova are documented in this file.
 
 - Added 24-hour message times beside copy actions, with user message actions ordered as time, copy, and revert.
 - Added a matrix-style dot animation beside the Thinking label, respecting reduced-motion preferences.
+- Added automatic desktop updates: Supernova checks for new releases in the background and shows an Update pill next to the navigation arrows to download the update, then confirms before restarting into it.
+- Added a nightly release channel published every night at 3AM UTC as a separate Supernova (Nightly) app that installs alongside stable and updates independently.
 
 ### Changed
 

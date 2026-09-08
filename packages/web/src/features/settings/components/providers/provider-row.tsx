@@ -2,8 +2,7 @@ import type {Provider} from "@supernova/contracts/providers/schemas";
 import Button from "@/components/ui/button";
 import {useState} from "react";
 
-const actionChipClassName =
-  "w-auto shrink-0 rounded-xl bg-overlay-pressed px-3 py-1.5 text-xs text-ink hover:bg-overlay-strong hover:text-ink-strong disabled:hover:bg-overlay-pressed disabled:hover:text-ink";
+const actionChipClassName = "w-auto shrink-0 px-3 py-1.5 text-xs";
 
 function getProviderSourceLabel(provider: Provider): string | undefined {
   if (!provider.connected) return undefined;
@@ -60,7 +59,7 @@ export default function ProviderRow(props: ProviderRowProps) {
           </p>
         )}
       </div>
-      <Button className={actionChipClassName} disabled={action.disabled} onClick={action.onClick} size="sm" variant="primary">
+      <Button className={actionChipClassName} disabled={action.disabled} onClick={action.onClick} size="sm" variant="filled">
         {action.label}
       </Button>
     </div>

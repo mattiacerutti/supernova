@@ -157,6 +157,7 @@ export default function Sidebar() {
         >
           <Icon name="settings" size="sm" />
           <span>Settings</span>
+          {window.desktopApi?.nightly && <span className="text-xs text-ink-faint">Nightly</span>}
         </Link>
       </div>
       <OpenProjectDialog onClose={handleCloseProjectDialog} onOpenProject={handleOpenProject} open={openProjectDialogOpen} />

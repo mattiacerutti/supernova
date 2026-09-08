@@ -9,6 +9,8 @@ import type {ServerProcess} from "@supernova/server/process";
 import {DESKTOP_IPC_CHANNELS} from "@/ipc";
 import {resolveRendererFile} from "@/protocol";
 import {syncShellEnvironment} from "@/shell";
+import {isNightlyVersion} from "@/updates/state";
+import {createDesktopUpdater} from "@/updates/updater";
 import {createWindow, WINDOWS_TITLE_BAR_OVERLAY} from "@/window";
 
 declare const SUPERNOVA_IS_DEV: boolean;
@@ -17,11 +19,17 @@ declare const SUPERNOVA_WEB_DIR: string;
 
 const APP_URL = "supernova://app";
 const ICONS_DIR = app.isPackaged ? join(process.resourcesPath, "icons") : join(__dirname, "../../resources/icons");
+const NIGHTLY = isNightlyVersion(app.getVersion());
 
 let mainWindow: BrowserWindow | undefined;
 let server: ServerProcess | undefined;
 let serverUrl: string;
 let quitting = false;
+
+const updater = createDesktopUpdater({
+  nightly: NIGHTLY,
+  onStateChange: (state) => mainWindow?.webContents.send(DESKTOP_IPC_CHANNELS.updateState, state),
+});
 
 function registerDesktopIpc(): void {
   ipcMain.handle(DESKTOP_IPC_CHANNELS.setNativeTheme, (_, theme: unknown) => {
@@ -36,6 +44,19 @@ function registerDesktopIpc(): void {
 
     const error = await shell.openPath(path);
     if (error) throw new Error(error);
+  });
+
+  ipcMain.handle(DESKTOP_IPC_CHANNELS.getUpdateState, () => updater.getState());
+  ipcMain.handle(DESKTOP_IPC_CHANNELS.downloadUpdate, () => updater.download());
+
+  ipcMain.handle(DESKTOP_IPC_CHANNELS.installUpdate, async () => {
+    if (quitting || updater.getState().status !== "downloaded") return;
+
+    // Stop the bundled API before handing control to the installer so quitAndInstall
+    // does not race the before-quit shutdown sequence.
+    quitting = true;
+    await server?.close().catch(() => undefined);
+    updater.quitAndInstall();
   });
 }
 
@@ -104,14 +125,15 @@ async function startDesktop(): Promise<void> {
   }
 
   registerDesktopIpc();
+  updater.start();
   app.on("browser-window-created", (_, window) => optimizer.watchWindowShortcuts(window));
 
   await openWindow();
   app.on("activate", () => void openWindow().catch(failStartup));
 }
 
-app.setName("Supernova");
-app.setPath("userData", join(app.getPath("appData"), SUPERNOVA_IS_DEV ? "supernova-dev" : "supernova"));
+app.setName(NIGHTLY ? "Supernova (Nightly)" : "Supernova");
+app.setPath("userData", join(app.getPath("appData"), SUPERNOVA_IS_DEV ? "supernova-dev" : NIGHTLY ? "supernova-nightly" : "supernova"));
 protocol.registerSchemesAsPrivileged([{scheme: "supernova", privileges: {standard: true, secure: true, supportFetchAPI: true}}]);
 
 if (!SUPERNOVA_IS_DEV && !app.requestSingleInstanceLock()) {

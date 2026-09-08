@@ -1,7 +1,8 @@
 import {join} from "node:path";
 import type {BrowserWindowConstructorOptions} from "electron";
-import {BrowserWindow, shell} from "electron";
+import {app, BrowserWindow, shell} from "electron";
 import windowState from "electron-window-state";
+import {isNightlyVersion} from "@/updates/state";
 
 export const WINDOWS_TITLE_BAR_OVERLAY = {color: "#00000000", height: 48, symbolColor: "#FFFFFFFF"} as const;
 
@@ -39,14 +40,18 @@ export function createWindow({serverUrl, rendererUrl, iconsDir}: CreateWindowOpt
     height: saved.height,
     minWidth: 840,
     minHeight: 620,
-    title: "Supernova",
+    title: app.getName(),
     show: false,
     autoHideMenuBar: true,
     icon: join(iconsDir, process.platform === "win32" ? "icon.ico" : "icon.png"),
     ...chrome,
     webPreferences: {
       preload: join(__dirname, "../preload/index.js"),
-      additionalArguments: [`--supernova-server-url=${serverUrl}`],
+      additionalArguments: [
+        `--supernova-server-url=${serverUrl}`,
+        `--supernova-app-version=${app.getVersion()}`,
+        ...(isNightlyVersion(app.getVersion()) ? ["--supernova-nightly"] : []),
+      ],
       sandbox: false,
       contextIsolation: true,
       nodeIntegration: false,

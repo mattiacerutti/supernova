@@ -1,12 +1,14 @@
 import type {ButtonHTMLAttributes, KeyboardEvent, MouseEventHandler, ReactNode} from "react";
 import {cn} from "@/lib/cn";
 
-export type ButtonVariant = "bare" | "ghost" | "primary";
+export type ButtonVariant = "bare" | "filled" | "ghost" | "primary";
 export type ButtonSize = "lg" | "md" | "none" | "sm";
 export type ButtonShape = "default" | "icon";
 
 const variantClasses: Record<ButtonVariant, string> = {
   bare: "cursor-pointer disabled:cursor-default disabled:opacity-50",
+  filled:
+    "cursor-pointer rounded-xl bg-overlay-pressed text-ink corner-superellipse/1.3 hover:bg-overlay-strong hover:text-ink-strong disabled:cursor-default disabled:opacity-50 disabled:hover:bg-overlay-pressed disabled:hover:text-ink",
   ghost: "cursor-pointer text-ink-muted hover:text-ink-strong disabled:cursor-default disabled:opacity-50 disabled:hover:text-ink-muted [&_svg]:text-current",
   primary:
     "cursor-pointer rounded-xl text-ink corner-superellipse/1.3 hover:bg-overlay-hover hover:text-ink-strong disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-current",

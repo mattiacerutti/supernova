@@ -65,8 +65,17 @@ export default function SidebarLayout(props: SidebarLayoutProps) {
         )}
       >
         {(titlebarActions != null || macEnvironment || appEnvironment === "windows") && (
-          <div className={cn("absolute inset-x-0 top-0 z-10 flex h-12 items-center gap-1 pr-3 [-webkit-app-region:drag]", macEnvironment ? "pl-23" : "pl-3")}>
-            {titlebarActions}
+          <div className="absolute inset-x-0 top-0 z-10 flex h-12 items-center [-webkit-app-region:drag]" style={sidebarStyle}>
+            <div
+              className={cn(
+                "flex h-full items-center gap-1 pr-3",
+                macEnvironment ? "pl-23" : "pl-3",
+                sidebarVisible && "w-(--sidebar-width)",
+                !resizing && "transition-[width] duration-250 ease-in-out"
+              )}
+            >
+              {titlebarActions}
+            </div>
           </div>
         )}
 

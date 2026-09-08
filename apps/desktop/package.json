@@ -19,13 +19,14 @@
     "dev": "electron-vite dev",
     "build": "bun run typecheck && electron-vite build --ignoreConfigWarning",
     "postinstall": "electron-builder install-app-deps",
-    "package:unpack": "bun run generate:icons && electron-builder --dir --publish never",
-    "package:win": "bun run generate:icons && electron-builder --win --publish never",
-    "package:mac": "bun run generate:icons && electron-builder --mac --publish never",
-    "package:linux": "bun run generate:icons && electron-builder --linux --publish never"
+    "package:unpack": "bun run generate:icons && electron-builder --dir --config electron-builder.config.mjs --publish never",
+    "package:win": "bun run generate:icons && electron-builder --win --config electron-builder.config.mjs --publish never",
+    "package:mac": "bun run generate:icons && electron-builder --mac --config electron-builder.config.mjs --publish never",
+    "package:linux": "bun run generate:icons && electron-builder --linux --config electron-builder.config.mjs --publish never"
   },
   "dependencies": {
     "@electron-toolkit/utils": "^4.0.0",
+    "electron-updater": "^6.6.2",
     "electron-window-state": "^5.0.3"
   },
   "devDependencies": {

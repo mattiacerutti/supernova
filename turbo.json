@@ -1,43 +1,140 @@
 {
-  "globalPassThroughEnv": ["SUPERNOVA_*", "VITE_SUPERNOVA_*", "PI_OFFLINE"],
+  "globalPassThroughEnv": [
+    "SUPERNOVA_*",
+    "VITE_SUPERNOVA_*",
+    "PI_OFFLINE"
+  ],
   "tasks": {
     "dev": {
       "cache": false,
       "persistent": true
     },
     "start": {
-      "dependsOn": ["build"],
+      "dependsOn": [
+        "build"
+      ],
       "cache": false,
       "persistent": true
     },
     "build": {
-      "env": ["VITE_SUPERNOVA_SERVER_URL"],
-      "dependsOn": ["^build"],
-      "outputs": ["dist/**", "out/**"]
+      "env": [
+        "VITE_SUPERNOVA_SERVER_URL"
+      ],
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        "dist/**",
+        "out/**"
+      ]
     },
     "package:unpack": {
-      "dependsOn": ["build", "^build"],
-      "passThroughEnv": ["APPLE_API_ISSUER", "APPLE_API_KEY", "APPLE_API_KEY_ID", "CSC_IDENTITY_AUTO_DISCOVERY", "CSC_KEY_PASSWORD", "CSC_LINK"],
+      "dependsOn": [
+        "build",
+        "^build"
+      ],
+      "passThroughEnv": [
+        "APPLE_API_ISSUER",
+        "APPLE_API_KEY",
+        "APPLE_API_KEY_ID",
+        "AZURE_CLIENT_ID",
+        "AZURE_CLIENT_SECRET",
+        "AZURE_TENANT_ID",
+        "AZURE_TRUSTED_SIGNING_ACCOUNT_NAME",
+        "AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME",
+        "AZURE_TRUSTED_SIGNING_ENDPOINT",
+        "AZURE_TRUSTED_SIGNING_PUBLISHER_NAME",
+        "CSC_IDENTITY_AUTO_DISCOVERY",
+        "CSC_KEY_PASSWORD",
+        "CSC_LINK",
+        "WIN_CSC_KEY_PASSWORD",
+        "WIN_CSC_LINK"
+      ],
       "cache": false,
-      "outputs": ["dist/**"]
+      "outputs": [
+        "dist/**"
+      ]
     },
     "package:win": {
-      "dependsOn": ["build", "^build"],
-      "passThroughEnv": ["APPLE_API_ISSUER", "APPLE_API_KEY", "APPLE_API_KEY_ID", "CSC_IDENTITY_AUTO_DISCOVERY", "CSC_KEY_PASSWORD", "CSC_LINK"],
+      "dependsOn": [
+        "build",
+        "^build"
+      ],
+      "passThroughEnv": [
+        "APPLE_API_ISSUER",
+        "APPLE_API_KEY",
+        "APPLE_API_KEY_ID",
+        "AZURE_CLIENT_ID",
+        "AZURE_CLIENT_SECRET",
+        "AZURE_TENANT_ID",
+        "AZURE_TRUSTED_SIGNING_ACCOUNT_NAME",
+        "AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME",
+        "AZURE_TRUSTED_SIGNING_ENDPOINT",
+        "AZURE_TRUSTED_SIGNING_PUBLISHER_NAME",
+        "CSC_IDENTITY_AUTO_DISCOVERY",
+        "CSC_KEY_PASSWORD",
+        "CSC_LINK",
+        "WIN_CSC_KEY_PASSWORD",
+        "WIN_CSC_LINK"
+      ],
       "cache": false,
-      "outputs": ["dist/**"]
+      "outputs": [
+        "dist/**"
+      ]
     },
     "package:mac": {
-      "dependsOn": ["build", "^build"],
-      "passThroughEnv": ["APPLE_API_ISSUER", "APPLE_API_KEY", "APPLE_API_KEY_ID", "CSC_IDENTITY_AUTO_DISCOVERY", "CSC_KEY_PASSWORD", "CSC_LINK"],
+      "dependsOn": [
+        "build",
+        "^build"
+      ],
+      "passThroughEnv": [
+        "APPLE_API_ISSUER",
+        "APPLE_API_KEY",
+        "APPLE_API_KEY_ID",
+        "AZURE_CLIENT_ID",
+        "AZURE_CLIENT_SECRET",
+        "AZURE_TENANT_ID",
+        "AZURE_TRUSTED_SIGNING_ACCOUNT_NAME",
+        "AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME",
+        "AZURE_TRUSTED_SIGNING_ENDPOINT",
+        "AZURE_TRUSTED_SIGNING_PUBLISHER_NAME",
+        "CSC_IDENTITY_AUTO_DISCOVERY",
+        "CSC_KEY_PASSWORD",
+        "CSC_LINK",
+        "WIN_CSC_KEY_PASSWORD",
+        "WIN_CSC_LINK"
+      ],
       "cache": false,
-      "outputs": ["dist/**"]
+      "outputs": [
+        "dist/**"
+      ]
     },
     "package:linux": {
-      "dependsOn": ["build", "^build"],
-      "passThroughEnv": ["APPLE_API_ISSUER", "APPLE_API_KEY", "APPLE_API_KEY_ID", "CSC_IDENTITY_AUTO_DISCOVERY", "CSC_KEY_PASSWORD", "CSC_LINK"],
+      "dependsOn": [
+        "build",
+        "^build"
+      ],
+      "passThroughEnv": [
+        "APPLE_API_ISSUER",
+        "APPLE_API_KEY",
+        "APPLE_API_KEY_ID",
+        "AZURE_CLIENT_ID",
+        "AZURE_CLIENT_SECRET",
+        "AZURE_TENANT_ID",
+        "AZURE_TRUSTED_SIGNING_ACCOUNT_NAME",
+        "AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME",
+        "AZURE_TRUSTED_SIGNING_ENDPOINT",
+        "AZURE_TRUSTED_SIGNING_PUBLISHER_NAME",
+        "CSC_IDENTITY_AUTO_DISCOVERY",
+        "CSC_KEY_PASSWORD",
+        "CSC_LINK",
+        "WIN_CSC_KEY_PASSWORD",
+        "WIN_CSC_LINK"
+      ],
       "cache": false,
-      "outputs": ["dist/**"]
+      "outputs": [
+        "dist/**"
+      ]
     },
     "lint": {
       "outputs": []
@@ -46,11 +143,15 @@
       "outputs": []
     },
     "test": {
-      "dependsOn": ["^typecheck"],
+      "dependsOn": [
+        "^typecheck"
+      ],
       "outputs": []
     },
     "typecheck": {
-      "dependsOn": ["^typecheck"]
+      "dependsOn": [
+        "^typecheck"
+      ]
     }
   }
 }

@@ -3,6 +3,9 @@
   "include": ["**/*.ts"],
   "compilerOptions": {
     "lib": ["ES2023"],
-    "types": ["node"]
+    "types": ["node"],
+    "paths": {
+      "@scripts/*": ["./*"]
+    }
   }
 }

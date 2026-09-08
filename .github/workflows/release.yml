@@ -3,13 +3,21 @@ name: Release
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: Release version, for example 0.1.0 or v0.1.0
+      channel:
+        description: Release channel
         required: true
+        default: stable
+        type: choice
+        options:
+          - stable
+          - nightly
+      version:
+        description: Release version for stable releases, for example 0.1.0 or v0.1.0
+        required: false
         type: string
       prerelease:
-        description: Mark the GitHub release as a prerelease
-        required: true
+        description: Mark a stable GitHub release as a prerelease
+        required: false
         default: false
         type: boolean
       signed:
@@ -17,25 +25,76 @@ on:
         required: true
         default: true
         type: boolean
+  schedule:
+    # Nightly release at 3AM UTC. Runs are skipped when main has no new commits
+    # since the previous nightly tag.
+    - cron: "0 3 * * *"
 
 permissions:
   contents: write
 
 concurrency:
-  group: release-${{ inputs.version }}
+  group: release-${{ (github.event_name == 'schedule' || inputs.channel == 'nightly') && 'nightly' || format('stable-{0}', inputs.version) }}
   cancel-in-progress: false
 
 jobs:
+  check_changes:
+    name: Check for changes since last nightly
+    # Always runs: a skipped job taints every downstream job in the graph, even ones
+    # that override the condition, which would skip the build and release jobs.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      has_changes: ${{ steps.check.outputs.has_changes }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: check
+        name: Compare HEAD to last nightly tag
+        run: |
+          set -euo pipefail
+
+          if [[ "$GITHUB_EVENT_NAME" != "schedule" ]]; then
+            echo "Manually triggered run; the nightly change check does not apply."
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          last_nightly_tag=$(git tag --list 'v*-nightly.*' --sort=-creatordate | head -n 1)
+          if [[ -z "$last_nightly_tag" ]]; then
+            echo "No previous nightly tag found. Proceeding with release."
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          last_nightly_sha=$(git rev-parse "$last_nightly_tag^{commit}")
+          head_sha=$(git rev-parse HEAD)
+
+          if [[ "$last_nightly_sha" == "$head_sha" ]]; then
+            echo "No changes since last nightly release ($last_nightly_tag). Skipping."
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Changes detected since $last_nightly_tag ($last_nightly_sha -> $head_sha). Proceeding."
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+
   preflight:
     name: Preflight
+    needs: check_changes
+    if: needs.check_changes.outputs.has_changes == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
+      channel: ${{ steps.release_meta.outputs.channel }}
       version: ${{ steps.release_meta.outputs.version }}
       tag: ${{ steps.release_meta.outputs.tag }}
       release_name: ${{ steps.release_meta.outputs.release_name }}
       prerelease: ${{ steps.release_meta.outputs.prerelease }}
       make_latest: ${{ steps.release_meta.outputs.make_latest }}
+      signed: ${{ steps.release_meta.outputs.signed }}
       ref: ${{ steps.release_prep.outputs.ref }}
     steps:
       - name: Checkout
@@ -66,31 +125,53 @@ jobs:
         name: Resolve release metadata
         shell: bash
         env:
+          DISPATCH_CHANNEL: ${{ inputs.channel }}
           INPUT_VERSION: ${{ inputs.version }}
           INPUT_PRERELEASE: ${{ inputs.prerelease }}
+          INPUT_SIGNED: ${{ inputs.signed }}
         run: |
           set -euo pipefail
 
-          version="${INPUT_VERSION#v}"
-          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
-            echo "Invalid release version: $INPUT_VERSION" >&2
-            exit 1
-          fi
+          if [[ "$GITHUB_EVENT_NAME" == "schedule" || "${DISPATCH_CHANNEL:-stable}" == "nightly" ]]; then
+            bun scripts/release/resolve-nightly-version.ts
 
-          prerelease="$INPUT_PRERELEASE"
-          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            prerelease=true
-          fi
-
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "tag=v$version" >> "$GITHUB_OUTPUT"
-          echo "release_name=Supernova v$version" >> "$GITHUB_OUTPUT"
-          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
-
-          if [[ "$prerelease" == "true" ]]; then
+            echo "channel=nightly" >> "$GITHUB_OUTPUT"
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
             echo "make_latest=false" >> "$GITHUB_OUTPUT"
           else
-            echo "make_latest=true" >> "$GITHUB_OUTPUT"
+            if [[ -z "$INPUT_VERSION" ]]; then
+              echo "Stable releases require the version input." >&2
+              exit 1
+            fi
+
+            version="${INPUT_VERSION#v}"
+            if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+              echo "Invalid release version: $INPUT_VERSION" >&2
+              exit 1
+            fi
+
+            prerelease="$INPUT_PRERELEASE"
+            if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              prerelease=true
+            fi
+
+            echo "channel=stable" >> "$GITHUB_OUTPUT"
+            echo "version=$version" >> "$GITHUB_OUTPUT"
+            echo "tag=v$version" >> "$GITHUB_OUTPUT"
+            echo "release_name=Supernova v$version" >> "$GITHUB_OUTPUT"
+            echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+
+            if [[ "$prerelease" == "true" ]]; then
+              echo "make_latest=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "make_latest=true" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+          if [[ "$GITHUB_EVENT_NAME" == "schedule" ]]; then
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "signed=$INPUT_SIGNED" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Ensure release does not exist
@@ -115,12 +196,13 @@ jobs:
         name: Prepare release commit
         shell: bash
         env:
+          RELEASE_CHANNEL: ${{ steps.release_meta.outputs.channel }}
           RELEASE_VERSION: ${{ steps.release_meta.outputs.version }}
           RELEASE_TAG: ${{ steps.release_meta.outputs.tag }}
         run: |
           set -euo pipefail
 
-          bun scripts/prepare-release.ts
+          bun scripts/release/prepare.ts
           bun install --lockfile-only --ignore-scripts
 
           if git diff --quiet -- \
@@ -180,18 +262,22 @@ jobs:
           - label: macOS arm64
             runner: macos-26
             package_script: package:desktop:mac
+            platform: mac
             arch: arm64
           - label: macOS x64
             runner: macos-26
             package_script: package:desktop:mac
+            platform: mac
             arch: x64
           - label: Linux x64
             runner: ubuntu-latest
             package_script: package:desktop:linux
+            platform: linux
             arch: x64
           - label: Windows x64
             runner: windows-latest
             package_script: package:desktop:win
+            platform: win
             arch: x64
     steps:
       - name: Checkout
@@ -238,55 +324,143 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Validate desktop signing credentials
-        if: inputs.signed
+      - id: signing
+        name: Resolve desktop signing
         shell: bash
         env:
+          DESKTOP_SIGNED: ${{ needs.preflight.outputs.signed }}
+          BUILD_PLATFORM: ${{ matrix.platform }}
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TRUSTED_SIGNING_ENDPOINT: ${{ secrets.AZURE_TRUSTED_SIGNING_ENDPOINT }}
+          AZURE_TRUSTED_SIGNING_ACCOUNT_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_ACCOUNT_NAME }}
+          AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME }}
         run: |
           set -euo pipefail
 
-          missing=()
-          for name in CSC_LINK CSC_KEY_PASSWORD APPLE_API_KEY APPLE_API_KEY_ID APPLE_API_ISSUER; do
-            if [[ -z "${!name:-}" ]]; then
-              missing+=("$name")
-            fi
-          done
+          has() {
+            for name in "$@"; do
+              if [[ -z "${!name:-}" ]]; then
+                return 1
+              fi
+            done
+          }
 
-          if (( ${#missing[@]} > 0 )); then
-            printf 'Signed desktop release requested, but these secrets are missing: %s\n' "${missing[*]}" >&2
-            exit 1
+          enabled=false
+          if [[ "$DESKTOP_SIGNED" == "true" ]]; then
+            case "$BUILD_PLATFORM" in
+              mac)
+                if has CSC_LINK CSC_KEY_PASSWORD APPLE_API_KEY APPLE_API_KEY_ID APPLE_API_ISSUER; then
+                  enabled=true
+                fi
+                ;;
+              win)
+                if has WIN_CSC_LINK WIN_CSC_KEY_PASSWORD; then
+                  enabled=true
+                elif has AZURE_TENANT_ID AZURE_CLIENT_ID AZURE_CLIENT_SECRET \
+                  AZURE_TRUSTED_SIGNING_ENDPOINT AZURE_TRUSTED_SIGNING_ACCOUNT_NAME \
+                  AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME; then
+                  enabled=true
+                fi
+                ;;
+            esac
           fi
+
+          echo "enabled=$enabled" >> "$GITHUB_OUTPUT"
+
+          if [[ "$enabled" == "true" ]]; then
+            echo "Signing the $BUILD_PLATFORM build."
+          elif [[ "$BUILD_PLATFORM" == "mac" ]]; then
+            # Squirrel.Mac refuses updates from unsigned builds, so macOS users of an
+            # unsigned release must reinstall manually to receive later updates.
+            echo "::warning::Building macOS unsigned. Automatic updates will not work for macOS users."
+          elif [[ "$BUILD_PLATFORM" == "win" ]]; then
+            echo "::warning::Building Windows unsigned. SmartScreen may warn on download; automatic updates still work."
+          fi
+
+      - name: Import macOS signing certificate
+        if: steps.signing.outputs.enabled == 'true' && matrix.platform == 'mac'
+        # electron-builder's own certificate import passes CSC_KEY_PASSWORD to
+        # "security set-key-partition-list -k", which expects the keychain password, so it fails
+        # on macOS 26. Import the certificate here and hand the keychain over through
+        # CSC_KEYCHAIN instead, leaving CSC_LINK unset so electron-builder skips its own import.
+        uses: apple-actions/import-codesign-certs@8f3fb608891dd2244cdab3d69cd68c0d37a7fe93 # v2.0.0
+        with:
+          keychain: build
+          p12-file-base64: ${{ secrets.CSC_LINK }}
+          p12-password: ${{ secrets.CSC_KEY_PASSWORD }}
+
+      - name: Prepare macOS notarization key
+        if: steps.signing.outputs.enabled == 'true' && matrix.platform == 'mac'
+        shell: bash
+        env:
+          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+        run: |
+          set -euo pipefail
+
+          key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID}.p8"
+          printf '%s' "$APPLE_API_KEY_CONTENT" > "$key_path"
+          echo "APPLE_API_KEY_PATH=$key_path" >> "$GITHUB_ENV"
 
       - name: Build desktop artifact
         shell: bash
         env:
-          DESKTOP_SIGNED: ${{ inputs.signed }}
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          DESKTOP_SIGNED: ${{ steps.signing.outputs.enabled }}
+          BUILD_PLATFORM: ${{ matrix.platform }}
+          CSC_KEYCHAIN: build.keychain
+          APPLE_API_KEY: ${{ env.APPLE_API_KEY_PATH }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TRUSTED_SIGNING_ENDPOINT: ${{ secrets.AZURE_TRUSTED_SIGNING_ENDPOINT }}
+          AZURE_TRUSTED_SIGNING_ACCOUNT_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_ACCOUNT_NAME }}
+          AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME }}
+          AZURE_TRUSTED_SIGNING_PUBLISHER_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_PUBLISHER_NAME }}
         run: |
           set -euo pipefail
 
           if [[ "$DESKTOP_SIGNED" != "true" ]]; then
             export CSC_IDENTITY_AUTO_DISCOVERY=false
-            unset CSC_LINK
-            unset CSC_KEY_PASSWORD
-            unset APPLE_API_KEY
-            unset APPLE_API_KEY_ID
-            unset APPLE_API_ISSUER
+            unset CSC_KEYCHAIN
+            unset APPLE_API_KEY APPLE_API_KEY_ID APPLE_API_ISSUER
+            unset WIN_CSC_LINK WIN_CSC_KEY_PASSWORD
+            unset AZURE_TENANT_ID AZURE_CLIENT_ID AZURE_CLIENT_SECRET
+            unset AZURE_TRUSTED_SIGNING_ENDPOINT AZURE_TRUSTED_SIGNING_ACCOUNT_NAME
+            unset AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME AZURE_TRUSTED_SIGNING_PUBLISHER_NAME
+          fi
+
+          # Signing credentials are platform-specific; never expose the other
+          # platform's certificate to electron-builder.
+          if [[ "$BUILD_PLATFORM" != "mac" ]]; then
+            unset CSC_KEYCHAIN APPLE_API_KEY APPLE_API_KEY_ID APPLE_API_ISSUER
+          fi
+          if [[ "$BUILD_PLATFORM" != "win" ]]; then
+            unset WIN_CSC_LINK WIN_CSC_KEY_PASSWORD
+            unset AZURE_TENANT_ID AZURE_CLIENT_ID AZURE_CLIENT_SECRET
+            unset AZURE_TRUSTED_SIGNING_ENDPOINT AZURE_TRUSTED_SIGNING_ACCOUNT_NAME
+            unset AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME AZURE_TRUSTED_SIGNING_PUBLISHER_NAME
           fi
 
           bun run ${{ matrix.package_script }} -- --${{ matrix.arch }}
 
       - name: Collect release assets
         shell: bash
+        env:
+          BUILD_PLATFORM: ${{ matrix.platform }}
+          BUILD_ARCH: ${{ matrix.arch }}
         run: |
           set -euo pipefail
           mkdir -p release-assets
@@ -299,11 +473,22 @@ jobs:
             "apps/desktop/dist/*.deb" \
             "apps/desktop/dist/*.snap" \
             "apps/desktop/dist/*.exe" \
-            "apps/desktop/dist/*.msi"; do
+            "apps/desktop/dist/*.msi" \
+            "apps/desktop/dist/*.blockmap" \
+            "apps/desktop/dist/latest*.yml" \
+            "apps/desktop/dist/nightly*.yml"; do
             for file in $pattern; do
               cp "$file" release-assets/
             done
           done
+
+          # Each macOS arch emits the same channel manifest name. Suffix the x64
+          # copy so the release job can merge both into one mac manifest.
+          if [[ "$BUILD_PLATFORM" == "mac" && "$BUILD_ARCH" != "arm64" ]]; then
+            for manifest in release-assets/*-mac.yml; do
+              mv "$manifest" "${manifest%.yml}-${BUILD_ARCH}.yml"
+            done
+          fi
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -339,6 +524,11 @@ jobs:
           git fetch release-prep/release-prep.bundle HEAD
           git checkout --detach "$RELEASE_REF"
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
       - name: Download release assets
         uses: actions/download-artifact@v4
         with:
@@ -346,14 +536,33 @@ jobs:
           merge-multiple: true
           path: release-assets
 
+      - name: Merge macOS updater manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          for x64_manifest in release-assets/*-mac-x64.yml; do
+            base_manifest="${x64_manifest%-x64.yml}.yml"
+            if [[ -f "$base_manifest" ]]; then
+              bun scripts/release/merge-update-manifests.ts "$base_manifest" "$x64_manifest"
+              rm -f "$x64_manifest"
+            else
+              mv "$x64_manifest" "$base_manifest"
+            fi
+          done
+
       - name: Extract changelog notes
         shell: bash
         env:
+          RELEASE_CHANNEL: ${{ needs.preflight.outputs.channel }}
           RELEASE_VERSION: ${{ needs.preflight.outputs.version }}
         run: |
           set -euo pipefail
 
-          if [[ -f CHANGELOG.md ]]; then
+          if [[ "$RELEASE_CHANNEL" == "nightly" ]]; then
+            bun scripts/release/extract-unreleased-notes.ts > release-notes.md
+          elif [[ -f CHANGELOG.md ]]; then
             awk -v version="$RELEASE_VERSION" '$0 == "## [" version "]" {flag=1; next} /^## \[/ {flag=0} flag' CHANGELOG.md > release-notes.md
           fi
 
@@ -362,6 +571,7 @@ jobs:
           fi
 
       - name: Push release prep commit
+        if: needs.preflight.outputs.channel == 'stable'
         shell: bash
         run: git push origin "HEAD:${GITHUB_REF_NAME}"
 
@@ -369,7 +579,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.preflight.outputs.tag }}
-          target_commitish: ${{ needs.preflight.outputs.ref }}
+          target_commitish: ${{ needs.preflight.outputs.channel == 'stable' && needs.preflight.outputs.ref || github.sha }}
           name: ${{ needs.preflight.outputs.release_name }}
           body_path: release-notes.md
           prerelease: ${{ needs.preflight.outputs.prerelease }}
