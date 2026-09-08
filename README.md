@@ -18,9 +18,6 @@
   <img src="docs/assets/supernova-desktop.png" alt="Supernova desktop workspace" width="100%" />
 </p>
 
-> [!WARNING]
-> Supernova is pre-release software. Expect breaking changes and rough edges.
-
 Supernova is built for developers who want to move quickly without giving up control.
 
 - **Performance first** — A virtualized timeline and streaming UI stay responsive, even in long sessions.
@@ -31,14 +28,7 @@ Supernova is built for developers who want to move quickly without giving up con
 
 ## Install
 
-Download the desktop app for macOS, Linux, or Windows from [GitHub Releases](https://github.com/mattiacerutti/supernova/releases).
-
-> [!NOTE]
-> Current macOS builds are unsigned. If macOS blocks Supernova, move it to Applications and run:
->
-> ```bash
-> xattr -rd com.apple.quarantine /Applications/Supernova.app
-> ```
+Download the latest desktop app for macOS, Linux, or Windows from [GitHub Releases](https://github.com/mattiacerutti/supernova/releases/latest).
 
 ### From source
 
