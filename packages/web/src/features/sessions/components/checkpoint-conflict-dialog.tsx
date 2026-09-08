@@ -7,11 +7,12 @@ interface CheckpointConflictDialogProps {
   readonly onCancel: () => void;
   readonly onConfirm: () => void;
   readonly open: boolean;
+  readonly reason: "conflict" | "uncaptured";
 }
 
 /** Confirms discarding manual workspace changes before retrying checkpoint navigation with force. */
 export default function CheckpointConflictDialog(props: CheckpointConflictDialogProps) {
-  const {onCancel, onConfirm, open} = props;
+  const {onCancel, onConfirm, open, reason} = props;
   const [dontAskAgain, setDontAskAgain] = useState(false);
   const setConfirmCheckpointConflicts = useGeneralSettingsStore((state) => state.setConfirmCheckpointConflicts);
 
@@ -34,7 +35,9 @@ export default function CheckpointConflictDialog(props: CheckpointConflictDialog
     <Dialog className="h-auto" containerClassName="h-auto w-[min(calc(100vw-1rem),26rem)]" onOpenChange={handleOpenChange} open={open} title="Discard changes?">
       <div className="flex flex-col gap-5 pb-5 pt-2">
         <p className="text-sm text-ink-muted">
-          Changes have been made to files since the current checkpoint. Continuing will overwrite those changes, and they cannot be recovered.
+          {reason === "uncaptured"
+            ? "The current checkpoint has no workspace snapshot because checkpoint capture was disabled or failed. Continuing will restore the selected checkpoint and may discard later changes, including manual edits."
+            : "Changes have been made to files since the current checkpoint. Continuing will overwrite those changes, and they cannot be recovered."}
         </p>
         <label className="flex cursor-pointer items-center gap-2 text-sm text-ink-muted">
           <input checked={dontAskAgain} className="size-3.5 cursor-pointer accent-ink" onChange={(event) => setDontAskAgain(event.target.checked)} type="checkbox" />

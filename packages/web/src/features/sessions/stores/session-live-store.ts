@@ -1,5 +1,5 @@
 import type {QueryClient} from "@tanstack/react-query";
-import {CheckpointConflictError} from "@supernova/contracts/session-runtime/procedures";
+import {CheckpointConflictError, CheckpointUncapturedError} from "@supernova/contracts/session-runtime/procedures";
 import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
 import type {ModelReference, Session, SessionContextUsage, Turn, UserMessage, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 import {create} from "zustand";
@@ -12,7 +12,7 @@ import type {RpcClient, RpcProtocolClient} from "@/rpc/transport/protocol";
 export type SessionLiveStatus = "checkpoint-navigating" | "compacting" | "idle" | "stopping" | "streaming";
 
 /** Result of a checkpoint navigation command, so callers can confirm and retry a refused restore. */
-export type CheckpointNavigationOutcome = "applied" | "conflict" | "failed";
+export type CheckpointNavigationOutcome = "applied" | "conflict" | "uncaptured" | "failed";
 
 export interface SessionLiveState {
   readonly error: string | null;
@@ -276,15 +276,15 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
       .run((rpc) => execute(rpc))
       .then((): CheckpointNavigationOutcome => "applied")
       .catch((cause: unknown): CheckpointNavigationOutcome => {
-        const conflict = cause instanceof CheckpointConflictError;
-        if (!conflict) showToast(title, errorMessage(cause, "The session checkpoint could not be changed."));
+        const outcome = cause instanceof CheckpointConflictError ? "conflict" : cause instanceof CheckpointUncapturedError ? "uncaptured" : "failed";
+        if (outcome === "failed") showToast(title, errorMessage(cause, "The session checkpoint could not be changed."));
         if (previousSession) queryClient.setQueryData(sessionQueryKey(sessionId), previousSession);
         set((state) => {
           const entry = state.sessions[sessionId];
           if (!entry) return state;
           return {sessions: {...state.sessions, [sessionId]: {...entry, status: "idle"}}};
         });
-        return conflict ? "conflict" : "failed";
+        return outcome;
       });
   };
 

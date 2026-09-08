@@ -2,7 +2,7 @@ import {Schema} from "effect";
 
 /** Shared fields for every checkpoint navigation command. */
 const CheckpointNavigationFields = {
-  /** Discards conflicting manual changes instead of refusing to restore. */
+  /** Allows discarding conflicting or uncaptured workspace changes. */
   force: Schema.optional(Schema.Boolean),
   sessionId: Schema.String,
 };
@@ -28,7 +28,12 @@ export class CheckpointConflictError extends Schema.TaggedErrorClass<CheckpointC
   message: Schema.String,
 }) {}
 
-export const CheckpointNavigationError = Schema.Union([CheckpointGenericError, CheckpointConflictError]);
+/** Raised when the current boundary has no workspace snapshot. Retry with `force` to restore the captured target. */
+export class CheckpointUncapturedError extends Schema.TaggedErrorClass<CheckpointUncapturedError>()("CheckpointUncapturedError", {
+  message: Schema.String,
+}) {}
+
+export const CheckpointNavigationError = Schema.Union([CheckpointGenericError, CheckpointConflictError, CheckpointUncapturedError]);
 
 export type CheckpointNavigationError = typeof CheckpointNavigationError.Type;
 export type RevertToMessagePayload = typeof RevertToMessagePayload.Type;

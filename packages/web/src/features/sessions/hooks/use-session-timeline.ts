@@ -11,7 +11,7 @@ import {useRpcClient} from "@/rpc/use-rpc-client";
 
 interface UseSessionTimelineResult {
   /** Pending confirmation for a restore that would discard manual workspace changes. */
-  readonly checkpointConflict: {readonly cancel: () => void; readonly confirm: () => void; readonly open: boolean};
+  readonly checkpointConflict: {readonly cancel: () => void; readonly confirm: () => void; readonly open: boolean; readonly reason: "conflict" | "uncaptured"};
   committedTimelineItems: readonly SessionTimelineItem[];
   liveContext: SessionContextUsage | null;
   liveTimelineItems: readonly SessionTimelineItem[];
@@ -33,13 +33,13 @@ export function useSessionTimeline(input: UseSessionTimelineInput): UseSessionTi
   const {modelReference, sessionId, sessionTurns} = input;
   const queryClient = useQueryClient();
   const rpcClient = useRpcClient();
-  const [forceNavigation, setForceNavigation] = useState<(() => void) | null>(null);
+  const [forceNavigation, setForceNavigation] = useState<{readonly retry: () => void; readonly reason: "conflict" | "uncaptured"} | null>(null);
 
   /** Runs a navigation command and holds its forced retry when the workspace conflicts, or forces immediately when confirmation is off. */
   const navigate = async (run: () => Promise<CheckpointNavigationOutcome>, retryWithForce: () => Promise<CheckpointNavigationOutcome>): Promise<void> => {
     const outcome = await run();
-    if (outcome !== "conflict") return;
-    if (useGeneralSettingsStore.getState().confirmCheckpointConflicts) setForceNavigation(() => () => void retryWithForce());
+    if (outcome !== "conflict" && outcome !== "uncaptured") return;
+    if (useGeneralSettingsStore.getState().confirmCheckpointConflicts) setForceNavigation({reason: outcome, retry: () => void retryWithForce()});
     else await retryWithForce();
   };
 
@@ -113,10 +113,11 @@ export function useSessionTimeline(input: UseSessionTimelineInput): UseSessionTi
     checkpointConflict: {
       cancel: () => setForceNavigation(null),
       confirm: () => {
-        forceNavigation?.();
+        forceNavigation?.retry();
         setForceNavigation(null);
       },
       open: forceNavigation !== null,
+      reason: forceNavigation?.reason ?? "conflict",
     },
     streamStatus,
     streamError: sessionState?.error ?? null,

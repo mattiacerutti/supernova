@@ -12,6 +12,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Fixed
 
+- Fixed restoring saved checkpoints after checkpoint capture was disabled or failed, with confirmation before discarding uncaptured workspace changes.
+
 ### Removed
 
 ## [0.1.0]

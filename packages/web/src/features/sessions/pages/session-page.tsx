@@ -217,7 +217,12 @@ function SessionConversation(props: SessionConversationProps) {
         }
         titleActions={<SessionActionsMenu onRename={startRenaming} projectPath={session.projectPath} sessionId={session.id} sessionTitle={session.title} />}
       />
-      <CheckpointConflictDialog onCancel={stream.checkpointConflict.cancel} onConfirm={stream.checkpointConflict.confirm} open={stream.checkpointConflict.open} />
+      <CheckpointConflictDialog
+        onCancel={stream.checkpointConflict.cancel}
+        onConfirm={stream.checkpointConflict.confirm}
+        open={stream.checkpointConflict.open}
+        reason={stream.checkpointConflict.reason}
+      />
     </>
   );
 }

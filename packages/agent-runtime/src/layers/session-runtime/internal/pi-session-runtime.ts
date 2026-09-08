@@ -1,5 +1,6 @@
 import type {AgentSession} from "@earendil-works/pi-coding-agent";
 import {randomUUID} from "node:crypto";
+import {CheckpointUncapturedError} from "@supernova/contracts/session-runtime/procedures";
 import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
 import type {ModelReference, Session} from "@supernova/contracts/sessions/schemas";
 import {Effect} from "effect";
@@ -222,8 +223,8 @@ export class PiSessionRuntime {
   /**
    * Restores the workspace and moves the active Pi session to a checkpoint.
    *
-   * Workspace files are restored only when both boundaries have durable manifests.
-   * An uncovered boundary moves the conversation alone, leaving files as they are.
+   * An uncovered target moves the conversation alone, leaving files as they are.
+   * A captured target with an uncovered current boundary requires explicit force.
    * `force` discards conflicting manual changes; it bypasses no other preflight check.
    */
   public async navigateToCheckpoint(input: {
@@ -237,11 +238,14 @@ export class PiSessionRuntime {
 
     const {current, cursorLeafEntryId, force, target} = input;
     const sessionManager = agentSession.sessionManager;
-    if (isCapturedCheckpoint(target) && isCapturedCheckpoint(current)) {
+    if (isCapturedCheckpoint(target)) {
+      if (!isCapturedCheckpoint(current) && !force) {
+        throw new CheckpointUncapturedError({message: "The current checkpoint has no workspace snapshot. Restoring may discard uncaptured changes."});
+      }
       await this.restoreCheckpoint({
         checkpointId: target.data.checkpointId,
         force,
-        fromCheckpointId: current.data.checkpointId,
+        fromCheckpointId: isCapturedCheckpoint(current) ? current.data.checkpointId : undefined,
         projectRoot: sessionManager.getCwd(),
       });
     }
@@ -306,7 +310,12 @@ export class PiSessionRuntime {
   }
 
   /** Restores only files changed between checkpoints into the worktree, leaving Git HEAD and staged state untouched. */
-  private async restoreCheckpoint(input: {readonly checkpointId: string; readonly force: boolean; readonly fromCheckpointId: string; readonly projectRoot: string}): Promise<void> {
+  private async restoreCheckpoint(input: {
+    readonly checkpointId: string;
+    readonly force: boolean;
+    readonly fromCheckpointId: string | undefined;
+    readonly projectRoot: string;
+  }): Promise<void> {
     try {
       await this.checkpointStore.restore({...input, sessionId: this.sessionId});
     } catch (cause) {

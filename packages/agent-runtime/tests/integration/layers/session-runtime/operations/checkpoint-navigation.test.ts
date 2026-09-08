@@ -1190,10 +1190,10 @@ describe("checkpoint navigation", () => {
     ).toEqual([{text: "one", type: "text"}]);
   });
 
-  it("moves the conversation without restoring files when a checkpoint boundary is not covered", async () => {
+  it("requires confirmation when the current checkpoint capture failed", async () => {
     const projectPath = await createProject();
     tempDirs.push(projectPath);
-    const restoreCalls: Array<{readonly checkpointId: string; readonly fromCheckpointId: string}> = [];
+    const restoreCalls: Array<{readonly checkpointId: string; readonly fromCheckpointId: string | undefined}> = [];
     let captureCount = 0;
     const checkpointStore: CheckpointStoreShape = {
       capture: async () => {
@@ -1214,21 +1214,72 @@ describe("checkpoint navigation", () => {
     await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
     await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
 
-    const undoEvents = await runSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.undoCheckpoint({sessionId: info.id})});
+    const {cause, events} = await runRejectedSessionCommand({pi, run: (sessionRuntime) => sessionRuntime.undoCheckpoint({sessionId: info.id})});
 
-    expect(errorEvents(undoEvents)).toEqual([]);
+    expect(cause).toMatchObject({_tag: "CheckpointUncapturedError"});
+    expect(snapshotEvents(events)).toEqual([]);
     expect(restoreCalls).toEqual([]);
-    expect(
-      snapshotEvents(undoEvents)
-        .at(-1)
-        ?.session.turns.map((turn) => turn.userMessage.contentParts[0])
-    ).toEqual([{text: "one", type: "text"}]);
+  });
+
+  it.each([
+    {name: "direct revert", rewindFirst: false, removeRepository: false},
+    {name: "conversation-only undo followed by revert", rewindFirst: true, removeRepository: false},
+    {name: "missing repository on forced retry", rewindFirst: false, removeRepository: true},
+  ])("handles an older captured turn after disabled capture: $name", async ({rewindFirst, removeRepository}) => {
+    const projectPath = await createGitProject();
+    tempDirs.push(projectPath);
+    const pi = await createPiTestRuntime();
+    runtimes.push(pi);
+    const {info, manager} = pi.createSession(projectPath);
+    pi.faux.setResponses([
+      async () => {
+        await writeFile(join(projectPath, "file.txt"), "one\n");
+        return fauxAssistantMessage("one");
+      },
+      async () => {
+        await writeFile(join(projectPath, "file.txt"), "two\n");
+        await writeFile(join(projectPath, "later.txt"), "uncaptured\n");
+        return fauxAssistantMessage("two");
+      },
+    ]);
+    const firstEvents = await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
+    await runSessionCommand({
+      pi,
+      run: (runtime) => runtime.sendMessage({captureCheckpoints: false, contentParts: [{type: "text", text: "two"}], modelReference: selectedModelReference, sessionId: info.id}),
+    });
+    if (rewindFirst) {
+      await runSessionCommand({pi, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
+      await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("two\n");
+    }
+    const turnId = snapshotEvents(firstEvents).at(-1)!.session.turns[0]!.id;
+    const leafBefore = manager.getLeafId();
+    const rejected = await runRejectedSessionCommand({pi, run: (runtime) => runtime.revertToMessage({sessionId: info.id, turnId})});
+    expect(rejected.cause).toMatchObject({_tag: "CheckpointUncapturedError"});
+    expect(snapshotEvents(rejected.events)).toEqual([]);
+    expect(manager.getLeafId()).toBe(leafBefore);
+    await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("two\n");
+
+    if (removeRepository) {
+      await rm(join(projectPath, ".git"), {recursive: true, force: true});
+      const failed = await runRejectedSessionCommand({pi, run: (runtime) => runtime.revertToMessage({force: true, sessionId: info.id, turnId})});
+      expect(failed.cause).toMatchObject({_tag: "CheckpointGenericError"});
+      expect(snapshotEvents(failed.events)).toEqual([]);
+      expect(manager.getLeafId()).toBe(leafBefore);
+      await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("two\n");
+      await expect(readFile(join(projectPath, "later.txt"), "utf8")).resolves.toBe("uncaptured\n");
+      return;
+    }
+
+    const restored = await runSessionCommand({pi, run: (runtime) => runtime.revertToMessage({force: true, sessionId: info.id, turnId})});
+    expect(snapshotEvents(restored).at(-1)?.session.turns).toEqual([]);
+    await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("initial\n");
+    await expect(readFile(join(projectPath, "later.txt"), "utf8")).rejects.toThrow();
   });
 
   it("restores files when both checkpoint boundaries are covered", async () => {
     const projectPath = await createProject();
     tempDirs.push(projectPath);
-    const restoreCalls: Array<{readonly checkpointId: string; readonly fromCheckpointId: string}> = [];
+    const restoreCalls: Array<{readonly checkpointId: string; readonly fromCheckpointId: string | undefined}> = [];
     const checkpointStore: CheckpointStoreShape = {
       capture: async () => undefined,
       deleteSession: async () => undefined,

@@ -1,5 +1,5 @@
 import type {QueryClient} from "@tanstack/react-query";
-import {CheckpointConflictError} from "@supernova/contracts/session-runtime/procedures";
+import {CheckpointConflictError, CheckpointUncapturedError} from "@supernova/contracts/session-runtime/procedures";
 import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
 import type {ModelReference, Session, SessionContextUsage, Turn, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 import {QueryClient as TanStackQueryClient} from "@tanstack/react-query";
@@ -225,7 +225,10 @@ describe("session live store", () => {
     expect(queryClient.getQueryData(sessionQueryKey("session-1"))).toEqual(previousSession);
   });
 
-  it("reports a conflict outcome and applies the navigation when retried with force", async () => {
+  it.each([
+    {outcome: "conflict", error: new CheckpointConflictError({message: "Conflicting changes."})},
+    {outcome: "uncaptured", error: new CheckpointUncapturedError({message: "No current snapshot."})},
+  ])("reports $outcome and applies the navigation when retried with force", async ({outcome, error}) => {
     const forceFlags: Array<boolean | undefined> = [];
     const rpcClient = {
       dispose: vi.fn(async () => undefined),
@@ -234,7 +237,7 @@ describe("session live store", () => {
         const protocol = {
           undoCheckpoint: (payload: {readonly force?: boolean}) => {
             forceFlags.push(payload.force);
-            return payload.force ? Effect.void : Effect.fail(new CheckpointConflictError({message: "Restoring this checkpoint would discard changes made after it."}));
+            return payload.force ? Effect.void : Effect.fail(error);
           },
         } as unknown as RpcProtocolClient;
         return await Effect.runPromise(execute(protocol));
@@ -247,7 +250,7 @@ describe("session live store", () => {
 
     const refused = await useSessionLiveStore.getState().undoCheckpoint({queryClient, rpcClient, sessionId: "session-1"});
 
-    expect(refused).toBe("conflict");
+    expect(refused).toBe(outcome);
     expect(queryClient.getQueryData<Session>(sessionQueryKey("session-1"))?.turns.map((item) => item.id)).toEqual(["kept", "undone"]);
 
     const forced = await useSessionLiveStore.getState().undoCheckpoint({force: true, queryClient, rpcClient, sessionId: "session-1"});

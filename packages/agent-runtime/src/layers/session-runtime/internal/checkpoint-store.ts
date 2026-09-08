@@ -38,7 +38,8 @@ export interface CheckpointStoreShape {
   readonly restore: (input: {
     readonly checkpointId: string;
     readonly force: boolean;
-    readonly fromCheckpointId: string;
+    /** When absent, force is required and the live workspace is captured as the restore baseline. */
+    readonly fromCheckpointId: string | undefined;
     readonly projectRoot: string;
     readonly sessionId: string;
   }) => Promise<void>;
@@ -155,7 +156,7 @@ class CheckpointStoreImpl implements CheckpointStoreShape {
   public async restore(input: {
     readonly checkpointId: string;
     readonly force: boolean;
-    readonly fromCheckpointId: string;
+    readonly fromCheckpointId: string | undefined;
     readonly projectRoot: string;
     readonly sessionId: string;
   }): Promise<void> {
@@ -209,12 +210,19 @@ class CheckpointStoreImpl implements CheckpointStoreShape {
   /** Reconciles manifests and applies the workspace restore. Requires the project lock. */
   private async restoreProject(
     projectRoot: string,
-    input: {readonly checkpointId: string; readonly force: boolean; readonly fromCheckpointId: string; readonly sessionId: string}
+    input: {readonly checkpointId: string; readonly force: boolean; readonly fromCheckpointId: string | undefined; readonly sessionId: string}
   ): Promise<void> {
+    const fromCheckpointId = input.fromCheckpointId ?? randomUUID();
+    if (input.fromCheckpointId === undefined) {
+      if (!input.force) throw new Error("Restoring without a current checkpoint requires force.");
+      // Keep a durable safety snapshot and reuse the normal diff, preflight and rollback pipeline.
+      // Capture and restore share the project lock so other checkpoint operations cannot interleave.
+      await this.captureProject(projectRoot, {checkpointId: fromCheckpointId, sessionId: input.sessionId});
+    }
     const projectStorage = projectStorageRoot(this.storageRoot, projectRoot);
     const repositoriesRoot = join(projectStorage, "repositories");
     const [currentManifest, targetManifest, repositories] = await Promise.all([
-      loadManifest(projectStorage, {checkpointId: input.fromCheckpointId, projectRoot, sessionId: input.sessionId}),
+      loadManifest(projectStorage, {checkpointId: fromCheckpointId, projectRoot, sessionId: input.sessionId}),
       loadManifest(projectStorage, {checkpointId: input.checkpointId, projectRoot, sessionId: input.sessionId}),
       discoverRepositories(projectRoot, repositoriesRoot),
     ]);
