@@ -15,6 +15,7 @@ export function installTimelineVisualProbe(): void {
     samples.push({
       bottomDistance: viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop,
       clientHeight: viewport.clientHeight,
+      lastRowIndex: Math.max(-1, ...[...viewport.querySelectorAll<HTMLElement>("[data-index]")].map((row) => Number(row.dataset.index))),
       lineCount: window.__supernovaTimelineMock?.getState().lineCount ?? 0,
       pathname: window.location.pathname,
       scrollButtonVisible: document.querySelector('[data-slot="message-scroller-button"]') !== null,

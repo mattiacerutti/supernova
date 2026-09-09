@@ -53,6 +53,22 @@ function assertAnimatedScroll(input: {readonly end: number; readonly label: stri
   ).toBeUndefined();
 }
 
+/** The sent message must paint at the bottom, then move up in one continuous motion: never a frame ahead at the anchored position, never a frame back. */
+function assertContinuousAnchorScroll(input: {readonly end: number; readonly rowIndexBeforeSend: number; readonly samples: readonly TimelineVisualSample[]}): void {
+  const {end, rowIndexBeforeSend, samples} = input;
+  const frames = visibleSamples(samples, TIMELINE_SESSION_ID).filter((sample) => sample.source === "frame" && sample.lastRowIndex > rowIndexBeforeSend);
+  const firstFrame = frames[0];
+  const settledIndex = frames.findIndex((sample) => sample.scrollTop >= end - 1);
+  const movingFrames = frames.slice(0, settledIndex < 0 ? frames.length : settledIndex + 1);
+  const backwardJump = movingFrames.find((sample, index) => index > 0 && sample.scrollTop < movingFrames[index - 1]!.scrollTop - 1);
+  const forwardJump = movingFrames.find((sample, index) => index > 0 && sample.scrollTop - movingFrames[index - 1]!.scrollTop > (end - firstFrame!.scrollTop) / 3);
+
+  expect(firstFrame, "the sent message should be painted before the anchored position is reached").toBeDefined();
+  expect(end - firstFrame!.scrollTop, "the sent message should first paint at the bottom rather than already anchored at the top").toBeGreaterThanOrEqual(DETACHED_DISTANCE_PX);
+  expect(backwardJump, `the anchor scroll moved back down mid-transition: ${JSON.stringify(backwardJump)}`).toBeUndefined();
+  expect(forwardJump, `the anchor scroll jumped ahead mid-transition: ${JSON.stringify(forwardJump)}`).toBeUndefined();
+}
+
 async function waitForPrimaryFrames(input: {readonly count?: number; readonly timeline: TimelineDriver}): Promise<readonly TimelineVisualSample[]> {
   const {count = 4, timeline} = input;
   await expect
@@ -135,6 +151,7 @@ test.describe("session timeline visual stability", () => {
   test("sending a message scrolls it to the top of the viewport and expands the response below it", async ({timeline}) => {
     await timeline.expectAtBottom();
     const scrollTopBeforeSend = await timeline.scrollTop();
+    const rowIndexBeforeSend = await timeline.lastRowIndex();
     await timeline.resetVisualProbe();
     const messageText = "Anchor this message at the top of the timeline";
     await timeline.sendMessage(messageText);
@@ -145,16 +162,30 @@ test.describe("session timeline visual stability", () => {
     await timeline.expectAtBottom();
 
     const anchoredScrollTop = await timeline.scrollTop();
-    assertAnimatedScroll({
-      end: anchoredScrollTop,
-      label: "the scroll that pins the message at the top",
-      samples: await timeline.visualSamples(),
-      start: scrollTopBeforeSend,
-    });
+    const samples = await timeline.visualSamples();
+    assertAnimatedScroll({end: anchoredScrollTop, label: "the scroll that pins the message at the top", samples, start: scrollTopBeforeSend});
+    assertContinuousAnchorScroll({end: anchoredScrollTop, rowIndexBeforeSend, samples});
 
     await timeline.waitForLineGrowth(5);
     expect(await timeline.messageViewportTop(messageText), "streamed rows should expand below the anchored message without scrolling").toBeLessThanOrEqual(30);
     await timeline.expectAtBottom();
+  });
+
+  test("a response streaming during the anchor scroll neither interrupts it nor loses the bottom afterwards", async ({timeline}) => {
+    await timeline.expectAtBottom();
+    const rowIndexBeforeSend = await timeline.lastRowIndex();
+    await timeline.resetVisualProbe();
+    const messageText = "Anchor this message while the response races in";
+    await timeline.sendMessage(messageText, {awaitBottom: false});
+    await timeline.waitForLineGrowth(60);
+
+    await expect.poll(() => timeline.messageViewportTop(messageText), {message: "the sent message should settle near the viewport top"}).toBeLessThanOrEqual(30);
+    const anchoredScrollTop = await timeline.scrollTop();
+    assertContinuousAnchorScroll({end: anchoredScrollTop, rowIndexBeforeSend, samples: await timeline.visualSamples()});
+
+    expect(await timeline.fakeSpaceHeight(), "the response should have outgrown the fake space").toBe(0);
+    await timeline.expectAtBottom();
+    assertBottomLocked({samples: await timeline.recordStreamGrowth(30)});
   });
 
   test("the fake space below an anchored message is lossy when scrolling up", async ({timeline}) => {
