@@ -1,4 +1,4 @@
-import type {ModelDetails, ModelReference, Session, SessionSummary, Turn, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {ModelDetails, ModelReference, Session, SessionSummary, Turn, TurnEvent, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 
 export const TIMELINE_PROJECT_PATH = "/tmp/supernova-timeline-e2e";
 export const TIMELINE_PROJECT_NAME = "supernova-timeline-e2e";
@@ -87,30 +87,45 @@ export function timelineStreamLine(index: number): string {
   return `Stress stream line ${String(index).padStart(6, "0")} fills the viewport immediately.`;
 }
 
-/** Builds one realistic turn whose assistant response grows by complete lines. */
+/**
+ * Builds one realistic turn whose assistant response grows by complete lines.
+ * Each reasoning break is a line count after which a collapsed reasoning step
+ * interrupts the response, so later lines flow into a fresh assistant event.
+ */
 export function timelineStreamTurn(input: {
   readonly contentParts: readonly UserMessageContentPart[];
   readonly lineCount: number;
+  readonly reasoningBreaks?: readonly number[];
   readonly status: "completed" | "streaming";
 }): Turn {
-  const lines = Array.from({length: input.lineCount}, (_, index) => timelineStreamLine(index + 1));
-  const completedAt = input.status === "completed" ? timestamp(100_000 + input.lineCount) : undefined;
-  const content = input.lineCount > 0 ? ["Extreme-speed streamed response:", ...lines].join("\n") : "";
+  const {contentParts, lineCount, reasoningBreaks = [], status} = input;
+  const completedAt = status === "completed" ? timestamp(100_000 + lineCount) : undefined;
+  const segmentStarts = [0, ...reasoningBreaks.filter((lineIndex) => lineIndex > 0 && lineIndex < lineCount)];
+  const events: TurnEvent[] = [];
+
+  segmentStarts.forEach((segmentStart, segmentIndex) => {
+    const segmentEnd = segmentStarts[segmentIndex + 1] ?? lineCount;
+    const lines = Array.from({length: segmentEnd - segmentStart}, (_, index) => timelineStreamLine(segmentStart + index + 1));
+    const eventTimestamp = timestamp(90_000 + segmentStart);
+
+    if (reasoningBreaks.includes(segmentStart)) {
+      events.push({content: `Reasoning step ${segmentIndex} before continuing.`, id: `timeline-stream-reasoning-${segmentIndex}`, timestamp: eventTimestamp, type: "reasoning"});
+    }
+    events.push({
+      content: lines.length > 0 ? ["Extreme-speed streamed response:", ...lines].join("\n") : "",
+      id: segmentIndex === 0 ? "timeline-stream-assistant" : `timeline-stream-assistant-${segmentIndex}`,
+      timestamp: eventTimestamp,
+      type: "assistant",
+    });
+  });
 
   return {
     completedAt,
-    events: [
-      {
-        content,
-        id: "timeline-stream-assistant",
-        timestamp: timestamp(90_000),
-        type: "assistant",
-      },
-    ],
+    events,
     id: "timeline-stream-turn",
     modelReference: timelineModel,
     startedAt: timestamp(80_000),
-    status: input.status,
-    userMessage: {contentParts: input.contentParts, id: "timeline-stream-user", timestamp: timestamp(80_000)},
+    status,
+    userMessage: {contentParts, id: "timeline-stream-user", timestamp: timestamp(80_000)},
   };
 }

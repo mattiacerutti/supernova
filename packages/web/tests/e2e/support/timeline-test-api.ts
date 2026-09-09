@@ -6,6 +6,7 @@ export interface TimelineMockState {
 }
 
 export interface TimelineMockController {
+  readonly breakForReasoning: () => void;
   readonly completeStream: () => void;
   readonly emitLines: (lineCount: number) => void;
   readonly getState: () => TimelineMockState;

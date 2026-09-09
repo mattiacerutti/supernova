@@ -149,6 +149,14 @@ export class TimelineDriver {
     await this.waitForSettledStatus("completed");
   }
 
+  /** Interrupts the response with a collapsed reasoning step so the next lines start a new assistant message. */
+  public async breakForReasoning(): Promise<void> {
+    await this.page.evaluate(() => {
+      if (!window.__supernovaTimelineMock) throw new Error("Timeline RPC mock is not installed");
+      window.__supernovaTimelineMock.breakForReasoning();
+    });
+  }
+
   /** Waits for a relative amount of mock stream growth rather than elapsed time. */
   public async waitForLineGrowth(additionalLines: number): Promise<void> {
     const initialLineCount = (await this.mockState()).lineCount;
@@ -241,6 +249,11 @@ export class TimelineDriver {
 
       return target.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
     }, text);
+  }
+
+  /** Counts the rendered assistant messages produced by the mock stream. */
+  public async streamedResponseCount(): Promise<number> {
+    return await this.page.locator(".session-markdown", {hasText: "Extreme-speed streamed response:"}).count();
   }
 
   /** Reads the current height of the lossy fake space below an anchored message. */

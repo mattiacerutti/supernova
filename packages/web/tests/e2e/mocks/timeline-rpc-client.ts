@@ -1,5 +1,5 @@
 import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
-import type {Session, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {Session, Turn, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 import {Effect, Exit, Fiber, PubSub, Stream} from "effect";
 import type {RpcClient, RpcClientFiber, RpcExecute, RpcProtocolClient, RpcRunOptions} from "@/rpc/transport/protocol";
 import {
@@ -25,6 +25,7 @@ class TimelineRpcClient implements RpcClient {
   private activeSessionId = TIMELINE_SESSION_ID;
   private lineCount = 0;
   private publishQueue: Promise<void> = Promise.resolve();
+  private reasoningBreaks: number[] = [];
   private revision = 0;
   private status: TimelineMockState["status"] = "idle";
   private streamFrame: number | null = null;
@@ -32,6 +33,7 @@ class TimelineRpcClient implements RpcClient {
 
   public constructor() {
     window.__supernovaTimelineMock = {
+      breakForReasoning: () => this.breakForReasoning(),
       completeStream: () => this.settleStream("completed"),
       emitLines: (lineCount) => this.emitLines(lineCount),
       getState: () => {
@@ -171,6 +173,7 @@ class TimelineRpcClient implements RpcClient {
     this.activeContentParts = contentParts;
     this.activeSessionId = sessionId;
     this.lineCount = 0;
+    this.reasoningBreaks = [];
     this.streamTargetLineCount = 0;
     this.status = "streaming";
     this.publish({revision: this.nextRevision(), sessionId, type: "session.agent.started"});
@@ -178,9 +181,20 @@ class TimelineRpcClient implements RpcClient {
       revision: this.nextRevision(),
       sessionId,
       context: this.session(sessionId).context,
-      turn: timelineStreamTurn({contentParts, lineCount: this.lineCount, status: "streaming"}),
+      turn: this.streamTurn(contentParts, this.lineCount, "streaming"),
       type: "session.turn",
     });
+  }
+
+  /** Interrupts the response at the current line so later lines stream into a new assistant event after a reasoning step. */
+  private breakForReasoning(): void {
+    if (this.status !== "streaming" || this.reasoningBreaks.includes(this.lineCount)) return;
+
+    this.reasoningBreaks.push(this.lineCount);
+  }
+
+  private streamTurn(contentParts: readonly UserMessageContentPart[], lineCount: number, status: "completed" | "streaming"): Turn {
+    return timelineStreamTurn({contentParts, lineCount, reasoningBreaks: this.reasoningBreaks, status});
   }
 
   /** Adds a finite burst at two complete lines per frame, keeping user gestures deterministic between bursts. */
@@ -199,7 +213,7 @@ class TimelineRpcClient implements RpcClient {
         revision: this.nextRevision(),
         sessionId: this.activeSessionId,
         context: this.session(this.activeSessionId).context,
-        turn: timelineStreamTurn({contentParts, lineCount: this.lineCount, status: "streaming"}),
+        turn: this.streamTurn(contentParts, this.lineCount, "streaming"),
         type: "session.turn",
       });
 
@@ -227,7 +241,7 @@ class TimelineRpcClient implements RpcClient {
     this.stopPump();
     this.status = status;
     const contentParts = this.activeContentParts ?? [{text: "Timeline test prompt", type: "text"}];
-    const completedTurn = timelineStreamTurn({contentParts, lineCount: Math.max(this.lineCount, 1), status: "completed"});
+    const completedTurn = this.streamTurn(contentParts, Math.max(this.lineCount, 1), "completed");
     const previous = this.session(this.activeSessionId);
     const session = {...previous, turns: [...previous.turns, completedTurn], updatedAt: new Date().toISOString()};
     this.sessions.set(session.id, session);
