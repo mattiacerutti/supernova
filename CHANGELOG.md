@@ -15,6 +15,7 @@ All notable changes to Supernova are documented in this file.
 - Fixed restoring saved checkpoints after checkpoint capture was disabled or failed, with confirmation before discarding uncaptured workspace changes.
 - Fixed checkpoint confirmation text flashing to a different warning during the closing animation.
 - Fixed optimistic checkpoint navigation flashing back before confirmation; the timeline now stays in place unless navigation is canceled or fails.
+- Fixed the timeline briefly dropping below the bottom when a response with several messages finishes while following.
 
 ### Removed
 

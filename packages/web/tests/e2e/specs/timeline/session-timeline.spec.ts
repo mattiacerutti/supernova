@@ -424,6 +424,24 @@ test.describe("session timeline visual stability", () => {
     assertBottomLocked({samples: await waitForPrimaryFrames({timeline})});
   });
 
+  test("a multi-step response completes while following and stays at the bottom in the same frame", async ({timeline}) => {
+    await timeline.sendMessage();
+    await timeline.breakForReasoning();
+    await timeline.waitForLineGrowth(12);
+    await timeline.breakForReasoning();
+    await timeline.waitForLineGrowth(8);
+    await expect.poll(() => timeline.streamedResponseCount(), {message: "the response should be split into two assistant messages"}).toBe(2);
+    await timeline.detachSlightly();
+    await timeline.manuallyScrollToBottom();
+    expect(await timeline.fakeSpaceHeight(), "the timeline should be attached to real content").toBe(0);
+    await timeline.resetVisualProbe();
+
+    await timeline.completeMessage();
+    await timeline.expectAtBottom();
+
+    assertBottomLocked({samples: await waitForPrimaryFrames({timeline})});
+  });
+
   test("message aborts while following and stays at the bottom", async ({timeline}) => {
     await timeline.sendMessage();
     await timeline.waitForLineGrowth(60);
