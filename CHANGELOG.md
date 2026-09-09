@@ -16,6 +16,7 @@ All notable changes to Supernova are documented in this file.
 - Fixed checkpoint confirmation text flashing to a different warning during the closing animation.
 - Fixed optimistic checkpoint navigation flashing back before confirmation; the timeline now stays in place unless navigation is canceled or fails.
 - Fixed the timeline briefly dropping below the bottom when a response with several messages finishes while following.
+- Fixed a sent message flashing at the top of the timeline, or the scroll that pins it there stuttering, when the response starts arriving during that scroll. The timeline also keeps following when a fast response outgrows the space below the pinned message.
 
 ### Removed
 

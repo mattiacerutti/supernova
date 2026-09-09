@@ -15,6 +15,7 @@ export interface TimelineMockController {
 export interface TimelineVisualSample {
   readonly bottomDistance: number;
   readonly clientHeight: number;
+  readonly lastRowIndex: number;
   readonly lineCount: number;
   readonly pathname: string;
   readonly scrollButtonVisible: boolean;

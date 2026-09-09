@@ -2,8 +2,8 @@ import {useMessageScroller, useMessageScrollerScrollable} from "@shadcn/react/me
 import {defaultRangeExtractor, elementScroll, useVirtualizer} from "@tanstack/react-virtual";
 import type {VirtualItem} from "@tanstack/react-virtual";
 import {animate, AnimatePresence, motion, useReducedMotion} from "framer-motion";
-import {useLayoutEffect, useRef, useState} from "react";
-import type {ReactNode, UIEvent} from "react";
+import {useCallback, useLayoutEffect, useRef, useState} from "react";
+import type {UIEvent} from "react";
 import {Marker, MarkerContent} from "@/components/ui/marker";
 import MatrixLoader from "@/components/ui/matrix-loader";
 import {MessageScroller, MessageScrollerButton, MessageScrollerContent, MessageScrollerProvider, MessageScrollerViewport} from "@/components/ui/message-scroller";
@@ -71,21 +71,6 @@ function buildTimelineRows(input: {
   return rows;
 }
 
-interface SessionTimelineProviderProps {
-  readonly children: ReactNode;
-}
-
-/** Provides shared timeline commands to the conversation and transcript. */
-export function SessionTimelineProvider(props: SessionTimelineProviderProps) {
-  const {children} = props;
-
-  return (
-    <MessageScrollerProvider autoScroll defaultScrollPosition="end" scrollEdgeThreshold={0}>
-      {children}
-    </MessageScrollerProvider>
-  );
-}
-
 interface SessionTimelineProps {
   readonly bottomOverlayHeight?: number;
   readonly compacting: boolean;
@@ -97,8 +82,12 @@ interface SessionTimelineProps {
   readonly streamError: string | null;
 }
 
-export default function SessionTimeline(props: SessionTimelineProps) {
-  const {bottomOverlayHeight = 0, compacting, isStreaming, items, liveItems, onRevertToMessage, sessionId, streamError} = props;
+interface SessionTimelineViewportProps extends SessionTimelineProps {
+  readonly onAnchorScrollingChange: (anchorScrolling: boolean) => void;
+}
+
+function SessionTimelineViewport(props: SessionTimelineViewportProps) {
+  const {bottomOverlayHeight = 0, compacting, isStreaming, items, liveItems, onAnchorScrollingChange, onRevertToMessage, sessionId, streamError} = props;
   const {scrollToEnd} = useMessageScroller();
   const {end: canScrollToEnd} = useMessageScrollerScrollable();
   const cachedMeasurementsRef = useRef(timelineCache.get(sessionId));
@@ -140,11 +129,18 @@ export default function SessionTimeline(props: SessionTimelineProps) {
     if (anchorSpaceRef.current) anchorSpaceRef.current.style.height = `${height}px`;
   };
 
+  // Clearing the target first makes the animation's final sample a no-op.
   const stopAnchorScroll = (): void => {
+    anchorScrollTargetRef.current = null;
     anchorScrollAnimationRef.current?.stop();
     anchorScrollAnimationRef.current = null;
-    anchorScrollTargetRef.current = null;
   };
+
+  // Ends the anchor transition and hands the viewport back to auto-follow.
+  const releaseAnchorScroll = useCallback((): void => {
+    stopAnchorScroll();
+    onAnchorScrollingChange(false);
+  }, [onAnchorScrollingChange]);
 
   // Anchor space is lossy: growth and upward scrolling only consume it. When
   // real content shrinks, replace that height to prevent scrollTop clamping.
@@ -166,6 +162,9 @@ export default function SessionTimeline(props: SessionTimelineProps) {
     const requiredHeight = (anchorScrollTarget ?? viewport.scrollTop) + viewport.clientHeight - realContentHeight;
     const nextHeight = Math.max(0, Math.min(currentHeight, requiredHeight));
     if (nextHeight !== currentHeight) setAnchorSpaceHeight(nextHeight);
+    // Once the response has used up the space, the scroll end moves with it and
+    // the anchor transition no longer has a fixed destination to ease toward.
+    if (nextHeight === 0) releaseAnchorScroll();
   };
 
   // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual owns mutable scroll state by design.
@@ -234,45 +233,51 @@ export default function SessionTimeline(props: SessionTimelineProps) {
     previousHasLiveUserRowRef.current = hasLiveUserRow;
     if (!hasLiveUserRow || hadLiveUserRow) return;
 
-    // The message paints at the bottom on this frame, so anchoring waits for
-    // the next one: the scroll then eases up from where the message appeared.
-    const frame = window.requestAnimationFrame(() => {
-      const viewport = viewportRef.current;
-      const rowElement = viewport?.querySelector<HTMLElement>(`[data-index="${liveUserRowIndex}"]`);
-      if (!viewport || !rowElement) return;
+    const viewport = viewportRef.current;
+    const rowElement = viewport?.querySelector<HTMLElement>(`[data-index="${liveUserRowIndex}"]`);
+    if (!viewport || !rowElement) return;
 
-      stopAnchorScroll();
-      const rowOffset = rowElement.getBoundingClientRect().top - viewport.getBoundingClientRect().top + viewport.scrollTop;
-      const anchorOffset = Math.max(0, rowOffset - TIMELINE_ANCHOR_TOP_MARGIN_PX);
-      const realContentHeight = viewport.scrollHeight - anchorSpaceHeightRef.current;
-      realContentHeightRef.current = realContentHeight;
-      setScrollButtonVisible(false);
-      setAnchorSpaceHeight(Math.max(0, anchorOffset + viewport.clientHeight - realContentHeight));
+    // A followed timeline shows the message at the bottom first, like any
+    // appended row, so the scroll eases up from where the message appeared.
+    stopAnchorScroll();
+    if (!canScrollToEnd) scrollToEnd({behavior: "auto"});
+    const rowOffset = rowElement.getBoundingClientRect().top - viewport.getBoundingClientRect().top + viewport.scrollTop;
+    const anchorOffset = Math.max(0, rowOffset - TIMELINE_ANCHOR_TOP_MARGIN_PX);
+    const realContentHeight = viewport.scrollHeight - anchorSpaceHeightRef.current;
+    realContentHeightRef.current = realContentHeight;
+    setScrollButtonVisible(false);
+    setAnchorSpaceHeight(Math.max(0, anchorOffset + viewport.clientHeight - realContentHeight));
 
-      const anchorScrollTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
-      if (anchorScrollTop <= viewport.scrollTop) return;
+    const anchorScrollTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+    if (anchorScrollTop <= viewport.scrollTop) return;
+    if (shouldReduceMotion) {
+      viewport.scrollTop = anchorScrollTop;
+      return;
+    }
 
-      anchorScrollTargetRef.current = anchorScrollTop;
-      if (shouldReduceMotion) {
-        viewport.scrollTop = anchorScrollTop;
-        stopAnchorScroll();
-        return;
-      }
+    // The message scroller's auto-follow reacts to the new anchor space one
+    // frame later and would jump straight to the anchored position, so it hands
+    // the viewport to this transition until the scroll settles or the user
+    // takes over. Claiming here, during commit, lands before that frame.
+    anchorScrollTargetRef.current = anchorScrollTop;
+    onAnchorScrollingChange(true);
+
+    // The message paints at the bottom on this frame. Starting the animation on
+    // the next one keeps its clock aligned with painted frames, so a slow commit
+    // cannot make the first visible step skip ahead.
+    window.requestAnimationFrame(() => {
+      if (anchorScrollTargetRef.current !== anchorScrollTop) return;
 
       anchorScrollAnimationRef.current = animate(viewport.scrollTop, anchorScrollTop, {
         duration: TIMELINE_ANCHOR_SCROLL_DURATION_MS / 1_000,
         ease: [0.16, 1, 0.3, 1],
-        onComplete: () => {
-          anchorScrollAnimationRef.current = null;
-          anchorScrollTargetRef.current = null;
-        },
+        onComplete: releaseAnchorScroll,
         onUpdate: (scrollTop) => {
-          viewport.scrollTop = scrollTop;
+          if (anchorScrollTargetRef.current !== null) viewport.scrollTop = scrollTop;
         },
       });
     });
-    return () => window.cancelAnimationFrame(frame);
-  }, [hasLiveUserRow, liveUserRowIndex, shouldReduceMotion]);
+  }, [canScrollToEnd, hasLiveUserRow, liveUserRowIndex, onAnchorScrollingChange, releaseAnchorScroll, scrollToEnd, shouldReduceMotion]);
 
   // Anchor space only exists so a sent message can hold the viewport top while
   // its response grows below. When a revert removes turns that purpose is gone,
@@ -282,11 +287,11 @@ export default function SessionTimeline(props: SessionTimelineProps) {
     previousTurnCountRef.current = turnCount;
     if (!turnsReverted || anchorSpaceHeightRef.current === 0) return;
 
-    stopAnchorScroll();
+    releaseAnchorScroll();
     setAnchorSpaceHeight(0);
     realContentHeightRef.current = null;
     scrollToEnd({behavior: "auto"});
-  }, [scrollToEnd, turnCount]);
+  }, [releaseAnchorScroll, scrollToEnd, turnCount]);
 
   // Consume anchor space before auto-follow can move the viewport.
   useLayoutEffect(() => {
@@ -379,8 +384,8 @@ export default function SessionTimeline(props: SessionTimelineProps) {
             aria-label="Session timeline"
             className={shouldSetInitialPositionRef.current ? "invisible" : undefined}
             onScroll={handleViewportScroll}
-            onTouchMove={stopAnchorScroll}
-            onWheel={stopAnchorScroll}
+            onTouchMove={releaseAnchorScroll}
+            onWheel={releaseAnchorScroll}
             preserveScrollOnPrepend={false}
             ref={viewportRef}
           >
@@ -446,5 +451,20 @@ export default function SessionTimeline(props: SessionTimelineProps) {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Renders the virtualized session transcript. Auto-follow belongs to the
+ * message scroller except while a newly sent message is being anchored to the
+ * viewport top; that transition owns the scroll position until it settles.
+ */
+export default function SessionTimeline(props: SessionTimelineProps) {
+  const [anchorScrolling, setAnchorScrolling] = useState(false);
+
+  return (
+    <MessageScrollerProvider autoScroll={!anchorScrolling} defaultScrollPosition="end" scrollEdgeThreshold={0}>
+      <SessionTimelineViewport {...props} onAnchorScrollingChange={setAnchorScrolling} />
+    </MessageScrollerProvider>
   );
 }

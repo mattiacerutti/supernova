@@ -77,15 +77,20 @@ export class TimelineDriver {
     await this.switchToSession(TIMELINE_SESSION_TITLE);
   }
 
-  /** Sends a message through the real contenteditable composer. */
-  public async sendMessage(text = "Exercise the timeline under a very fast multiline response"): Promise<void> {
+  /** Sends a message through the real contenteditable composer, by default waiting until the timeline has settled at the bottom. */
+  public async sendMessage(text = "Exercise the timeline under a very fast multiline response", options: {readonly awaitBottom?: boolean} = {}): Promise<void> {
     const editor = this.page.locator('[contenteditable="true"]').first();
     await expect(editor).toBeEditable();
     await editor.fill(text);
     await this.page.getByRole("button", {name: "Send message"}).click();
     await expect(this.page.getByRole("button", {name: "Stop streaming"})).toBeVisible();
     await expect.poll(() => this.mockState().then((state) => state.status)).toBe("streaming");
-    await this.expectAtBottom();
+    if (options.awaitBottom !== false) await this.expectAtBottom();
+  }
+
+  /** Reads the highest virtual row index currently rendered. */
+  public async lastRowIndex(): Promise<number> {
+    return await this.timeline().evaluate((viewport) => Math.max(-1, ...[...viewport.querySelectorAll<HTMLElement>("[data-index]")].map((row) => Number(row.dataset.index))));
   }
 
   /** Asserts that the active status is mounted after, rather than inside, the virtual canvas. */
