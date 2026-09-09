@@ -57,7 +57,7 @@ export default function HomePage(props: HomePageProps) {
           </IconButton>
         </>
       )}
-      <UpdateButton className="ml-auto" />
+      {sidebarVisible && <UpdateButton className="ml-auto" />}
     </>
   );
 

@@ -14,6 +14,7 @@ All notable changes to Supernova are documented in this file.
 
 ### Fixed
 
+- Fixed the update button remaining visible during sidebar collapse; it now disappears immediately when the sidebar is collapsed.
 - Fixed restoring saved checkpoints after checkpoint capture was disabled or failed, with confirmation before discarding uncaptured workspace changes.
 - Fixed checkpoint confirmation text flashing to a different warning during the closing animation.
 - Fixed optimistic checkpoint navigation flashing back before confirmation; the timeline now stays in place unless navigation is canceled or fails.
