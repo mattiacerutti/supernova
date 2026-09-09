@@ -10,6 +10,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+- Changed nightly desktop builds to use a distinct app icon across macOS, Windows, and Linux.
+
 ### Fixed
 
 - Fixed restoring saved checkpoints after checkpoint capture was disabled or failed, with confirmation before discarding uncaptured workspace changes.

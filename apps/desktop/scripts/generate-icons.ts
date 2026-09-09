@@ -4,7 +4,8 @@ import {existsSync} from "node:fs";
 import {join} from "node:path";
 import sharp from "sharp";
 
-const iconVariants = ["dev", "prod"] as const;
+const {version} = await Bun.file(new URL("../package.json", import.meta.url)).json();
+const iconVariants = ["dev", "prod", "nightly"] as const;
 type IconVariant = (typeof iconVariants)[number];
 
 const requestedVariant =
@@ -13,7 +14,7 @@ const requestedVariant =
     ?.split("=")
     .at(1) ??
   process.env.SUPERNOVA_ICON_VARIANT ??
-  "prod";
+  (version.includes("-nightly.") ? "nightly" : "prod");
 const skipIfPresent = Bun.argv.includes("--if-missing");
 
 if (!isIconVariant(requestedVariant)) {
