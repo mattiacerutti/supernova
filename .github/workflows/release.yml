@@ -26,9 +26,9 @@ on:
         default: true
         type: boolean
   schedule:
-    # Nightly release at 3AM UTC. Runs are skipped when main has no new commits
-    # since the previous nightly tag.
-    - cron: "0 3 * * *"
+    # Nightly release at 02:37 UTC to avoid the top-of-hour scheduling spike.
+    # Runs are skipped when main has no new commits since the previous nightly tag.
+    - cron: "37 2 * * *"
 
 permissions:
   contents: write
