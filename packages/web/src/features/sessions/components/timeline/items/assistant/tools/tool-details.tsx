@@ -2,22 +2,11 @@ import type {ReactNode} from "react";
 import DiffViewer from "@/features/sessions/components/diffs/diff-viewer";
 import ContentPanel from "@/features/sessions/components/timeline/items/assistant/content-panel";
 import {parseFileEditPatch} from "@/features/sessions/lib/diff/diff-rendering";
+import {fileName, hasToolDetails, readLineWindow} from "@/features/sessions/lib/timeline/tool-details";
 import {cn} from "@/lib/cn";
 import type {Tool} from "@supernova/contracts/sessions/schemas";
 
 type FileMutationTool = Extract<Tool, {kind: "file-edit" | "file-write"}>;
-
-function pathSegments(path: string): readonly string[] {
-  return path.split(/[\\/]/).filter(Boolean);
-}
-
-function fileName(path: string): string {
-  return pathSegments(path).at(-1) ?? path;
-}
-
-function isSkillRead(path: string): boolean {
-  return pathSegments(path).at(-1) === "SKILL.md";
-}
 
 function formatJson(value: unknown): string {
   return JSON.stringify(value, null, 2);
@@ -68,21 +57,8 @@ function CommandToolDetails(props: {tool: Extract<Tool, {kind: "command"}>}) {
 function ReadToolDetails(props: {tool: Extract<Tool, {kind: "file-read"}>}) {
   const {tool} = props;
 
-  if (tool.input === undefined || isSkillRead(tool.input.path)) {
-    return null;
-  }
-
-  let lineWindow: string | undefined;
-  if (tool.input.offset !== undefined) {
-    lineWindow = `Read from line ${tool.input.offset}`;
-    if (tool.input.limit !== undefined) lineWindow += ` to ${tool.input.offset + tool.input.limit}`;
-  } else if (tool.input.limit !== undefined) {
-    lineWindow = `Read the first ${tool.input.limit} lines`;
-  }
-
-  if (tool.status === "completed" && lineWindow === undefined && !tool.result.truncated) {
-    return null;
-  }
+  if (tool.input === undefined || !hasToolDetails(tool)) return null;
+  const lineWindow = readLineWindow(tool.input);
 
   return (
     <div className="space-y-2">

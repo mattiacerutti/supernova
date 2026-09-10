@@ -3,21 +3,10 @@ import Icon from "@/components/ui/icon";
 import type {IconName} from "@/components/ui/icon";
 import type {SessionWorkEvent} from "@/features/sessions/types/session-timeline-item";
 import type {Tool} from "@supernova/contracts/sessions/schemas";
+import {fileName, skillName} from "@/features/sessions/lib/timeline/tool-details";
 
 type ToolEvent = Extract<SessionWorkEvent, {type: "tool"}>;
 type FileMutationTool = Extract<Tool, {kind: "file-edit" | "file-write"}>;
-
-function pathSegments(path: string): readonly string[] {
-  return path.split(/[\\/]/).filter(Boolean);
-}
-
-function fileName(path: string): string {
-  return pathSegments(path).at(-1) ?? path;
-}
-
-function isSkillRead(path: string): boolean {
-  return pathSegments(path).at(-1) === "SKILL.md";
-}
 
 interface FileEditDiffStats {
   readonly additions: number;
@@ -70,12 +59,12 @@ function CommandToolTitle(props: {tool: Extract<Tool, {kind: "command"}>}) {
 function ReadToolTitle(props: {tool: Extract<Tool, {kind: "file-read"}>}) {
   const {tool} = props;
 
-  if (tool.input && isSkillRead(tool.input.path)) {
-    const skillName = pathSegments(tool.input.path).at(-2);
+  const skill = tool.input ? skillName(tool.input.path) : undefined;
+  if (skill !== undefined) {
     return (
       <ToolTitleRow icon="skill">
         <span className="min-w-0 wrap-break-word">
-          {tool.status === "pending" ? "Loading" : "Loaded"} skill {skillName}
+          {tool.status === "pending" ? "Loading" : "Loaded"} skill {skill}
         </span>
       </ToolTitleRow>
     );

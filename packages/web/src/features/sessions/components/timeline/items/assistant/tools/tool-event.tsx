@@ -3,6 +3,7 @@ import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import ToolDetails from "@/features/sessions/components/timeline/items/assistant/tools/tool-details";
 import ToolTitle from "@/features/sessions/components/timeline/items/assistant/tools/tool-title";
+import {hasToolDetails} from "@/features/sessions/lib/timeline/tool-details";
 import type {SessionWorkEvent} from "@/features/sessions/types/session-timeline-item";
 import {cn} from "@/lib/cn";
 
@@ -13,13 +14,18 @@ type ToolEvent = Extract<SessionWorkEvent, {type: "tool"}>;
 export default function ToolEvent(props: {event: ToolEvent; mode: ToolDetailMode}) {
   const {event, mode} = props;
   const [expanded, setExpanded] = useState(false);
+  // Details such as diffs are expensive to render and start out hidden inside
+  // collapsed groups, so they mount on first request and then stay mounted so
+  // collapsing can animate them away.
+  const [detailsRequested, setDetailsRequested] = useState(false);
 
-  const details = ToolDetails({tool: event.tool});
-  const detailsAvailable = details !== null;
+  const detailsAvailable = hasToolDetails(event.tool);
   const showDetails = detailsAvailable && (mode === "visible" || expanded);
+  const renderDetails = detailsAvailable && (mode === "visible" || detailsRequested);
 
   const handleToggle = (): void => {
     setExpanded((currentExpanded) => !currentExpanded);
+    setDetailsRequested(true);
   };
 
   return (
@@ -50,7 +56,7 @@ export default function ToolEvent(props: {event: ToolEvent; mode: ToolDetailMode
           data-expanded={showDetails}
         >
           <div className="min-h-0 min-w-0 overflow-hidden">
-            <div className={cn("min-w-0", mode === "collapsible" && "pt-2")}>{details}</div>
+            <div className={cn("min-w-0", mode === "collapsible" && "pt-2")}>{renderDetails && <ToolDetails tool={event.tool} />}</div>
           </div>
         </div>
       )}

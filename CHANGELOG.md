@@ -11,6 +11,7 @@ All notable changes to Supernova are documented in this file.
 ### Changed
 
 - Changed nightly desktop builds to use a distinct app icon across macOS, Windows, and Linux.
+- Changed tool details inside collapsed work groups to render only when expanded, so opening or scrolling through long sessions with many file edits no longer stalls on hidden diffs.
 
 ### Fixed
 
