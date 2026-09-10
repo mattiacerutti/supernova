@@ -8,6 +8,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Added
 
+- Added automatic loading of shared instructions from `~/.agents/AGENTS.md` alongside project instructions.
+
 ### Changed
 
 - Changed nightly desktop builds to use a distinct app icon across macOS, Windows, and Linux.

@@ -1,3 +1,5 @@
+import {readFileSync} from "node:fs";
+import {homedir} from "node:os";
 import {resolve, sep} from "node:path";
 import {DefaultPackageManager, DefaultResourceLoader, getAgentDir, SettingsManager} from "@earendil-works/pi-coding-agent";
 import type {ResourceLoader} from "@earendil-works/pi-coding-agent";
@@ -28,6 +30,21 @@ function createRestrictedPiResourceLoader(input: {
   return new DefaultResourceLoader({
     additionalSkillPaths: input.skillPaths,
     agentDir: input.agentDir,
+    agentsFilesOverride: (current) => {
+      const path = resolve(process.env.HOME || homedir(), ".agents", "AGENTS.md");
+      if (current.agentsFiles.some((file) => file.path === path)) return current;
+
+      try {
+        // Shared user instructions precede Supernova-specific and project instructions.
+        const content = readFileSync(path, "utf-8");
+        return {agentsFiles: [{path, content}, ...current.agentsFiles]};
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+          console.warn(`Warning: Could not read ${path}: ${error}`);
+        }
+        return current;
+      }
+    },
     cwd: input.projectPath,
     noExtensions: true,
     noPromptTemplates: true,
