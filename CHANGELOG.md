@@ -8,6 +8,16 @@ All notable changes to Supernova are documented in this file.
 
 ### Added
 
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.1.1]
+
+### Added
+
 - Added automatic loading of shared instructions from `~/.agents/AGENTS.md` alongside project instructions.
 
 ### Changed
@@ -23,8 +33,6 @@ All notable changes to Supernova are documented in this file.
 - Fixed optimistic checkpoint navigation flashing back before confirmation; the timeline now stays in place unless navigation is canceled or fails.
 - Fixed the timeline briefly dropping below the bottom when a response with several messages finishes while following.
 - Fixed a sent message flashing at the top of the timeline, or the scroll that pins it there stuttering, when the response starts arriving during that scroll. The timeline also keeps following when a fast response outgrows the space below the pinned message.
-
-### Removed
 
 ## [0.1.0]
 
