@@ -112,6 +112,28 @@ describe("mapping Pi tool invocations", () => {
     expect(Schema.decodeUnknownSync(Tool)({...tool, name: "extension_echo"})).toEqual({...tool, name: "extension_echo"});
   });
 
+  it.each([
+    {details: {value: null, optional: undefined, nested: {optional: undefined}, items: [undefined, false, 0]}, expected: {value: null, nested: {}, items: [null, false, 0]}},
+    {details: false, expected: false},
+    {details: 0, expected: 0},
+    {details: null, expected: null},
+    {details: undefined, expected: undefined},
+  ])("encodes custom results through the RPC JSON codec: $details", ({details, expected}) => {
+    const invocation = PiToolInvocationFactory.create("extension_tool", {value: "example"});
+    invocation.complete({details, isError: false, output: "done"});
+
+    const encoded = Schema.encodeSync(Schema.toCodecJson(Tool))(invocation.toTool());
+    expect(encoded).toEqual({kind: "custom", name: "extension_tool", status: "completed", input: {value: "example"}, result: {output: "done", data: expected}});
+  });
+
+  it("encodes optional custom arguments before execution through the RPC JSON codec", () => {
+    const input = {value: "example", optional: undefined, nested: {optional: undefined}};
+    const tool = PiToolInvocationFactory.create("extension_tool", input).toTool();
+
+    expect(Schema.encodeSync(Schema.toCodecJson(Tool))(tool)).toEqual({kind: "custom", name: "extension_tool", status: "pending", input: {value: "example", nested: {}}});
+    expect(Object.hasOwn(input.nested, "optional")).toBe(true);
+  });
+
   it("preserves unknown tools as custom tool events", () => {
     const invocation = PiToolInvocationFactory.create("unknown-tool", {value: 42});
     invocation.complete({details: {extra: true}, isError: false, output: "done"});

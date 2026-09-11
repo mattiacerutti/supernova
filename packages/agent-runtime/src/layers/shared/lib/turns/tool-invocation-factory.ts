@@ -42,6 +42,12 @@ import {Option, Schema} from "effect";
 
 type PiToolOutput = string | readonly (TextContent | ImageContent)[];
 
+/** Matches Pi's persisted JSON representation before unknown extension data reaches the RPC codec. */
+function normalizeToolJson(value: unknown): unknown {
+  const json = JSON.stringify(value);
+  return json === undefined ? undefined : JSON.parse(json);
+}
+
 function piContentToText(content: PiToolOutput): string {
   if (typeof content === "string") return content;
 
@@ -243,12 +249,13 @@ class CustomPiToolInvocation extends PiToolInvocation<CustomToolInput, unknown, 
   }
 
   protected createInput(input: Record<string, unknown>): CustomToolInput {
-    return input;
+    return normalizeToolJson(input) as CustomToolInput;
   }
 
   protected createResult(completion: PiToolCompletion<unknown>): CustomToolResult {
     const output = piContentToText(completion.output);
-    return {data: completion.details, output};
+    const data = normalizeToolJson(completion.details);
+    return data === undefined ? {output} : {data, output};
   }
 }
 
