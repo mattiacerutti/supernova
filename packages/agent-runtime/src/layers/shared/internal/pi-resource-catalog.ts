@@ -29,7 +29,10 @@ export const PiResourceCatalogLive = Layer.effect(
             const {errors} = loader.getExtensions();
             if (errors.length > 0) throw new Error(errors.map(({path, error}) => `${path}: ${error}`).join("\n"));
             return loader;
-          })()
+          })().catch((error) => {
+            loaders.delete(projectPath);
+            throw error;
+          })
         );
       }
       return loaders.get(projectPath)!;
