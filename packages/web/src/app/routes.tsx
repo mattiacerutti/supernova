@@ -45,7 +45,7 @@ export function NewSessionRoute() {
 
   if (!project) return <EmptySessionState />;
 
-  return <NewSessionPage projectName={project.name} projectPath={project.path} />;
+  return <NewSessionPage key={project.path} projectName={project.name} projectPath={project.path} />;
 }
 
 export function SettingsSectionRoute() {

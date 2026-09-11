@@ -1,4 +1,6 @@
 import type {ModelDetails, ModelReference} from "@supernova/contracts/sessions/schemas";
+import type {ModelDefaults} from "@supernova/contracts/configuration/schemas";
+import {resolveComposerModelSelection} from "@/features/sessions/lib/composer/model-picker/model-defaults";
 import {useState} from "react";
 import {useSessionModels} from "@/features/sessions/hooks/api/use-session-models";
 import {modelKey, resolveThinkingLevel, createModelReference} from "@/features/sessions/lib/composer/model-picker/model-utils";
@@ -6,6 +8,7 @@ import {useModelPickerStore} from "@/features/sessions/stores/model-picker-store
 import {useSessionModelsStore} from "@/features/sessions/stores/session-models-store";
 
 interface UseComposerModelSelectionInput {
+  readonly defaults?: ModelDefaults;
   readonly initialSelection?: ModelReference;
   readonly sessionId?: string;
 }
@@ -22,24 +25,9 @@ interface ComposerModelSelection {
   readonly selectThinkingLevel: (value: string) => void;
 }
 
-function findModelByKey(models: readonly ModelDetails[], key: string): ModelDetails | undefined {
-  return models.find((model) => modelKey(model.providerId, model.id) === key);
-}
-
-function modelFromReference(models: readonly ModelDetails[], reference: ModelReference | undefined): ModelDetails | undefined {
-  if (!reference) return undefined;
-
-  return models.find((model) => model.providerId === reference.providerId && model.id === reference.id);
-}
-
-function recentModel(models: readonly ModelDetails[], recentKeys: readonly string[]): ModelDetails | undefined {
-  const key = recentKeys.find((recentKey) => findModelByKey(models, recentKey));
-  return key ? findModelByKey(models, key) : undefined;
-}
-
 /** Owns model and thinking-level selection for session composers. */
 export function useComposerModelSelection(input: UseComposerModelSelectionInput = {}): ComposerModelSelection {
-  const {initialSelection, sessionId} = input;
+  const {defaults, initialSelection, sessionId} = input;
 
   const {data: models, isPending} = useSessionModels();
   const availableModels = models ?? [];
@@ -55,17 +43,14 @@ export function useComposerModelSelection(input: UseComposerModelSelectionInput 
 
   // Determine the active selection based on session ID, stored selection, and local selection
   const activeSelection = sessionId ? (storedSessionSelection ?? initialSelection) : localSelection;
-  const activeSelectionModel = modelFromReference(availableModels, activeSelection);
-
-  // Final selected model is active selection model if available, otherwise the most recent model, or the first available model
-  const selectedModelDetails = activeSelectionModel ?? recentModel(availableModels, recentModelKeys) ?? availableModels[0];
-
-  // If we have an active selection, we use that selection thinking level, otherwise we fallback
-  // to the last thinking level used (which is normalized in case the model does not support it)
-  const preferredThinkingLevel = activeSelectionModel ? activeSelection?.thinkingLevel : lastThinkingLevel;
-  const resolvedThinkingLevel = selectedModelDetails ? resolveThinkingLevel(selectedModelDetails, preferredThinkingLevel) : undefined;
-
-  const modelReference = selectedModelDetails ? createModelReference(selectedModelDetails, resolvedThinkingLevel) : undefined;
+  const {selectedModelDetails, modelReference} = resolveComposerModelSelection({
+    models: availableModels,
+    activeSelection,
+    defaults,
+    isNewSession: !sessionId,
+    recentModelKeys,
+    lastThinkingLevel,
+  });
   const selectedThinkingLabel = selectedModelDetails?.thinkingLevels.find((level) => level.value === modelReference?.thinkingLevel)?.label ?? "Reasoning";
 
   const saveSelection = (selection: ModelReference): void => {
@@ -77,7 +62,7 @@ export function useComposerModelSelection(input: UseComposerModelSelectionInput 
     setLocalSelection(selection);
   };
 
-  const findModel = (key: string): ModelDetails | undefined => findModelByKey(availableModels, key);
+  const findModel = (key: string): ModelDetails | undefined => availableModels.find((model) => modelKey(model.providerId, model.id) === key);
 
   const selectModel = (key: string): void => {
     const nextModel = findModel(key);

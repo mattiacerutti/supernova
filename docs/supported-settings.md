@@ -22,6 +22,22 @@ Project settings currently follow Supernova's existing trusted-project policy; t
 
 ## Supported keys
 
+### New-session model defaults
+
+| Setting | Purpose |
+| --- | --- |
+| `defaultProvider` | Default provider for a new session. |
+| `defaultModel` | Exact provider-scoped model ID for a new session. |
+| `defaultThinkingLevel` | Startup reasoning preference: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`. |
+
+Project values override global values independently. Configure both provider and model to select an unambiguous pair. A provider alone selects its first available model; a model alone selects the first available exact ID match. Model patterns are not supported here.
+
+For new sessions, selection precedence is explicit composer choice → configured default → recently used model → first available model. An unavailable configured model silently falls back to the model shown in the picker. With no available models, sending stays disabled.
+
+The configured reasoning level is normalized to the selected model's supported levels. Explicit reasoning choices win, including `off`. Models without reasoning omit the level. Switching models manually preserves the existing reasoning-selection behavior. Startup defaults never overwrite resumed-session selections.
+
+These defaults are applied by the composer and sent as an explicit model selection, not persisted back into settings files. New-session submission waits for the project configuration request to settle. Loading failures show a toast, with no inline error or retry controls in the composer. The composer uses the last cached defaults when available, otherwise its normal recent-model fallback. Backend runtime settings validation remains unchanged; unreadable or malformed settings files can still prevent the agent runtime from starting.
+
 ### Reasoning
 
 | Setting | Purpose |
@@ -110,11 +126,31 @@ Pi's `PI_TELEMETRY` environment override takes precedence. Supporting this setti
 }
 ```
 
+## Client configuration API
+
+`getConfiguration({projectPath?: string})` returns a typed, client-safe snapshot:
+
+```ts
+{
+  modelDefaults: {
+    providerId?: string;
+    modelId?: string;
+    thinkingLevel?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+  };
+}
+```
+
+Without `projectPath`, only global settings are read—even when the server starts inside a project. With a path, the server reads and merges that project's settings. Responses are validated against shared contracts. Backend-only values and arbitrary custom keys are never returned, and errors do not include raw file contents.
+
+The frontend loads global configuration at startup and effective project configuration when opening a new-session composer. Snapshots use the existing shared RPC client and live only in the query cache, with separate global and project entries; they are not stored in local storage. Opening the composer, reconnecting the event stream, or explicitly invalidating configuration queries refreshes them. A changed default never replaces an explicit composer selection.
+
+This refresh behavior applies to client defaults only. Already-active agent runtimes retain their backend settings snapshot until recreated; restart the server/app to reliably apply runtime-setting edits.
+
 ## Not yet supported
 
 Anything absent from the supported tables is ignored, including:
 
-- Proxy settings, model/reasoning defaults, default tools, and model cycling.
+- Proxy settings, per-model reasoning defaults (`modelThinkingLevels`), default tools, and model cycling.
 - Resource paths, packages, extensions, prompt templates, and resource enable/disable settings.
 - Session storage overrides, message queues, branch summaries, and trust preferences.
 - Image blocking and GUI/TUI preferences.

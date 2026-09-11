@@ -1,13 +1,9 @@
 import {SettingsManager} from "@earendil-works/pi-coding-agent";
+import {loadPiSettings} from "@supernova/agent-runtime/layers/shared/lib/pi-settings";
 
 /** Loads a session-local snapshot of the file settings Supernova supports, without writing back to disk. */
 export function loadPiRuntimeSettings(cwd: string, agentDir?: string): SettingsManager {
-  // Match the existing resource loader's project policy; unsupported trust/resource settings stay isolated.
-  const source = SettingsManager.create(cwd, agentDir, {projectTrusted: true});
-  const errors = source.drainErrors();
-  if (errors.length > 0) {
-    throw new Error(`Could not load ${errors.map(({scope}) => scope).join(" and ")} settings.json. Check that the files are readable and contain valid JSON.`);
-  }
+  const source = loadPiSettings(cwd, agentDir);
 
   const budgets = source.getThinkingBudgets();
   const providerRetry = source.getProviderRetrySettings();
