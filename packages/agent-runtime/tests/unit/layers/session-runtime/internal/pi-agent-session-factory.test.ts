@@ -6,7 +6,7 @@ import {PiAgentSessionFactory, PiAgentSessionFactoryLive} from "@supernova/agent
 
 describe("Pi agent session factory", () => {
   it("creates sessions with Supernova's custom resource loader policy", async () => {
-    const resourceLoader = {reload: vi.fn(async () => undefined)};
+    const resourceLoader = {reload: vi.fn(async () => undefined), getExtensions: () => ({errors: []})};
     const session = {
       getActiveToolNames: vi.fn(() => ["read", "bash", "edit", "write"]),
       setActiveToolsByName: vi.fn(),

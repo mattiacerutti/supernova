@@ -23,6 +23,12 @@ function DefaultToolDetails(props: {tool: Tool}) {
   return (
     <div className="space-y-2">
       {tool.input && <ContentPanel className="font-mono">{formatJson(tool.input)}</ContentPanel>}
+      {tool.kind === "custom" && tool.status === "completed" && (
+        <>
+          {tool.result.output && <ContentPanel className="font-mono">{tool.result.output}</ContentPanel>}
+          {tool.result.data !== undefined && <ContentPanel className="font-mono">{formatJson(tool.result.data)}</ContentPanel>}
+        </>
+      )}
       {tool.status === "error" && <DetailText className="text-danger-ink">{tool.error}</DetailText>}
     </div>
   );

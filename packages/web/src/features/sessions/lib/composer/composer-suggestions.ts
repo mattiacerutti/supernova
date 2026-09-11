@@ -1,9 +1,13 @@
+import {matchSorter} from "match-sorter";
+import type {ComposerSuggestionItem, ComposerSuggestionTriggerKind as ResourceTriggerKind} from "@supernova/contracts/sessions/procedures";
 import type {Editor} from "@tiptap/core";
 import {Node} from "@tiptap/core";
 import type {ComposerSuggestionMatch, ComposerSuggestionTriggerKind} from "@/features/sessions/types/composer-suggestion";
 import {PluginKey} from "@tiptap/pm/state";
 import {Suggestion} from "@tiptap/suggestion";
 import type {SuggestionOptions} from "@tiptap/suggestion";
+
+const MAX_SUGGESTIONS = 50;
 
 function isTokenBoundary(value: string | undefined): boolean {
   return value === undefined || /\s/.test(value);
@@ -47,6 +51,19 @@ function createSuggestionPlugin(input: {
     }),
     startOfLine,
   });
+}
+
+/** Filters the full resource snapshot locally, applying the display limit after searching. */
+export function filterComposerSuggestions(items: readonly ComposerSuggestionItem[], kind: ResourceTriggerKind, query: string): ComposerSuggestionItem[] {
+  const candidates = items.filter((item) => (kind === "skill" ? item.kind === "skill" : item.kind !== "skill"));
+  const normalizedQuery = query.trim();
+  return (
+    normalizedQuery
+      ? matchSorter(candidates, normalizedQuery, {
+          keys: [(item) => ("name" in item ? item.name : item.title), (item) => item.subtitle ?? "", (item) => (item.kind === "prompt-template" ? item.prompt : "")],
+        })
+      : candidates
+  ).slice(0, MAX_SUGGESTIONS);
 }
 
 /** Creates a TipTap suggestion matcher that expands from the cursor to token boundaries. */

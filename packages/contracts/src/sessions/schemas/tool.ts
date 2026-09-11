@@ -101,36 +101,34 @@ export const CustomToolInput = Schema.Record(Schema.String, Schema.Unknown);
 /** Result data produced by a custom or unknown tool. */
 export const CustomToolResult = Schema.Struct({
   output: Schema.optional(Schema.String),
-  data: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
+  data: Schema.optional(Schema.Unknown),
 });
 
 const pendingToolFields = {status: Schema.Literal("pending")};
 const errorToolFields = {error: Schema.String, status: Schema.Literal("error")};
 
-function sessionToolStates<const Kind extends string, const Input extends Schema.Codec<unknown>, const Result extends Schema.Codec<unknown>>(
-  kind: Kind,
+function sessionToolStates<const Fields extends Schema.Struct.Fields, const Input extends Schema.Codec<unknown>, const Result extends Schema.Codec<unknown>>(
+  fields: Fields,
   input: Input,
   result: Result
 ) {
-  const kindField = {kind: Schema.Literal(kind)};
-
   return [
-    Schema.Struct({...pendingToolFields, ...kindField, input: Schema.optional(input)}),
-    Schema.Struct({...kindField, input: Schema.optional(input), result, status: Schema.Literal("completed")}),
-    Schema.Struct({...errorToolFields, ...kindField, input: Schema.optional(input)}),
+    Schema.Struct({...pendingToolFields, ...fields, input: Schema.optional(input)}),
+    Schema.Struct({...fields, input: Schema.optional(input), result, status: Schema.Literal("completed")}),
+    Schema.Struct({...errorToolFields, ...fields, input: Schema.optional(input)}),
   ] as const;
 }
 
 /** Provider-agnostic tool metadata and result data for a session turn. */
 export const Tool = Schema.Union([
-  ...sessionToolStates("command", CommandToolInput, CommandToolResult),
-  ...sessionToolStates("file-read", FileReadToolInput, FileReadToolResult),
-  ...sessionToolStates("file-list", FileListToolInput, FileListToolResult),
-  ...sessionToolStates("file-edit", FileEditToolInput, FileEditToolResult),
-  ...sessionToolStates("file-write", FileWriteToolInput, FileWriteToolResult),
-  ...sessionToolStates("file-find", FileFindToolInput, FileFindToolResult),
-  ...sessionToolStates("web-fetch", WebFetchToolInput, WebFetchToolResult),
-  ...sessionToolStates("custom", CustomToolInput, CustomToolResult),
+  ...sessionToolStates({kind: Schema.Literal("command")}, CommandToolInput, CommandToolResult),
+  ...sessionToolStates({kind: Schema.Literal("file-read")}, FileReadToolInput, FileReadToolResult),
+  ...sessionToolStates({kind: Schema.Literal("file-list")}, FileListToolInput, FileListToolResult),
+  ...sessionToolStates({kind: Schema.Literal("file-edit")}, FileEditToolInput, FileEditToolResult),
+  ...sessionToolStates({kind: Schema.Literal("file-write")}, FileWriteToolInput, FileWriteToolResult),
+  ...sessionToolStates({kind: Schema.Literal("file-find")}, FileFindToolInput, FileFindToolResult),
+  ...sessionToolStates({kind: Schema.Literal("web-fetch")}, WebFetchToolInput, WebFetchToolResult),
+  ...sessionToolStates({kind: Schema.Literal("custom"), name: Schema.String}, CustomToolInput, CustomToolResult),
 ]);
 
 export type ToolStatus = typeof ToolStatus.Type;

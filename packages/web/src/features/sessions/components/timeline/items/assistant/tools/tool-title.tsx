@@ -36,12 +36,14 @@ function ToolTitleRow(props: {children: ReactNode; icon: IconName}) {
   );
 }
 
-function DefaultToolTitle(props: {tool: Tool | undefined}) {
+function DefaultToolTitle(props: {tool: Extract<Tool, {kind: "custom"}> | undefined}) {
   const {tool} = props;
 
   return (
     <ToolTitleRow icon="folder">
-      <span className="min-w-0 wrap-break-word">{tool?.status === "pending" ? "Running tool" : "Ran tool"}</span>
+      <span className="min-w-0 wrap-break-word">
+        {tool?.status === "pending" ? "Running" : "Ran"} {tool?.name ?? "tool"}
+      </span>
     </ToolTitleRow>
   );
 }

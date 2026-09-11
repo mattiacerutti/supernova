@@ -1,7 +1,7 @@
 import {mkdir, mkdtemp, readFile, rm, writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
-import {createAgentSession, ModelRuntime, SessionManager, SettingsManager} from "@earendil-works/pi-coding-agent";
+import {CONFIG_DIR_NAME, createAgentSession, ModelRuntime, SessionManager, SettingsManager} from "@earendil-works/pi-coding-agent";
 import {InMemoryCredentialStore} from "@earendil-works/pi-ai";
 import {Effect} from "effect";
 import {afterEach, describe, expect, it, vi} from "vitest";
@@ -16,7 +16,7 @@ async function writeSkill(path: string, name: string): Promise<void> {
 
 async function createTestProject(): Promise<{agentDir: string; home: string; project: string; repo: string}> {
   const home = await mkdtemp(join(tmpdir(), "supernova-home-"));
-  const repo = await mkdtemp(join(tmpdir(), "supernova-repo-"));
+  const repo = join(home, "workspace", "repo");
   const project = join(repo, "packages", "app");
   const agentDir = join(home, ".supernova", "userdata", "agent");
 
@@ -59,7 +59,7 @@ describe("Supernova Pi SDK config", () => {
     const {project} = testProject;
 
     await writeSkill(join(project, ".agents", "skills", "project-skill"), "project-skill");
-    await writeSkill(join(project, ".pi", "skills", "pi-skill"), "pi-skill");
+    await writeSkill(join(project, CONFIG_DIR_NAME, "skills", "pi-skill"), "pi-skill");
 
     const piSdk = await Effect.runPromise(
       Effect.gen(function* () {
@@ -70,24 +70,100 @@ describe("Supernova Pi SDK config", () => {
     await loader.reload();
 
     expect(loader).toBeInstanceOf(CustomPiResourceLoader);
-    expect(loader.getSkills().skills.map((skill) => skill.name)).toEqual(["project-skill"]);
+    expect(
+      loader
+        .getSkills()
+        .skills.map((skill) => skill.name)
+        .sort()
+    ).toEqual(["pi-skill", "project-skill"]);
   });
 
-  it("loads Pi-discovered .agents skills without loading .pi skills", async () => {
+  it("loads standard global/project skills and .agents skills up to the repository root", async () => {
     const testProject = await createTestProject();
     tempDirs.push(testProject.home, testProject.repo);
-    const {home, project, repo} = testProject;
+    const {agentDir, home, project, repo} = testProject;
 
     await writeSkill(join(home, ".agents", "skills", "global-skill"), "global-skill");
     await writeSkill(join(repo, ".agents", "skills", "repo-skill"), "repo-skill");
     await writeSkill(join(project, ".agents", "skills", "project-skill"), "project-skill");
     await writeSkill(join(repo, "..", ".agents", "skills", "above-repo-skill"), "above-repo-skill");
-    await writeSkill(join(project, ".pi", "skills", "pi-skill"), "pi-skill");
+    await writeSkill(join(project, CONFIG_DIR_NAME, "skills", "pi-skill"), "pi-skill");
+    await writeSkill(join(agentDir, "skills", "agent-skill"), "agent-skill");
+    await writeFile(join(agentDir, "skills", "root.md"), "---\nname: root-skill\ndescription: Root Markdown skill\n---\nSkill body");
 
     const loader = new CustomPiResourceLoader(project);
     await loader.reload();
 
-    expect(loader.getSkills().skills.map((skill) => skill.name)).toEqual(["project-skill", "repo-skill", "global-skill"]);
+    expect(
+      loader
+        .getSkills()
+        .skills.map((skill) => skill.name)
+        .sort()
+    ).toEqual(["agent-skill", "global-skill", "pi-skill", "project-skill", "repo-skill", "root-skill"]);
+  });
+
+  it.each(["global", "project"] as const)("loads %s configured extension paths, skill paths, and package resources", async (scope) => {
+    const {agentDir, home, project, repo} = await createTestProject();
+    tempDirs.push(home, repo);
+    const settingsDir = scope === "global" ? agentDir : join(project, CONFIG_DIR_NAME);
+    const packageDir = join(settingsDir, "kit");
+    await writeSkill(join(packageDir, "skills", "package-skill"), "package-skill");
+    await mkdir(join(packageDir, "extensions"), {recursive: true});
+    await mkdir(join(packageDir, "prompts"));
+    await mkdir(join(packageDir, "themes"));
+    await writeFile(
+      join(packageDir, "package.json"),
+      JSON.stringify({name: "fixture-kit", pi: {extensions: ["extensions"], skills: ["skills"], prompts: ["prompts"], themes: ["themes"]}})
+    );
+    await writeFile(
+      join(packageDir, "extensions", "tool.ts"),
+      `
+import {Type} from "typebox";
+export default function(pi) {
+  pi.registerTool({name: "package_tool", label: "Package tool", description: "Test tool", parameters: Type.Object({}), execute: async () => ({content: [{type: "text", text: "ok"}], details: {}})});
+}`
+    );
+    await writeFile(join(packageDir, "prompts", "ignored.md"), "---\ndescription: Ignored\n---\nIgnored prompt");
+    await writeFile(join(packageDir, "themes", "ignored.json"), "{}");
+    await writeFile(join(settingsDir, "extra.ts"), "export default function() {}");
+    await writeFile(join(settingsDir, "explicit.md"), "---\nname: explicit-skill\ndescription: Explicit file\ndisable-model-invocation: true\n---\nSkill body");
+    await writeSkill(join(home, "shared-skills", "shared-skill"), "shared-skill");
+    await writeFile(join(settingsDir, "settings.json"), JSON.stringify({extensions: ["./extra.ts"], skills: ["./explicit.md", "~/shared-skills"], packages: ["./kit"]}));
+
+    const loader = new CustomPiResourceLoader(project);
+    await loader.reload();
+    expect(loader.getExtensions().errors).toEqual([]);
+    expect(
+      loader
+        .getExtensions()
+        .extensions.map((extension) => extension.path)
+        .sort()
+    ).toEqual([join(settingsDir, "extra.ts"), join(packageDir, "extensions", "tool.ts")].sort());
+    expect(loader.getExtensions().extensions.some((extension) => extension.tools.has("package_tool"))).toBe(true);
+    expect(
+      loader
+        .getSkills()
+        .skills.map((skill) => skill.name)
+        .sort()
+    ).toEqual(["explicit-skill", "package-skill", "shared-skill"]);
+    expect(loader.getSkills().skills.find((skill) => skill.name === "explicit-skill")?.disableModelInvocation).toBe(true);
+    expect(loader.getPrompts().prompts).toEqual([]);
+    expect(loader.getThemes().themes).toEqual([]);
+
+    // A new loader picks up Pi's per-package resource filters after a restart.
+    await writeFile(join(settingsDir, "settings.json"), JSON.stringify({packages: [{source: "./kit", extensions: [], skills: []}]}));
+    const filtered = new CustomPiResourceLoader(project);
+    await filtered.reload();
+    expect(filtered.getExtensions().extensions).toEqual([]);
+    expect(filtered.getSkills().skills).toEqual([]);
+  });
+
+  it("rejects malformed resource settings", async () => {
+    const {agentDir, home, project, repo} = await createTestProject();
+    tempDirs.push(home, repo);
+    await mkdir(agentDir, {recursive: true});
+    await writeFile(join(agentDir, "settings.json"), "{broken");
+    expect(() => new CustomPiResourceLoader(project)).toThrow("settings.json");
   });
 
   it.each([
@@ -197,24 +273,24 @@ describe("Supernova Pi SDK config", () => {
     expect(authJson.openai).toEqual({type: "api_key", key: "test-key"});
   });
 
-  it("does not load Pi extensions, themes, or prompt templates", async () => {
+  it("loads extensions while leaving themes and prompt templates disabled", async () => {
     const testProject = await createTestProject();
     tempDirs.push(testProject.home, testProject.repo);
     const {project} = testProject;
 
-    await mkdir(join(project, ".pi", "prompts"), {recursive: true});
-    await mkdir(join(project, ".pi", "themes"), {recursive: true});
-    await mkdir(join(project, ".pi", "extensions"), {recursive: true});
-    await writeFile(join(project, ".pi", "prompts", "ignored.md"), "---\ndescription: ignored\n---\nignored");
-    await writeFile(join(project, ".pi", "themes", "ignored.json"), "{}");
-    await writeFile(join(project, ".pi", "extensions", "ignored.ts"), "export default function() {}\n");
+    await mkdir(join(project, CONFIG_DIR_NAME, "prompts"), {recursive: true});
+    await mkdir(join(project, CONFIG_DIR_NAME, "themes"), {recursive: true});
+    await mkdir(join(project, CONFIG_DIR_NAME, "extensions"), {recursive: true});
+    await writeFile(join(project, CONFIG_DIR_NAME, "prompts", "ignored.md"), "---\ndescription: ignored\n---\nignored");
+    await writeFile(join(project, CONFIG_DIR_NAME, "themes", "ignored.json"), "{}");
+    await writeFile(join(project, CONFIG_DIR_NAME, "extensions", "extension.ts"), "export default function() {}\n");
 
     const loader = new CustomPiResourceLoader(project);
     await loader.reload();
 
     expect(loader.getPrompts().prompts).toEqual([]);
     expect(loader.getThemes().themes).toEqual([]);
-    expect(loader.getExtensions().extensions).toEqual([]);
+    expect(loader.getExtensions().extensions).toHaveLength(1);
   });
 
   it("does not load system prompts from files while keeping Pi's default system prompt", async () => {

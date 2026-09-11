@@ -23,6 +23,7 @@ const promptTemplate = {
 describe("Pi resource catalog", () => {
   it("loads skills and prompt templates through the SDK resource loader abstraction", async () => {
     const resourceLoader = {
+      getExtensions: vi.fn(() => ({errors: []})),
       getPrompts: vi.fn(() => ({diagnostics: [], prompts: [promptTemplate]})),
       getSkills: vi.fn(() => ({diagnostics: [], skills: [skill]})),
       reload: vi.fn(async () => undefined),
@@ -32,8 +33,12 @@ describe("Pi resource catalog", () => {
     } as unknown as PiSdkServiceShape;
     const catalog = await runCatalog(piSdk);
 
-    await expect(catalog.listSkills("/workspace")).resolves.toEqual([skill]);
-    await expect(catalog.listPromptTemplates("/workspace")).resolves.toEqual([promptTemplate]);
+    const [skills, prompts] = await Promise.all([catalog.listSkills("/workspace"), catalog.listPromptTemplates("/workspace")]);
+    expect(skills).toEqual([skill]);
+    expect(prompts).toEqual([promptTemplate]);
+    expect(resourceLoader.reload).toHaveBeenCalledTimes(1);
+    await catalog.listSkills("/other-project");
+    expect(piSdk.createResourceLoader).toHaveBeenCalledTimes(2);
   });
 });
 

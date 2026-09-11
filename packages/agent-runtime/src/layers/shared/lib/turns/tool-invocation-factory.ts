@@ -103,7 +103,7 @@ export abstract class PiToolInvocation<TPiInput = unknown, TPiDetails = unknown,
 
   /** Converts the invocation's current state into a serializable tool event payload. */
   public toTool(): Tool {
-    const base = {input: this.input, kind: this.kind} as const;
+    const base = {input: this.input, kind: this.kind, ...(this.kind === "custom" ? {name: this.name} : {})} as const;
     if (this.status === "error") return {...base, error: this.errorMessage(), status: "error"} as Tool;
     if (this.status === "completed") return {...base, result: this.completedResult(), status: "completed"} as Tool;
     return {...base, status: "pending"} as Tool;
@@ -176,7 +176,8 @@ class EditPiToolInvocation extends PiToolInvocation<EditToolInput, EditToolDetai
   }
 
   protected createInput(input: Partial<EditToolInput>): FileEditToolInput | undefined {
-    const candidate = {path: input.path, replacements: input.edits} satisfies Partial<FileEditToolInput>;
+    // Pi emits raw arguments before normalizing a single edit into an array.
+    const candidate = {path: input.path, replacements: Array.isArray(input.edits) ? input.edits : [input.edits]};
     return Schema.decodeUnknownOption(FileEditToolInputSchema)(candidate).pipe(Option.getOrUndefined);
   }
 
@@ -236,7 +237,7 @@ class WebFetchPiToolInvocation extends PiToolInvocation<WebFetchToolInput, WebFe
   }
 }
 
-class CustomPiToolInvocation extends PiToolInvocation<CustomToolInput, Record<string, unknown>, CustomToolInput, CustomToolResult> {
+class CustomPiToolInvocation extends PiToolInvocation<CustomToolInput, unknown, CustomToolInput, CustomToolResult> {
   public constructor(name: string, input: Record<string, unknown> | undefined) {
     super(name, "custom", input);
   }
@@ -245,7 +246,7 @@ class CustomPiToolInvocation extends PiToolInvocation<CustomToolInput, Record<st
     return input;
   }
 
-  protected createResult(completion: PiToolCompletion<Record<string, unknown>>): CustomToolResult {
+  protected createResult(completion: PiToolCompletion<unknown>): CustomToolResult {
     const output = piContentToText(completion.output);
     return {data: completion.details, output};
   }

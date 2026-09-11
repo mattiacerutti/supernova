@@ -170,8 +170,9 @@ describe("sending messages through Pi sessions", () => {
     runtimes.push(pi);
     const {info, manager} = pi.createSession();
     pi.appendConversation(manager, {requestText: "Older request", assistantText: "Older response."});
-    pi.appendConversation(manager, {requestText: "x".repeat(selectedPiModel.contextWindow * 4), assistantText: "Old response."});
-    pi.faux.setResponses([fauxAssistantMessage("Done."), fauxAssistantMessage("Compacted summary."), fauxAssistantMessage("Compacted summary.")]);
+    // Start below the pre-prompt threshold, then cross it with the response's actual faux usage.
+    pi.appendConversation(manager, {requestText: "x".repeat((selectedPiModel.contextWindow - 20_000) * 4), assistantText: "Old response."});
+    pi.faux.setResponses([fauxAssistantMessage("Done." + "x".repeat(24_000)), fauxAssistantMessage("Compacted summary.")]);
 
     const events = await pi.sendMessage({message: "Continue", modelReference: selectedModelReference, sessionId: info.id});
     const liveCompactionEvents = events.filter(isTurnEvent).flatMap((event) => event.turn.events.filter((turnEvent) => turnEvent.type === "compaction"));
@@ -359,11 +360,12 @@ describe("sending messages through Pi sessions", () => {
   });
 
   it("keeps overflow compaction continuation in the same live turn", async () => {
-    const pi = await createPiTestRuntime();
+    const pi = await createPiTestRuntime({settings: {compaction: {enabled: true, keepRecentTokens: 16}}});
     runtimes.push(pi);
     const {info, manager} = pi.createSession();
     pi.appendConversation(manager, {requestText: "Older request", assistantText: "Older response."});
-    pi.appendConversation(manager, {requestText: "x".repeat(selectedPiModel.contextWindow * 4), assistantText: "Old response."});
+    // Keep pre-prompt estimation below the threshold so the provider error triggers recovery.
+    pi.appendConversation(manager, {requestText: "Recent request ".repeat(20), assistantText: "Old response."});
     pi.faux.setResponses([
       fauxAssistantMessage("", {errorMessage: "prompt is too long", stopReason: "error"}),
       fauxAssistantMessage("Compacted overflow summary."),

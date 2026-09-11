@@ -22,6 +22,8 @@ export const PiAgentSessionFactoryLive = Layer.effect(
         const settingsManager = loadPiRuntimeSettings(cwd);
         const resourceLoader = piSdk.createResourceLoader({projectPath: cwd});
         await resourceLoader.reload();
+        const extensionErrors = resourceLoader.getExtensions().errors;
+        if (extensionErrors.length > 0) throw new Error(extensionErrors.map(({path, error}) => `${path}: ${error}`).join("\n"));
 
         const created = await piSdk.createAgentSession({
           cwd,
