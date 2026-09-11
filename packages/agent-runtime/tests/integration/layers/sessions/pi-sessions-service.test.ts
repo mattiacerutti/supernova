@@ -95,7 +95,7 @@ describe("Pi sessions service", () => {
     const models = await pi.runWithSessions(
       Effect.gen(function* () {
         const sessions = yield* SessionsService;
-        return yield* sessions.listModels();
+        return yield* sessions.listModels("/workspace");
       })
     );
 

@@ -1,5 +1,6 @@
 import {AgentRpcGroup} from "@supernova/contracts";
 import {Effect} from "effect";
+import {ConfigurationService} from "@supernova/agent-runtime/services/configuration-service";
 import {FoldersService} from "@supernova/agent-runtime/services/folders-service";
 import {ProvidersService} from "@supernova/agent-runtime/services/providers-service";
 import {ProjectsService} from "@supernova/agent-runtime/services/projects-service";
@@ -8,6 +9,7 @@ import {SessionsService} from "@supernova/agent-runtime/services/sessions-servic
 
 export const AgentRpcLive = AgentRpcGroup.toLayer(
   Effect.gen(function* () {
+    const configuration = yield* ConfigurationService;
     const folders = yield* FoldersService;
     const providers = yield* ProvidersService;
     const projects = yield* ProjectsService;
@@ -27,14 +29,15 @@ export const AgentRpcLive = AgentRpcGroup.toLayer(
       compactSession: (input) => sessionRuntime.compactSession(input),
       createFolder: ({path}) => folders.create(path),
       createSession: ({projectPath}) => sessions.create(projectPath),
+      getConfiguration: (input) => configuration.get(input),
       getSession: ({sessionId}) =>
         Effect.flatMap(sessionRuntime.getCommittedSession(sessionId), (committedSession) => (committedSession ? Effect.succeed(committedSession) : sessions.get(sessionId))),
       listFolderFiles: ({projectPath, query}) => folders.listFiles(projectPath, query),
       listFolderSuggestions: ({query}) => folders.listSuggestions(query),
       listProviders: () => providers.list(),
       listProjectSessions: (input) => projects.listSessions(input),
-      listComposerSuggestions: ({kind, projectPath, query}) => sessions.listComposerSuggestions(projectPath, kind, query),
-      listModels: () => sessions.listModels(),
+      listComposerSuggestions: ({projectPath}) => sessions.listComposerSuggestions(projectPath),
+      listModels: ({projectPath}) => sessions.listModels(projectPath),
       logoutProvider: ({providerId}) => providers.logout(providerId),
       redoCheckpoint: (input) => sessionRuntime.redoCheckpoint(input),
       renameSession: (input) => sessions.rename(input),

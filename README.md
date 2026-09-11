@@ -41,6 +41,10 @@ bun install
 bun run dev:desktop
 ```
 
+## Pi compatibility
+
+See the [Pi compatibility guide](docs/pi-compatibility.md) for supported settings, skills, extensions, packages, and current limitations.
+
 ## Development
 
 ```bash

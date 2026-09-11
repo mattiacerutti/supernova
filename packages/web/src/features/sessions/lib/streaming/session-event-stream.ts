@@ -31,6 +31,7 @@ function applyEvent(input: {event: SessionStreamEvent; queryClient: QueryClient}
 
   if (event.type === "connected") {
     useSessionLiveStore.getState().resetRevisions();
+    void queryClient.invalidateQueries({queryKey: ["configuration"]});
     void queryClient.invalidateQueries({queryKey: allSessionsQueryKey()});
     void queryClient.invalidateQueries({queryKey: allProjectSessionsQueryKey()});
     return;

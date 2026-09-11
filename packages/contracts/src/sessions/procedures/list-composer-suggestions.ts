@@ -21,14 +21,11 @@ export const ComposerPromptTemplateSuggestionItem = Schema.Struct({
 export const ComposerSuggestionItem = Schema.Union([ComposerPromptTemplateSuggestionItem, ComposerSkillSuggestionItem]);
 
 export const ListComposerSuggestionsPayload = Schema.Struct({
-  kind: ComposerSuggestionTriggerKind,
   projectPath: Schema.String,
-  query: Schema.String,
 });
 
 export const ListComposerSuggestionsResult = Schema.Struct({
   items: Schema.Array(ComposerSuggestionItem),
-  query: Schema.String,
 });
 
 export class ListComposerSuggestionsError extends Schema.TaggedErrorClass<ListComposerSuggestionsError>()("ListComposerSuggestionsError", {

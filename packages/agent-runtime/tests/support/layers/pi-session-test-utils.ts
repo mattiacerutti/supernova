@@ -226,6 +226,7 @@ export async function createPiTestRuntime(input?: {
     generateSessionTitle: async () => "Generated title",
   };
   const resourceCatalog: PiResourceCatalogShape = {
+    initialize: async () => undefined,
     listPromptTemplates: async () => input?.promptTemplates ?? [],
     listSkills: async () => input?.skills ?? [],
     readSkillContent: async (skill) => {

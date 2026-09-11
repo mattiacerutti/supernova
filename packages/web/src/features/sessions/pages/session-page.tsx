@@ -76,7 +76,7 @@ function SessionConversation(props: SessionConversationProps) {
     startRenaming,
   } = useInlineRename({initialValue: session.title, onSave: (title) => renameSessionMutation.mutate({sessionId: session.id, title})});
 
-  const modelSelection = useComposerModelSelection({initialSelection: session.modelReference, sessionId: session.id});
+  const modelSelection = useComposerModelSelection({projectPath: session.projectPath, initialSelection: session.modelReference, sessionId: session.id});
   const composerDraftKey = sessionComposerDraftKey(session.id);
   const composerDraft = useComposerDraft({key: composerDraftKey});
   const stream = useSessionTimeline({modelReference: modelSelection.modelReference, sessionId: session.id, sessionTurns: session.turns});

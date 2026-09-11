@@ -105,7 +105,13 @@ export class PiSessionRuntime {
       this.unsubscribe = undefined;
 
       unsubscribe?.();
-      agentSession?.dispose();
+      if (agentSession) {
+        try {
+          await agentSession.extensionRunner.emit({type: "session_shutdown", reason: "quit"});
+        } finally {
+          agentSession.dispose();
+        }
+      }
     })();
 
     return this.releasePromise;
@@ -330,6 +336,22 @@ export class PiSessionRuntime {
       const sessionManager = await this.sessionStore.openSessionById(this.sessionId);
       const {session} = await this.agentSessionFactory.createAgentSession({cwd: sessionManager.getCwd(), sessionManager});
       this.agentSession = session;
+      try {
+        await session.bindExtensions({
+          mode: "print",
+          onError: ({extensionPath, error}) => {
+            void this.publishEvent({type: "session.error", sessionId: this.sessionId, error: `Extension ${extensionPath}: ${error}`});
+          },
+        });
+      } catch (error) {
+        this.agentSession = undefined;
+        try {
+          await session.extensionRunner.emit({type: "session_shutdown", reason: "quit"});
+        } finally {
+          session.dispose();
+        }
+        throw error;
+      }
     }
 
     return this.agentSession;
@@ -407,7 +429,7 @@ export class PiSessionRuntime {
 
   /** Waits for Pi to finish its public run-settlement boundary before publishing committed state. */
   private async waitForPiSettlement(): Promise<void> {
-    await this.agentSession?.agent.waitForIdle();
+    await this.agentSession?.waitForIdle();
   }
 
   private nextRevision(): number {

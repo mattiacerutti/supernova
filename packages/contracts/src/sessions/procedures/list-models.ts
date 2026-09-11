@@ -1,7 +1,7 @@
 import {Schema} from "effect";
-import {ModelDetails} from "../schemas";
+import {ModelDetails} from "@supernova/contracts/sessions/schemas";
 
-export const ListModelsPayload = Schema.Void;
+export const ListModelsPayload = Schema.Struct({projectPath: Schema.String});
 
 /** Result payload for listing models available to session prompts. */
 export const ListModelsResult = Schema.Array(ModelDetails);

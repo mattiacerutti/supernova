@@ -1,15 +1,16 @@
 import {readFile} from "node:fs/promises";
-import type {PromptTemplate, Skill} from "@earendil-works/pi-coding-agent";
+import type {PromptTemplate, ResourceLoader, Skill} from "@earendil-works/pi-coding-agent";
 import {Context, Effect, Layer} from "effect";
 import {PiSdkService} from "@supernova/agent-runtime/layers/pi-sdk";
 
 export interface PiResourceCatalogShape {
+  readonly initialize: (projectPath: string) => Promise<void>;
   readonly listPromptTemplates: (projectPath: string) => Promise<readonly PromptTemplate[]>;
   readonly listSkills: (projectPath: string) => Promise<readonly Skill[]>;
   readonly readSkillContent: (skill: Skill) => Promise<string>;
 }
 
-/** Private capability for loading Pi skills and prompt templates. */
+/** Private capability for loading project resources once for discovery. */
 export class PiResourceCatalog extends Context.Service<PiResourceCatalog, PiResourceCatalogShape>()("supernova/agent-runtime/PiResourceCatalog") {}
 
 export const PiResourceCatalogLive = Layer.effect(
@@ -17,17 +18,32 @@ export const PiResourceCatalogLive = Layer.effect(
   Effect.gen(function* () {
     const piSdk = yield* PiSdkService;
 
+    const loaders = new Map<string, Promise<ResourceLoader>>();
+
+    function load(projectPath: string): Promise<ResourceLoader> {
+      if (!loaders.has(projectPath)) {
+        loaders.set(
+          projectPath,
+          (async () => {
+            const loader = await piSdk.loadResourceLoader({projectPath});
+            const {errors} = loader.getExtensions();
+            if (errors.length > 0) throw new Error(errors.map(({path, error}) => `${path}: ${error}`).join("\n"));
+            return loader;
+          })().catch((error) => {
+            loaders.delete(projectPath);
+            throw error;
+          })
+        );
+      }
+      return loaders.get(projectPath)!;
+    }
+
     return {
-      listPromptTemplates: async (projectPath) => {
-        const resourceLoader = piSdk.createResourceLoader({projectPath});
-        await resourceLoader.reload();
-        return resourceLoader.getPrompts().prompts;
+      initialize: async (projectPath) => {
+        await load(projectPath);
       },
-      listSkills: async (projectPath) => {
-        const resourceLoader = piSdk.createResourceLoader({projectPath});
-        await resourceLoader.reload();
-        return resourceLoader.getSkills().skills;
-      },
+      listPromptTemplates: async (projectPath) => (await load(projectPath)).getPrompts().prompts,
+      listSkills: async (projectPath) => (await load(projectPath)).getSkills().skills,
       readSkillContent: (skill) => readFile(skill.filePath, "utf8"),
     };
   })

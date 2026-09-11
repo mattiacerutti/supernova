@@ -18,6 +18,7 @@ import {useSessionLiveStore} from "@/features/sessions/stores/session-live-store
 import {useAppearanceStore} from "@/features/settings/stores/appearance-store";
 import {useRpcClient} from "@/rpc/use-rpc-client";
 import {showToast} from "@/components/ui/toast-manager";
+import {useConfiguration} from "@/features/configuration/hooks/api/use-configuration";
 
 interface NewSessionPageProps {
   readonly projectName: string;
@@ -33,9 +34,11 @@ export default function NewSessionPage(props: NewSessionPageProps) {
   const createSessionMutation = useCreateSession();
   const resolvedMode = useAppearanceStore((state) => state.resolvedMode);
   const sendMessage = useSessionLiveStore((state) => state.sendMessage);
-  const modelSelection = useComposerModelSelection();
+  const configuration = useConfiguration(projectPath);
+  const modelSelection = useComposerModelSelection({projectPath, defaults: configuration.data?.modelDefaults});
+  const isPending = configuration.isPending || modelSelection.isPending;
 
-  const composerDisabled = createSessionMutation.isPending || modelSelection.isPending || !modelSelection.modelReference;
+  const composerDisabled = createSessionMutation.isPending || isPending || configuration.isFetching || !modelSelection.modelReference;
 
   const thinkingLevels = modelSelection.selectedModelDetails?.thinkingLevels ?? [];
 
@@ -58,7 +61,7 @@ export default function NewSessionPage(props: NewSessionPageProps) {
 
   const handleSubmit = (contentParts: readonly UserMessageContentPart[]): void => {
     const modelReference = modelSelection.modelReference;
-    if (!modelReference) return;
+    if (composerDisabled || !modelReference) return;
 
     createSessionMutation.mutate(
       {projectPath},
@@ -86,7 +89,7 @@ export default function NewSessionPage(props: NewSessionPageProps) {
           </h1>
         </div>
         <div className="relative w-full">
-          {modelSelection.isPending ? (
+          {isPending ? (
             <SessionComposerSkeleton />
           ) : (
             <SessionComposer

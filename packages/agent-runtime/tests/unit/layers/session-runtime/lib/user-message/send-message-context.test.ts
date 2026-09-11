@@ -4,6 +4,7 @@ import {prepareSendMessageContext} from "@supernova/agent-runtime/layers/session
 import {imageAttachment, textAttachment} from "@tests/support/layers/pi-session-test-utils";
 
 const resourceCatalog: PiResourceCatalogShape = {
+  initialize: async () => undefined,
   listPromptTemplates: async () => [],
   listSkills: async () => [],
   readSkillContent: async () => "",
