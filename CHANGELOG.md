@@ -8,6 +8,16 @@ All notable changes to Supernova are documented in this file.
 
 ### Added
 
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.2.0]
+
+### Added
+
 - Added global and project settings.json support.
 - Added support for headless Pi extensions, packages, and expanded skill discovery.
 
@@ -15,10 +25,6 @@ All notable changes to Supernova are documented in this file.
 
 - Changed the agent runtime to Pi 0.85.1.
 - Changed skill suggestions to load once per project and filter locally.
-
-### Fixed
-
-### Removed
 
 ## [0.1.1]
 
