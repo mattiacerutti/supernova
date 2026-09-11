@@ -35,7 +35,7 @@ export default function NewSessionPage(props: NewSessionPageProps) {
   const resolvedMode = useAppearanceStore((state) => state.resolvedMode);
   const sendMessage = useSessionLiveStore((state) => state.sendMessage);
   const configuration = useConfiguration(projectPath);
-  const modelSelection = useComposerModelSelection({defaults: configuration.data?.modelDefaults});
+  const modelSelection = useComposerModelSelection({projectPath, defaults: configuration.data?.modelDefaults});
   const isPending = configuration.isPending || modelSelection.isPending;
 
   const composerDisabled = createSessionMutation.isPending || isPending || configuration.isFetching || !modelSelection.modelReference;

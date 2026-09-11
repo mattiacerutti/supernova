@@ -1,6 +1,7 @@
 import {Toast} from "@base-ui/react/toast";
 import {useId, type ReactNode} from "react";
 import Icon from "@/components/ui/icon";
+import Button from "@/components/ui/button";
 import {toastManager} from "@/components/ui/toast-manager";
 import {cn} from "@/lib/cn";
 
@@ -75,6 +76,16 @@ function ToastItem(props: {readonly toast: ToastObject}) {
             <p className="mt-0.5 mb-0 wrap-break-word text-xs text-ink-muted" id={descriptionId}>
               {toast.description}
             </p>
+          )}
+          {toast.actionProps && (
+            <Toast.Action
+              {...toast.actionProps}
+              render={
+                <Button variant="ghost" size="sm" className="mt-1">
+                  {toast.actionProps.children}
+                </Button>
+              }
+            />
           )}
         </div>
 

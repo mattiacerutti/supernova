@@ -8,6 +8,7 @@ import {useModelPickerStore} from "@/features/sessions/stores/model-picker-store
 import {useSessionModelsStore} from "@/features/sessions/stores/session-models-store";
 
 interface UseComposerModelSelectionInput {
+  readonly projectPath: string;
   readonly defaults?: ModelDefaults;
   readonly initialSelection?: ModelReference;
   readonly sessionId?: string;
@@ -26,10 +27,10 @@ interface ComposerModelSelection {
 }
 
 /** Owns model and thinking-level selection for session composers. */
-export function useComposerModelSelection(input: UseComposerModelSelectionInput = {}): ComposerModelSelection {
-  const {defaults, initialSelection, sessionId} = input;
+export function useComposerModelSelection(input: UseComposerModelSelectionInput): ComposerModelSelection {
+  const {defaults, initialSelection, projectPath, sessionId} = input;
 
-  const {data: models, isPending} = useSessionModels();
+  const {data: models, isPending} = useSessionModels(projectPath);
   const availableModels = models ?? [];
 
   const [localSelection, setLocalSelection] = useState<ModelReference | undefined>(undefined);

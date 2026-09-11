@@ -6,6 +6,7 @@ const skillFile = "/skills/demo/SKILL.md";
 
 function resourceCatalog(input?: {skillContent?: string}): PiResourceCatalogShape {
   return {
+    initialize: async () => undefined,
     listPromptTemplates: async () => [],
     listSkills: async () =>
       input?.skillContent

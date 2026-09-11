@@ -20,7 +20,7 @@ export const PiSessionsFromInternal = Layer.effect(
       create: (projectPath) => createSession(projectPath).pipe(Effect.provideService(PiSessionStore, sessionStore)),
       get: (sessionId) => getSession(sessionId).pipe(Effect.provideService(PiModelCatalog, modelCatalog), Effect.provideService(PiSessionStore, sessionStore)),
       listComposerSuggestions: (projectPath) => listComposerSuggestions(projectPath).pipe(Effect.provideService(PiResourceCatalog, resourceCatalog)),
-      listModels: () => listModels().pipe(Effect.provideService(PiModelCatalog, modelCatalog)),
+      listModels: (projectPath) => listModels(projectPath).pipe(Effect.provideService(PiModelCatalog, modelCatalog), Effect.provideService(PiResourceCatalog, resourceCatalog)),
       rename: (input) => renameSession(input).pipe(Effect.provideService(PiModelCatalog, modelCatalog), Effect.provideService(PiSessionStore, sessionStore)),
     };
   })

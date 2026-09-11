@@ -4,6 +4,7 @@ import {Context, Effect, Layer} from "effect";
 import {PiSdkService} from "@supernova/agent-runtime/layers/pi-sdk";
 
 export interface PiResourceCatalogShape {
+  readonly initialize: (projectPath: string) => Promise<void>;
   readonly listPromptTemplates: (projectPath: string) => Promise<readonly PromptTemplate[]>;
   readonly listSkills: (projectPath: string) => Promise<readonly Skill[]>;
   readonly readSkillContent: (skill: Skill) => Promise<string>;
@@ -24,8 +25,7 @@ export const PiResourceCatalogLive = Layer.effect(
         loaders.set(
           projectPath,
           (async () => {
-            const loader = piSdk.createResourceLoader({projectPath});
-            await loader.reload();
+            const loader = await piSdk.loadResourceLoader({projectPath});
             const {errors} = loader.getExtensions();
             if (errors.length > 0) throw new Error(errors.map(({path, error}) => `${path}: ${error}`).join("\n"));
             return loader;
@@ -39,6 +39,9 @@ export const PiResourceCatalogLive = Layer.effect(
     }
 
     return {
+      initialize: async (projectPath) => {
+        await load(projectPath);
+      },
       listPromptTemplates: async (projectPath) => (await load(projectPath)).getPrompts().prompts,
       listSkills: async (projectPath) => (await load(projectPath)).getSkills().skills,
       readSkillContent: (skill) => readFile(skill.filePath, "utf8"),

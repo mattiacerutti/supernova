@@ -12,6 +12,7 @@ function run(catalog: PiResourceCatalogShape) {
 describe("listing composer suggestions", () => {
   it("returns every resource without filtering or truncating the client snapshot", async () => {
     const result = await run({
+      initialize: async () => undefined,
       listPromptTemplates: async () => [
         {
           name: "",
@@ -32,6 +33,7 @@ describe("listing composer suggestions", () => {
   it("maps discovery failures to the RPC error", async () => {
     await expect(
       run({
+        initialize: async () => undefined,
         listPromptTemplates: async () => [],
         listSkills: async () => {
           throw new Error("resources unavailable");

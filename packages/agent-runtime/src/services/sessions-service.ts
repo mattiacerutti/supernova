@@ -14,7 +14,7 @@ export interface SessionsServiceShape {
   readonly create: (projectPath: string) => Effect.Effect<Session, CreateSessionError>;
   readonly get: (sessionId: string) => Effect.Effect<Session, LoadSessionError>;
   readonly listComposerSuggestions: (projectPath: string) => Effect.Effect<ListComposerSuggestionsResult, ListComposerSuggestionsError>;
-  readonly listModels: () => Effect.Effect<ListModelsResult, ListModelsError>;
+  readonly listModels: (projectPath: string) => Effect.Effect<ListModelsResult, ListModelsError>;
   readonly rename: (input: {readonly sessionId: string; readonly title: string}) => Effect.Effect<Session, RenameSessionError>;
 }
 

@@ -72,9 +72,17 @@ describe("Pi resource catalog", () => {
 });
 
 function runCatalog(piSdk: PiSdkServiceShape) {
+  const testSdk = {
+    ...piSdk,
+    loadResourceLoader: async (input: {readonly projectPath: string}) => {
+      const loader = piSdk.createResourceLoader(input);
+      await loader.reload();
+      return loader;
+    },
+  };
   return Effect.runPromise(
     Effect.gen(function* () {
       return yield* PiResourceCatalog;
-    }).pipe(Effect.provide(PiResourceCatalogLive.pipe(Layer.provide(Layer.succeed(PiSdkService, piSdk)))))
+    }).pipe(Effect.provide(PiResourceCatalogLive.pipe(Layer.provide(Layer.succeed(PiSdkService, testSdk)))))
   );
 }
