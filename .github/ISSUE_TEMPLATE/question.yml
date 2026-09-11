@@ -1,0 +1,27 @@
+name: Question
+description: Ask a question about using Supernova.
+title: "question: "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before opening a question, check the documentation and search for similar issues and discussions.
+
+        For bugs or feature requests, use the corresponding issue template instead.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: What is your question?
+      description: Describe what you would like to know or what you are trying to achieve.
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Include relevant details, what you have already tried, or screenshots that help explain your question.
+    validations:
+      required: false
