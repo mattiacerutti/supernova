@@ -28,7 +28,9 @@ export function resolveComposerModelSelection({models, activeSelection, defaults
   const recentKey = recentModelKeys.find((key) => models.some((model) => modelKey(model.providerId, model.id) === key));
   const recentModel = recentKey ? models.find((model) => modelKey(model.providerId, model.id) === recentKey) : undefined;
   const selectedModelDetails = activeModel ?? defaultModel ?? recentModel ?? models[0];
-  const preferredThinkingLevel = activeModel ? activeSelection?.thinkingLevel : (startupDefaults?.thinkingLevel ?? lastThinkingLevel);
+
+  const modelThinkingLevel = selectedModelDetails ? startupDefaults?.modelThinkingLevels?.[`${selectedModelDetails.providerId}/${selectedModelDetails.id}`] : undefined;
+  const preferredThinkingLevel = activeModel ? activeSelection?.thinkingLevel : (modelThinkingLevel ?? startupDefaults?.thinkingLevel ?? lastThinkingLevel);
   const thinkingLevel = selectedModelDetails ? resolveThinkingLevel(selectedModelDetails, preferredThinkingLevel) : undefined;
 
   return {

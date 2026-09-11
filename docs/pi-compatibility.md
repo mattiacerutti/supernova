@@ -41,6 +41,7 @@ Each supported setting path is listed individually below. See [Pi's settings ref
 | `defaultProvider`                |
 | `defaultModel`                   |
 | `defaultThinkingLevel`           |
+| `modelThinkingLevels`            |
 | `thinkingBudgets.minimal`        |
 | `thinkingBudgets.low`            |
 | `thinkingBudgets.medium`         |

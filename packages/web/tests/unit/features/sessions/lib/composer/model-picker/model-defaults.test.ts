@@ -35,6 +35,35 @@ const cases: readonly SelectionCase[] = [
     expectedId: "preferred",
     expectedThinking: "high",
   },
+  {
+    name: "uses per-model reasoning before the general default",
+    defaults: {modelId: "preferred", thinkingLevel: "off", modelThinkingLevels: {"b/preferred": "high"}},
+    expectedId: "preferred",
+    expectedThinking: "high",
+  },
+  {
+    name: "honors per-model off reasoning",
+    defaults: {modelId: "preferred", thinkingLevel: "high", modelThinkingLevels: {"b/preferred": "off"}},
+    expectedId: "preferred",
+    expectedThinking: "off",
+  },
+  {
+    name: "matches the provider as well as the model ID",
+    defaults: {modelId: "preferred", thinkingLevel: "off", modelThinkingLevels: {"a/preferred": "high"}},
+    expectedId: "preferred",
+    expectedThinking: "off",
+  },
+  {
+    name: "clamps per-model reasoning to supported levels",
+    defaults: {modelId: "preferred", modelThinkingLevels: {"b/preferred": "max"}},
+    expectedId: "preferred",
+    expectedThinking: "high",
+  },
+  {
+    name: "ignores per-model reasoning for a model without reasoning",
+    defaults: {modelId: "first", modelThinkingLevels: {"a/first": "high"}},
+    expectedId: "first",
+  },
   {name: "accepts a provider-only default", defaults: {providerId: "b"}, expectedId: "preferred", expectedThinking: "off"},
   {name: "accepts an exact model-only default", defaults: {modelId: "preferred"}, expectedId: "preferred", expectedThinking: "off"},
   {name: "does not match a model belonging to another provider", defaults: {providerId: "a", modelId: "preferred"}, expectedId: "first"},
@@ -44,7 +73,7 @@ const cases: readonly SelectionCase[] = [
   {name: "preserves explicit model choice", defaults: {modelId: "preferred"}, activeSelection: {providerId: "a", id: "first"}, expectedId: "first"},
   {
     name: "preserves explicit off reasoning",
-    defaults: {thinkingLevel: "high"},
+    defaults: {thinkingLevel: "high", modelThinkingLevels: {"b/preferred": "high"}},
     activeSelection: {providerId: "b", id: "preferred", thinkingLevel: "off"},
     expectedId: "preferred",
     expectedThinking: "off",
@@ -52,7 +81,7 @@ const cases: readonly SelectionCase[] = [
   {
     name: "preserves a resumed selection",
     isNewSession: false,
-    defaults: {modelId: "first", thinkingLevel: "off"},
+    defaults: {modelId: "first", thinkingLevel: "off", modelThinkingLevels: {"b/preferred": "off"}},
     activeSelection: {providerId: "b", id: "preferred", thinkingLevel: "high"},
     expectedId: "preferred",
     expectedThinking: "high",
@@ -73,10 +102,13 @@ describe("composer model defaults", () => {
     expect(selection.modelReference?.thinkingLevel).toBe(expectedThinking);
   });
 
-  it("uses a reasoning-only default with the recent model", () => {
-    const selection = resolveComposerModelSelection({models, defaults: {thinkingLevel: "high"}, isNewSession: true, recentModelKeys: ["b|preferred"], lastThinkingLevel: "off"});
-    expect(selection.modelReference).toEqual({providerId: "b", id: "preferred", thinkingLevel: "high"});
-  });
+  it.each([{thinkingLevel: "high"}, {modelThinkingLevels: {"b/preferred": "high"}}, {modelId: "missing", modelThinkingLevels: {"b/preferred": "high"}}] satisfies ModelDefaults[])(
+    "uses reasoning defaults with the recent model: %j",
+    (defaults) => {
+      const selection = resolveComposerModelSelection({models, defaults, isNewSession: true, recentModelKeys: ["b|preferred"], lastThinkingLevel: "off"});
+      expect(selection.modelReference).toEqual({providerId: "b", id: "preferred", thinkingLevel: "high"});
+    }
+  );
 
   it("returns no model when no authenticated models are available", () => {
     const selection = resolveComposerModelSelection({models: [], defaults: {modelId: "preferred"}, isNewSession: true, recentModelKeys: []});

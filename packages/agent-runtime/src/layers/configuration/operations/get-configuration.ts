@@ -8,11 +8,13 @@ export function getConfiguration(input: GetConfigurationPayload) {
   return Effect.try({
     try: () => {
       const settings = loadPiSettings(input.projectPath);
+      const modelThinkingLevels = settings.getAllModelThinkingLevels();
       return Schema.decodeUnknownSync(GetConfigurationResult)({
         modelDefaults: {
           providerId: settings.getDefaultProvider(),
           modelId: settings.getDefaultModel(),
           thinkingLevel: settings.getDefaultThinkingLevel(),
+          modelThinkingLevels: Object.keys(modelThinkingLevels).length > 0 ? modelThinkingLevels : undefined,
         },
       });
     },

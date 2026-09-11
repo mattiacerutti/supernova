@@ -65,6 +65,18 @@ describe("client-safe configuration", () => {
     expect(await readFile(projectFile, "utf8")).toBe(project);
   });
 
+  it("merges per-model reasoning defaults by key without changing the global configuration or files", async () => {
+    const global = JSON.stringify({modelThinkingLevels: {"a/model": "high", "b/model": "low"}});
+    const project = JSON.stringify({modelThinkingLevels: {"a/model": "off", "c/model": "max"}});
+    await writeFile(globalFile, global);
+    await writeFile(projectFile, project);
+
+    expect((await configuration(projectPath)).modelDefaults.modelThinkingLevels).toEqual({"a/model": "off", "b/model": "low", "c/model": "max"});
+    expect((await configuration()).modelDefaults.modelThinkingLevels).toEqual({"a/model": "high", "b/model": "low"});
+    expect(await readFile(globalFile, "utf8")).toBe(global);
+    expect(await readFile(projectFile, "utf8")).toBe(project);
+  });
+
   it("does not consult the server working directory's project configuration for a global request", async () => {
     await writeFile(globalFile, JSON.stringify({defaultModel: "global-model"}));
     await writeFile(projectFile, "invalid project JSON");
@@ -78,6 +90,8 @@ describe("client-safe configuration", () => {
     {name: "invalid model type", content: JSON.stringify({defaultModel: {secret: "private"}})},
     {name: "invalid provider type", content: JSON.stringify({defaultProvider: 123})},
     {name: "invalid reasoning level", content: JSON.stringify({defaultThinkingLevel: "private"})},
+    {name: "invalid per-model reasoning level", content: JSON.stringify({modelThinkingLevels: {"a/model": "private"}})},
+    {name: "invalid per-model reasoning value type", content: JSON.stringify({modelThinkingLevels: {"a/model": 123}})},
   ])("returns a sanitized typed error for $name", async ({content}) => {
     await writeFile(projectFile, content);
     const error = await Effect.runPromise(
