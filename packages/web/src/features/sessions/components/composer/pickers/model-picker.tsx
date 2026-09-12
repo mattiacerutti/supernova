@@ -94,9 +94,15 @@ export default function ModelPicker(props: ModelPickerProps) {
                       )}
                       key={`${section.title}-${value}`}
                     >
-                      <Button className="flex min-w-0 flex-1 items-baseline gap-1.5 px-2 py-1.5 text-left" onClick={() => handleModelSelect(value)} variant="bare">
-                        <span className={cn("truncate text-sm leading-5 text-ink", selected && "font-medium")}>{model.name}</span>
-                        {showProvider && <span className="shrink-0 text-[11px] text-ink-faint">{model.providerName}</span>}
+                      <Button className="flex min-w-0 flex-1 items-baseline gap-1 px-2 py-1.5 text-left" onClick={() => handleModelSelect(value)} variant="bare">
+                        <span className={cn("truncate text-sm leading-5 text-ink", showProvider && "max-w-[70%] shrink-0", selected && "font-medium")} title={model.name}>
+                          {model.name}
+                        </span>
+                        {showProvider && (
+                          <span className="truncate text-xs text-ink-faint" title={model.providerName}>
+                            {model.providerName}
+                          </span>
+                        )}
                       </Button>
                       <IconButton
                         label={favorite ? "Remove from favorites" : "Add to favorites"}
