@@ -12,6 +12,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Fixed
 
+- Fixed sending a message right after selecting a newly available model (for example, right after adding a provider package) failing with "Selected model is not available." until the message was resent.
+
 ### Removed
 
 ## [0.2.0]

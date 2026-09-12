@@ -133,18 +133,19 @@ export class PiSessionRuntime {
     return (await this.getAgentSession()).sessionManager;
   }
 
-  /** Resolves a public model reference against Pi's available model catalog. */
-  public resolveModel(modelReference: ModelReference): PiModel {
-    return findSelectedModel(this.modelCatalog, modelReference);
-  }
-
-  /** Applies model and thinking level to the active session. */
-  public async selectModel(modelReference: ModelReference): Promise<void> {
+  /**
+   * Applies model and thinking level to the active session and returns the applied model.
+   *
+   * Pi's `setModel` verifies provider credentials, so an unauthenticated provider fails here
+   * with a specific auth error rather than a generic availability error.
+   */
+  public async selectModel(modelReference: ModelReference): Promise<PiModel> {
     const agentSession = await this.getAgentSession();
-    const model = this.resolveModel(modelReference);
+    const model = findSelectedModel(this.modelCatalog, modelReference);
 
     await agentSession.setModel(model);
     agentSession.setThinkingLevel(toPiThinkingLevel(modelReference.thinkingLevel));
+    return model;
   }
 
   /** Returns the selected model state represented by the active session branch. */
@@ -352,6 +353,10 @@ export class PiSessionRuntime {
         }
         throw error;
       }
+      // Binding re-registers extension providers on the shared ModelRuntime, which recomposes them from
+      // their static config and drops any network-fetched catalog. Pi restores the cached catalog in a
+      // fire-and-forget refresh; await an equivalent restore so model resolution never sees the gap.
+      await this.modelCatalog.restoreModels();
     }
 
     return this.agentSession;

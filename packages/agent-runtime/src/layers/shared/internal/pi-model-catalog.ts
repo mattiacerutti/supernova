@@ -5,8 +5,13 @@ import type {PiSdkServiceShape} from "@supernova/agent-runtime/layers/pi-sdk";
 export type PiModel = ReturnType<PiSdkServiceShape["modelRuntime"]["getModels"]>[number];
 
 export interface PiModelCatalogShape {
+  /** Every model from every registered provider, regardless of credential state. */
+  readonly getModel: (providerId: string, modelId: string) => PiModel | undefined;
+  /** Models whose provider passed the last auth sweep; used for discovery, not for gating selection. */
   readonly getAvailableModels: () => readonly PiModel[];
   readonly getProviderDisplayName: (providerId: string) => string;
+  /** Reapplies cached provider catalogs without network access; needed after extension providers re-register. */
+  readonly restoreModels: () => Promise<void>;
   readonly refreshAuthAndModels: () => Promise<void>;
 }
 
@@ -20,8 +25,12 @@ export const PiModelCatalogLive = Layer.effect(
     const piSdk = yield* PiSdkService;
 
     return {
+      getModel: (providerId, modelId) => piSdk.modelRuntime.getModel(providerId, modelId),
       getAvailableModels: () => piSdk.modelRuntime.getAvailableSnapshot(),
       getProviderDisplayName: (providerId) => piSdk.modelRuntime.getProvider(providerId)?.name ?? providerId,
+      restoreModels: async () => {
+        await piSdk.modelRuntime.refresh({allowNetwork: false});
+      },
       refreshAuthAndModels: async () => {
         await piSdk.modelRuntime.refresh({allowNetwork: true, signal: AbortSignal.timeout(15_000)});
         const error = piSdk.modelRuntime.getError();

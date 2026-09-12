@@ -409,6 +409,41 @@ describe("sending messages through Pi sessions", () => {
     expect(pi.faux.state.callCount).toBe(1);
   });
 
+  it("rejects a registered model whose provider has no credentials with an auth error before any provider work", async () => {
+    const pi = await createPiTestRuntime();
+    runtimes.push(pi);
+    const {info} = pi.createSession();
+    pi.modelRuntime.registerProvider("unauthenticated", {
+      api: selectedPiModel.api,
+      baseUrl: selectedPiModel.baseUrl,
+      models: [
+        {
+          api: selectedPiModel.api,
+          baseUrl: selectedPiModel.baseUrl,
+          contextWindow: selectedPiModel.contextWindow,
+          cost: selectedPiModel.cost,
+          id: "locked-model",
+          input: [...selectedPiModel.input],
+          maxTokens: selectedPiModel.maxTokens,
+          name: "Locked Model",
+          reasoning: selectedPiModel.reasoning,
+        },
+      ],
+      name: "Unauthenticated",
+    });
+    expect(pi.modelCatalog.getModel("unauthenticated", "locked-model")).toBeDefined();
+    expect(pi.modelCatalog.getAvailableModels().some((model) => model.provider === "unauthenticated")).toBe(false);
+
+    await expect(
+      pi.sendMessage({message: "Fix it", modelReference: {id: "locked-model", providerId: "unauthenticated", thinkingLevel: "off"}, sessionId: info.id})
+    ).rejects.toThrow("No API key for unauthenticated/locked-model");
+    expect(pi.faux.state.callCount).toBe(0);
+
+    pi.faux.setResponses([fauxAssistantMessage("Recovered.")]);
+    await pi.sendMessage({message: "Try again", modelReference: selectedModelReference, sessionId: info.id});
+    expect(pi.faux.state.callCount).toBe(1);
+  });
+
   it("rejects the command when the session cannot be found", async () => {
     const pi = await createPiTestRuntime();
     runtimes.push(pi);

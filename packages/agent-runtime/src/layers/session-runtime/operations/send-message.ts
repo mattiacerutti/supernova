@@ -22,8 +22,8 @@ export async function sendMessage(runtime: PiSessionRuntime, titleGenerator: PiS
 
   try {
     const sessionManager = await runtime.getSessionManager();
-    const selectedModel = input.modelReference;
-    const model = runtime.resolveModel(selectedModel);
+    // Selecting first lets an unknown or unauthenticated model fail before any provider work or checkpoint capture.
+    const model = await runtime.selectModel(input.modelReference);
 
     const generatedTitle = sessionManager.getSessionName() === undefined ? await generateSessionTitle({input, model, titleGenerator}) : undefined;
     const messageContext = await prepareSendMessageContext(input, {
@@ -34,7 +34,6 @@ export async function sendMessage(runtime: PiSessionRuntime, titleGenerator: PiS
     const captureCheckpoints = input.captureCheckpoints ?? true;
     const checkpointId = randomUUID();
     const checkpointStatus = await runtime.createCheckpoint(checkpointId, captureCheckpoints);
-    await runtime.selectModel(selectedModel);
 
     const {completion} = runtime.startTurn({beforeCheckpoint: {checkpointId, status: checkpointStatus}, captureCheckpoints, messageContext, title: generatedTitle});
 

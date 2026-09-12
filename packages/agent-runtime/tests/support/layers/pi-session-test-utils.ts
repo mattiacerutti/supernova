@@ -215,8 +215,12 @@ export async function createPiTestRuntime(input?: {
     },
   };
   const modelCatalog: PiModelCatalogShape = {
+    getModel: (providerId, modelId) => modelRuntime.getModel(providerId, modelId),
     getAvailableModels: () => modelRuntime.getAvailableSnapshot(),
     getProviderDisplayName: (providerId) => modelRuntime.getProvider(providerId)?.name ?? providerId,
+    restoreModels: async () => {
+      await modelRuntime.refresh({allowNetwork: false});
+    },
     refreshAuthAndModels: async () => {
       refreshCount++;
       await modelRuntime.refresh({allowNetwork: false});
