@@ -1,28 +1,24 @@
-import type {WorkspaceChangeEntry, WorkspaceFileNode} from "@/features/workspace/types/workspace";
+import type {WorkspaceChangeEntry} from "@supernova/contracts/workspace/schemas";
 import {directoryOf, fileNameOf} from "@/features/workspace/lib/file-info";
 
 export interface FileTreeNode {
   readonly children: readonly FileTreeNode[];
+  /** Muted directory prefix shown before the label in flat lists. */
   readonly directoryLabel?: string;
-  readonly entry?: WorkspaceChangeEntry;
+  /** Present when the file comes from a change set. */
+  readonly changeEntry?: WorkspaceChangeEntry;
   readonly kind: "directory" | "file";
   readonly label: string;
   readonly path: string;
 }
 
-export interface FileTreeRowData {
-  readonly depth: number;
-  readonly expandable: boolean;
-  readonly expanded: boolean;
-  readonly node: FileTreeNode;
-}
-
 interface DraftNode {
   readonly children: Map<string, DraftNode>;
-  entry?: WorkspaceChangeEntry;
   readonly name: string;
   readonly path: string;
 }
+
+type EntryMap = ReadonlyMap<string, WorkspaceChangeEntry>;
 
 /** Directories first, then alphabetical. */
 function compareNodes(left: FileTreeNode, right: FileTreeNode): number {
@@ -30,74 +26,41 @@ function compareNodes(left: FileTreeNode, right: FileTreeNode): number {
   return left.label.localeCompare(right.label);
 }
 
-/** Merges single-directory chains into one row. */
-function toChangeNode(draft: DraftNode, label: string): FileTreeNode {
-  if (draft.entry) return {children: [], entry: draft.entry, kind: "file", label, path: draft.path};
+/** Converts a draft to a node, merging single-child directory chains into one row. */
+function toNode(draft: DraftNode, label: string, entries: EntryMap): FileTreeNode {
+  if (draft.children.size === 0) return {changeEntry: entries.get(draft.path), children: [], kind: "file", label, path: draft.path};
 
   let current = draft;
   let mergedLabel = label;
   while (current.children.size === 1) {
     const [child] = current.children.values();
-    if (!child || child.entry) break;
+    if (!child || child.children.size === 0) break;
     mergedLabel = `${mergedLabel}/${child.name}`;
     current = child;
   }
 
-  const children = [...current.children.values()].map((child) => toChangeNode(child, child.name)).sort(compareNodes);
+  const children = [...current.children.values()].map((child) => toNode(child, child.name, entries)).sort(compareNodes);
   return {children, kind: "directory", label: mergedLabel, path: current.path};
 }
 
-export function buildChangeTree(entries: readonly WorkspaceChangeEntry[]): readonly FileTreeNode[] {
+/** Nests repository-relative file paths into directories; entries attach git status to their files. */
+export function buildTree(paths: readonly string[], entries: EntryMap = new Map()): readonly FileTreeNode[] {
   const root: DraftNode = {children: new Map(), name: "", path: ""};
-
-  for (const entry of entries) {
+  for (const fullPath of paths) {
     let current = root;
-    for (const segment of entry.path.split("/").filter(Boolean)) {
+    for (const segment of fullPath.split("/").filter(Boolean)) {
       const path = current.path ? `${current.path}/${segment}` : segment;
       const child = current.children.get(segment) ?? {children: new Map(), name: segment, path};
       current.children.set(segment, child);
       current = child;
     }
-    current.entry = entry;
   }
-
-  return [...root.children.values()].map((child) => toChangeNode(child, child.name)).sort(compareNodes);
+  return [...root.children.values()].map((child) => toNode(child, child.name, entries)).sort(compareNodes);
 }
 
-export function buildFlatChangeList(entries: readonly WorkspaceChangeEntry[]): readonly FileTreeNode[] {
-  return entries
-    .map<FileTreeNode>((entry) => ({children: [], directoryLabel: directoryOf(entry.path), entry, kind: "file", label: fileNameOf(entry.path), path: entry.path}))
+/** Path-sorted file rows with the directory as a muted prefix, for flat and search views. */
+export function buildFlatList(paths: readonly string[], entries: EntryMap = new Map()): readonly FileTreeNode[] {
+  return paths
+    .map<FileTreeNode>((path) => ({children: [], directoryLabel: directoryOf(path), changeEntry: entries.get(path), kind: "file", label: fileNameOf(path), path}))
     .toSorted((left, right) => left.path.localeCompare(right.path));
-}
-
-export function buildFileTree(nodes: readonly WorkspaceFileNode[]): readonly FileTreeNode[] {
-  return nodes.map<FileTreeNode>((node) => ({children: buildFileTree(node.children ?? []), kind: node.kind, label: node.name, path: node.path})).sort(compareNodes);
-}
-
-/** Visible rows; only expanded branches are walked. */
-export function flattenTree(nodes: readonly FileTreeNode[], isExpanded: (node: FileTreeNode) => boolean, depth = 0): readonly FileTreeRowData[] {
-  return nodes.flatMap((node) => {
-    const expandable = node.children.length > 0;
-    const expanded = expandable && isExpanded(node);
-    const row: FileTreeRowData = {depth, expandable, expanded, node};
-    return expanded ? [row, ...flattenTree(node.children, isExpanded, depth + 1)] : [row];
-  });
-}
-
-/** Rows a directory would reveal, so an expansion can be sized before the rows exist. */
-export function countVisibleDescendants(node: FileTreeNode, isExpanded: (node: FileTreeNode) => boolean): number {
-  return node.children.reduce((total, child) => total + 1 + (child.children.length > 0 && isExpanded(child) ? countVisibleDescendants(child, isExpanded) : 0), 0);
-}
-
-export function filterFileTree(nodes: readonly FileTreeNode[], query: string): readonly FileTreeNode[] {
-  const needle = query.trim().toLowerCase();
-  const matches: FileTreeNode[] = [];
-  const visit = (node: FileTreeNode): void => {
-    if (node.kind === "file" && node.path.toLowerCase().includes(needle)) {
-      matches.push({children: [], directoryLabel: directoryOf(node.path), kind: "file", label: fileNameOf(node.path), path: node.path});
-    }
-    node.children.forEach(visit);
-  };
-  nodes.forEach(visit);
-  return matches.toSorted((left, right) => left.path.localeCompare(right.path));
 }

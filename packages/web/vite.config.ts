@@ -27,7 +27,18 @@ export default defineConfig(({mode}) => ({
     strictPort: true,
   },
   optimizeDeps: {
-    include: ["@pierre/diffs"],
+    // Pierre pulls Shiki, its grammars, and themes in lazily. Pre-bundling them all up front stops Vite
+    // from re-optimizing mid-session, which would leave the highlighter split across two module copies.
+    include: [
+      "@pierre/diffs",
+      "@pierre/diffs/react",
+      "@pierre/trees",
+      "@pierre/trees/react",
+      "@pierre/diffs > shiki",
+      "@pierre/diffs > shiki/wasm",
+      "@pierre/diffs > @pierre/theme/pierre-dark",
+      "@pierre/diffs > @pierre/theme/pierre-light",
+    ],
   },
   resolve: {
     alias: [

@@ -55,50 +55,68 @@ export function nextActiveTabId(tabs: readonly WorkspacePanelTab[], closedId: st
   return remaining[Math.min(closedIndex, remaining.length - 1)]?.id ?? null;
 }
 
-interface WorkspacePanelState {
+/** A session's panel state. Kept per session so switching sessions restores each one's layout. */
+export interface WorkspacePanelLayout {
   readonly activeTabId: string | null;
   readonly open: boolean;
   readonly tabs: readonly WorkspacePanelTab[];
+}
+
+export const EMPTY_LAYOUT: WorkspacePanelLayout = {activeTabId: null, open: false, tabs: []};
+
+interface WorkspacePanelState {
+  readonly layouts: Readonly<Record<string, WorkspacePanelLayout>>;
   readonly width: number;
-  readonly closeTab: (tabId: string) => void;
-  /** Opens a new tab of the kind after the active one, or activates the existing one for singleton kinds. */
-  readonly openTab: (kind: WorkspacePanelTabKind) => void;
-  readonly pinTab: (tabId: string) => void;
-  readonly setActiveTab: (tabId: string) => void;
-  /** Replaces the whole tab list; used by tab-specific behavior such as opening a file. */
-  readonly setTabs: (tabs: readonly WorkspacePanelTab[], activeTabId: string) => void;
+  readonly closeTab: (sessionId: string, tabId: string) => void;
+  /** Opens a new tab of the kind, or activates the existing one for singleton kinds. */
+  readonly openTab: (sessionId: string, kind: WorkspacePanelTabKind) => void;
+  readonly pinTab: (sessionId: string, tabId: string) => void;
+  readonly setActiveTab: (sessionId: string, tabId: string) => void;
+  /** Replaces a session's layout; used by tab-specific behavior such as opening a file. */
+  readonly setLayout: (sessionId: string, layout: WorkspacePanelLayout) => void;
   readonly setWidth: (width: number, minWidth: number, maxWidth: number) => void;
-  readonly togglePanel: () => void;
-  readonly updateTab: <TTab extends WorkspacePanelTab>(tabId: string, update: (tab: TTab) => TTab) => void;
+  readonly togglePanel: (sessionId: string) => void;
+  readonly updateTab: <TTab extends WorkspacePanelTab>(sessionId: string, tabId: string, update: (tab: TTab) => TTab) => void;
 }
 
 export const useWorkspacePanelStore = create<WorkspacePanelState>()(
   persist(
-    (set) => ({
-      activeTabId: null,
-      open: false,
-      tabs: [],
-      width: DEFAULT_WORKSPACE_PANEL_WIDTH,
-      closeTab: (tabId) => set((state) => ({activeTabId: nextActiveTabId(state.tabs, tabId, state.activeTabId), tabs: state.tabs.filter((tab) => tab.id !== tabId)})),
-      openTab: (kind) =>
-        set((state) => {
-          const definition = WORKSPACE_TAB_KINDS[kind];
-          const existing = definition.singleton ? state.tabs.find((tab) => tab.kind === kind) : undefined;
-          if (existing) return {activeTabId: existing.id};
-          const created = definition.create();
-          return {activeTabId: created.id, tabs: [...state.tabs, created]};
-        }),
-      pinTab: (tabId) => set((state) => ({tabs: state.tabs.map((tab) => (tab.id === tabId ? (tabKind(tab).pin?.(tab) ?? tab) : tab))})),
-      setActiveTab: (activeTabId) => set({activeTabId}),
-      setTabs: (tabs, activeTabId) => set({activeTabId, tabs}),
-      setWidth: (width, minWidth, maxWidth) => set({width: Math.min(Math.max(Math.round(width), minWidth), maxWidth)}),
-      togglePanel: () => set((state) => ({open: !state.open})),
-      updateTab: (tabId, update) => set((state) => ({tabs: state.tabs.map((tab) => (tab.id === tabId ? update(tab as never) : tab))})),
-    }),
+    (set) => {
+      const updateLayout = (sessionId: string, update: (layout: WorkspacePanelLayout) => WorkspacePanelLayout): void => {
+        set((state) => ({layouts: {...state.layouts, [sessionId]: update(state.layouts[sessionId] ?? EMPTY_LAYOUT)}}));
+      };
+
+      return {
+        layouts: {},
+        width: DEFAULT_WORKSPACE_PANEL_WIDTH,
+        closeTab: (sessionId, tabId) =>
+          updateLayout(sessionId, (layout) => ({
+            ...layout,
+            activeTabId: nextActiveTabId(layout.tabs, tabId, layout.activeTabId),
+            tabs: layout.tabs.filter((tab) => tab.id !== tabId),
+          })),
+        openTab: (sessionId, kind) =>
+          updateLayout(sessionId, (layout) => {
+            const definition = WORKSPACE_TAB_KINDS[kind];
+            const existing = definition.singleton ? layout.tabs.find((tab) => tab.kind === kind) : undefined;
+            if (existing) return {...layout, activeTabId: existing.id};
+            const created = definition.create();
+            return {...layout, activeTabId: created.id, tabs: [...layout.tabs, created]};
+          }),
+        pinTab: (sessionId, tabId) =>
+          updateLayout(sessionId, (layout) => ({...layout, tabs: layout.tabs.map((tab) => (tab.id === tabId ? (tabKind(tab).pin?.(tab) ?? tab) : tab))})),
+        setActiveTab: (sessionId, activeTabId) => updateLayout(sessionId, (layout) => ({...layout, activeTabId})),
+        setLayout: (sessionId, layout) => updateLayout(sessionId, () => layout),
+        setWidth: (width, minWidth, maxWidth) => set({width: Math.min(Math.max(Math.round(width), minWidth), maxWidth)}),
+        togglePanel: (sessionId) => updateLayout(sessionId, (layout) => ({...layout, open: !layout.open})),
+        updateTab: (sessionId, tabId, update) =>
+          updateLayout(sessionId, (layout) => ({...layout, tabs: layout.tabs.map((tab) => (tab.id === tabId ? update(tab as never) : tab))})),
+      };
+    },
     {
       name: "supernova-workspace-panel",
       storage: createJSONStorage(() => localStorage),
-      partialize: ({open, width}) => ({open, width}),
+      partialize: ({width}) => ({width}),
     }
   )
 );

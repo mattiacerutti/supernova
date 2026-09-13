@@ -2,101 +2,108 @@ import {useState} from "react";
 import Icon from "@/components/ui/icon";
 import IconButton from "@/components/ui/icon-button";
 import Menu, {MenuItem} from "@/components/ui/menu";
-import CommitsList from "@/features/workspace/components/changes/commits-list";
-import PanelSectionHeader from "@/features/workspace/components/panel-section-header";
 import DiffStat from "@/features/workspace/components/changes/diff/diff-stat";
 import GitStatusBadge from "@/features/workspace/components/changes/diff/git-status-badge";
 import FileTree from "@/features/workspace/components/file-tree/file-tree";
+import FileTreeSkeleton from "@/features/workspace/components/file-tree/file-tree-skeleton";
 import FileDiffView from "@/features/workspace/components/file-viewer/file-diff-view";
 import FileViewer from "@/features/workspace/components/file-viewer/file-viewer";
-import {mockPatch} from "@/features/workspace/lib/mock-workspace";
+import {useWorkspaceChanges, useWorkspaceDiffContents} from "@/features/workspace/hooks/api/use-workspace";
+import {buildFlatList, buildTree} from "@/features/workspace/lib/file-tree";
+import {workspaceErrorMessage} from "@/features/workspace/lib/workspace-error-message";
 import {useWorkspacePanelStore} from "@/features/workspace/stores/workspace-panel-store";
-import {buildChangeTree, buildFlatChangeList} from "@/features/workspace/lib/file-tree";
-import type {WorkspaceChangeEntry, WorkspaceChangeSelection, WorkspaceSnapshot} from "@/features/workspace/types/workspace";
+import type {WorkspaceChangeEntry} from "@supernova/contracts/workspace/schemas";
 import type {WorkspaceChangesTab} from "@/features/workspace/types/workspace-panel";
 import {cn} from "@/lib/cn";
 
-// Rows: uncommitted header, body, filler, commits header, body. Spelled out for the Tailwind scanner.
-const SECTION_ROWS = {
-  both: "grid-rows-[auto_1fr_0fr_auto_1fr]",
-  commits: "grid-rows-[auto_0fr_0fr_auto_1fr]",
-  none: "grid-rows-[auto_0fr_1fr_auto_0fr]",
-  uncommitted: "grid-rows-[auto_1fr_0fr_auto_0fr]",
-};
-
 type ChangesView = "flat" | "tree";
 
+interface ChangeDiffProps {
+  readonly entry: WorkspaceChangeEntry | undefined;
+  readonly expanded: boolean;
+  readonly path: string;
+  readonly projectPath: string;
+  readonly split: boolean;
+}
+
+function ChangeDiff(props: ChangeDiffProps) {
+  const {entry, expanded, path, projectPath, split} = props;
+  const diff = useWorkspaceDiffContents(projectPath, path);
+
+  if (!entry) return <p className="px-4 py-3 text-sm text-ink-faint">This file is no longer part of the uncommitted changes.</p>;
+  if (diff.error) return <p className="px-4 py-3 text-sm text-ink-faint">{workspaceErrorMessage(diff.error)}</p>;
+  if (!diff.data) return <div aria-label="Loading" className="mx-4 my-3 h-4 w-32 animate-pulse rounded-full bg-overlay-pressed" />;
+  return <FileDiffView expanded={expanded} newContents={diff.data.newContents} oldContents={diff.data.oldContents} path={path} split={split} />;
+}
+
 interface ChangesTabProps {
-  readonly getCommitChanges: (commitId: string) => readonly WorkspaceChangeEntry[];
-  readonly snapshot: WorkspaceSnapshot;
+  readonly projectPath: string;
+  readonly sessionId: string;
   readonly tab: WorkspaceChangesTab;
 }
 
 export default function ChangesTab(props: ChangesTabProps) {
-  const {getCommitChanges, snapshot, tab} = props;
+  const {projectPath, sessionId, tab} = props;
   const {selection} = tab;
+  const changes = useWorkspaceChanges(projectPath);
   const updateTab = useWorkspacePanelStore((state) => state.updateTab);
-  const selectChange = (selection: WorkspaceChangeSelection): void => updateTab<WorkspaceChangesTab>(tab.id, (current) => ({...current, selection}));
+  const selectChange = (path: string): void => updateTab<WorkspaceChangesTab>(sessionId, tab.id, (current) => ({...current, selection: path}));
   const [changesView, setChangesView] = useState<ChangesView>("tree");
-  const [uncommittedOpen, setUncommittedOpen] = useState(true);
-  const [commitsOpen, setCommitsOpen] = useState(false);
+  const [diffExpanded, setDiffExpanded] = useState(false);
+  const [diffSplit, setDiffSplit] = useState(false);
 
-  const rowsClassName = uncommittedOpen ? (commitsOpen ? SECTION_ROWS.both : SECTION_ROWS.uncommitted) : commitsOpen ? SECTION_ROWS.commits : SECTION_ROWS.none;
-  const additions = snapshot.uncommitted.reduce((total, entry) => total + entry.additions, 0);
-  const deletions = snapshot.uncommitted.reduce((total, entry) => total + entry.deletions, 0);
-  const selectedEntry = selection && (selection.scope === "commit" ? getCommitChanges(selection.commitId) : snapshot.uncommitted).find((entry) => entry.path === selection.path);
+  const uncommitted = changes.data?.uncommitted ?? [];
+  const additions = uncommitted.reduce((total, entry) => total + entry.additions, 0);
+  const deletions = uncommitted.reduce((total, entry) => total + entry.deletions, 0);
+  const selectedEntry = selection === null ? undefined : uncommitted.find((entry) => entry.path === selection);
+  const entries = new Map(uncommitted.map((entry) => [entry.path, entry]));
+  const paths = uncommitted.map((entry) => entry.path);
+
+  if (changes.error) {
+    return (
+      <div className="flex min-h-0 flex-1 items-center justify-center">
+        <p className="px-6 text-center text-sm text-ink-faint">{workspaceErrorMessage(changes.error)}</p>
+      </div>
+    );
+  }
 
   const list = (
     <>
-      <div className={cn("grid min-h-0 flex-1 transition-[grid-template-rows] duration-200 ease-out", rowsClassName)}>
-        <PanelSectionHeader
-          actions={
-            <Menu
-              trigger={(triggerProps) => (
-                <IconButton {...triggerProps} className="size-7" label="Change list view">
-                  <Icon name="more-horizontal" size="sm" />
-                </IconButton>
-              )}
-              triggerLabel="Change list view"
-              sideOffset={4}
-            >
-              <MenuItem onClick={() => setChangesView("tree")} trailing={changesView === "tree" && <Icon name="check" size="xs" />}>
-                Folder tree
-              </MenuItem>
-              <MenuItem onClick={() => setChangesView("flat")} trailing={changesView === "flat" && <Icon name="check" size="xs" />}>
-                Flat file list
-              </MenuItem>
-            </Menu>
-          }
-          collapsed={!uncommittedOpen}
-          label="Uncommitted"
-          onToggle={() => setUncommittedOpen((open) => !open)}
-          trailing={<DiffStat additions={additions} deletions={deletions} />}
-        />
-
-        <div className={cn("flex min-h-0 flex-col overflow-hidden transition-opacity duration-200 ease-out", !uncommittedOpen && "opacity-0")} inert={!uncommittedOpen}>
-          <FileTree
-            key={changesView}
-            emptyLabel="No uncommitted changes."
-            expandedByDefault
-            label="Uncommitted changes"
-            nodes={changesView === "tree" ? buildChangeTree(snapshot.uncommitted) : buildFlatChangeList(snapshot.uncommitted)}
-            onSelectFile={(node) => selectChange({path: node.path, scope: "uncommitted"})}
-            selectedPath={selection?.scope === "uncommitted" ? selection.path : undefined}
-          />
-        </div>
-
-        {/* Keeps the commits header at the bottom while both sections are closed. */}
-        <div aria-hidden="true" />
-
-        <div className="border-t border-border-muted">
-          <PanelSectionHeader collapsed={!commitsOpen} label="Commits" onToggle={() => setCommitsOpen((open) => !open)} />
-        </div>
-
-        <div className={cn("flex min-h-0 flex-col overflow-hidden transition-opacity duration-200 ease-out", !commitsOpen && "opacity-0")} inert={!commitsOpen}>
-          <CommitsList commits={snapshot.commits} getCommitChanges={getCommitChanges} onSelectFile={selectChange} selection={selection} />
-        </div>
+      <div className="flex h-8 shrink-0 items-center justify-between gap-2 px-3">
+        <span className="flex min-w-0 items-baseline gap-1.5 text-sm text-ink-muted">
+          <span className="truncate">Uncommitted</span>
+          <DiffStat additions={additions} deletions={deletions} />
+        </span>
+        <Menu
+          trigger={(triggerProps) => (
+            <IconButton {...triggerProps} className="size-7 text-ink-muted" label="Change list view" variant="primary">
+              <Icon name="more-horizontal" size="sm" />
+            </IconButton>
+          )}
+          triggerLabel="Change list view"
+          sideOffset={4}
+        >
+          <MenuItem onClick={() => setChangesView("tree")} trailing={changesView === "tree" && <Icon name="check" size="xs" />}>
+            Folder tree
+          </MenuItem>
+          <MenuItem onClick={() => setChangesView("flat")} trailing={changesView === "flat" && <Icon name="check" size="xs" />}>
+            Flat file list
+          </MenuItem>
+        </Menu>
       </div>
+      {changes.isPending ? (
+        <FileTreeSkeleton />
+      ) : (
+        <FileTree
+          key={changesView}
+          emptyLabel="No uncommitted changes."
+          expandedByDefault
+          label="Uncommitted changes"
+          nodes={changesView === "tree" ? buildTree(paths, entries) : buildFlatList(paths, entries)}
+          onSelectFile={(node) => selectChange(node.path)}
+          selectedPath={selection ?? undefined}
+        />
+      )}
     </>
   );
 
@@ -104,20 +111,31 @@ export default function ChangesTab(props: ChangesTabProps) {
     <FileViewer
       actions={
         <>
-          {selection?.scope === "commit" && <span className="font-mono text-xs text-ink-faint">{selection.commitId.slice(0, 7)}</span>}
           {selectedEntry && <DiffStat additions={selectedEntry.additions} deletions={selectedEntry.deletions} />}
           {selectedEntry && <GitStatusBadge status={selectedEntry.status} />}
+          <IconButton
+            className={cn("size-7 text-ink-muted", diffSplit && "bg-overlay-hover text-ink")}
+            label={diffSplit ? "Show unified diff" : "Show split diff"}
+            onClick={() => setDiffSplit((value) => !value)}
+            variant="primary"
+          >
+            <Icon name="columns" size="sm" />
+          </IconButton>
+          <IconButton
+            className={cn("size-7 text-ink-muted", diffExpanded && "bg-overlay-hover text-ink")}
+            label={diffExpanded ? "Collapse unchanged lines" : "Show whole file"}
+            onClick={() => setDiffExpanded((value) => !value)}
+            variant="primary"
+          >
+            <Icon name={diffExpanded ? "fold-vertical" : "unfold-vertical"} size="sm" />
+          </IconButton>
         </>
       }
       deleted={selectedEntry?.status === "deleted"}
       explorer={list}
-      path={selection?.path ?? null}
+      path={selection}
     >
-      {selectedEntry ? (
-        <FileDiffView key={`${selection?.scope === "commit" ? selection.commitId : ""}:${selectedEntry.path}`} patch={mockPatch(selectedEntry)} path={selectedEntry.path} />
-      ) : (
-        <p className="px-4 py-3 text-sm text-ink-faint">This file is no longer part of the selected changes.</p>
-      )}
+      {selection !== null && <ChangeDiff entry={selectedEntry} expanded={diffExpanded} key={selection} path={selection} projectPath={projectPath} split={diffSplit} />}
     </FileViewer>
   );
 }

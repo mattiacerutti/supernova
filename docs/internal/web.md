@@ -15,7 +15,7 @@ Conventions for `packages/web`. See [Coding standards](coding-standards.md) for 
 - Feature-specific UI lives in `src/features/<feature>/components`, grouped by domain when a flat components folder becomes hard to navigate.
 - Feature hooks live in `src/features/<feature>/hooks`.
 - API hooks live in `src/features/<feature>/hooks/api`, grouped by domain when a feature has multiple query/mutation families.
-- Feature `lib` folders contain feature-specific domain logic, state transformations, mappers, parsers, render-item builders, and other meaningful behavior that is not UI or React-specific.
+- Feature `lib` folders contain feature-specific domain logic, state transformations, mappers, parsers, and other meaningful behavior that is not UI or React-specific. The test for `lib` is whether the output stands on its own: a tree, a parsed patch, a mapped record that any consumer could use. A helper that only shapes one component's render input from that component's own state belongs in the component file, even when it is pure; it has no meaning without the component and moving it out only hides where it is used.
 - Feature `utils` folders contain small, generic helpers for that feature, such as formatting or simple value normalization. If a utility starts encoding domain behavior, move it to `lib`.
 - Shared reusable UI lives in `src/components`; shared UI primitives live in `src/components/ui`.
 - Shared non-UI utilities live in `src/lib`.

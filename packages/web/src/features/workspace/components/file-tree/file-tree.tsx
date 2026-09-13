@@ -2,8 +2,23 @@ import {useState} from "react";
 import ExpandableVirtualList from "@/features/workspace/components/file-tree/expandable-virtual-list";
 import type {ExpansionOptions} from "@/features/workspace/components/file-tree/expandable-virtual-list";
 import FileTreeRow, {FILE_TREE_ROW_HEIGHT_PX} from "@/features/workspace/components/file-tree/file-tree-row";
-import {countVisibleDescendants, flattenTree} from "@/features/workspace/lib/file-tree";
-import type {FileTreeNode, FileTreeRowData} from "@/features/workspace/lib/file-tree";
+import type {FileTreeRowData} from "@/features/workspace/components/file-tree/file-tree-row";
+import type {FileTreeNode} from "@/features/workspace/lib/file-tree";
+
+/** Visible rows; only expanded branches are walked. */
+function flattenTree(nodes: readonly FileTreeNode[], isExpanded: (node: FileTreeNode) => boolean, depth = 0): readonly FileTreeRowData[] {
+  return nodes.flatMap((node) => {
+    const expandable = node.children.length > 0;
+    const expanded = expandable && isExpanded(node);
+    const row: FileTreeRowData = {depth, expandable, expanded, node};
+    return expanded ? [row, ...flattenTree(node.children, isExpanded, depth + 1)] : [row];
+  });
+}
+
+/** Rows a directory would reveal, so an expansion can be sized before the rows exist. */
+function countVisibleDescendants(node: FileTreeNode, isExpanded: (node: FileTreeNode) => boolean): number {
+  return node.children.reduce((total, child) => total + 1 + (child.children.length > 0 && isExpanded(child) ? countVisibleDescendants(child, isExpanded) : 0), 0);
+}
 
 interface FileTreeProps {
   readonly emptyLabel: string;

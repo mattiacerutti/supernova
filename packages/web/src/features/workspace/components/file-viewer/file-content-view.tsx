@@ -14,7 +14,7 @@ export default function FileContentView(props: FileContentViewProps) {
   const mode = useAppearanceStore((state) => state.resolvedMode);
 
   return (
-    <Virtualizer className="min-h-0 flex-1 overflow-auto overscroll-contain" config={VIRTUALIZER_CONFIG} key={`${path}:${mode}`}>
+    <Virtualizer className="min-h-0 flex-1 select-text overflow-auto overscroll-contain" config={VIRTUALIZER_CONFIG} key={`${path}:${mode}`}>
       <File className="min-h-full" file={{contents: content, name: path}} options={{...generateFileOptions(mode), overflow: "scroll"}} />
     </Virtualizer>
   );

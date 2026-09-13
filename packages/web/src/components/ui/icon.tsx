@@ -22,12 +22,14 @@ export type IconName =
   | "check"
   | "chevron-down"
   | "chevron-right"
+  | "columns"
   | "compact"
   | "copy"
   | "corner-left-up"
   | "edit"
   | "file"
   | "filter"
+  | "fold-vertical"
   | "folder"
   | "folder-open"
   | "folder-plus"
@@ -68,6 +70,7 @@ export type IconName =
   | "terminal"
   | "trash"
   | "undo"
+  | "unfold-vertical"
   | "update"
   | "user"
   | "workflow"
@@ -89,12 +92,14 @@ const icons = {
   check: getStaticIcon(lucideIcons, "check"),
   "chevron-down": getStaticIcon(lucideIcons, "chevron-down"),
   "chevron-right": getStaticIcon(lucideIcons, "chevron-right"),
+  columns: getStaticIcon(lucideIcons, "columns-2"),
   compact: getStaticIcon(lucideIcons, "minimize-2"),
   copy: getStaticIcon(lucideIcons, "copy"),
   "corner-left-up": getStaticIcon(lucideIcons, "corner-left-up"),
   edit: getStaticIcon(cuidaIcons, "edit-outline"),
   file: getStaticIcon(lucideIcons, "file"),
   filter: getStaticIcon(lucideIcons, "list-filter"),
+  "fold-vertical": getStaticIcon(lucideIcons, "fold-vertical"),
   folder: getStaticIcon(cuidaIcons, "folder-outline"),
   "folder-open": getStaticIcon(fluentIcons, "folder-open-24-regular"),
   "folder-plus": getStaticIcon(mdiIcons, "create-new-folder-outline"),
@@ -135,6 +140,7 @@ const icons = {
   terminal: getStaticIcon(lucideIcons, "square-terminal"),
   trash: getStaticIcon(lucideIcons, "trash-2"),
   undo: getStaticIcon(lucideIcons, "undo-2"),
+  "unfold-vertical": getStaticIcon(lucideIcons, "unfold-vertical"),
   update: getStaticIcon(fluentIcons, "arrow-up-16-filled"),
   user: getStaticIcon(lucideIcons, "user"),
   workflow: getStaticIcon(lucideIcons, "workflow"),

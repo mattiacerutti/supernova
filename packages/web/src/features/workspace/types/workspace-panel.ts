@@ -1,9 +1,8 @@
-import type {WorkspaceChangeSelection} from "@/features/workspace/types/workspace";
-
 export interface WorkspaceChangesTab {
   readonly id: string;
   readonly kind: "changes";
-  readonly selection: WorkspaceChangeSelection | null;
+  /** Path of the uncommitted change whose diff is shown. */
+  readonly selection: string | null;
 }
 
 export interface WorkspaceFilesTab {

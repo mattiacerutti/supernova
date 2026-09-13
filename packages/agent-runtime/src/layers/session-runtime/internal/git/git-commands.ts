@@ -1,4 +1,4 @@
-import {optionalGit, runGit, runGitResult} from "@supernova/agent-runtime/layers/session-runtime/internal/git/git-process";
+import {optionalGit, runGit, runGitResult} from "@supernova/agent-runtime/layers/shared/lib/git/git-process";
 
 /**
  * Config pinned on every checkpoint command so user settings cannot change what a snapshot contains.

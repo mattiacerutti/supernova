@@ -6,6 +6,7 @@ import {ProvidersService} from "@supernova/agent-runtime/services/providers-serv
 import {ProjectsService} from "@supernova/agent-runtime/services/projects-service";
 import {SessionRuntimeService} from "@supernova/agent-runtime/services/session-runtime-service";
 import {SessionsService} from "@supernova/agent-runtime/services/sessions-service";
+import {WorkspaceService} from "@supernova/agent-runtime/services/workspace-service";
 
 export const AgentRpcLive = AgentRpcGroup.toLayer(
   Effect.gen(function* () {
@@ -15,6 +16,7 @@ export const AgentRpcLive = AgentRpcGroup.toLayer(
     const projects = yield* ProjectsService;
     const sessionRuntime = yield* SessionRuntimeService;
     const sessions = yield* SessionsService;
+    const workspace = yield* WorkspaceService;
 
     return {
       abortSession: ({sessionId}) => sessionRuntime.abortSession(sessionId),
@@ -30,15 +32,19 @@ export const AgentRpcLive = AgentRpcGroup.toLayer(
       createFolder: ({path}) => folders.create(path),
       createSession: ({projectPath}) => sessions.create(projectPath),
       getConfiguration: (input) => configuration.get(input),
+      getWorkspaceChanges: ({projectPath}) => workspace.getChanges(projectPath),
+      getWorkspaceDiffContents: (input) => workspace.getDiffContents(input),
       getSession: ({sessionId}) =>
         Effect.flatMap(sessionRuntime.getCommittedSession(sessionId), (committedSession) => (committedSession ? Effect.succeed(committedSession) : sessions.get(sessionId))),
       listFolderFiles: ({projectPath, query}) => folders.listFiles(projectPath, query),
       listFolderSuggestions: ({query}) => folders.listSuggestions(query),
       listProviders: () => providers.list(),
+      listWorkspaceFiles: ({projectPath}) => workspace.listFiles(projectPath),
       listProjectSessions: (input) => projects.listSessions(input),
       listComposerSuggestions: ({projectPath}) => sessions.listComposerSuggestions(projectPath),
       listModels: ({projectPath}) => sessions.listModels(projectPath),
       logoutProvider: ({providerId}) => providers.logout(providerId),
+      readWorkspaceFile: (input) => workspace.readFile(input),
       redoCheckpoint: (input) => sessionRuntime.redoCheckpoint(input),
       renameSession: (input) => sessions.rename(input),
       revertToMessage: (input) => sessionRuntime.revertToMessage(input),

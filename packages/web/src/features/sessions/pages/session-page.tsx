@@ -217,9 +217,9 @@ function SessionConversation(props: SessionConversationProps) {
             <SessionTitleText className="block truncate" title={session.title} />
           )
         }
-        viewActions={<WorkspacePanelToggle />}
+        viewActions={<WorkspacePanelToggle sessionId={session.id} />}
         titleActions={<SessionActionsMenu onRename={startRenaming} projectPath={session.projectPath} sessionId={session.id} sessionTitle={session.title} />}
-        workspacePanel={<WorkspacePanel appEnvironment={appEnvironment} />}
+        workspacePanel={<WorkspacePanel appEnvironment={appEnvironment} projectPath={session.projectPath} sessionId={session.id} />}
       />
       <CheckpointConflictDialog
         onCancel={stream.checkpointConflict.cancel}

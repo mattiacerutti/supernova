@@ -8,9 +8,8 @@ import Menu, {MenuItem} from "@/components/ui/menu";
 import FileIcon from "@/features/workspace/components/file-tree/file-icon";
 import ChangesTab from "@/features/workspace/tabs/changes-tab";
 import FilesTab from "@/features/workspace/tabs/files-tab";
-import {MOCK_WORKSPACE, mockCommitChanges} from "@/features/workspace/lib/mock-workspace";
 import {minWorkspacePanelWidth} from "@/features/workspace/lib/workspace-panel-width";
-import {tabKind, useWorkspacePanelStore, WORKSPACE_TAB_KINDS} from "@/features/workspace/stores/workspace-panel-store";
+import {EMPTY_LAYOUT, tabKind, useWorkspacePanelStore, WORKSPACE_TAB_KINDS} from "@/features/workspace/stores/workspace-panel-store";
 import type {WorkspacePanelTab, WorkspacePanelTabKind} from "@/features/workspace/types/workspace-panel";
 import {useDragResize} from "@/hooks/use-drag-resize";
 import type {AppEnvironment} from "@/lib/app-environment";
@@ -19,12 +18,12 @@ import {clampedPanelWidth, maxPanelWidth} from "@/lib/panel-layout";
 
 const WORKSPACE_TAB_KIND_NAMES = Object.keys(WORKSPACE_TAB_KINDS) as readonly WorkspacePanelTabKind[];
 
-function renderTab(tab: WorkspacePanelTab): ReactNode {
+function renderTab(tab: WorkspacePanelTab, projectPath: string, sessionId: string): ReactNode {
   switch (tab.kind) {
     case "changes":
-      return <ChangesTab getCommitChanges={mockCommitChanges} snapshot={MOCK_WORKSPACE} tab={tab} />;
+      return <ChangesTab projectPath={projectPath} sessionId={sessionId} tab={tab} />;
     case "files":
-      return <FilesTab files={MOCK_WORKSPACE.files} tab={tab} />;
+      return <FilesTab projectPath={projectPath} sessionId={sessionId} tab={tab} />;
   }
 }
 
@@ -74,9 +73,14 @@ function PanelTab(props: PanelTabProps) {
   );
 }
 
-function WorkspacePanelContent() {
-  const activeTabId = useWorkspacePanelStore((state) => state.activeTabId);
-  const tabs = useWorkspacePanelStore((state) => state.tabs);
+interface WorkspacePanelContentProps {
+  readonly projectPath: string;
+  readonly sessionId: string;
+}
+
+function WorkspacePanelContent(props: WorkspacePanelContentProps) {
+  const {projectPath, sessionId} = props;
+  const {activeTabId, tabs} = useWorkspacePanelStore((state) => state.layouts[sessionId] ?? EMPTY_LAYOUT);
   const closeTab = useWorkspacePanelStore((state) => state.closeTab);
   const openTab = useWorkspacePanelStore((state) => state.openTab);
   const pinTab = useWorkspacePanelStore((state) => state.pinTab);
@@ -100,7 +104,13 @@ function WorkspacePanelContent() {
                 key={tab.id}
                 transition={{duration: 0.2, ease: "easeOut"}}
               >
-                <PanelTab active={tab.id === activeTabId} onActivate={() => setActiveTab(tab.id)} onClose={() => closeTab(tab.id)} onPin={() => pinTab(tab.id)} tab={tab} />
+                <PanelTab
+                  active={tab.id === activeTabId}
+                  onActivate={() => setActiveTab(sessionId, tab.id)}
+                  onClose={() => closeTab(sessionId, tab.id)}
+                  onPin={() => pinTab(sessionId, tab.id)}
+                  tab={tab}
+                />
               </motion.div>
             ))}
           </AnimatePresence>
@@ -115,7 +125,7 @@ function WorkspacePanelContent() {
             sideOffset={4}
           >
             {addableKinds.map((kind) => (
-              <MenuItem icon={<Icon name={WORKSPACE_TAB_KINDS[kind].icon} size="xs" />} key={kind} onClick={() => openTab(kind)}>
+              <MenuItem icon={<Icon name={WORKSPACE_TAB_KINDS[kind].icon} size="xs" />} key={kind} onClick={() => openTab(sessionId, kind)}>
                 {WORKSPACE_TAB_KINDS[kind].label}
               </MenuItem>
             ))}
@@ -131,7 +141,7 @@ function WorkspacePanelContent() {
       {/* Hidden tabs stay mounted so their local state survives switching. */}
       {tabs.map((tab) => (
         <Activity key={tab.id} mode={tab.id === activeTabId ? "visible" : "hidden"}>
-          {renderTab(tab)}
+          {renderTab(tab, projectPath, sessionId)}
         </Activity>
       ))}
     </section>
@@ -140,12 +150,14 @@ function WorkspacePanelContent() {
 
 interface WorkspacePanelProps {
   readonly appEnvironment: AppEnvironment;
+  readonly projectPath: string;
+  readonly sessionId: string;
 }
 
 export default function WorkspacePanel(props: WorkspacePanelProps) {
-  const {appEnvironment} = props;
+  const {appEnvironment, projectPath, sessionId} = props;
   const panelRef = useRef<HTMLDivElement>(null);
-  const open = useWorkspacePanelStore((state) => state.open);
+  const open = useWorkspacePanelStore((state) => (state.layouts[sessionId] ?? EMPTY_LAYOUT).open);
   const storedWidth = useWorkspacePanelStore((state) => state.width);
   const setWidth = useWorkspacePanelStore((state) => state.setWidth);
 
@@ -168,7 +180,7 @@ export default function WorkspacePanel(props: WorkspacePanelProps) {
       style={{width: open ? panelWidth : 0}}
     >
       <div className="h-full" style={{width: panelWidth}}>
-        <WorkspacePanelContent />
+        <WorkspacePanelContent projectPath={projectPath} sessionId={sessionId} />
       </div>
       {open && (
         <div

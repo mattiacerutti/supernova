@@ -1,4 +1,4 @@
-import {useRouter, useRouterState, useCanGoBack} from "@tanstack/react-router";
+import {useParams, useRouter, useRouterState, useCanGoBack} from "@tanstack/react-router";
 import type {ReactNode} from "react";
 import type {AppEnvironment} from "@/lib/app-environment";
 import {isDesktopEnvironment} from "@/lib/app-environment";
@@ -10,7 +10,7 @@ import UpdateButton from "@/features/updates/components/update-button";
 import {useSidebarVisibility} from "@/features/sidebar/hooks/use-sidebar-visibility";
 import {MIN_SIDEBAR_WIDTH, useSidebarSectionsStore} from "@/features/sidebar/stores/sidebar-store";
 import {minWorkspacePanelWidth} from "@/features/workspace/lib/workspace-panel-width";
-import {useWorkspacePanelStore} from "@/features/workspace/stores/workspace-panel-store";
+import {EMPTY_LAYOUT, useWorkspacePanelStore} from "@/features/workspace/stores/workspace-panel-store";
 import {maxPanelWidth} from "@/lib/panel-layout";
 
 interface HomePageProps {
@@ -23,7 +23,9 @@ export default function HomePage(props: HomePageProps) {
   const {sidebarVisible, toggleSidebar} = useSidebarVisibility();
   const sidebarWidth = useSidebarSectionsStore((state) => state.sidebarWidth);
   const setSidebarWidth = useSidebarSectionsStore((state) => state.setSidebarWidth);
-  const workspaceOpen = useWorkspacePanelStore((state) => state.open);
+  // The workspace panel belongs to the session route; outside it nothing is reserved.
+  const sessionId = useParams({select: (params) => params.sessionId, strict: false});
+  const workspaceOpen = useWorkspacePanelStore((state) => (sessionId === undefined ? false : (state.layouts[sessionId] ?? EMPTY_LAYOUT).open));
   const router = useRouter();
 
   useRouterState({

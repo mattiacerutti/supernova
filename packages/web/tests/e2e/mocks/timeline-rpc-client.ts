@@ -84,6 +84,8 @@ class TimelineRpcClient implements RpcClient {
       createSession: () => Effect.succeed(this.session(EMPTY_SESSION_ID)),
       getFolderStatus: () => Effect.succeed({exists: true, kind: "directory"}),
       getSession: ({sessionId}: {readonly sessionId: string}) => Effect.sync(() => this.session(sessionId)),
+      getWorkspaceChanges: () => Effect.succeed({uncommitted: []}),
+      getWorkspaceDiffContents: () => Effect.succeed({newContents: "", oldContents: ""}),
       listComposerSuggestions: () => Effect.succeed({items: []}),
       listFolderFiles: () => Effect.succeed({items: []}),
       listFolderSuggestions: ({query}: {readonly query: string}) =>
@@ -101,7 +103,9 @@ class TimelineRpcClient implements RpcClient {
           sessions: [...this.sessions.values()].map(timelineSessionSummary),
         }),
       listProviders: () => Effect.succeed([]),
+      listWorkspaceFiles: () => Effect.succeed({files: []}),
       logoutProvider: () => Effect.void,
+      readWorkspaceFile: () => Effect.succeed({content: ""}),
       redoCheckpoint: ({sessionId}: {readonly sessionId: string}) => Effect.sync(() => this.redoCheckpoint(sessionId)),
       renameSession: ({sessionId}: {readonly sessionId: string}) => Effect.sync(() => this.session(sessionId)),
       revertToMessage: ({sessionId, turnId}: {readonly sessionId: string; readonly turnId: string}) => Effect.sync(() => this.revertToMessage(sessionId, turnId)),

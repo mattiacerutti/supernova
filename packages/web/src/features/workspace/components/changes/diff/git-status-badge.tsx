@@ -1,4 +1,4 @@
-import type {WorkspaceChangeStatus} from "@/features/workspace/types/workspace";
+import type {WorkspaceChangeStatus} from "@supernova/contracts/workspace/schemas";
 import {cn} from "@/lib/cn";
 
 const STATUS_LETTERS: Record<WorkspaceChangeStatus, string> = {added: "A", deleted: "D", modified: "M", renamed: "R", untracked: "U"};

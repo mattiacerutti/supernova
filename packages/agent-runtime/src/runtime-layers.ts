@@ -6,7 +6,14 @@ import {PiProvidersLive} from "@supernova/agent-runtime/layers/providers/pi-prov
 import {PiProjectsLive} from "@supernova/agent-runtime/layers/projects/pi-projects-live";
 import {PiSessionRuntimeLive} from "@supernova/agent-runtime/layers/session-runtime/pi-session-runtime-live";
 import {PiSessionsLive} from "@supernova/agent-runtime/layers/sessions/pi-sessions-live";
+import {WorkspaceLive} from "@supernova/agent-runtime/layers/workspace/workspace-live";
 
-export const AgentRuntimeServicesLive = Layer.mergeAll(PiConfigurationLive, FileSystemFoldersLive, PiProjectsLive, PiProvidersLive, PiSessionRuntimeLive, PiSessionsLive).pipe(
-  Layer.provide(PiSdkLive)
-);
+export const AgentRuntimeServicesLive = Layer.mergeAll(
+  PiConfigurationLive,
+  FileSystemFoldersLive,
+  PiProjectsLive,
+  PiProvidersLive,
+  PiSessionRuntimeLive,
+  PiSessionsLive,
+  WorkspaceLive
+).pipe(Layer.provide(PiSdkLive));
