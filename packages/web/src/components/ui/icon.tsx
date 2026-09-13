@@ -31,8 +31,10 @@ export type IconName =
   | "folder"
   | "folder-open"
   | "folder-plus"
+  | "folders"
   | "gauge"
   | "git-branch"
+  | "git-commit"
   | "globe"
   | "key"
   | "image"
@@ -43,6 +45,7 @@ export type IconName =
   | "more-horizontal"
   | "new-session"
   | "panel-left"
+  | "panel-right"
   | "panel-top"
   | "palette"
   | "paperclip"
@@ -62,6 +65,7 @@ export type IconName =
   | "star-filled"
   | "stop"
   | "sun"
+  | "terminal"
   | "trash"
   | "undo"
   | "update"
@@ -94,8 +98,10 @@ const icons = {
   folder: getStaticIcon(cuidaIcons, "folder-outline"),
   "folder-open": getStaticIcon(fluentIcons, "folder-open-24-regular"),
   "folder-plus": getStaticIcon(mdiIcons, "create-new-folder-outline"),
+  folders: getStaticIcon(lucideIcons, "folders"),
   gauge: getStaticIcon(lucideIcons, "gauge"),
   "git-branch": getStaticIcon(lucideIcons, "git-branch"),
+  "git-commit": getStaticIcon(lucideIcons, "git-commit-horizontal"),
   globe: getStaticIcon(lucideIcons, "globe"),
   image: getStaticIcon(lucideIcons, "image"),
   key: getStaticIcon(lucideIcons, "key-round"),
@@ -106,6 +112,7 @@ const icons = {
   "more-horizontal": getStaticIcon(lucideIcons, "more-horizontal"),
   "new-session": getStaticIcon(cuidaIcons, "edit-outline"),
   "panel-left": getStaticIcon(tablerIcons, "layout-sidebar"),
+  "panel-right": getStaticIcon(tablerIcons, "layout-sidebar-right"),
   "panel-top": getStaticIcon(lucideIcons, "panel-top"),
   palette: getStaticIcon(lucideIcons, "palette"),
   paperclip: getStaticIcon(lucideIcons, "paperclip"),
@@ -125,6 +132,7 @@ const icons = {
   "star-filled": getStaticIcon(iconoirIcons, "star-solid"),
   stop: getStaticIcon(materialSymbolsIcons, "stop-rounded"),
   sun: getStaticIcon(lucideIcons, "sun"),
+  terminal: getStaticIcon(lucideIcons, "square-terminal"),
   trash: getStaticIcon(lucideIcons, "trash-2"),
   undo: getStaticIcon(lucideIcons, "undo-2"),
   update: getStaticIcon(fluentIcons, "arrow-up-16-filled"),

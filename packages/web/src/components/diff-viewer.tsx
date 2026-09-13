@@ -1,7 +1,7 @@
 import {FileDiff} from "@pierre/diffs";
 import type {FileDiffMetadata, FileDiffOptions} from "@pierre/diffs";
 import {useRef} from "react";
-import {generateDiffOptions} from "@/features/sessions/lib/diff/diff-viewer-options";
+import {generateDiffOptions} from "@/lib/diff/diff-viewer-options";
 import {useAppearanceStore} from "@/features/settings/stores/appearance-store";
 import type {ResolvedAppearanceMode} from "@/features/settings/stores/appearance-store";
 import {cn} from "@/lib/cn";

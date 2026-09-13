@@ -5,7 +5,7 @@ import {createJSONStorage, persist} from "zustand/middleware";
 const SIDEBAR_SECTIONS_STORAGE_KEY = "supernova-sidebar-sections";
 const EXPANDED_PROJECTS_STORAGE_VALUE_KEY = "expandedProjects";
 const DEFAULT_SIDEBAR_WIDTH = 288;
-const MIN_SIDEBAR_WIDTH = 240;
+export const MIN_SIDEBAR_WIDTH = 240;
 const MAX_SIDEBAR_WIDTH = 480;
 
 interface SidebarSectionsState {
@@ -15,7 +15,7 @@ interface SidebarSectionsState {
   readonly sidebarWidth: number;
   readonly collapseAllProjects: () => void;
   readonly expandProject: (projectId: string) => void;
-  readonly setSidebarWidth: (width: number) => void;
+  readonly setSidebarWidth: (width: number, maxWidth: number) => void;
   readonly togglePinnedCollapsed: () => void;
   readonly toggleProject: (projectId: string) => void;
   readonly toggleProjectsCollapsed: () => void;
@@ -42,8 +42,8 @@ export const useSidebarSectionsStore = create<SidebarSectionsState>()(
           return {expandedProjects: new Set(state.expandedProjects).add(projectId)};
         });
       },
-      setSidebarWidth: (width) => {
-        set({sidebarWidth: Math.min(Math.max(width, MIN_SIDEBAR_WIDTH), MAX_SIDEBAR_WIDTH)});
+      setSidebarWidth: (width, maxWidth) => {
+        set({sidebarWidth: Math.min(Math.max(Math.round(width), MIN_SIDEBAR_WIDTH), maxWidth, MAX_SIDEBAR_WIDTH)});
       },
       togglePinnedCollapsed: () => {
         set((state) => ({isPinnedCollapsed: !state.isPinnedCollapsed}));

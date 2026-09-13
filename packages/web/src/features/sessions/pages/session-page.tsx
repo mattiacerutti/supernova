@@ -22,6 +22,8 @@ import {useSessionTimeline} from "@/features/sessions/hooks/use-session-timeline
 import {sessionComposerDraftKey} from "@/features/sessions/stores/composer-drafts-store";
 import {useSessionLiveStore} from "@/features/sessions/stores/session-live-store";
 import {useSessionVisitsStore} from "@/features/sessions/stores/session-visits-store";
+import WorkspacePanel from "@/features/workspace/components/workspace-panel";
+import WorkspacePanelToggle from "@/features/workspace/components/workspace-panel-toggle";
 import {useInlineRename} from "@/hooks/use-inline-rename";
 import {useMountEffect} from "@/lib/use-mount-effect";
 
@@ -215,7 +217,9 @@ function SessionConversation(props: SessionConversationProps) {
             <SessionTitleText className="block truncate" title={session.title} />
           )
         }
+        viewActions={<WorkspacePanelToggle />}
         titleActions={<SessionActionsMenu onRename={startRenaming} projectPath={session.projectPath} sessionId={session.id} sessionTitle={session.title} />}
+        workspacePanel={<WorkspacePanel appEnvironment={appEnvironment} />}
       />
       <CheckpointConflictDialog
         onCancel={stream.checkpointConflict.cancel}

@@ -1,8 +1,14 @@
-import type {FileDiffOptions} from "@pierre/diffs";
+import type {FileDiffOptions, FileOptions} from "@pierre/diffs";
 import {CODE_HIGHLIGHT_THEMES} from "@/lib/code-highlighting";
 
 const SUPERNOVA_DIFF_VIEW_CSS = `
-[data-diff] {
+:host {
+  --diffs-font-size: 0.8125rem;
+  --diffs-line-height: 1.5rem;
+}
+
+[data-diff],
+[data-file] {
   --diffs-light-bg: var(--theme-surface);
   --diffs-dark-bg: var(--theme-surface);
   --diffs-bg: var(--theme-surface);
@@ -21,8 +27,6 @@ const SUPERNOVA_DIFF_VIEW_CSS = `
   --diffs-fg: var(--theme-ink);
   --diffs-fg-number: var(--theme-ink-muted);
   --diffs-font-family: var(--font-mono);
-  --diffs-font-size: 0.8125rem;
-  --diffs-line-height: 1.5rem;
   --diffs-gap-block: 0;
   --diffs-min-number-column-width: 3ch;
   background: var(--theme-surface) !important;
@@ -31,23 +35,28 @@ const SUPERNOVA_DIFF_VIEW_CSS = `
 pre,
 code,
 [data-diff],
+[data-file],
 [data-gutter],
 [data-content] {
   background-color: var(--theme-surface) !important;
 }
 
-[data-diff] [data-code] {
+[data-diff] [data-code],
+[data-file] [data-code] {
   background-color: var(--theme-surface) !important;
   overflow-x: auto !important;
   overflow-y: hidden !important;
 }
 
 [data-diff] [data-line],
-[data-diff] [data-line] span {
+[data-diff] [data-line] span,
+[data-file] [data-line],
+[data-file] [data-line] span {
   background-color: transparent !important;
 }
 
-[data-diff] [data-column-number] {
+[data-diff] [data-column-number],
+[data-file] [data-column-number] {
   background-color: var(--theme-surface) !important;
   color: var(--theme-ink-muted) !important;
   user-select: none;
@@ -69,7 +78,8 @@ code,
   background-color: color-mix(in srgb, var(--theme-diff-removed) 16%, transparent) !important;
 }
 
-[data-diff] [data-line] {
+[data-diff] [data-line],
+[data-file] [data-line] {
   padding-right: 0.625rem;
 }
 
@@ -78,17 +88,18 @@ code,
 }
 `;
 
-/** Creates Pierre diff viewer options styled to match the active appearance. */
+const SHARED_OPTIONS = {
+  disableFileHeader: true,
+  overflow: "wrap",
+  unsafeCSS: SUPERNOVA_DIFF_VIEW_CSS,
+} as const;
+
+/** Pierre options for plain file rendering, styled to match the active appearance. */
+export function generateFileOptions<T>(mode: "dark" | "light"): FileOptions<T> {
+  return {...SHARED_OPTIONS, theme: CODE_HIGHLIGHT_THEMES[mode], themeType: mode};
+}
+
+/** Pierre options for diff rendering, styled to match the active appearance. */
 export function generateDiffOptions<T>(mode: "dark" | "light"): FileDiffOptions<T> {
-  return {
-    diffIndicators: "bars",
-    diffStyle: "unified",
-    disableFileHeader: true,
-    hunkSeparators: "simple",
-    lineDiffType: "none",
-    overflow: "wrap",
-    theme: CODE_HIGHLIGHT_THEMES[mode],
-    themeType: mode,
-    unsafeCSS: SUPERNOVA_DIFF_VIEW_CSS,
-  };
+  return {...SHARED_OPTIONS, diffIndicators: "bars", diffStyle: "unified", hunkSeparators: "simple", lineDiffType: "none", theme: CODE_HIGHLIGHT_THEMES[mode], themeType: mode};
 }

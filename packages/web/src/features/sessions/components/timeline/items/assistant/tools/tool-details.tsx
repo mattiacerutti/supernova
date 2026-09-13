@@ -1,7 +1,7 @@
 import type {ReactNode} from "react";
-import DiffViewer from "@/features/sessions/components/diffs/diff-viewer";
+import DiffViewer from "@/components/diff-viewer";
 import ContentPanel from "@/features/sessions/components/timeline/items/assistant/content-panel";
-import {parseFileEditPatch} from "@/features/sessions/lib/diff/diff-rendering";
+import {parseFilePatch} from "@/lib/diff/parse-file-patch";
 import {fileName, hasToolDetails, readLineWindow} from "@/features/sessions/lib/timeline/tool-details";
 import {cn} from "@/lib/cn";
 import type {Tool} from "@supernova/contracts/sessions/schemas";
@@ -96,7 +96,7 @@ function FileMutationToolDetails(props: {tool: FileMutationTool}) {
 
   const path = tool.input?.path;
   const patch = tool.status === "completed" ? tool.result.patch : undefined;
-  const fileDiff = patch ? parseFileEditPatch({patch, path}) : undefined;
+  const fileDiff = patch ? parseFilePatch({patch, path}) : undefined;
 
   return (
     <ContentPanel className="p-0 text-sm" scrollable={false}>

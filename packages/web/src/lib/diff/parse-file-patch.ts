@@ -18,13 +18,13 @@ function buildParsedDiffCacheKey(input: {patch: string; path: string | undefined
 }
 
 /** Parses a unified patch into Pierre diff metadata, caching both valid and invalid results. */
-export function parseFileEditPatch(input: {patch: string; path: string | undefined}): FileDiffMetadata | undefined {
+export function parseFilePatch(input: {patch: string; path: string | undefined}): FileDiffMetadata | undefined {
   const cacheKey = buildParsedDiffCacheKey(input);
   const cached = parsedDiffCache.get(cacheKey);
   if (cached !== undefined) return cached.fileDiff;
 
   try {
-    const fileDiff = parsePatchFiles(input.patch, `edit-tool:${cacheKey}`, true).at(0)?.files.at(0);
+    const fileDiff = parsePatchFiles(input.patch, `file-patch:${cacheKey}`, true).at(0)?.files.at(0);
     parsedDiffCache.set(cacheKey, {fileDiff}, {size: input.patch.length * 2});
     return fileDiff;
   } catch {

@@ -15,7 +15,7 @@ import {useProjectsStore} from "@/features/projects/stores/projects-store";
 import {sessionQueryOptions} from "@/features/sessions/hooks/api/use-session";
 import {useSessionLiveStore} from "@/features/sessions/stores/session-live-store";
 import {hasUnseenActivity, useSessionVisitsStore} from "@/features/sessions/stores/session-visits-store";
-import {formatUpdatedAt} from "@/features/projects/utils/format-updated-at";
+import {formatRelativeTime} from "@/lib/format-relative-time";
 import {cn} from "@/lib/cn";
 
 const INITIAL_SESSION_LIMIT = 5;
@@ -64,7 +64,7 @@ export default function ProjectListItem(props: ProjectListItemProps) {
         pinned: project.pinnedSessionIds.includes(session.id),
         title: session.title,
         timestamp: Date.parse(session.updatedAt),
-        updatedAt: formatUpdatedAt(session.updatedAt),
+        updatedAt: formatRelativeTime(session.updatedAt),
       }))
       .toSorted((left, right) => Number(right.pinned) - Number(left.pinned) || right.timestamp - left.timestamp) ?? [];
 

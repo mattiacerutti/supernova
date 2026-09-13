@@ -65,7 +65,7 @@
   --color-diff-removed-surface: var(--theme-diff-removed-surface);
   --color-danger-ink: var(--theme-danger-ink);
   --font-sans: -apple-system, BlinkMacSystemFont, Inter, sans-serif;
-  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --font-mono: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
   --text-sm: 0.85rem;
 }
 
@@ -75,6 +75,13 @@
     color: var(--theme-ink);
     font-synthesis: none;
     text-rendering: optimizeLegibility;
+    /* Space taken by native window controls that overlay the app content. */
+    --window-controls-right-inset: 0px;
+  }
+
+  /* Windows overlays its controls on the top right of the content area. */
+  :root[data-app-environment="windows"] {
+    --window-controls-right-inset: calc(100vw - env(titlebar-area-width, calc(100vw - 8.625rem)));
   }
 
   body {

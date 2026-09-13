@@ -1,9 +1,9 @@
-/** Format a session timestamp as a compact relative age label. */
-export function formatUpdatedAt(value: string): string {
-  const updatedAt = new Date(value).getTime();
-  if (Number.isNaN(updatedAt)) return "";
+/** Formats an ISO timestamp as a compact relative age label. */
+export function formatRelativeTime(value: string): string {
+  const timestamp = new Date(value).getTime();
+  if (Number.isNaN(timestamp)) return "";
 
-  const elapsedMs = Date.now() - updatedAt;
+  const elapsedMs = Date.now() - timestamp;
 
   const elapsedSeconds = Math.floor(elapsedMs / 1_000);
   if (elapsedSeconds < 60) return "now";

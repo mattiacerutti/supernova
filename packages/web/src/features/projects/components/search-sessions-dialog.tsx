@@ -9,7 +9,7 @@ import SearchField from "@/components/ui/search-field";
 import SearchableList from "@/features/projects/components/searchable-list";
 import {listProjectSessionsQueryOptions} from "@/features/projects/hooks/api/use-list-project-sessions";
 import {useProjectList} from "@/features/projects/hooks/use-project-list";
-import {formatUpdatedAt} from "@/features/projects/utils/format-updated-at";
+import {formatRelativeTime} from "@/lib/format-relative-time";
 import SessionTitleText from "@/features/sessions/components/session-title-text";
 import {cn} from "@/lib/cn";
 
@@ -77,7 +77,7 @@ export default function SearchSessionsDialog(props: SearchSessionsDialogProps) {
           timestamp: Date.parse(session.updatedAt),
           title: session.title,
           type: "session",
-          updatedAt: formatUpdatedAt(session.updatedAt),
+          updatedAt: formatRelativeTime(session.updatedAt),
         })
       )
       .filter((session) => normalizedQuery.length === 0 || session.title.toLocaleLowerCase().includes(normalizedQuery))

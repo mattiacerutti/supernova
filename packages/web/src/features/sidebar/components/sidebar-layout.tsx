@@ -1,6 +1,8 @@
-import {useState} from "react";
-import type {CSSProperties, PointerEvent, ReactNode} from "react";
+import type {CSSProperties, ReactNode} from "react";
 import {useAppearanceStore} from "@/features/settings/stores/appearance-store";
+import {useDragResize} from "@/hooks/use-drag-resize";
+import {MIN_SIDEBAR_WIDTH} from "@/features/sidebar/stores/sidebar-store";
+import {clampedPanelWidth} from "@/lib/panel-layout";
 import type {AppEnvironment} from "@/lib/app-environment";
 import {isDesktopEnvironment} from "@/lib/app-environment";
 import {cn} from "@/lib/cn";
@@ -10,6 +12,8 @@ interface SidebarLayoutProps {
   children: ReactNode;
   className?: string;
   onSidebarWidthChange?: (width: number) => void;
+  /** Width other panels in the content area need. */
+  reservedContentWidth?: number;
   sidebar: ReactNode;
   sidebarVisible?: boolean;
   sidebarWidth: number;
@@ -17,50 +21,20 @@ interface SidebarLayoutProps {
 }
 
 export default function SidebarLayout(props: SidebarLayoutProps) {
-  const {appEnvironment, children, className, onSidebarWidthChange, sidebar, sidebarVisible = true, sidebarWidth, titlebarActions} = props;
+  const {appEnvironment, children, className, onSidebarWidthChange, reservedContentWidth = 0, sidebar, sidebarVisible = true, sidebarWidth, titlebarActions} = props;
   const translucentSidebar = useAppearanceStore((state) => state.translucentSidebar);
-  const [resizing, setResizing] = useState(false);
+  const handleResizePointerDown = useDragResize((clientX) => onSidebarWidthChange?.(clientX));
   const desktopEnvironment = isDesktopEnvironment(appEnvironment);
   const macEnvironment = appEnvironment === "mac";
   const resizable = onSidebarWidthChange != null;
 
-  const handleResizePointerDown = (event: PointerEvent<HTMLDivElement>): void => {
-    if (!onSidebarWidthChange) return;
-
-    event.preventDefault();
-    setResizing(true);
-    const updateSidebarWidth = onSidebarWidthChange;
-    let nextSidebarWidth = sidebarWidth;
-    const previousCursor = document.body.style.cursor;
-    const previousUserSelect = document.body.style.userSelect;
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-
-    const handlePointerMove = (moveEvent: globalThis.PointerEvent): void => {
-      nextSidebarWidth = moveEvent.clientX;
-      updateSidebarWidth(nextSidebarWidth);
-    };
-
-    const handlePointerUp = (): void => {
-      updateSidebarWidth(nextSidebarWidth);
-      document.body.style.cursor = previousCursor;
-      document.body.style.userSelect = previousUserSelect;
-      setResizing(false);
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerUp);
-    };
-
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerUp, {once: true});
-  };
-
-  const sidebarStyle = {"--sidebar-width": `${sidebarWidth}px`} as CSSProperties;
+  const sidebarStyle = {"--sidebar-width": clampedPanelWidth(sidebarWidth, MIN_SIDEBAR_WIDTH, reservedContentWidth)} as CSSProperties;
 
   return (
     <main className={cn("h-svh overflow-hidden text-ink", desktopEnvironment && "bg-transparent", className)}>
       <section
         className={cn(
-          "relative flex h-full min-h-0 overflow-hidden bg-surface-sidebar",
+          "@container relative flex h-full min-h-0 overflow-hidden bg-surface-sidebar",
           (macEnvironment || appEnvironment === "windows") && translucentSidebar && "bg-surface-sidebar-translucent backdrop-blur-sm backdrop-saturate-[1.35]"
         )}
       >
@@ -71,7 +45,7 @@ export default function SidebarLayout(props: SidebarLayoutProps) {
                 "flex h-full items-center gap-1 pr-3",
                 macEnvironment ? "pl-23" : "pl-3",
                 sidebarVisible && "w-(--sidebar-width)",
-                !resizing && "transition-[width] duration-250 ease-in-out"
+                "transition-[width] duration-250 ease-in-out [[data-resizing]_&]:transition-none [[data-resizing]_&]:duration-0"
               )}
             >
               {titlebarActions}
@@ -82,7 +56,7 @@ export default function SidebarLayout(props: SidebarLayoutProps) {
         <div
           className={cn(
             "relative shrink-0 overflow-hidden",
-            !resizing && "transition-[width] duration-250 ease-in-out",
+            "transition-[width] duration-250 ease-in-out [[data-resizing]_&]:transition-none [[data-resizing]_&]:duration-0",
             sidebarVisible ? (resizable ? "w-full md:w-(--sidebar-width)" : "w-(--sidebar-width)") : "w-0"
           )}
           style={sidebarStyle}
