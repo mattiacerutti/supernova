@@ -26,7 +26,7 @@ export default function FileDiffView(props: FileDiffViewProps) {
       <FileDiff
         className="min-h-full"
         fileDiff={fileDiff}
-        options={{...generateDiffOptions(mode), diffStyle: split ? "split" : "unified", expandUnchanged: expanded, hunkSeparators: "line-info", overflow: "scroll"}}
+        options={{...generateDiffOptions(mode), diffStyle: split ? "split" : "unified", expandUnchanged: expanded, hunkSeparators: "line-info"}}
       />
     </Virtualizer>
   );
