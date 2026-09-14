@@ -14,7 +14,7 @@ export default function DiffStat(props: DiffStatProps) {
   if (additions === 0 && deletions === 0) return null;
 
   return (
-    <span className="flex shrink-0 items-center gap-1 font-mono text-xs">
+    <span className="flex shrink-0 items-baseline gap-1 font-mono text-xs">
       {additions > 0 && <span className="text-diff-added">+{formatCount(additions)}</span>}
       {deletions > 0 && <span className="text-diff-removed">-{formatCount(deletions)}</span>}
     </span>

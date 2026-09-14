@@ -7,6 +7,7 @@ import {Effect} from "effect";
 import {afterAll, beforeAll, describe, expect, it} from "vitest";
 import {getWorkspaceChanges} from "@supernova/agent-runtime/layers/workspace/operations/changes/get-workspace-changes";
 import {getWorkspaceDiffContents} from "@supernova/agent-runtime/layers/workspace/operations/changes/get-workspace-diff-contents";
+import {listWorkspaceRepositories} from "@supernova/agent-runtime/layers/workspace/operations/changes/list-workspace-repositories";
 import {listWorkspaceFiles} from "@supernova/agent-runtime/layers/workspace/operations/files/list-workspace-files";
 import {readWorkspaceFile} from "@supernova/agent-runtime/layers/workspace/operations/files/read-workspace-file";
 
@@ -49,6 +50,16 @@ beforeAll(async () => {
   await writeFile(join(repo, ".gitignore"), "ignored.log\n");
   await writeFile(join(repo, "ignored.log"), "noise\n");
   await writeFile(join(repo, "binary.bin"), Buffer.from([0, 1, 2, 3]));
+  // A nested repository one level down, with its own committed and uncommitted files, plus a deeper one that must be ignored.
+  await mkdir(join(repo, "nested"));
+  await exec("git", ["init", "-q", "-b", "main"], {cwd: join(repo, "nested")});
+  await writeFile(join(repo, "nested/n.ts"), "n\n");
+  await exec("git", ["add", "-A"], {cwd: join(repo, "nested")});
+  await exec("git", ["-c", "user.name=Ada", "-c", "user.email=a@x", "commit", "-q", "-m", "nested"], {cwd: join(repo, "nested")});
+  await writeFile(join(repo, "nested/n.ts"), "n\nm\n");
+  await mkdir(join(repo, "nested/deeper"));
+  await exec("git", ["init", "-q"], {cwd: join(repo, "nested/deeper")});
+  await writeFile(join(repo, "nested/deeper/d.ts"), "d\n");
 });
 
 afterAll(async () => {
@@ -57,26 +68,55 @@ afterAll(async () => {
 });
 
 describe("workspace git operations", () => {
+  it("discovers the root repository and its immediate children only", async () => {
+    const result = await run(listWorkspaceRepositories(repo));
+    expect(result._tag === "Success" && result.success.repositories).toEqual([".", "nested"]);
+    const plain = await run(listWorkspaceRepositories(plainFolder));
+    expect(plain._tag === "Success" && plain.success.repositories).toEqual([]);
+  });
+
+  it("refuses repository roots outside the discovered set", async () => {
+    const result = await run(getWorkspaceChanges({projectPath: repo, repositoryRoot: "../elsewhere"}));
+    expect(result._tag === "Failure" && result.failure._tag).toBe("WorkspaceGenericError");
+  });
+
   it("reports a plain folder as not a repository", async () => {
     const result = await run(listWorkspaceFiles(plainFolder));
     expect(result._tag).toBe("Failure");
     if (result._tag === "Failure") expect(result.failure._tag).toBe("WorkspaceNotARepositoryError");
   });
 
-  it("lists tracked and untracked files without ignored ones", async () => {
+  it("lists the files of every discovered repository, without ignored ones or deeper repositories", async () => {
     const result = await run(listWorkspaceFiles(repo));
-    expect(result._tag === "Success" && [...result.success.files].toSorted()).toEqual([".gitignore", "binary.bin", "src/a.ts", "src/b.ts", "src/c.ts", "src/new.ts"]);
+    expect(result._tag === "Success" && [...result.success.files].toSorted()).toEqual([
+      ".gitignore",
+      "binary.bin",
+      "nested/n.ts",
+      "src/a.ts",
+      "src/b.ts",
+      "src/c.ts",
+      "src/new.ts",
+    ]);
   });
 
   it("reports uncommitted changes with status and line counts", async () => {
-    const result = await run(getWorkspaceChanges(repo));
+    const result = await run(getWorkspaceChanges({projectPath: repo, repositoryRoot: "."}));
     expect(result._tag).toBe("Success");
     if (result._tag !== "Success") return;
     const byPath = new Map(result.success.uncommitted.map((entry) => [entry.path, entry]));
+    expect(byPath.has("nested/")).toBe(false);
+    expect([...byPath.keys()].some((path) => path.startsWith("nested/"))).toBe(false);
     expect(byPath.get("src/a.ts")).toEqual({additions: 1, deletions: 0, path: "src/a.ts", status: "modified"});
     expect(byPath.get("README.md")).toEqual({additions: 0, deletions: 1, path: "README.md", status: "deleted"});
     expect(byPath.get("src/new.ts")).toEqual({additions: 2, deletions: 0, path: "src/new.ts", status: "untracked"});
     expect(byPath.has("ignored.log")).toBe(false);
+  });
+
+  it("scopes changes to the selected nested repository", async () => {
+    const result = await run(getWorkspaceChanges({projectPath: repo, repositoryRoot: "nested"}));
+    expect(result._tag === "Success" && result.success.uncommitted).toEqual([{additions: 1, deletions: 0, path: "n.ts", status: "modified"}]);
+    const diff = await run(getWorkspaceDiffContents({path: "n.ts", projectPath: repo, repositoryRoot: "nested"}));
+    expect(diff._tag === "Success" && diff.success).toEqual({newContents: "n\nm\n", oldContents: "n\n"});
   });
 
   it.each([
@@ -84,7 +124,7 @@ describe("workspace git operations", () => {
     {expected: {newContents: "x\ny\n", oldContents: ""}, name: "returns an empty old side for an untracked file", path: "src/new.ts"},
     {expected: {newContents: "", oldContents: "hi\n"}, name: "returns an empty new side for a deleted file", path: "README.md"},
   ])("$name", async ({expected, path}) => {
-    const result = await run(getWorkspaceDiffContents({path, projectPath: repo}));
+    const result = await run(getWorkspaceDiffContents({path, projectPath: repo, repositoryRoot: "."}));
     expect(result._tag === "Success" && result.success).toEqual(expected);
   });
 

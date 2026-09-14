@@ -1,7 +1,9 @@
 export interface WorkspaceChangesTab {
   readonly id: string;
   readonly kind: "changes";
-  /** Path of the uncommitted change whose diff is shown. */
+  /** Root from `listWorkspaceRepositories`; null until the user picks one, meaning the first discovered. */
+  readonly repositoryRoot: string | null;
+  /** Repository-relative path of the uncommitted change whose diff is shown. */
   readonly selection: string | null;
 }
 

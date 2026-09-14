@@ -3,6 +3,8 @@ import {WorkspaceChangeEntry} from "@supernova/contracts/workspace/schemas";
 
 export const WorkspaceChangesGetPayload = Schema.Struct({
   projectPath: Schema.String,
+  /** One of the roots from `listWorkspaceRepositories`. */
+  repositoryRoot: Schema.String,
 });
 
 export const WorkspaceChangesGetResult = Schema.Struct({

@@ -5,7 +5,7 @@ export const WorkspaceChangeStatus = Schema.Literals(["added", "deleted", "modif
 export const WorkspaceChangeEntry = Schema.Struct({
   additions: Schema.Number,
   deletions: Schema.Number,
-  /** Repository-relative path, POSIX separators. */
+  /** Relative to the repository root, POSIX separators. */
   path: Schema.String,
   status: WorkspaceChangeStatus,
 });

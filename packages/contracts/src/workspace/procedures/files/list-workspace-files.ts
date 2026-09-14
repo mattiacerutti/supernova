@@ -4,7 +4,7 @@ export const WorkspaceFilesListPayload = Schema.Struct({
   projectPath: Schema.String,
 });
 
-/** Tracked and untracked-but-not-ignored files, repository-relative with POSIX separators. */
+/** Tracked and untracked-but-not-ignored files of every discovered repository, project-relative with POSIX separators. */
 export const WorkspaceFilesListResult = Schema.Struct({
   files: Schema.Array(Schema.String),
 });

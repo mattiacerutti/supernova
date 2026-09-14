@@ -32,16 +32,16 @@ export function decodeWorkspaceFile(buffer: Buffer): string {
 import {runGitResult} from "@supernova/agent-runtime/layers/shared/lib/git/git-process";
 
 /**
- * Runs Git in the project. A missing repository is detected up front so the UI gets one stable
+ * Runs Git in a repository. A missing repository is detected up front so the UI gets one stable
  * reason instead of whatever message the particular command prints. `git diff --no-index` exits
  * 1 when the files differ, so callers that expect that pass `okCodes`.
  */
-export function workspaceGit(projectPath: string, args: readonly string[], okCodes: readonly number[] = [0]): Effect.Effect<string, WorkspaceGitError> {
+export function workspaceGit(repositoryPath: string, args: readonly string[], okCodes: readonly number[] = [0]): Effect.Effect<string, WorkspaceGitError> {
   return Effect.tryPromise({
     try: async () => {
-      const probe = await runGitResult(["rev-parse", "--is-inside-work-tree"], {cwd: projectPath});
+      const probe = await runGitResult(["rev-parse", "--is-inside-work-tree"], {cwd: repositoryPath});
       if (probe.code !== 0) throw new WorkspaceNotARepositoryError({message: "Not a Git repository."});
-      const output = await runGitResult(args, {cwd: projectPath});
+      const output = await runGitResult(args, {cwd: repositoryPath});
       if (okCodes.includes(output.code)) return output.stdout;
       throw new WorkspaceGenericError({message: output.stderr.trim()});
     },

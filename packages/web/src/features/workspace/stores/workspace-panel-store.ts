@@ -27,7 +27,7 @@ interface WorkspaceTabKind<TTab extends WorkspacePanelTab> {
 /** Everything the panel and store need to know per tab kind. Adding a kind means adding an entry here and a `renderTab` case in the panel. */
 export const WORKSPACE_TAB_KINDS = {
   changes: {
-    create: () => ({id: "changes", kind: "changes", selection: null}),
+    create: () => ({id: "changes", kind: "changes", repositoryRoot: null, selection: null}),
     icon: "git-commit",
     label: "Changes",
     present: () => ({icon: "git-commit", label: "Changes", preview: false}),

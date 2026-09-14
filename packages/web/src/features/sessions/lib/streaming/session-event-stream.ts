@@ -6,7 +6,6 @@ import {Effect, Stream} from "effect";
 import {allProjectSessionsQueryKey, listProjectSessionsQueryKey} from "@/features/projects/hooks/api/use-list-project-sessions";
 import {allSessionsQueryKey, sessionQueryKey} from "@/features/sessions/hooks/api/use-session";
 import {useSessionLiveStore} from "@/features/sessions/stores/session-live-store";
-import {workspaceQueryKey} from "@/features/workspace/hooks/api/use-workspace";
 import type {RpcClient, RpcClientFiber} from "@/rpc/transport/protocol";
 
 let connectionGeneration = 0;
@@ -63,7 +62,7 @@ function applyEvent(input: {event: SessionStreamEvent; queryClient: QueryClient}
   // The agent may have touched the working tree during the turn.
   if (event.type === "session.agent.ended") {
     const projectPath = queryClient.getQueryData<Session>(sessionQueryKey(event.sessionId))?.projectPath;
-    if (projectPath) void queryClient.invalidateQueries({queryKey: workspaceQueryKey(projectPath)});
+    if (projectPath) void queryClient.invalidateQueries({queryKey: ["workspace", projectPath]});
   }
 
   useSessionLiveStore.getState().applyEvent(event);

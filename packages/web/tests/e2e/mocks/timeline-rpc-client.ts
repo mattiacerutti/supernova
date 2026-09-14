@@ -104,6 +104,7 @@ class TimelineRpcClient implements RpcClient {
         }),
       listProviders: () => Effect.succeed([]),
       listWorkspaceFiles: () => Effect.succeed({files: []}),
+      listWorkspaceRepositories: () => Effect.succeed({repositories: []}),
       logoutProvider: () => Effect.void,
       readWorkspaceFile: () => Effect.succeed({content: ""}),
       redoCheckpoint: ({sessionId}: {readonly sessionId: string}) => Effect.sync(() => this.redoCheckpoint(sessionId)),
