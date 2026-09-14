@@ -1,11 +1,11 @@
 import {readFile} from "node:fs/promises";
-import {resolve} from "node:path";
 import {Effect} from "effect";
 import type {WorkspaceDiffContentsGetPayload} from "@supernova/contracts/workspace/procedures";
 import {WorkspaceGenericError} from "@supernova/contracts/workspace/schemas";
 import type {WorkspaceFileError} from "@supernova/contracts/workspace/schemas";
 import {runGitResult} from "@supernova/agent-runtime/layers/shared/lib/git/git-process";
 import {decodeWorkspaceFile, isWorkspaceError, workspaceGit} from "@supernova/agent-runtime/layers/workspace/lib/workspace-git";
+import {pathInProject} from "@supernova/agent-runtime/layers/workspace/lib/workspace-paths";
 import {repositoryPath} from "@supernova/agent-runtime/layers/workspace/lib/workspace-repositories";
 
 /** A blob at a revision, or empty when the path did not exist there (untracked files). */
@@ -19,10 +19,13 @@ function blobAt(repository: string, revision: string, path: string): Effect.Effe
   });
 }
 
-/** The working-tree file, or empty when it was deleted. */
+/** The working-tree file. Empty when it was deleted, and likewise when the path leaves the repository, which has nothing to show. */
 function workingFile(repository: string, path: string): Effect.Effect<string, WorkspaceFileError> {
   return Effect.tryPromise({
-    try: async () => decodeWorkspaceFile(await readFile(resolve(repository, path)).catch(() => Buffer.alloc(0))),
+    try: async () => {
+      const target = await pathInProject(repository, path);
+      return target ? decodeWorkspaceFile(await readFile(target)) : "";
+    },
     catch: (cause) => (isWorkspaceError(cause) ? cause : new WorkspaceGenericError({cause, message: "Failed to read file."})),
   });
 }

@@ -1,5 +1,5 @@
 import {execFile} from "node:child_process";
-import {mkdir, mkdtemp, rm, writeFile} from "node:fs/promises";
+import {mkdir, mkdtemp, rm, symlink, writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {promisify} from "node:util";
@@ -16,6 +16,7 @@ const run = <A, E>(effect: Effect.Effect<A, E>) => Effect.runPromise(Effect.resu
 
 let repo: string;
 let plainFolder: string;
+let outsideRepo: string;
 const commitIds: string[] = [];
 
 async function git(...args: string[]): Promise<string> {
@@ -60,11 +61,16 @@ beforeAll(async () => {
   await mkdir(join(repo, "nested/deeper"));
   await exec("git", ["init", "-q"], {cwd: join(repo, "nested/deeper")});
   await writeFile(join(repo, "nested/deeper/d.ts"), "d\n");
+  // A repository reachable only through a symlinked child, used to check that requests cannot follow it.
+  outsideRepo = await mkdtemp(join(tmpdir(), "supernova-outside-"));
+  await exec("git", ["init", "-q", "-b", "main"], {cwd: outsideRepo});
+  await symlink(outsideRepo, join(repo, "linked"));
 });
 
 afterAll(async () => {
   await rm(repo, {force: true, recursive: true});
   await rm(plainFolder, {force: true, recursive: true});
+  await rm(outsideRepo, {force: true, recursive: true});
 });
 
 describe("workspace git operations", () => {
@@ -75,9 +81,19 @@ describe("workspace git operations", () => {
     expect(plain._tag === "Success" && plain.success.repositories).toEqual([]);
   });
 
-  it("refuses repository roots outside the discovered set", async () => {
-    const result = await run(getWorkspaceChanges({projectPath: repo, repositoryRoot: "../elsewhere"}));
+  it.each([
+    {name: "refuses repository roots with path segments", root: "../elsewhere"},
+    {name: "refuses an empty repository root", root: ""},
+    // A symlinked child is never discovered, so following one would read a repository outside the project.
+    {name: "refuses a symlinked repository root", root: "linked"},
+  ])("$name", async ({root}) => {
+    const result = await run(getWorkspaceChanges({projectPath: repo, repositoryRoot: root}));
     expect(result._tag === "Failure" && result.failure._tag).toBe("WorkspaceGenericError");
+  });
+
+  it("does not read files outside the repository through a relative path", async () => {
+    const result = await run(getWorkspaceDiffContents({path: "../../../../etc/hosts", projectPath: repo, repositoryRoot: "."}));
+    expect(result._tag === "Success" && result.success).toEqual({newContents: "", oldContents: ""});
   });
 
   it("reports a plain folder as not a repository", async () => {
@@ -88,9 +104,11 @@ describe("workspace git operations", () => {
 
   it("lists the files of every discovered repository, without ignored ones or deeper repositories", async () => {
     const result = await run(listWorkspaceFiles(repo));
+    // Git tracks a symlink as a file, so it is listed; opening it is refused separately.
     expect(result._tag === "Success" && [...result.success.files].toSorted()).toEqual([
       ".gitignore",
       "binary.bin",
+      "linked",
       "nested/n.ts",
       "src/a.ts",
       "src/b.ts",
@@ -133,6 +151,7 @@ describe("workspace git operations", () => {
     {expected: {tag: "WorkspaceBinaryFileError"}, name: "refuses binary files", path: "binary.bin"},
     {expected: {tag: "WorkspaceFileNotFoundError"}, name: "refuses paths that escape the project", path: "../outside.txt"},
     {expected: {tag: "WorkspaceFileNotFoundError"}, name: "refuses missing files", path: "src/missing.ts"},
+    {expected: {tag: "WorkspaceFileNotFoundError"}, name: "refuses files reached through a symlink out of the project", path: "linked/HEAD"},
   ])("$name", async ({expected, path}) => {
     const result = await run(readWorkspaceFile({path, projectPath: repo}));
     if ("content" in expected) expect(result._tag === "Success" && result.success).toEqual(expected);

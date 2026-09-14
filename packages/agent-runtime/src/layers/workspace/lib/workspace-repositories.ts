@@ -3,13 +3,21 @@ import {join} from "node:path";
 import {Effect} from "effect";
 import {WorkspaceGenericError} from "@supernova/contracts/workspace/schemas";
 import {optionalGit} from "@supernova/agent-runtime/layers/shared/lib/git/git-process";
+import {pathInProject} from "@supernova/agent-runtime/layers/workspace/lib/workspace-paths";
 
-/** A root is `"."` or the plain name of an immediate child directory, so it can never leave the project. */
+/**
+ * Resolves a client-supplied repository root. It must be `"."` or the plain name of an immediate child
+ * directory, and must still be inside the project once symlinks are followed: a symlinked child is never
+ * discovered, so accepting one would let a request read a repository outside the project.
+ */
 export function repositoryPath(projectPath: string, repositoryRoot: string): Effect.Effect<string, WorkspaceGenericError> {
   if (repositoryRoot !== "." && (repositoryRoot === ".." || repositoryRoot.length === 0 || /[/\\]/.test(repositoryRoot))) {
     return Effect.fail(new WorkspaceGenericError({message: "Unknown repository."}));
   }
-  return Effect.succeed(join(projectPath, repositoryRoot));
+  return Effect.flatMap(
+    Effect.promise(() => pathInProject(projectPath, repositoryRoot)),
+    (resolved) => (resolved === undefined ? Effect.fail(new WorkspaceGenericError({message: "Unknown repository."})) : Effect.succeed(resolved))
+  );
 }
 
 async function hasGitEntry(directory: string): Promise<boolean> {
