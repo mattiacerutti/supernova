@@ -33,7 +33,7 @@ export default function UpdateStatusIcon(props: UpdateStatusIconProps) {
   const percent = Math.min(100, Math.max(0, downloadPercent ?? 0));
 
   return (
-    <span className="grid size-4 place-items-center rounded-full bg-blue-500 text-white transition-colors duration-160 ease-out group-hover:bg-blue-400">
+    <span className="grid size-4 place-items-center">
       {status === "downloading" ? <DownloadProgressRing percent={percent} /> : <Icon className="size-2.5" name={status === "downloaded" ? "restart" : "update"} size="xs" />}
     </span>
   );

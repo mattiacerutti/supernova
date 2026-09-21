@@ -10,6 +10,7 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+- Updated the sidebar footer layout and update button appearance.
 - Updated the desktop shell to Electron 44 (Chromium 152), which includes upstream fixes for GPU rendering glitches in translucent windows on macOS.
 
 ### Fixed

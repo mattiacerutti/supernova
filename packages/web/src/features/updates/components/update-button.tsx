@@ -58,8 +58,27 @@ export default function UpdateButton(props: UpdateButtonProps) {
 
   return (
     <>
-      <IconButton className={cn("group size-7", className)} disabled={downloading || pending} label={label} onClick={handleClick} title={label}>
-        <UpdateStatusIcon downloadPercent={state.downloadPercent} status={state.status} />
+      <IconButton
+        className={cn(
+          "group relative h-4.5 w-4.5 overflow-hidden transition-[width] duration-160 ease-out enabled:hover:w-14 enabled:focus-visible:w-14 motion-reduce:transition-none",
+          className
+        )}
+        disabled={downloading || pending}
+        label={label}
+        onClick={handleClick}
+        title={label}
+      >
+        <span className="relative grid h-4.5 w-full place-items-center overflow-hidden rounded-full bg-blue-500 text-white/90">
+          <span className="transition-opacity duration-160 group-enabled:group-hover:opacity-0 group-enabled:group-focus-visible:opacity-0 motion-reduce:transition-none">
+            <UpdateStatusIcon downloadPercent={state.downloadPercent} status={state.status} />
+          </span>
+          <span
+            aria-hidden="true"
+            className="absolute inset-0 grid scale-90 place-items-center whitespace-nowrap text-xs font-semibold opacity-0 transition-opacity duration-160 group-enabled:group-hover:opacity-100 group-enabled:group-focus-visible:opacity-100 motion-reduce:transition-none"
+          >
+            {state.status === "downloaded" ? "Restart" : "Update"}
+          </span>
+        </span>
       </IconButton>
       <UpdateInstallDialog onCancel={handleCancelInstall} onConfirm={handleConfirmInstall} open={installDialogOpen} version={state.version} />
     </>
