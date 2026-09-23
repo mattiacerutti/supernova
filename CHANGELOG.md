@@ -15,6 +15,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Fixed
 
+- Removed a redundant full-window backdrop filter from translucent desktop layouts, reducing GPU compositing overhead during streaming.
+- Reduced style recalculation during scrolling and message anchoring, especially in code-heavy conversations.
 - Fixed workspace folders losing their expanded state when opening a file from the full-panel explorer.
 - Fixed menu and suggestion panel corners not matching the rounding of the items inside them.
 

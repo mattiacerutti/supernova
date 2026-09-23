@@ -2,6 +2,17 @@
 @import "shadcn/tailwind.css";
 @plugin "@toolwind/corner-shape";
 
+/* Keep shadcn's changing scroll-fade gradients from invalidating descendant styles. */
+@property --scroll-fade-block {
+  syntax: "*";
+  inherits: false;
+}
+
+@property --scroll-fade-inline {
+  syntax: "*";
+  inherits: false;
+}
+
 @font-face {
   font-family: "Inter";
   font-style: normal;

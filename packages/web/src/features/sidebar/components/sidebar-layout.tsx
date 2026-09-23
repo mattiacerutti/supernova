@@ -35,7 +35,7 @@ export default function SidebarLayout(props: SidebarLayoutProps) {
       <section
         className={cn(
           "@container relative flex h-full min-h-0 overflow-hidden bg-surface-sidebar",
-          (macEnvironment || appEnvironment === "windows") && translucentSidebar && "bg-surface-sidebar-translucent backdrop-blur-sm backdrop-saturate-[1.35]"
+          (macEnvironment || appEnvironment === "windows") && translucentSidebar && "bg-surface-sidebar-translucent"
         )}
       >
         {(titlebarActions != null || macEnvironment || appEnvironment === "windows") && (
