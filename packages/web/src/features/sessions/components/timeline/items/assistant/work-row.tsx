@@ -16,7 +16,7 @@ const TRUNK_X = 10.5;
 const BEND_RADIUS = 6;
 const BRANCH_END_X = 26;
 const ICON_LEFT = 30;
-const ICON_SIZE = 16;
+const ICON_SIZE = 14;
 const GUTTER_WIDTH = 54;
 // Half-pixel so the 1px horizontal leg lands on one pixel row, like the trunk.
 const BEND_Y = ROW_HEIGHT / 2 - BEND_RADIUS + 0.5;
