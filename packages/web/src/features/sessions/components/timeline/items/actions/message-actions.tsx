@@ -40,13 +40,22 @@ export default function MessageActions(props: MessageActionsProps) {
   if (!hasActions) return null;
 
   return (
-    <div className={cn("mt-1 flex items-center gap-0.5 opacity-0 transition-opacity group-hover/message:opacity-100", copied && "opacity-100", align === "end" && "justify-end")}>
+    <div
+      className={cn(
+        "mt-1 flex items-center gap-0.5 opacity-0 transition-opacity group-[.turn-hover]/turn:opacity-100 group-hover/message:opacity-100",
+        copied && "opacity-100",
+        align === "end" && "justify-end"
+      )}
+    >
       {align === "end" && time}
       {canCopy && (
         <Button aria-label="Copy message" className={cn("size-6", align === "start" && "-ml-1.5")} onClick={handleCopy} shape="icon" size="sm" title="Copy message" variant="ghost">
           <span className="relative grid size-3 place-items-center">
             <Icon
-              className={cn("absolute size-3.5 opacity-0 transition-opacity duration-150 group-hover/message:opacity-100", copied && "opacity-0 group-hover/message:opacity-0")}
+              className={cn(
+                "absolute size-3.5 opacity-0 transition-opacity duration-150 group-[.turn-hover]/turn:opacity-100 group-hover/message:opacity-100",
+                copied && "opacity-0 group-[.turn-hover]/turn:opacity-0 group-hover/message:opacity-0"
+              )}
               name="copy"
               size="xs"
             />

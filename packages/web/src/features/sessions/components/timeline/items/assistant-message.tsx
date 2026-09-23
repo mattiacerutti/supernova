@@ -18,7 +18,7 @@ export default function AssistantMessage(props: AssistantMessageProps) {
     <article className="group/message">
       <div className="max-w-3xl">
         {event.content.length > 0 && <AssistantMessageContent streaming={live}>{event.content}</AssistantMessageContent>}
-        {event.content.length > 0 && final && (live ? <div aria-hidden="true" className="mt-1 h-6" /> : <MessageActions copyText={event.content} timestamp={event.timestamp} />)}
+        {final && <MessageActions copyText={event.content} timestamp={event.timestamp} />}
         {error && <p className={cn("text-sm leading-7 text-danger-ink", event.content.length > 0 && "mt-3")}>{error}</p>}
       </div>
     </article>

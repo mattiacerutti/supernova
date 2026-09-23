@@ -148,7 +148,15 @@ test.describe("session timeline visual stability", () => {
     const easingFrames = fittingFrames.filter((sample) => sample.statusFooterOffset < -0.5);
     expect(fittingFrames.length, "the response should grow inside the viewport for a while").toBeGreaterThanOrEqual(2);
     expect(easingFrames.length, "the footer should be displaced upward and ease into place as rows push it down").toBeGreaterThanOrEqual(2);
-    expect(Math.min(...easingFrames.map((sample) => sample.statusFooterOffset)), "the footer catch-up should stay bounded").toBeGreaterThanOrEqual(-57);
+    // On the frame layout moves the footer down, the painted footer must not
+    // have moved with it: the catch-up transform holds it in place and eases.
+    const jumpedFrames = fittingFrames.filter((sample, index) => {
+      const previous = fittingFrames[index - 1];
+      if (previous === undefined || sample.statusFooterTop === null || previous.statusFooterTop === null) return false;
+      const layoutMoved = sample.statusFooterTop - sample.statusFooterOffset > previous.statusFooterTop - previous.statusFooterOffset + 0.5;
+      return layoutMoved && sample.statusFooterTop > previous.statusFooterTop + 2;
+    });
+    expect(jumpedFrames, "the footer should never jump when layout pushes it down; it only eases").toEqual([]);
     expect(Math.max(...fittingFrames.map((sample) => sample.streamOffset)), "rows should not animate while nothing scrolls").toBeLessThanOrEqual(0.5);
   });
 
@@ -247,6 +255,21 @@ test.describe("session timeline visual stability", () => {
     expect(Math.max(...animatedFrames.map((sample) => sample.streamOffset)), "stream animation should remain bounded while catching up").toBeLessThanOrEqual(57);
     expect(footerPositions.length, "the status footer should remain mounted during animation").toBe(animatedFrames.length);
     expect(Math.max(...footerPositions) - Math.min(...footerPositions), "the status footer should stay fixed while stream rows animate").toBeLessThanOrEqual(1);
+  });
+
+  test("stream growth keeps animating after a manual detach and reattach", async ({timeline}) => {
+    await timeline.sendMessage();
+    await timeline.waitForLineGrowth(30);
+    await timeline.scrollUp(300);
+    await timeline.scrollDown(600);
+    await timeline.expectAtBottom();
+
+    const samples = visibleSamples(await timeline.recordStreamGrowth(60), TIMELINE_SESSION_ID);
+    const growthFrames = samples.filter((sample, index) => index > 0 && sample.scrollHeight > samples[index - 1]!.scrollHeight);
+    const unanimatedGrowth = growthFrames.filter((sample) => !samples.slice(samples.indexOf(sample), samples.indexOf(sample) + 3).some((next) => next.streamOffset > 0.5));
+
+    expect(growthFrames.length, "the stream should keep growing after reattaching").toBeGreaterThanOrEqual(5);
+    expect(unanimatedGrowth, "every growth step should ease rows into place after reattaching").toEqual([]);
   });
 
   test("scrolling slightly up during streaming detaches from auto-scroll", async ({timeline}) => {

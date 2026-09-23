@@ -6,6 +6,8 @@ export type SessionWorkEvent = Extract<TurnEvent, {type: "tool"}>;
 export type SessionCompactionEvent = CompactionTurnEvent;
 
 interface SessionTimelineItemBase {
+  /** The turn's last item once settled; it carries the timestamp actions. */
+  readonly final: boolean;
   readonly id: string;
   readonly spacing: "message" | "work";
   readonly turnId: string;
@@ -13,17 +15,13 @@ interface SessionTimelineItemBase {
 
 export interface AssistantSessionTimelineItem extends SessionTimelineItemBase {
   readonly event: SessionAssistantEvent;
-  /** Only the turn's final response carries copy/timestamp actions. */
-  readonly final: boolean;
   readonly live: boolean;
-  readonly spacing: "message" | "work";
   readonly type: "assistant";
 }
 
 export interface ReasoningSessionTimelineItem extends SessionTimelineItemBase {
   readonly event: SessionReasoningEvent;
   readonly live: boolean;
-  readonly spacing: "work";
   readonly type: "reasoning";
 }
 
@@ -37,14 +35,12 @@ export interface WorkSessionTimelineItem extends SessionTimelineItemBase {
   readonly durationMs: number | undefined;
   readonly events: readonly SessionWorkEvent[];
   readonly live: boolean;
-  readonly spacing: "message" | "work";
   readonly type: "work";
 }
 
 export interface CompactionSessionTimelineItem extends SessionTimelineItemBase {
   readonly durationMs: number | undefined;
   readonly event: SessionCompactionEvent;
-  readonly spacing: "work";
   readonly type: "compaction";
 }
 
@@ -52,7 +48,6 @@ export interface CompactionSessionTimelineItem extends SessionTimelineItemBase {
 export interface TurnWorkSessionTimelineItem extends SessionTimelineItemBase {
   readonly durationMs: number | undefined;
   readonly items: readonly SessionTimelineItem[];
-  readonly spacing: "work";
   readonly type: "turn-work";
 }
 

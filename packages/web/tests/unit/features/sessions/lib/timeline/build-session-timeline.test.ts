@@ -68,16 +68,32 @@ describe("buildSessionTimeline", () => {
     ]);
   });
 
-  it("keeps a settled turn flat when nothing precedes its response or there is no response", () => {
+  it("folds trailing work into the turn's work row when a response ends the turn", () => {
+    const timeline = buildSessionTimeline({
+      live: false,
+      liveTurn: null,
+      turns: [turn({events: [toolEvent("tool-1", 1), assistantEvent("assistant-1", 2), toolEvent("tool-2", 3), assistantEvent("assistant-2", 4)]})],
+    });
+    expect(timeline.committedItems).toMatchObject([
+      {type: "user"},
+      {items: [{type: "work"}, {event: {id: "assistant-1"}, final: false, type: "assistant"}, {type: "work"}], type: "turn-work"},
+      {event: {id: "assistant-2"}, final: true, spacing: "message", type: "assistant"},
+    ]);
+  });
+
+  it("keeps a settled turn flat and stamps its last item when it ends on work", () => {
     const direct = buildSessionTimeline({live: false, liveTurn: null, turns: [turn({events: [assistantEvent("assistant-1", 1)]})]});
     expect(direct.committedItems).toMatchObject([{type: "user"}, {event: {id: "assistant-1"}, final: true, type: "assistant"}]);
 
-    const toolsOnly = buildSessionTimeline({live: false, liveTurn: null, turns: [turn({events: [reasoningEvent("reasoning-1", 1), toolEvent("tool-1", 3, "command")]})]});
-    expect(toolsOnly.committedItems).toMatchObject([
+    const endsOnWork = buildSessionTimeline({live: false, liveTurn: null, turns: [turn({events: [assistantEvent("assistant-1", 1), toolEvent("tool-1", 3, "command")]})]});
+    expect(endsOnWork.committedItems).toMatchObject([
       {type: "user"},
-      {event: {id: "reasoning-1"}, type: "reasoning"},
-      {events: [{tool: {kind: "command"}}], live: false, type: "work"},
+      {event: {id: "assistant-1"}, final: false, spacing: "work", type: "assistant"},
+      {events: [{tool: {kind: "command"}}], final: true, spacing: "work", type: "work"},
     ]);
+
+    const toolsOnly = buildSessionTimeline({live: false, liveTurn: null, turns: [turn({events: [reasoningEvent("reasoning-1", 1), toolEvent("tool-1", 3, "command")]})]});
+    expect(toolsOnly.committedItems).toMatchObject([{type: "user"}, {event: {id: "reasoning-1"}, final: false, type: "reasoning"}, {final: true, type: "work"}]);
   });
 
   it("marks only the active stream output and trailing work as live", () => {
@@ -92,7 +108,11 @@ describe("buildSessionTimeline", () => {
     });
 
     expect(timeline.committedItems).toEqual([]);
-    expect(timeline.liveItems).toMatchObject([{type: "user"}, {event: {id: "assistant-1"}, live: true, type: "assistant"}, {events: [{id: "tool-1"}], live: true, type: "work"}]);
+    expect(timeline.liveItems).toMatchObject([
+      {type: "user"},
+      {event: {id: "assistant-1"}, final: false, live: true, type: "assistant"},
+      {events: [{id: "tool-1"}], final: false, live: true, type: "work"},
+    ]);
     const withReasoning = buildSessionTimeline({
       live: true,
       liveTurn: turn({completedAt: undefined, events: [toolEvent("tool-1", 1), reasoningEvent("reasoning-1", 2), toolEvent("tool-2", 3)], status: "streaming"}),

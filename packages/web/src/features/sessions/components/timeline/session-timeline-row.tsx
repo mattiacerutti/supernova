@@ -1,4 +1,6 @@
 import {memo} from "react";
+import type {ReactNode} from "react";
+import MessageActions from "@/features/sessions/components/timeline/items/actions/message-actions";
 import AssistantMessage from "@/features/sessions/components/timeline/items/assistant-message";
 import AssistantCompaction from "@/features/sessions/components/timeline/items/assistant-compaction";
 import UserMessage from "@/features/sessions/components/timeline/items/user-message";
@@ -12,6 +14,18 @@ interface SessionTimelineRowProps {
   readonly onRevertToMessage?: (turnId: string) => void;
 }
 
+/** A settled turn that ended on work (abort, error) stamps its last item with the time only. */
+function FinalWork(props: {readonly children: ReactNode; readonly timestamp: string}) {
+  const {children, timestamp} = props;
+
+  return (
+    <div className="group/message">
+      {children}
+      <MessageActions copyText="" timestamp={timestamp} />
+    </div>
+  );
+}
+
 const SessionTimelineRow = memo(function SessionTimelineRow(props: SessionTimelineRowProps) {
   const {item, onRevertToMessage} = props;
 
@@ -23,11 +37,23 @@ const SessionTimelineRow = memo(function SessionTimelineRow(props: SessionTimeli
     case "compaction":
       return <AssistantCompaction item={item} />;
     case "reasoning":
-      return <AssistantReasoning item={item} />;
+      return item.final ? (
+        <FinalWork timestamp={item.event.timestamp}>
+          <AssistantReasoning item={item} />
+        </FinalWork>
+      ) : (
+        <AssistantReasoning item={item} />
+      );
     case "turn-work":
       return <AssistantTurnWork item={item} />;
     case "work":
-      return <AssistantWork item={item} />;
+      return item.final ? (
+        <FinalWork timestamp={item.events.at(-1)?.timestamp ?? ""}>
+          <AssistantWork item={item} />
+        </FinalWork>
+      ) : (
+        <AssistantWork item={item} />
+      );
   }
 });
 
