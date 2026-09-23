@@ -24,12 +24,29 @@ const TIMELINE_CACHE_LIMIT = 16;
 const TIMELINE_END_THRESHOLD_PX = 5;
 // Shows the scroll-to-latest button after the user moves this far from the bottom.
 const TIMELINE_SCROLL_BUTTON_THRESHOLD_PX = 50;
-// Lets streamed rows visually catch up after auto-follow instantly advances scrollTop.
+// Lets streamed rows (or the status footer) visually catch up after content
+// growth instantly moves them.
 const TIMELINE_STREAM_SCROLL_ANIMATION_MS = 160;
 // Caps that catch-up distance when a stream update adds a large amount of content.
 const TIMELINE_STREAM_SCROLL_MAX_OFFSET_PX = 56;
 
 const timelineCache = new Map<string, VirtualItem[]>();
+
+/**
+ * Starts `element` displaced by `offset` px and eases it to its layout position,
+ * stacking onto any displacement still in flight. Transform-only, so it runs on
+ * the compositor and never triggers layout while the stream renders.
+ */
+function animateCatchUp(element: HTMLElement, offset: number, current: Animation | null): Animation {
+  const transform = window.getComputedStyle(element).transform;
+  const inFlight = transform === "none" ? 0 : new DOMMatrixReadOnly(transform).m42;
+  const start = Math.sign(offset) * Math.min(Math.abs(inFlight + offset), TIMELINE_STREAM_SCROLL_MAX_OFFSET_PX);
+  current?.cancel();
+  return element.animate([{transform: `translateY(${start}px)`}, {transform: "translateY(0)"}], {
+    duration: TIMELINE_STREAM_SCROLL_ANIMATION_MS,
+    easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+  });
+}
 
 function hasLiveTimelineOutput(items: readonly SessionTimelineItem[]): boolean {
   return items.some((item) => {
@@ -103,6 +120,9 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
   const shouldSetInitialPositionRef = useRef(true);
   const streamAnimationReadyRef = useRef(false);
   const streamScrollAnimationRef = useRef<Animation | null>(null);
+  const footerRef = useRef<HTMLDivElement>(null);
+  const footerAnimationRef = useRef<Animation | null>(null);
+  const lastTotalSizeRef = useRef<number | null>(null);
 
   const hasTimelineContent = items.length > 0 || liveItems.length > 0 || isStreaming || streamError !== null;
   const timelineRows = hasTimelineContent ? buildTimelineRows({items, liveItems, streamError}) : [];
@@ -193,31 +213,35 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
     scrollToFn: (offset, options, instance) => {
       const viewport = viewportRef.current;
       const virtualContent = virtualContentRef.current;
-      const streamContent = streamContentRef.current;
-      if (virtualContent) virtualContent.style.height = `${instance.getTotalSize()}px`;
+      const totalSize = instance.getTotalSize();
+      const growth = totalSize - (lastTotalSizeRef.current ?? totalSize);
+      lastTotalSizeRef.current = totalSize;
+      if (virtualContent) virtualContent.style.height = `${totalSize}px`;
+      const animateGrowth = !shouldReduceMotion && isStreaming && !shouldSetInitialPositionRef.current && streamAnimationReadyRef.current && growth > 0;
+      // Growth is animated from the height change itself, never from scrollTop
+      // deltas: the message scroller's own auto-follow may already have moved
+      // scrollTop before this runs, which used to skip the catch-up at random.
+      const spacerBefore = anchorSpaceHeightRef.current;
       // While anchor space is active the message stays put: growth consumes
       // the space in place, so stale virtualizer follow targets are ignored.
       if (viewport) syncAnchorSpace(viewport);
-      if (anchorSpaceHeightRef.current > 0) return;
-      const targetOffset = viewport ? Math.min(offset + (options.adjustments ?? 0), Math.max(0, viewport.scrollHeight - viewport.clientHeight)) : 0;
-      const scrollDelta = viewport ? targetOffset - viewport.scrollTop : 0;
-      if (
-        !shouldReduceMotion &&
-        isStreaming &&
-        !shouldSetInitialPositionRef.current &&
-        streamAnimationReadyRef.current &&
-        viewport &&
-        !viewport.dataset.scrollable?.includes("end") &&
-        scrollDelta > 0 &&
-        streamContent
-      ) {
-        const transform = window.getComputedStyle(streamContent).transform;
-        const currentOffset = transform === "none" ? 0 : new DOMMatrixReadOnly(transform).m42;
-        streamScrollAnimationRef.current?.cancel();
-        streamScrollAnimationRef.current = streamContent.animate(
-          [{transform: `translateY(${Math.min(Math.max(0, currentOffset) + scrollDelta, TIMELINE_STREAM_SCROLL_MAX_OFFSET_PX)}px)`}, {transform: "translateY(0)"}],
-          {duration: TIMELINE_STREAM_SCROLL_ANIMATION_MS, easing: "cubic-bezier(0.22, 1, 0.36, 1)"}
-        );
+      if (anchorSpaceHeightRef.current > 0 || spacerBefore > 0) {
+        const footerShift = Math.min(growth, spacerBefore);
+        if (animateGrowth && footerShift > 0 && footerRef.current) footerAnimationRef.current = animateCatchUp(footerRef.current, -footerShift, footerAnimationRef.current);
+        if (anchorSpaceHeightRef.current > 0) return;
+      }
+      if (animateGrowth && viewport) {
+        const maxScrollTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+        const targetOffset = Math.min(offset + (options.adjustments ?? 0), maxScrollTop);
+        const following = targetOffset >= maxScrollTop - 1;
+        // Free space below the content before it grew: that part pushes the
+        // footer down; the rest scrolls, sliding rows up beneath a fixed footer.
+        const freeSpace = Math.max(0, viewport.clientHeight - (viewport.scrollHeight - growth));
+        const footerShift = Math.min(growth, freeSpace);
+        const scrollShift = growth - footerShift;
+        if (following && footerShift > 0 && footerRef.current) footerAnimationRef.current = animateCatchUp(footerRef.current, -footerShift, footerAnimationRef.current);
+        if (following && scrollShift > 0 && streamContentRef.current)
+          streamScrollAnimationRef.current = animateCatchUp(streamContentRef.current, scrollShift, streamScrollAnimationRef.current);
       }
       elementScroll(offset, options, instance);
     },
@@ -319,6 +343,7 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
   useLayoutEffect(
     () => () => {
       streamScrollAnimationRef.current?.cancel();
+      footerAnimationRef.current?.cancel();
       stopAnchorScroll();
     },
     []
@@ -416,6 +441,7 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
                 <div
                   className={cn("relative z-10 mx-auto w-full max-w-3xl bg-surface px-5 pb-8 md:px-8", pullStatusIntoLastMessage && "-mt-5")}
                   data-timeline-footer="streaming-status"
+                  ref={footerRef}
                 >
                   {compacting ? (
                     <Marker role="status" variant="separator">

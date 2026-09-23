@@ -12,6 +12,7 @@ export function installTimelineVisualProbe(): void {
     const streamContent = viewport.querySelector<HTMLElement>("[data-timeline-stream-content]");
     const streamTransform = streamContent ? window.getComputedStyle(streamContent).transform : "none";
     const statusFooter = viewport.querySelector<HTMLElement>('[data-timeline-footer="streaming-status"]');
+    const footerTransform = statusFooter ? window.getComputedStyle(statusFooter).transform : "none";
     samples.push({
       bottomDistance: viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop,
       clientHeight: viewport.clientHeight,
@@ -21,6 +22,7 @@ export function installTimelineVisualProbe(): void {
       scrollButtonVisible: document.querySelector('[data-slot="message-scroller-button"]') !== null,
       scrollHeight: viewport.scrollHeight,
       scrollTop: viewport.scrollTop,
+      statusFooterOffset: footerTransform === "none" ? 0 : new DOMMatrixReadOnly(footerTransform).m42,
       statusFooterTop: statusFooter?.getBoundingClientRect().top ?? null,
       streamOffset: streamTransform === "none" ? 0 : new DOMMatrixReadOnly(streamTransform).m42,
       source: "frame",

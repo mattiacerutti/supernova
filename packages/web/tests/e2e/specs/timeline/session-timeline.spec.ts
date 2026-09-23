@@ -136,6 +136,22 @@ test.describe("session timeline visual stability", () => {
     expect(Math.max(...fittingFrames.map((sample) => sample.streamOffset)), "content should not animate before scrolling is possible").toBeLessThanOrEqual(0.5);
   });
 
+  test("the status footer eases down while a new session's response grows into free space", async ({timeline}) => {
+    await timeline.startEmptySession();
+    await timeline.expectStatusOutsideVirtualization();
+    await timeline.waitForLineGrowth(2);
+    await timeline.resetVisualProbe();
+
+    await timeline.waitForLineGrowth(12);
+
+    const fittingFrames = visibleSamples(await timeline.visualSamples(), EMPTY_SESSION_ID).filter((sample) => sample.scrollHeight <= sample.clientHeight);
+    const easingFrames = fittingFrames.filter((sample) => sample.statusFooterOffset < -0.5);
+    expect(fittingFrames.length, "the response should grow inside the viewport for a while").toBeGreaterThanOrEqual(2);
+    expect(easingFrames.length, "the footer should be displaced upward and ease into place as rows push it down").toBeGreaterThanOrEqual(2);
+    expect(Math.min(...easingFrames.map((sample) => sample.statusFooterOffset)), "the footer catch-up should stay bounded").toBeGreaterThanOrEqual(-57);
+    expect(Math.max(...fittingFrames.map((sample) => sample.streamOffset)), "rows should not animate while nothing scrolls").toBeLessThanOrEqual(0.5);
+  });
+
   test("sending a message from the bottom auto-scrolls while streaming", async ({timeline}) => {
     await timeline.expectAtBottom();
     await timeline.sendMessage();

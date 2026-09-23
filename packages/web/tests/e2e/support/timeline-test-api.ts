@@ -21,6 +21,7 @@ export interface TimelineVisualSample {
   readonly scrollButtonVisible: boolean;
   readonly scrollHeight: number;
   readonly scrollTop: number;
+  readonly statusFooterOffset: number;
   readonly statusFooterTop: number | null;
   readonly streamOffset: number;
   readonly source: "frame";
