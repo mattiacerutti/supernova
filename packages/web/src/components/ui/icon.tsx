@@ -6,6 +6,7 @@ import {icons as lucideIcons} from "@iconify-json/lucide";
 import {icons as materialSymbolsIcons} from "@iconify-json/material-symbols";
 import {icons as mdiIcons} from "@iconify-json/mdi";
 import {icons as mingcuteIcons} from "@iconify-json/mingcute";
+import {icons as solarIcons} from "@iconify-json/solar";
 import {icons as stashIcons} from "@iconify-json/stash";
 import {icons as tablerIcons} from "@iconify-json/tabler";
 import {Icon as IconifyIcon} from "@iconify/react/offline";
@@ -61,6 +62,14 @@ export type IconName =
   | "server"
   | "session"
   | "settings"
+  | "tool-command"
+  | "tool-edit"
+  | "tool-fetch"
+  | "tool-find"
+  | "tool-read"
+  | "tool-todo"
+  | "tool-unknown"
+  | "tool-write"
   | "shield"
   | "skill"
   | "star"
@@ -131,6 +140,14 @@ const icons = {
   server: getStaticIcon(lucideIcons, "server"),
   session: getStaticIcon(bxIcons, "chat"),
   settings: getStaticIcon(lucideIcons, "settings"),
+  "tool-command": getStaticIcon(lucideIcons, "square-terminal"),
+  "tool-edit": getStaticIcon(solarIcons, "pen-linear"),
+  "tool-fetch": getStaticIcon(solarIcons, "global-linear"),
+  "tool-find": getStaticIcon(solarIcons, "folder-with-files-linear"),
+  "tool-read": getStaticIcon(solarIcons, "document-linear"),
+  "tool-todo": getStaticIcon(solarIcons, "checklist-linear"),
+  "tool-unknown": getStaticIcon(solarIcons, "widget-linear"),
+  "tool-write": getStaticIcon(solarIcons, "document-add-linear"),
   shield: getStaticIcon(lucideIcons, "shield"),
   skill: getStaticIcon(mingcuteIcons, "tool-line"),
   star: getStaticIcon(lucideIcons, "star"),

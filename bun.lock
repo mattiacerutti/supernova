@@ -120,6 +120,7 @@
         "@iconify-json/material-symbols": "^1.2.73",
         "@iconify-json/mdi": "^1.2.3",
         "@iconify-json/mingcute": "^1.2.7",
+        "@iconify-json/solar": "1.2.12",
         "@iconify-json/stash": "^1.2.4",
         "@iconify-json/tabler": "^1.2.35",
         "@iconify/react": "^6.0.2",
@@ -476,6 +477,8 @@
     "@iconify-json/mdi": ["@iconify-json/mdi@1.2.3", "", { "dependencies": { "@iconify/types": "*" } }, "sha512-O3cLwbDOK7NNDf2ihaQOH5F9JglnulNDFV7WprU2dSoZu3h3cWH//h74uQAB87brHmvFVxIOkuBX2sZSzYhScg=="],
 
     "@iconify-json/mingcute": ["@iconify-json/mingcute@1.2.7", "", { "dependencies": { "@iconify/types": "*" } }, "sha512-bp4z6F53KAQp99aSL7qPCHL7HWUNGMNKIhfo/dx9pwVHiad/WusUbTOFXEZfpA44syJPzSOxa3O6Pwiq7qZz1g=="],
+
+    "@iconify-json/solar": ["@iconify-json/solar@1.2.12", "", { "dependencies": { "@iconify/types": "*" } }, "sha512-du9+xxEUCWfjKzr1O+yqtQ3zHYr7M5x88WpnCABdclvW3xpDjJckkPJak+l9k0YqpEgG1F2kjz02csD969R6Fw=="],
 
     "@iconify-json/stash": ["@iconify-json/stash@1.2.4", "", { "dependencies": { "@iconify/types": "*" } }, "sha512-EO3iJTRdhrJPuNE11ZXk6KwIpQYrnOXCPtcKnklsBt8aSABseZ74caHua25ksl5MZfQi3nEuKgpqm6mxgQPOGg=="],
 

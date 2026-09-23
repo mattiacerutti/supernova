@@ -35,6 +35,7 @@ function hasLiveTimelineOutput(items: readonly SessionTimelineItem[]): boolean {
   return items.some((item) => {
     if (item.type === "assistant") return item.event.content.trim().length > 0;
     if (item.type === "work") return item.events.length > 0;
+    if (item.type === "reasoning") return item.event.content.trim().length > 0;
     return item.type === "compaction";
   });
 }
@@ -413,7 +414,7 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
               </div>
               {statusLabel && (
                 <div
-                  className={cn("relative z-10 mx-auto w-full max-w-3xl bg-surface px-5 pb-8 md:px-8", pullStatusIntoLastMessage && "-mt-6")}
+                  className={cn("relative z-10 mx-auto w-full max-w-3xl bg-surface px-5 pb-8 md:px-8", pullStatusIntoLastMessage && "-mt-5")}
                   data-timeline-footer="streaming-status"
                 >
                   {compacting ? (

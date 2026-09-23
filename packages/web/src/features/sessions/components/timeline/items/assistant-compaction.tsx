@@ -25,10 +25,10 @@ export default function AssistantCompaction(props: AssistantCompactionProps) {
         <Icon className={cn("transition-transform duration-160 ease-out", expanded && "rotate-90")} name="chevron-right" size="xs" />
       </Marker>
       <div
-        className="grid grid-rows-[0fr] opacity-0 will-change-[grid-template-rows,opacity] transition-[grid-template-rows,opacity] duration-300 ease-in-out data-[expanded=true]:mt-2 data-[expanded=true]:grid-rows-[1fr] data-[expanded=true]:opacity-100"
+        className="grid grid-rows-[0fr] opacity-0 will-change-[grid-template-rows,opacity] transition-[grid-template-rows,opacity] duration-300 ease-in-out data-[expanded=true]:grid-rows-[1fr] data-[expanded=true]:opacity-100"
         data-expanded={expanded}
       >
-        <div className="mt-1 overflow-hidden">
+        <div className="overflow-hidden pt-1">
           <AssistantMessageContent className="text-ink" mode="text">
             {item.event.summary ?? ""}
           </AssistantMessageContent>

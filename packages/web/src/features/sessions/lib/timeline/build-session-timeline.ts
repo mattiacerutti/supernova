@@ -10,7 +10,7 @@ interface BuildSessionTimelineInput {
 
 function turnToTimelineItems(turn: Turn, live: boolean): SessionTimelineItem[] {
   const items: SessionTimelineItem[] = [];
-  const hasAssistantResponse = turn.events.some((event) => event.type === "assistant" && event.content.trim().length > 0);
+  const lastAssistantEventId = turn.events.findLast((event) => event.type === "assistant" && event.content.trim().length > 0)?.id;
 
   let workEvents: SessionWorkEvent[] = [];
   let workIndex = 0;
@@ -19,12 +19,11 @@ function turnToTimelineItems(turn: Turn, live: boolean): SessionTimelineItem[] {
     if (workEvents.length === 0) return;
 
     items.push({
-      collapsible: hasAssistantResponse,
       durationMs: workDuration(workEvents, completedAt),
       events: workEvents,
       id: `work:${turn.id}:${workIndex}`,
       live: workLive,
-      spacing: hasAssistantResponse ? "work" : "message",
+      spacing: "work",
       turnId: turn.id,
       type: "work",
     });
@@ -36,8 +35,14 @@ function turnToTimelineItems(turn: Turn, live: boolean): SessionTimelineItem[] {
   items.push({id: `user:${turn.userMessage.id}`, message: turn.userMessage, spacing: "message", turnId: turn.id, type: "user"});
 
   for (const [eventIndex, event] of turn.events.entries()) {
-    if (event.type === "tool" || event.type === "reasoning") {
+    if (event.type === "tool") {
       workEvents.push(event);
+      continue;
+    }
+
+    if (event.type === "reasoning") {
+      flushWork(false, event.timestamp);
+      items.push({event, id: `reasoning:${event.id}`, live, spacing: "work", turnId: turn.id, type: "reasoning"});
       continue;
     }
 
@@ -58,10 +63,24 @@ function turnToTimelineItems(turn: Turn, live: boolean): SessionTimelineItem[] {
     }
 
     flushWork(false, event.timestamp);
-    items.push({event, id: `assistant:${event.id}`, live, spacing: "message", turnId: turn.id, type: "assistant"});
+    // Only the turn's final response gets message spacing and actions; an
+    // error-only event is a note inside the turn's work, not its reply.
+    const final = event.id === lastAssistantEventId;
+    items.push({event, final, id: `assistant:${event.id}`, live, spacing: final ? "message" : "work", turnId: turn.id, type: "assistant"});
   }
 
   flushWork(turn.status === "streaming" && live, turn.completedAt);
+
+  // Settled turns show only the final response; everything before it folds
+  // behind one "Worked for" row. The live turn stays fully expanded.
+  const finalIndex = live ? -1 : items.findIndex((item) => item.type === "assistant" && item.final);
+  if (finalIndex > 1) {
+    const folded = items.slice(1, finalIndex);
+    const startedAt = turn.startedAt ?? turn.userMessage.timestamp ?? turn.events[0]?.timestamp;
+    const completedAt = items[finalIndex]?.type === "assistant" ? items[finalIndex].event.timestamp : turn.completedAt;
+    const durationMs = startedAt === undefined || completedAt === undefined ? undefined : Math.max(0, Date.parse(completedAt) - Date.parse(startedAt));
+    return [items[0]!, {durationMs, id: `turn-work:${turn.id}`, items: folded, spacing: "work", turnId: turn.id, type: "turn-work"}, ...items.slice(finalIndex)];
+  }
 
   return items;
 }

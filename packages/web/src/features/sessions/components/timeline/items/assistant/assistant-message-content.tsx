@@ -118,7 +118,9 @@ export default function AssistantMessageContent(props: AssistantMessageContentPr
   const {children, className, fadeNewText = false, mode = "markdown", streaming = false} = props;
 
   if (streaming) {
-    const segments = segmentStreamingMessage(children);
+    // Trailing newlines are a paragraph break the model has not filled yet;
+    // rendered as pre-wrap text they add a blank line that vanishes on settle.
+    const segments = segmentStreamingMessage(children.replace(/\s+$/, ""));
 
     return (
       <div className="space-y-3">

@@ -38,13 +38,14 @@ function turn(overrides: Partial<Turn>): Turn {
 }
 
 describe("buildSessionTimeline", () => {
-  it("groups consecutive reasoning and tool activity into work blocks with user-facing durations", () => {
+  it("folds a settled turn's activity behind one work row before the final response", () => {
     const timeline = buildSessionTimeline({
       live: false,
       liveTurn: null,
       turns: [
         turn({
-          events: [reasoningEvent("reasoning-1", 1), toolEvent("tool-1", 3, "command"), assistantEvent("assistant-1", 6), toolEvent("tool-2", 7)],
+          events: [reasoningEvent("reasoning-1", 1), toolEvent("tool-1", 3, "command"), assistantEvent("assistant-1", 6), toolEvent("tool-2", 7), assistantEvent("assistant-2", 9)],
+          startedAt: timestamp(0),
         }),
       ],
     });
@@ -52,26 +53,30 @@ describe("buildSessionTimeline", () => {
     expect(timeline.liveItems).toEqual([]);
     expect(timeline.committedItems).toMatchObject([
       {message: {contentParts: [{text: "Ship it", type: "text"}]}, type: "user"},
-      {collapsible: true, durationMs: 5000, events: [{type: "reasoning"}, {tool: {kind: "command"}, type: "tool"}], id: "work:turn-1:0", live: false, type: "work"},
-      {event: {content: "assistant assistant-1", type: "assistant"}, live: false, type: "assistant"},
-      {collapsible: true, durationMs: 3000, events: [{tool: {kind: "file-read"}, type: "tool"}], id: "work:turn-1:1", live: false, type: "work"},
+      {
+        durationMs: 9000,
+        id: "turn-work:turn-1",
+        items: [
+          {event: {id: "reasoning-1"}, live: false, type: "reasoning"},
+          {events: [{tool: {kind: "command"}, type: "tool"}], id: "work:turn-1:0", live: false, type: "work"},
+          {event: {id: "assistant-1"}, final: false, type: "assistant"},
+          {events: [{tool: {kind: "file-read"}, type: "tool"}], id: "work:turn-1:1", live: false, type: "work"},
+        ],
+        type: "turn-work",
+      },
+      {event: {id: "assistant-2"}, final: true, live: false, type: "assistant"},
     ]);
   });
 
-  it("keeps reasoning and tool-only turns expanded when there is no assistant response", () => {
-    const timeline = buildSessionTimeline({
-      live: false,
-      liveTurn: null,
-      turns: [
-        turn({
-          events: [reasoningEvent("reasoning-1", 1), toolEvent("tool-1", 3, "command")],
-        }),
-      ],
-    });
+  it("keeps a settled turn flat when nothing precedes its response or there is no response", () => {
+    const direct = buildSessionTimeline({live: false, liveTurn: null, turns: [turn({events: [assistantEvent("assistant-1", 1)]})]});
+    expect(direct.committedItems).toMatchObject([{type: "user"}, {event: {id: "assistant-1"}, final: true, type: "assistant"}]);
 
-    expect(timeline.committedItems).toMatchObject([
-      {message: {contentParts: [{text: "Ship it", type: "text"}]}, type: "user"},
-      {collapsible: false, events: [{type: "reasoning"}, {tool: {kind: "command"}, type: "tool"}], live: false, type: "work"},
+    const toolsOnly = buildSessionTimeline({live: false, liveTurn: null, turns: [turn({events: [reasoningEvent("reasoning-1", 1), toolEvent("tool-1", 3, "command")]})]});
+    expect(toolsOnly.committedItems).toMatchObject([
+      {type: "user"},
+      {event: {id: "reasoning-1"}, type: "reasoning"},
+      {events: [{tool: {kind: "command"}}], live: false, type: "work"},
     ]);
   });
 
@@ -87,10 +92,17 @@ describe("buildSessionTimeline", () => {
     });
 
     expect(timeline.committedItems).toEqual([]);
-    expect(timeline.liveItems).toMatchObject([
+    expect(timeline.liveItems).toMatchObject([{type: "user"}, {event: {id: "assistant-1"}, live: true, type: "assistant"}, {events: [{id: "tool-1"}], live: true, type: "work"}]);
+    const withReasoning = buildSessionTimeline({
+      live: true,
+      liveTurn: turn({completedAt: undefined, events: [toolEvent("tool-1", 1), reasoningEvent("reasoning-1", 2), toolEvent("tool-2", 3)], status: "streaming"}),
+      turns: [],
+    });
+    expect(withReasoning.liveItems).toMatchObject([
       {type: "user"},
-      {event: {id: "assistant-1"}, live: true, type: "assistant"},
-      {collapsible: true, events: [{id: "tool-1"}], live: true, type: "work"},
+      {events: [{id: "tool-1"}], type: "work"},
+      {event: {id: "reasoning-1"}, live: true, type: "reasoning"},
+      {events: [{id: "tool-2"}], live: true, type: "work"},
     ]);
   });
 
@@ -107,8 +119,13 @@ describe("buildSessionTimeline", () => {
 
     expect(timeline.committedItems).toMatchObject([
       {type: "user"},
-      {event: {id: "assistant-1"}, type: "assistant"},
-      {durationMs: 3000, event: {id: "compaction-1", summary: "summary compaction-1", type: "compaction"}, id: "compaction:compaction-1", type: "compaction"},
+      {
+        items: [
+          {event: {id: "assistant-1"}, type: "assistant"},
+          {durationMs: 3000, event: {id: "compaction-1", summary: "summary compaction-1", type: "compaction"}, id: "compaction:compaction-1", type: "compaction"},
+        ],
+        type: "turn-work",
+      },
       {event: {id: "assistant-2"}, type: "assistant"},
     ]);
   });

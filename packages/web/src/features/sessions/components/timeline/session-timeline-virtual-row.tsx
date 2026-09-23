@@ -17,7 +17,7 @@ interface StreamErrorTimelineItem {
 export type TimelineVirtualItem = SessionTimelineItem | SpacerTimelineItem | StreamErrorTimelineItem;
 
 function isSessionTimelineItem(item: TimelineVirtualItem): item is SessionTimelineItem {
-  return item.type === "assistant" || item.type === "compaction" || item.type === "user" || item.type === "work";
+  return item.type !== "bottom-spacer" && item.type !== "top-spacer" && item.type !== "stream-error";
 }
 
 interface SessionTimelineVirtualRowProps {

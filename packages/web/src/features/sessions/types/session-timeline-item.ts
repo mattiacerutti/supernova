@@ -1,7 +1,8 @@
 import type {CompactionTurnEvent, TurnEvent, UserMessage} from "@supernova/contracts/sessions/schemas";
 
 export type SessionAssistantEvent = Extract<TurnEvent, {type: "assistant"}>;
-export type SessionWorkEvent = Extract<TurnEvent, {type: "reasoning" | "tool"}>;
+export type SessionReasoningEvent = Extract<TurnEvent, {type: "reasoning"}>;
+export type SessionWorkEvent = Extract<TurnEvent, {type: "tool"}>;
 export type SessionCompactionEvent = CompactionTurnEvent;
 
 interface SessionTimelineItemBase {
@@ -12,9 +13,18 @@ interface SessionTimelineItemBase {
 
 export interface AssistantSessionTimelineItem extends SessionTimelineItemBase {
   readonly event: SessionAssistantEvent;
+  /** Only the turn's final response carries copy/timestamp actions. */
+  readonly final: boolean;
   readonly live: boolean;
-  readonly spacing: "message";
+  readonly spacing: "message" | "work";
   readonly type: "assistant";
+}
+
+export interface ReasoningSessionTimelineItem extends SessionTimelineItemBase {
+  readonly event: SessionReasoningEvent;
+  readonly live: boolean;
+  readonly spacing: "work";
+  readonly type: "reasoning";
 }
 
 export interface UserSessionTimelineItem extends SessionTimelineItemBase {
@@ -24,7 +34,6 @@ export interface UserSessionTimelineItem extends SessionTimelineItemBase {
 }
 
 export interface WorkSessionTimelineItem extends SessionTimelineItemBase {
-  readonly collapsible: boolean;
   readonly durationMs: number | undefined;
   readonly events: readonly SessionWorkEvent[];
   readonly live: boolean;
@@ -39,7 +48,21 @@ export interface CompactionSessionTimelineItem extends SessionTimelineItemBase {
   readonly type: "compaction";
 }
 
-export type SessionTimelineItem = AssistantSessionTimelineItem | CompactionSessionTimelineItem | UserSessionTimelineItem | WorkSessionTimelineItem;
+/** A settled turn's activity before its final response, folded behind "Worked for". */
+export interface TurnWorkSessionTimelineItem extends SessionTimelineItemBase {
+  readonly durationMs: number | undefined;
+  readonly items: readonly SessionTimelineItem[];
+  readonly spacing: "work";
+  readonly type: "turn-work";
+}
+
+export type SessionTimelineItem =
+  | AssistantSessionTimelineItem
+  | CompactionSessionTimelineItem
+  | ReasoningSessionTimelineItem
+  | TurnWorkSessionTimelineItem
+  | UserSessionTimelineItem
+  | WorkSessionTimelineItem;
 
 export interface SessionTimelineItems {
   readonly committedItems: readonly SessionTimelineItem[];
