@@ -5,6 +5,8 @@ import {registerBunOAuthFlows} from "@earendil-works/pi-ai/bun-oauth";
 
 const PI_RUNTIME_PACKAGE_DIR = join(tmpdir(), "pi-runtime-package");
 const PI_RUNTIME_PACKAGE_JSON = {
+  // Keep in sync with @earendil-works/pi-coding-agent in packages/agent-runtime/package.json.
+  version: "0.85.1",
   piConfig: {
     configDir: ".supernova",
   },
