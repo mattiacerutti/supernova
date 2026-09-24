@@ -10,6 +10,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+- Redesigned tool calls in the timeline: consecutive tool calls are grouped under a one-line summary that expands into an animated tree, and each tool shows a clear action label such as "Ran", "Read", or "Edited".
+- Settled turns now fold their intermediate steps behind the final response, and the timeline animates more smoothly as responses stream in.
 - Updated the sidebar footer layout and update button appearance.
 - Updated the desktop shell to Electron 44 (Chromium 152), which includes upstream fixes for GPU rendering glitches in translucent windows on macOS.
 
