@@ -1,5 +1,6 @@
 import type {SessionWorkEvent} from "@/features/sessions/types/session-timeline-item";
 import {describe, expect, it} from "vitest";
+import {hasToolDetails, readLineRange} from "@/features/sessions/lib/timeline/tool-details";
 import {summarizeWork} from "@/features/sessions/lib/timeline/work-summary";
 
 function command(id: string, status: "completed" | "error" = "completed"): SessionWorkEvent {
@@ -22,5 +23,22 @@ describe("summarizeWork", () => {
 
   it("appends failures", () => {
     expect(summarizeWork([command("1", "error")])).toBe("Ran 1 command · 1 failed");
+  });
+});
+
+describe("file read rows", () => {
+  it("only expands a read for truncation or errors", () => {
+    const ranged = {input: {limit: 50, offset: 120, path: "src/a.ts"}, kind: "file-read" as const, result: {}, status: "completed" as const};
+    expect(hasToolDetails(ranged)).toBe(false);
+    expect(hasToolDetails({input: {path: "src/a.ts"}, kind: "file-read", status: "pending"})).toBe(false);
+    expect(hasToolDetails({...ranged, result: {truncated: true}})).toBe(true);
+    expect(hasToolDetails({error: "missing", input: {path: "src/a.ts"}, kind: "file-read", status: "error"})).toBe(true);
+  });
+
+  it("formats a partial read's line range", () => {
+    expect(readLineRange({limit: 50, offset: 120})).toBe("L120–169");
+    expect(readLineRange({limit: 50})).toBe("L1–50");
+    expect(readLineRange({offset: 120})).toBe("L120+");
+    expect(readLineRange({})).toBeUndefined();
   });
 });

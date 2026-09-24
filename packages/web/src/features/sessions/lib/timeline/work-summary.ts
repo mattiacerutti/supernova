@@ -1,6 +1,3 @@
-import type {Tool} from "@supernova/contracts/sessions/schemas";
-import type {IconName} from "@/components/ui/icon";
-import {fileName, skillName} from "@/features/sessions/lib/timeline/tool-details";
 import type {SessionWorkEvent} from "@/features/sessions/types/session-timeline-item";
 
 function plural(count: number, one: string, many: string): string {
@@ -59,49 +56,4 @@ export function summarizeWork(events: readonly SessionWorkEvent[]): string {
   if (failed > 0) segments.push(`${failed} failed`);
 
   return capitalize(segments.join(" · "));
-}
-
-export interface ToolChipContent {
-  readonly detail: string;
-  /** Set when the detail names a file, so it can render as a file badge. */
-  readonly filePath: string | undefined;
-  readonly icon: IconName;
-  readonly label: string;
-}
-
-function singleLine(text: string): string {
-  return text.split(/\s+/).filter(Boolean).join(" ");
-}
-
-/** Short label, detail line, and icon for a tool chip. */
-export function describeTool(tool: Tool | undefined): ToolChipContent {
-  switch (tool?.kind) {
-    case "command":
-      return {detail: singleLine(tool.input?.command ?? ""), filePath: undefined, icon: "tool-command", label: "Run"};
-    case "file-read": {
-      const path = tool.input?.path;
-      const skill = path ? skillName(path) : undefined;
-      if (skill !== undefined) return {detail: skill, filePath: undefined, icon: "skill", label: "Skill"};
-      return {detail: path ? fileName(path) : "", filePath: path, icon: "tool-read", label: "Read"};
-    }
-    case "file-write":
-      return {detail: tool.input?.path ? fileName(tool.input.path) : "", filePath: tool.input?.path, icon: "tool-write", label: "Write"};
-    case "file-edit":
-      return {detail: tool.input?.path ? fileName(tool.input.path) : "", filePath: tool.input?.path, icon: "tool-edit", label: "Edit"};
-    case "file-list":
-      return {detail: tool.input?.path ?? "", filePath: undefined, icon: "tool-find", label: "List"};
-    case "file-find":
-      return {
-        detail: singleLine(tool.input ? (tool.input.path ? `${tool.input.pattern} in ${tool.input.path}` : tool.input.pattern) : ""),
-        filePath: undefined,
-        icon: "tool-find",
-        label: "Glob",
-      };
-    case "web-fetch":
-      return {detail: tool.input?.url ?? (tool.status === "completed" ? tool.result.url : ""), filePath: undefined, icon: "tool-fetch", label: "Fetch"};
-    case "custom":
-      return {detail: tool.name, filePath: undefined, icon: "tool-unknown", label: "Tool"};
-    default:
-      return {detail: "", filePath: undefined, icon: "tool-unknown", label: "Tool"};
-  }
 }

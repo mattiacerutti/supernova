@@ -3,9 +3,8 @@ import type {CSSProperties, ReactNode} from "react";
 import Icon from "@/components/ui/icon";
 import type {IconName} from "@/components/ui/icon";
 import ToolDetails from "@/features/sessions/components/timeline/items/assistant/tools/tool-details";
-import FileIcon from "@/features/workspace/components/file-tree/file-icon";
-import {hasToolDetails} from "@/features/sessions/lib/timeline/tool-details";
-import {describeTool} from "@/features/sessions/lib/timeline/work-summary";
+import ToolTitle from "@/features/sessions/components/timeline/items/assistant/tools/tool-title";
+import {hasToolDetails, toolIcon} from "@/features/sessions/lib/timeline/tool-details";
 import type {SessionWorkEvent} from "@/features/sessions/types/session-timeline-item";
 import {cn} from "@/lib/cn";
 
@@ -118,7 +117,7 @@ export default function WorkRow(props: WorkRowProps) {
   const [detailsRequested, setDetailsRequested] = useState(false);
   const open = expandable && expanded;
 
-  const {detail, filePath, icon, label} = describeTool(tool);
+  const icon = toolIcon(tool);
   const timing = hasPredecessor ? CONNECTOR_TIMING.next : CONNECTOR_TIMING.first;
 
   const handleToggle = (): void => {
@@ -130,19 +129,7 @@ export default function WorkRow(props: WorkRowProps) {
 
   const header = (
     <div className={cn("flex min-w-0 items-baseline gap-3 text-sm leading-8", error ? "text-danger-ink" : "text-ink-muted")} style={{height: ROW_HEIGHT}}>
-      <span className="shrink-0">{label}</span>
-      {filePath ? (
-        <span className="flex min-w-0 items-baseline gap-1 text-ink-faint transition-colors group-hover/row:text-ink-muted">
-          <FileIcon className="size-3.5 translate-y-0.5 opacity-80" path={filePath} />
-          <span className="min-w-0 truncate">{detail}</span>
-        </span>
-      ) : (
-        detail.length > 0 && (
-          <span className={cn("min-w-0 truncate text-ink-faint transition-colors group-hover/row:text-ink-muted", tool?.kind === "command" && "font-mono text-[0.8125rem]")}>
-            {detail}
-          </span>
-        )
-      )}
+      <ToolTitle tool={tool} />
       {expandable && (
         <Icon
           className={cn("ml-auto shrink-0 self-center opacity-0 transition-[opacity,transform] duration-150 ease-out group-hover/row:opacity-100", open && "rotate-90")}

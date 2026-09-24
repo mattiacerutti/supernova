@@ -2,7 +2,7 @@ import type {ReactNode} from "react";
 import DiffViewer from "@/components/diff-viewer";
 import ContentPanel from "@/features/sessions/components/timeline/items/assistant/content-panel";
 import {parseFilePatch} from "@/lib/diff/parse-file-patch";
-import {fileName, hasToolDetails, readLineWindow} from "@/features/sessions/lib/timeline/tool-details";
+import {fileName, hasToolDetails} from "@/features/sessions/lib/timeline/tool-details";
 import {cn} from "@/lib/cn";
 import type {Tool} from "@supernova/contracts/sessions/schemas";
 
@@ -64,11 +64,9 @@ function ReadToolDetails(props: {tool: Extract<Tool, {kind: "file-read"}>}) {
   const {tool} = props;
 
   if (tool.input === undefined || !hasToolDetails(tool)) return null;
-  const lineWindow = readLineWindow(tool.input);
 
   return (
     <div className="space-y-2">
-      <DetailText>{lineWindow}</DetailText>
       {tool.status === "completed" && tool.result.truncated && <DetailText>Read output was truncated.</DetailText>}
       {tool.status === "error" && <DetailText className="text-danger-ink">{tool.error}</DetailText>}
     </div>
