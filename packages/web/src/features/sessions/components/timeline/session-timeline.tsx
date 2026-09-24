@@ -13,20 +13,15 @@ import type {TimelineVirtualItem} from "@/features/sessions/components/timeline/
 import type {SessionTimelineItem} from "@/features/sessions/types/session-timeline-item";
 import {cn} from "@/lib/cn";
 
-// Controls how long a newly sent message takes to move toward the viewport top.
 const TIMELINE_ANCHOR_SCROLL_DURATION_MS = 700;
-// Leaves a small gap above a newly sent message after it is anchored.
 const TIMELINE_ANCHOR_TOP_MARGIN_PX = 24;
-// Leaves trailing space after the final virtualized timeline row.
 const TIMELINE_BOTTOM_PADDING_PX = 16;
 // Bounds retained measurement snapshots used when switching between sessions.
 const TIMELINE_CACHE_LIMIT = 16;
-// Shows the scroll-to-latest button after the user moves this far from the bottom.
 const TIMELINE_SCROLL_BUTTON_THRESHOLD_PX = 50;
 // Lets streamed rows (or the status footer) visually catch up after content
 // growth instantly moves them.
 const TIMELINE_STREAM_SCROLL_ANIMATION_MS = 160;
-// Caps that catch-up distance when a stream update adds a large amount of content.
 const TIMELINE_STREAM_SCROLL_MAX_OFFSET_PX = 56;
 
 const timelineCache = new Map<string, VirtualItem[]>();
@@ -185,7 +180,6 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
     anchor?.progress.stop();
   };
 
-  // Ends the anchor transition and hands the viewport back to auto-follow.
   const releaseAnchorScroll = useCallback((): void => {
     stopAnchorScroll();
     onAnchorScrollingChange(false);
@@ -238,8 +232,7 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
 
   // Growth is detected by comparing the footer's layout position and scrollTop
   // against the previous commit, not from the virtualizer's scroll delta: the
-  // message scroller's own auto-follow may have already scrolled, which used to
-  // skip the catch-up until the user detached and reattached.
+  // message scroller's own auto-follow may have already scrolled.
   const streamEndRef = useRef<{footerTop: number; scrollTop: number} | null>(null);
   const measureStreamEnd = (): void => {
     const viewport = viewportRef.current;
@@ -273,8 +266,11 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
     easeStreamGrowth();
   };
 
-  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, _delta, instance) =>
-    anchorScrollRef.current === null && anchorSpaceHeightRef.current === 0 && item.end <= instance.getLogicalScrollOffset();
+  // Compare against the DOM offset: TanStack's own offset only updates on the
+  // next scroll event, while scrollToFn above applies each adjustment in this
+  // measurement batch synchronously and without clamping.
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item) =>
+    anchorScrollRef.current === null && anchorSpaceHeightRef.current === 0 && item.end <= (viewportRef.current?.scrollTop ?? 0);
 
   const virtualItems = virtualizer.getVirtualItems();
 
@@ -414,7 +410,6 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
             onScroll={handleViewportScroll}
             onTouchMove={releaseAnchorScroll}
             onWheel={releaseAnchorScroll}
-            preserveScrollOnPrepend={false}
             ref={viewportRef}
           >
             <MessageScrollerContent aria-busy={isStreaming} className="block min-h-full">

@@ -27,9 +27,6 @@
     "typecheck:scripts": "tsc --project scripts/tsconfig.json",
     "prepare": "husky"
   },
-  "patchedDependencies": {
-    "@tanstack/virtual-core@3.17.0": "patches/@tanstack%2Fvirtual-core@3.17.0.patch"
-  },
   "devDependencies": {
     "@supernova/server": "workspace:*",
     "vite": "^8.0.10",
