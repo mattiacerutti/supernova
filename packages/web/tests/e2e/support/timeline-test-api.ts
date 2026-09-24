@@ -16,6 +16,7 @@ export interface TimelineVisualSample {
   readonly bottomDistance: number;
   readonly clientHeight: number;
   readonly lastRowIndex: number;
+  readonly lastUserMessageTop: number | null;
   readonly lineCount: number;
   readonly pathname: string;
   readonly scrollButtonVisible: boolean;
@@ -36,6 +37,7 @@ export interface TimelineVisualProbe {
 
 declare global {
   interface Window {
+    __supernovaTimelineOptions?: {readonly historyTurnCount?: number; readonly initialResponseLines?: number};
     __supernovaTimelineMock?: TimelineMockController;
     __supernovaTimelineVisualProbe?: TimelineVisualProbe;
   }

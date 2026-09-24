@@ -30,6 +30,7 @@ class TimelineRpcClient implements RpcClient {
   private status: TimelineMockState["status"] = "idle";
   private streamFrame: number | null = null;
   private streamTargetLineCount = 0;
+  private streamSequence = 0;
 
   public constructor() {
     window.__supernovaTimelineMock = {
@@ -171,15 +172,16 @@ class TimelineRpcClient implements RpcClient {
     this.commitCheckpoint({...session, turns: session.turns.slice(0, turnIndex), undoneTurns: [...session.turns.slice(turnIndex), ...session.undoneTurns]});
   }
 
-  /** Starts a stream with one line, then waits for tests to request deterministic high-speed bursts. */
+  /** Starts with the configured first payload, then waits for deterministic high-speed bursts. */
   private startStream(sessionId: string, contentParts: readonly UserMessageContentPart[]): void {
     if (this.status === "streaming") return;
 
     this.activeContentParts = contentParts;
     this.activeSessionId = sessionId;
-    this.lineCount = 0;
+    this.streamSequence += 1;
+    this.lineCount = window.__supernovaTimelineOptions?.initialResponseLines ?? 0;
     this.reasoningBreaks = [];
-    this.streamTargetLineCount = 0;
+    this.streamTargetLineCount = this.lineCount;
     this.status = "streaming";
     this.publish({revision: this.nextRevision(), sessionId, type: "session.agent.started"});
     this.publish({
@@ -199,7 +201,13 @@ class TimelineRpcClient implements RpcClient {
   }
 
   private streamTurn(contentParts: readonly UserMessageContentPart[], lineCount: number, status: "completed" | "streaming"): Turn {
-    return timelineStreamTurn({contentParts, lineCount, reasoningBreaks: this.reasoningBreaks, status});
+    const turn = timelineStreamTurn({contentParts, lineCount, reasoningBreaks: this.reasoningBreaks, status});
+    return {
+      ...turn,
+      id: `${turn.id}-${this.streamSequence}`,
+      userMessage: {...turn.userMessage, id: `${turn.userMessage.id}-${this.streamSequence}`},
+      events: turn.events.map((event) => ({...event, id: `${event.id}-${this.streamSequence}`})),
+    };
   }
 
   /** Adds a finite burst at two complete lines per frame, keeping user gestures deterministic between bursts. */

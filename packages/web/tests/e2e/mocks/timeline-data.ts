@@ -69,7 +69,7 @@ function historySession(input: {readonly historyTurnCount: number; readonly id: 
 /** Creates the sessions used by every isolated browser test. */
 export function createTimelineSessions(): Map<string, Session> {
   const sessions = [
-    historySession({historyTurnCount: 28, id: TIMELINE_SESSION_ID, title: TIMELINE_SESSION_TITLE}),
+    historySession({historyTurnCount: window.__supernovaTimelineOptions?.historyTurnCount ?? 28, id: TIMELINE_SESSION_ID, title: TIMELINE_SESSION_TITLE}),
     historySession({historyTurnCount: 24, id: OTHER_SESSION_ID, title: OTHER_SESSION_TITLE}),
     historySession({historyTurnCount: 0, id: EMPTY_SESSION_ID, title: EMPTY_SESSION_TITLE}),
   ];

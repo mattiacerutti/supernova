@@ -552,3 +552,147 @@ test.describe("session timeline visual stability", () => {
     assertAnchorUnmoved(before, after, samples);
   });
 });
+
+test("opens a large uncached session at the bottom under CPU load", async ({page, timeline}) => {
+  await page.addInitScript(() => {
+    window.__supernovaTimelineOptions = {historyTurnCount: 1_000};
+  });
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Emulation.setCPUThrottlingRate", {rate: 4});
+  await timeline.openMainSession();
+  await timeline.expectAtBottom();
+  const samples = await waitForPrimaryFrames({timeline});
+  assertBottomLocked({samples});
+  expect(
+    samples.some((sample) => sample.scrollButtonVisible),
+    "opening should not flash the scroll-to-latest button"
+  ).toBe(false);
+});
+
+test.describe("message pinning races", () => {
+  for (const promptLines of [1, 12]) {
+    test(`animates through an immediate response with a ${promptLines}-line prompt`, async ({page, timeline}) => {
+      await page.addInitScript(() => {
+        window.__supernovaTimelineOptions = {initialResponseLines: 15};
+      });
+      await timeline.openMainSession();
+      await timeline.expectAtBottom();
+      const start = await timeline.scrollTop();
+      const rowIndexBeforeSend = await timeline.lastRowIndex();
+      await timeline.resetVisualProbe();
+
+      await timeline.sendMessage(Array.from({length: promptLines}, (_, index) => `Anchor prompt line ${index + 1}`).join("\n"));
+      const end = await timeline.scrollTop();
+      // Multiline typing resizes the composer before send; those scrolls are
+      // not part of the pinning transition.
+      const samples = (await timeline.visualSamples()).filter((sample) => sample.lastRowIndex > rowIndexBeforeSend);
+      assertAnimatedScroll({end, label: "pinning before the first response paint", samples, start});
+      assertContinuousAnchorScroll({end, rowIndexBeforeSend, samples});
+      assertBottomLocked({samples: await timeline.recordStreamGrowth(10)});
+    });
+  }
+
+  for (const {historyTurnCount, scrollUp} of [
+    {historyTurnCount: 1, scrollUp: 0},
+    {historyTurnCount: 100, scrollUp: 3_000},
+    {historyTurnCount: 100, scrollUp: 6_000},
+  ]) {
+    test(`pins correctly with ${historyTurnCount} turns after scrolling up ${scrollUp}px`, async ({page, timeline}) => {
+      await page.addInitScript((historyTurnCount) => {
+        window.__supernovaTimelineOptions = {historyTurnCount};
+      }, historyTurnCount);
+      await timeline.openMainSession();
+      await timeline.expectAtBottom();
+      if (scrollUp > 0) {
+        await timeline.scrollUp(scrollUp);
+        await timeline.expectDetached();
+      }
+      const message = "Pin after measuring history";
+      await timeline.sendMessage(message);
+
+      await expect.poll(() => timeline.messageViewportTop(message)).toBeGreaterThanOrEqual(23);
+      await expect.poll(() => timeline.messageViewportTop(message)).toBeLessThanOrEqual(25);
+      await timeline.expectAtBottom();
+    });
+  }
+
+  for (const change of ["resize", "complete"] as const) {
+    test(`finishes pinning when ${change} happens during the animation`, async ({page, timeline}) => {
+      await timeline.openMainSession();
+      const message = "Keep this anchor while geometry changes";
+      await timeline.resetVisualProbe();
+      await timeline.sendMessage(message, {awaitBottom: false});
+      await page.waitForFunction(() => {
+        const samples = window.__supernovaTimelineVisualProbe?.read() ?? [];
+        const top = samples.at(-1)?.lastUserMessageTop;
+        return top !== null && top !== undefined && top > 100 && top < 450;
+      });
+
+      if (change === "resize") await page.setViewportSize({width: 1280, height: 950});
+      else await timeline.completeMessage();
+
+      await timeline.expectAtBottom();
+      await expect.poll(() => timeline.messageViewportTop(message)).toBeGreaterThanOrEqual(23);
+      await expect.poll(() => timeline.messageViewportTop(message)).toBeLessThanOrEqual(25);
+    });
+  }
+
+  test("manual scrolling interrupts pinning without the animation resuming", async ({page, timeline}) => {
+    await timeline.openMainSession();
+    const message = "Interrupt this anchor";
+    await timeline.resetVisualProbe();
+    await timeline.sendMessage(message, {awaitBottom: false});
+    await page.waitForFunction(() => {
+      const top = window.__supernovaTimelineVisualProbe?.read().at(-1)?.lastUserMessageTop;
+      return top !== null && top !== undefined && top > 100 && top < 450;
+    });
+    await timeline.scrollUp(80);
+
+    // Observe beyond the original 700ms transition, not just its first stopped frame.
+    await expect
+      .poll(async () => {
+        const frames = timeline.visibleFrameSamples(await timeline.visualSamples());
+        return (frames.at(-1)?.timestamp ?? 0) - (frames[0]?.timestamp ?? 0);
+      })
+      .toBeGreaterThan(800);
+    expect(await timeline.messageViewportTop(message)).toBeGreaterThan(80);
+  });
+
+  test("a second send replaces an unfinished pinning transition", async ({timeline}) => {
+    await timeline.openMainSession();
+    await timeline.sendMessage("Finish this turn quickly", {awaitBottom: false});
+    await timeline.completeMessage();
+    const rowIndexBeforeSend = await timeline.lastRowIndex();
+    await timeline.resetVisualProbe();
+    const message = "Only this new message should be pinned";
+    await timeline.sendMessage(message);
+
+    await expect.poll(() => timeline.messageViewportTop(message)).toBeGreaterThanOrEqual(23);
+    await expect.poll(() => timeline.messageViewportTop(message)).toBeLessThanOrEqual(25);
+    assertContinuousAnchorScroll({end: await timeline.scrollTop(), rowIndexBeforeSend, samples: await timeline.visualSamples()});
+  });
+
+  test("leaving the session cancels its unfinished pinning transition", async ({timeline}) => {
+    await timeline.openMainSession();
+    await timeline.sendMessage("Switch before this anchor finishes", {awaitBottom: false});
+    await timeline.resetVisualProbe();
+    await timeline.switchToOtherSession();
+    await timeline.expectAtBottom();
+    await expect.poll(async () => visibleSamples(await timeline.visualSamples(), OTHER_SESSION_ID).length).toBeGreaterThanOrEqual(4);
+    assertBottomLocked({samples: await timeline.visualSamples(), sessionId: OTHER_SESSION_ID});
+  });
+
+  test("reduced motion pins without animated intermediate positions", async ({page, timeline}) => {
+    await page.emulateMedia({reducedMotion: "reduce"});
+    await timeline.openMainSession();
+    const rowIndexBeforeSend = await timeline.lastRowIndex();
+    await timeline.resetVisualProbe();
+    const message = "Pin without motion";
+    await timeline.sendMessage(message);
+    await expect.poll(() => timeline.messageViewportTop(message)).toBeGreaterThanOrEqual(23);
+    await expect.poll(() => timeline.messageViewportTop(message)).toBeLessThanOrEqual(25);
+    const frames = visibleSamples(await timeline.visualSamples(), TIMELINE_SESSION_ID).filter((sample) => sample.lastRowIndex > rowIndexBeforeSend);
+    expect(frames.length).toBeGreaterThan(0);
+    expect(frames.every((sample) => sample.lastUserMessageTop !== null && Math.abs(sample.lastUserMessageTop - 24) <= 1)).toBe(true);
+  });
+});
