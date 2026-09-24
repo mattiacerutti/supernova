@@ -30,6 +30,7 @@ class TimelineRpcClient implements RpcClient {
   private status: TimelineMockState["status"] = "idle";
   private streamFrame: number | null = null;
   private streamTargetLineCount = 0;
+  private streamSequence = 0;
 
   public constructor() {
     window.__supernovaTimelineMock = {
@@ -177,6 +178,7 @@ class TimelineRpcClient implements RpcClient {
 
     this.activeContentParts = contentParts;
     this.activeSessionId = sessionId;
+    this.streamSequence += 1;
     this.lineCount = 0;
     this.reasoningBreaks = [];
     this.streamTargetLineCount = 0;
@@ -199,7 +201,13 @@ class TimelineRpcClient implements RpcClient {
   }
 
   private streamTurn(contentParts: readonly UserMessageContentPart[], lineCount: number, status: "completed" | "streaming"): Turn {
-    return timelineStreamTurn({contentParts, lineCount, reasoningBreaks: this.reasoningBreaks, status});
+    const turn = timelineStreamTurn({contentParts, lineCount, reasoningBreaks: this.reasoningBreaks, status});
+    return {
+      ...turn,
+      id: `${turn.id}-${this.streamSequence}`,
+      userMessage: {...turn.userMessage, id: `${turn.userMessage.id}-${this.streamSequence}`},
+      events: turn.events.map((event) => ({...event, id: `${event.id}-${this.streamSequence}`})),
+    };
   }
 
   /** Adds a finite burst at two complete lines per frame, keeping user gestures deterministic between bursts. */

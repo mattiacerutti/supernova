@@ -31,6 +31,7 @@
     "@iconify-json/material-symbols": "^1.2.73",
     "@iconify-json/mdi": "^1.2.3",
     "@iconify-json/mingcute": "^1.2.7",
+    "@iconify-json/solar": "1.2.12",
     "@iconify-json/stash": "^1.2.4",
     "@iconify-json/tabler": "^1.2.35",
     "@iconify/react": "^6.0.2",

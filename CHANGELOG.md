@@ -10,6 +10,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+- Redesigned tool calls in the timeline: consecutive tool calls are grouped under a one-line summary that expands into an animated tree, and each tool shows a clear action label such as "Ran", "Read", or "Edited".
+- Settled turns now fold their intermediate steps behind the final response, and the timeline animates more smoothly as responses stream in.
 - Updated the sidebar footer layout and update button appearance.
 - Updated the desktop shell to Electron 44 (Chromium 152), which includes upstream fixes for GPU rendering glitches in translucent windows on macOS.
 
@@ -18,6 +20,8 @@ All notable changes to Supernova are documented in this file.
 - Fixed newly available models disappearing when the remote model catalog rejected Supernova's reported Pi version.
 - Removed a redundant full-window backdrop filter from translucent desktop layouts, reducing GPU compositing overhead during streaming.
 - Reduced style recalculation during scrolling and message anchoring, especially in code-heavy conversations.
+- Fixed new messages jumping or stopping short while being pinned when responses arrive quickly or timeline geometry changes.
+- Fixed keyboard scrolling being overridden by the new-message pinning animation.
 - Fixed workspace folders losing their expanded state when opening a file from the full-panel explorer.
 - Fixed menu and suggestion panel corners not matching the rounding of the items inside them.
 

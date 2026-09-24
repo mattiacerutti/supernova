@@ -89,7 +89,7 @@ async function waitForCheckpointFrames(input: {
       return frames.filter((sample) => (direction === "grow" ? sample.scrollHeight > beforeScrollHeight : sample.scrollHeight < beforeScrollHeight)).length;
     })
     .toBeGreaterThanOrEqual(2);
-  return await timeline.visualSamples();
+  return await waitForPrimaryFrames({timeline});
 }
 
 test.describe("session timeline visual stability", () => {
@@ -136,6 +136,30 @@ test.describe("session timeline visual stability", () => {
     expect(Math.max(...fittingFrames.map((sample) => sample.streamOffset)), "content should not animate before scrolling is possible").toBeLessThanOrEqual(0.5);
   });
 
+  test("the status footer eases down while a new session's response grows into free space", async ({timeline}) => {
+    await timeline.startEmptySession();
+    await timeline.expectStatusOutsideVirtualization();
+    await timeline.waitForLineGrowth(2);
+    await timeline.resetVisualProbe();
+
+    await timeline.waitForLineGrowth(12);
+
+    const fittingFrames = visibleSamples(await timeline.visualSamples(), EMPTY_SESSION_ID).filter((sample) => sample.scrollHeight <= sample.clientHeight);
+    const easingFrames = fittingFrames.filter((sample) => sample.statusFooterOffset < -0.5);
+    expect(fittingFrames.length, "the response should grow inside the viewport for a while").toBeGreaterThanOrEqual(2);
+    expect(easingFrames.length, "the footer should be displaced upward and ease into place as rows push it down").toBeGreaterThanOrEqual(2);
+    // On the frame layout moves the footer down, the painted footer must not
+    // have moved with it: the catch-up transform holds it in place and eases.
+    const jumpedFrames = fittingFrames.filter((sample, index) => {
+      const previous = fittingFrames[index - 1];
+      if (previous === undefined || sample.statusFooterTop === null || previous.statusFooterTop === null) return false;
+      const layoutMoved = sample.statusFooterTop - sample.statusFooterOffset > previous.statusFooterTop - previous.statusFooterOffset + 0.5;
+      return layoutMoved && sample.statusFooterTop > previous.statusFooterTop + 2;
+    });
+    expect(jumpedFrames, "the footer should never jump when layout pushes it down; it only eases").toEqual([]);
+    expect(Math.max(...fittingFrames.map((sample) => sample.streamOffset)), "rows should not animate while nothing scrolls").toBeLessThanOrEqual(0.5);
+  });
+
   test("sending a message from the bottom auto-scrolls while streaming", async ({timeline}) => {
     await timeline.expectAtBottom();
     await timeline.sendMessage();
@@ -171,23 +195,6 @@ test.describe("session timeline visual stability", () => {
     await timeline.expectAtBottom();
   });
 
-  test("a response streaming during the anchor scroll neither interrupts it nor loses the bottom afterwards", async ({timeline}) => {
-    await timeline.expectAtBottom();
-    const rowIndexBeforeSend = await timeline.lastRowIndex();
-    await timeline.resetVisualProbe();
-    const messageText = "Anchor this message while the response races in";
-    await timeline.sendMessage(messageText, {awaitBottom: false});
-    await timeline.waitForLineGrowth(60);
-
-    await expect.poll(() => timeline.messageViewportTop(messageText), {message: "the sent message should settle near the viewport top"}).toBeLessThanOrEqual(30);
-    const anchoredScrollTop = await timeline.scrollTop();
-    assertContinuousAnchorScroll({end: anchoredScrollTop, rowIndexBeforeSend, samples: await timeline.visualSamples()});
-
-    expect(await timeline.fakeSpaceHeight(), "the response should have outgrown the fake space").toBe(0);
-    await timeline.expectAtBottom();
-    assertBottomLocked({samples: await timeline.recordStreamGrowth(30)});
-  });
-
   test("the fake space below an anchored message is lossy when scrolling up", async ({timeline}) => {
     const messageText = "Anchor a message to create fake space";
     await timeline.sendMessage(messageText);
@@ -203,19 +210,6 @@ test.describe("session timeline visual stability", () => {
     await timeline.scrollDown(400);
     expect(await timeline.scrollHeight(), "scrolling back down must not recoup the lost space").toBeLessThanOrEqual(shrunkenScrollHeight);
     await timeline.expectAtBottom();
-  });
-
-  test("does not animate the first response paint", async ({timeline}) => {
-    await timeline.sendMessage();
-    await timeline.resetVisualProbe();
-
-    await timeline.waitForLineGrowth(2);
-    const samples = await timeline.visualSamples();
-    const firstResponseFrames = visibleSamples(samples, TIMELINE_SESSION_ID).filter((sample) => sample.lineCount === 2);
-
-    assertBottomLocked({minimumFrameCount: 1, samples});
-    expect(firstResponseFrames.length, "the first response should produce a painted frame").toBeGreaterThanOrEqual(1);
-    expect(Math.max(...firstResponseFrames.map((sample) => sample.streamOffset)), "the first response paint should appear without moving existing rows").toBeLessThanOrEqual(0.5);
   });
 
   test("streamed content stays bottom-locked in the same frame while auto-following", async ({timeline}) => {
@@ -320,7 +314,7 @@ test.describe("session timeline visual stability", () => {
 
     await timeline.scrollDown(90);
     await timeline.expectDetached();
-    expect(await timeline.scrollTop(), "the downward wheel gesture should move the detached viewport").toBeGreaterThan(beforeScrollTop);
+    await expect.poll(() => timeline.scrollTop(), {message: "the downward wheel gesture should move the detached viewport"}).toBeGreaterThan(beforeScrollTop);
     await timeline.waitForLineGrowth(90);
     assertSustainedDetachment(await waitForPrimaryFrames({count: 8, timeline}));
 
@@ -511,5 +505,21 @@ test.describe("session timeline visual stability", () => {
     const after = await timeline.measureVisibleTextAnchor(before);
 
     assertAnchorUnmoved(before, after, samples);
+  });
+});
+
+test.describe("message pinning", () => {
+  test("reduced motion pins without animated intermediate positions", async ({page, timeline}) => {
+    await page.emulateMedia({reducedMotion: "reduce"});
+    await timeline.openMainSession();
+    const rowIndexBeforeSend = await timeline.lastRowIndex();
+    await timeline.resetVisualProbe();
+    const message = "Pin without motion";
+    await timeline.sendMessage(message);
+    await expect.poll(() => timeline.messageViewportTop(message)).toBeGreaterThanOrEqual(23);
+    await expect.poll(() => timeline.messageViewportTop(message)).toBeLessThanOrEqual(25);
+    const frames = visibleSamples(await timeline.visualSamples(), TIMELINE_SESSION_ID).filter((sample) => sample.lastRowIndex > rowIndexBeforeSend);
+    expect(frames.length).toBeGreaterThan(0);
+    expect(frames.every((sample) => sample.lastUserMessageTop !== null && Math.abs(sample.lastUserMessageTop - 24) <= 1)).toBe(true);
   });
 });

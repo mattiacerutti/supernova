@@ -78,6 +78,30 @@
   --font-sans: -apple-system, BlinkMacSystemFont, Inter, sans-serif;
   --font-mono: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
   --text-sm: 0.85rem;
+
+  /* Work tree arrivals; rows set animation-delay and animation-duration inline. */
+  --animate-work-rail-grow: work-rail-grow 1s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-work-rail-draw: work-rail-draw 1s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-work-reveal: work-reveal 1s cubic-bezier(0.22, 1, 0.36, 1) both;
+
+  @keyframes work-rail-grow {
+    from {
+      transform: scaleY(0);
+    }
+  }
+
+  @keyframes work-rail-draw {
+    from {
+      stroke-dashoffset: var(--rail-length);
+    }
+  }
+
+  @keyframes work-reveal {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+  }
 }
 
 @layer base {

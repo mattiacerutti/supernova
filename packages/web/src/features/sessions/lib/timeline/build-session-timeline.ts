@@ -10,7 +10,6 @@ interface BuildSessionTimelineInput {
 
 function turnToTimelineItems(turn: Turn, live: boolean): SessionTimelineItem[] {
   const items: SessionTimelineItem[] = [];
-  const hasAssistantResponse = turn.events.some((event) => event.type === "assistant" && event.content.trim().length > 0);
 
   let workEvents: SessionWorkEvent[] = [];
   let workIndex = 0;
@@ -19,12 +18,12 @@ function turnToTimelineItems(turn: Turn, live: boolean): SessionTimelineItem[] {
     if (workEvents.length === 0) return;
 
     items.push({
-      collapsible: hasAssistantResponse,
       durationMs: workDuration(workEvents, completedAt),
       events: workEvents,
+      final: false,
       id: `work:${turn.id}:${workIndex}`,
       live: workLive,
-      spacing: hasAssistantResponse ? "work" : "message",
+      spacing: "work",
       turnId: turn.id,
       type: "work",
     });
@@ -33,11 +32,17 @@ function turnToTimelineItems(turn: Turn, live: boolean): SessionTimelineItem[] {
     workEvents = [];
   };
 
-  items.push({id: `user:${turn.userMessage.id}`, message: turn.userMessage, spacing: "message", turnId: turn.id, type: "user"});
+  items.push({final: false, id: `user:${turn.userMessage.id}`, message: turn.userMessage, spacing: "message", turnId: turn.id, type: "user"});
 
   for (const [eventIndex, event] of turn.events.entries()) {
-    if (event.type === "tool" || event.type === "reasoning") {
+    if (event.type === "tool") {
       workEvents.push(event);
+      continue;
+    }
+
+    if (event.type === "reasoning") {
+      flushWork(false, event.timestamp);
+      items.push({event, final: false, id: `reasoning:${event.id}`, live, spacing: "work", turnId: turn.id, type: "reasoning"});
       continue;
     }
 
@@ -49,6 +54,7 @@ function turnToTimelineItems(turn: Turn, live: boolean): SessionTimelineItem[] {
       items.push({
         durationMs: workDuration([event], nextEvent?.timestamp ?? turn.completedAt),
         event,
+        final: false,
         id: `compaction:${event.id}`,
         spacing: "work",
         turnId: turn.id,
@@ -58,12 +64,27 @@ function turnToTimelineItems(turn: Turn, live: boolean): SessionTimelineItem[] {
     }
 
     flushWork(false, event.timestamp);
-    items.push({event, id: `assistant:${event.id}`, live, spacing: "message", turnId: turn.id, type: "assistant"});
+    items.push({event, final: false, id: `assistant:${event.id}`, live, spacing: "work", turnId: turn.id, type: "assistant"});
   }
 
   flushWork(turn.status === "streaming" && live, turn.completedAt);
 
-  return items;
+  // Once settled, a turn ending on a response folds everything before it behind
+  // one "Worked for" row; a turn ending on work stays flat. Compaction is a
+  // marker and never concludes a turn.
+  const last = items.at(-1);
+  if (!last || last.type === "user" || last.type === "compaction") return items;
+  const response = last.type === "assistant" && last.event.content.trim().length > 0;
+  items[items.length - 1] = {...last, final: !live, spacing: response ? "message" : "work"};
+  if (live || !response || items.length <= 2) return items;
+
+  const startedAt = turn.startedAt ?? turn.userMessage.timestamp ?? turn.events[0]?.timestamp;
+  const durationMs = startedAt === undefined ? undefined : Math.max(0, Date.parse(last.event.timestamp) - Date.parse(startedAt));
+  return [
+    items[0]!,
+    {durationMs, final: false, id: `turn-work:${turn.id}`, items: items.slice(1, -1), spacing: "work", turnId: turn.id, type: "turn-work"},
+    items[items.length - 1]!,
+  ];
 }
 
 /** Builds committed and live timeline item groups from raw session turns. */

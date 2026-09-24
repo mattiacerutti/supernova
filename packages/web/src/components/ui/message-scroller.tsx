@@ -44,20 +44,6 @@ function MessageScrollerContent(props: ComponentProps<typeof MessageScrollerPrim
   return <MessageScrollerPrimitive.Content className={cn("flex h-max min-h-full flex-col", className)} data-slot="message-scroller-content" {...contentProps} />;
 }
 
-/** Renders a measurable message-scroller row. */
-function MessageScrollerItem(props: ComponentProps<typeof MessageScrollerPrimitive.Item>) {
-  const {className, scrollAnchor = false, ...itemProps} = props;
-
-  return (
-    <MessageScrollerPrimitive.Item
-      className={cn("min-w-0 shrink-0 [contain-intrinsic-size:auto_10rem] [content-visibility:auto]", className)}
-      data-slot="message-scroller-item"
-      scrollAnchor={scrollAnchor}
-      {...itemProps}
-    />
-  );
-}
-
 /** Renders a transcript edge navigation button. */
 function MessageScrollerButton(props: ComponentProps<typeof MessageScrollerPrimitive.Button>) {
   const {children, className, direction = "end", ...buttonProps} = props;
@@ -83,4 +69,4 @@ function MessageScrollerButton(props: ComponentProps<typeof MessageScrollerPrimi
   );
 }
 
-export {MessageScroller, MessageScrollerButton, MessageScrollerContent, MessageScrollerItem, MessageScrollerProvider, MessageScrollerViewport};
+export {MessageScroller, MessageScrollerButton, MessageScrollerContent, MessageScrollerProvider, MessageScrollerViewport};

@@ -16,11 +16,13 @@ export interface TimelineVisualSample {
   readonly bottomDistance: number;
   readonly clientHeight: number;
   readonly lastRowIndex: number;
+  readonly lastUserMessageTop: number | null;
   readonly lineCount: number;
   readonly pathname: string;
   readonly scrollButtonVisible: boolean;
   readonly scrollHeight: number;
   readonly scrollTop: number;
+  readonly statusFooterOffset: number;
   readonly statusFooterTop: number | null;
   readonly streamOffset: number;
   readonly source: "frame";
