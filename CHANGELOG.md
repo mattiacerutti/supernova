@@ -10,6 +10,14 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+### Fixed
+
+### Removed
+
+## [0.4.0]
+
+### Changed
+
 - Redesigned tool calls in the timeline: consecutive tool calls are grouped under a one-line summary that expands into an animated tree, and each tool shows a clear action label such as "Ran", "Read", or "Edited".
 - Settled turns now fold their intermediate steps behind the final response, and the timeline animates more smoothly as responses stream in.
 - Updated the sidebar footer layout and update button appearance.
@@ -24,8 +32,6 @@ All notable changes to Supernova are documented in this file.
 - Fixed keyboard scrolling being overridden by the new-message pinning animation.
 - Fixed workspace folders losing their expanded state when opening a file from the full-panel explorer.
 - Fixed menu and suggestion panel corners not matching the rounding of the items inside them.
-
-### Removed
 
 ## [0.3.0]
 
