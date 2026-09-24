@@ -89,7 +89,7 @@ async function waitForCheckpointFrames(input: {
       return frames.filter((sample) => (direction === "grow" ? sample.scrollHeight > beforeScrollHeight : sample.scrollHeight < beforeScrollHeight)).length;
     })
     .toBeGreaterThanOrEqual(2);
-  return await timeline.visualSamples();
+  return await waitForPrimaryFrames({timeline});
 }
 
 test.describe("session timeline visual stability", () => {
@@ -359,7 +359,7 @@ test.describe("session timeline visual stability", () => {
 
     await timeline.scrollDown(90);
     await timeline.expectDetached();
-    expect(await timeline.scrollTop(), "the downward wheel gesture should move the detached viewport").toBeGreaterThan(beforeScrollTop);
+    await expect.poll(() => timeline.scrollTop(), {message: "the downward wheel gesture should move the detached viewport"}).toBeGreaterThan(beforeScrollTop);
     await timeline.waitForLineGrowth(90);
     assertSustainedDetachment(await waitForPrimaryFrames({count: 8, timeline}));
 
@@ -637,26 +637,39 @@ test.describe("message pinning races", () => {
     });
   }
 
-  test("manual scrolling interrupts pinning without the animation resuming", async ({page, timeline}) => {
-    await timeline.openMainSession();
-    const message = "Interrupt this anchor";
-    await timeline.resetVisualProbe();
-    await timeline.sendMessage(message, {awaitBottom: false});
-    await page.waitForFunction(() => {
-      const top = window.__supernovaTimelineVisualProbe?.read().at(-1)?.lastUserMessageTop;
-      return top !== null && top !== undefined && top > 100 && top < 450;
-    });
-    await timeline.scrollUp(80);
+  for (const {input, interrupts, target = "viewport"} of [
+    {input: "wheel", interrupts: true},
+    {input: "Home", interrupts: true},
+    {input: "PageUp", interrupts: true},
+    {input: "ArrowUp", interrupts: true},
+    {input: "Shift+Space", interrupts: true},
+    {input: "x", interrupts: false},
+    {input: "Space", interrupts: false, target: "copy button"},
+  ]) {
+    test(`${input} on the ${target} ${interrupts ? "interrupts" : "does not interrupt"} pinning`, async ({page, timeline}) => {
+      await page.clock.install({time: new Date("2026-01-01T00:00:00Z")});
+      if (target === "copy button") await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+      await timeline.openMainSession();
+      await page.clock.pauseAt(new Date("2026-01-01T01:00:00Z"));
+      const message = "Check pinning interruption";
+      await timeline.sendMessage(message, {awaitBottom: false});
+      await page.clock.runFor(100);
+      expect(await timeline.messageViewportTop(message), "the transition should still be in progress").toBeGreaterThan(100);
+      if (input !== "wheel") {
+        const viewport = page.getByLabel("Session timeline");
+        await (target === "copy button" ? viewport.getByRole("button", {name: "Copy message"}).last() : viewport).focus();
+      }
+      if (input === "wheel") await timeline.scrollUp(80);
+      else await page.keyboard.press(input);
 
-    // Observe beyond the original 700ms transition, not just its first stopped frame.
-    await expect
-      .poll(async () => {
-        const frames = timeline.visibleFrameSamples(await timeline.visualSamples());
-        return (frames.at(-1)?.timestamp ?? 0) - (frames[0]?.timestamp ?? 0);
-      })
-      .toBeGreaterThan(800);
-    expect(await timeline.messageViewportTop(message)).toBeGreaterThan(80);
-  });
+      // Run beyond the original 700ms transition to catch an animation resuming.
+      await page.clock.runFor(800);
+      const top = await timeline.messageViewportTop(message);
+      if (interrupts) expect(top).toBeGreaterThan(80);
+      else expect(Math.abs(top - 24)).toBeLessThanOrEqual(1);
+      if (target === "copy button") expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(message);
+    });
+  }
 
   test("a second send replaces an unfinished pinning transition", async ({timeline}) => {
     await timeline.openMainSession();
