@@ -81,12 +81,7 @@ export class TimelineDriver {
   public async sendMessage(text = "Exercise the timeline under a very fast multiline response", options: {readonly awaitBottom?: boolean} = {}): Promise<void> {
     const editor = this.page.locator('[contenteditable="true"]').first();
     await expect(editor).toBeEditable();
-    const [firstLine = "", ...remainingLines] = text.split("\n");
-    await editor.fill(firstLine);
-    for (const line of remainingLines) {
-      await editor.press("Shift+Enter");
-      await this.page.keyboard.insertText(line);
-    }
+    await editor.fill(text);
     await this.page.getByRole("button", {name: "Send message"}).click();
     await expect(this.page.getByRole("button", {name: "Stop streaming"})).toBeVisible();
     await expect.poll(() => this.mockState().then((state) => state.status)).toBe("streaming");

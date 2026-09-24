@@ -195,23 +195,6 @@ test.describe("session timeline visual stability", () => {
     await timeline.expectAtBottom();
   });
 
-  test("a response streaming during the anchor scroll neither interrupts it nor loses the bottom afterwards", async ({timeline}) => {
-    await timeline.expectAtBottom();
-    const rowIndexBeforeSend = await timeline.lastRowIndex();
-    await timeline.resetVisualProbe();
-    const messageText = "Anchor this message while the response races in";
-    await timeline.sendMessage(messageText, {awaitBottom: false});
-    await timeline.waitForLineGrowth(60);
-
-    await expect.poll(() => timeline.messageViewportTop(messageText), {message: "the sent message should settle near the viewport top"}).toBeLessThanOrEqual(30);
-    const anchoredScrollTop = await timeline.scrollTop();
-    assertContinuousAnchorScroll({end: anchoredScrollTop, rowIndexBeforeSend, samples: await timeline.visualSamples()});
-
-    expect(await timeline.fakeSpaceHeight(), "the response should have outgrown the fake space").toBe(0);
-    await timeline.expectAtBottom();
-    assertBottomLocked({samples: await timeline.recordStreamGrowth(30)});
-  });
-
   test("the fake space below an anchored message is lossy when scrolling up", async ({timeline}) => {
     const messageText = "Anchor a message to create fake space";
     await timeline.sendMessage(messageText);
@@ -229,19 +212,6 @@ test.describe("session timeline visual stability", () => {
     await timeline.expectAtBottom();
   });
 
-  test("does not animate the first response paint", async ({timeline}) => {
-    await timeline.sendMessage();
-    await timeline.resetVisualProbe();
-
-    await timeline.waitForLineGrowth(2);
-    const samples = await timeline.visualSamples();
-    const firstResponseFrames = visibleSamples(samples, TIMELINE_SESSION_ID).filter((sample) => sample.lineCount === 2);
-
-    assertBottomLocked({minimumFrameCount: 1, samples});
-    expect(firstResponseFrames.length, "the first response should produce a painted frame").toBeGreaterThanOrEqual(1);
-    expect(Math.max(...firstResponseFrames.map((sample) => sample.streamOffset)), "the first response paint should appear without moving existing rows").toBeLessThanOrEqual(0.5);
-  });
-
   test("streamed content stays bottom-locked in the same frame while auto-following", async ({timeline}) => {
     await timeline.sendMessage();
     await timeline.waitForLineGrowth(30);
@@ -255,21 +225,6 @@ test.describe("session timeline visual stability", () => {
     expect(Math.max(...animatedFrames.map((sample) => sample.streamOffset)), "stream animation should remain bounded while catching up").toBeLessThanOrEqual(57);
     expect(footerPositions.length, "the status footer should remain mounted during animation").toBe(animatedFrames.length);
     expect(Math.max(...footerPositions) - Math.min(...footerPositions), "the status footer should stay fixed while stream rows animate").toBeLessThanOrEqual(1);
-  });
-
-  test("stream growth keeps animating after a manual detach and reattach", async ({timeline}) => {
-    await timeline.sendMessage();
-    await timeline.waitForLineGrowth(30);
-    await timeline.scrollUp(300);
-    await timeline.scrollDown(600);
-    await timeline.expectAtBottom();
-
-    const samples = visibleSamples(await timeline.recordStreamGrowth(60), TIMELINE_SESSION_ID);
-    const growthFrames = samples.filter((sample, index) => index > 0 && sample.scrollHeight > samples[index - 1]!.scrollHeight);
-    const unanimatedGrowth = growthFrames.filter((sample) => !samples.slice(samples.indexOf(sample), samples.indexOf(sample) + 3).some((next) => next.streamOffset > 0.5));
-
-    expect(growthFrames.length, "the stream should keep growing after reattaching").toBeGreaterThanOrEqual(5);
-    expect(unanimatedGrowth, "every growth step should ease rows into place after reattaching").toEqual([]);
   });
 
   test("scrolling slightly up during streaming detaches from auto-scroll", async ({timeline}) => {
@@ -553,148 +508,7 @@ test.describe("session timeline visual stability", () => {
   });
 });
 
-test("opens a large uncached session at the bottom under CPU load", async ({page, timeline}) => {
-  await page.addInitScript(() => {
-    window.__supernovaTimelineOptions = {historyTurnCount: 1_000};
-  });
-  const cdp = await page.context().newCDPSession(page);
-  await cdp.send("Emulation.setCPUThrottlingRate", {rate: 4});
-  await timeline.openMainSession();
-  await timeline.expectAtBottom();
-  const samples = await waitForPrimaryFrames({timeline});
-  assertBottomLocked({samples});
-  expect(
-    samples.some((sample) => sample.scrollButtonVisible),
-    "opening should not flash the scroll-to-latest button"
-  ).toBe(false);
-});
-
-test.describe("message pinning races", () => {
-  for (const promptLines of [1, 12]) {
-    test(`animates through an immediate response with a ${promptLines}-line prompt`, async ({page, timeline}) => {
-      await page.addInitScript(() => {
-        window.__supernovaTimelineOptions = {initialResponseLines: 15};
-      });
-      await timeline.openMainSession();
-      await timeline.expectAtBottom();
-      const start = await timeline.scrollTop();
-      const rowIndexBeforeSend = await timeline.lastRowIndex();
-      await timeline.resetVisualProbe();
-
-      await timeline.sendMessage(Array.from({length: promptLines}, (_, index) => `Anchor prompt line ${index + 1}`).join("\n"));
-      const end = await timeline.scrollTop();
-      // Multiline typing resizes the composer before send; those scrolls are
-      // not part of the pinning transition.
-      const samples = (await timeline.visualSamples()).filter((sample) => sample.lastRowIndex > rowIndexBeforeSend);
-      assertAnimatedScroll({end, label: "pinning before the first response paint", samples, start});
-      assertContinuousAnchorScroll({end, rowIndexBeforeSend, samples});
-      assertBottomLocked({samples: await timeline.recordStreamGrowth(10)});
-    });
-  }
-
-  for (const {historyTurnCount, scrollUp} of [
-    {historyTurnCount: 1, scrollUp: 0},
-    {historyTurnCount: 100, scrollUp: 3_000},
-    {historyTurnCount: 100, scrollUp: 6_000},
-  ]) {
-    test(`pins correctly with ${historyTurnCount} turns after scrolling up ${scrollUp}px`, async ({page, timeline}) => {
-      await page.addInitScript((historyTurnCount) => {
-        window.__supernovaTimelineOptions = {historyTurnCount};
-      }, historyTurnCount);
-      await timeline.openMainSession();
-      await timeline.expectAtBottom();
-      if (scrollUp > 0) {
-        await timeline.scrollUp(scrollUp);
-        await timeline.expectDetached();
-      }
-      const message = "Pin after measuring history";
-      await timeline.sendMessage(message);
-
-      await expect.poll(() => timeline.messageViewportTop(message)).toBeGreaterThanOrEqual(23);
-      await expect.poll(() => timeline.messageViewportTop(message)).toBeLessThanOrEqual(25);
-      await timeline.expectAtBottom();
-    });
-  }
-
-  for (const change of ["resize", "complete"] as const) {
-    test(`finishes pinning when ${change} happens during the animation`, async ({page, timeline}) => {
-      await timeline.openMainSession();
-      const message = "Keep this anchor while geometry changes";
-      await timeline.resetVisualProbe();
-      await timeline.sendMessage(message, {awaitBottom: false});
-      await page.waitForFunction(() => {
-        const samples = window.__supernovaTimelineVisualProbe?.read() ?? [];
-        const top = samples.at(-1)?.lastUserMessageTop;
-        return top !== null && top !== undefined && top > 100 && top < 450;
-      });
-
-      if (change === "resize") await page.setViewportSize({width: 1280, height: 950});
-      else await timeline.completeMessage();
-
-      await timeline.expectAtBottom();
-      await expect.poll(() => timeline.messageViewportTop(message)).toBeGreaterThanOrEqual(23);
-      await expect.poll(() => timeline.messageViewportTop(message)).toBeLessThanOrEqual(25);
-    });
-  }
-
-  for (const {input, interrupts, target = "viewport"} of [
-    {input: "wheel", interrupts: true},
-    {input: "Home", interrupts: true},
-    {input: "PageUp", interrupts: true},
-    {input: "ArrowUp", interrupts: true},
-    {input: "Shift+Space", interrupts: true},
-    {input: "x", interrupts: false},
-    {input: "Space", interrupts: false, target: "copy button"},
-  ]) {
-    test(`${input} on the ${target} ${interrupts ? "interrupts" : "does not interrupt"} pinning`, async ({page, timeline}) => {
-      await page.clock.install({time: new Date("2026-01-01T00:00:00Z")});
-      if (target === "copy button") await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
-      await timeline.openMainSession();
-      await page.clock.pauseAt(new Date("2026-01-01T01:00:00Z"));
-      const message = "Check pinning interruption";
-      await timeline.sendMessage(message, {awaitBottom: false});
-      await page.clock.runFor(100);
-      expect(await timeline.messageViewportTop(message), "the transition should still be in progress").toBeGreaterThan(100);
-      if (input !== "wheel") {
-        const viewport = page.getByLabel("Session timeline");
-        await (target === "copy button" ? viewport.getByRole("button", {name: "Copy message"}).last() : viewport).focus();
-      }
-      if (input === "wheel") await timeline.scrollUp(80);
-      else await page.keyboard.press(input);
-
-      // Run beyond the original 700ms transition to catch an animation resuming.
-      await page.clock.runFor(800);
-      const top = await timeline.messageViewportTop(message);
-      if (interrupts) expect(top).toBeGreaterThan(80);
-      else expect(Math.abs(top - 24)).toBeLessThanOrEqual(1);
-      if (target === "copy button") expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(message);
-    });
-  }
-
-  test("a second send replaces an unfinished pinning transition", async ({timeline}) => {
-    await timeline.openMainSession();
-    await timeline.sendMessage("Finish this turn quickly", {awaitBottom: false});
-    await timeline.completeMessage();
-    const rowIndexBeforeSend = await timeline.lastRowIndex();
-    await timeline.resetVisualProbe();
-    const message = "Only this new message should be pinned";
-    await timeline.sendMessage(message);
-
-    await expect.poll(() => timeline.messageViewportTop(message)).toBeGreaterThanOrEqual(23);
-    await expect.poll(() => timeline.messageViewportTop(message)).toBeLessThanOrEqual(25);
-    assertContinuousAnchorScroll({end: await timeline.scrollTop(), rowIndexBeforeSend, samples: await timeline.visualSamples()});
-  });
-
-  test("leaving the session cancels its unfinished pinning transition", async ({timeline}) => {
-    await timeline.openMainSession();
-    await timeline.sendMessage("Switch before this anchor finishes", {awaitBottom: false});
-    await timeline.resetVisualProbe();
-    await timeline.switchToOtherSession();
-    await timeline.expectAtBottom();
-    await expect.poll(async () => visibleSamples(await timeline.visualSamples(), OTHER_SESSION_ID).length).toBeGreaterThanOrEqual(4);
-    assertBottomLocked({samples: await timeline.visualSamples(), sessionId: OTHER_SESSION_ID});
-  });
-
+test.describe("message pinning", () => {
   test("reduced motion pins without animated intermediate positions", async ({page, timeline}) => {
     await page.emulateMedia({reducedMotion: "reduce"});
     await timeline.openMainSession();

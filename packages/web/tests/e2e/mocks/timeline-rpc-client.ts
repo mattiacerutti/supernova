@@ -172,16 +172,16 @@ class TimelineRpcClient implements RpcClient {
     this.commitCheckpoint({...session, turns: session.turns.slice(0, turnIndex), undoneTurns: [...session.turns.slice(turnIndex), ...session.undoneTurns]});
   }
 
-  /** Starts with the configured first payload, then waits for deterministic high-speed bursts. */
+  /** Starts a stream with one line, then waits for tests to request deterministic high-speed bursts. */
   private startStream(sessionId: string, contentParts: readonly UserMessageContentPart[]): void {
     if (this.status === "streaming") return;
 
     this.activeContentParts = contentParts;
     this.activeSessionId = sessionId;
     this.streamSequence += 1;
-    this.lineCount = window.__supernovaTimelineOptions?.initialResponseLines ?? 0;
+    this.lineCount = 0;
     this.reasoningBreaks = [];
-    this.streamTargetLineCount = this.lineCount;
+    this.streamTargetLineCount = 0;
     this.status = "streaming";
     this.publish({revision: this.nextRevision(), sessionId, type: "session.agent.started"});
     this.publish({

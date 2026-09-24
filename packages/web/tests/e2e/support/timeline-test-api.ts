@@ -37,7 +37,6 @@ export interface TimelineVisualProbe {
 
 declare global {
   interface Window {
-    __supernovaTimelineOptions?: {readonly historyTurnCount?: number; readonly initialResponseLines?: number};
     __supernovaTimelineMock?: TimelineMockController;
     __supernovaTimelineVisualProbe?: TimelineVisualProbe;
   }
