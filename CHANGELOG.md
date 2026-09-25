@@ -12,6 +12,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Fixed
 
+- Fixed model errors in the timeline, such as "This operation was aborted" after stopping a response, showing a timestamp above the error with extra spacing; they now render like other session errors.
+
 ### Removed
 
 ## [0.4.0]
