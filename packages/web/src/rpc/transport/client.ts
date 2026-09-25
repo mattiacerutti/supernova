@@ -52,7 +52,7 @@ let sharedClient: RpcClient | undefined;
 
 /** Initializes the app's local endpoint; connection selection can supply a different endpoint at this boundary. */
 export async function getRpcClient(): Promise<RpcClient> {
-  sharedClient ??= createRpcClient(window.desktopApi?.serverUrl ?? import.meta.env.VITE_SUPERNOVA_SERVER_URL ?? window.location.origin);
+  sharedClient ??= createRpcClient(window.desktopApi?.serverUrl ?? window.location.origin);
 
   return sharedClient;
 }

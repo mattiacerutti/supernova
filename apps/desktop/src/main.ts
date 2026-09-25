@@ -18,6 +18,9 @@ declare const SUPERNOVA_SERVER_ENTRY: string;
 declare const SUPERNOVA_WEB_DIR: string;
 
 const APP_URL = "supernova://app";
+// Development ports match the server's default port and packages/web/vite.config.ts.
+const DEV_SERVER_URL = "http://127.0.0.1:4317";
+const DEV_WEB_URL = "http://127.0.0.1:48371";
 const ICONS_DIR = app.isPackaged ? join(process.resourcesPath, "icons") : join(__dirname, "../../resources/icons");
 const NIGHTLY = isNightlyVersion(app.getVersion());
 
@@ -64,9 +67,7 @@ function registerDesktopIpc(): void {
 async function openWindow(): Promise<void> {
   if (mainWindow || quitting) return;
 
-  const rendererUrl = SUPERNOVA_IS_DEV ? process.env.SUPERNOVA_WEB_URL : APP_URL;
-  if (!rendererUrl) throw new Error("Start desktop development with bun run dev:desktop.");
-
+  const rendererUrl = SUPERNOVA_IS_DEV ? DEV_WEB_URL : APP_URL;
   const window = createWindow({serverUrl, rendererUrl, iconsDir: ICONS_DIR});
   mainWindow = window;
   window.once("closed", () => {
@@ -90,10 +91,7 @@ async function startDesktop(): Promise<void> {
   syncShellEnvironment();
 
   if (SUPERNOVA_IS_DEV) {
-    const endpoint = process.env.SUPERNOVA_SERVER_URL;
-    if (!endpoint) throw new Error("Start desktop development with bun run dev:desktop.");
-
-    serverUrl = endpoint;
+    serverUrl = DEV_SERVER_URL;
     void installExtension(REACT_DEVELOPER_TOOLS).catch((error) => console.warn("Failed to install React DevTools.", error));
   } else {
     server = await startServerProcess({
@@ -163,7 +161,7 @@ if (!SUPERNOVA_IS_DEV && !app.requestSingleInstanceLock()) {
     void startup
       .catch(() => undefined)
       .then(() => server?.close())
-      .finally(() => app.quit());
+      .finally(() => setImmediate(() => app.quit()));
   });
 
   app.on("window-all-closed", () => {

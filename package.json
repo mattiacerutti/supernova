@@ -8,8 +8,8 @@
     "apps/*"
   ],
   "scripts": {
-    "dev:server": "bun scripts/dev.ts",
-    "dev:desktop": "bun scripts/dev.ts --desktop",
+    "dev:server": "turbo run dev --filter=@supernova/web --filter=@supernova/server",
+    "dev:desktop": "turbo run dev --filter=@supernova/web --filter=@supernova/server --filter=@supernova/desktop",
     "start:server": "turbo run start --filter=@supernova/server",
     "start:desktop": "turbo run start --filter=@supernova/desktop",
     "build": "turbo run build",
@@ -28,8 +28,6 @@
     "prepare": "husky"
   },
   "devDependencies": {
-    "@supernova/server": "workspace:*",
-    "vite": "^8.0.10",
     "@types/node": "^22.19.1",
     "eslint": "^10.3.0",
     "husky": "^9.1.7",

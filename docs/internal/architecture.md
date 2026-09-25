@@ -18,9 +18,9 @@ Bun manages packages and scripts; Turborepo coordinates workspace tasks. The ser
 Standalone server:
 terminal → supernova-server → runtime/filesystem/workspaces (no UI)
 
-Browser development:
-dev launcher → local API child + Vite UI host
-browser → UI host's WebSocket proxy → API
+Development (turbo run dev):
+API on 127.0.0.1:4317 (bun --watch) + Vite UI host on 127.0.0.1:48371
+browser or Electron → Vite UI; WebSocket via the UI host's proxy (browser) or directly (Electron) → API
 
 Desktop:
 Electron → bundled API on an OS-assigned port

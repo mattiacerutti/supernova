@@ -1,7 +1,6 @@
 {
   "globalPassThroughEnv": [
     "SUPERNOVA_*",
-    "VITE_SUPERNOVA_*",
     "PI_OFFLINE"
   ],
   "tasks": {
@@ -17,9 +16,6 @@
       "persistent": true
     },
     "build": {
-      "env": [
-        "VITE_SUPERNOVA_SERVER_URL"
-      ],
       "dependsOn": [
         "^build"
       ],
