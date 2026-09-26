@@ -264,7 +264,7 @@ Pre-prompt compaction may start before Pi emits the submitted user message. The 
 
 ### Tool and compaction normalization
 
-Partial tool-call arguments are intentionally removed from streaming assistant updates. The runtime records full validated arguments when Pi emits `tool_execution_start`.
+Partial tool-call arguments are hidden until Pi emits `toolcall_end` for that call. Completed inputs remain visible while later calls are still being generated; `tool_execution_start` can refresh them. Showing inputs does not imply execution has started: tools remain pending until a result arrives, and Pi still owns argument validation before execution.
 
 Live compaction uses a temporary synthetic compaction entry. It is completed when Pi supplies a result or removed if compaction does not produce one.
 

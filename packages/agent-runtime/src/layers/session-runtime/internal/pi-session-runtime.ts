@@ -380,6 +380,10 @@ export class PiSessionRuntime {
           break;
         case "message_update":
           activeTurn.replaceLastLiveMessage(event.message);
+          if (event.assistantMessageEvent.type === "toolcall_end") {
+            const {toolCall} = event.assistantMessageEvent;
+            activeTurn.recordToolArguments({args: toolCall.arguments, toolCallId: toolCall.id});
+          }
           void this.publishLiveTurn(activeTurn);
           break;
         case "message_end":
@@ -392,7 +396,7 @@ export class PiSessionRuntime {
           });
           break;
         case "tool_execution_start":
-          activeTurn.recordToolExecutionStart({args: event.args, toolCallId: event.toolCallId});
+          activeTurn.recordToolArguments({args: event.args, toolCallId: event.toolCallId});
           void this.publishLiveTurn(activeTurn);
           break;
         case "compaction_start":

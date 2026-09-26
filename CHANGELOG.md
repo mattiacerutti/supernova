@@ -12,6 +12,7 @@ All notable changes to Supernova are documented in this file.
 
 ### Fixed
 
+- Fixed tool inputs staying hidden until execution instead of appearing as each tool call finishes generating.
 - Fixed model errors in the timeline, such as "This operation was aborted" after stopping a response, showing a timestamp above the error with extra spacing; they now render like other session errors.
 
 ### Removed

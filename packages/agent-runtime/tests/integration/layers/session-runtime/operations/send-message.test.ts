@@ -110,6 +110,36 @@ describe("sending messages through Pi sessions", () => {
     expect(liveContexts.at(-1)).toBeGreaterThan(liveContexts[0]!);
   });
 
+  it("reveals each tool's completed inputs while later calls are still streaming", async () => {
+    const pi = await createPiTestRuntime();
+    runtimes.push(pi);
+    const {info} = pi.createSession();
+    pi.faux.setResponses([
+      fauxAssistantMessage(
+        [
+          {type: "toolCall", id: "call-1", name: "read", arguments: {path: "one.ts"}},
+          {type: "toolCall", id: "call-2", name: "read", arguments: {path: "two.ts"}},
+        ],
+        {stopReason: "toolUse"}
+      ),
+      fauxAssistantMessage("Done."),
+    ]);
+
+    const events = await pi.sendMessage({message: "Read both files", modelReference: selectedModelReference, sessionId: info.id});
+    const toolsByUpdate = turnEvents(events).map((event) => event.turn.events.flatMap((part) => (part.type === "tool" && part.tool ? [part.tool] : [])));
+
+    expect(toolsByUpdate).toContainEqual([{kind: "file-read", status: "pending"}]);
+    expect(toolsByUpdate).toContainEqual([{kind: "file-read", status: "pending", input: {path: "one.ts"}}]);
+    expect(toolsByUpdate).toContainEqual([
+      {kind: "file-read", status: "pending", input: {path: "one.ts"}},
+      {kind: "file-read", status: "pending"},
+    ]);
+    expect(toolsByUpdate).toContainEqual([
+      {kind: "file-read", status: "pending", input: {path: "one.ts"}},
+      {kind: "file-read", status: "pending", input: {path: "two.ts"}},
+    ]);
+  });
+
   it("uses the first user message without persisting a fallback when title generation fails", async () => {
     const pi = await createPiTestRuntime();
     runtimes.push(pi);

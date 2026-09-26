@@ -38,7 +38,7 @@ function toolEvents(turn: ReturnType<ActiveTurn["buildLiveTurn"]>): Tool[] {
 }
 
 describe("active turn live projection", () => {
-  it("hides streamed partial tool arguments until tool execution starts", () => {
+  it("hides streamed partial tool arguments until complete arguments arrive", () => {
     const activeTurn = createActiveTurn();
 
     activeTurn.appendLiveMessage(
@@ -51,12 +51,12 @@ describe("active turn live projection", () => {
 
     expect(firstToolEvent(activeTurn.buildLiveTurn()).tool).toEqual({kind: "file-read", status: "pending"});
 
-    activeTurn.recordToolExecutionStart({args: {limit: 20, path: "file-hello.tsx"}, toolCallId: "call-1"});
+    activeTurn.recordToolArguments({args: {limit: 20, path: "file-hello.tsx"}, toolCallId: "call-1"});
 
     expect(firstToolEvent(activeTurn.buildLiveTurn()).tool).toEqual({input: {limit: 20, path: "file-hello.tsx"}, kind: "file-read", status: "pending"});
   });
 
-  it("ignores malformed execution arguments and keeps the live tool generic", () => {
+  it.each(["not-object", null, ["one.ts"]])("ignores malformed arguments %j and keeps the live tool generic", (args) => {
     const activeTurn = createActiveTurn();
 
     activeTurn.appendLiveMessage(
@@ -67,9 +67,30 @@ describe("active turn live projection", () => {
       })
     );
 
-    activeTurn.recordToolExecutionStart({args: "not-object", toolCallId: "call-1"});
+    activeTurn.recordToolArguments({args, toolCallId: "call-1"});
 
     expect(firstToolEvent(activeTurn.buildLiveTurn()).tool).toEqual({kind: "file-read", status: "pending"});
+  });
+
+  it.each(["pending", "toolUse", "aborted", "error"])("preserves finished inputs without revealing unfinished inputs on %s updates", (stopReason) => {
+    const activeTurn = createActiveTurn();
+    const message = piAgentMessage({
+      content: [
+        {arguments: {path: "one.ts"}, id: "call-1", name: "read", type: "toolCall"},
+        {arguments: {path: "partial"}, id: "call-2", name: "read", type: "toolCall"},
+      ],
+      role: "assistant",
+      timestamp: 2,
+    });
+    activeTurn.appendLiveMessage(message);
+    activeTurn.recordToolArguments({args: {path: "one.ts"}, toolCallId: "call-1"});
+
+    activeTurn.replaceLastLiveMessage(piAgentMessage({...message, stopReason}));
+
+    expect(toolEvents(activeTurn.buildLiveTurn())).toEqual([
+      {input: {path: "one.ts"}, kind: "file-read", status: "pending"},
+      {kind: "file-read", status: "pending"},
+    ]);
   });
 
   it("updates the matching assistant tool call after an earlier sequential tool result", () => {
@@ -85,10 +106,10 @@ describe("active turn live projection", () => {
         timestamp: 2,
       })
     );
-    activeTurn.recordToolExecutionStart({args: {path: "one.ts"}, toolCallId: "call-1"});
+    activeTurn.recordToolArguments({args: {path: "one.ts"}, toolCallId: "call-1"});
     activeTurn.appendLiveMessage(piAgentMessage({content: [{text: "one", type: "text"}], role: "toolResult", timestamp: 3, toolCallId: "call-1", toolName: "read"}));
 
-    activeTurn.recordToolExecutionStart({args: {path: "two.ts"}, toolCallId: "call-2"});
+    activeTurn.recordToolArguments({args: {path: "two.ts"}, toolCallId: "call-2"});
 
     expect(toolEvents(activeTurn.buildLiveTurn())).toMatchObject([
       {input: {path: "one.ts"}, kind: "file-read", result: {content: "one"}, status: "completed"},

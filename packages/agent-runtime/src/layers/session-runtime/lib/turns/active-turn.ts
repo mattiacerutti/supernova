@@ -8,12 +8,12 @@ import type {SendMessageContext} from "@supernova/agent-runtime/layers/session-r
 
 type PiAgentMessage = AgentSession["messages"][number];
 
-function stripToolArguments(message: PiAgentMessage): PiAgentMessage {
+function stripPartialToolArguments(message: PiAgentMessage, completedToolCallIds: ReadonlySet<string>): PiAgentMessage {
   if (message.role !== "assistant") return message;
 
   return {
     ...message,
-    content: message.content.map((part) => (part.type === "toolCall" ? {...part, arguments: {}} : part)),
+    content: message.content.map((part) => (part.type === "toolCall" && !completedToolCallIds.has(part.id) ? {...part, arguments: {}} : part)),
   };
 }
 
@@ -37,6 +37,7 @@ export class ActiveTurn {
   private contextUsage: SessionContextUsage;
   /** Runtime-owned live transcript for this turn. */
   private readonly liveMessages: PiAgentMessage[] = [];
+  private readonly completedToolCallIds = new Set<string>();
 
   public constructor(input: ActiveTurnInput, sessionManager: PiSessionManager) {
     this.baseParentId = input.baseParentId;
@@ -78,15 +79,14 @@ export class ActiveTurn {
 
   /** Appends a live Pi message according to Pi's ordered message lifecycle. */
   public appendLiveMessage(message: PiAgentMessage): void {
-    // The `message_update` event emits partial tool call arguments, since they are being streamed in realtime.
-    // To avoid showing incomplete arguments in the live transcript, we strip them out until the full arguments are available in the `tool_execution_start` event.
-    const sanitzedMessage = stripToolArguments(message);
-    this.liveMessages.push(sanitzedMessage);
+    // Only reveal arguments after toolcall_end or tool_execution_start, not from partial JSON.
+    const sanitizedMessage = stripPartialToolArguments(message, this.completedToolCallIds);
+    this.liveMessages.push(sanitizedMessage);
   }
 
   /** Replaces the currently active live Pi message. */
   public replaceLastLiveMessage(message: PiAgentMessage): void {
-    const sanitizedMessage = stripToolArguments(message);
+    const sanitizedMessage = stripPartialToolArguments(message, this.completedToolCallIds);
 
     if (this.liveMessages.length === 0) {
       this.liveMessages.push(sanitizedMessage);
@@ -96,8 +96,8 @@ export class ActiveTurn {
     this.liveMessages[this.liveMessages.length - 1] = sanitizedMessage;
   }
 
-  /** Records non-streaming tool arguments once Pi starts executing a tool call. */
-  public recordToolExecutionStart(input: {readonly args: unknown; readonly toolCallId: string}): void {
+  /** Records complete arguments when Pi finishes generating or starts executing a tool call. */
+  public recordToolArguments(input: {readonly args: unknown; readonly toolCallId: string}): void {
     // Pi emits `tool_execution_start` event before argument validation, thus they are typed as unknown.
     // In case they are malformed, we simply reject recording them, as after validation a `tool_execution_end` event with error will still be emitted
     const isValidToolArgs = (value: unknown): value is Record<string, unknown> => {
@@ -124,7 +124,7 @@ export class ActiveTurn {
     const toolCall = message.content[toolCallIndex];
     if (toolCall?.type !== "toolCall") return;
 
-    // Replaces the tool call arguments with the execution-start arguments
+    this.completedToolCallIds.add(input.toolCallId);
     const content = [...message.content];
     content[toolCallIndex] = {...toolCall, arguments: args};
 
