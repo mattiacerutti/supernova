@@ -1,12 +1,12 @@
 import {EditorContent} from "@tiptap/react";
 import type {Editor, JSONContent} from "@tiptap/core";
 import type {ClipboardEvent} from "react";
-import ComposerSuggestionMenu from "@/features/sessions/components/composer/suggestions/composer-suggestion-menu";
-import {useComposerSuggestions} from "@/features/sessions/hooks/api/use-composer-suggestions";
+import ComposerSuggestionMenu from "@/features/sessions/components/composer/editor/composer-suggestion-menu";
+import {useComposerSuggestions} from "@/features/sessions/api/composer/get-composer-suggestions";
 import type {ComposerSuggestionItem, ComposerSuggestionMatch} from "@/features/sessions/types/composer-suggestion";
 import {cn} from "@/lib/cn";
-import {createReferenceNode} from "@/features/sessions/lib/composer/composer-content-parts";
-import type {ClientSlashCommandActions} from "@/features/sessions/lib/composer/client-slash-commands";
+import {createReferenceNode} from "@/features/sessions/lib/composer/editor/composer-content-parts";
+import type {ClientSlashCommandActions} from "@/features/sessions/lib/composer/editor/client-slash-commands";
 
 function suggestionText(item: ComposerSuggestionItem): string {
   if (item.kind !== "prompt-template") return "";

@@ -172,8 +172,8 @@ const sizeClasses: Record<NonNullable<IconProps["size"]>, string> = {
 };
 
 interface IconProps extends Omit<IconifyIconProps, "children" | "icon" | "size"> {
-  name: IconName;
-  size?: "lg" | "md" | "sm" | "xs";
+  readonly name: IconName;
+  readonly size?: "lg" | "md" | "sm" | "xs";
 }
 
 export default function Icon(props: IconProps) {

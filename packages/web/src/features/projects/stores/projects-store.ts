@@ -1,30 +1,17 @@
 import {create} from "zustand";
 import {persist} from "zustand/middleware";
-import {normalizeProjectPath, projectNameFromPath} from "@/features/projects/lib/project-paths";
+import type {Project} from "@/features/projects/types/project";
+import {normalizeProjectPath, projectIdFromPath, projectNameFromPath} from "@/lib/project-paths";
 
 const PROJECTS_STORAGE_KEY = "supernova-projects";
 
-export interface StoredProject {
-  readonly id: string;
-  readonly name: string;
-  readonly path: string;
-  readonly addedAt: string;
-  readonly pinned?: boolean;
-  readonly pinnedSessionIds?: string[];
-}
-
 interface ProjectsState {
-  readonly projects: StoredProject[];
-  readonly addProject: (projectPath: string) => StoredProject | undefined;
+  readonly projects: readonly Project[];
+  readonly addProject: (projectPath: string) => Project | undefined;
   readonly removeProject: (projectId: string) => void;
   readonly renameProject: (projectId: string, name: string) => void;
   readonly reorderProject: (projectId: string, targetProjectId: string) => void;
   readonly toggleProjectPinned: (projectId: string) => void;
-  readonly toggleSessionPinned: (projectId: string, sessionId: string) => void;
-}
-
-function toProjectId(projectPath: string): string {
-  return btoa(encodeURIComponent(projectPath)).replaceAll("=", "");
 }
 
 export const useProjectsStore = create<ProjectsState>()(
@@ -38,11 +25,12 @@ export const useProjectsStore = create<ProjectsState>()(
         const existingProject = get().projects.find((project) => project.path === normalizedPath);
         if (existingProject) return existingProject;
 
-        const project: StoredProject = {
-          id: toProjectId(normalizedPath),
+        const project: Project = {
+          id: projectIdFromPath(normalizedPath),
           name: projectNameFromPath(normalizedPath),
           path: normalizedPath,
           addedAt: new Date().toISOString(),
+          pinned: false,
         };
 
         set((state) => ({projects: [...state.projects, project]}));
@@ -70,27 +58,25 @@ export const useProjectsStore = create<ProjectsState>()(
           return {projects};
         });
       },
-      toggleSessionPinned: (projectId, sessionId) => {
-        set((state) => ({
-          projects: state.projects.map((project) => {
-            if (project.id !== projectId) return project;
-
-            const pinnedSessionIds = project.pinnedSessionIds ?? [];
-            const nextPinnedSessionIds = pinnedSessionIds.includes(sessionId)
-              ? pinnedSessionIds.filter((pinnedSessionId) => pinnedSessionId !== sessionId)
-              : [...pinnedSessionIds, sessionId];
-            return {...project, pinnedSessionIds: nextPinnedSessionIds};
-          }),
-        }));
-      },
       toggleProjectPinned: (projectId) => {
         set((state) => ({
-          projects: state.projects.map((project) => (project.id === projectId ? {...project, pinned: project.pinned !== true} : project)),
+          projects: state.projects.map((project) => (project.id === projectId ? {...project, pinned: !project.pinned} : project)),
         }));
       },
     }),
     {
       name: PROJECTS_STORAGE_KEY,
+      // Earlier versions stored `pinned` as optional and kept session pins here; see session-pins-store for those.
+      merge: (persisted, current) => ({
+        ...current,
+        projects: ((persisted as Partial<ProjectsState> | undefined)?.projects ?? []).map((project) => ({
+          addedAt: project.addedAt,
+          id: project.id,
+          name: project.name,
+          path: project.path,
+          pinned: project.pinned ?? false,
+        })),
+      }),
       partialize: (state) => ({projects: state.projects}),
     }
   )

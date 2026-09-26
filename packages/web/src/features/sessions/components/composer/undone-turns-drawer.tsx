@@ -13,7 +13,11 @@ function contentPartKey(part: UserMessageContentPart, index: number): string {
   return `text-${part.text.slice(0, 20)}-${index}`;
 }
 
-function UndoneTurnTitle(props: {readonly contentParts: readonly UserMessageContentPart[]}) {
+interface UndoneTurnTitleProps {
+  readonly contentParts: readonly UserMessageContentPart[];
+}
+
+function UndoneTurnTitle(props: UndoneTurnTitleProps) {
   const {contentParts} = props;
   const titleParts = contentParts.filter((part) => part.type === "text" || part.type === "reference");
   const hasTitle = titleParts.some((part) => part.type === "reference" || part.text.trim().length > 0);

@@ -1,0 +1,32 @@
+import type {Ref} from "react";
+import {Marker, MarkerContent} from "@/features/sessions/components/timeline/marker";
+import MatrixLoader from "@/features/sessions/components/timeline/viewport/matrix-loader";
+import {cn} from "@/lib/cn";
+
+interface StreamingStatusProps {
+  readonly compacting: boolean;
+  /** Tucks the status under the last message when that message ends with message spacing. */
+  readonly pullIntoLastMessage: boolean;
+  readonly ref: Ref<HTMLDivElement>;
+}
+
+/** Footer shown below the transcript while the agent works. */
+export default function StreamingStatus(props: StreamingStatusProps) {
+  const {compacting, pullIntoLastMessage, ref} = props;
+  const label = compacting ? "Compacting context" : "Thinking";
+
+  return (
+    <div className={cn("relative z-10 mx-auto w-full max-w-3xl bg-surface px-5 pb-8 md:px-8", pullIntoLastMessage && "-mt-5")} data-timeline-footer="streaming-status" ref={ref}>
+      {compacting ? (
+        <Marker role="status" variant="separator">
+          <MarkerContent className="shimmer text-ink-faint">{label}</MarkerContent>
+        </Marker>
+      ) : (
+        <p className="flex w-fit items-center gap-2.5 text-sm text-ink-faint" role="status">
+          <MatrixLoader />
+          <span className="shimmer">{label}</span>
+        </p>
+      )}
+    </div>
+  );
+}

@@ -2,8 +2,8 @@ import type {ReactNode} from "react";
 import Button, {type ButtonProps} from "@/components/ui/button";
 
 interface IconButtonProps extends Omit<ButtonProps, "aria-label" | "children"> {
-  children: ReactNode;
-  label: string;
+  readonly children: ReactNode;
+  readonly label: string;
 }
 
 export default function IconButton(props: IconButtonProps) {

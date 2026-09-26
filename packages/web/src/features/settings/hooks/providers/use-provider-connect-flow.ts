@@ -1,8 +1,8 @@
 import {useRef, useState} from "react";
 import type {ProviderLoginAuthType} from "@supernova/contracts/providers/procedures";
 import type {Provider} from "@supernova/contracts/providers/schemas";
-import {useCancelProviderLogin} from "@/features/settings/hooks/api/providers/use-cancel-provider-login";
-import {useStartProviderLogin} from "@/features/settings/hooks/api/providers/use-start-provider-login";
+import {useCancelProviderLogin} from "@/features/settings/api/providers/login/cancel-provider-login";
+import {useStartProviderLogin} from "@/features/settings/api/providers/login/start-provider-login";
 
 export type ProviderConnectView = "login" | "method";
 
@@ -13,7 +13,7 @@ interface PendingClose {
 }
 
 interface UseProviderConnectFlowOptions {
-  onLoginDialogClosed: () => void;
+  readonly onLoginDialogClosed: () => void;
 }
 
 /**

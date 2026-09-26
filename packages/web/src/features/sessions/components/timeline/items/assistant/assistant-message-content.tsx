@@ -1,78 +1,13 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import {Suspense, isValidElement, use, useState} from "react";
-import type {ComponentProps, ReactNode} from "react";
-import Button from "@/components/ui/button";
-import Icon from "@/components/ui/icon";
-import ContentPanel from "@/features/sessions/components/timeline/items/assistant/content-panel";
-import {segmentStreamingMessage} from "@/features/sessions/lib/streaming/message-segments";
-import {useAppearanceStore} from "@/features/settings/stores/appearance-store";
-import {CODE_HIGHLIGHT_THEMES, getCachedHighlightedCode, highlightCode} from "@/lib/code-highlighting";
+import {isValidElement} from "react";
+import type {ComponentProps} from "react";
+import CodeBlock from "@/features/sessions/components/timeline/items/assistant/code-block";
+import {segmentStreamingMessage} from "@/features/sessions/lib/timeline/message/message-segments";
 import {cn} from "@/lib/cn";
-
-const SHIKI_CLASS_NAME =
-  "scroll-fade-x overflow-x-auto [&_pre]:m-0 [&_pre]:min-w-full [&_pre]:w-max [&_pre]:p-0 [&_pre]:!bg-transparent [&_code]:font-mono [&_code]:text-[0.8125rem] [&_code]:leading-6";
 
 function languageFromClassName(className: string | undefined): string | undefined {
   return className?.match(/language-([^\s]+)/)?.[1];
-}
-
-function HighlightedCode(props: {code: string; language?: string}) {
-  const {code, language} = props;
-  const mode = useAppearanceStore((state) => state.resolvedMode);
-  const theme = CODE_HIGHLIGHT_THEMES[mode];
-  const cachedHtml = getCachedHighlightedCode({code, language, theme});
-
-  if (cachedHtml) {
-    return <div className={SHIKI_CLASS_NAME} dangerouslySetInnerHTML={{__html: cachedHtml}} />;
-  }
-
-  const html = use(highlightCode({code, language, theme}));
-
-  return <div className={SHIKI_CLASS_NAME} dangerouslySetInnerHTML={{__html: html}} />;
-}
-
-function PlainCode(props: {code: string}) {
-  const {code} = props;
-
-  return (
-    <div className={SHIKI_CLASS_NAME}>
-      <pre>
-        <code>{code}</code>
-      </pre>
-    </div>
-  );
-}
-
-function CodeBlock(props: {children: ReactNode; code: string; language?: string}) {
-  const {code, language} = props;
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = (): void => {
-    void navigator.clipboard.writeText(code).then(() => {
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1600);
-    });
-  };
-
-  return (
-    <ContentPanel className="group/code my-4 p-2.5" scrollable={false}>
-      <div className="mb-1.5 flex items-center justify-between font-sans text-sm text-ink-muted">
-        <span>{language ?? "text"}</span>
-        <Button
-          className="inline-flex w-auto items-center gap-1.5 px-2 py-1 text-xs text-ink-muted opacity-0 hover:text-ink group-hover/code:opacity-100 focus-visible:opacity-100"
-          onClick={handleCopy}
-          variant="primary"
-        >
-          <Icon name={copied ? "check" : "copy"} size="xs" />
-          {copied ? "Copied" : "Copy"}
-        </Button>
-      </div>
-      <Suspense fallback={<PlainCode code={code} />}>
-        <HighlightedCode code={code} language={language} />
-      </Suspense>
-    </ContentPanel>
-  );
 }
 
 interface StreamingFadeTextProps {
@@ -107,11 +42,11 @@ function StreamingFadeText(props: StreamingFadeTextProps) {
 }
 
 interface AssistantMessageContentProps {
-  children: string;
-  className?: string;
-  fadeNewText?: boolean;
-  mode?: "markdown" | "text";
-  streaming?: boolean;
+  readonly children: string;
+  readonly className?: string;
+  readonly fadeNewText?: boolean;
+  readonly mode?: "markdown" | "text";
+  readonly streaming?: boolean;
 }
 
 export default function AssistantMessageContent(props: AssistantMessageContentProps) {
@@ -171,11 +106,7 @@ export default function AssistantMessageContent(props: AssistantMessageContentPr
               const codeElement = isValidElement<ComponentProps<"code">>(preChildren) ? preChildren : undefined;
               const code = String(codeElement?.props.children ?? "").replace(/\n$/, "");
 
-              return (
-                <CodeBlock code={code} language={languageFromClassName(codeElement?.props.className)}>
-                  {preChildren}
-                </CodeBlock>
-              );
+              return <CodeBlock code={code} language={languageFromClassName(codeElement?.props.className)} />;
             },
             table: ({children: tableChildren}) => (
               <div className="my-4 overflow-hidden rounded-xl border border-border-muted">

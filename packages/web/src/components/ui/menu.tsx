@@ -6,8 +6,8 @@ import {cn} from "@/lib/cn";
 type MenuTriggerProps = Omit<ComponentProps<typeof Button>, "children">;
 
 interface MenuItemProps extends ComponentProps<typeof BaseMenu.Item> {
-  icon?: ReactNode;
-  trailing?: ReactNode;
+  readonly icon?: ReactNode;
+  readonly trailing?: ReactNode;
 }
 
 export function MenuItem(props: MenuItemProps) {
@@ -34,25 +34,30 @@ export function MenuItem(props: MenuItemProps) {
   );
 }
 
+interface MenuLabelProps {
+  readonly children: ReactNode;
+  readonly className?: string;
+}
+
 /** Renders a section heading inside a menu or menu-like floating panel. */
-export function MenuLabel(props: {readonly children: ReactNode; readonly className?: string}) {
+export function MenuLabel(props: MenuLabelProps) {
   const {children, className} = props;
 
   return <div className={cn("px-2 pb-2 pt-2 text-sm text-ink-faint", className)}>{children}</div>;
 }
 
 interface MenuProps {
-  align?: ComponentProps<typeof BaseMenu.Positioner>["align"];
-  alignOffset?: ComponentProps<typeof BaseMenu.Positioner>["alignOffset"];
-  children: ReactNode;
-  className?: string;
-  onOpenChange?: ComponentProps<typeof BaseMenu.Root>["onOpenChange"];
-  onOpenChangeComplete?: ComponentProps<typeof BaseMenu.Root>["onOpenChangeComplete"];
-  open?: ComponentProps<typeof BaseMenu.Root>["open"];
-  side?: ComponentProps<typeof BaseMenu.Positioner>["side"];
-  sideOffset?: ComponentProps<typeof BaseMenu.Positioner>["sideOffset"];
-  trigger: (triggerProps: MenuTriggerProps) => ReactElement;
-  triggerLabel: string;
+  readonly align?: ComponentProps<typeof BaseMenu.Positioner>["align"];
+  readonly alignOffset?: ComponentProps<typeof BaseMenu.Positioner>["alignOffset"];
+  readonly children: ReactNode;
+  readonly className?: string;
+  readonly onOpenChange?: ComponentProps<typeof BaseMenu.Root>["onOpenChange"];
+  readonly onOpenChangeComplete?: ComponentProps<typeof BaseMenu.Root>["onOpenChangeComplete"];
+  readonly open?: ComponentProps<typeof BaseMenu.Root>["open"];
+  readonly side?: ComponentProps<typeof BaseMenu.Positioner>["side"];
+  readonly sideOffset?: ComponentProps<typeof BaseMenu.Positioner>["sideOffset"];
+  readonly trigger: (triggerProps: MenuTriggerProps) => ReactElement;
+  readonly triggerLabel: string;
 }
 
 export default function Menu(props: MenuProps) {

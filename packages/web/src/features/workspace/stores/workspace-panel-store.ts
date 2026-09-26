@@ -1,10 +1,16 @@
 import {create} from "zustand";
 import {createJSONStorage, persist} from "zustand/middleware";
 import type {IconName} from "@/components/ui/icon";
+import {isWindowsEnvironment} from "@/config/app-environment";
 import {fileNameOf} from "@/features/workspace/lib/file-info";
 import type {WorkspacePanelTab, WorkspacePanelTabKind} from "@/features/workspace/types/workspace-panel";
 
 const DEFAULT_WORKSPACE_PANEL_WIDTH = 348;
+const BASE_MIN_WORKSPACE_PANEL_WIDTH = 280;
+/** Windows overlays its window controls on the panel header. */
+const WINDOWS_WINDOW_CONTROLS_WIDTH = 138;
+
+export const MIN_WORKSPACE_PANEL_WIDTH = isWindowsEnvironment ? BASE_MIN_WORKSPACE_PANEL_WIDTH + WINDOWS_WINDOW_CONTROLS_WIDTH : BASE_MIN_WORKSPACE_PANEL_WIDTH;
 
 interface TabPresentation {
   /** Shown as the tab icon; a file path renders that file's type icon instead. */

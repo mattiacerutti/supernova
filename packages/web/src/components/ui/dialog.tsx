@@ -4,13 +4,13 @@ import Icon from "@/components/ui/icon";
 import {cn} from "@/lib/cn";
 
 interface DialogProps {
-  children: ReactNode;
-  className?: string;
-  containerClassName?: string;
-  onOpenChange: (open: boolean) => void;
-  onOpenChangeComplete?: (open: boolean) => void;
-  open: boolean;
-  title: ReactNode;
+  readonly children: ReactNode;
+  readonly className?: string;
+  readonly containerClassName?: string;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly onOpenChangeComplete?: (open: boolean) => void;
+  readonly open: boolean;
+  readonly title: ReactNode;
 }
 
 export default function Dialog(props: DialogProps) {

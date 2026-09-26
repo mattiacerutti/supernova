@@ -6,9 +6,9 @@ import Dialog from "@/components/ui/dialog";
 import Icon from "@/components/ui/icon";
 import {MenuLabel} from "@/components/ui/menu";
 import SearchField from "@/components/ui/search-field";
-import SearchableList from "@/features/projects/components/searchable-list";
-import {useCreateFolder} from "@/features/projects/hooks/api/use-create-folder";
-import {listFolderSuggestionsQueryOptions, useListFolderSuggestions} from "@/features/projects/hooks/api/use-list-folder-suggestions";
+import SearchableList from "@/components/searchable-list";
+import {useCreateFolder} from "@/features/projects/api/create-folder";
+import {listFolderSuggestionsQueryOptions, useListFolderSuggestions} from "@/features/projects/api/list-folder-suggestions";
 import {
   formatSuggestionPath,
   getProjectBrowseDirectoryPath,
@@ -17,7 +17,7 @@ import {
   hasTrailingProjectPathSeparator,
   resolveProjectBrowsePath,
   withTrailingProjectPathSeparator,
-} from "@/features/projects/lib/project-paths";
+} from "@/features/projects/lib/folder-browsing";
 import {useProjectsStore} from "@/features/projects/stores/projects-store";
 import {cn} from "@/lib/cn";
 
@@ -26,12 +26,12 @@ type ProjectSearchRow =
   | {readonly kind: "folder" | "parent" | "recent"; readonly path: string; readonly type: "suggestion"};
 
 interface SuggestionItemProps {
-  highlighted: boolean;
-  homePath: string | undefined;
-  kind: "folder" | "parent" | "recent";
-  onAutocomplete: (path: string) => void;
-  path: string;
-  ref: Ref<HTMLDivElement>;
+  readonly highlighted: boolean;
+  readonly homePath: string | undefined;
+  readonly kind: "folder" | "parent" | "recent";
+  readonly onAutocomplete: (path: string) => void;
+  readonly path: string;
+  readonly ref: Ref<HTMLDivElement>;
 }
 
 function SuggestionItem(props: SuggestionItemProps) {
@@ -53,9 +53,9 @@ function SuggestionItem(props: SuggestionItemProps) {
 }
 
 interface OpenProjectDialogProps {
-  onClose: () => void;
-  onOpenProject: (projectPath: string) => void;
-  open: boolean;
+  readonly onClose: () => void;
+  readonly onOpenProject: (projectPath: string) => void;
+  readonly open: boolean;
 }
 
 export default function OpenProjectDialog(props: OpenProjectDialogProps) {

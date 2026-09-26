@@ -1,7 +1,7 @@
 import {useRef, useState} from "react";
 import type {DesktopUpdateState} from "@supernova/contracts/desktop/api";
-import {showToast} from "@/components/ui/toast-manager";
-import {useMountEffect} from "@/lib/use-mount-effect";
+import {showToast} from "@/lib/toast";
+import {useMountEffect} from "@/hooks/use-mount-effect";
 
 export interface DesktopUpdate {
   readonly state: DesktopUpdateState | undefined;

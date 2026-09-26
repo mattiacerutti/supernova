@@ -1,8 +1,8 @@
 import type {ReactNode} from "react";
 
 interface SettingsGroupProps {
-  children: ReactNode;
-  title: string;
+  readonly children: ReactNode;
+  readonly title: string;
 }
 
 export function SettingsGroup(props: SettingsGroupProps) {
@@ -17,10 +17,10 @@ export function SettingsGroup(props: SettingsGroupProps) {
 }
 
 interface SettingsRowProps {
-  children?: ReactNode;
-  control?: ReactNode;
-  description?: string;
-  title: string;
+  readonly children?: ReactNode;
+  readonly control?: ReactNode;
+  readonly description?: string;
+  readonly title: string;
 }
 
 export function SettingsRow(props: SettingsRowProps) {

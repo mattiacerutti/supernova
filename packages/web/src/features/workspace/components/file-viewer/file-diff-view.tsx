@@ -1,7 +1,7 @@
 import {parseDiffFromFile} from "@pierre/diffs";
 import {FileDiff, Virtualizer} from "@pierre/diffs/react";
-import {useAppearanceStore} from "@/features/settings/stores/appearance-store";
-import {generateDiffOptions} from "@/lib/diff/diff-viewer-options";
+import {useSettingsStore} from "@/stores/settings-store";
+import {generateDiffOptions} from "@/lib/diffs/options";
 
 const VIRTUALIZER_CONFIG = {intersectionObserverMargin: 1200, overscrollSize: 600};
 
@@ -17,7 +17,7 @@ interface FileDiffViewProps {
 
 export default function FileDiffView(props: FileDiffViewProps) {
   const {expanded, newContents, oldContents, path, split} = props;
-  const mode = useAppearanceStore((state) => state.resolvedMode);
+  const mode = useSettingsStore((state) => state.resolvedMode);
   // Diffing both full sides lets Pierre reveal unchanged context on demand, which a patch alone cannot.
   const fileDiff = parseDiffFromFile({contents: oldContents, name: path}, {contents: newContents, name: path});
 

@@ -1,7 +1,7 @@
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import FileIcon from "@/features/workspace/components/file-tree/file-icon";
-import GitStatusBadge from "@/features/workspace/components/changes/diff/git-status-badge";
+import GitStatusBadge from "@/features/workspace/components/changes/git-status-badge";
 import type {FileTreeNode} from "@/features/workspace/lib/file-tree";
 import {cn} from "@/lib/cn";
 

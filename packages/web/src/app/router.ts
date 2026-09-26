@@ -1,13 +1,8 @@
-import {createRootRouteWithContext, createRoute, createRouter, redirect} from "@tanstack/react-router";
-import type {AppEnvironment} from "@/lib/app-environment";
+import {createRootRoute, createRoute, createRouter, redirect} from "@tanstack/react-router";
 import {HomeLayoutRoute, HomeRoute, NewSessionRoute, RootRoute, SessionRoute, SettingsSectionRoute} from "@/app/routes";
-import {defaultSettingsSectionId, settingsSections} from "@/features/settings/data/settings-sections";
+import {defaultSettingsSectionId, settingsSections} from "@/features/settings/pages/settings-sections";
 
-interface RouterContext {
-  appEnvironment: AppEnvironment;
-}
-
-const rootRoute = createRootRouteWithContext<RouterContext>()({
+const rootRoute = createRootRoute({
   component: RootRoute,
 });
 
@@ -56,12 +51,7 @@ const settingsSectionRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([homeLayoutRoute.addChildren([indexRoute, newSessionRoute, sessionRoute]), settingsRoute, settingsSectionRoute]);
 
-export const router = createRouter({
-  context: {
-    appEnvironment: "web",
-  },
-  routeTree,
-});
+export const router = createRouter({routeTree});
 
 declare module "@tanstack/react-router" {
   interface Register {

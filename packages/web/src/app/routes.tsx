@@ -1,6 +1,6 @@
-import {Outlet, useParams, useRouteContext, useSearch} from "@tanstack/react-router";
-import HomePage from "@/components/home-page";
-import {useProjectList} from "@/features/projects/hooks/use-project-list";
+import {Outlet, useParams, useSearch} from "@tanstack/react-router";
+import AppLayout from "@/app/layout/app-layout";
+import {useProjectsStore} from "@/features/projects/stores/projects-store";
 import SettingsPage from "@/features/settings/pages/settings-page";
 import NewSessionPage from "@/features/sessions/pages/new-session-page";
 import SessionPage from "@/features/sessions/pages/session-page";
@@ -18,12 +18,10 @@ export function RootRoute() {
 }
 
 export function HomeLayoutRoute() {
-  const {appEnvironment} = useRouteContext({from: "__root__"});
-
   return (
-    <HomePage appEnvironment={appEnvironment}>
+    <AppLayout>
       <Outlet />
-    </HomePage>
+    </AppLayout>
   );
 }
 
@@ -32,15 +30,14 @@ export function HomeRoute() {
 }
 
 export function SessionRoute() {
-  const {appEnvironment} = useRouteContext({from: "__root__"});
   const {sessionId} = useParams({from: "/home-layout/session/$sessionId"});
 
-  return <SessionPage appEnvironment={appEnvironment} key={sessionId} sessionId={sessionId} />;
+  return <SessionPage key={sessionId} sessionId={sessionId} />;
 }
 
 export function NewSessionRoute() {
   const search = useSearch({from: "/home-layout/session/new"}) as {projectId?: string};
-  const projects = useProjectList();
+  const projects = useProjectsStore((state) => state.projects);
   const project = search.projectId ? projects.find((candidate) => candidate.id === search.projectId) : undefined;
 
   if (!project) return <EmptySessionState />;
@@ -49,8 +46,7 @@ export function NewSessionRoute() {
 }
 
 export function SettingsSectionRoute() {
-  const {appEnvironment} = useRouteContext({from: "__root__"});
   const {sectionId} = useParams({from: "/settings/$sectionId"});
 
-  return <SettingsPage appEnvironment={appEnvironment} sectionId={sectionId} />;
+  return <SettingsPage sectionId={sectionId} />;
 }

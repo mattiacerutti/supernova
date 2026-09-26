@@ -3,22 +3,19 @@ import {useQueryClient} from "@tanstack/react-query";
 import {useNavigate} from "@tanstack/react-router";
 import appIconLightUrl from "@assets/icon-black.png";
 import appIconDarkUrl from "@assets/icon-white.png";
-import AttachmentDropOverlay from "@/features/sessions/components/attachments/attachment-drop-overlay";
-import ModelPicker from "@/features/sessions/components/composer/pickers/model-picker";
-import ThinkingLevelPicker from "@/features/sessions/components/composer/pickers/thinking-level-picker";
+import {useCreateSession} from "@/features/sessions/api/conversation/create-session";
+import {sessionKeys} from "@/features/sessions/api/query-keys";
+import {useSessionActions} from "@/features/sessions/api/conversation/session-actions";
+import AttachmentDropOverlay from "@/features/sessions/components/conversation/attachment-drop-overlay";
+import ModelPicker from "@/features/sessions/components/composer/toolbar/model-picker";
 import SessionComposer from "@/features/sessions/components/composer/session-composer";
 import SessionComposerSkeleton from "@/features/sessions/components/composer/session-composer-skeleton";
-import {useCreateSession} from "@/features/sessions/hooks/api/use-create-session";
-import {sessionQueryKey} from "@/features/sessions/hooks/api/use-session";
-import {useComposerAttachments} from "@/features/sessions/hooks/use-composer-attachments";
-import {useComposerDraft} from "@/features/sessions/hooks/use-composer-draft";
-import {useComposerModelSelection} from "@/features/sessions/hooks/use-composer-model-selection";
-import {newSessionComposerDraftKey} from "@/features/sessions/stores/composer-drafts-store";
-import {useSessionLiveStore} from "@/features/sessions/stores/session-live-store";
-import {useAppearanceStore} from "@/features/settings/stores/appearance-store";
-import {useRpcClient} from "@/rpc/use-rpc-client";
-import {showToast} from "@/components/ui/toast-manager";
-import {useConfiguration} from "@/features/configuration/hooks/api/use-configuration";
+import ThinkingLevelPicker from "@/features/sessions/components/composer/toolbar/thinking-level-picker";
+import {ComposerContext, useComposer} from "@/features/sessions/hooks/composer/use-composer";
+import {newSessionComposerDraftKey} from "@/features/sessions/stores/composer/composer-drafts-store";
+import {useConfiguration} from "@/api/configuration";
+import {showToast} from "@/lib/toast";
+import {useSettingsStore} from "@/stores/settings-store";
 
 interface NewSessionPageProps {
   readonly projectName: string;
@@ -30,49 +27,33 @@ export default function NewSessionPage(props: NewSessionPageProps) {
 
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const rpcClient = useRpcClient();
-  const createSessionMutation = useCreateSession();
-  const resolvedMode = useAppearanceStore((state) => state.resolvedMode);
-  const sendMessage = useSessionLiveStore((state) => state.sendMessage);
+  const createSession = useCreateSession();
+  const {sendMessage} = useSessionActions();
+  const resolvedMode = useSettingsStore((state) => state.resolvedMode);
   const configuration = useConfiguration(projectPath);
-  const modelSelection = useComposerModelSelection({projectPath, defaults: configuration.data?.modelDefaults});
-  const isPending = configuration.isPending || modelSelection.isPending;
 
-  const composerDisabled = createSessionMutation.isPending || isPending || configuration.isFetching || !modelSelection.modelReference;
-
-  const thinkingLevels = modelSelection.selectedModelDetails?.thinkingLevels ?? [];
-
-  const composerDraftKey = newSessionComposerDraftKey(projectPath);
-  const composerDraft = useComposerDraft({key: composerDraftKey});
-  const composerAttachments = useComposerAttachments({
-    attachments: composerDraft.attachments,
-    disabled: composerDisabled,
-    imageSupported: modelSelection.selectedModelDetails?.capabilities.images === true,
-    onAttachmentsChange: composerDraft.setAttachments,
+  const composer = useComposer({
+    disabled: createSession.isPending || configuration.isFetching,
+    draftKey: newSessionComposerDraftKey(projectPath),
+    modelDefaults: configuration.data?.modelDefaults,
+    projectPath,
   });
-
-  const handleModelChange = (value: string): void => {
-    const nextModel = modelSelection.findModel(value);
-    if (!nextModel) return;
-
-    if (!nextModel.capabilities.images) composerAttachments.removeUnsupportedImages();
-    modelSelection.selectModel(value);
-  };
+  const isPending = configuration.isPending || composer.isPending;
 
   const handleSubmit = (contentParts: readonly UserMessageContentPart[]): void => {
-    const modelReference = modelSelection.modelReference;
-    if (composerDisabled || !modelReference) return;
+    const modelReference = composer.models.modelReference;
+    if (composer.disabled || !modelReference) return;
 
-    createSessionMutation.mutate(
+    createSession.mutate(
       {projectPath},
       {
         onError: () => {
           showToast("Unable to create the session", "Please try again.");
         },
         onSuccess: (session) => {
-          queryClient.setQueryData(sessionQueryKey(session.id), session);
-          modelSelection.assignToSession(session.id, modelReference);
-          sendMessage({contentParts, modelReference, queryClient, rpcClient, sessionId: session.id});
+          queryClient.setQueryData(sessionKeys.detail(session.id), session);
+          composer.models.assignToSession(session.id, modelReference);
+          sendMessage({contentParts, modelReference, sessionId: session.id});
           void navigate({params: {sessionId: session.id}, to: "/session/$sessionId"});
         },
       }
@@ -80,49 +61,28 @@ export default function NewSessionPage(props: NewSessionPageProps) {
   };
 
   return (
-    <div {...composerAttachments.dropZoneProps} className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden px-4 pb-16 pt-4">
-      <div className="flex h-[min(calc(100svh-1rem),32rem)] w-[min(calc(100vw-2rem),48rem)] flex-col items-center justify-center overflow-visible">
-        <div className="mb-8 flex flex-col items-center gap-3">
-          <img src={resolvedMode === "light" ? appIconLightUrl : appIconDarkUrl} alt="Supernova" className="h-16 w-22 shrink-0" draggable={false} />
-          <h1 className="text-center text-4xl font-normal tracking-tight text-ink-strong">
-            What should we build in <i className="text-ink-muted">{projectName}</i>?
-          </h1>
+    <ComposerContext value={composer}>
+      <div {...composer.attachments.dropZoneProps} className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden px-4 pb-16 pt-4">
+        <div className="flex h-[min(calc(100svh-1rem),32rem)] w-[min(calc(100vw-2rem),48rem)] flex-col items-center justify-center overflow-visible">
+          <div className="mb-8 flex flex-col items-center gap-3">
+            <img src={resolvedMode === "light" ? appIconLightUrl : appIconDarkUrl} alt="Supernova" className="h-16 w-22 shrink-0" draggable={false} />
+            <h1 className="text-center text-4xl font-normal tracking-tight text-ink-strong">
+              What should we build in <i className="text-ink-muted">{projectName}</i>?
+            </h1>
+          </div>
+          <div className="relative w-full">
+            {isPending ? (
+              <SessionComposerSkeleton />
+            ) : (
+              <SessionComposer key={`${composer.draftKey}:${composer.draft.revision}`} onSubmit={handleSubmit}>
+                <ModelPicker />
+                <ThinkingLevelPicker />
+              </SessionComposer>
+            )}
+          </div>
         </div>
-        <div className="relative w-full">
-          {isPending ? (
-            <SessionComposerSkeleton />
-          ) : (
-            <SessionComposer
-              key={`${composerDraftKey}:${composerDraft.revision}`}
-              attachments={composerAttachments}
-              disabled={composerDisabled}
-              draft={composerDraft}
-              onSubmit={handleSubmit}
-              projectPath={projectPath}
-              toolbarControls={
-                <div className="flex gap-2">
-                  <ModelPicker
-                    selectedModel={modelSelection.selectedModelDetails}
-                    disabled={composerDisabled}
-                    models={modelSelection.availableModels}
-                    onModelChange={handleModelChange}
-                  />
-                  {thinkingLevels.length > 0 && (
-                    <ThinkingLevelPicker
-                      disabled={composerDisabled}
-                      onThinkingLevelChange={modelSelection.selectThinkingLevel}
-                      selectedThinkingLabel={modelSelection.selectedThinkingLabel}
-                      selectedThinkingLevel={modelSelection.modelReference?.thinkingLevel}
-                      thinkingLevels={thinkingLevels}
-                    />
-                  )}
-                </div>
-              }
-            />
-          )}
-        </div>
+        {composer.attachments.isDraggingFiles && <AttachmentDropOverlay />}
       </div>
-      {composerAttachments.isDraggingFiles && <AttachmentDropOverlay />}
-    </div>
+    </ComposerContext>
   );
 }

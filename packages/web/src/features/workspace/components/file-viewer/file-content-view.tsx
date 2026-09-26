@@ -1,6 +1,6 @@
 import {File, Virtualizer} from "@pierre/diffs/react";
-import {useAppearanceStore} from "@/features/settings/stores/appearance-store";
-import {generateFileOptions} from "@/lib/diff/diff-viewer-options";
+import {useSettingsStore} from "@/stores/settings-store";
+import {generateFileOptions} from "@/lib/diffs/options";
 
 const VIRTUALIZER_CONFIG = {intersectionObserverMargin: 1200, overscrollSize: 600};
 
@@ -11,7 +11,7 @@ interface FileContentViewProps {
 
 export default function FileContentView(props: FileContentViewProps) {
   const {content, path} = props;
-  const mode = useAppearanceStore((state) => state.resolvedMode);
+  const mode = useSettingsStore((state) => state.resolvedMode);
 
   return (
     <Virtualizer className="min-h-0 flex-1 select-text overflow-auto overscroll-contain" config={VIRTUALIZER_CONFIG} key={`${path}:${mode}`}>

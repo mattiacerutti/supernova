@@ -2,8 +2,8 @@ import {Toast} from "@base-ui/react/toast";
 import {useId, type ReactNode} from "react";
 import Icon from "@/components/ui/icon";
 import Button from "@/components/ui/button";
-import {toastManager} from "@/components/ui/toast-manager";
 import {cn} from "@/lib/cn";
+import {toastManager} from "@/lib/toast";
 
 type ToastObject = ReturnType<typeof Toast.useToastManager>["toasts"][number];
 
@@ -13,7 +13,11 @@ function ToastList() {
   return toasts.map((toast) => <ToastItem key={toast.id} toast={toast} />);
 }
 
-function ToastItem(props: {readonly toast: ToastObject}) {
+interface ToastItemProps {
+  readonly toast: ToastObject;
+}
+
+function ToastItem(props: ToastItemProps) {
   const {toast} = props;
   const titleId = useId();
   const descriptionId = useId();

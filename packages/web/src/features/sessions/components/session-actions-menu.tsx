@@ -3,9 +3,10 @@ import {useLocation, useNavigate} from "@tanstack/react-router";
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import Menu, {MenuItem} from "@/components/ui/menu";
-import {useArchiveProjectSession} from "@/features/projects/hooks/api/use-archive-project-session";
-import {useProjectsStore} from "@/features/projects/stores/projects-store";
+import {useArchiveSession} from "@/features/sessions/api/sidebar/archive-session";
+import {useSessionPinsStore} from "@/features/sessions/stores/sidebar/session-pins-store";
 import {cn} from "@/lib/cn";
+import {projectIdFromPath} from "@/lib/project-paths";
 
 interface SessionActionsMenuProps {
   readonly onRename: () => void;
@@ -22,23 +23,21 @@ export default function SessionActionsMenu(props: SessionActionsMenuProps) {
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const project = useProjectsStore((state) => state.projects.find((candidate) => candidate.path === projectPath));
-  const toggleSessionPinned = useProjectsStore((state) => state.toggleSessionPinned);
-  const archiveProjectSessionMutation = useArchiveProjectSession();
-  const pinned = project?.pinnedSessionIds?.includes(sessionId) === true;
+  const pinned = useSessionPinsStore((state) => state.pinnedSessionIds.includes(sessionId));
+  const toggleSessionPinned = useSessionPinsStore((state) => state.toggleSessionPinned);
+  const archiveSessionMutation = useArchiveSession();
 
   const handleToggleSessionPinned = (): void => {
-    if (!project) return;
-    toggleSessionPinned(project.id, sessionId);
+    toggleSessionPinned(sessionId);
   };
 
   const handleArchiveSession = (): void => {
-    archiveProjectSessionMutation.mutate(
+    archiveSessionMutation.mutate(
       {projectPath, sessionId},
       {
         onSuccess: () => {
           if (location.pathname === `/session/${sessionId}`) {
-            void navigate({replace: true, search: project ? {projectId: project.id} : {}, to: "/session/new"});
+            void navigate({replace: true, search: {projectId: projectIdFromPath(projectPath)}, to: "/session/new"});
           }
         },
       }
@@ -58,13 +57,13 @@ export default function SessionActionsMenu(props: SessionActionsMenuProps) {
       sideOffset={2}
       align="start"
     >
-      <MenuItem disabled={!project} icon={<Icon name="pin" size="xs" />} onClick={handleToggleSessionPinned}>
+      <MenuItem icon={<Icon name="pin" size="xs" />} onClick={handleToggleSessionPinned}>
         {pinned ? "Unpin chat" : "Pin chat"}
       </MenuItem>
       <MenuItem icon={<Icon name="edit" size="xs" />} onClick={onRename}>
         Rename chat
       </MenuItem>
-      <MenuItem disabled={archiveProjectSessionMutation.isPending} icon={<Icon name="archive" size="xs" />} onClick={handleArchiveSession}>
+      <MenuItem disabled={archiveSessionMutation.isPending} icon={<Icon name="archive" size="xs" />} onClick={handleArchiveSession}>
         Archive chat
       </MenuItem>
     </Menu>

@@ -3,8 +3,8 @@ import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import type {IconName} from "@/components/ui/icon";
 import ThemePreview from "@/features/settings/components/appearance/theme-preview";
-import {getAppTheme} from "@/features/settings/lib/themes";
-import {useAppearanceStore} from "@/features/settings/stores/appearance-store";
+import {getAppTheme} from "@/lib/themes/theme";
+import {useSettingsStore} from "@/stores/settings-store";
 import {cn} from "@/lib/cn";
 
 // Overshoots the card bounds so clip-path anti-aliasing never exposes the layer beneath;
@@ -18,9 +18,9 @@ const modeOptions: ReadonlyArray<{icon: IconName; label: string; value: DesktopT
 ];
 
 export default function ModePicker() {
-  const mode = useAppearanceStore((state) => state.mode);
-  const setMode = useAppearanceStore((state) => state.setMode);
-  const themeId = useAppearanceStore((state) => state.themeId);
+  const mode = useSettingsStore((state) => state.mode);
+  const setMode = useSettingsStore((state) => state.setMode);
+  const themeId = useSettingsStore((state) => state.themeId);
   const theme = getAppTheme(themeId);
 
   return (

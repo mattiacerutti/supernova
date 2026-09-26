@@ -1,244 +1,171 @@
 import type {Session} from "@supernova/contracts/sessions/schemas";
-import {useCallback, useState} from "react";
-import type {AppEnvironment} from "@/lib/app-environment";
-import CheckpointConflictDialog from "@/features/sessions/components/checkpoint-conflict-dialog";
-import ModelPicker from "@/features/sessions/components/composer/pickers/model-picker";
-import ThinkingLevelPicker from "@/features/sessions/components/composer/pickers/thinking-level-picker";
+import {useState} from "react";
+import {useSession} from "@/features/sessions/api/conversation/get-session";
+import {useRenameSession} from "@/features/sessions/api/sidebar/rename-session";
+import CheckpointConflictDialog from "@/features/sessions/components/conversation/checkpoint-conflict-dialog";
+import AttachmentDropOverlay from "@/features/sessions/components/conversation/attachment-drop-overlay";
+import ModelPicker from "@/features/sessions/components/composer/toolbar/model-picker";
 import SessionComposer from "@/features/sessions/components/composer/session-composer";
 import SessionComposerSkeleton from "@/features/sessions/components/composer/session-composer-skeleton";
-import SessionContextIndicator from "@/features/sessions/components/composer/session-context-indicator";
+import SessionContextIndicator from "@/features/sessions/components/composer/toolbar/session-context-indicator";
+import ThinkingLevelPicker from "@/features/sessions/components/composer/toolbar/thinking-level-picker";
 import UndoneTurnsDrawer from "@/features/sessions/components/composer/undone-turns-drawer";
 import SessionActionsMenu from "@/features/sessions/components/session-actions-menu";
-import SessionLayout from "@/features/sessions/components/session-layout";
+import SessionLayout, {SessionHeader, SessionViewActions} from "@/features/sessions/components/conversation/session-layout";
 import SessionTitleText from "@/features/sessions/components/session-title-text";
 import SessionTimeline from "@/features/sessions/components/timeline/session-timeline";
-import {useRenameSession as useRenameSessionMutation} from "@/features/sessions/hooks/api/use-rename-session";
-import {useSession} from "@/features/sessions/hooks/api/use-session";
-import {useCachedSessionTitle} from "@/features/sessions/hooks/use-cached-session-title";
-import {useComposerAttachments} from "@/features/sessions/hooks/use-composer-attachments";
-import {useComposerDraft} from "@/features/sessions/hooks/use-composer-draft";
-import {useComposerModelSelection} from "@/features/sessions/hooks/use-composer-model-selection";
-import {useSessionTimeline} from "@/features/sessions/hooks/use-session-timeline";
-import {sessionComposerDraftKey} from "@/features/sessions/stores/composer-drafts-store";
-import {useSessionLiveStore} from "@/features/sessions/stores/session-live-store";
-import {useSessionVisitsStore} from "@/features/sessions/stores/session-visits-store";
+import SessionPageSkeleton from "@/features/sessions/pages/session-page-skeleton";
+import {ComposerContext, useComposer} from "@/features/sessions/hooks/composer/use-composer";
+import {useSessionTimeline} from "@/features/sessions/hooks/conversation/use-session-timeline";
+import {sessionComposerDraftKey} from "@/features/sessions/stores/composer/composer-drafts-store";
+import {useSessionLiveStore} from "@/features/sessions/stores/conversation/session-live-store";
+import {useSessionVisitsStore} from "@/features/sessions/stores/sidebar/session-visits-store";
 import WorkspacePanel from "@/features/workspace/components/workspace-panel";
 import WorkspacePanelToggle from "@/features/workspace/components/workspace-panel-toggle";
 import {useInlineRename} from "@/hooks/use-inline-rename";
-import {useMountEffect} from "@/lib/use-mount-effect";
-
-interface SessionLoadingProps {
-  readonly appEnvironment: AppEnvironment;
-  readonly sessionId: string;
-}
-
-function SessionLoading(props: SessionLoadingProps) {
-  const {appEnvironment, sessionId} = props;
-  const cachedTitle = useCachedSessionTitle(sessionId);
-
-  return (
-    <SessionLayout
-      appEnvironment={appEnvironment}
-      composer={<SessionComposerSkeleton />}
-      timeline={<div className="min-h-0 flex-1" />}
-      title={
-        cachedTitle ? (
-          <span className="block truncate">{cachedTitle}</span>
-        ) : (
-          <span className="block h-4 w-36 animate-pulse rounded-full bg-overlay-pressed" aria-label="Loading session title" />
-        )
-      }
-    />
-  );
-}
+import {useMountEffect} from "@/hooks/use-mount-effect";
 
 interface SessionConversationProps {
-  readonly appEnvironment: AppEnvironment;
   readonly session: Session;
 }
 
+/** A loaded session: header, timeline, composer, and workspace panel wired to the live stream. */
 function SessionConversation(props: SessionConversationProps) {
-  const {appEnvironment, session} = props;
+  const {session} = props;
 
   const markSessionVisited = useSessionVisitsStore((state) => state.markSessionVisited);
-  const renameSessionMutation = useRenameSessionMutation();
+  const renameSession = useRenameSession();
+  const {
+    inputProps: renameInputProps,
+    renaming,
+    startRenaming,
+  } = useInlineRename({initialValue: session.title, onSave: (title) => renameSession.mutate({sessionId: session.id, title})});
 
   // Opening a session clears its unseen activity. The route remounts this
   // page per session, so the stamp lands once per open.
   useMountEffect(() => markSessionVisited(session.id, session.updatedAt));
-  const {
-    draftName,
-    handleBlur: handleRenameBlur,
-    handleChange: handleRenameChange,
-    handleClick: handleRenameClick,
-    handleFocus: handleRenameFocus,
-    handleInputRef: renameInputRef,
-    handleKeyDown: handleRenameKeyDown,
-    renaming,
-    startRenaming,
-  } = useInlineRename({initialValue: session.title, onSave: (title) => renameSessionMutation.mutate({sessionId: session.id, title})});
 
-  const modelSelection = useComposerModelSelection({projectPath: session.projectPath, initialSelection: session.modelReference, sessionId: session.id});
-  const composerDraftKey = sessionComposerDraftKey(session.id);
-  const composerDraft = useComposerDraft({key: composerDraftKey});
-  const stream = useSessionTimeline({modelReference: modelSelection.modelReference, sessionId: session.id, sessionTurns: session.turns});
+  const composer = useComposer({
+    draftKey: sessionComposerDraftKey(session.id),
+    initialModelReference: session.modelReference,
+    projectPath: session.projectPath,
+    sessionId: session.id,
+  });
+  const stream = useSessionTimeline({modelReference: composer.models.modelReference, sessionId: session.id, sessionTurns: session.turns});
   const [undoneDrawerHeight, setUndoneDrawerHeight] = useState(0);
 
-  const composerDisabled = modelSelection.isPending || !modelSelection.modelReference;
-  const composerActionDisabled = composerDisabled || stream.streamStatus !== "idle";
-  const thinkingLevels = modelSelection.selectedModelDetails?.thinkingLevels ?? [];
-  const composerAttachments = useComposerAttachments({
-    attachments: composerDraft.attachments,
-    disabled: composerDisabled,
-    imageSupported: modelSelection.selectedModelDetails?.capabilities.images === true,
-    onAttachmentsChange: composerDraft.setAttachments,
-  });
+  const idle = stream.streamStatus === "idle";
+  const streaming = stream.streamStatus === "streaming" || stream.streamStatus === "compacting";
 
-  const handleModelChange = (value: string): void => {
-    const nextModel = modelSelection.findModel(value);
-    if (!nextModel) return;
-
-    if (!nextModel.capabilities.images) composerAttachments.removeUnsupportedImages();
-    modelSelection.selectModel(value);
+  /** Puts a turn's prompt back into the composer before the checkpoint moves. */
+  const restoreDraftFrom = (turn: Session["turns"][number] | undefined): void => {
+    composer.draft.replaceContentParts(turn?.userMessage.contentParts ?? []);
   };
 
   const handleUndo = (): void => {
-    if (stream.streamStatus !== "idle") return;
-
-    const turn = session.turns.at(-1);
-    if (turn) composerDraft.replaceContentParts(turn.userMessage.contentParts);
+    if (!idle) return;
+    restoreDraftFrom(session.turns.at(-1));
     stream.slashCommandActions.undo?.();
   };
 
   const handleRedo = (): void => {
-    if (stream.streamStatus !== "idle") return;
-
-    composerDraft.replaceContentParts(session.undoneTurns[1]?.userMessage.contentParts ?? []);
+    if (!idle) return;
+    restoreDraftFrom(session.undoneTurns[1]);
     stream.slashCommandActions.redo?.();
   };
 
   const handleRevertToMessage = (turnId: string): void => {
-    if (stream.streamStatus !== "idle") return;
-
-    const turn = [...session.turns, ...session.undoneTurns].find((item) => item.id === turnId);
-    if (turn) composerDraft.replaceContentParts(turn.userMessage.contentParts);
+    if (!idle) return;
+    restoreDraftFrom([...session.turns, ...session.undoneTurns].find((turn) => turn.id === turnId));
     stream.revertToMessage(turnId);
   };
 
   const handleRestoreUndoneTurn = (turnId: string): void => {
-    if (stream.streamStatus !== "idle") return;
-
-    const restoredTurnIndex = session.undoneTurns.findIndex((turn) => turn.id === turnId);
-    composerDraft.replaceContentParts(session.undoneTurns[restoredTurnIndex + 1]?.userMessage.contentParts ?? []);
+    if (!idle) return;
+    const restoredIndex = session.undoneTurns.findIndex((turn) => turn.id === turnId);
+    restoreDraftFrom(session.undoneTurns[restoredIndex + 1]);
     stream.revertToMessage(turnId);
   };
 
-  const handleUndoneDrawerHeightChange = useCallback((height: number): void => {
+  const handleUndoneDrawerHeightChange = (height: number): void => {
     setUndoneDrawerHeight((current) => (Math.abs(current - height) < 0.5 ? current : height));
-  }, []);
+  };
 
   return (
-    <>
+    <ComposerContext value={composer}>
       <SessionLayout
-        appEnvironment={appEnvironment}
-        attachmentDropOverlayVisible={composerAttachments.isDraggingFiles}
-        attachmentDropZoneProps={composerAttachments.dropZoneProps}
-        composer={
-          modelSelection.isPending ? (
-            <SessionComposerSkeleton />
-          ) : (
-            <SessionComposer
-              key={`${composerDraftKey}:${composerDraft.revision}`}
-              attachments={composerAttachments}
-              disabled={composerDisabled}
-              draft={composerDraft}
-              onInterrupt={stream.stopStreaming}
-              onSubmit={stream.submitMessage}
-              projectPath={session.projectPath}
-              slashCommandActions={{...stream.slashCommandActions, redo: handleRedo, undo: handleUndo}}
-              streamStatus={stream.streamStatus}
-              toolbarControls={
-                <div className="flex items-center gap-2">
-                  <SessionContextIndicator context={stream.liveContext ?? session.context} />
-                  <ModelPicker
-                    selectedModel={modelSelection.selectedModelDetails}
-                    disabled={composerDisabled}
-                    models={modelSelection.availableModels}
-                    onModelChange={handleModelChange}
-                  />
-                  {thinkingLevels.length > 0 && (
-                    <ThinkingLevelPicker
-                      disabled={composerDisabled}
-                      onThinkingLevelChange={modelSelection.selectThinkingLevel}
-                      selectedThinkingLabel={modelSelection.selectedThinkingLabel}
-                      selectedThinkingLevel={modelSelection.modelReference?.thinkingLevel}
-                      thinkingLevels={thinkingLevels}
-                    />
-                  )}
-                </div>
-              }
-              topExtension={
-                <UndoneTurnsDrawer
-                  disabled={composerActionDisabled}
-                  onHeightChange={handleUndoneDrawerHeightChange}
-                  onRevertToMessage={handleRestoreUndoneTurn}
-                  turns={session.undoneTurns}
-                />
-              }
-            />
-          )
+        {...composer.attachments.dropZoneProps}
+        aside={<WorkspacePanel projectPath={session.projectPath} sessionId={session.id} />}
+        overlay={
+          <>
+            <SessionViewActions>
+              <WorkspacePanelToggle sessionId={session.id} />
+            </SessionViewActions>
+            {composer.attachments.isDraggingFiles && <AttachmentDropOverlay />}
+          </>
         }
-        timeline={
-          <SessionTimeline
-            key={session.id}
-            bottomOverlayHeight={undoneDrawerHeight}
-            compacting={stream.streamStatus === "compacting"}
-            isStreaming={stream.streamStatus === "streaming" || stream.streamStatus === "compacting"}
-            items={stream.committedTimelineItems}
-            liveItems={stream.liveTimelineItems}
-            onRevertToMessage={handleRevertToMessage}
-            sessionId={session.id}
-            streamError={stream.streamError}
-          />
-        }
-        title={
-          renaming ? (
-            <input
-              className="block h-5 min-w-0 w-64 truncate border-0 bg-transparent p-0 text-sm font-medium leading-5 text-ink outline-none"
-              onBlur={handleRenameBlur}
-              onChange={handleRenameChange}
-              onClick={handleRenameClick}
-              onFocus={handleRenameFocus}
-              onKeyDown={handleRenameKeyDown}
-              ref={renameInputRef}
-              value={draftName}
-            />
+      >
+        <SessionHeader actions={<SessionActionsMenu onRename={startRenaming} projectPath={session.projectPath} sessionId={session.id} sessionTitle={session.title} />}>
+          {renaming ? (
+            <input {...renameInputProps} className="block h-5 min-w-0 w-64 truncate border-0 bg-transparent p-0 text-sm font-medium leading-5 text-ink outline-none" />
           ) : (
             <SessionTitleText className="block truncate" title={session.title} />
-          )
-        }
-        viewActions={<WorkspacePanelToggle sessionId={session.id} />}
-        titleActions={<SessionActionsMenu onRename={startRenaming} projectPath={session.projectPath} sessionId={session.id} sessionTitle={session.title} />}
-        workspacePanel={<WorkspacePanel appEnvironment={appEnvironment} projectPath={session.projectPath} sessionId={session.id} />}
-      />
+          )}
+        </SessionHeader>
+
+        <SessionTimeline
+          key={session.id}
+          bottomOverlayHeight={undoneDrawerHeight}
+          compacting={stream.streamStatus === "compacting"}
+          isStreaming={streaming}
+          items={stream.committedTimelineItems}
+          liveItems={stream.liveTimelineItems}
+          onRevertToMessage={handleRevertToMessage}
+          sessionId={session.id}
+          streamError={stream.streamError}
+        />
+
+        {composer.isPending ? (
+          <SessionComposerSkeleton />
+        ) : (
+          <SessionComposer
+            key={`${composer.draftKey}:${composer.draft.revision}`}
+            onInterrupt={stream.stopStreaming}
+            onSubmit={stream.submitMessage}
+            slashCommandActions={{...stream.slashCommandActions, redo: handleRedo, undo: handleUndo}}
+            streamStatus={stream.streamStatus}
+            topExtension={
+              <UndoneTurnsDrawer
+                disabled={composer.disabled || !idle}
+                onHeightChange={handleUndoneDrawerHeightChange}
+                onRevertToMessage={handleRestoreUndoneTurn}
+                turns={session.undoneTurns}
+              />
+            }
+          >
+            <SessionContextIndicator context={stream.liveContext ?? session.context} />
+            <ModelPicker />
+            <ThinkingLevelPicker />
+          </SessionComposer>
+        )}
+      </SessionLayout>
+
       <CheckpointConflictDialog
         onCancel={stream.checkpointConflict.cancel}
         onConfirm={stream.checkpointConflict.confirm}
         open={stream.checkpointConflict.open}
         reason={stream.checkpointConflict.reason}
       />
-    </>
+    </ComposerContext>
   );
 }
 
 interface SessionPageProps {
-  readonly appEnvironment: AppEnvironment;
   readonly sessionId: string;
 }
 
 export default function SessionPage(props: SessionPageProps) {
-  const {appEnvironment, sessionId} = props;
-
+  const {sessionId} = props;
   const setActiveSession = useSessionLiveStore((state) => state.setActiveSession);
   const {data: session, error} = useSession(sessionId);
 
@@ -248,17 +175,15 @@ export default function SessionPage(props: SessionPageProps) {
     return () => setActiveSession(null);
   });
 
-  if (!session) {
-    if (error) {
-      return (
-        <div className="grid flex-1 place-items-center px-6 py-10">
-          <p className="text-sm text-danger-ink">Unable to load this session.</p>
-        </div>
-      );
-    }
+  if (session) return <SessionConversation session={session} />;
 
-    return <SessionLoading appEnvironment={appEnvironment} sessionId={sessionId} />;
+  if (error) {
+    return (
+      <div className="grid flex-1 place-items-center px-6 py-10">
+        <p className="text-sm text-danger-ink">Unable to load this session.</p>
+      </div>
+    );
   }
 
-  return <SessionConversation appEnvironment={appEnvironment} session={session} />;
+  return <SessionPageSkeleton sessionId={sessionId} />;
 }

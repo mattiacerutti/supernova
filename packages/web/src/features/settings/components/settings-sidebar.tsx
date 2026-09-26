@@ -1,11 +1,11 @@
 import {Link} from "@tanstack/react-router";
 import Icon from "@/components/ui/icon";
 import {cn} from "@/lib/cn";
-import {settingsSections} from "@/features/settings/data/settings-sections";
-import type {SettingsSectionId} from "@/features/settings/data/settings-sections";
+import {settingsSections} from "@/features/settings/pages/settings-sections";
+import type {SettingsSectionId} from "@/features/settings/pages/settings-sections";
 
 interface SettingsSidebarProps {
-  activeSectionId: SettingsSectionId;
+  readonly activeSectionId: SettingsSectionId;
 }
 
 export default function SettingsSidebar(props: SettingsSidebarProps) {

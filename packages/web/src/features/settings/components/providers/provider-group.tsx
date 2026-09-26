@@ -3,10 +3,10 @@ import {SettingsGroup} from "@/features/settings/components/settings-group";
 import ProviderRow from "@/features/settings/components/providers/provider-row";
 
 interface ProviderGroupProps {
-  title: string;
-  providers: readonly Provider[];
-  onConnect: (provider: Provider) => void;
-  onDisconnect: (provider: Provider) => Promise<void>;
+  readonly title: string;
+  readonly providers: readonly Provider[];
+  readonly onConnect: (provider: Provider) => void;
+  readonly onDisconnect: (provider: Provider) => Promise<void>;
 }
 
 export default function ProviderGroup(props: ProviderGroupProps) {

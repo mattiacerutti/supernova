@@ -29,11 +29,11 @@ const iconSizeClasses: Record<ButtonSize, string> = {
 };
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  as?: "button" | "div";
-  children: ReactNode;
-  shape?: ButtonShape;
-  size?: ButtonSize;
-  variant?: ButtonVariant;
+  readonly as?: "button" | "div";
+  readonly children: ReactNode;
+  readonly shape?: ButtonShape;
+  readonly size?: ButtonSize;
+  readonly variant?: ButtonVariant;
 }
 
 export default function Button(props: ButtonProps) {

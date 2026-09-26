@@ -1,13 +1,13 @@
 import {useState} from "react";
 import IconButton from "@/components/ui/icon-button";
-import {showToast} from "@/components/ui/toast-manager";
+import {showToast} from "@/lib/toast";
 import {cn} from "@/lib/cn";
 import UpdateInstallDialog from "@/features/updates/components/update-install-dialog";
 import UpdateStatusIcon from "@/features/updates/components/update-status-icon";
 import {useDesktopUpdate} from "@/features/updates/hooks/use-desktop-update";
 
 interface UpdateButtonProps {
-  className?: string;
+  readonly className?: string;
 }
 
 export default function UpdateButton(props: UpdateButtonProps) {

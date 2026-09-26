@@ -1,4 +1,4 @@
-import type {ThemeVariant} from "@/features/settings/lib/themes";
+import type {ThemeVariant} from "@/lib/themes/theme";
 import {cn} from "@/lib/cn";
 
 function withAlpha(color: string, opacity: number): string {
@@ -6,8 +6,8 @@ function withAlpha(color: string, opacity: number): string {
 }
 
 interface ThemePreviewProps {
-  className?: string;
-  variant: ThemeVariant;
+  readonly className?: string;
+  readonly variant: ThemeVariant;
 }
 
 export default function ThemePreview(props: ThemePreviewProps) {

@@ -1,5 +1,5 @@
 import {createFileTreeIconResolver, getBuiltInSpriteSheet} from "@pierre/trees";
-import {useMountEffect} from "@/lib/use-mount-effect";
+import {useMountEffect} from "@/hooks/use-mount-effect";
 import {cn} from "@/lib/cn";
 
 const SPRITE_ID = "workspace-file-icon-sprite";

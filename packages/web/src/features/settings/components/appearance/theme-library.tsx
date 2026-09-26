@@ -1,8 +1,8 @@
 import type {CSSProperties} from "react";
 import Button from "@/components/ui/button";
-import {appThemes} from "@/features/settings/lib/themes";
-import type {ThemeVariant} from "@/features/settings/lib/themes";
-import {useAppearanceStore} from "@/features/settings/stores/appearance-store";
+import {appThemes} from "@/lib/themes/theme";
+import type {ThemeVariant} from "@/lib/themes/theme";
+import {useSettingsStore} from "@/stores/settings-store";
 import {cn} from "@/lib/cn";
 
 interface TileSpec {
@@ -39,9 +39,9 @@ function getTileFillStyle(variant: ThemeVariant): CSSProperties {
 }
 
 export default function ThemeLibrary() {
-  const resolvedMode = useAppearanceStore((state) => state.resolvedMode);
-  const setThemeId = useAppearanceStore((state) => state.setThemeId);
-  const themeId = useAppearanceStore((state) => state.themeId);
+  const resolvedMode = useSettingsStore((state) => state.resolvedMode);
+  const setThemeId = useSettingsStore((state) => state.setThemeId);
+  const themeId = useSettingsStore((state) => state.themeId);
 
   return (
     <div aria-label="Color palette" className="grid grid-cols-3 gap-3" role="radiogroup">

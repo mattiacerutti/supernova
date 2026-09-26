@@ -9,18 +9,46 @@ Conventions for `packages/web`. See [Coding standards](coding-standards.md) for 
 
 ## Project structure and architecture
 
-- Maintain feature-first organization under `src/features/<feature>`.
-- Feature code lives under `src/features/<feature>/{pages,components,hooks,stores,types,lib,utils}` as needed.
-- Route/page-level components live in `src/features/<feature>/pages`.
-- Feature-specific UI lives in `src/features/<feature>/components`, grouped by domain when a flat components folder becomes hard to navigate.
-- Feature hooks live in `src/features/<feature>/hooks`.
-- API hooks live in `src/features/<feature>/hooks/api`, grouped by domain when a feature has multiple query/mutation families.
-- Feature `lib` folders contain feature-specific domain logic, state transformations, mappers, parsers, and other meaningful behavior that is not UI or React-specific. The test for `lib` is whether the output stands on its own: a tree, a parsed patch, a mapped record that any consumer could use. A helper that only shapes one component's render input from that component's own state belongs in the component file, even when it is pure; it has no meaning without the component and moving it out only hides where it is used.
-- Feature `utils` folders contain small, generic helpers for that feature, such as formatting or simple value normalization. If a utility starts encoding domain behavior, move it to `lib`.
-- Shared reusable UI lives in `src/components`; shared UI primitives live in `src/components/ui`.
-- Shared non-UI utilities live in `src/lib`.
-- App-level composition, routing, and shell code lives in `src/app`.
-- RPC transport/client code lives in `src/rpc`.
+The package follows [bulletproof-react](https://github.com/alan2207/bulletproof-react): feature-first, with a small set of shared top-level folders. When something has no obvious home, check that reference before inventing one.
+
+```
+src/
+  api/          app-wide server data (configuration); same rules as a feature api/ folder
+  app/          bootstrap and composition: app, providers, router, routes, layout/ (shell + sidebar), session-events-provider
+  components/   shared UI; layouts/ for page shells, ui/ for design-system primitives
+  config/       runtime constants (app environment)
+  features/     product areas: projects, sessions, settings, updates, workspace
+  hooks/        shared hooks
+  lib/          helpers used across features (cn, toast, project-paths) and preconfigured dependencies (diffs/, themes/)
+  rpc/          transport and Effect RPC client
+  stores/       app-wide Zustand stores
+```
+
+Deliberate deviations from the reference:
+
+- Features use `lib/` rather than `utils/`, and keep their route-level components in `pages/` (the guide puts them under `app/routes`).
+- Cross-feature imports of `components/` and `types/` are allowed; the guide forbids all of them. Composing every feature relationship in `app/` would mean render props through the sidebar and session page for no gain.
+- Single components are default exports; props and options fields are `readonly`.
+
+### Features
+
+A feature owns a screen or a panel a user would name. Layout regions (sidebar, titlebar) and app-wide state are not features; they live in `app/` and `stores/`. A feature has only the folders it needs, from this fixed list:
+
+| Folder        | Holds                                                                                                                                                                                                                                                                                                 |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `api/`        | Server access. One file per operation, named after it (`get-session.ts`, `rename-session.ts`), exporting the hook and, when other code needs it, `getXQueryOptions`. `query-keys.ts` holds one `xKeys` object per feature. Keep `@/rpc` imports here so components and hooks never see the transport. |
+| `components/` | Feature UI. Subfolders are UI regions (`composer/`, `timeline/`); a file is either inside a region folder or shared by several regions, never a sibling of a folder that describes it.                                                                                                                |
+| `hooks/`      | Feature hooks that are not server access.                                                                                                                                                                                                                                                             |
+| `lib/`        | Domain logic that is not UI or React-specific: parsers, builders, mappers. The test for `lib` is whether the output stands on its own. A helper that only shapes one component's render input belongs in that component file.                                                                         |
+| `pages/`      | Route-level components and anything only they compose (a settings section registry, for example).                                                                                                                                                                                                     |
+| `stores/`     | Feature-scoped Zustand stores. File `x-store.ts` exports `useXStore`. Stores hold client state; the one exception that takes the transport as a parameter is `session-live-store` (see [Session runtime](session-runtime.md)).                                                                        |
+| `types/`      | A domain model shared by several files in the feature. Types with one consumer live next to it.                                                                                                                                                                                                       |
+
+Cross-feature imports are limited to another feature's `components/` and `types/`; its `api/`, `hooks/`, `lib/`, `pages/`, and `stores/` are private. Shared code under `api/`, `components/`, `config/`, `hooks/`, `lib/`, and `stores/` never imports from `features/`; composition happens in `app/`. ESLint enforces both rules and kebab-case filenames.
+
+Keep folders small enough to read at a glance; around five loose files is the point to group. Group by what the files are for, and reuse the same names at every level so a concern can be traced by name: `sessions` uses `composer/`, `conversation/`, `sidebar/`, and `timeline/` under `api/`, `components/`, `hooks/`, `lib/`, and `stores/` alike, and inside those `editor/`, `toolbar/`, `rows/`, `work/`, and so on. Files shared by several subfolders stay at the parent level; that is the only reason a file sits beside folders. `components/ui` and `app/` are exempt: one is a flat catalogue by design, the other is bootstrap.
+
+A helper earns a place in `lib/` when several features use it. Something used by one feature belongs in that feature's `lib/`, even if it looks generic.
 
 ## Code standards
 
@@ -28,13 +56,18 @@ Conventions for `packages/web`. See [Coding standards](coding-standards.md) for 
 - Co-locate state with its owner and derive computed values instead of storing them. Do not call `useEffect` directly.
 - The web build enables React Compiler. Avoid `useMemo` and `useCallback` unless there is a specific need; React 19 alone does not provide automatic memoization.
 - React 19 accepts refs as props. Avoid `forwardRef` unless required for interop.
-- Avoid prop drilling; lift shared data to a feature-level context or custom hook. Keep hook names descriptive (`useLoginWithEmail`, `useAuthStatus`).
+- Avoid prop drilling; lift shared data to a feature-level context or custom hook. Keep hook names descriptive (`useLoginWithEmail`, `useAuthStatus`). The app environment is a constant from `@/config/app-environment`, never a prop.
 - Avoid duplicating mutation result data into local state when it can be derived from the mutation result.
 
 ### Components and hooks
 
-- Default-export UI components as `export default function Component(props: ComponentProps) { ... }`; define handlers as `const handleX = () => {}` inside the component.
-- If a component has a named props type or interface, place that type directly above the component declaration.
+- Default-export UI components as `export default function Component(props: ComponentProps) { ... }`; define handlers as `const handleX = () => {}` inside the component. Compound components with several named parts (`Menu`/`MenuItem`, `SidebarLayout`/`SidebarLayoutSidebar`) use named exports.
+- Every component has an `interface XProps` with `readonly` fields directly above it; no inline `props: {…}` types. Hook options are `interface UseXOptions`.
+- Layouts are compound components with children and part components, not render-prop slots.
+- A component whose props grow past a handful, or that would take a "controller" object, reads from a feature context instead (`ComposerContext` from `useComposer`).
+- Hooks that hand back DOM handlers return one spreadable `…Props` object (`useInlineRename().inputProps`), not a list of callbacks.
+- Do not add hooks that only re-export store selectors; call the store.
+- Keep components under roughly 250 lines. Split by extracting a part component or a behavior hook.
 - In files with multiple components and helpers, order declarations from top to bottom as helpers, non-exported components, then exported component.
 - Prefer shared components before creating feature-local variants; only fork when the shared version cannot be extended cleanly.
 - When you need to render conditional UI, prefer `condition && <Component />` over `condition ? <Component /> : null`.
@@ -43,6 +76,7 @@ Conventions for `packages/web`. See [Coding standards](coding-standards.md) for 
 ### UI and Styling rules
 
 - Prefer primitives from `@/components/ui` before creating custom UI or using default html elements.
+- `components/ui` holds design-system primitives only: controls and surfaces that make sense in any feature. A component that exists for one feature's screen lives in that feature, even when it is built like a primitive; promote it when a second feature needs it.
 - Only override primitive styles such as hover effects, text colors, spacing, or borders if explicitly requested by the user.
 - When designing new UI, respect the app's existing design language for colors, typography, icon/text sizes, layout positioning, interaction flows, motion, and animation timing.
 - Use semantic tailwind utilities (`text-xs`, `p-2`, `rounded-full`, etc.) over arbitrary pixel/rem size. Avoid things like `text-[10px]`, `p-[1.3rem]`, `rounded-[13px]`.
@@ -51,9 +85,10 @@ Conventions for `packages/web`. See [Coding standards](coding-standards.md) for 
 
 ### RPC hooks
 
-- Use `effect-query` for RPC-backed React Query hooks.
+- Use `effect-query` for RPC-backed React Query hooks, inside the feature's `api/` folder.
 - Prefer `eq.queryOptions` and `eq.mutationOptions` over manually wrapping RPC calls with an imperative client runner.
-- Use `Effect.gen` for RPC effects and get the RPC client from `RpcProtocolClientService` so typed RPC failures are preserved.
+- Get the RPC client from `RpcProtocolClientService` so typed RPC failures are preserved.
+- Query keys come from the feature's `xKeys` object, shaped `[feature, ...scope]`, and are read from `queryOptions().queryKey` where an options object exists. Invalidate with the parent key (`sessionKeys.lists()`), never a literal array.
 
 ## Testing
 
@@ -67,7 +102,7 @@ See [Development](development.md#verification) for verification and the test wor
 
 - Prefer local component state for UI-local state.
 - Use Zustand for shared client state that spans multiple components or feature boundaries.
-- Keep Zustand stores feature-scoped under `src/features/<feature>/stores` unless the state is truly app-wide.
+- Keep Zustand stores feature-scoped under `src/features/<feature>/stores`; app-wide state (settings, sidebar) lives in `src/stores`.
 - Derive values from store state when possible instead of duplicating derived state.
 
 ## UI language and design style

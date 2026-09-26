@@ -6,15 +6,13 @@ import Icon from "@/components/ui/icon";
 import IconButton from "@/components/ui/icon-button";
 import Menu, {MenuItem} from "@/components/ui/menu";
 import FileIcon from "@/features/workspace/components/file-tree/file-icon";
-import ChangesTab from "@/features/workspace/tabs/changes-tab";
-import FilesTab from "@/features/workspace/tabs/files-tab";
-import {minWorkspacePanelWidth} from "@/features/workspace/lib/workspace-panel-width";
-import {EMPTY_LAYOUT, tabKind, useWorkspacePanelStore, WORKSPACE_TAB_KINDS} from "@/features/workspace/stores/workspace-panel-store";
+import ChangesTab from "@/features/workspace/components/tabs/changes-tab";
+import FilesTab from "@/features/workspace/components/tabs/files-tab";
+import {EMPTY_LAYOUT, MIN_WORKSPACE_PANEL_WIDTH, tabKind, useWorkspacePanelStore, WORKSPACE_TAB_KINDS} from "@/features/workspace/stores/workspace-panel-store";
 import type {WorkspacePanelTab, WorkspacePanelTabKind} from "@/features/workspace/types/workspace-panel";
 import {useDragResize} from "@/hooks/use-drag-resize";
-import type {AppEnvironment} from "@/lib/app-environment";
 import {cn} from "@/lib/cn";
-import {clampedPanelWidth, maxPanelWidth} from "@/lib/panel-layout";
+import {clampedPanelWidth, maxPanelWidth} from "@/components/layouts/panel-layout";
 
 const WORKSPACE_TAB_KIND_NAMES = Object.keys(WORKSPACE_TAB_KINDS) as readonly WorkspacePanelTabKind[];
 
@@ -149,24 +147,22 @@ function WorkspacePanelContent(props: WorkspacePanelContentProps) {
 }
 
 interface WorkspacePanelProps {
-  readonly appEnvironment: AppEnvironment;
   readonly projectPath: string;
   readonly sessionId: string;
 }
 
 export default function WorkspacePanel(props: WorkspacePanelProps) {
-  const {appEnvironment, projectPath, sessionId} = props;
+  const {projectPath, sessionId} = props;
   const panelRef = useRef<HTMLDivElement>(null);
   const open = useWorkspacePanelStore((state) => (state.layouts[sessionId] ?? EMPTY_LAYOUT).open);
   const storedWidth = useWorkspacePanelStore((state) => state.width);
   const setWidth = useWorkspacePanelStore((state) => state.setWidth);
 
-  const minWidth = minWorkspacePanelWidth(appEnvironment);
-  const width = Math.max(storedWidth, minWidth);
-  const panelWidth = clampedPanelWidth(width, minWidth);
+  const width = Math.max(storedWidth, MIN_WORKSPACE_PANEL_WIDTH);
+  const panelWidth = clampedPanelWidth(width, MIN_WORKSPACE_PANEL_WIDTH);
   const handlePointerDown = useDragResize((_, deltaX) => {
     const rowWidth = panelRef.current?.parentElement?.clientWidth ?? window.innerWidth;
-    setWidth(width - deltaX, minWidth, maxPanelWidth(rowWidth, minWidth));
+    setWidth(width - deltaX, MIN_WORKSPACE_PANEL_WIDTH, maxPanelWidth(rowWidth, MIN_WORKSPACE_PANEL_WIDTH));
   });
 
   return (

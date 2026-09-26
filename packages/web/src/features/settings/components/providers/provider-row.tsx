@@ -14,9 +14,9 @@ function getProviderSourceLabel(provider: Provider): string | undefined {
 }
 
 interface ProviderRowProps {
-  provider: Provider;
-  onConnect: (provider: Provider) => void;
-  onDisconnect: (provider: Provider) => Promise<void>;
+  readonly provider: Provider;
+  readonly onConnect: (provider: Provider) => void;
+  readonly onDisconnect: (provider: Provider) => Promise<void>;
 }
 
 export default function ProviderRow(props: ProviderRowProps) {

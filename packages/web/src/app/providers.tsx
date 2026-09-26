@@ -1,7 +1,7 @@
 import {QueryClient, QueryClientProvider} from "@tanstack/react-query";
 import {useState} from "react";
 import ToastProvider from "@/components/ui/toast";
-import SessionEventsProvider from "@/features/sessions/components/session-events-provider";
+import SessionEventsProvider from "@/app/session-events-provider";
 import type {RpcClient} from "@/rpc/transport/protocol";
 import RpcProvider from "@/rpc/provider";
 

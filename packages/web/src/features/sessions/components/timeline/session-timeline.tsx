@@ -1,17 +1,17 @@
 import {useMessageScroller, useMessageScrollerScrollable} from "@shadcn/react/message-scroller";
 import {defaultRangeExtractor, elementScroll, useVirtualizer} from "@tanstack/react-virtual";
 import type {VirtualItem} from "@tanstack/react-virtual";
-import {animate, AnimatePresence, motion, motionValue, useReducedMotion} from "framer-motion";
+import {animate, motionValue, useReducedMotion} from "framer-motion";
 import type {MotionValue} from "framer-motion";
 import {useCallback, useLayoutEffect, useRef, useState} from "react";
 import type {KeyboardEvent, PointerEvent, UIEvent} from "react";
-import {Marker, MarkerContent} from "@/components/ui/marker";
-import MatrixLoader from "@/components/ui/matrix-loader";
-import {MessageScroller, MessageScrollerButton, MessageScrollerContent, MessageScrollerProvider, MessageScrollerViewport} from "@/components/ui/message-scroller";
-import SessionTimelineVirtualRow from "@/features/sessions/components/timeline/session-timeline-virtual-row";
-import type {TimelineVirtualItem} from "@/features/sessions/components/timeline/session-timeline-virtual-row";
+import {MessageScroller, MessageScrollerContent, MessageScrollerProvider, MessageScrollerViewport} from "@/features/sessions/components/timeline/viewport/message-scroller";
+import ScrollToEndButton from "@/features/sessions/components/timeline/viewport/scroll-to-end-button";
+import SessionTimelineVirtualRow from "@/features/sessions/components/timeline/rows/session-timeline-virtual-row";
+import StreamingStatus from "@/features/sessions/components/timeline/viewport/streaming-status";
+import TimelineEmptyState from "@/features/sessions/components/timeline/viewport/timeline-empty-state";
+import {buildTimelineRowKeys, buildTimelineRows, hasLiveTimelineOutput} from "@/features/sessions/lib/timeline/rows/timeline-rows";
 import type {SessionTimelineItem} from "@/features/sessions/types/session-timeline-item";
-import {cn} from "@/lib/cn";
 
 const TIMELINE_ANCHOR_SCROLL_DURATION_MS = 700;
 const TIMELINE_ANCHOR_TOP_MARGIN_PX = 24;
@@ -40,46 +40,6 @@ function animateCatchUp(element: HTMLElement, offset: number, current: Animation
     duration: TIMELINE_STREAM_SCROLL_ANIMATION_MS,
     easing: "cubic-bezier(0.22, 1, 0.36, 1)",
   });
-}
-
-function hasLiveTimelineOutput(items: readonly SessionTimelineItem[]): boolean {
-  return items.some((item) => {
-    if (item.type === "assistant") return item.event.content.trim().length > 0;
-    if (item.type === "work") return item.events.length > 0;
-    if (item.type === "reasoning") return item.event.content.trim().length > 0;
-    return item.type === "compaction";
-  });
-}
-
-/** Keeps virtual row identity stable when live event ids change on settlement. */
-function buildVirtualRowKeys(rows: readonly TimelineVirtualItem[]): readonly string[] {
-  const typeCounts = new Map<string, number>();
-  let turnIndex = -1;
-
-  return rows.map((item) => {
-    if (item.type === "user") {
-      turnIndex += 1;
-      typeCounts.clear();
-    }
-
-    const typeIndex = typeCounts.get(item.type) ?? 0;
-    typeCounts.set(item.type, typeIndex + 1);
-    return `turn:${turnIndex}:${item.type}:${typeIndex}`;
-  });
-}
-
-function buildTimelineRows(input: {
-  readonly items: readonly SessionTimelineItem[];
-  readonly liveItems: readonly SessionTimelineItem[];
-  readonly streamError: string | null;
-}): readonly TimelineVirtualItem[] {
-  const {items, liveItems, streamError} = input;
-  const rows: TimelineVirtualItem[] = [...items, ...liveItems];
-  const activeTurnId = liveItems[0]?.turnId ?? items.at(-1)?.turnId ?? "session";
-
-  if (streamError) rows.push({id: `stream-error:${activeTurnId}`, message: streamError, turnId: activeTurnId, type: "stream-error"});
-
-  return rows;
 }
 
 interface SessionTimelineProps {
@@ -119,9 +79,8 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
   const hasLiveOutput = hasLiveTimelineOutput(liveItems);
   if (!hasLiveOutput) streamAnimationReadyRef.current = false;
 
-  const statusLabel = isStreaming ? (compacting ? "Compacting context" : "Thinking") : null;
   const pullStatusIntoLastMessage = hasLiveOutput && liveItems.at(-1)?.spacing === "message";
-  const virtualRowKeys = buildVirtualRowKeys(timelineRows);
+  const virtualRowKeys = buildTimelineRowKeys(timelineRows);
   const [scrollButtonVisible, setScrollButtonVisible] = useState(false);
   const shouldReduceMotion = useReducedMotion();
 
@@ -440,45 +399,14 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
                   })}
                 </div>
               </div>
-              {statusLabel && (
-                <div
-                  className={cn("relative z-10 mx-auto w-full max-w-3xl bg-surface px-5 pb-8 md:px-8", pullStatusIntoLastMessage && "-mt-5")}
-                  data-timeline-footer="streaming-status"
-                  ref={footerRef}
-                >
-                  {compacting ? (
-                    <Marker role="status" variant="separator">
-                      <MarkerContent className="shimmer text-ink-faint">{statusLabel}</MarkerContent>
-                    </Marker>
-                  ) : (
-                    <p className="flex w-fit items-center gap-2.5 text-sm text-ink-faint" role="status">
-                      <MatrixLoader />
-                      <span className="shimmer">{statusLabel}</span>
-                    </p>
-                  )}
-                </div>
-              )}
+              {isStreaming && <StreamingStatus compacting={compacting} pullIntoLastMessage={pullStatusIntoLastMessage} ref={footerRef} />}
               <div aria-hidden="true" className="shrink-0" data-timeline-fake-space ref={anchorSpaceRef} />
             </MessageScrollerContent>
           </MessageScrollerViewport>
-          <AnimatePresence>
-            {scrollButtonVisible && (
-              <motion.div
-                animate={{opacity: 1, scale: 1, x: "-50%", y: 0, transition: {duration: 0.2, ease: [0.23, 1, 0.32, 1]}}}
-                className="absolute left-1/2 z-10"
-                exit={{opacity: 0, x: "-50%", transition: {duration: 0}}}
-                initial={{opacity: 0, scale: 0.95, x: "-50%", y: shouldReduceMotion ? 0 : "100%"}}
-                style={{bottom: `calc(1rem + ${bottomOverlayHeight}px)`}}
-              >
-                <MessageScrollerButton behavior="auto" className="static translate-x-0 bg-surface transition-colors hover:bg-surface-popover rtl:translate-x-0" />
-              </motion.div>
-            )}
-          </AnimatePresence>
+          <ScrollToEndButton bottomOffset={bottomOverlayHeight} visible={scrollButtonVisible} />
         </MessageScroller>
       ) : (
-        <div className="flex min-h-full items-center justify-center px-5 pb-8 pt-6 md:px-8">
-          <p className="text-center text-sm text-ink-faint">No messages yet.</p>
-        </div>
+        <TimelineEmptyState />
       )}
     </div>
   );
