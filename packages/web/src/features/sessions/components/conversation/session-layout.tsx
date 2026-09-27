@@ -81,16 +81,14 @@ export function SessionBody(props: SessionBodyProps) {
   return (
     <>
       {centered && <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col justify-end px-4 md:px-6">{hero}</div>}
-      {!centered && (
-        <motion.div
-          className="flex min-h-0 flex-1 flex-col"
-          animate={{opacity: 1, y: 0}}
-          initial={reduceMotion ? false : {opacity: 0, y: 25}}
-          transition={TIMELINE_ENTER_TRANSITION}
-        >
-          {timeline}
-        </motion.div>
-      )}
+      <motion.div
+        className={cn("flex min-h-0 flex-1 flex-col", centered && "hidden")}
+        animate={centered ? {opacity: 0, y: 25} : {opacity: 1, y: 0}}
+        initial={false}
+        transition={reduceMotion ? {duration: 0} : TIMELINE_ENTER_TRANSITION}
+      >
+        {!centered && timeline}
+      </motion.div>
       <motion.div className="relative z-20" layout={reduceMotion ? false : "position"} transition={DOCK_TRANSITION}>
         {composer}
       </motion.div>
