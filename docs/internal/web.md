@@ -9,7 +9,7 @@ Conventions for `packages/web`. See [Coding standards](coding-standards.md) for 
 
 ## Project structure and architecture
 
-The package follows [bulletproof-react](https://github.com/alan2207/bulletproof-react): feature-first, with a small set of shared top-level folders. When something has no obvious home, check that reference before inventing one.
+Feature-first, with a small set of typed shared folders. The layout follows [bulletproof-react](https://github.com/alan2207/bulletproof-react); check it before inventing a home for something.
 
 ```
 src/
@@ -24,11 +24,7 @@ src/
   stores/       app-wide Zustand stores
 ```
 
-Deliberate deviations from the reference:
-
-- Features use `lib/` rather than `utils/`, and keep their route-level components in `pages/` (the guide puts them under `app/routes`).
-- Cross-feature imports of `components/` and `types/` are allowed; the guide forbids all of them. Composing every feature relationship in `app/` would mean render props through the sidebar and session page for no gain.
-- Single components are default exports; props and options fields are `readonly`.
+Features keep route-level components in `pages/` and helpers in `lib/`. Single components are default exports; props and options fields are `readonly`.
 
 ### Features
 
@@ -42,7 +38,7 @@ A feature owns a screen or a panel a user would name. Layout regions (sidebar, t
 | `lib/`        | Domain logic that is not UI or React-specific: parsers, builders, mappers. The test for `lib` is whether the output stands on its own. A helper that only shapes one component's render input belongs in that component file.                                                                         |
 | `pages/`      | Route-level components and anything only they compose (a settings section registry, for example).                                                                                                                                                                                                     |
 | `stores/`     | Feature-scoped Zustand stores. File `x-store.ts` exports `useXStore`. Stores hold client state; the one exception that takes the transport as a parameter is `session-live-store` (see [Session runtime](session-runtime.md)).                                                                        |
-| `types/`      | A domain model shared by several files in the feature. Types with one consumer live next to it.                                                                                                                                                                                                       |
+| `types/`      | Nouns of the domain shared by several files in the feature (`Session`, `Project`, `TimelineItem`). A type that describes one component's props or one function's input lives with that component or function, however many files import it.                                                           |
 
 Cross-feature imports are limited to another feature's `components/` and `types/`; its `api/`, `hooks/`, `lib/`, `pages/`, and `stores/` are private. Shared code under `api/`, `components/`, `config/`, `hooks/`, `lib/`, and `stores/` never imports from `features/`; composition happens in `app/`. ESLint enforces both rules and kebab-case filenames.
 
@@ -104,6 +100,8 @@ See [Development](development.md#verification) for verification and the test wor
 - Use Zustand for shared client state that spans multiple components or feature boundaries.
 - Keep Zustand stores feature-scoped under `src/features/<feature>/stores`; app-wide state (settings, sidebar) lives in `src/stores`.
 - Derive values from store state when possible instead of duplicating derived state.
+- Store actions take data and change state. They do not take callbacks, navigate, show toasts, or otherwise reach into the UI; a component reads store state and reacts to it.
+- `session-live-store` and `api/conversation/session-events` are bound to the transport and already do network I/O and optimistic updates. Add behavior around them, in a hook or at the page, not inside them.
 
 ## UI language and design style
 

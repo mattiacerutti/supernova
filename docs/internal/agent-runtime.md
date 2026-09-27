@@ -1,50 +1,102 @@
 # Agent runtime
 
-See [Coding standards](coding-standards.md) for shared TypeScript rules.
+Conventions for `packages/agent-runtime`. See [Coding standards](coding-standards.md) for shared TypeScript rules and [Web](web.md) for the client-side counterpart; the two packages follow the same feature-first shape.
 
-## Purpose
+## Boundaries
 
-`packages/agent-runtime` owns the runtime integration layer for Supernova. It provides Effect services and live layers for provider SDKs, filesystem/runtime boundaries, sessions, streams, and related execution concerns.
+The package is plain TypeScript. Effect exists in `rpc/` only, because the wire protocol and contract schemas are Effect. Do not import `effect` anywhere else; `effect/Schema` is allowed for validating against contracts.
 
-This package should stay focused on runtime behavior and provider integration. Shared serializable contracts belong in `@supernova/contracts`, and UI or server routing concerns belong outside this package.
+Dependencies flow one way: `lib/` ← `pi/` ← `features/` ← `runtime.ts` ← `rpc/`. A feature never depends on another feature, by import or by injection: it does not import one, and its `Deps` does not name one or declare an interface another feature's class happens to satisfy. `pi/` and `lib/` never import a feature. ESLint enforces the import half; the injection half is on you.
 
-## Source Layout
+Shared serializable contracts belong in `@supernova/contracts`. UI and HTTP routing belong outside this package.
 
-- Keep public Effect service tags and service interfaces as flat files in `src/services`.
-- Keep concrete runtime/provider wiring and operation layers in `src/layers/<domain>`.
-- Put cross-layer implementation code in `src/layers/shared`, using `lib` for pure helpers and `internal` for private Effect services or layers shared by multiple layer domains.
-- Use examples like `src/layers/sessions`, `src/layers/session-runtime`, and `src/layers/folders` as the intended shape.
-- Keep public live layer files named `*-live.ts`.
-- Keep `*-live.ts` files focused on wiring service methods to implementation functions.
-- Put service operation implementations in an `operations` folder.
-- Put pure implementation-local mappers, resolvers, builders, and helpers in `lib` when they are shared by multiple operations or when the operation becomes too long and unreadable.
-- Put private implementation-local Effect services and layers in `internal`.
-- Keep serializable domain contracts, schemas, and RPC definitions in `@supernova/contracts`; do not duplicate them in this package.
+## Layout
 
-## Service Design
+```
+src/
+  index.ts        public exports: createAgentRuntime, agentRpcLayer
+  runtime.ts      composition root: constructs every class once and owns dispose()
+  rpc/            agent-rpc.ts maps each procedure to a feature function; edge.ts adapts thrown errors
+  lib/            stateless helpers with no Pi or product knowledge
+  pi/             the Pi SDK wrapper
+  features/       configuration, folders, projects, providers, session-runtime, sessions, workspace
+```
 
-- Keep live layer files thin; they should primarily wire services to implementation functions.
-- Put each service operation implementation in its own file.
-- Design for testability by introducing narrow, app-owned Effect services at meaningful runtime boundaries.
-- Prefer narrow capability services over broad gateway objects or raw third-party SDK dependencies.
-- Operations should depend only on the capabilities they actually need.
-- Name internal services by capability, not architecture vocabulary.
-- Use internal services only for boundaries that need production/test replacement, resource ownership, or runtime integration.
-- Treat internal boundaries as tools for testability and runtime ownership, not as a way to hide the chosen runtime from its own implementation.
-- Runtime-specific operations may directly orchestrate runtime objects and map runtime types when that remains readable and testable.
-- Small private internal services may keep their service tag, shape, and production `Live` layer in the same file.
+Where a file goes:
 
-## Code Standards
+- Used by several features, no Pi knowledge → `lib/`.
+- Wraps or maps Pi, regardless of how many features use it → `pi/`.
+- Used by one feature → that feature, even if it looks generic.
+- Used by exactly one file → that file.
+- Orchestrates several features (archive a session across `session-runtime` and `projects`, create a session and send its first message) → `rpc/agent-rpc.ts`. It is the only file that sees every feature. If the sequence is not a transport concern but a product rule, the two features are one feature; merge them rather than wiring one into the other.
 
-- Use package imports for source imports that must typecheck from dependent packages, such as `@supernova/agent-runtime/...`.
-- Avoid interfaces for local-only callback or object shapes unless they clarify a reused boundary or TypeScript requires them.
-- Avoid defensive overchecking when the operation boundary already guarantees the state.
+There is no `shared/`. A stateful class two features need is either Pi (`pi/`) or has no product owner; the second case has not occurred, so there is no folder for it.
+
+## Features
+
+```
+features/<name>/
+  <name>.ts     the feature class: one public method per RPC procedure
+  lib/          pure helpers used by several methods
+  <region>/     a stateful class with everything that serves it
+```
+
+Nothing else sits at a feature root.
+
+**The feature class** is named for the feature (`Sessions`, `Workspace`) and constructed once in `runtime.ts`. Dependencies arrive through the constructor as one `Deps` object: `new Providers({loginSessions, sdk})`. Methods take the contracts payload, return the contracts result, and throw the contracts error classes directly; no wrapping, no reclassification. Method names drop the feature noun: `sessions.create`, not `sessions.createSession`. A feature with no dependencies has no constructor.
+
+**`Deps`** is an interface naming what the class needs from `pi/`, `lib/`, and its own regions. Narrow the SDK with `Pick<PiSdk, "modelRuntime">` so tests construct the class with only the methods it calls. The tripwire: if a feature's test has to construct another feature to run, the boundary is wrong.
+
+**A region** exists only when the feature owns a second stateful class. Helpers alone go in `lib/`, not a region. Inside a region:
+
+- The class file(s) at the root, named for the thing (`session-pool.ts`, `login-sessions.ts`). A class that holds resources exposes `dispose()`.
+- `commands/` for functions the class dispatches to.
+- `lib/` for helpers that serve the region.
+- When the region's surface is a function rather than a class, the file takes the region's name (`tools/tools.ts`).
+
+Group a folder once it holds more than about five files, by what the files are for. `session-runtime/worker/commands/` holds six because a session can do six things.
+
+**Naming.** Files are kebab-case. A class is named for what it is, not the layer it sits in: `SessionWorker`, not `SessionRuntime` (the feature class has that name). Files ending in `-utils`, `-helpers`, `-manager`, `-service` are a smell; the path should carry the domain.
+
+## Errors
+
+Throw the tagged error classes from `@supernova/contracts`. They are the wire format; nothing else is needed inside a feature. `rpc/edge.ts` passes declared errors through and turns anything undeclared into the procedure's generic error with the cause attached. Use `lib/errors.ts` `errorMessage(cause, fallback)` to build messages from unknown causes.
+
+Checkpoint navigation is the one place errors are classified below the edge: `features/session-runtime/checkpoints/lib/checkpoint-error.ts` turns a workspace conflict into `CheckpointConflictError` so the client can offer a forced retry. See [Checkpoint system](checkpoint-system.md).
+
+## Streams
+
+Long-lived output is an `AsyncGenerator` built on `lib/event-bus.ts`. Subscribing registers immediately, so subscribe before triggering the work you want to observe. Consumers must `return()` or exit their `for await` to unsubscribe. The RPC edge converts with `Stream.fromAsyncIterable`.
+
+## `pi/`
+
+```
+pi/
+  sdk.ts              PiSdk interface and createPiSdk(); the one seam onto @earendil-works/pi-coding-agent
+  resource-cache.ts   per-project memo of loaded extensions, prompts, and skills
+  config/             resource-loader and settings policy
+  lib/                every Pi ↔ contracts mapping and behavior Pi lacks: turns, content parts, models, session snapshots
+```
+
+Reach Pi through `Pick<PiSdk, …>`. An object over part of the SDK earns a file only when it holds state or behavior Pi lacks: `resource-cache.ts` does; `openSessionById` is a `lib/` function; a rename of `modelRuntime.getModel` is nothing.
+
+Inside `pi/` names drop the `Pi` prefix. Outside it, values that hold Pi types keep it (`PiModel`, `PiSessionManager`, `buildPiTurns`) so the reader knows which side of the boundary they are on.
+
+## `features/session-runtime`
+
+Live execution: send, abort, compact, checkpoint navigation, the event stream. `sessions` is the durable record: create, load, rename. They are separate features because the Pi harness migration replaces this one and barely touches that one (see [Pi harness v2 migration](../pi-harness-v2-migration.md)). Do not reshape `worker/` internals ahead of the migration.
+
+- `worker/session-pool.ts` keeps one `SessionWorker` per active session.
+- `worker/session-worker.ts` owns the Pi `AgentSession` subscription, revisions, and the live turn.
+- `worker/commands/` are what the pool dispatches to a worker.
+- `checkpoints/` is the store, shadow repositories, and git plumbing; it moves as one unit under the migration.
+- `tools/` are the Pi custom tools registered on every agent session.
 
 ## Testing
 
 See [Development](development.md#verification) for verification and the test workflow.
 
-- Keep test folders aligned with layer boundaries under `src`, split by test category. For example, unit tests for `src/layers/session-runtime` should live under `tests/unit/layers/session-runtime`, and integration tests for `src/layers/folders` should live under `tests/integration/layers/folders`.
-- Add tests for critical runtime behavior, bug fixes, failure handling, stream/session lifecycle behavior, persistence, emitted events, and cleanup.
-- Prefer focused tests around operation boundaries, mapping logic, error handling, and runtime lifecycle behavior.
-- Prefer real in-memory dependencies, faux providers, and narrow Effect service replacements over broad SDK mocks.
+- Tests mirror `src` file for file under `tests/unit` and `tests/integration` (`src/pi/lib/turns/build-turns.ts` → `tests/unit/pi/lib/turns/build-turns.test.ts`). Fixtures live in `tests/support`, named for what they build.
+- Construct the feature class with `Deps` built from Pi's in-memory pieces (`SessionManager.inMemory()`, `registerFauxProvider`) or a temp directory. `tests/support/session-runtime.ts` builds `SessionRuntime` and `Sessions` this way.
+- Assert with `await expect(feature.method(input)).rejects.toMatchObject({_tag: "…"})`. No Effect in tests below `rpc/`.
+- Cover runtime behavior, failure handling, stream and session lifecycle, persistence, emitted events, and cleanup. Prefer real in-memory dependencies over mocks.

@@ -85,8 +85,8 @@ flowchart BT
         rpc[Agent RPC]
         sessions["SessionsService<br/>durable session operations"]
         runtimeService["SessionRuntimeService<br/>commands and global stream"]
-        pool[SessionRuntimePool]
-        runtime[PiSessionRuntime per session]
+        pool[SessionPool]
+        runtime[SessionWorker per session]
         agent[Pi AgentSession]
         manager[Pi SessionManager]
 
@@ -113,7 +113,7 @@ flowchart BT
 | State                         | Owner                         | Lifetime                        |
 | ----------------------------- | ----------------------------- | ------------------------------- |
 | Persisted session tree        | Pi `SessionManager`           | Durable                         |
-| Agent execution               | Server `PiSessionRuntime`     | Server process                  |
+| Agent execution               | Server `SessionWorker`     | Server process                  |
 | Active-turn projection        | Server `ActiveTurn`           | One accepted user turn          |
 | Committed browser session     | React Query                   | Browser cache                   |
 | Live browser status and turn  | Zustand session live store    | Browser process                 |
@@ -126,7 +126,7 @@ No full committed `Session` is duplicated into the live Zustand store. This is a
 
 ### Runtime creation and retention
 
-The server keeps a `SessionRuntimePool` keyed by session ID. A runtime is created when the first runtime command targets that session. The current pool has no idle eviction, so the runtime remains retained for the lifetime of that server runtime.
+The server keeps a `SessionPool` keyed by session ID. A runtime is created when the first runtime command targets that session. The current pool has no idle eviction, so the runtime remains retained for the lifetime of that server runtime.
 
 This gives each retained session:
 

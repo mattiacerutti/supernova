@@ -16,8 +16,8 @@ A checkpoint navigation succeeds only when the workspace restore completes befor
 ```mermaid
 flowchart LR
   CLIENT[Web client] --> RPC[Agent RPC]
-  RPC --> POOL[SessionRuntimePool]
-  POOL --> RUNTIME[PiSessionRuntime]
+  RPC --> POOL[SessionPool]
+  POOL --> RUNTIME[SessionWorker]
   RUNTIME --> PI[Pi SessionManager]
   RUNTIME --> STORE[CheckpointStore]
   STORE --> MANIFESTS[Checkpoint manifests]
@@ -459,7 +459,7 @@ Safety trees are not referenced after the restore call and are eventually eligib
 
 ### Conversation commit
 
-`navigateToCheckpoint()` calls `PiSessionRuntime.restoreCheckpoint()` before mutating Pi state, and only when both the current and target boundaries are captured. Only after restore succeeds, or is skipped because a boundary is uncovered, does it:
+`navigateToCheckpoint()` calls `SessionWorker.restoreCheckpoint()` before mutating Pi state, and only when both the current and target boundaries are captured. Only after restore succeeds, or is skipped because a boundary is uncovered, does it:
 
 1. Branch the Pi `SessionManager` to the target checkpoint entry.
 2. Append a checkpoint cursor preserving the redo leaf.
@@ -501,18 +501,18 @@ At session boundaries:
 - Checkpoint failures are not logged by the checkpoint system.
 
 `CheckpointNavigationError` is the union of those two and is the declared error for the undo,
-redo, and revert procedures. Navigation operations throw ordinary exceptions; the runtime
-service boundary wraps each command in `Effect.tryPromise` and classifies whatever was thrown
-with `asCheckpointNavigationError()`. That is the single place a navigation failure becomes a
-client-facing error.
+redo, and revert procedures. Navigation operations throw ordinary exceptions; the session-runtime
+feature's `undoCheckpoint`, `redoCheckpoint`, and `revertToMessage` catch them and classify
+whatever was thrown with `toCheckpointNavigationError()`. That is the single place a navigation
+failure becomes a client-facing error.
 
-The store uses `Promise<void>` rather than booleans so callers cannot accidentally treat a failed capture as a valid checkpoint. `PiSessionRuntime.createCheckpoint()` converts that rejection into a boundary status, which is the only place a capture failure is interpreted.
+The store uses `Promise<void>` rather than booleans so callers cannot accidentally treat a failed capture as a valid checkpoint. `SessionWorker.createCheckpoint()` converts that rejection into a boundary status, which is the only place a capture failure is interpreted.
 
 ## Session archival and cleanup
 
 Archiving a session follows this order:
 
-1. `AgentRpcLive` releases and disposes the session runtime.
+1. `the RPC edge` releases and disposes the session runtime.
 2. The Pi session file moves into the archive directory.
 3. `CheckpointStore.deleteSession()` runs as best-effort cleanup.
 
@@ -562,13 +562,13 @@ Objects available only through the source repository alternate remain dependent 
 
 ## Concurrency and lifecycle
 
-`SessionRuntimePool` retains one `PiSessionRuntime` per active session. Runtime work tracking prevents disposal from tearing down a Pi session while accepted work is still settling:
+`SessionPool` retains one `SessionWorker` per active session. Runtime work tracking prevents disposal from tearing down a Pi session while accepted work is still settling:
 
 - `beginWork()` creates a completion boundary.
 - `endWork()` releases it.
 - `dispose()` aborts active work, including work still opening its Pi session, waits for completion, unsubscribes, and disposes the Pi session.
 - Session archival releases the runtime before moving the session file or deleting checkpoint refs.
-- Runtime-layer shutdown disposes all retained runtimes.
+- Runtime shutdown disposes all retained runtimes.
 
 The checkpoint store serializes capture and restore per canonical project root with an
 in-process keyed lock. Concurrent sessions in the same project queue instead of observing

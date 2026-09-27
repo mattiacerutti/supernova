@@ -2,7 +2,7 @@ import {createServer} from "node:http";
 import type {Socket} from "node:net";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import {AgentRpcGroup} from "@supernova/contracts";
-import {AgentRpcLive, AgentRuntimeServicesLive} from "@supernova/agent-runtime";
+import {agentRpcLayer, createAgentRuntime} from "@supernova/agent-runtime";
 import {Context, Effect, Exit, Layer, Scope} from "effect";
 import {HttpRouter, HttpServer, HttpServerResponse} from "effect/unstable/http";
 import {RpcSerialization, RpcServer} from "effect/unstable/rpc";
@@ -10,19 +10,27 @@ import {RpcSerialization, RpcServer} from "effect/unstable/rpc";
 export const DEFAULT_HOST = "127.0.0.1";
 export const DEFAULT_PORT = 4317;
 
-const handlers = AgentRpcLive.pipe(Layer.provideMerge(AgentRuntimeServicesLive));
-const rpc = RpcServer.layerHttp({
-  group: AgentRpcGroup,
-  path: "/ws",
-  protocol: "websocket",
-  spanAttributes: {"rpc.system": "effect-rpc", "rpc.transport": "websocket"},
-  spanPrefix: "pi.ws.rpc",
-}).pipe(Layer.provide(handlers), Layer.provide(RpcSerialization.layerJson));
+/** The runtime is created once per server and disposed with the server's scope. */
+const routes = Layer.unwrap(
+  Effect.gen(function* () {
+    const runtime = yield* Effect.acquireRelease(
+      Effect.promise(() => createAgentRuntime()),
+      (created) => Effect.promise(() => created.dispose())
+    );
+    const rpc = RpcServer.layerHttp({
+      group: AgentRpcGroup,
+      path: "/ws",
+      protocol: "websocket",
+      spanAttributes: {"rpc.system": "effect-rpc", "rpc.transport": "websocket"},
+      spanPrefix: "pi.ws.rpc",
+    }).pipe(Layer.provide(agentRpcLayer(runtime)), Layer.provide(RpcSerialization.layerJson));
 
-const routes = Layer.mergeAll(
-  rpc,
-  HttpRouter.add("GET", "/health", Effect.succeed(HttpServerResponse.jsonUnsafe({ok: true}))),
-  HttpRouter.add("*", "*", Effect.succeed(HttpServerResponse.jsonUnsafe({error: "Not found"}, {status: 404})))
+    return Layer.mergeAll(
+      rpc,
+      HttpRouter.add("GET", "/health", Effect.succeed(HttpServerResponse.jsonUnsafe({ok: true}))),
+      HttpRouter.add("*", "*", Effect.succeed(HttpServerResponse.jsonUnsafe({error: "Not found"}, {status: 404})))
+    );
+  })
 );
 
 /** Parses a TCP port; zero asks the OS to allocate an available port. */
