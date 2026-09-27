@@ -1,6 +1,6 @@
 import type {ModelReference, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 import {useQueryClient} from "@tanstack/react-query";
-import type {CheckpointNavigationOutcome} from "@/features/sessions/stores/conversation/session-live-store";
+import type {CheckpointNavigationOutcome, StartSessionOutcome} from "@/features/sessions/stores/conversation/session-live-store";
 import {useSessionLiveStore} from "@/features/sessions/stores/conversation/session-live-store";
 import {useRpcClient} from "@/rpc/use-rpc-client";
 
@@ -8,6 +8,10 @@ interface SendMessageInput {
   readonly contentParts: readonly UserMessageContentPart[];
   readonly modelReference: ModelReference;
   readonly sessionId: string;
+}
+
+interface StartSessionInput extends SendMessageInput {
+  readonly projectPath: string;
 }
 
 interface CompactSessionInput {
@@ -29,6 +33,8 @@ export interface SessionActions {
   readonly redoCheckpoint: (input: CheckpointNavigationInput) => Promise<CheckpointNavigationOutcome>;
   readonly revertToMessage: (input: RevertToMessageInput) => Promise<CheckpointNavigationOutcome>;
   readonly sendMessage: (input: SendMessageInput) => void;
+  /** Creates a session under a client-chosen id with its first message; see `StartSessionOutcome`. */
+  readonly startSession: (input: StartSessionInput) => Promise<StartSessionOutcome>;
   readonly undoCheckpoint: (input: CheckpointNavigationInput) => Promise<CheckpointNavigationOutcome>;
 }
 
@@ -44,6 +50,7 @@ export function useSessionActions(): SessionActions {
   const redoCheckpoint = useSessionLiveStore((state) => state.redoCheckpoint);
   const revertToMessage = useSessionLiveStore((state) => state.revertToMessage);
   const sendMessage = useSessionLiveStore((state) => state.sendMessage);
+  const startSession = useSessionLiveStore((state) => state.startSession);
   const undoCheckpoint = useSessionLiveStore((state) => state.undoCheckpoint);
 
   return {
@@ -52,6 +59,7 @@ export function useSessionActions(): SessionActions {
     redoCheckpoint: (input) => redoCheckpoint({...input, queryClient, rpcClient}),
     revertToMessage: (input) => revertToMessage({...input, queryClient, rpcClient}),
     sendMessage: (input) => sendMessage({...input, queryClient, rpcClient}),
+    startSession: (input) => startSession({...input, queryClient, rpcClient}),
     undoCheckpoint: (input) => undoCheckpoint({...input, queryClient, rpcClient}),
   };
 }

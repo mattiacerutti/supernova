@@ -2,8 +2,8 @@ import {Outlet, useParams, useSearch} from "@tanstack/react-router";
 import AppLayout from "@/app/layout/app-layout";
 import {useProjectsStore} from "@/features/projects/stores/projects-store";
 import SettingsPage from "@/features/settings/pages/settings-page";
-import NewSessionPage from "@/features/sessions/pages/new-session-page";
 import SessionPage from "@/features/sessions/pages/session-page";
+import type {SessionPageTarget} from "@/features/sessions/pages/session-page";
 
 function EmptySessionState() {
   return (
@@ -29,20 +29,25 @@ export function HomeRoute() {
   return <EmptySessionState />;
 }
 
+/**
+ * Serves `/session/new` and `/session/$sessionId` with one page keyed by session id. A draft already carries the id
+ * its session will get, so sending the first message changes the URL without remounting the page.
+ */
 export function SessionRoute() {
-  const {sessionId} = useParams({from: "/home-layout/session/$sessionId"});
-
-  return <SessionPage key={sessionId} sessionId={sessionId} />;
-}
-
-export function NewSessionRoute() {
-  const search = useSearch({from: "/home-layout/session/new"}) as {projectId?: string};
+  const {sessionId} = useParams({strict: false});
+  const search = useSearch({strict: false}) as {draft?: string; projectId?: string};
   const projects = useProjectsStore((state) => state.projects);
-  const project = search.projectId ? projects.find((candidate) => candidate.id === search.projectId) : undefined;
 
-  if (!project) return <EmptySessionState />;
+  let target: SessionPageTarget | undefined;
+  if (sessionId !== undefined) target = {kind: "session", sessionId};
+  else {
+    const project = search.projectId ? projects.find((candidate) => candidate.id === search.projectId) : undefined;
+    if (project && search.draft) target = {kind: "new", projectName: project.name, projectPath: project.path, sessionId: search.draft};
+  }
 
-  return <NewSessionPage key={project.path} projectName={project.name} projectPath={project.path} />;
+  if (!target) return <EmptySessionState />;
+
+  return <SessionPage key={target.sessionId} target={target} />;
 }
 
 export function SettingsSectionRoute() {

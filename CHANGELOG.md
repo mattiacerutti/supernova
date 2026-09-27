@@ -10,6 +10,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+- Sending the first message of a new session now keeps the composer in place and slides it down into the session, instead of switching pages.
+
 ### Fixed
 
 - Fixed tool inputs staying hidden until execution instead of appearing as each tool call finishes generating.

@@ -1,3 +1,4 @@
+import {existsSync} from "node:fs";
 import {mkdtemp, readFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
@@ -74,5 +75,54 @@ describe("Pi sessions service", () => {
 
     expect(pi.refreshCount).toBe(1);
     expect(models).toEqual(expect.arrayContaining([expect.objectContaining({id: "claude-sonnet", name: "Claude Sonnet", providerId: "anthropic", providerName: "Anthropic"})]));
+  });
+});
+
+describe("creating a session under a client id", () => {
+  const runtimes: Array<{unregister: () => void}> = [];
+  const tempDirs: string[] = [];
+
+  afterEach(() => {
+    while (runtimes.length > 0) runtimes.pop()?.unregister();
+    cleanupTempDirs(tempDirs);
+  });
+
+  async function sessionDir(): Promise<string> {
+    const dir = await mkdtemp(join(tmpdir(), "supernova-sessions-"));
+    tempDirs.push(dir);
+    return dir;
+  }
+
+  it("uses the client's id and rejects a second session with it", async () => {
+    const pi = await createPiTestRuntime({sessionDir: await sessionDir()});
+    runtimes.push(pi);
+
+    const session = await pi.sessions.create({id: "client-chosen-id", projectPath: "/workspace"});
+
+    expect(session.id).toBe("client-chosen-id");
+    await expect(pi.sessions.create({id: "client-chosen-id", projectPath: "/workspace"})).rejects.toMatchObject({
+      _tag: "CreateSessionError",
+      message: "A session with this id already exists.",
+    });
+  });
+
+  it("rejects an id Pi would not accept as a file name", async () => {
+    const pi = await createPiTestRuntime({sessionDir: await sessionDir()});
+    runtimes.push(pi);
+
+    await expect(pi.sessions.create({id: "../escape", projectPath: "/workspace"})).rejects.toThrow();
+    expect(pi.getSession("../escape")).toBeUndefined();
+  });
+
+  it("deletes the session file", async () => {
+    const pi = await createPiTestRuntime({sessionDir: await sessionDir()});
+    runtimes.push(pi);
+    const session = await pi.sessions.create({projectPath: "/workspace"});
+    const path = pi.getSession(session.id)?.info.path ?? "";
+    expect(existsSync(path)).toBe(true);
+
+    await pi.sessions.delete({sessionId: session.id});
+
+    expect(existsSync(path)).toBe(false);
   });
 });

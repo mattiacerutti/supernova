@@ -46,7 +46,25 @@ export function agentRpcLayer(runtime: AgentRuntime) {
     cancelProviderLogin: (input) => runSync(() => providers.cancelLogin(input), oneOf(ProviderLoginError), fallback(ProviderLoginError, "Failed to cancel provider login.")),
     compactSession: (input) => Effect.promise(() => sessionRuntime.compact(input)),
     createFolder: (input) => run(() => folders.create(input), oneOf(FolderCreateError), fallback(FolderCreateError, "Failed to create folder.")),
-    createSession: (input) => run(() => sessions.create(input), oneOf(CreateSessionError), fallback(CreateSessionError, "Failed to create session.")),
+    createSession: ({id, message, projectPath}) =>
+      run(
+        async () => {
+          const session = await sessions.create({id, projectPath});
+          if (!message) return session;
+
+          // Setup is all-or-nothing: a session whose first turn cannot start is removed again.
+          try {
+            await sessionRuntime.sendMessage({...message, sessionId: session.id});
+          } catch (cause) {
+            await sessionRuntime.release({projectPath, sessionId: session.id});
+            await sessions.delete({sessionId: session.id});
+            throw new CreateSessionError({cause, message: errorMessage(cause, "Failed to start the session.")});
+          }
+          return session;
+        },
+        oneOf(CreateSessionError),
+        fallback(CreateSessionError, "Failed to create session.")
+      ),
     getConfiguration: (input) => runSync(() => configuration.get(input), oneOf(GetConfigurationError), fallback(GetConfigurationError, "Unable to load configuration.")),
     getSession: (input) =>
       run(async () => sessionRuntime.getCommittedSession(input) ?? sessions.get(input), oneOf(LoadSessionError), fallback(LoadSessionError, "Failed to load session.")),

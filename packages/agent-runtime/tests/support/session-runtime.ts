@@ -196,7 +196,8 @@ export async function createPiTestRuntime(input?: {
   };
   /** A `SessionManager` that keeps every created manager in memory so ids resolve without a sessions folder. */
   const sessionManagers = {
-    create: (projectPath: string) => rememberSession(input?.sessionDir ? SessionManager.create(projectPath, input.sessionDir) : SessionManager.inMemory(projectPath)),
+    create: (projectPath: string, _sessionDir: string | undefined, options?: {id?: string}) =>
+      rememberSession(input?.sessionDir ? SessionManager.create(projectPath, input.sessionDir, options) : SessionManager.inMemory(projectPath, options)),
     listAll: async () => [...sessions.values()].map((manager) => sessionRecord(manager).info),
     open: (path: string) => {
       openCount++;

@@ -36,9 +36,14 @@ export async function findPiSessionPath(sessionId: string, sessionsDir = join(ge
   return matches[0];
 }
 
-/** Opens a session by id. Fast path by filename; falls back to Pi's full listing when the file is elsewhere. */
+/** The session file for an id, or undefined when no session has it. Fast path by filename, then Pi's full listing. */
+export async function sessionPathById(sdk: Pick<PiSdk, "SessionManager">, sessionId: string): Promise<string | undefined> {
+  return (await findPiSessionPath(sessionId)) ?? (await sdk.SessionManager.listAll()).find((candidate) => candidate.id === sessionId)?.path;
+}
+
+/** Opens a session by id. */
 export async function openSessionById(sdk: Pick<PiSdk, "SessionManager">, sessionId: string): Promise<PiSessionManager> {
-  const path = (await findPiSessionPath(sessionId)) ?? (await sdk.SessionManager.listAll()).find((candidate) => candidate.id === sessionId)?.path;
+  const path = await sessionPathById(sdk, sessionId);
   if (!path) throw new Error("Session not found.");
 
   const manager = sdk.SessionManager.open(path);

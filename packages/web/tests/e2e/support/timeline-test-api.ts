@@ -9,6 +9,8 @@ export interface TimelineMockController {
   readonly breakForReasoning: () => void;
   readonly completeStream: () => void;
   readonly emitLines: (lineCount: number) => void;
+  /** Makes the next session creation fail with this message, as a server-side setup failure would. */
+  readonly failNextCreateSession: (message: string) => void;
   readonly getState: () => TimelineMockState;
 }
 

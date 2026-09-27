@@ -1,7 +1,7 @@
 import type {QueryClient} from "@tanstack/react-query";
 import {CheckpointConflictError, CheckpointUncapturedError} from "@supernova/contracts/session-runtime/procedures";
 import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
-import type {ModelReference, Session, SessionContextUsage, Turn, UserMessage, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {ModelReference, OutgoingMessage, Session, SessionContextUsage, Turn, UserMessage, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 import {create} from "zustand";
 import {useSettingsStore} from "@/stores/settings-store";
 import {showToast} from "@/lib/toast";
@@ -103,12 +103,33 @@ function reduceSessionEvent(entry: SessionLiveState, event: RevisionedSessionStr
   }
 }
 
+/** The session the server will create for a first message, shown until its first snapshot replaces it. */
+function createPendingSession(input: {projectPath: string; sessionId: string}): Session {
+  return {
+    id: input.sessionId,
+    context: {usedTokens: 0, contextWindow: 0},
+    projectPath: input.projectPath,
+    title: "Untitled session",
+    turns: [],
+    undoneTurns: [],
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+/** Whether the server created the session and accepted its first turn. On failure nothing of the session remains on the client. */
+export type StartSessionOutcome = {readonly status: "started"} | {readonly status: "failed"; readonly message: string};
+
 interface SendSessionMessageInput {
   readonly contentParts: readonly UserMessageContentPart[];
   readonly modelReference: ModelReference;
   readonly queryClient: QueryClient;
   readonly rpcClient: RpcClient;
   readonly sessionId: string;
+}
+
+/** The first message of a session that does not exist yet; the server creates it under `sessionId` with this message. */
+interface StartSessionInput extends SendSessionMessageInput {
+  readonly projectPath: string;
 }
 
 interface CompactSessionInput {
@@ -141,6 +162,7 @@ interface SessionLiveStoreState {
   readonly revertToMessage: (input: RevertToMessageInput) => Promise<CheckpointNavigationOutcome>;
   readonly sendMessage: (input: SendSessionMessageInput) => void;
   readonly setActiveSession: (sessionId: string | null) => void;
+  readonly startSession: (input: StartSessionInput) => Promise<StartSessionOutcome>;
   readonly undoCheckpoint: (input: CheckpointNavigationInput) => Promise<CheckpointNavigationOutcome>;
 }
 
@@ -177,22 +199,29 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
     }));
   };
 
-  const sendMessage = (input: SendSessionMessageInput): void => {
-    const {contentParts, modelReference, queryClient, rpcClient, sessionId} = input;
-    const current = get().sessions[sessionId];
-    if (current && current.status !== "idle") return;
-
+  /** Shows the user's message as a streaming turn before the server has accepted it. */
+  const beginOptimisticTurn = (input: SendSessionMessageInput): OutgoingMessage => {
+    const {contentParts, modelReference, sessionId} = input;
     const liveTurn = createInitialStreamTurn({contentParts, modelReference});
-    const previousSession = queryClient.getQueryData<Session>(sessionKeys.detail(sessionId));
-    const previousRevision = current?.revision ?? 0;
-    queryClient.setQueryData<Session>(sessionKeys.detail(sessionId), (session) => (session ? {...session, undoneTurns: []} : session));
     set((state) => {
       const entry = state.sessions[sessionId] ?? emptyEntry();
       return {sessions: {...state.sessions, [sessionId]: {...entry, error: null, liveContext: null, liveTurn, status: "streaming"}}};
     });
+    return {captureCheckpoints: useSettingsStore.getState().captureCheckpoints, contentParts, modelReference};
+  };
+
+  const sendMessage = (input: SendSessionMessageInput): void => {
+    const {queryClient, rpcClient, sessionId} = input;
+    const current = get().sessions[sessionId];
+    if (current && current.status !== "idle") return;
+
+    const previousSession = queryClient.getQueryData<Session>(sessionKeys.detail(sessionId));
+    const previousRevision = current?.revision ?? 0;
+    queryClient.setQueryData<Session>(sessionKeys.detail(sessionId), (session) => (session ? {...session, undoneTurns: []} : session));
+    const message = beginOptimisticTurn(input);
 
     void rpcClient
-      .run((rpc) => rpc.sendMessage({captureCheckpoints: useSettingsStore.getState().captureCheckpoints, contentParts, modelReference, sessionId}))
+      .run((rpc) => rpc.sendMessage({...message, sessionId}))
       .catch((cause: unknown) => {
         const entry = get().sessions[sessionId];
         if (!entry || entry.revision !== previousRevision) return;
@@ -209,6 +238,26 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
           };
         });
       });
+  };
+
+  const startSession = async (input: StartSessionInput): Promise<StartSessionOutcome> => {
+    const {projectPath, queryClient, rpcClient, sessionId} = input;
+    queryClient.setQueryData<Session>(sessionKeys.detail(sessionId), createPendingSession({projectPath, sessionId}));
+    const message = beginOptimisticTurn(input);
+
+    try {
+      await rpcClient.run((rpc) => rpc.createSession({id: sessionId, message, projectPath}));
+      return {status: "started"};
+    } catch (cause) {
+      // The server removed the session, so nothing of it may remain on the client.
+      queryClient.removeQueries({exact: true, queryKey: sessionKeys.detail(sessionId)});
+      set((state) => {
+        const sessions = {...state.sessions};
+        delete sessions[sessionId];
+        return {sessions};
+      });
+      return {message: errorMessage(cause, "Failed to start the session."), status: "failed"};
+    }
   };
 
   const abortSession = (input: {rpcClient: RpcClient; sessionId: string}): void => {
@@ -355,6 +404,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
     sendMessage,
     sessions: {},
     setActiveSession,
+    startSession,
     undoCheckpoint,
   };
 });

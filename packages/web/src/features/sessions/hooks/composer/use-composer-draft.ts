@@ -13,9 +13,9 @@ export interface ComposerDraft {
   readonly setEditableContentParts: (contentParts: readonly UserMessageContentPart[]) => void;
 }
 
-/** Provides the persisted composer content and draft mutation helpers for one composer instance. */
-export function useComposerDraft(key: string): ComposerDraft {
-  const draft = useComposerDraftsStore((state) => state.drafts[key]);
+/** The composer content kept for a session, and the helpers that change it. */
+export function useComposerDraft(sessionId: string): ComposerDraft {
+  const draft = useComposerDraftsStore((state) => state.drafts[sessionId]);
   const clearDraft = useComposerDraftsStore((state) => state.clearDraft);
   const setDraftAttachments = useComposerDraftsStore((state) => state.setDraftAttachments);
   const setDraftContentParts = useComposerDraftsStore((state) => state.setDraftContentParts);
@@ -27,19 +27,19 @@ export function useComposerDraft(key: string): ComposerDraft {
   const revision = draft?.revision ?? 0;
 
   const setEditableContentParts = (nextContentParts: readonly UserMessageContentPart[]): void => {
-    setDraftEditableContentParts(key, nextContentParts);
+    setDraftEditableContentParts(sessionId, nextContentParts);
   };
 
   const setAttachments = (update: ComposerAttachmentsUpdate): void => {
-    setDraftAttachments(key, update);
+    setDraftAttachments(sessionId, update);
   };
 
   const replaceContentParts = (nextContentParts: readonly UserMessageContentPart[]): void => {
-    setDraftContentParts(key, nextContentParts);
+    setDraftContentParts(sessionId, nextContentParts);
   };
 
   const clear = (): void => {
-    clearDraft(key);
+    clearDraft(sessionId);
   };
 
   return {attachments, clear, contentParts, replaceContentParts, revision, setAttachments, setEditableContentParts};

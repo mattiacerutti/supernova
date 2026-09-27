@@ -1,4 +1,4 @@
-import {writeFile} from "node:fs/promises";
+import {rm, writeFile} from "node:fs/promises";
 import type {
   CreateSessionPayload,
   GetSessionPayload,
@@ -15,7 +15,7 @@ import {resolveModelContextWindow} from "@supernova/agent-runtime/pi/lib/models/
 import {toAgentModelDetails} from "@supernova/agent-runtime/pi/lib/models/map-model";
 import {buildSessionSnapshot, sessionModelReference} from "@supernova/agent-runtime/pi/lib/session/build-session-snapshot";
 import {refreshAuthAndModels} from "@supernova/agent-runtime/pi/lib/models/refresh-models";
-import {openSessionById} from "@supernova/agent-runtime/pi/lib/session/open-session";
+import {openSessionById, sessionPathById} from "@supernova/agent-runtime/pi/lib/session/open-session";
 import type {ResourceCache} from "@supernova/agent-runtime/pi/resource-cache";
 import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";
 
@@ -28,9 +28,13 @@ export interface SessionsDeps {
 export class Sessions {
   public constructor(private readonly deps: SessionsDeps) {}
 
-  /** Creates a new empty Pi session for a project. */
-  public async create(input: CreateSessionPayload): Promise<Session> {
-    const sessionManager = this.deps.sdk.SessionManager.create(input.projectPath);
+  /** Creates a new empty Pi session for a project, under the client's id when it gives one. */
+  public async create(input: Pick<CreateSessionPayload, "id" | "projectPath">): Promise<Session> {
+    const {id, projectPath} = input;
+    // Pi names files `<timestamp>_<id>.jsonl`, so the exclusive write below cannot catch a reused id.
+    if (id !== undefined && (await sessionPathById(this.deps.sdk, id)) !== undefined) throw new CreateSessionError({message: "A session with this id already exists."});
+
+    const sessionManager = this.deps.sdk.SessionManager.create(projectPath, undefined, {id});
     const sessionFile = sessionManager.getSessionFile();
     const header = sessionManager.getHeader();
     if (!sessionFile || !header) throw new CreateSessionError({message: "Failed to create session."});
@@ -39,12 +43,18 @@ export class Sessions {
     return {
       id: sessionManager.getSessionId(),
       context: {usedTokens: 0, contextWindow: 0},
-      projectPath: input.projectPath,
+      projectPath,
       title: "Untitled session",
       turns: [],
       undoneTurns: [],
       updatedAt: header.timestamp,
     };
+  }
+
+  /** Removes a session's file. For undoing a `create` whose setup failed; archiving keeps the file. */
+  public async delete(input: GetSessionPayload): Promise<void> {
+    const path = await sessionPathById(this.deps.sdk, input.sessionId);
+    if (path) await rm(path, {force: true});
   }
 
   /** Loads one Pi session and maps it into the shared session detail contract. */

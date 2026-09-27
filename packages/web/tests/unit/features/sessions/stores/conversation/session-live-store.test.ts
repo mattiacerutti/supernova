@@ -91,7 +91,7 @@ function streamRpcClient(events: readonly SessionStreamEvent[]): RpcClient {
   } as RpcClient & {readonly interrupted: boolean};
 }
 
-function commandRpcClient(input?: {readonly rejectNavigation?: boolean; readonly rejectSend?: boolean}): RpcClient {
+function commandRpcClient(input?: {readonly rejectCreate?: boolean; readonly rejectNavigation?: boolean; readonly rejectSend?: boolean}): RpcClient {
   return {
     dispose: vi.fn(async () => undefined),
     fork: vi.fn(),
@@ -99,6 +99,7 @@ function commandRpcClient(input?: {readonly rejectNavigation?: boolean; readonly
       const protocol = {
         abortSession: () => Effect.void,
         compactSession: () => Effect.void,
+        createSession: () => (input?.rejectCreate ? Effect.fail(new Error("Worktree could not be created.")) : Effect.succeed(session())),
         redoCheckpoint: () => (input?.rejectNavigation ? Effect.fail(new Error("Checkpoint unavailable")) : Effect.void),
         revertToMessage: () => (input?.rejectNavigation ? Effect.fail(new Error("Checkpoint unavailable")) : Effect.void),
         sendMessage: () => (input?.rejectSend ? Effect.fail(new Error("Model unavailable")) : Effect.void),
@@ -285,6 +286,30 @@ describe("session live store", () => {
       expect(queryClient.getQueryData(sessionKeys.detail("session-1"))).toEqual(before);
       expect(useSessionLiveStore.getState().sessions["session-1"]?.status).toBe("idle");
     }
+  });
+
+  it("shows a new session at once and creates it with its first message", async () => {
+    const queryClient = createQueryClient();
+
+    const pending = useSessionLiveStore
+      .getState()
+      .startSession({contentParts, modelReference: model, projectPath: "/workspace", queryClient, rpcClient: commandRpcClient(), sessionId: "new-session"});
+
+    expect(queryClient.getQueryData<Session>(sessionKeys.detail("new-session"))).toMatchObject({id: "new-session", projectPath: "/workspace", turns: []});
+    expect(useSessionLiveStore.getState().sessions["new-session"]).toMatchObject({liveTurn: {userMessage: {contentParts}}, status: "streaming"});
+    await expect(pending).resolves.toEqual({status: "started"});
+  });
+
+  it("removes every trace of a new session the server could not create", async () => {
+    const queryClient = createQueryClient();
+
+    const outcome = await useSessionLiveStore
+      .getState()
+      .startSession({contentParts, modelReference: model, projectPath: "/workspace", queryClient, rpcClient: commandRpcClient({rejectCreate: true}), sessionId: "new-session"});
+
+    expect(outcome).toEqual({message: "Worktree could not be created.", status: "failed"});
+    expect(queryClient.getQueryData(sessionKeys.detail("new-session"))).toBeUndefined();
+    expect(useSessionLiveStore.getState().sessions["new-session"]).toBeUndefined();
   });
 
   it("optimistically moves turns when navigating checkpoints and rolls back failures", async () => {

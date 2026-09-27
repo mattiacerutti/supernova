@@ -1,7 +1,7 @@
 import {BOTTOM_TOLERANCE_PX, DETACHED_DISTANCE_PX, expect, test} from "@e2e/support/timeline-fixture";
 import type {TimelineDriver, VisibleTextAnchor} from "@e2e/support/timeline-fixture";
 import type {TimelineVisualSample} from "@e2e/support/timeline-test-api";
-import {EMPTY_SESSION_ID, OTHER_SESSION_ID, TIMELINE_SESSION_ID} from "@e2e/mocks/timeline-data";
+import {OTHER_SESSION_ID, TIMELINE_SESSION_ID} from "@e2e/mocks/timeline-data";
 
 function visibleSamples(samples: readonly TimelineVisualSample[], sessionId: string): readonly TimelineVisualSample[] {
   return samples.filter((sample) => sample.visible && sample.pathname === `/session/${sessionId}`);
@@ -118,7 +118,7 @@ test.describe("session timeline visual stability", () => {
   });
 
   test("keeps following when a new session first grows beyond the viewport", async ({timeline}) => {
-    await timeline.startEmptySession();
+    const sessionId = await timeline.startEmptySession();
     await timeline.expectStatusOutsideVirtualization();
     expect(await timeline.isScrollable(), "the initial response should still fit inside the viewport").toBe(false);
     await timeline.resetVisualProbe();
@@ -129,22 +129,22 @@ test.describe("session timeline visual stability", () => {
     expect(await timeline.isFollowing(), "the first overflow must not detach auto-follow").toBe(true);
     await timeline.expectAtBottom();
     const samples = await timeline.visualSamples();
-    const fittingFrames = visibleSamples(samples, EMPTY_SESSION_ID).filter((sample) => sample.scrollHeight <= sample.clientHeight);
+    const fittingFrames = visibleSamples(samples, sessionId).filter((sample) => sample.scrollHeight <= sample.clientHeight);
 
-    assertBottomLocked({minimumFrameCount: 1, samples, sessionId: EMPTY_SESSION_ID});
+    assertBottomLocked({minimumFrameCount: 1, samples, sessionId});
     expect(fittingFrames.length, "the stream should render while the new timeline still fits").toBeGreaterThanOrEqual(2);
     expect(Math.max(...fittingFrames.map((sample) => sample.streamOffset)), "content should not animate before scrolling is possible").toBeLessThanOrEqual(0.5);
   });
 
   test("the status footer eases down while a new session's response grows into free space", async ({timeline}) => {
-    await timeline.startEmptySession();
+    const sessionId = await timeline.startEmptySession();
     await timeline.expectStatusOutsideVirtualization();
     await timeline.waitForLineGrowth(2);
     await timeline.resetVisualProbe();
 
     await timeline.waitForLineGrowth(12);
 
-    const fittingFrames = visibleSamples(await timeline.visualSamples(), EMPTY_SESSION_ID).filter((sample) => sample.scrollHeight <= sample.clientHeight);
+    const fittingFrames = visibleSamples(await timeline.visualSamples(), sessionId).filter((sample) => sample.scrollHeight <= sample.clientHeight);
     const easingFrames = fittingFrames.filter((sample) => sample.statusFooterOffset < -0.5);
     expect(fittingFrames.length, "the response should grow inside the viewport for a while").toBeGreaterThanOrEqual(2);
     expect(easingFrames.length, "the footer should be displaced upward and ease into place as rows push it down").toBeGreaterThanOrEqual(2);
@@ -521,5 +521,55 @@ test.describe("message pinning", () => {
     const frames = visibleSamples(await timeline.visualSamples(), TIMELINE_SESSION_ID).filter((sample) => sample.lastRowIndex > rowIndexBeforeSend);
     expect(frames.length).toBeGreaterThan(0);
     expect(frames.every((sample) => sample.lastUserMessageTop !== null && Math.abs(sample.lastUserMessageTop - 24) <= 1)).toBe(true);
+  });
+});
+
+test.describe("starting a session", () => {
+  test.beforeEach(async ({timeline}) => {
+    await timeline.openNewSessionScreen();
+  });
+
+  test("keeps the composer and docks it while the first message becomes the new session", async ({page, timeline}) => {
+    await timeline.markComposer();
+    const heroTop = await timeline.composerTop();
+
+    await timeline.submitComposer("Build the thing");
+    await expect(page).toHaveURL(/\/session\/(?!new)[^/?]+$/);
+    await expect(page.getByText("Build the thing")).toBeVisible();
+
+    await expect.poll(() => timeline.composerTop(), {message: "the composer should settle at the bottom"}).toBeGreaterThan(heroTop + 100);
+    expect(await timeline.composerIsMarked(), "the composer should be the same element, not a remounted copy").toBe(true);
+    await expect(page.locator('[contenteditable="true"]').first(), "focus should stay in the composer through the handoff").toBeFocused();
+  });
+
+  test("keeps one draft per project until it is sent, then starts a fresh one", async ({page, timeline}) => {
+    const draftUrl = page.url();
+    expect(draftUrl).toMatch(/draft=/);
+    await page.locator('[contenteditable="true"]').first().fill("Half-written");
+
+    await timeline.switchToMainSession();
+    await timeline.clickNewSessionInSidebar();
+
+    expect(page.url(), "coming back finds the same draft").toBe(draftUrl);
+    await expect(page.locator('[contenteditable="true"]').first()).toHaveText("Half-written");
+
+    await timeline.submitComposer("Half-written and sent");
+    await expect(page).toHaveURL(`/session/${new URL(draftUrl).searchParams.get("draft")}`);
+
+    await timeline.clickNewSessionInSidebar();
+    expect(page.url(), "the next new session gets its own id").not.toBe(draftUrl);
+  });
+
+  test("returns to the new-session screen with the prompt restored when the session cannot start", async ({page, timeline}) => {
+    await timeline.failNextCreateSession("Worktree could not be created.");
+
+    await timeline.submitComposer("Build the thing");
+
+    await expect(page.getByText("Unable to start the session")).toBeVisible();
+    await expect(page.getByText("Worktree could not be created.")).toBeVisible();
+    await expect(page).toHaveURL(/\/session\/new\?.*draft=/);
+    await expect(page.getByRole("heading", {name: /What should we build in/})).toBeVisible();
+    await expect(page.locator('[contenteditable="true"]').first()).toHaveText("Build the thing");
+    await expect(page.locator("[data-index]").getByText("Build the thing")).toHaveCount(0);
   });
 });

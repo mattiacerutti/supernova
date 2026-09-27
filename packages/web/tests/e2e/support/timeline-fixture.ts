@@ -1,15 +1,6 @@
 import {expect, test as base} from "@playwright/test";
 import type {Page} from "@playwright/test";
-import {
-  EMPTY_SESSION_ID,
-  EMPTY_SESSION_TITLE,
-  OTHER_SESSION_TITLE,
-  timelineStreamLine,
-  TIMELINE_PROJECT_NAME,
-  TIMELINE_PROJECT_PATH,
-  TIMELINE_SESSION_ID,
-  TIMELINE_SESSION_TITLE,
-} from "@e2e/mocks/timeline-data";
+import {OTHER_SESSION_TITLE, timelineStreamLine, TIMELINE_PROJECT_NAME, TIMELINE_PROJECT_PATH, TIMELINE_SESSION_ID, TIMELINE_SESSION_TITLE} from "@e2e/mocks/timeline-data";
 import {installTimelineVisualProbe} from "@e2e/support/install-visual-probe";
 import type {TimelineMockState, TimelineVisualSample} from "@e2e/support/timeline-test-api";
 
@@ -58,13 +49,60 @@ export class TimelineDriver {
     await this.openSession(TIMELINE_SESSION_ID, TIMELINE_SESSION_TITLE);
   }
 
-  /** Creates an empty session and sends its first message through the new-session screen. */
-  public async startEmptySession(): Promise<void> {
+  /** Opens the project's new-session screen once its composer can take input. */
+  public async openNewSessionScreen(): Promise<void> {
     const projectId = Buffer.from(encodeURIComponent(TIMELINE_PROJECT_PATH)).toString("base64").replaceAll("=", "");
     await this.page.goto(`/session/new?projectId=${projectId}`, {waitUntil: "commit"});
+    await expect(this.page.locator('[contenteditable="true"]').first()).toBeEditable();
+  }
+
+  /** Sends a first message from the new-session screen and returns the id of the session it created. */
+  public async startEmptySession(): Promise<string> {
+    await this.openNewSessionScreen();
     await this.sendMessage();
-    await expect(this.page).toHaveURL(`/session/${EMPTY_SESSION_ID}`);
-    await expect(this.page.getByRole("heading", {name: EMPTY_SESSION_TITLE})).toBeVisible();
+    await expect(this.page).toHaveURL(/\/session\/(?!new)[^/?]+$/);
+    await expect(this.page.getByRole("heading", {name: "Untitled session"})).toBeVisible();
+    return new URL(this.page.url()).pathname.slice("/session/".length);
+  }
+
+  /** Remembers the composer card, so a later check can tell whether it is still the same element. */
+  public async markComposer(): Promise<void> {
+    await this.composerCard().evaluate((card) => {
+      (window as unknown as {__markedComposer?: Element}).__markedComposer = card;
+    });
+  }
+
+  public async composerIsMarked(): Promise<boolean> {
+    return await this.composerCard().evaluate((card) => (window as unknown as {__markedComposer?: Element}).__markedComposer === card);
+  }
+
+  public async composerTop(): Promise<number> {
+    return await this.composerCard().evaluate((card) => card.getBoundingClientRect().top);
+  }
+
+  public async failNextCreateSession(message: string): Promise<void> {
+    await this.page.evaluate((failure) => {
+      if (!window.__supernovaTimelineMock) throw new Error("Timeline RPC mock is not installed");
+      window.__supernovaTimelineMock.failNextCreateSession(failure);
+    }, message);
+  }
+
+  /** Sends with Enter, keeping focus in the composer, without waiting for a stream. */
+  public async submitComposer(text: string): Promise<void> {
+    const editor = this.page.locator('[contenteditable="true"]').first();
+    await expect(editor).toBeEditable();
+    await editor.fill(text);
+    await editor.press("Enter");
+  }
+
+  private composerCard() {
+    return this.page.locator('[contenteditable="true"]').first().locator("xpath=ancestor::div[contains(@class, 'rounded-3xl')][1]");
+  }
+
+  /** Clicks the project's "new session" button in the sidebar, staying in the running app. */
+  public async clickNewSessionInSidebar(): Promise<void> {
+    await this.page.getByRole("button", {exact: true, name: `New session in ${TIMELINE_PROJECT_NAME}`}).click();
+    await expect(this.page.locator('[contenteditable="true"]').first()).toBeEditable();
   }
 
   /** Navigates through the real sidebar to the second long session. */

@@ -1,9 +1,11 @@
-import {LayoutGroup, motion} from "framer-motion";
+import {LayoutGroup, motion, useReducedMotion} from "framer-motion";
 import type {HTMLAttributes, ReactNode} from "react";
 import {appEnvironment} from "@/config/app-environment";
 import {cn} from "@/lib/cn";
 
 const TITLE_TRANSITION = {duration: 0.18, ease: "easeOut"} as const;
+const DOCK_TRANSITION = {type: "spring", visualDuration: 0.2, bounce: 0} as const;
+const TIMELINE_ENTER_TRANSITION = {delay: 0.08, duration: 0.25, ease: "easeOut"} as const;
 
 // The title clears the window controls and titlebar buttons, which differ per host.
 const TITLE_OFFSET = {mac: "left-48", web: "left-12", windows: "left-29", linux: "left-29"}[appEnvironment];
@@ -36,7 +38,7 @@ export default function SessionLayout(props: SessionLayoutProps) {
 }
 
 interface SessionHeaderProps {
-  readonly children: ReactNode;
+  readonly children?: ReactNode;
   /** Rendered right after the title and animated with it. */
   readonly actions?: ReactNode;
 }
@@ -60,6 +62,40 @@ export function SessionHeader(props: SessionHeaderProps) {
         </div>
       </LayoutGroup>
     </header>
+  );
+}
+
+interface SessionBodyProps {
+  readonly composer: ReactNode;
+  /** Shown above a centered composer before the session exists. Removing it docks the composer at the bottom. */
+  readonly hero?: ReactNode;
+  readonly timeline?: ReactNode;
+}
+
+/** Timeline and composer. With a hero the composer sits centered under it; without one it docks below the timeline, animating the same element. */
+export function SessionBody(props: SessionBodyProps) {
+  const {composer, hero, timeline} = props;
+  const reduceMotion = useReducedMotion();
+  const centered = hero !== undefined;
+
+  return (
+    <>
+      {centered && <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col justify-end px-4 md:px-6">{hero}</div>}
+      {!centered && (
+        <motion.div
+          className="flex min-h-0 flex-1 flex-col"
+          animate={{opacity: 1, y: 0}}
+          initial={reduceMotion ? false : {opacity: 0, y: 25}}
+          transition={TIMELINE_ENTER_TRANSITION}
+        >
+          {timeline}
+        </motion.div>
+      )}
+      <motion.div className="relative z-20" layout={reduceMotion ? false : "position"} transition={DOCK_TRANSITION}>
+        {composer}
+      </motion.div>
+      <div className={cn("min-h-0", centered && "flex-1")} />
+    </>
   );
 }
 

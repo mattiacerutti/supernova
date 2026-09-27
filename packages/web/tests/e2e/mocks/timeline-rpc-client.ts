@@ -1,28 +1,24 @@
 import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
+import type {CreateSessionPayload} from "@supernova/contracts/sessions/procedures";
+import {CreateSessionError} from "@supernova/contracts/sessions/procedures";
 import type {Session, Turn, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 import {Effect, Exit, Fiber, PubSub, Stream} from "effect";
 import type {RpcClient, RpcClientFiber, RpcExecute, RpcProtocolClient, RpcRunOptions} from "@/rpc/transport/protocol";
-import {
-  createTimelineSessions,
-  EMPTY_SESSION_ID,
-  timelineModelDetails,
-  timelineSessionSummary,
-  timelineStreamTurn,
-  TIMELINE_PROJECT_PATH,
-  TIMELINE_SESSION_ID,
-} from "@e2e/mocks/timeline-data";
+import {createTimelineSessions, timelineModelDetails, timelineSessionSummary, timelineStreamTurn, TIMELINE_PROJECT_PATH, TIMELINE_SESSION_ID} from "@e2e/mocks/timeline-data";
 import type {TimelineMockState} from "@e2e/support/timeline-test-api";
 
 export {RpcProtocolClientService} from "@/rpc/transport/protocol";
 export type {RpcClient, RpcClientFiber, RpcProtocolClient} from "@/rpc/transport/protocol";
 
 const STREAM_LINES_PER_FRAME = 2;
+const CREATE_SESSION_FAILURE_DELAY = "150 millis";
 
 class TimelineRpcClient implements RpcClient {
   private readonly events = Effect.runSync(PubSub.unbounded<SessionStreamEvent>());
   private readonly sessions = createTimelineSessions();
   private activeContentParts: readonly UserMessageContentPart[] | null = null;
   private activeSessionId = TIMELINE_SESSION_ID;
+  private createSessionFailure: string | null = null;
   private lineCount = 0;
   private publishQueue: Promise<void> = Promise.resolve();
   private reasoningBreaks: number[] = [];
@@ -37,6 +33,9 @@ class TimelineRpcClient implements RpcClient {
       breakForReasoning: () => this.breakForReasoning(),
       completeStream: () => this.settleStream("completed"),
       emitLines: (lineCount) => this.emitLines(lineCount),
+      failNextCreateSession: (message) => {
+        this.createSessionFailure = message;
+      },
       getState: () => {
         const session = this.session(TIMELINE_SESSION_ID);
         return {lineCount: this.lineCount, status: this.status, turnCount: session.turns.length, undoneTurnCount: session.undoneTurns.length};
@@ -82,7 +81,14 @@ class TimelineRpcClient implements RpcClient {
       cancelProviderLogin: () => Effect.void,
       compactSession: () => Effect.void,
       createFolder: () => Effect.void,
-      createSession: () => Effect.succeed(this.session(EMPTY_SESSION_ID)),
+      createSession: (payload: CreateSessionPayload) =>
+        Effect.suspend(() => {
+          const failure = this.createSessionFailure;
+          this.createSessionFailure = null;
+          if (failure === null) return Effect.sync(() => this.createSession(payload));
+          // A real failure arrives after a round trip, while the composer is already docking.
+          return Effect.delay(Effect.fail(new CreateSessionError({message: failure})), CREATE_SESSION_FAILURE_DELAY);
+        }),
       getFolderStatus: () => Effect.succeed({exists: true, kind: "directory"}),
       getSession: ({sessionId}: {readonly sessionId: string}) => Effect.sync(() => this.session(sessionId)),
       getWorkspaceChanges: () => Effect.succeed({uncommitted: []}),
@@ -119,6 +125,22 @@ class TimelineRpcClient implements RpcClient {
       watchEvents: () => Stream.concat(Stream.succeed({type: "connected"} as const), Stream.fromPubSub(this.events)),
       watchProviderLoginSession: () => Stream.empty,
     } as unknown as RpcProtocolClient;
+  }
+
+  /** Mirrors the server: the client's id names the session, and a first message starts its turn. */
+  private createSession({id, message, projectPath}: CreateSessionPayload): Session {
+    const session: Session = {
+      id: id ?? `session-${this.sessions.size + 1}`,
+      context: {usedTokens: 0, contextWindow: 0},
+      projectPath,
+      title: "Untitled session",
+      turns: [],
+      undoneTurns: [],
+      updatedAt: new Date().toISOString(),
+    };
+    this.sessions.set(session.id, session);
+    if (message) this.startStream(session.id, message.contentParts);
+    return session;
   }
 
   /** Serializes publications so revisions arrive in exactly the order generated. */

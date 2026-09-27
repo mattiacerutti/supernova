@@ -10,47 +10,48 @@ export interface ComposerDraft {
 }
 
 interface ComposerDraftsState {
+  /** Composer content per session id, including sessions that exist only as a draft so far. */
   readonly drafts: Record<string, ComposerDraft | undefined>;
-  readonly clearDraft: (key: string) => void;
-  readonly setDraftAttachments: (key: string, update: ComposerAttachmentsUpdate) => void;
-  readonly setDraftContentParts: (key: string, contentParts: readonly UserMessageContentPart[]) => void;
-  readonly setDraftEditableContentParts: (key: string, contentParts: readonly UserMessageContentPart[]) => void;
+  /**
+   * The id a project's next session will get, minted when its new-session screen is first opened. One per project,
+   * so leaving the screen and coming back finds the same draft; several drafts per project would be a list here.
+   */
+  readonly newSessionIds: Record<string, string | undefined>;
+  readonly clearDraft: (sessionId: string) => void;
+  /** The project's pending new-session id, minting one when there is none. */
+  readonly ensureNewSessionId: (projectPath: string) => string;
+  readonly setDraftAttachments: (sessionId: string, update: ComposerAttachmentsUpdate) => void;
+  readonly setDraftContentParts: (sessionId: string, contentParts: readonly UserMessageContentPart[]) => void;
+  readonly setDraftEditableContentParts: (sessionId: string, contentParts: readonly UserMessageContentPart[]) => void;
+  /** Clears the pending id once its session is being created, or puts it back when that failed. */
+  readonly setNewSessionId: (projectPath: string, sessionId: string | undefined) => void;
 }
 
-/** Returns the stable draft key for the new chat composer in a project. */
-export function newSessionComposerDraftKey(projectPath: string): string {
-  return `new-session:${projectPath}`;
-}
-
-/** Returns the stable draft key for an existing session composer. */
-export function sessionComposerDraftKey(sessionId: string): string {
-  return `session:${sessionId}`;
-}
-
-export const useComposerDraftsStore = create<ComposerDraftsState>()((set) => ({
+export const useComposerDraftsStore = create<ComposerDraftsState>()((set, get) => ({
   drafts: {},
-  clearDraft: (key) => {
+  newSessionIds: {},
+  clearDraft: (sessionId) => {
     set((state) => {
       const drafts = {...state.drafts};
-      delete drafts[key];
+      delete drafts[sessionId];
       return {drafts};
     });
   },
-  setDraftAttachments: (key, update) => {
+  setDraftAttachments: (sessionId, update) => {
     set((state) => {
-      const draft = state.drafts[key] ?? {revision: 0};
+      const draft = state.drafts[sessionId] ?? {revision: 0};
       const attachments = typeof update === "function" ? update(draft.attachments ?? []) : update;
 
-      return {drafts: {...state.drafts, [key]: {...draft, attachments}}};
+      return {drafts: {...state.drafts, [sessionId]: {...draft, attachments}}};
     });
   },
-  setDraftContentParts: (key, contentParts) => {
+  setDraftContentParts: (sessionId, contentParts) => {
     set((state) => {
-      const revision = (state.drafts[key]?.revision ?? 0) + 1;
+      const revision = (state.drafts[sessionId]?.revision ?? 0) + 1;
       return {
         drafts: {
           ...state.drafts,
-          [key]: {
+          [sessionId]: {
             attachments: attachmentComposerContentParts(contentParts),
             editableContentParts: editableComposerContentParts(contentParts),
             revision,
@@ -59,10 +60,20 @@ export const useComposerDraftsStore = create<ComposerDraftsState>()((set) => ({
       };
     });
   },
-  setDraftEditableContentParts: (key, editableContentParts) => {
+  setDraftEditableContentParts: (sessionId, editableContentParts) => {
     set((state) => {
-      const draft = state.drafts[key] ?? {revision: 0};
-      return {drafts: {...state.drafts, [key]: {...draft, editableContentParts}}};
+      const draft = state.drafts[sessionId] ?? {revision: 0};
+      return {drafts: {...state.drafts, [sessionId]: {...draft, editableContentParts}}};
     });
+  },
+  ensureNewSessionId: (projectPath) => {
+    const existing = get().newSessionIds[projectPath];
+    if (existing) return existing;
+    const sessionId = crypto.randomUUID();
+    set((state) => ({newSessionIds: {...state.newSessionIds, [projectPath]: sessionId}}));
+    return sessionId;
+  },
+  setNewSessionId: (projectPath, sessionId) => {
+    set((state) => ({newSessionIds: {...state.newSessionIds, [projectPath]: sessionId}}));
   },
 }));

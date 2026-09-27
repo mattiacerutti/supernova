@@ -9,14 +9,14 @@ import type {ModelSelection} from "@/features/sessions/hooks/composer/use-model-
 import {useModelSelection} from "@/features/sessions/hooks/composer/use-model-selection";
 
 interface UseComposerOptions {
-  /** Stable key the draft persists under while the user navigates away. */
-  readonly draftKey: string;
   /** Disables input for reasons outside the composer, such as a pending create. */
   readonly disabled?: boolean;
+  /** Project defaults for a session that has not been sent yet. */
   readonly modelDefaults?: ModelDefaults;
   readonly initialModelReference?: ModelReference;
   readonly projectPath: string;
-  readonly sessionId?: string;
+  /** The session the draft and model choice belong to. For a new session this is the id the client minted for it. */
+  readonly sessionId: string;
 }
 
 export interface Composer {
@@ -25,7 +25,6 @@ export interface Composer {
   readonly isPending: boolean;
   readonly disabled: boolean;
   readonly draft: ComposerDraft;
-  readonly draftKey: string;
   readonly models: ModelSelection;
   readonly projectPath: string;
   readonly selectModel: (key: string) => void;
@@ -33,10 +32,10 @@ export interface Composer {
 
 /** Composes draft, attachments, and model selection for one composer instance. Share it through `ComposerContext`. */
 export function useComposer(options: UseComposerOptions): Composer {
-  const {disabled: externallyDisabled = false, draftKey, initialModelReference, modelDefaults, projectPath, sessionId} = options;
+  const {disabled: externallyDisabled = false, initialModelReference, modelDefaults, projectPath, sessionId} = options;
 
   const models = useModelSelection({defaults: modelDefaults, initialSelection: initialModelReference, projectPath, sessionId});
-  const draft = useComposerDraft(draftKey);
+  const draft = useComposerDraft(sessionId);
   const disabled = externallyDisabled || models.isPending || !models.modelReference;
   const attachments = useComposerAttachments({
     attachments: draft.attachments,
@@ -53,7 +52,7 @@ export function useComposer(options: UseComposerOptions): Composer {
     models.selectModel(key);
   };
 
-  return {attachments, disabled, draft, draftKey, isPending: models.isPending, models, projectPath, selectModel};
+  return {attachments, disabled, draft, isPending: models.isPending, models, projectPath, selectModel};
 }
 
 export const ComposerContext = createContext<Composer | null>(null);

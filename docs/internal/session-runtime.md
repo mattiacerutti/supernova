@@ -113,7 +113,7 @@ flowchart BT
 | State                         | Owner                         | Lifetime                        |
 | ----------------------------- | ----------------------------- | ------------------------------- |
 | Persisted session tree        | Pi `SessionManager`           | Durable                         |
-| Agent execution               | Server `SessionWorker`     | Server process                  |
+| Agent execution               | Server `SessionWorker`        | Server process                  |
 | Active-turn projection        | Server `ActiveTurn`           | One accepted user turn          |
 | Committed browser session     | React Query                   | Browser cache                   |
 | Live browser status and turn  | Zustand session live store    | Browser process                 |
@@ -169,6 +169,12 @@ sequenceDiagram
 ```
 
 The command RPC confirms acceptance; it does not remain open for the entire provider run. Work continues under the server runtime after the response returns.
+
+### Starting a new session
+
+The first message of a new session is sent with `createSession`, not `sendMessage`. The client picks the session id and passes it with the message, so it can show the session and its optimistic turn under that id before the server replies. The RPC edge orchestrates the two features: `sessions.create` writes the session file, then `sessionRuntime.sendMessage` starts the first turn.
+
+Session setup is all-or-nothing: if any step fails, the server removes the session and the call fails, so the client never holds a session it cannot use. The client then drops the optimistic session, returns to the new-session screen with the prompt restored, and shows the error. Future setup steps (worktrees, setup commands) run before the first turn under the same rule; a step that can fail without making the session unusable should report through the session's event stream instead.
 
 ### Freezing committed state
 
