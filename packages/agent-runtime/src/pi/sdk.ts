@@ -1,6 +1,7 @@
-import {createAgentSession, createAgentSessionServices, ModelRuntime, SessionManager} from "@earendil-works/pi-coding-agent";
+import {createAgentSession, createAgentSessionServices, DefaultPackageManager, getAgentDir, ModelRuntime, SessionManager} from "@earendil-works/pi-coding-agent";
 import type {ResourceLoader, SessionInfo} from "@earendil-works/pi-coding-agent";
 import {createPiResourceLoaderOptions, CustomPiResourceLoader} from "@supernova/agent-runtime/pi/config/resource-loader";
+import {loadPiSettings} from "@supernova/agent-runtime/pi/config/settings";
 
 export type PiSessionInfo = SessionInfo;
 export type PiSessionManager = ReturnType<typeof SessionManager.open>;
@@ -13,6 +14,8 @@ export interface PiSdk {
   readonly loadResourceLoader: (input: {readonly projectPath: string}) => Promise<ResourceLoader>;
   readonly modelRuntime: ModelRuntime;
   readonly SessionManager: typeof SessionManager;
+  /** Updates the packages in the global Pi settings, as `pi update --extensions` does. Project packages are not touched. */
+  readonly updatePackages: () => Promise<void>;
 }
 
 /** Connects to the real Pi SDK. Discovers providers and models once; call at startup. */
@@ -37,5 +40,10 @@ export async function createPiSdk(): Promise<PiSdk> {
     },
     modelRuntime,
     SessionManager,
+    updatePackages: async () => {
+      // No project path: only global settings load, so project-scoped packages stay out of a server-wide update.
+      const packageManager = new DefaultPackageManager({cwd: process.cwd(), agentDir: getAgentDir(), settingsManager: loadPiSettings()});
+      await packageManager.update();
+    },
   };
 }

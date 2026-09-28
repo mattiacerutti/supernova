@@ -67,6 +67,22 @@ describe("Pi resource cache", () => {
     await catalog.listSkills("/other-project");
     expect(piSdk.createResourceLoader).toHaveBeenCalledTimes(2);
   });
+
+  it("reloads every project after invalidation", async () => {
+    const resourceLoader = {
+      getExtensions: () => ({errors: []}),
+      getPrompts: () => ({diagnostics: [], prompts: []}),
+      getSkills: () => ({diagnostics: [], skills: [skill]}),
+      reload: async () => undefined,
+    } as unknown as ResourceLoader;
+    const piSdk = {createResourceLoader: vi.fn(() => resourceLoader)} as unknown as PiSdk;
+    const catalog = await runCatalog(piSdk);
+
+    await Promise.all([catalog.listSkills("/a"), catalog.listSkills("/b")]);
+    catalog.invalidate();
+    await Promise.all([catalog.listSkills("/a"), catalog.listSkills("/b")]);
+    expect(piSdk.createResourceLoader).toHaveBeenCalledTimes(4);
+  });
 });
 
 function runCatalog(piSdk: PiSdk) {

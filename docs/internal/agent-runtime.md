@@ -19,7 +19,7 @@ src/
   rpc/            agent-rpc.ts maps each procedure to a feature function; edge.ts adapts thrown errors
   lib/            stateless helpers with no Pi or product knowledge
   pi/             the Pi SDK wrapper
-  features/       configuration, folders, projects, providers, session-runtime, sessions, workspace
+  features/       configuration, extensions, folders, projects, providers, session-runtime, sessions, workspace
 ```
 
 Where a file goes:

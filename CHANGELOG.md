@@ -8,6 +8,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Added
 
+- Added an Extensions section to General settings with a button that updates installed Pi packages, like `pi update --extensions`.
+
 ### Changed
 
 - Sending the first message of a new session now keeps the composer in place and slides it down into the session, instead of switching pages.

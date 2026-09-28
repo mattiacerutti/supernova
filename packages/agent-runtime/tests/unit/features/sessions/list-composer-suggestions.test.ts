@@ -12,6 +12,7 @@ describe("listing composer suggestions", () => {
   it("returns every resource without filtering or truncating the client snapshot", async () => {
     const result = await run({
       initialize: async () => undefined,
+      invalidate: () => undefined,
       listPromptTemplates: async () => [
         {
           name: "",

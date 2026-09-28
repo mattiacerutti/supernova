@@ -7,6 +7,7 @@ const skillFile = "/skills/demo/SKILL.md";
 function resourceCache(input?: {skillContent?: string}): ResourceCache {
   return {
     initialize: async () => undefined,
+    invalidate: () => undefined,
     listPromptTemplates: async () => [],
     listSkills: async () =>
       input?.skillContent

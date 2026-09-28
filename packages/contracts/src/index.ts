@@ -1,5 +1,6 @@
 import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 import {ConfigurationRpcs} from "@supernova/contracts/configuration/rpc";
+import {ExtensionRpcs} from "@supernova/contracts/extensions/rpc";
 import {FolderRpcs} from "@supernova/contracts/folders/rpc";
 import {ProjectRpcs} from "@supernova/contracts/projects/rpc";
 import {ProviderRpcs} from "@supernova/contracts/providers/rpc";
@@ -8,6 +9,7 @@ import {SessionRpcs} from "@supernova/contracts/sessions/rpc";
 import {WorkspaceRpcs} from "@supernova/contracts/workspace/rpc";
 
 export * from "@supernova/contracts/configuration/rpc";
+export * from "@supernova/contracts/extensions/rpc";
 export * from "@supernova/contracts/folders/rpc";
 export * from "@supernova/contracts/projects/rpc";
 export * from "@supernova/contracts/providers/rpc";
@@ -15,4 +17,13 @@ export * from "@supernova/contracts/session-runtime/rpc";
 export * from "@supernova/contracts/sessions/rpc";
 export * from "@supernova/contracts/workspace/rpc";
 
-export const AgentRpcGroup = RpcGroup.make(...ConfigurationRpcs, ...FolderRpcs, ...ProjectRpcs, ...ProviderRpcs, ...SessionRpcs, ...SessionRuntimeRpcs, ...WorkspaceRpcs);
+export const AgentRpcGroup = RpcGroup.make(
+  ...ConfigurationRpcs,
+  ...ExtensionRpcs,
+  ...FolderRpcs,
+  ...ProjectRpcs,
+  ...ProviderRpcs,
+  ...SessionRpcs,
+  ...SessionRuntimeRpcs,
+  ...WorkspaceRpcs
+);

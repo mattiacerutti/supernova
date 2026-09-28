@@ -138,6 +138,12 @@ This gives each retained session:
 
 The pool is what allows session A and session B to work concurrently while preventing two overlapping commands inside session A.
 
+### Reloading extensions
+
+Updating extensions marks every retained runtime stale. The next command on a stale runtime disposes its Pi `AgentSession` before it starts, and the command reopens the session from its file with the extensions now on disk. A turn that is running keeps its extensions until it finishes; the first command after it reloads. The worker survives the reload, so event revisions keep increasing and connected clients don't discard later events as stale.
+
+Pi's `AgentSession.reload()` is not used because it resets the process-wide API provider registry that every session shares.
+
 ### Starting a user turn
 
 The important part of starting a turn is establishing the committed/live boundary before Pi mutates its branch.

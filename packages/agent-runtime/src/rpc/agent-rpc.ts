@@ -1,5 +1,6 @@
 import {AgentRpcGroup} from "@supernova/contracts";
 import {GetConfigurationError} from "@supernova/contracts/configuration/procedures";
+import {UpdateExtensionsError} from "@supernova/contracts/extensions/procedures";
 import {FolderCreateError, FolderFilesListError, FolderSuggestionsListError} from "@supernova/contracts/folders/procedures";
 import {ProjectSessionArchiveError, ProjectSessionsListError} from "@supernova/contracts/projects/procedures";
 import {ProviderLoginError, ProviderLogoutError, ProvidersListError} from "@supernova/contracts/providers/procedures";
@@ -30,7 +31,7 @@ const checkpointFailure = (cause: unknown) => new CheckpointGenericError({cause,
 
 /** Adapts every RPC procedure to its feature function. The only place Effect meets the features. */
 export function agentRpcLayer(runtime: AgentRuntime) {
-  const {configuration, folders, projects, providers, sessionRuntime, sessions, workspace} = runtime;
+  const {configuration, extensions, folders, projects, providers, sessionRuntime, sessions, workspace} = runtime;
 
   return AgentRpcGroup.toLayer({
     abortSession: (input) => Effect.promise(() => sessionRuntime.abort(input)),
@@ -92,6 +93,19 @@ export function agentRpcLayer(runtime: AgentRuntime) {
     submitProviderLoginInput: (input) =>
       runSync(() => providers.submitLoginInput(input), oneOf(ProviderLoginError), fallback(ProviderLoginError, "Failed to submit provider login input.")),
     undoCheckpoint: (input) => run(() => sessionRuntime.undoCheckpoint(input), isCheckpointError, checkpointFailure),
+    updateExtensions: () =>
+      run(
+        async () => {
+          try {
+            await extensions.update();
+          } finally {
+            // Even a partial failure may have replaced packages on disk, so every session reloads either way.
+            sessionRuntime.reloadExtensions();
+          }
+        },
+        oneOf(UpdateExtensionsError),
+        fallback(UpdateExtensionsError, "Failed to update extensions.")
+      ),
     watchEvents: () => Stream.fromAsyncIterable(sessionRuntime.watchEvents(), (cause) => cause as never),
     watchProviderLoginSession: (input) =>
       Stream.fromAsyncIterable(providers.watchLoginSession(input), (cause) =>

@@ -76,6 +76,11 @@ export class SessionRuntime {
     return this.deps.pool.getCommittedSession(input.sessionId);
   }
 
+  /** Retained sessions reload extensions at their next command; an active turn finishes on the code it started with. */
+  public reloadExtensions(): void {
+    this.deps.pool.reloadExtensions();
+  }
+
   /** Drops the retained runtime and its checkpoints; used before a session is archived. */
   public async release(input: ProjectSessionArchivePayload): Promise<void> {
     await this.deps.pool.releaseSession(input.sessionId);

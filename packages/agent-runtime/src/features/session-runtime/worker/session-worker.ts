@@ -50,6 +50,7 @@ export class SessionWorker {
   private committedSession: Session | undefined;
 
   private cancelled = false;
+  private extensionsStale = false;
   private releasePromise: Promise<void> | undefined;
   private running = false;
   private revision = 0;
@@ -90,23 +91,27 @@ export class SessionWorker {
 
     this.releasePromise = (async () => {
       await this.abort();
-      const agentSession = this.agentSession;
-      const unsubscribe = this.unsubscribe;
-
-      this.agentSession = undefined;
-      this.unsubscribe = undefined;
-
-      unsubscribe?.();
-      if (agentSession) {
-        try {
-          await agentSession.extensionRunner.emit({type: "session_shutdown", reason: "quit"});
-        } finally {
-          agentSession.dispose();
-        }
-      }
+      await this.disposeAgentSession("quit");
     })();
 
     return this.releasePromise;
+  }
+
+  /** Marks the loaded extensions as outdated; the next command rebuilds the Pi session with the code on disk. */
+  public markExtensionsStale(): void {
+    this.extensionsStale = true;
+  }
+
+  /**
+   * Rebuilds the Pi session from its durable file when extensions are outdated. Call before a command begins.
+   *
+   * An active turn keeps its extensions: the flag stays set and the first command after the turn reloads.
+   * Pi's own `AgentSession.reload()` is not used because it resets the API provider registry every session shares.
+   */
+  public async reloadStaleExtensions(): Promise<void> {
+    if (!this.extensionsStale || this.running) return;
+    this.extensionsStale = false;
+    await this.disposeAgentSession("reload");
   }
 
   /**
@@ -352,6 +357,24 @@ export class SessionWorker {
     }
 
     return this.agentSession;
+  }
+
+  /** Detaches and disposes the Pi session; the next `getAgentSession` reopens it. Revisions continue on this worker. */
+  private async disposeAgentSession(reason: "quit" | "reload"): Promise<void> {
+    const agentSession = this.agentSession;
+    const unsubscribe = this.unsubscribe;
+
+    this.agentSession = undefined;
+    this.unsubscribe = undefined;
+
+    unsubscribe?.();
+    if (agentSession) {
+      try {
+        await agentSession.extensionRunner.emit({type: "session_shutdown", reason});
+      } finally {
+        agentSession.dispose();
+      }
+    }
   }
 
   private subscribeToLiveUpdates(): void {

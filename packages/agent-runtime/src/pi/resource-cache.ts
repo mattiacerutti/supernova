@@ -4,6 +4,8 @@ import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";
 
 export interface ResourceCache {
   readonly initialize: (projectPath: string) => Promise<void>;
+  /** Drops every loaded project so the next request rediscovers resources, e.g. after packages change on disk. */
+  readonly invalidate: () => void;
   readonly listPromptTemplates: (projectPath: string) => Promise<readonly PromptTemplate[]>;
   readonly listSkills: (projectPath: string) => Promise<readonly Skill[]>;
   readonly readSkillContent: (skill: Skill) => Promise<string>;
@@ -34,6 +36,7 @@ export function createResourceCache(sdk: Pick<PiSdk, "loadResourceLoader">): Res
     initialize: async (projectPath) => {
       await load(projectPath);
     },
+    invalidate: () => loaders.clear(),
     listPromptTemplates: async (projectPath) => (await load(projectPath)).getPrompts().prompts,
     listSkills: async (projectPath) => (await load(projectPath)).getSkills().skills,
     readSkillContent: (skill) => readFile(skill.filePath, "utf8"),

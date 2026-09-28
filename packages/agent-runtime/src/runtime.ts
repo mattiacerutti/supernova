@@ -1,5 +1,6 @@
 import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
 import {Configuration} from "@supernova/agent-runtime/features/configuration/configuration";
+import {Extensions} from "@supernova/agent-runtime/features/extensions/extensions";
 import {Folders} from "@supernova/agent-runtime/features/folders/folders";
 import {Projects} from "@supernova/agent-runtime/features/projects/projects";
 import {LoginSessions} from "@supernova/agent-runtime/features/providers/login/login-sessions";
@@ -19,6 +20,7 @@ import {createPiSdk} from "@supernova/agent-runtime/pi/sdk";
 /** Every feature, constructed once with its dependencies. */
 export interface AgentRuntime {
   readonly configuration: Configuration;
+  readonly extensions: Extensions;
   readonly folders: Folders;
   readonly projects: Projects;
   readonly providers: Providers;
@@ -53,6 +55,7 @@ export async function createAgentRuntime(options: CreateAgentRuntimeOptions = {}
 
   return {
     configuration: new Configuration(),
+    extensions: new Extensions({resourceCache, sdk}),
     folders: new Folders(),
     projects: new Projects({sdk}),
     providers: new Providers({loginSessions: new LoginSessions(), sdk}),

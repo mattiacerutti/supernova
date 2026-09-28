@@ -5,6 +5,7 @@ import {imageAttachment, textAttachment} from "@tests/support/session-runtime";
 
 const resourceCache: ResourceCache = {
   initialize: async () => undefined,
+  invalidate: () => undefined,
   listPromptTemplates: async () => [],
   listSkills: async () => [],
   readSkillContent: async () => "",

@@ -226,6 +226,7 @@ export async function createPiTestRuntime(input?: {
   };
   const resourceCache: ResourceCache = {
     initialize: async () => undefined,
+    invalidate: () => undefined,
     listPromptTemplates: async () => input?.promptTemplates ?? [],
     listSkills: async () => input?.skills ?? [],
     readSkillContent: async (skill) => {
