@@ -5,6 +5,7 @@ import {useMountEffect} from "@/hooks/use-mount-effect";
 
 export interface DesktopUpdate {
   readonly state: DesktopUpdateState | undefined;
+  readonly check: () => Promise<DesktopUpdateState | null>;
   readonly download: () => Promise<void>;
   readonly install: () => Promise<void>;
 }
@@ -47,6 +48,7 @@ export function useDesktopUpdate(): DesktopUpdate {
 
   return {
     state,
+    check: async () => (await window.desktopApi?.checkForUpdates()) ?? null,
     download: async () => window.desktopApi?.downloadUpdate(),
     install: async () => window.desktopApi?.installUpdate(),
   };

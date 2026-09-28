@@ -17,6 +17,7 @@ const desktopApi = {
   setNativeTheme: (theme) => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.setNativeTheme, theme),
 
   getUpdateState: () => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.getUpdateState),
+  checkForUpdates: () => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.checkForUpdates),
   downloadUpdate: () => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.downloadUpdate),
   installUpdate: () => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.installUpdate),
   onUpdateState: (listener) => {

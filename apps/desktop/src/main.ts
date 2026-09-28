@@ -50,6 +50,7 @@ function registerDesktopIpc(): void {
   });
 
   ipcMain.handle(DESKTOP_IPC_CHANNELS.getUpdateState, () => updater.getState());
+  ipcMain.handle(DESKTOP_IPC_CHANNELS.checkForUpdates, () => updater.check());
   ipcMain.handle(DESKTOP_IPC_CHANNELS.downloadUpdate, () => updater.download());
 
   ipcMain.handle(DESKTOP_IPC_CHANNELS.installUpdate, async () => {

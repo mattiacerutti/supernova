@@ -20,6 +20,7 @@ export interface DesktopApi {
   readonly openDirectory: (path: string) => Promise<void>;
   readonly setNativeTheme: (theme: DesktopTheme) => Promise<void>;
   readonly getUpdateState: () => Promise<DesktopUpdateState>;
+  readonly checkForUpdates: () => Promise<DesktopUpdateState | null>;
   readonly downloadUpdate: () => Promise<void>;
   readonly installUpdate: () => Promise<void>;
   readonly onUpdateState: (listener: (state: DesktopUpdateState) => void) => () => void;

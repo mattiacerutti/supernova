@@ -2,6 +2,7 @@ import Button from "@/components/ui/button";
 import Switch from "@/components/ui/switch";
 import {SettingsGroup, SettingsRow} from "@/features/settings/components/settings-group";
 import {useUpdateExtensions} from "@/features/settings/api/extensions/update-extensions";
+import UpdateCheckButton from "@/features/updates/components/update-check-button";
 import {showToast} from "@/lib/toast";
 import {useSettingsStore} from "@/stores/settings-store";
 
@@ -45,6 +46,12 @@ export default function GeneralSection() {
           title="Update extensions"
         />
       </SettingsGroup>
+
+      {window.desktopApi && (
+        <SettingsGroup title="About">
+          <SettingsRow control={<UpdateCheckButton />} description={window.desktopApi.appVersion} title="Version" />
+        </SettingsGroup>
+      )}
     </>
   );
 }

@@ -17,6 +17,7 @@ interface CreateDesktopUpdaterOptions {
 export interface DesktopUpdater {
   readonly getState: () => DesktopUpdateState;
   readonly start: () => void;
+  readonly check: () => Promise<DesktopUpdateState | null>;
   readonly download: () => Promise<void>;
   readonly quitAndInstall: () => void;
 }
@@ -47,10 +48,10 @@ export function createDesktopUpdater({nightly, onStateChange}: CreateDesktopUpda
     setState(reduceUpdateState(state, event));
   };
 
-  const checkForUpdates = (): void => {
+  const checkForUpdates = async (): Promise<void> => {
     if (state.status === "downloading" || state.status === "downloaded") return;
     // Failures surface through the updater "error" event.
-    void autoUpdater.checkForUpdates().catch(() => undefined);
+    await autoUpdater.checkForUpdates().catch(() => undefined);
   };
 
   return {
@@ -74,8 +75,15 @@ export function createDesktopUpdater({nightly, onStateChange}: CreateDesktopUpda
       autoUpdater.on("update-downloaded", (info) => applyEvent({type: "downloaded", version: info.version}));
       autoUpdater.on("error", (error) => applyEvent({type: "error", message: error.message}));
 
-      setTimeout(checkForUpdates, STARTUP_CHECK_DELAY_MS);
-      setInterval(checkForUpdates, CHECK_INTERVAL_MS);
+      setTimeout(() => void checkForUpdates(), STARTUP_CHECK_DELAY_MS);
+      setInterval(() => void checkForUpdates(), CHECK_INTERVAL_MS);
+    },
+
+    check: async () => {
+      if (!supported) return null;
+      // electron-updater emits the check's events before its promise settles, so state is final here.
+      await checkForUpdates();
+      return state;
     },
 
     download: async () => {
