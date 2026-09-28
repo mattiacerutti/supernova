@@ -1204,4 +1204,37 @@ describe("checkpoint navigation", () => {
         ?.session.turns.map((turn) => turn.userMessage.contentParts[0])
     ).toEqual([{text: "one", type: "text"}]);
   });
+  it("rejects undoing a turn a fork carried over from its source session", async () => {
+    const projectPath = await createGitProject();
+    const sessionDir = mkdtempSync(join(tmpdir(), "supernova-checkpoint-session-"));
+    tempDirs.push(projectPath, sessionDir);
+    const pi = await createPiTestRuntime({reopenManagers: true, sessionDir});
+    runtimes.push(pi);
+    const source = await pi.sessions.create({projectPath});
+    pi.faux.setResponses([
+      async () => {
+        await writeFile(join(projectPath, "file.txt"), "one\n");
+        return fauxAssistantMessage("one");
+      },
+      async () => {
+        await writeFile(join(projectPath, "file.txt"), "two\n");
+        return fauxAssistantMessage("two");
+      },
+    ]);
+    const firstEvents = await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: source.id});
+    const firstTurnId = snapshotEvents(firstEvents).at(-1)!.session.turns.at(-1)!.id;
+
+    const fork = await pi.sessions.fork({sessionId: source.id, turnId: firstTurnId});
+    const undo = await runRejectedSessionCommand({pi, run: (runtime) => runtime.undoCheckpoint({sessionId: fork.id})});
+
+    expect(undo.cause).toMatchObject({_tag: "CheckpointInheritedError"});
+    await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("one\n");
+
+    // The fork's own turn keeps its snapshot, so undoing it still restores files.
+    await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: fork.id});
+    const undoOwnTurn = await runSessionCommand({pi, run: (runtime) => runtime.undoCheckpoint({sessionId: fork.id})});
+
+    expect(errorEvents(undoOwnTurn)).toEqual([]);
+    await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("one\n");
+  });
 });

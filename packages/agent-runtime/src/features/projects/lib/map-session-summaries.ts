@@ -1,7 +1,7 @@
 import type {SessionInfo} from "@earendil-works/pi-coding-agent";
 import type {SessionSummary} from "@supernova/contracts/sessions/schemas";
 
-export type PiSessionInfo = Pick<SessionInfo, "cwd" | "firstMessage" | "id" | "modified" | "name">;
+export type PiSessionInfo = Pick<SessionInfo, "cwd" | "firstMessage" | "id" | "modified" | "name" | "parentSessionPath">;
 
 /** Chooses the best display title available for a Pi session. */
 function toSessionTitle(session: PiSessionInfo): string {
@@ -18,6 +18,7 @@ function toSessionTitle(session: PiSessionInfo): string {
 export function toPiSessionSummary(session: PiSessionInfo): SessionSummary {
   return {
     id: session.id,
+    ...(session.parentSessionPath ? {forked: true} : {}),
     title: toSessionTitle(session),
     updatedAt: session.modified.toISOString(),
   };

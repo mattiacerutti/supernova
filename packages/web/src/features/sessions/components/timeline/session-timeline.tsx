@@ -48,6 +48,7 @@ interface SessionTimelineProps {
   readonly isStreaming: boolean;
   readonly items: readonly SessionTimelineItem[];
   readonly liveItems: readonly SessionTimelineItem[];
+  readonly onForkFromTurn?: (turnId: string) => void;
   readonly onRevertToMessage?: (turnId: string) => void;
   readonly sessionId: string;
   readonly streamError: string | null;
@@ -58,7 +59,7 @@ interface SessionTimelineViewportProps extends SessionTimelineProps {
 }
 
 function SessionTimelineViewport(props: SessionTimelineViewportProps) {
-  const {bottomOverlayHeight = 0, compacting, isStreaming, items, liveItems, onAnchorScrollingChange, onRevertToMessage, sessionId, streamError} = props;
+  const {bottomOverlayHeight = 0, compacting, isStreaming, items, liveItems, onAnchorScrollingChange, onForkFromTurn, onRevertToMessage, sessionId, streamError} = props;
   const {scrollToEnd} = useMessageScroller();
   const {end: canScrollToEnd} = useMessageScrollerScrollable();
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -393,7 +394,7 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
                         key={virtualItem.key}
                         ref={virtualizer.measureElement}
                       >
-                        <SessionTimelineVirtualRow activeTurnId={activeTurnId} item={item} onRevertToMessage={onRevertToMessage} />
+                        <SessionTimelineVirtualRow activeTurnId={activeTurnId} item={item} onForkFromTurn={onForkFromTurn} onRevertToMessage={onRevertToMessage} />
                       </div>
                     );
                   })}

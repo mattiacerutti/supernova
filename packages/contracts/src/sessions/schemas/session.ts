@@ -34,6 +34,8 @@ export const Session = Schema.Struct({
 export const SessionSummary = Schema.Struct({
   /** Stable session identifier. */
   id: Schema.String,
+  /** Whether the session was forked from another session. */
+  forked: Schema.optional(Schema.Boolean),
   /** Human-readable session title. */
   title: Schema.String,
   /** ISO timestamp for the last session update. */

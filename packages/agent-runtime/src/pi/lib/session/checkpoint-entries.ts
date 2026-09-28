@@ -3,6 +3,7 @@ import type {PiSessionManager} from "@supernova/agent-runtime/pi/sdk";
 
 export const CHECKPOINT_CUSTOM_TYPE = "supernova.checkpoint";
 export const CHECKPOINT_CURSOR_CUSTOM_TYPE = "supernova.checkpoint-cursor";
+export const FORK_CUSTOM_TYPE = "supernova.fork";
 
 export type CheckpointPhase = "before-turn" | "after-turn";
 
@@ -48,6 +49,21 @@ export function isCapturedCheckpoint(entry: CheckpointEntry): boolean {
 
 function isCheckpointCursorEntry(entry: SessionEntry): entry is CheckpointCursorEntry {
   return isCustomEntry(entry) && entry.customType === CHECKPOINT_CURSOR_CUSTOM_TYPE;
+}
+
+/** Marks where a forked session's copied history ends and its own turns begin. */
+function isForkEntry(entry: SessionEntry): boolean {
+  return isCustomEntry(entry) && entry.customType === FORK_CUSTOM_TYPE;
+}
+
+/**
+ * Whether a checkpoint was copied in from the session this one was forked from. Workspace snapshots stay keyed by
+ * the session that captured them, so an inherited boundary has nothing to restore here. Takes entries in append
+ * order, where everything before the fork marker is copied history.
+ */
+export function isInheritedCheckpoint(entries: readonly SessionEntry[], target: CheckpointEntry): boolean {
+  const forkIndex = entries.findIndex(isForkEntry);
+  return forkIndex !== -1 && entries.findIndex((entry) => entry.id === target.id) < forkIndex;
 }
 
 /** Returns the latest persisted checkpoint cursor. */

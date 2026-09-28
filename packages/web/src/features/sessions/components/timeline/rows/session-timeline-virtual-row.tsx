@@ -5,11 +5,13 @@ import type {TimelineRow} from "@/features/sessions/lib/timeline/rows/timeline-r
 interface SessionTimelineVirtualRowProps {
   readonly activeTurnId: string | null;
   readonly item: TimelineRow;
+  readonly onForkFromTurn?: (turnId: string) => void;
   readonly onRevertToMessage?: (turnId: string) => void;
 }
 
 export default function SessionTimelineVirtualRow(props: SessionTimelineVirtualRowProps) {
-  const {activeTurnId, item, onRevertToMessage} = props;
+  const {activeTurnId, item, onForkFromTurn, onRevertToMessage} = props;
+  const settled = !activeTurnId || item.turnId !== activeTurnId;
 
   if (item.type === "stream-error") {
     return (
@@ -21,7 +23,7 @@ export default function SessionTimelineVirtualRow(props: SessionTimelineVirtualR
 
   return (
     <SessionTimelineItemFrame item={item}>
-      <SessionTimelineRow item={item} onRevertToMessage={activeTurnId && item.turnId === activeTurnId ? undefined : onRevertToMessage} />
+      <SessionTimelineRow item={item} onForkFromTurn={settled ? onForkFromTurn : undefined} onRevertToMessage={settled ? onRevertToMessage : undefined} />
     </SessionTimelineItemFrame>
   );
 }

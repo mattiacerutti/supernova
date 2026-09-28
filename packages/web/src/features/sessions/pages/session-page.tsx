@@ -13,6 +13,7 @@ import ThinkingLevelPicker from "@/features/sessions/components/composer/toolbar
 import UndoneTurnsDrawer from "@/features/sessions/components/composer/undone-turns-drawer";
 import AttachmentDropOverlay from "@/features/sessions/components/conversation/attachment-drop-overlay";
 import CheckpointConflictDialog from "@/features/sessions/components/conversation/checkpoint-conflict-dialog";
+import ForkSessionDialog from "@/features/sessions/components/conversation/fork-session-dialog";
 import NewSessionHero from "@/features/sessions/components/conversation/new-session-hero";
 import SessionLayout, {SessionBody, SessionHeader, SessionViewActions} from "@/features/sessions/components/conversation/session-layout";
 import SessionActionsMenu from "@/features/sessions/components/session-actions-menu";
@@ -129,6 +130,7 @@ export default function SessionPage(props: SessionPageProps) {
   });
   const stream = useSessionTimeline({modelReference: composer.models.modelReference, sessionId, sessionTurns: session?.turns ?? []});
   const [undoneDrawerHeight, setUndoneDrawerHeight] = useState(0);
+  const [forkTurnId, setForkTurnId] = useState<string | null>(null);
 
   const composerPending = composer.isPending || (target.kind === "new" && configuration.isPending);
 
@@ -182,6 +184,11 @@ export default function SessionPage(props: SessionPageProps) {
     const restoredIndex = session.undoneTurns.findIndex((turn) => turn.id === turnId);
     restoreDraftFrom(session.undoneTurns[restoredIndex + 1]);
     stream.revertToMessage(turnId);
+  };
+
+  const handleForkFromTurn = (turnId: string): void => {
+    if (!idle) return;
+    setForkTurnId(turnId);
   };
 
   const handleUndoneDrawerHeightChange = (height: number): void => {
@@ -252,6 +259,7 @@ export default function SessionPage(props: SessionPageProps) {
                 isStreaming={streaming}
                 items={stream.committedTimelineItems}
                 liveItems={stream.liveTimelineItems}
+                onForkFromTurn={idle ? handleForkFromTurn : undefined}
                 onRevertToMessage={handleRevertToMessage}
                 sessionId={session.id}
                 streamError={stream.streamError}
@@ -264,6 +272,7 @@ export default function SessionPage(props: SessionPageProps) {
       </SessionLayout>
 
       {session && <SessionActivity key={session.id} session={session} />}
+      {session && <ForkSessionDialog onClose={() => setForkTurnId(null)} sessionId={session.id} turnId={forkTurnId} />}
       <CheckpointConflictDialog
         onCancel={stream.checkpointConflict.cancel}
         onConfirm={stream.checkpointConflict.confirm}

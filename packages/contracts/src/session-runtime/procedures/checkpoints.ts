@@ -33,7 +33,12 @@ export class CheckpointUncapturedError extends Schema.TaggedErrorClass<Checkpoin
   message: Schema.String,
 }) {}
 
-export const CheckpointNavigationError = Schema.Union([CheckpointGenericError, CheckpointConflictError, CheckpointUncapturedError]);
+/** Raised when the target was copied in by a fork, whose workspace snapshots belong to the session it forked from. */
+export class CheckpointInheritedError extends Schema.TaggedErrorClass<CheckpointInheritedError>()("CheckpointInheritedError", {
+  message: Schema.String,
+}) {}
+
+export const CheckpointNavigationError = Schema.Union([CheckpointGenericError, CheckpointConflictError, CheckpointInheritedError, CheckpointUncapturedError]);
 
 export type CheckpointNavigationError = typeof CheckpointNavigationError.Type;
 export type RevertToMessagePayload = typeof RevertToMessagePayload.Type;

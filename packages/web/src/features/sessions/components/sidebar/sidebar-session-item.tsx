@@ -16,6 +16,7 @@ import {cn} from "@/lib/cn";
 import {formatRelativeTime} from "@/lib/format-relative-time";
 
 interface SidebarSessionItemProps {
+  readonly forked: boolean;
   readonly projectPath: string;
   readonly sessionId: string;
   readonly title: string;
@@ -24,7 +25,7 @@ interface SidebarSessionItemProps {
 
 /** One session row in the sidebar: opens on click, prefetches on hover, and owns rename, pin, live, and unseen state. */
 export default function SidebarSessionItem(props: SidebarSessionItemProps) {
-  const {projectPath, sessionId, title, updatedAt} = props;
+  const {forked, projectPath, sessionId, title, updatedAt} = props;
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -72,11 +73,14 @@ export default function SidebarSessionItem(props: SidebarSessionItemProps) {
             size="xs"
           />
         </IconButton>
-        {renaming ? (
-          <input {...inputProps} aria-label="Session title" className="min-w-0 flex-1 truncate bg-transparent text-sm outline-none" />
-        ) : (
-          <SessionTitleText className="min-w-0 flex-1 truncate text-sm" title={title} />
-        )}
+        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+          {renaming ? (
+            <input {...inputProps} aria-label="Session title" className="min-w-0 flex-1 truncate bg-transparent text-sm outline-none" />
+          ) : (
+            <SessionTitleText className="min-w-0 truncate text-sm" title={title} />
+          )}
+          {forked && !renaming && <Icon aria-label="Forked session" className="shrink-0 text-ink-faint" name="git-branch" role="img" size="xs" />}
+        </div>
         <span className="grid w-12 shrink-0 place-items-center justify-items-end">
           <span className="col-start-1 row-start-1 w-full justify-self-end whitespace-nowrap pr-1.5 text-right text-xs text-ink-muted group-hover/session:invisible group-focus-within/session:invisible group-has-[[data-popup-open]]/session:invisible">
             {streaming ? (

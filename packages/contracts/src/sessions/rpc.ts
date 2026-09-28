@@ -3,6 +3,9 @@ import {
   CreateSessionError,
   CreateSessionPayload,
   CreateSessionResult,
+  ForkSessionError,
+  ForkSessionPayload,
+  ForkSessionResult,
   ListComposerSuggestionsError,
   ListComposerSuggestionsPayload,
   ListComposerSuggestionsResult,
@@ -29,6 +32,12 @@ export const CreateSessionRpc = Rpc.make("createSession", {
   success: CreateSessionResult,
 });
 
+export const ForkSessionRpc = Rpc.make("forkSession", {
+  error: ForkSessionError,
+  payload: ForkSessionPayload,
+  success: ForkSessionResult,
+});
+
 export const ListModelsRpc = Rpc.make("listModels", {
   error: ListModelsError,
   payload: ListModelsPayload,
@@ -47,4 +56,4 @@ export const RenameSessionRpc = Rpc.make("renameSession", {
   success: RenameSessionResult,
 });
 
-export const SessionRpcs = [GetSessionRpc, CreateSessionRpc, ListModelsRpc, ListComposerSuggestionsRpc, RenameSessionRpc] as const;
+export const SessionRpcs = [GetSessionRpc, CreateSessionRpc, ForkSessionRpc, ListModelsRpc, ListComposerSuggestionsRpc, RenameSessionRpc] as const;

@@ -1,4 +1,5 @@
 export * from "./create-session";
+export * from "./fork-session";
 export * from "./get-session";
 export * from "./list-composer-suggestions";
 export * from "./list-models";

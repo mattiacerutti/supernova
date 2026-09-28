@@ -8,6 +8,7 @@ All notable changes to Supernova are documented in this file.
 
 ### Added
 
+- Added session forking: a fork action on an assistant's final message opens a new session with the conversation up to that message.
 - Added an Extensions section to General settings with a button that updates installed Pi packages, like `pi update --extensions`.
 - Added an About section to General settings that shows the app version and checks for, downloads, and installs updates.
 

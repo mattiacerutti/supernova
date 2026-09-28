@@ -1,9 +1,11 @@
 import {existsSync} from "node:fs";
-import {mkdtemp, readFile} from "node:fs/promises";
+import {mkdtemp, readdir, readFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
+import {SessionManager} from "@earendil-works/pi-coding-agent";
 import {afterEach, describe, expect, it} from "vitest";
-import {createPiTestRuntime, selectedModelReference} from "@tests/support/session-runtime";
+import {CHECKPOINT_CURSOR_CUSTOM_TYPE, CHECKPOINT_CUSTOM_TYPE} from "@supernova/agent-runtime/pi/lib/session/checkpoint-entries";
+import {createPiTestRuntime, fauxAssistantMessage, selectedModelReference} from "@tests/support/session-runtime";
 import {cleanupTempDirs} from "@tests/support/async";
 
 describe("Pi sessions service", () => {
@@ -124,5 +126,64 @@ describe("creating a session under a client id", () => {
     await pi.sessions.delete({sessionId: session.id});
 
     expect(existsSync(path)).toBe(false);
+  });
+});
+
+describe("forking a Pi session", () => {
+  const runtimes: Array<{unregister: () => void}> = [];
+  const tempDirs: string[] = [];
+
+  afterEach(() => {
+    while (runtimes.length > 0) runtimes.pop()?.unregister();
+    cleanupTempDirs(tempDirs);
+  });
+
+  /** A persisted session with two completed turns, each closed by an after-turn checkpoint and cursor. */
+  async function sessionWithTwoTurns() {
+    const dir = await mkdtemp(join(tmpdir(), "supernova-sessions-"));
+    tempDirs.push(dir);
+    const pi = await createPiTestRuntime({reopenManagers: true, sessionDir: dir});
+    runtimes.push(pi);
+    const manager = pi.sdk.SessionManager.create("/workspace", undefined);
+    manager.appendModelChange(selectedModelReference.providerId, selectedModelReference.id);
+    manager.appendSessionInfo("Original title");
+    const turnIds: string[] = [];
+    for (const text of ["First", "Second"]) {
+      manager.appendCustomEntry(CHECKPOINT_CUSTOM_TYPE, {checkpointId: `${text}-before`, phase: "before-turn"});
+      manager.appendCustomEntry("supernova.user-message-content-parts", {contentParts: [{text, type: "text"}]});
+      turnIds.push(manager.appendMessage({content: [{text, type: "text"}], role: "user", timestamp: 1}));
+      manager.appendMessage(fauxAssistantMessage(`${text} answer`, {timestamp: 2}));
+      manager.appendCustomEntry(CHECKPOINT_CUSTOM_TYPE, {checkpointId: `${text}-after`, phase: "after-turn"});
+      manager.appendCustomEntry(CHECKPOINT_CURSOR_CUSTOM_TYPE, {leafEntryId: manager.getLeafId()});
+    }
+    return {dir, pi, sessionId: manager.getSessionId(), turnIds};
+  }
+
+  it("copies the conversation through the chosen turn into a new session and leaves the source intact", async () => {
+    const {dir, pi, sessionId, turnIds} = await sessionWithTwoTurns();
+
+    const fork = await pi.sessions.fork({sessionId, turnId: turnIds[0]!});
+
+    expect(fork.id).not.toBe(sessionId);
+    expect(fork).toMatchObject({title: "Original title", undoneTurns: []});
+    expect(fork.turns.map((turn) => turn.userMessage.contentParts)).toEqual([[{text: "First", type: "text"}]]);
+    expect((await pi.sessions.get({sessionId})).turns).toHaveLength(2);
+
+    const forkFile = (await readdir(dir)).find((name) => name.endsWith(`_${fork.id}.jsonl`));
+    const reopened = SessionManager.open(join(dir, forkFile ?? ""));
+    expect(reopened.getHeader()?.parentSession).toBe(pi.getSession(sessionId)?.info.path);
+    // The cursor makes the fork point visible; the marker after it separates copied history from the fork's own turns.
+    expect(
+      reopened
+        .getBranch()
+        .slice(-2)
+        .map((entry) => (entry.type === "custom" ? entry.customType : entry.type))
+    ).toEqual([CHECKPOINT_CURSOR_CUSTOM_TYPE, "supernova.fork"]);
+  });
+
+  it("rejects a turn that is not in the session", async () => {
+    const {pi, sessionId} = await sessionWithTwoTurns();
+
+    await expect(pi.sessions.fork({sessionId, turnId: "missing"})).rejects.toMatchObject({_tag: "ForkSessionError"});
   });
 });

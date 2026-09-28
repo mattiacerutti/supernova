@@ -11,6 +11,7 @@ import type {SessionTimelineItem} from "@/features/sessions/types/session-timeli
 
 interface SessionTimelineRowProps {
   readonly item: SessionTimelineItem;
+  readonly onForkFromTurn?: (turnId: string) => void;
   readonly onRevertToMessage?: (turnId: string) => void;
 }
 
@@ -32,13 +33,13 @@ function FinalWork(props: FinalWorkProps) {
 }
 
 const SessionTimelineRow = memo(function SessionTimelineRow(props: SessionTimelineRowProps) {
-  const {item, onRevertToMessage} = props;
+  const {item, onForkFromTurn, onRevertToMessage} = props;
 
   switch (item.type) {
     case "user":
       return <UserMessage message={item.message} onRevertToMessage={onRevertToMessage} turnId={item.turnId} />;
     case "assistant":
-      return <AssistantMessage event={item.event} final={item.final} live={item.live} />;
+      return <AssistantMessage event={item.event} final={item.final} live={item.live} onForkFromTurn={onForkFromTurn} turnId={item.turnId} />;
     case "compaction":
       return <AssistantCompaction item={item} />;
     case "reasoning":

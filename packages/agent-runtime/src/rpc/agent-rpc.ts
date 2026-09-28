@@ -4,8 +4,8 @@ import {UpdateExtensionsError} from "@supernova/contracts/extensions/procedures"
 import {FolderCreateError, FolderFilesListError, FolderSuggestionsListError} from "@supernova/contracts/folders/procedures";
 import {ProjectSessionArchiveError, ProjectSessionsListError} from "@supernova/contracts/projects/procedures";
 import {ProviderLoginError, ProviderLogoutError, ProvidersListError} from "@supernova/contracts/providers/procedures";
-import {CheckpointConflictError, CheckpointGenericError, CheckpointUncapturedError} from "@supernova/contracts/session-runtime/procedures";
-import {CreateSessionError, ListComposerSuggestionsError, ListModelsError, LoadSessionError, RenameSessionError} from "@supernova/contracts/sessions/procedures";
+import {CheckpointConflictError, CheckpointGenericError, CheckpointInheritedError, CheckpointUncapturedError} from "@supernova/contracts/session-runtime/procedures";
+import {CreateSessionError, ForkSessionError, ListComposerSuggestionsError, ListModelsError, LoadSessionError, RenameSessionError} from "@supernova/contracts/sessions/procedures";
 import {
   WorkspaceBinaryFileError,
   WorkspaceFileNotFoundError,
@@ -26,7 +26,7 @@ function fallback<E>(Error: new (fields: {cause: unknown; message: string}) => E
   return (cause: unknown): E => new Error({cause, message: errorMessage(cause, message)});
 }
 
-const isCheckpointError = oneOf(CheckpointConflictError, CheckpointGenericError, CheckpointUncapturedError);
+const isCheckpointError = oneOf(CheckpointConflictError, CheckpointGenericError, CheckpointInheritedError, CheckpointUncapturedError);
 const checkpointFailure = (cause: unknown) => new CheckpointGenericError({cause, message: errorMessage(cause, "Failed to change the session checkpoint.")});
 
 /** Adapts every RPC procedure to its feature function. The only place Effect meets the features. */
@@ -66,6 +66,7 @@ export function agentRpcLayer(runtime: AgentRuntime) {
         oneOf(CreateSessionError),
         fallback(CreateSessionError, "Failed to create session.")
       ),
+    forkSession: (input) => run(() => sessions.fork(input), oneOf(ForkSessionError), fallback(ForkSessionError, "Failed to fork session.")),
     getConfiguration: (input) => runSync(() => configuration.get(input), oneOf(GetConfigurationError), fallback(GetConfigurationError, "Unable to load configuration.")),
     getSession: (input) =>
       run(async () => sessionRuntime.getCommittedSession(input) ?? sessions.get(input), oneOf(LoadSessionError), fallback(LoadSessionError, "Failed to load session.")),

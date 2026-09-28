@@ -63,7 +63,14 @@ export default function SidebarProjectSessions(props: SidebarProjectSessionsProp
         )}
         {expanded && sessionsQuery.error != null && <li className="px-8 py-1 text-sm text-danger-ink">Unable to load sessions.</li>}
         {displayedSessions.map((session) => (
-          <SidebarSessionItem key={session.id} projectPath={projectPath} sessionId={session.id} title={session.title} updatedAt={session.updatedAt} />
+          <SidebarSessionItem
+            forked={session.forked === true}
+            key={session.id}
+            projectPath={projectPath}
+            sessionId={session.id}
+            title={session.title}
+            updatedAt={session.updatedAt}
+          />
         ))}
         {canShowMore && (
           <li>

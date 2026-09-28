@@ -1,6 +1,6 @@
 import type {AgentSession} from "@earendil-works/pi-coding-agent";
 import {randomUUID} from "node:crypto";
-import {CheckpointUncapturedError} from "@supernova/contracts/session-runtime/procedures";
+import {CheckpointInheritedError, CheckpointUncapturedError} from "@supernova/contracts/session-runtime/procedures";
 import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
 import type {ModelReference, Session} from "@supernova/contracts/sessions/schemas";
 import type {PiModel} from "@supernova/agent-runtime/pi/sdk";
@@ -12,7 +12,13 @@ import type {AgentSessionFactory} from "@supernova/agent-runtime/features/sessio
 import type {CheckpointStore} from "@supernova/agent-runtime/features/session-runtime/checkpoints/checkpoint-store";
 import {CheckpointConflictError} from "@supernova/agent-runtime/features/session-runtime/checkpoints/shadow-repository";
 import type {EventBus} from "@supernova/agent-runtime/lib/event-bus";
-import {CHECKPOINT_CURSOR_CUSTOM_TYPE, CHECKPOINT_CUSTOM_TYPE, invalidateCheckpointRedo, isCapturedCheckpoint} from "@supernova/agent-runtime/pi/lib/session/checkpoint-entries";
+import {
+  CHECKPOINT_CURSOR_CUSTOM_TYPE,
+  CHECKPOINT_CUSTOM_TYPE,
+  invalidateCheckpointRedo,
+  isCapturedCheckpoint,
+  isInheritedCheckpoint,
+} from "@supernova/agent-runtime/pi/lib/session/checkpoint-entries";
 import type {CheckpointEntry, CheckpointStatus} from "@supernova/agent-runtime/pi/lib/session/checkpoint-entries";
 import {buildSessionSnapshot} from "@supernova/agent-runtime/pi/lib/session/build-session-snapshot";
 import {findSelectedModel} from "@supernova/agent-runtime/pi/lib/models/selected-model";
@@ -243,6 +249,10 @@ export class SessionWorker {
     const {current, cursorLeafEntryId, force, target} = input;
     const sessionManager = agentSession.sessionManager;
     if (isCapturedCheckpoint(target)) {
+      // A fork copies its history but not the workspace snapshots behind it, so those boundaries cannot restore files.
+      if (isInheritedCheckpoint(sessionManager.getEntries(), target)) {
+        throw new CheckpointInheritedError({message: "This message came from the session this one was forked from."});
+      }
       if (!isCapturedCheckpoint(current) && !force) {
         throw new CheckpointUncapturedError({message: "The current checkpoint has no workspace snapshot. Restoring may discard uncaptured changes."});
       }

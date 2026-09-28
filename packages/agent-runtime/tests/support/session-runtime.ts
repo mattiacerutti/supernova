@@ -198,11 +198,20 @@ export async function createPiTestRuntime(input?: {
   const sessionManagers = {
     create: (projectPath: string, _sessionDir: string | undefined, options?: {id?: string}) =>
       rememberSession(input?.sessionDir ? SessionManager.create(projectPath, input.sessionDir, options) : SessionManager.inMemory(projectPath, options)),
-    listAll: async () => [...sessions.values()].map((manager) => sessionRecord(manager).info),
+    listAll: async () => {
+      // Forks create their file directly, so a session dir is also listed from disk, as production does.
+      const created = [...sessions.values()].map((manager) => sessionRecord(manager).info);
+      if (!input?.sessionDir) return created;
+      const onDisk = await SessionManager.listAll(input.sessionDir);
+      return [...created, ...onDisk.filter((candidate) => !created.some((existing) => existing.id === candidate.id))];
+    },
     open: (path: string) => {
       openCount++;
       const sessionManager = [...sessions.values()].find((manager) => sessionRecord(manager).info.path === path);
-      if (!sessionManager) throw new Error("Session not found.");
+      if (!sessionManager) {
+        if (input?.sessionDir) return rememberSession(SessionManager.open(path, input.sessionDir));
+        throw new Error("Session not found.");
+      }
       const sessionFile = sessionManager.getSessionFile();
       if (input?.reopenManagers && input.sessionDir && sessionFile) return SessionManager.open(sessionFile, input.sessionDir);
       return sessionManager;

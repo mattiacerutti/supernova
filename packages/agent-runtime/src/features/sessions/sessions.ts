@@ -1,6 +1,7 @@
 import {rm, writeFile} from "node:fs/promises";
 import type {
   CreateSessionPayload,
+  ForkSessionPayload,
   GetSessionPayload,
   ListComposerSuggestionsPayload,
   ListComposerSuggestionsResult,
@@ -8,13 +9,14 @@ import type {
   ListModelsResult,
   RenameSessionPayload,
 } from "@supernova/contracts/sessions/procedures";
-import {CreateSessionError, RenameSessionError} from "@supernova/contracts/sessions/procedures";
+import {CreateSessionError, ForkSessionError, RenameSessionError} from "@supernova/contracts/sessions/procedures";
 import type {Session} from "@supernova/contracts/sessions/schemas";
 import {toComposerSuggestions} from "@supernova/agent-runtime/features/sessions/lib/composer-suggestions";
 import {resolveModelContextWindow} from "@supernova/agent-runtime/pi/lib/models/context-window";
 import {toAgentModelDetails} from "@supernova/agent-runtime/pi/lib/models/map-model";
 import {buildSessionSnapshot, sessionModelReference} from "@supernova/agent-runtime/pi/lib/session/build-session-snapshot";
 import {refreshAuthAndModels} from "@supernova/agent-runtime/pi/lib/models/refresh-models";
+import {CHECKPOINT_CURSOR_CUSTOM_TYPE, FORK_CUSTOM_TYPE, isCheckpointAfterTurnEntry} from "@supernova/agent-runtime/pi/lib/session/checkpoint-entries";
 import {openSessionById, sessionPathById} from "@supernova/agent-runtime/pi/lib/session/open-session";
 import type {ResourceCache} from "@supernova/agent-runtime/pi/resource-cache";
 import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";
@@ -55,6 +57,34 @@ export class Sessions {
   public async delete(input: GetSessionPayload): Promise<void> {
     const path = await sessionPathById(this.deps.sdk, input.sessionId);
     if (path) await rm(path, {force: true});
+  }
+
+  /**
+   * Copies the conversation up to and including a visible turn into a new session. The source is untouched and
+   * workspace files are not changed. Checkpoints stay keyed by the source session, so the fork cannot undo
+   * inherited turns; only turns made after the fork restore files.
+   */
+  public async fork(input: ForkSessionPayload): Promise<Session> {
+    const source = await openSessionById(this.deps.sdk, input.sessionId);
+    const sourceFile = source.getSessionFile();
+    if (!sourceFile) throw new ForkSessionError({message: "Session has not been saved yet."});
+
+    // A turn ends at its after-turn checkpoint; cutting there keeps its tool results and drops its cursor, whose
+    // redo leaf would point outside the fork.
+    const branch = source.getBranch();
+    const turnIndex = branch.findIndex((entry) => entry.id === input.turnId && entry.type === "message" && entry.message.role === "user");
+    const turnEnd = turnIndex === -1 ? undefined : branch.slice(turnIndex).find(isCheckpointAfterTurnEntry);
+    if (!turnEnd) throw new ForkSessionError({message: "This message cannot be forked."});
+
+    const fork = this.deps.sdk.SessionManager.open(sourceFile);
+    if (!fork.createBranchedSession(turnEnd.id)) throw new ForkSessionError({message: "Failed to fork session."});
+    fork.branch(turnEnd.id);
+    fork.appendCustomEntry(CHECKPOINT_CURSOR_CUSTOM_TYPE, {leafEntryId: turnEnd.id});
+    // Appended after the cursor so the cursor still hangs off the checkpoint it makes visible.
+    fork.appendCustomEntry(FORK_CUSTOM_TYPE, {sourceSessionId: input.sessionId});
+
+    const modelReference = sessionModelReference(fork);
+    return buildSessionSnapshot({contextWindow: resolveModelContextWindow(this.deps.sdk, modelReference), modelReference, sessionManager: fork});
   }
 
   /** Loads one Pi session and maps it into the shared session detail contract. */

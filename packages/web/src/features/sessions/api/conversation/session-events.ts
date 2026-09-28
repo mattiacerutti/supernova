@@ -19,7 +19,7 @@ function applyProjectSessionSummary(input: {projectPath: string; queryClient: Qu
     if (!result) return result;
 
     const sessionExists = result.sessions.some((session) => session.id === sessionId);
-    const sessions = sessionExists ? result.sessions.map((session) => (session.id === sessionId ? summary : session)) : [summary, ...result.sessions];
+    const sessions = sessionExists ? result.sessions.map((session) => (session.id === sessionId ? {...session, ...summary} : session)) : [summary, ...result.sessions];
     return {...result, sessions};
   });
 }

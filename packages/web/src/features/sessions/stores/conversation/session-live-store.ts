@@ -1,5 +1,5 @@
 import type {QueryClient} from "@tanstack/react-query";
-import {CheckpointConflictError, CheckpointUncapturedError} from "@supernova/contracts/session-runtime/procedures";
+import {CheckpointConflictError, CheckpointInheritedError, CheckpointUncapturedError} from "@supernova/contracts/session-runtime/procedures";
 import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
 import type {ModelReference, OutgoingMessage, Session, SessionContextUsage, Turn, UserMessage, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 import {create} from "zustand";
@@ -360,6 +360,11 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
                 return executeNavigation(true);
               },
             };
+          }
+          if (cause instanceof CheckpointInheritedError) {
+            showToast("Nothing to undo in this fork", "This message came from the session this one was forked from. Only messages sent in this session can be undone.");
+            rollback();
+            return "failed";
           }
           showToast(title, errorMessage(cause, "The session checkpoint could not be changed."));
           rollback();

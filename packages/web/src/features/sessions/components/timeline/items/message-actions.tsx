@@ -8,19 +8,20 @@ const messageTimeFormatter = new Intl.DateTimeFormat("en-GB", {hour: "2-digit", 
 interface MessageActionsProps {
   readonly align?: "end" | "start";
   readonly copyText: string;
+  readonly onFork?: () => void;
   readonly onRevert?: () => void;
   readonly timestamp?: string;
 }
 
 export default function MessageActions(props: MessageActionsProps) {
-  const {align = "start", copyText, onRevert, timestamp} = props;
+  const {align = "start", copyText, onFork, onRevert, timestamp} = props;
 
   const [copied, setCopied] = useState(false);
   const canCopy = copyText.length > 0;
   const timestampMs = timestamp === undefined ? NaN : Date.parse(timestamp);
   const hasTimestamp = Number.isFinite(timestampMs);
 
-  const hasActions = canCopy || onRevert || hasTimestamp;
+  const hasActions = canCopy || onFork || onRevert || hasTimestamp;
 
   const time = hasTimestamp && (
     <time className="px-1 text-[12px] leading-none tabular-nums text-ink-muted" dateTime={timestamp}>
@@ -61,6 +62,11 @@ export default function MessageActions(props: MessageActionsProps) {
             />
             <Icon className={cn("absolute size-3.5 transition-opacity duration-150", copied ? "opacity-100" : "opacity-0")} name="check" size="xs" />
           </span>
+        </Button>
+      )}
+      {onFork && (
+        <Button aria-label="Fork from this message" className="size-6" onClick={onFork} shape="icon" size="sm" title="Fork from this message" variant="ghost">
+          <Icon name="git-branch" size="xs" />
         </Button>
       )}
       {align === "start" && time}
