@@ -14,6 +14,7 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+- Changed long session names in the sidebar to fade out at the edge instead of ending in an ellipsis, and to scroll slowly into view while hovered.
 - Sending the first message of a new session now keeps the composer in place and slides it down into the session, instead of switching pages.
 
 ### Fixed

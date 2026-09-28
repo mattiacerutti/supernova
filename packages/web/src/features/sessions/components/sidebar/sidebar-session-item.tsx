@@ -77,7 +77,11 @@ export default function SidebarSessionItem(props: SidebarSessionItemProps) {
           {renaming ? (
             <input {...inputProps} aria-label="Session title" className="min-w-0 flex-1 truncate bg-transparent text-sm outline-none" />
           ) : (
-            <SessionTitleText className="min-w-0 truncate text-sm" title={title} />
+            <SessionTitleText
+              className="no-scrollbar scroll-fade-x min-w-0 flex-1 overflow-x-auto overflow-y-hidden text-sm whitespace-nowrap [--scroll-fade-e-size:1.5rem] [--scroll-fade-s-size:0.75rem]"
+              revealOnHover
+              title={title}
+            />
           )}
           {forked && !renaming && <Icon aria-label="Forked session" className="shrink-0 text-ink-faint" name="git-branch" role="img" size="xs" />}
         </div>
