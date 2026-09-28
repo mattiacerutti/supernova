@@ -5,7 +5,8 @@ import {chmod, mkdir, readdir, readFile, readlink, realpath, rm, stat, symlink, 
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {promisify} from "node:util";
-import {afterEach, describe, expect, it} from "vitest";
+import {afterEach, describe, expect, it, vi} from "vitest";
+import * as gitProcess from "@supernova/agent-runtime/lib/git-process";
 import {FileCheckpointStore} from "@supernova/agent-runtime/features/session-runtime/checkpoints/checkpoint-store";
 import {checkpointRefName} from "@supernova/agent-runtime/features/session-runtime/checkpoints/lib/checkpoint-keys";
 
@@ -86,6 +87,7 @@ describe("checkpoint store", () => {
   const tempDirs: string[] = [];
 
   afterEach(() => {
+    vi.restoreAllMocks();
     while (tempDirs.length > 0) rmSync(tempDirs.pop()!, {force: true, recursive: true});
   });
 
@@ -323,7 +325,7 @@ describe("checkpoint store", () => {
     await expect(readFile(join(repo, "tracked.txt"), "utf8")).resolves.toBe("after\n");
   });
 
-  it("deletes only refs and manifests owned by an archived session across all workspace repositories", async () => {
+  it("batches archived session ref deletion per repository while preserving other sessions", async () => {
     const repo = await createRepo();
     await createChildRepo(repo);
     const storageRoot = mkdtempSync(join(tmpdir(), "supernova-checkpoint-storage-"));
@@ -332,6 +334,7 @@ describe("checkpoint store", () => {
 
     await runCheckpoint(storageRoot, async (store) => {
       await store.capture({checkpointId: "owned", projectRoot: repo, sessionId});
+      await store.capture({checkpointId: "owned-second", projectRoot: repo, sessionId});
       await store.capture({checkpointId: "retained", projectRoot: repo, sessionId: otherSessionId});
     });
 
@@ -342,17 +345,27 @@ describe("checkpoint store", () => {
     const retainedManifest = JSON.parse(await readFile(retainedManifestPath, "utf8"));
     expect(ownedManifest.repositories.map((repository: {relativeRoot: string}) => repository.relativeRoot)).toEqual([".", "child"]);
 
+    const gitCommands = vi.spyOn(gitProcess, "runGitResult");
     await runCheckpoint(storageRoot, async (store) => {
       await store.deleteSession({projectRoot: repo, sessionId});
     });
 
-    await expect(stat(ownedManifestPath)).rejects.toThrow();
+    // Count Git processes instead of asserting machine-dependent elapsed time.
+    expect(gitCommands.mock.calls.filter(([args]) => args.includes("update-ref"))).toHaveLength(2);
+    await expect(stat(join(projectStorage, "manifests", hash(sessionId)))).rejects.toThrow();
     expect((await stat(retainedManifestPath)).isFile()).toBe(true);
     for (const [index, ownedRepository] of ownedManifest.repositories.entries()) {
       const shadowGitDir = join(projectStorage, "repositories", ownedRepository.repositoryId, "git");
       await expect(gitOutput(repo, ["--git-dir", shadowGitDir, "rev-parse", "--verify", ownedRepository.refName])).rejects.toThrow();
+      await expect(gitOutput(repo, ["--git-dir", shadowGitDir, "rev-parse", "--verify", checkpointRefName(sessionId, "owned-second")])).rejects.toThrow();
       await expect(gitOutput(repo, ["--git-dir", shadowGitDir, "rev-parse", "--verify", retainedManifest.repositories[index].refName])).resolves.toHaveLength(40);
     }
+
+    gitCommands.mockClear();
+    await runCheckpoint(storageRoot, async (store) => {
+      await store.deleteSession({projectRoot: repo, sessionId});
+    });
+    expect(gitCommands.mock.calls.filter(([args]) => args.includes("update-ref"))).toHaveLength(0);
   });
 
   it("keeps one repository identity across ordinary Git activity", async () => {

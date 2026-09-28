@@ -7,6 +7,7 @@ import {
   collectGarbage,
   createShadowRepository,
   deleteRef,
+  deleteRefs,
   diffTrees,
   listFlaggedPaths,
   listRefs,
@@ -357,7 +358,7 @@ async function listShadowGitDirs(repositoriesRoot: string): Promise<readonly str
 export async function deleteSessionRefs(repositoriesRoot: string, sessionId: string): Promise<void> {
   const prefix = checkpointSessionRefPrefix(sessionId);
   for (const gitDir of await listShadowGitDirs(repositoriesRoot)) {
-    for (const ref of await listRefs(gitDir, prefix)) await deleteRef(gitDir, ref);
+    await deleteRefs(gitDir, await listRefs(gitDir, prefix));
   }
 }
 

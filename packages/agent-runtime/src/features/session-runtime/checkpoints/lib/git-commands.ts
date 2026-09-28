@@ -245,6 +245,13 @@ export async function deleteRef(gitDir: string, ref: string): Promise<void> {
   await runGitResult([`--git-dir=${gitDir}`, "update-ref", "-d", ref]);
 }
 
+/** Deletes refs in one Git process, keeping cleanup best-effort. */
+export async function deleteRefs(gitDir: string, refs: readonly string[]): Promise<void> {
+  if (refs.length === 0) return;
+  const input = Buffer.from(refs.map((ref) => `delete ${ref}\n`).join(""));
+  await runGitResult([`--git-dir=${gitDir}`, "update-ref", "--stdin"], {input});
+}
+
 /** Lists refs under a prefix. */
 export async function listRefs(gitDir: string, prefix: string): Promise<readonly string[]> {
   const output = await optionalGit([`--git-dir=${gitDir}`, "for-each-ref", "--format=%(refname)", prefix]);

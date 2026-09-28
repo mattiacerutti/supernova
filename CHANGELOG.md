@@ -17,6 +17,7 @@ All notable changes to Supernova are documented in this file.
 
 ### Fixed
 
+- Fixed slow chat archiving for sessions with many checkpoints.
 - Fixed the composer shrinking and shifting once its model pickers finished loading.
 - Fixed the composer briefly dropping and sliding back into place when its height changed, such as after undo or redo restored a message.
 - Fixed tool inputs staying hidden until execution instead of appearing as each tool call finishes generating.
