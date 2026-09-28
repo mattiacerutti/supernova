@@ -8,6 +8,16 @@ All notable changes to Supernova are documented in this file.
 
 ### Added
 
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.5.0]
+
+### Added
+
 - Added session forking: a fork action on an assistant's final message opens a new session with the conversation up to that message.
 - Added an Extensions section to General settings with a button that updates installed Pi packages, like `pi update --extensions`.
 - Added an About section to General settings that shows the app version and checks for, downloads, and installs updates.
@@ -25,8 +35,6 @@ All notable changes to Supernova are documented in this file.
 - Fixed the composer briefly dropping and sliding back into place when its height changed, such as after undo or redo restored a message.
 - Fixed tool inputs staying hidden until execution instead of appearing as each tool call finishes generating.
 - Fixed model errors in the timeline, such as "This operation was aborted" after stopping a response, showing a timestamp above the error with extra spacing; they now render like other session errors.
-
-### Removed
 
 ## [0.4.0]
 
