@@ -89,7 +89,7 @@ export function SessionBody(props: SessionBodyProps) {
       >
         {!centered && timeline}
       </motion.div>
-      <motion.div className="relative z-20" layout={reduceMotion ? false : "position"} transition={DOCK_TRANSITION}>
+      <motion.div className="relative z-20" layout={reduceMotion ? false : "position"} layoutDependency={centered} transition={DOCK_TRANSITION}>
         {composer}
       </motion.div>
       <div className={cn("min-h-0", centered && "flex-1")} />
