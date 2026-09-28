@@ -15,6 +15,7 @@ All notable changes to Supernova are documented in this file.
 ### Changed
 
 - Changed long session names in the sidebar to fade out at the edge instead of ending in an ellipsis, and to scroll slowly into view while hovered.
+- Changed the sidebar to drop the hover pin button on chat rows and show a fork marker in its place; pinning stays in the chat actions menu.
 - Sending the first message of a new session now keeps the composer in place and slides it down into the session, instead of switching pages.
 
 ### Fixed

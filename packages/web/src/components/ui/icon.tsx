@@ -114,7 +114,7 @@ const icons = {
   "folder-plus": getStaticIcon(mdiIcons, "create-new-folder-outline"),
   folders: getStaticIcon(lucideIcons, "folders"),
   gauge: getStaticIcon(lucideIcons, "gauge"),
-  "git-branch": getStaticIcon(lucideIcons, "git-branch"),
+  "git-branch": getStaticIcon(fluentIcons, "branch-fork-16-regular"),
   "git-commit": getStaticIcon(lucideIcons, "git-commit-horizontal"),
   globe: getStaticIcon(lucideIcons, "globe"),
   image: getStaticIcon(lucideIcons, "image"),

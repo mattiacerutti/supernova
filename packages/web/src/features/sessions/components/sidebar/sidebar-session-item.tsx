@@ -1,9 +1,7 @@
 import {useQueryClient} from "@tanstack/react-query";
 import {useLocation, useNavigate} from "@tanstack/react-router";
-import type {MouseEvent} from "react";
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
-import IconButton from "@/components/ui/icon-button";
 import {getSessionQueryOptions} from "@/features/sessions/api/conversation/get-session";
 import {useRenameSession} from "@/features/sessions/api/sidebar/rename-session";
 import SessionActionsMenu from "@/features/sessions/components/session-actions-menu";
@@ -32,7 +30,6 @@ export default function SidebarSessionItem(props: SidebarSessionItemProps) {
   const renameSession = useRenameSession();
   const liveStatus = useSessionLiveStore((state) => state.sessions[sessionId]?.status);
   const pinned = useSessionPinsStore((state) => state.pinnedSessionIds.includes(sessionId));
-  const toggleSessionPinned = useSessionPinsStore((state) => state.toggleSessionPinned);
   const visitedAt = useSessionVisitsStore((state) => state.visits[sessionId]);
   const {inputProps, renaming, startRenaming} = useInlineRename({initialValue: title, onSave: (nextTitle) => renameSession.mutate({sessionId, title: nextTitle})});
 
@@ -49,44 +46,34 @@ export default function SidebarSessionItem(props: SidebarSessionItemProps) {
     void queryClient.prefetchQuery(getSessionQueryOptions(sessionId));
   };
 
-  const handleTogglePinned = (event: MouseEvent): void => {
-    event.stopPropagation();
-    toggleSessionPinned(sessionId);
-  };
-
   return (
     <li onFocusCapture={handlePrefetch} onPointerDown={handlePrefetch} onPointerEnter={handlePrefetch}>
       <Button
         as="div"
-        className={cn("group/session flex w-full items-center gap-2 py-1.5 pl-2 pr-1 text-left", selected && "bg-overlay-pressed text-ink")}
+        className={cn("group/session flex w-full items-center gap-2 py-1.5 pl-2 pr-2 text-left", selected && "bg-overlay-pressed text-ink")}
         onClick={handleOpen}
         variant="primary"
       >
-        <IconButton
-          className={cn("group/pin-toggle size-4 shrink-0", !pinned && "invisible group-hover/session:visible")}
-          label={pinned ? "Unpin session" : "Pin session"}
-          onClick={handleTogglePinned}
-        >
-          <Icon
-            className="origin-center transition-transform duration-250 ease-[cubic-bezier(0.2,0.9,0.2,1.15)] group-active/pin-toggle:scale-85 group-active/pin-toggle:-rotate-8 motion-reduce:transition-none"
-            name="pin"
-            size="xs"
-          />
-        </IconButton>
+        <span className="grid size-4 shrink-0 place-items-center">
+          {forked ? (
+            <Icon aria-label="Forked session" className="text-ink-faint" name="git-branch" role="img" size="xs" />
+          ) : (
+            pinned && <Icon aria-label="Pinned session" className="text-ink-muted" name="pin" role="img" size="xs" />
+          )}
+        </span>
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
           {renaming ? (
             <input {...inputProps} aria-label="Session title" className="min-w-0 flex-1 truncate bg-transparent text-sm outline-none" />
           ) : (
             <SessionTitleText
-              className="no-scrollbar scroll-fade-x min-w-0 flex-1 overflow-x-auto overflow-y-hidden text-sm whitespace-nowrap [--scroll-fade-e-size:1.5rem] [--scroll-fade-s-size:0.75rem]"
+              className="no-scrollbar scroll-fade-x min-w-0 flex-1 overflow-x-auto overflow-y-hidden text-sm whitespace-nowrap [--scroll-fade-e-size:1.5rem] [--scroll-fade-reveal:0.5rem] [--scroll-fade-s-size:1rem]"
               revealOnHover
               title={title}
             />
           )}
-          {forked && !renaming && <Icon aria-label="Forked session" className="shrink-0 text-ink-faint" name="git-branch" role="img" size="xs" />}
         </div>
         <span className="grid w-12 shrink-0 place-items-center justify-items-end">
-          <span className="col-start-1 row-start-1 w-full justify-self-end whitespace-nowrap pr-1.5 text-right text-xs text-ink-muted group-hover/session:invisible group-focus-within/session:invisible group-has-[[data-popup-open]]/session:invisible">
+          <span className="col-start-1 row-start-1 w-full justify-self-end whitespace-nowrap pr-0.75 text-right text-xs text-ink-muted group-hover/session:invisible group-focus-within/session:invisible group-has-[[data-popup-open]]/session:invisible">
             {streaming ? (
               <span className="inline-block size-2 animate-spin rounded-full border border-border-strong border-t-ink" aria-label="Session streaming" />
             ) : unseen ? (
