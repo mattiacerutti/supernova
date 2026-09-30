@@ -135,7 +135,7 @@ export default function SessionPage(props: SessionPageProps) {
   const projectPath = newSessionProjectPath ?? session?.projectPath ?? "";
 
   const composer = useComposer({
-    disabled: target.kind === "new" && configuration.isFetching,
+    disabled: target.kind === "new" && configuration.isPending,
     initialModelReference: session?.modelReference,
     modelDefaults: configuration.data?.modelDefaults,
     projectPath,
