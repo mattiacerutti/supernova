@@ -3,6 +3,8 @@ import {Schema} from "effect";
 export const ProjectSessionArchivePayload = Schema.Struct({
   projectPath: Schema.String,
   sessionId: Schema.String,
+  /** Also remove the session's worktree and branch. Ignored for sessions without a worktree. */
+  removeWorktree: Schema.optional(Schema.Boolean),
 });
 
 export const ProjectSessionArchiveResult = Schema.Struct({

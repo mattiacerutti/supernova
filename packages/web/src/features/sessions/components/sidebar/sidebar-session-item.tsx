@@ -19,11 +19,12 @@ interface SidebarSessionItemProps {
   readonly sessionId: string;
   readonly title: string;
   readonly updatedAt: string;
+  readonly worktree: boolean;
 }
 
 /** One session row in the sidebar: opens on click, prefetches on hover, and owns rename, pin, live, and unseen state. */
 export default function SidebarSessionItem(props: SidebarSessionItemProps) {
-  const {forked, projectPath, sessionId, title, updatedAt} = props;
+  const {forked, projectPath, sessionId, title, updatedAt, worktree} = props;
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -55,7 +56,9 @@ export default function SidebarSessionItem(props: SidebarSessionItemProps) {
         variant="primary"
       >
         <span className="grid size-4 shrink-0 place-items-center">
-          {forked ? (
+          {worktree ? (
+            <Icon aria-label="Worktree session" className="text-ink-faint" name="folder-git" role="img" size="xs" />
+          ) : forked ? (
             <Icon aria-label="Forked session" className="text-ink-faint" name="git-branch" role="img" size="xs" />
           ) : (
             pinned && <Icon aria-label="Pinned session" className="text-ink-muted" name="pin" role="img" size="xs" />
@@ -87,6 +90,7 @@ export default function SidebarSessionItem(props: SidebarSessionItemProps) {
             projectPath={projectPath}
             sessionId={sessionId}
             sessionTitle={title}
+            worktree={worktree}
             triggerClassName="col-start-1 row-start-1 size-5 opacity-0 group-hover/session:opacity-100 group-focus-within/session:opacity-100 data-popup-open:opacity-100"
           />
         </span>

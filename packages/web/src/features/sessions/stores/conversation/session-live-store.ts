@@ -1,7 +1,16 @@
 import type {QueryClient} from "@tanstack/react-query";
 import {CheckpointConflictError, CheckpointInheritedError, CheckpointUncapturedError} from "@supernova/contracts/session-runtime/procedures";
-import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
-import type {ModelReference, OutgoingMessage, Session, SessionContextUsage, Turn, UserMessage, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {SessionSetupStep, SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
+import type {
+  ModelReference,
+  OutgoingMessage,
+  Session,
+  SessionContextUsage,
+  SessionWorkspaceSelection,
+  Turn,
+  UserMessage,
+  UserMessageContentPart,
+} from "@supernova/contracts/sessions/schemas";
 import {create} from "zustand";
 import {useSettingsStore} from "@/stores/settings-store";
 import {showToast} from "@/lib/toast";
@@ -29,6 +38,8 @@ export interface SessionLiveState {
   readonly liveTurn: Turn | null;
   /** Latest server revision applied for this session. Older session-scoped events are ignored. */
   readonly revision: number;
+  /** Setup step running before a new session's first turn, shown in place of the thinking label. Set optimistically for steps the client asked for. */
+  readonly setupStep: SessionSetupStep | null;
   readonly status: SessionLiveStatus;
 }
 
@@ -48,7 +59,7 @@ function createInitialStreamTurn(input: {contentParts: readonly UserMessageConte
 
 /** Creates baseline event-derived state for sessions first seen from the global stream. */
 function emptyEntry(revision = 0): SessionLiveState {
-  return {error: null, liveContext: null, liveTurn: null, revision, status: "idle"};
+  return {error: null, liveContext: null, liveTurn: null, revision, setupStep: null, status: "idle"};
 }
 
 /** Normalizes command failures for user-facing messages. */
@@ -88,8 +99,12 @@ function reduceSessionEvent(entry: SessionLiveState, event: RevisionedSessionStr
       return {...entry, status: "compacting"};
     case "session.compaction.ended":
       return {...entry, status: entry.status === "stopping" ? "stopping" : entry.liveTurn ? "streaming" : "idle"};
+    case "session.setup.started":
+      return {...entry, setupStep: event.step};
+    case "session.setup.ended":
+      return {...entry, setupStep: null};
     case "session.snapshot":
-      return {...entry, error: null, liveContext: null, liveTurn: null, status: "idle"};
+      return {...entry, error: null, liveContext: null, liveTurn: null, setupStep: null, status: "idle"};
     case "session.turn":
       return {
         ...entry,
@@ -99,7 +114,7 @@ function reduceSessionEvent(entry: SessionLiveState, event: RevisionedSessionStr
         status: entry.status === "compacting" || entry.status === "stopping" ? entry.status : "streaming",
       };
     case "session.error":
-      return {...entry, error: event.error, liveContext: null, liveTurn: null, status: "idle"};
+      return {...entry, error: event.error, liveContext: null, liveTurn: null, setupStep: null, status: "idle"};
   }
 }
 
@@ -108,6 +123,7 @@ function createPendingSession(input: {projectPath: string; sessionId: string}): 
   return {
     id: input.sessionId,
     context: {usedTokens: 0, contextWindow: 0},
+    forked: false,
     projectPath: input.projectPath,
     title: "Untitled session",
     turns: [],
@@ -130,6 +146,7 @@ interface SendSessionMessageInput {
 /** The first message of a session that does not exist yet; the server creates it under `sessionId` with this message. */
 interface StartSessionInput extends SendSessionMessageInput {
   readonly projectPath: string;
+  readonly workspace: SessionWorkspaceSelection;
 }
 
 interface CompactSessionInput {
@@ -241,12 +258,19 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
   };
 
   const startSession = async (input: StartSessionInput): Promise<StartSessionOutcome> => {
-    const {projectPath, queryClient, rpcClient, sessionId} = input;
+    const {projectPath, queryClient, rpcClient, sessionId, workspace} = input;
     queryClient.setQueryData<Session>(sessionKeys.detail(sessionId), createPendingSession({projectPath, sessionId}));
     const message = beginOptimisticTurn(input);
+    // The worktree step starts before any event can arrive; showing it now keeps the thinking label from flashing first.
+    if (workspace.mode === "worktree") {
+      set((state) => {
+        const entry = state.sessions[sessionId];
+        return entry ? {sessions: {...state.sessions, [sessionId]: {...entry, setupStep: "worktree"}}} : state;
+      });
+    }
 
     try {
-      await rpcClient.run((rpc) => rpc.createSession({id: sessionId, message, projectPath}));
+      await rpcClient.run((rpc) => rpc.createSession({id: sessionId, message, projectPath, workspace}));
       return {status: "started"};
     } catch (cause) {
       // The server removed the session, so nothing of it may remain on the client.

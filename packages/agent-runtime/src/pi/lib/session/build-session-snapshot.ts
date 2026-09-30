@@ -4,6 +4,7 @@ import {buildSessionContextUsage} from "@supernova/agent-runtime/pi/lib/session/
 import type {PiSessionManager} from "@supernova/agent-runtime/pi/sdk";
 import {buildPiTurns} from "@supernova/agent-runtime/pi/lib/turns/build-turns";
 import {latestCheckpointCursor} from "@supernova/agent-runtime/pi/lib/session/checkpoint-entries";
+import {sessionWorkspace} from "@supernova/agent-runtime/pi/lib/session/worktree-entry";
 
 /** The model a session last ran with, or undefined for a session that has never been prompted. */
 export function sessionModelReference(sessionManager: PiSessionManager): ModelReference | undefined {
@@ -67,9 +68,10 @@ export function buildSessionSnapshot(input: {
 
   return {
     id: sessionManager.getSessionId(),
+    forked: sessionManager.getHeader()?.parentSession !== undefined,
     modelReference,
     context: buildSessionContextUsage({contextWindow, entries: branch, messages: sessionManager.buildSessionContext().messages}),
-    projectPath: sessionManager.getCwd(),
+    ...sessionWorkspace(sessionManager),
     title: sessionTitle(sessionManager, branch),
     turns,
     undoneTurns: modelReference ? buildUndoneTurns({sessionManager, modelReference}) : [],

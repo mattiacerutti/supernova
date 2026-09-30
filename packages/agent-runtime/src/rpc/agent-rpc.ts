@@ -15,6 +15,7 @@ import {
 } from "@supernova/contracts/workspace/schemas";
 import {Effect, Stream} from "effect";
 import {errorMessage} from "@supernova/agent-runtime/lib/errors";
+import {Workflow} from "@supernova/agent-runtime/lib/workflow";
 import {oneOf, run, runSync} from "@supernova/agent-runtime/rpc/edge";
 import type {AgentRuntime} from "@supernova/agent-runtime/runtime";
 
@@ -31,15 +32,18 @@ const checkpointFailure = (cause: unknown) => new CheckpointGenericError({cause,
 
 /** Adapts every RPC procedure to its feature function. The only place Effect meets the features. */
 export function agentRpcLayer(runtime: AgentRuntime) {
-  const {configuration, extensions, folders, projects, providers, sessionRuntime, sessions, workspace} = runtime;
+  const {configuration, extensions, folders, projects, providers, sessionRuntime, sessions, workspace, worktrees} = runtime;
 
   return AgentRpcGroup.toLayer({
     abortSession: (input) => Effect.promise(() => sessionRuntime.abort(input)),
     archiveProjectSession: (input) =>
       run(
         async () => {
-          await sessionRuntime.release(input);
-          return projects.archiveSession(input);
+          const worktree = await sessions.getWorktree(input);
+          await sessionRuntime.release({sessionId: input.sessionId, workspacePath: worktree?.path ?? input.projectPath});
+          const result = await projects.archiveSession(input);
+          if (worktree && input.removeWorktree) await worktrees.remove({projectPath: input.projectPath, worktree});
+          return result;
         },
         oneOf(ProjectSessionArchiveError),
         fallback(ProjectSessionArchiveError, "Failed to archive project session.")
@@ -47,20 +51,49 @@ export function agentRpcLayer(runtime: AgentRuntime) {
     cancelProviderLogin: (input) => runSync(() => providers.cancelLogin(input), oneOf(ProviderLoginError), fallback(ProviderLoginError, "Failed to cancel provider login.")),
     compactSession: (input) => Effect.promise(() => sessionRuntime.compact(input)),
     createFolder: (input) => run(() => folders.create(input), oneOf(FolderCreateError), fallback(FolderCreateError, "Failed to create folder.")),
-    createSession: ({id, message, projectPath}) =>
+    // Setup is all-or-nothing: when a required step fails, everything before it is undone and the client keeps nothing.
+    createSession: ({id, message, projectPath, workspace: selection}) =>
       run(
         async () => {
-          const session = await sessions.create({id, projectPath});
+          const workflow = new Workflow();
+          const worktree =
+            selection?.mode === "worktree" && id !== undefined
+              ? await workflow.step({
+                  name: "worktree",
+                  required: true,
+                  run: async () => {
+                    sessionRuntime.publishSetup({phase: "started", sessionId: id, step: "worktree"});
+                    try {
+                      const value = await worktrees.create({baseRef: selection.baseRef, projectPath});
+                      return {value, undo: () => worktrees.remove({projectPath, worktree: value})};
+                    } finally {
+                      sessionRuntime.publishSetup({phase: "ended", sessionId: id, step: "worktree"});
+                    }
+                  },
+                })
+              : undefined;
+          const session = await workflow.step({
+            name: "session",
+            required: true,
+            run: async () => {
+              const value = await sessions.create({id, projectPath, worktree});
+              return {value, undo: () => sessions.delete({sessionId: value.id})};
+            },
+          });
           if (!message) return session;
-
-          // Setup is all-or-nothing: a session whose first turn cannot start is removed again.
-          try {
-            await sessionRuntime.sendMessage({...message, sessionId: session.id});
-          } catch (cause) {
-            await sessionRuntime.release({projectPath, sessionId: session.id});
-            await sessions.delete({sessionId: session.id});
-            throw new CreateSessionError({cause, message: errorMessage(cause, "Failed to start the session.")});
-          }
+          await workflow.step({
+            name: "first-turn",
+            required: true,
+            run: async () => {
+              try {
+                await sessionRuntime.sendMessage({...message, sessionId: session.id});
+              } catch (cause) {
+                await sessionRuntime.release({sessionId: session.id, workspacePath: worktree?.path ?? projectPath});
+                throw new CreateSessionError({cause, message: errorMessage(cause, "Failed to start the session.")});
+              }
+              return {value: undefined};
+            },
+          });
           return session;
         },
         oneOf(CreateSessionError),
@@ -81,6 +114,7 @@ export function agentRpcLayer(runtime: AgentRuntime) {
     listProjectSessions: (input) =>
       run(() => projects.listSessions(input), oneOf(ProjectSessionsListError), fallback(ProjectSessionsListError, "Failed to list project sessions.")),
     listProviders: () => run(() => providers.list(), oneOf(ProvidersListError), fallback(ProvidersListError, "Failed to list providers.")),
+    listWorkspaceBranches: (input) => run(() => workspace.listBranches(input), isWorkspaceGitError, fallback(WorkspaceGenericError, "Workspace operation failed.")),
     listWorkspaceFiles: (input) => run(() => workspace.listFiles(input), isWorkspaceGitError, fallback(WorkspaceGenericError, "Workspace operation failed.")),
     listWorkspaceRepositories: (input) =>
       run(() => workspace.listRepositories(input), oneOf(WorkspaceGenericError), fallback(WorkspaceGenericError, "Workspace operation failed.")),

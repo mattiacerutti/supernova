@@ -1,9 +1,10 @@
 import Icon from "@/components/ui/icon";
 import IconButton from "@/components/ui/icon-button";
+import {WorkspacePickerSkeleton} from "@/features/sessions/components/composer/toolbar/workspace-picker";
 
 export default function SessionComposerSkeleton() {
   return (
-    <div className="relative px-4 pb-7 md:px-6">
+    <div className="relative px-4 pb-3 md:px-6">
       <div className="mx-auto max-w-3xl rounded-3xl corner-superellipse/1.3 bg-surface-control px-3 py-2 ring-1 ring-border-muted shadow-md">
         <div className="min-h-10 p-1 text-sm font-light leading-5 text-ink-strong/25">Ask anything, @ to add files, or / for commands</div>
 
@@ -35,6 +36,9 @@ export default function SessionComposerSkeleton() {
             </IconButton>
           </div>
         </div>
+      </div>
+      <div className="mx-auto flex h-8 max-w-3xl items-center px-1">
+        <WorkspacePickerSkeleton />
       </div>
     </div>
   );

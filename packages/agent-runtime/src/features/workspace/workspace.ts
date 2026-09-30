@@ -1,6 +1,9 @@
 import {readFile} from "node:fs/promises";
 import {join} from "node:path";
 import type {
+  WorkspaceBranch,
+  WorkspaceBranchesListPayload,
+  WorkspaceBranchesListResult,
   WorkspaceChangesGetPayload,
   WorkspaceChangesGetResult,
   WorkspaceDiffContentsGetPayload,
@@ -55,8 +58,43 @@ async function repositoryFiles(projectPath: string, root: string): Promise<strin
   );
 }
 
+/** `git worktree list --porcelain` as branch → worktree path. */
+function parseWorktreeBranches(output: string): Map<string, string> {
+  const result = new Map<string, string>();
+  for (const block of output.split("\n\n")) {
+    const path = block.match(/^worktree (.+)$/m)?.[1];
+    const branch = block.match(/^branch refs\/heads\/(.+)$/m)?.[1];
+    if (path && branch) result.set(branch, path);
+  }
+  return result;
+}
+
 /** Read-only view of a project's files and uncommitted Git changes. */
 export class Workspace {
+  /** Local branches by most recent commit, then remote-tracking branches, with the worktree each is checked out in. */
+  public async listBranches(input: WorkspaceBranchesListPayload): Promise<WorkspaceBranchesListResult> {
+    const {projectPath} = input;
+    const [refs, worktrees, head] = await Promise.all([
+      workspaceGit(projectPath, ["for-each-ref", "--sort=-committerdate", "--format=%(refname)", "refs/heads", "refs/remotes"]),
+      workspaceGit(projectPath, ["worktree", "list", "--porcelain"]),
+      workspaceGit(projectPath, ["symbolic-ref", "--quiet", "--short", "HEAD"], [0, 1]),
+    ]);
+    const worktreeByBranch = parseWorktreeBranches(worktrees);
+    const local: WorkspaceBranch[] = [];
+    const remote: WorkspaceBranch[] = [];
+    for (const ref of refs.split("\n")) {
+      if (ref.startsWith("refs/heads/")) {
+        const name = ref.slice("refs/heads/".length);
+        const worktreePath = worktreeByBranch.get(name);
+        local.push({name, remote: false, ...(worktreePath ? {worktreePath} : {})});
+      } else if (ref.startsWith("refs/remotes/") && !ref.endsWith("/HEAD")) {
+        remote.push({name: ref.slice("refs/remotes/".length), remote: true});
+      }
+    }
+    const current = head.trim();
+    return {branches: [...local, ...remote], ...(current ? {current} : {})};
+  }
+
   /** Every change against HEAD, staged or not, plus untracked files with their line counts. */
   public async getChanges(input: WorkspaceChangesGetPayload): Promise<WorkspaceChangesGetResult> {
     const repository = await repositoryPath(input.projectPath, input.repositoryRoot);

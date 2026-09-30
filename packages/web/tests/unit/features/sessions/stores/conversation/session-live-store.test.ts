@@ -171,6 +171,26 @@ describe("session live store", () => {
     });
   });
 
+  it("tracks the setup step of a session being created until it ends or the turn settles", async () => {
+    const queryClient = createQueryClient();
+    const rpcClient = streamRpcClient([
+      {type: "connected"},
+      {revision: 1, sessionId: "session-1", step: "worktree", type: "session.setup.started"},
+      {revision: 2, sessionId: "session-1", step: "worktree", type: "session.setup.ended"},
+      {revision: 3, sessionId: "session-2", step: "worktree", type: "session.setup.started"},
+      {revision: 4, sessionId: "session-2", type: "session.error", error: "Worktree failed"},
+      {revision: 5, sessionId: "session-3", step: "worktree", type: "session.setup.started"},
+    ]);
+
+    disconnect = connectSessionEvents({queryClient, rpcClient});
+
+    await waitUntil(() => {
+      expect(useSessionLiveStore.getState().sessions["session-1"]).toMatchObject({revision: 2, setupStep: null});
+      expect(useSessionLiveStore.getState().sessions["session-2"]).toMatchObject({revision: 4, setupStep: null, status: "idle"});
+      expect(useSessionLiveStore.getState().sessions["session-3"]).toMatchObject({revision: 5, setupStep: "worktree"});
+    });
+  });
+
   it("clears stopped live turns when an authoritative snapshot arrives", async () => {
     const queryClient = createQueryClient();
     const stoppedTurn = turn({
@@ -196,6 +216,7 @@ describe("session live store", () => {
           liveContext: contextUsage,
           liveTurn: stoppedTurn,
           revision: 1,
+          setupStep: null,
           status: "stopping",
         },
       },
@@ -291,21 +312,50 @@ describe("session live store", () => {
   it("shows a new session at once and creates it with its first message", async () => {
     const queryClient = createQueryClient();
 
-    const pending = useSessionLiveStore
-      .getState()
-      .startSession({contentParts, modelReference: model, projectPath: "/workspace", queryClient, rpcClient: commandRpcClient(), sessionId: "new-session"});
+    const pending = useSessionLiveStore.getState().startSession({
+      contentParts,
+      modelReference: model,
+      projectPath: "/workspace",
+      queryClient,
+      rpcClient: commandRpcClient(),
+      sessionId: "new-session",
+      workspace: {mode: "local"},
+    });
 
     expect(queryClient.getQueryData<Session>(sessionKeys.detail("new-session"))).toMatchObject({id: "new-session", projectPath: "/workspace", turns: []});
-    expect(useSessionLiveStore.getState().sessions["new-session"]).toMatchObject({liveTurn: {userMessage: {contentParts}}, status: "streaming"});
+    expect(useSessionLiveStore.getState().sessions["new-session"]).toMatchObject({liveTurn: {userMessage: {contentParts}}, setupStep: null, status: "streaming"});
+    await expect(pending).resolves.toEqual({status: "started"});
+  });
+
+  it("shows the worktree step at once when a new session asks for one", async () => {
+    const queryClient = createQueryClient();
+
+    const pending = useSessionLiveStore.getState().startSession({
+      contentParts,
+      modelReference: model,
+      projectPath: "/workspace",
+      queryClient,
+      rpcClient: commandRpcClient(),
+      sessionId: "new-session",
+      workspace: {baseRef: "main", mode: "worktree"},
+    });
+
+    expect(useSessionLiveStore.getState().sessions["new-session"]).toMatchObject({setupStep: "worktree", status: "streaming"});
     await expect(pending).resolves.toEqual({status: "started"});
   });
 
   it("removes every trace of a new session the server could not create", async () => {
     const queryClient = createQueryClient();
 
-    const outcome = await useSessionLiveStore
-      .getState()
-      .startSession({contentParts, modelReference: model, projectPath: "/workspace", queryClient, rpcClient: commandRpcClient({rejectCreate: true}), sessionId: "new-session"});
+    const outcome = await useSessionLiveStore.getState().startSession({
+      contentParts,
+      modelReference: model,
+      projectPath: "/workspace",
+      queryClient,
+      rpcClient: commandRpcClient({rejectCreate: true}),
+      sessionId: "new-session",
+      workspace: {mode: "local"},
+    });
 
     expect(outcome).toEqual({message: "Worktree could not be created.", status: "failed"});
     expect(queryClient.getQueryData(sessionKeys.detail("new-session"))).toBeUndefined();
@@ -372,7 +422,7 @@ describe("session live store", () => {
   it("guards session commands while work is active", () => {
     const rpcClient = commandRpcClient();
     useSessionLiveStore.setState({
-      sessions: {"session-1": {error: null, liveContext: contextUsage, liveTurn: turn(), revision: 1, status: "streaming"}},
+      sessions: {"session-1": {error: null, liveContext: contextUsage, liveTurn: turn(), revision: 1, setupStep: null, status: "streaming"}},
     });
 
     useSessionLiveStore.getState().sendMessage({contentParts, modelReference: model, queryClient: createQueryClient(), rpcClient, sessionId: "session-1"});
@@ -385,7 +435,7 @@ describe("session live store", () => {
   it("marks a streaming turn as stopping when aborting", () => {
     const rpcClient = commandRpcClient();
     useSessionLiveStore.setState({
-      sessions: {"session-1": {error: null, liveContext: contextUsage, liveTurn: turn(), revision: 1, status: "streaming"}},
+      sessions: {"session-1": {error: null, liveContext: contextUsage, liveTurn: turn(), revision: 1, setupStep: null, status: "streaming"}},
     });
 
     useSessionLiveStore.getState().abortSession({rpcClient, sessionId: "session-1"});

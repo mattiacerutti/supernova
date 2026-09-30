@@ -8,7 +8,11 @@ All notable changes to Supernova are documented in this file.
 
 ### Added
 
+- Added worktree sessions: two pickers under the composer choose whether a new session runs in the project's current checkout or in a new Git worktree branched off a chosen base branch. The worktree gets a random `supernova/<adjective>-<noun>` branch, a "Creating worktree" marker shows in the timeline while it is set up, worktree sessions carry a marker in the sidebar and their branch under the composer, and archiving one asks whether to remove its worktree and branch.
+
 ### Changed
+
+- Session titles are now generated in the background: the first response starts immediately and the title appears when it is ready, instead of the first turn waiting for it.
 
 ### Fixed
 

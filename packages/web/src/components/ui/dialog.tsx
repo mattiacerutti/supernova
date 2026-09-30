@@ -1,4 +1,4 @@
-import type {ReactNode} from "react";
+import type {MouseEvent, ReactNode} from "react";
 import {Dialog as BaseDialog} from "@base-ui/react/dialog";
 import Icon from "@/components/ui/icon";
 import {cn} from "@/lib/cn";
@@ -16,11 +16,20 @@ interface DialogProps {
 export default function Dialog(props: DialogProps) {
   const {children, className, containerClassName, onOpenChange, onOpenChangeComplete, open, title} = props;
 
+  // The dialog is portaled, but React events still bubble through the tree that rendered it. A dialog opened from a
+  // clickable row (a sidebar session) must not activate that row when the user clicks inside it.
+  const stopPropagation = (event: MouseEvent): void => {
+    event.stopPropagation();
+  };
+
   return (
     <BaseDialog.Root onOpenChange={onOpenChange} onOpenChangeComplete={onOpenChangeComplete} open={open}>
       <BaseDialog.Portal>
-        <BaseDialog.Backdrop className="fixed inset-0 z-50 bg-overlay-scrim opacity-100 transition-opacity duration-150 ease-out data-closed:opacity-0 data-ending-style:opacity-0 data-starting-style:opacity-0" />
-        <BaseDialog.Viewport className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center overflow-hidden">
+        <BaseDialog.Backdrop
+          className="fixed inset-0 z-50 bg-overlay-scrim opacity-100 transition-opacity duration-150 ease-out data-closed:opacity-0 data-ending-style:opacity-0 data-starting-style:opacity-0"
+          onClick={stopPropagation}
+        />
+        <BaseDialog.Viewport className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center overflow-hidden" onClick={stopPropagation}>
           <div
             className={cn("relative z-50 flex h-[min(calc(100svh-1rem),32rem)] w-[min(calc(100vw-1rem),40rem)] flex-col items-center overflow-visible", containerClassName)}
             data-slot="dialog-container"

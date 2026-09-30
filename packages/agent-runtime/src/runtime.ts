@@ -12,6 +12,7 @@ import {SessionPool} from "@supernova/agent-runtime/features/session-runtime/wor
 import {createTitleGenerator} from "@supernova/agent-runtime/features/session-runtime/worker/title-generator";
 import {Sessions} from "@supernova/agent-runtime/features/sessions/sessions";
 import {Workspace} from "@supernova/agent-runtime/features/workspace/workspace";
+import {Worktrees} from "@supernova/agent-runtime/features/worktrees/worktrees";
 import {EventBus} from "@supernova/agent-runtime/lib/event-bus";
 import {createResourceCache} from "@supernova/agent-runtime/pi/resource-cache";
 import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";
@@ -27,6 +28,7 @@ export interface AgentRuntime {
   readonly sessionRuntime: SessionRuntime;
   readonly sessions: Sessions;
   readonly workspace: Workspace;
+  readonly worktrees: Worktrees;
   readonly dispose: () => Promise<void>;
 }
 
@@ -35,6 +37,8 @@ interface CreateAgentRuntimeOptions {
   readonly sdk?: PiSdk;
   /** Where checkpoint manifests and shadow repositories live. */
   readonly checkpointStorageRoot?: string;
+  /** Where session worktrees are created. */
+  readonly worktreeStorageRoot?: string;
 }
 
 /** Wires the Pi SDK, stateful components, and features. Call `dispose()` on shutdown. */
@@ -62,6 +66,7 @@ export async function createAgentRuntime(options: CreateAgentRuntimeOptions = {}
     sessionRuntime: new SessionRuntime({events, pool}),
     sessions: new Sessions({resourceCache, sdk}),
     workspace: new Workspace(),
+    worktrees: new Worktrees(options.worktreeStorageRoot),
     dispose: () => pool.dispose(),
   };
 }

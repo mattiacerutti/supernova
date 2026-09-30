@@ -32,6 +32,7 @@ export type IconName =
   | "filter"
   | "fold-vertical"
   | "folder"
+  | "folder-git"
   | "folder-open"
   | "folder-plus"
   | "folders"
@@ -110,6 +111,7 @@ const icons = {
   filter: getStaticIcon(lucideIcons, "list-filter"),
   "fold-vertical": getStaticIcon(lucideIcons, "fold-vertical"),
   folder: getStaticIcon(cuidaIcons, "folder-outline"),
+  "folder-git": getStaticIcon(lucideIcons, "folder-git-2"),
   "folder-open": getStaticIcon(fluentIcons, "folder-open-24-regular"),
   "folder-plus": getStaticIcon(mdiIcons, "create-new-folder-outline"),
   folders: getStaticIcon(lucideIcons, "folders"),
