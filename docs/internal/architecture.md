@@ -29,4 +29,8 @@ BrowserWindow → supernova://app → API endpoint supplied by preload
 
 UI hosting and API ownership are separate. Remote/LAN operations happen on the machine running `apps/server`, not the machine running the browser. New features must preserve that boundary even when developed locally.
 
+### Native modules in the server
+
+The server runs under Bun in development and under Electron's Node in the desktop app. Code that needs a native capability checks for the Bun API first and falls back to a native module for Node; `features/workspace/terminals/pty.ts` does this with `Bun.Terminal` and `@lydell/node-pty`. Such a module is marked `--external` in the server build and `scripts/prepare-tools.ts` copies it, with only the current platform's prebuilt binary, to `dist/node_modules`, which electron-builder ships next to `cli.js`.
+
 For execution and recovery guarantees, see [Session runtime](session-runtime.md). For workspace snapshot and restore guarantees, see [Checkpoint system](checkpoint-system.md).

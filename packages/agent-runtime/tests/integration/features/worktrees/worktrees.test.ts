@@ -6,6 +6,7 @@ import {join} from "node:path";
 import {promisify} from "node:util";
 import {afterEach, describe, expect, it} from "vitest";
 import {Workspace} from "@supernova/agent-runtime/features/workspace/workspace";
+import type {WorkspaceDeps} from "@supernova/agent-runtime/features/workspace/workspace";
 import {Worktrees} from "@supernova/agent-runtime/features/worktrees/worktrees";
 import {cleanupTempDirs} from "@tests/support/async";
 
@@ -44,7 +45,7 @@ describe("Worktrees", () => {
     expect(await git(worktree.path, "rev-parse", "--abbrev-ref", "HEAD")).toBe(worktree.branch);
     expect(existsSync(join(worktree.path, "a.txt"))).toBe(true);
 
-    const branches = await new Workspace().listBranches({projectPath: repo});
+    const branches = await new Workspace({terminals: {} as WorkspaceDeps["terminals"]}).listBranches({projectPath: repo});
     expect(branches.current).toBe("main");
     expect(branches.branches).toContainEqual({name: worktree.branch, remote: false, worktreePath: worktree.path});
     expect(branches.branches.find((branch) => branch.name === "main")).toMatchObject({remote: false, worktreePath: await realpath(repo)});

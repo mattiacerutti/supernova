@@ -40,6 +40,7 @@ function session(input?: Partial<Session>): Session {
   return {
     id: "session-1",
     context: {usedTokens: 0, contextWindow: 200_000},
+    forked: false,
     projectPath: "/workspace",
     title: "Session",
     turns: [],

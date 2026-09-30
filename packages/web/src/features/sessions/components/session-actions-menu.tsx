@@ -25,7 +25,7 @@ export default function SessionActionsMenu(props: SessionActionsMenuProps) {
 
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
-  
+
   const navigate = useNavigate();
   const location = useLocation();
   const pinned = useSessionPinsStore((state) => state.pinnedSessionIds.includes(sessionId));

@@ -1,12 +1,14 @@
 import {execFile} from "node:child_process";
-import {chmod, copyFile, mkdir, readdir, rm, writeFile} from "node:fs/promises";
+import {createRequire} from "node:module";
+import {chmod, copyFile, cp, mkdir, readdir, rm, writeFile} from "node:fs/promises";
 import {arch, platform} from "node:os";
-import {basename, join} from "node:path";
+import {basename, dirname, join} from "node:path";
 import {promisify} from "node:util";
 
 const execFilePromise = promisify(execFile);
 const fdVersion = "10.3.0";
 const toolsDir = join(process.cwd(), "dist", "tools");
+const distNodeModulesDir = join(process.cwd(), "dist", "node_modules");
 const tmpDir = join(process.cwd(), "dist", ".tools-tmp");
 
 interface ToolAsset {
@@ -120,4 +122,22 @@ async function prepareFd(): Promise<void> {
   await rm(tmpDir, {force: true, recursive: true});
 }
 
+/**
+ * `@lydell/node-pty` is a native module, so the bundle leaves it external and it is copied next to `cli.js` for
+ * Node's resolution to find. The platform package holds the prebuilt binary and spawn helper; only the current
+ * platform's is shipped because the desktop app is packaged per platform.
+ */
+async function preparePty(): Promise<void> {
+  const ptyPackage = dirname(createRequire(import.meta.url).resolve("@lydell/node-pty/package.json"));
+  // The platform package is an optional dependency of @lydell/node-pty, so it resolves from that package's location.
+  const platformPackage = dirname(createRequire(join(ptyPackage, "index.js")).resolve(`@lydell/node-pty-${platform()}-${arch()}/package.json`));
+  const targetDir = join(distNodeModulesDir, "@lydell");
+  await rm(targetDir, {force: true, recursive: true});
+  await mkdir(targetDir, {recursive: true});
+  for (const source of [ptyPackage, platformPackage]) {
+    await cp(source, join(targetDir, basename(source)), {dereference: true, recursive: true});
+  }
+}
+
 await prepareFd();
+await preparePty();

@@ -22,6 +22,22 @@ import {decodeWorkspaceFile, workspaceGit} from "@supernova/agent-runtime/featur
 import {pathInProject} from "@supernova/agent-runtime/features/workspace/lib/paths";
 import {discoverWorkspaceRepositories, repositoryPath} from "@supernova/agent-runtime/features/workspace/lib/repositories";
 import {runGitResult} from "@supernova/agent-runtime/lib/git-process";
+import type {
+  TerminalClosePayload,
+  TerminalOpenPayload,
+  TerminalOpenResult,
+  TerminalResizePayload,
+  TerminalsListPayload,
+  TerminalsListResult,
+  TerminalWatchPayload,
+  TerminalWritePayload,
+} from "@supernova/contracts/terminals/procedures";
+import type {TerminalEvent} from "@supernova/contracts/terminals/schemas";
+import type {Terminals} from "@supernova/agent-runtime/features/workspace/terminals/terminals";
+
+export interface WorkspaceDeps {
+  readonly terminals: Terminals;
+}
 
 /** An untracked file has no HEAD side, so its whole content counts as additions. */
 async function untrackedEntry(repository: string, path: string): Promise<WorkspaceChangeEntry> {
@@ -69,8 +85,40 @@ function parseWorktreeBranches(output: string): Map<string, string> {
   return result;
 }
 
-/** Read-only view of a project's files and uncommitted Git changes. */
+/** A session's folder: its files, uncommitted Git changes, branches, and the shells running in it. */
 export class Workspace {
+  public constructor(private readonly deps: WorkspaceDeps) {}
+
+  public openTerminal(input: TerminalOpenPayload): Promise<TerminalOpenResult> {
+    return this.deps.terminals.open(input);
+  }
+
+  public writeTerminal(input: TerminalWritePayload): Promise<void> {
+    return this.deps.terminals.write(input);
+  }
+
+  public resizeTerminal(input: TerminalResizePayload): Promise<void> {
+    return this.deps.terminals.resize(input);
+  }
+
+  /** Ends the shell; the only way a terminal goes away short of its session being released. */
+  public closeTerminal(input: TerminalClosePayload): Promise<void> {
+    return this.deps.terminals.close(input);
+  }
+
+  public listTerminals(input: TerminalsListPayload): Promise<TerminalsListResult> {
+    return this.deps.terminals.list(input);
+  }
+
+  public watchTerminal(input: TerminalWatchPayload): Promise<AsyncGenerator<TerminalEvent, void, undefined>> {
+    return this.deps.terminals.watch(input);
+  }
+
+  /** Kills a session's shells; runs before the session is archived and its worktree removed. */
+  public closeSessionTerminals(sessionId: string): Promise<void> {
+    return this.deps.terminals.closeSession(sessionId);
+  }
+
   /** Local branches by most recent commit, then remote-tracking branches, with the worktree each is checked out in. */
   public async listBranches(input: WorkspaceBranchesListPayload): Promise<WorkspaceBranchesListResult> {
     const {projectPath} = input;

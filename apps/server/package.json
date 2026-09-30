@@ -12,9 +12,9 @@
   "scripts": {
     "dev": "SUPERNOVA_SERVER_DEV=1 bun --watch src/cli.ts",
     "start": "node dist/cli.js",
-    "build": "rm -rf dist && bun build src/cli.ts --define PI_BUNDLED_NODE=true --target node --outdir dist && bun scripts/prepare-tools.ts",
+    "build": "rm -rf dist && bun build src/cli.ts --define PI_BUNDLED_NODE=true --target node --external @lydell/node-pty --outdir dist && bun scripts/prepare-tools.ts",
     "test": "bun test tests",
-    "build:e2e": "bun run build && bun build tests/support/e2e-server.ts --define PI_BUNDLED_NODE=true --target node --outfile dist/e2e-server.js",
+    "build:e2e": "bun run build && bun build tests/support/e2e-server.ts --define PI_BUNDLED_NODE=true --target node --external @lydell/node-pty --outfile dist/e2e-server.js",
     "lint": "eslint .",
     "prettier": "prettier --check . --ignore-path ../../.prettierignore",
     "typecheck": "tsc --noEmit"

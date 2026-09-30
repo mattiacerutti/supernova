@@ -17,7 +17,7 @@ const config = {
   files: ["out/**", "package.json"],
   extraResources: [
     {from: "resources/icons", to: "icons"},
-    {from: "../server/dist", to: "server", filter: ["cli.js", "tools/**"]},
+    {from: "../server/dist", to: "server", filter: ["cli.js", "tools/**", "node_modules/**"]},
     {from: "../../packages/web/dist", to: "web"},
   ],
   win: {

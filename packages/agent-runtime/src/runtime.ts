@@ -11,6 +11,8 @@ import {createAgentSessionFactory} from "@supernova/agent-runtime/features/sessi
 import {SessionPool} from "@supernova/agent-runtime/features/session-runtime/worker/session-pool";
 import {createTitleGenerator} from "@supernova/agent-runtime/features/session-runtime/worker/title-generator";
 import {Sessions} from "@supernova/agent-runtime/features/sessions/sessions";
+import {createSpawnPty} from "@supernova/agent-runtime/features/workspace/terminals/pty";
+import {Terminals} from "@supernova/agent-runtime/features/workspace/terminals/terminals";
 import {Workspace} from "@supernova/agent-runtime/features/workspace/workspace";
 import {Worktrees} from "@supernova/agent-runtime/features/worktrees/worktrees";
 import {EventBus} from "@supernova/agent-runtime/lib/event-bus";
@@ -57,6 +59,8 @@ export async function createAgentRuntime(options: CreateAgentRuntimeOptions = {}
     createTitleGenerator(sdk)
   );
 
+  const terminals = new Terminals({spawnPty: createSpawnPty()});
+
   return {
     configuration: new Configuration(),
     extensions: new Extensions({resourceCache, sdk}),
@@ -65,8 +69,10 @@ export async function createAgentRuntime(options: CreateAgentRuntimeOptions = {}
     providers: new Providers({loginSessions: new LoginSessions(), sdk}),
     sessionRuntime: new SessionRuntime({events, pool}),
     sessions: new Sessions({resourceCache, sdk}),
-    workspace: new Workspace(),
+    workspace: new Workspace({terminals}),
     worktrees: new Worktrees(options.worktreeStorageRoot),
-    dispose: () => pool.dispose(),
+    dispose: async () => {
+      await Promise.all([terminals.dispose(), pool.dispose()]);
+    },
   };
 }
