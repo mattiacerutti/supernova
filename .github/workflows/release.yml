@@ -321,8 +321,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ matrix.arch }}-bun-${{ hashFiles('bun.lock') }}-
 
+      # The macOS x64 build runs on an arm64 runner; installing every architecture's PTY binary lets the server bundle
+      # ship both so the packaged app has the right one.
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bun install --frozen-lockfile --os='*' --cpu='*'
 
       - id: signing
         name: Resolve desktop signing

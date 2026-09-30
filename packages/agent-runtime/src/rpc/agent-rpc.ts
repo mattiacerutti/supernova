@@ -63,7 +63,7 @@ export function agentRpcLayer(runtime: AgentRuntime) {
         async () => {
           const workflow = new Workflow();
           const worktree =
-            selection?.mode === "worktree" && id !== undefined
+            selection?.mode === "worktree"
               ? await workflow.step({
                   name: "worktree",
                   required: true,

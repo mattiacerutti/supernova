@@ -1210,7 +1210,7 @@ describe("checkpoint navigation", () => {
     tempDirs.push(projectPath, sessionDir);
     const pi = await createPiTestRuntime({reopenManagers: true, sessionDir});
     runtimes.push(pi);
-    const source = await pi.sessions.create({projectPath});
+    const source = await pi.sessions.create({id: crypto.randomUUID(), projectPath});
     pi.faux.setResponses([
       async () => {
         await writeFile(join(projectPath, "file.txt"), "one\n");

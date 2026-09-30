@@ -1,6 +1,5 @@
 import {rm, writeFile} from "node:fs/promises";
 import type {
-  CreateSessionPayload,
   ForkSessionPayload,
   GetSessionPayload,
   ListComposerSuggestionsPayload,
@@ -32,13 +31,13 @@ export class Sessions {
   public constructor(private readonly deps: SessionsDeps) {}
 
   /**
-   * Creates a new empty Pi session for a project, under the client's id when it gives one. With a worktree the agent
-   * runs there (Pi's cwd), while the file stays in the project's session folder so the project still lists it.
+   * Creates a new empty Pi session for a project under the client's id. With a worktree the agent runs there (Pi's
+   * cwd), while the file stays in the project's session folder so the project still lists it.
    */
-  public async create(input: Pick<CreateSessionPayload, "id" | "projectPath"> & {readonly worktree?: SessionWorktree}): Promise<Session> {
+  public async create(input: {readonly id: string; readonly projectPath: string; readonly worktree?: SessionWorktree}): Promise<Session> {
     const {id, projectPath, worktree} = input;
     // Pi names files `<timestamp>_<id>.jsonl`, so the exclusive write below cannot catch a reused id.
-    if (id !== undefined && (await sessionPathById(this.deps.sdk, id)) !== undefined) throw new CreateSessionError({message: "A session with this id already exists."});
+    if ((await sessionPathById(this.deps.sdk, id)) !== undefined) throw new CreateSessionError({message: "A session with this id already exists."});
 
     const sessionDir = worktree ? this.deps.sdk.SessionManager.create(projectPath).getSessionDir() : undefined;
     const sessionManager = this.deps.sdk.SessionManager.create(worktree?.path ?? projectPath, sessionDir, {id});

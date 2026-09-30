@@ -23,7 +23,7 @@ describe("Pi sessions service", () => {
     const pi = await createPiTestRuntime({sessionDir});
     runtimes.push(pi);
 
-    const session = await pi.sessions.create({projectPath: "/workspace"});
+    const session = await pi.sessions.create({id: crypto.randomUUID(), projectPath: "/workspace"});
     const created = pi.getSession(session.id);
 
     expect(session).toMatchObject({id: session.id, projectPath: "/workspace", title: "Untitled session", turns: []});
@@ -119,7 +119,7 @@ describe("creating a session under a client id", () => {
   it("deletes the session file", async () => {
     const pi = await createPiTestRuntime({sessionDir: await sessionDir()});
     runtimes.push(pi);
-    const session = await pi.sessions.create({projectPath: "/workspace"});
+    const session = await pi.sessions.create({id: crypto.randomUUID(), projectPath: "/workspace"});
     const path = pi.getSession(session.id)?.info.path ?? "";
     expect(existsSync(path)).toBe(true);
 

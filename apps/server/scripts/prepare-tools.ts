@@ -16,6 +16,7 @@ interface ToolAsset {
   readonly fileName: string;
 }
 
+// TODO: The macOS x64 release is built on an arm64 runner, so this ships an arm64 `fd` in the x64 artifact and it fails.
 function resolveFdAsset(): ToolAsset {
   const currentPlatform = platform();
   const currentArch = arch();
@@ -124,17 +125,27 @@ async function prepareFd(): Promise<void> {
 
 /**
  * `@lydell/node-pty` is a native module, so the bundle leaves it external and it is copied next to `cli.js` for
- * Node's resolution to find. The platform package holds the prebuilt binary and spawn helper; only the current
- * platform's is shipped because the desktop app is packaged per platform.
+ * Node's resolution to find. Every architecture's `@lydell/node-pty-<platform>-<arch>` package for the current
+ * platform is copied too, because a release may be built on a machine of a different architecture than the one it
+ * targets (macOS x64 on an arm64 runner); the wrapper picks the right binary at runtime. Other platforms are left
+ * out since the desktop app is packaged per platform and the Windows packages are ~12 MB each. A release install
+ * uses `--os='*' --cpu='*'` so the other architectures are present to copy.
  */
 async function preparePty(): Promise<void> {
-  const ptyPackage = dirname(createRequire(import.meta.url).resolve("@lydell/node-pty/package.json"));
-  // The platform package is an optional dependency of @lydell/node-pty, so it resolves from that package's location.
-  const platformPackage = dirname(createRequire(join(ptyPackage, "index.js")).resolve(`@lydell/node-pty-${platform()}-${arch()}/package.json`));
+  const require = createRequire(import.meta.url);
+  const ptyPackage = dirname(require.resolve("@lydell/node-pty/package.json"));
+  const platformPackages = Object.keys(require("@lydell/node-pty/package.json").optionalDependencies ?? {}).filter((name) => name.includes(`-${platform()}-`));
   const targetDir = join(distNodeModulesDir, "@lydell");
   await rm(targetDir, {force: true, recursive: true});
   await mkdir(targetDir, {recursive: true});
-  for (const source of [ptyPackage, platformPackage]) {
+  await cp(ptyPackage, join(targetDir, basename(ptyPackage)), {dereference: true, recursive: true});
+  for (const name of platformPackages) {
+    let source: string;
+    try {
+      source = dirname(require.resolve(`${name}/package.json`));
+    } catch {
+      continue; // Not installed; a development install only has the current architecture's.
+    }
     await cp(source, join(targetDir, basename(source)), {dereference: true, recursive: true});
   }
 }

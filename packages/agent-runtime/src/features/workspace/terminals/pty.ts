@@ -23,6 +23,11 @@ export interface SpawnPtyInput {
 
 export type SpawnPty = (input: SpawnPtyInput) => Promise<Pty>;
 
+/** POSIX shells read their profile as a login shell; PowerShell has no such flag and rejects `-l`. */
+function shellArguments(): string[] {
+  return process.platform === "win32" ? [] : ["-l"];
+}
+
 interface BunTerminal {
   close(): void;
   resize(cols: number, rows: number): void;
@@ -45,7 +50,7 @@ function spawnBunPty(bun: BunGlobal, input: SpawnPtyInput): Pty {
     name: "xterm-256color",
     data: (_terminal, data) => input.onData(decoder.decode(data, {stream: true})),
   });
-  const subprocess = bun.spawn([input.shell, "-l"], {
+  const subprocess = bun.spawn([input.shell, ...shellArguments()], {
     cwd: input.cwd,
     env: input.env,
     terminal,
@@ -68,14 +73,14 @@ function spawnBunPty(bun: BunGlobal, input: SpawnPtyInput): Pty {
 
 async function spawnNodePty(input: SpawnPtyInput): Promise<Pty> {
   const pty = await import("@lydell/node-pty");
-  const process = pty.spawn(input.shell, ["-l"], {cols: input.cols, cwd: input.cwd, env: input.env as Record<string, string>, name: "xterm-256color", rows: input.rows});
-  process.onData(input.onData);
-  process.onExit(({exitCode}) => input.onExit(exitCode));
+  const child = pty.spawn(input.shell, shellArguments(), {cols: input.cols, cwd: input.cwd, env: input.env as Record<string, string>, name: "xterm-256color", rows: input.rows});
+  child.onData(input.onData);
+  child.onExit(({exitCode}) => input.onExit(exitCode));
   return {
-    pid: process.pid,
-    kill: (signal) => process.kill(signal),
-    resize: (cols, rows) => process.resize(cols, rows),
-    write: (data) => process.write(data),
+    pid: child.pid,
+    kill: (signal) => child.kill(signal),
+    resize: (cols, rows) => child.resize(cols, rows),
+    write: (data) => child.write(data),
   };
 }
 

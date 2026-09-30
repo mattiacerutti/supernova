@@ -130,7 +130,7 @@ class TimelineRpcClient implements RpcClient {
   /** Mirrors the server: the client's id names the session, and a first message starts its turn. */
   private createSession({id, message, projectPath}: CreateSessionPayload): Session {
     const session: Session = {
-      id: id ?? `session-${this.sessions.size + 1}`,
+      id,
       context: {usedTokens: 0, contextWindow: 0},
       forked: false,
       projectPath,
