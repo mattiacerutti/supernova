@@ -12,6 +12,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Fixed
 
+- Fixed sidebar and workspace widths animating during window resizing and growing back after being constrained by a narrower window.
+
 ### Removed
 
 ## [0.5.0]

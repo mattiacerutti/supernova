@@ -1,6 +1,6 @@
 import {AnimatePresence, motion} from "framer-motion";
 import {Activity, useRef} from "react";
-import type {ReactNode} from "react";
+import type {CSSProperties, ReactNode} from "react";
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import IconButton from "@/components/ui/icon-button";
@@ -12,7 +12,7 @@ import {EMPTY_LAYOUT, MIN_WORKSPACE_PANEL_WIDTH, tabKind, useWorkspacePanelStore
 import type {WorkspacePanelTab, WorkspacePanelTabKind} from "@/features/workspace/types/workspace-panel";
 import {useDragResize} from "@/hooks/use-drag-resize";
 import {cn} from "@/lib/cn";
-import {clampedPanelWidth, maxPanelWidth} from "@/components/layouts/panel-layout";
+import {clampedPanelWidth, maxPanelWidth, observePanelWidth, PANEL_TRANSITION} from "@/components/layouts/panel-layout";
 
 const WORKSPACE_TAB_KIND_NAMES = Object.keys(WORKSPACE_TAB_KINDS) as readonly WorkspacePanelTabKind[];
 
@@ -168,14 +168,20 @@ export default function WorkspacePanel(props: WorkspacePanelProps) {
   return (
     <div
       className={cn(
-        "relative h-full shrink-0 overflow-hidden transition-[width] duration-250 ease-in-out [[data-resizing]_&]:transition-none [[data-resizing]_&]:duration-0",
-        open && "border-l border-border-muted"
+        "relative h-full shrink-0 overflow-hidden w-[calc(var(--panel-width)*var(--panel-open))]",
+        PANEL_TRANSITION,
+        open ? "[--panel-open:1] border-l border-border-muted" : "[--panel-open:0]"
       )}
       inert={!open}
       ref={panelRef}
-      style={{width: open ? panelWidth : 0}}
+      style={{"--panel-width": panelWidth} as CSSProperties}
     >
-      <div className="h-full" style={{width: panelWidth}}>
+      <div
+        className="h-full w-(--panel-width)"
+        ref={(element) => {
+          if (element && open) return observePanelWidth(element, width, (fittedWidth) => setWidth(fittedWidth, MIN_WORKSPACE_PANEL_WIDTH, width));
+        }}
+      >
         <WorkspacePanelContent projectPath={projectPath} sessionId={sessionId} />
       </div>
       {open && (

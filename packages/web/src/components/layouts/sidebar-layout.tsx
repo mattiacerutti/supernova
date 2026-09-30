@@ -2,10 +2,8 @@ import type {CSSProperties, ReactNode} from "react";
 import {isDesktopEnvironment, isMacEnvironment, isWindowsEnvironment} from "@/config/app-environment";
 import {useDragResize} from "@/hooks/use-drag-resize";
 import {cn} from "@/lib/cn";
-import {clampedPanelWidth} from "@/components/layouts/panel-layout";
+import {clampedPanelWidth, observePanelWidth, PANEL_TRANSITION} from "@/components/layouts/panel-layout";
 import {useSettingsStore} from "@/stores/settings-store";
-
-const PANEL_TRANSITION = "transition-[width] duration-250 ease-in-out [[data-resizing]_&]:transition-none [[data-resizing]_&]:duration-0";
 
 interface SidebarLayoutProps {
   readonly children: ReactNode;
@@ -54,13 +52,16 @@ export function SidebarLayoutTitlebar(props: SidebarLayoutTitlebarProps) {
 
   return (
     <div className="absolute inset-x-0 top-0 z-10 flex h-12 items-center [-webkit-app-region:drag]">
-      <div className={cn("flex h-full items-center gap-1 pr-3", isMacEnvironment ? "pl-23" : "pl-3", sidebarVisible && "w-(--sidebar-width)", PANEL_TRANSITION)}>{children}</div>
+      <div className={cn("flex h-full items-center gap-1 pr-3", isMacEnvironment ? "pl-23" : "pl-3", sidebarVisible && "w-(--sidebar-width)")}>{children}</div>
     </div>
   );
 }
 
 interface SidebarLayoutSidebarProps {
   readonly children: ReactNode;
+  readonly animate?: boolean;
+  /** Desktop width to remember after fitting; omitted in compact layouts. */
+  readonly width?: number;
   /** Enables the drag handle; on narrow viewports a resizable sidebar takes the full width. */
   readonly onWidthChange?: (width: number) => void;
   readonly visible?: boolean;
@@ -68,18 +69,25 @@ interface SidebarLayoutSidebarProps {
 
 /** The sidebar column. Collapses to zero width when hidden and fades its content. */
 export function SidebarLayoutSidebar(props: SidebarLayoutSidebarProps) {
-  const {children, onWidthChange, visible = true} = props;
+  const {animate = true, children, onWidthChange, visible = true, width} = props;
   const handleResizePointerDown = useDragResize((clientX) => onWidthChange?.(clientX));
   const resizable = onWidthChange != null;
 
   return (
-    <div className={cn("relative shrink-0 overflow-hidden", PANEL_TRANSITION, visible ? (resizable ? "w-full md:w-(--sidebar-width)" : "w-(--sidebar-width)") : "w-0")}>
+    <div
+      className={cn(
+        "relative shrink-0 overflow-hidden w-[calc(var(--panel-width)*var(--panel-open))]",
+        resizable ? "[--panel-width:100vw] md:[--panel-width:var(--sidebar-width)]" : "[--panel-width:var(--sidebar-width)]",
+        animate && PANEL_TRANSITION,
+        visible ? "[--panel-open:1]" : "[--panel-open:0]"
+      )}
+      inert={!visible}
+    >
       <div
-        className={cn(
-          "h-full pt-12 transition-opacity duration-200 ease-out",
-          resizable ? "w-screen md:w-(--sidebar-width)" : "w-(--sidebar-width)",
-          visible ? "opacity-100" : "opacity-0"
-        )}
+        className={cn("h-full w-(--panel-width) pt-12", animate && "transition-opacity duration-200 ease-out motion-reduce:transition-none", visible ? "opacity-100" : "opacity-0")}
+        ref={(element) => {
+          if (element && visible && width !== undefined && onWidthChange) return observePanelWidth(element, width, onWidthChange);
+        }}
       >
         {children}
       </div>

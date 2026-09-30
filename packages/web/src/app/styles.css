@@ -2,6 +2,13 @@
 @import "shadcn/tailwind.css";
 @plugin "@toolwind/corner-shape";
 
+/* Only panel visibility animates; its CSS-constrained width remains responsive. */
+@property --panel-open {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 1;
+}
+
 /* Keep shadcn's changing scroll-fade gradients from invalidating descendant styles. */
 @property --scroll-fade-block {
   syntax: "*";

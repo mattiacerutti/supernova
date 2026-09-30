@@ -41,7 +41,7 @@ interface AppLayoutProps {
 /** The main app shell: project sidebar, titlebar controls, and the routed content. */
 export default function AppLayout(props: AppLayoutProps) {
   const {children} = props;
-  const {sidebarVisible, toggleSidebar} = useSidebarVisibility();
+  const {animateSidebar, compactLayout, sidebarVisible, toggleSidebar} = useSidebarVisibility();
   const sidebarWidth = useSidebarStore((state) => state.sidebarWidth);
   const setSidebarWidth = useSidebarStore((state) => state.setSidebarWidth);
   // The workspace panel belongs to the session route; outside it nothing is reserved.
@@ -61,7 +61,7 @@ export default function AppLayout(props: AppLayoutProps) {
         </IconButton>
         {isDesktopEnvironment && <HistoryNavigation />}
       </SidebarLayoutTitlebar>
-      <SidebarLayoutSidebar onWidthChange={handleSidebarWidthChange} visible={sidebarVisible}>
+      <SidebarLayoutSidebar animate={animateSidebar} onWidthChange={handleSidebarWidthChange} visible={sidebarVisible} width={compactLayout ? undefined : sidebarWidth}>
         <Sidebar />
       </SidebarLayoutSidebar>
       <SidebarLayoutContent sidebarVisible={sidebarVisible}>{children}</SidebarLayoutContent>

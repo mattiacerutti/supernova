@@ -1,10 +1,6 @@
 import type {PointerEvent} from "react";
 
-/**
- * `onDrag` receives the pointer x and its delta from pointer down. The document carries
- * `data-resizing` during the drag so every panel drops its width transition, since one
- * panel's drag can resize another through the layout clamps.
- */
+/** `onDrag` receives the pointer x and its delta from pointer down. */
 export function useDragResize(onDrag: (clientX: number, deltaX: number) => void): (event: PointerEvent<HTMLElement>) => void {
   return (event) => {
     event.preventDefault();
@@ -14,7 +10,6 @@ export function useDragResize(onDrag: (clientX: number, deltaX: number) => void)
     const previousUserSelect = document.body.style.userSelect;
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
-    document.documentElement.dataset.resizing = "";
 
     const handlePointerMove = (moveEvent: globalThis.PointerEvent): void => {
       onDrag(moveEvent.clientX, moveEvent.clientX - startX);
@@ -23,7 +18,6 @@ export function useDragResize(onDrag: (clientX: number, deltaX: number) => void)
     const handlePointerUp = (): void => {
       document.body.style.cursor = previousCursor;
       document.body.style.userSelect = previousUserSelect;
-      delete document.documentElement.dataset.resizing;
       window.removeEventListener("pointermove", handlePointerMove);
     };
 

@@ -12,6 +12,7 @@ function getCompactSidebarLayout(): boolean {
 /** Controls sidebar visibility across split and compact full-width layouts. */
 export function useSidebarVisibility() {
   const [compactLayout, setCompactLayout] = useState(getCompactSidebarLayout);
+  const [animateSidebar, setAnimateSidebar] = useState(false);
   const [desktopSidebarVisible, setDesktopSidebarVisible] = useState(true);
   const [compactSidebarVisible, setCompactSidebarVisible] = useState(false);
 
@@ -20,6 +21,7 @@ export function useSidebarVisibility() {
 
     const syncCompactLayout = (event: MediaQueryList | MediaQueryListEvent): void => {
       setCompactLayout(event.matches);
+      setAnimateSidebar(false);
 
       if (event.matches) {
         setCompactSidebarVisible(false);
@@ -37,6 +39,7 @@ export function useSidebarVisibility() {
   const sidebarVisible = compactLayout ? compactSidebarVisible : desktopSidebarVisible;
 
   const toggleSidebar = (): void => {
+    setAnimateSidebar(true);
     if (compactLayout) {
       setCompactSidebarVisible((visible) => !visible);
       return;
@@ -45,5 +48,5 @@ export function useSidebarVisibility() {
     setDesktopSidebarVisible((visible) => !visible);
   };
 
-  return {compactLayout, sidebarVisible, toggleSidebar};
+  return {animateSidebar, compactLayout, sidebarVisible, toggleSidebar};
 }
