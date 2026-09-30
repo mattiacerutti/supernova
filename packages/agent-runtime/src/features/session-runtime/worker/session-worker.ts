@@ -8,6 +8,7 @@ import type {ResourceCache} from "@supernova/agent-runtime/pi/resource-cache";
 import type {PiSdk, PiSessionManager} from "@supernova/agent-runtime/pi/sdk";
 import {restoreModels} from "@supernova/agent-runtime/pi/lib/models/refresh-models";
 import {openSessionById} from "@supernova/agent-runtime/pi/lib/session/open-session";
+import {sessionWorkspace} from "@supernova/agent-runtime/pi/lib/session/worktree-entry";
 import type {AgentSessionFactory} from "@supernova/agent-runtime/features/session-runtime/worker/agent-session-factory";
 import type {CheckpointStore} from "@supernova/agent-runtime/features/session-runtime/checkpoints/checkpoint-store";
 import {CheckpointConflictError} from "@supernova/agent-runtime/features/session-runtime/checkpoints/shadow-repository";
@@ -163,12 +164,15 @@ export class SessionWorker {
     return {model: findSelectedModel(this.sdk, modelReference), modelReference};
   }
 
-  /** Accepts and starts one prepared user turn, returning its background completion. */
+  /**
+   * Accepts and starts one prepared user turn, returning its background completion. A pending `titleGeneration` is
+   * applied and published whenever it resolves; the turn does not wait for it.
+   */
   public startTurn(input: {
     readonly beforeCheckpoint: {readonly checkpointId: string; readonly status: CheckpointStatus};
     readonly captureCheckpoints: boolean;
     readonly messageContext: SendMessageContext;
-    readonly title: string | undefined;
+    readonly titleGeneration: Promise<string | undefined> | undefined;
   }): {readonly completion: Promise<void>} {
     if (this.cancelled) throw new Error("Session was cancelled.");
 
@@ -176,9 +180,6 @@ export class SessionWorker {
     if (!agentSession) throw new Error("Agent session is not initialized.");
 
     const sessionManager = agentSession.sessionManager;
-    const title = sessionManager.getSessionName() === undefined ? input.title : undefined;
-    if (title) sessionManager.appendSessionInfo(title);
-
     invalidateCheckpointRedo(sessionManager);
 
     const selectedModel = this.getSelectedModel();
@@ -207,7 +208,14 @@ export class SessionWorker {
     });
     if (!this.unsubscribe) this.subscribeToLiveUpdates();
 
-    const sessionUpdate = title ? this.publishSessionUpdate() : Promise.resolve();
+    // Only a session's first turn has a title in flight; a user rename that lands first wins.
+    const sessionUpdate = input.titleGeneration
+      ? input.titleGeneration.then(async (title) => {
+          if (!title || sessionManager.getSessionName() !== undefined) return;
+          sessionManager.appendSessionInfo(title);
+          await this.publishSessionUpdate();
+        })
+      : Promise.resolve();
 
     const execution = (async () => {
       const images = activeTurn.images;
@@ -442,14 +450,17 @@ export class SessionWorker {
   /** Publishes session metadata after generating its title. */
   private async publishSessionUpdate(): Promise<void> {
     const agentSession = await this.getAgentSession();
+    const {projectPath, worktree} = sessionWorkspace(agentSession.sessionManager);
     this.publishEvent({
       type: "session.updated",
-      projectPath: agentSession.sessionManager.getCwd(),
+      projectPath,
       sessionId: this.sessionId,
       summary: {
         id: agentSession.sessionManager.getSessionId(),
+        forked: agentSession.sessionManager.getHeader()?.parentSession !== undefined,
         title: agentSession.sessionManager.getSessionName() ?? "Untitled session",
         updatedAt: new Date().toISOString(),
+        worktree: worktree !== undefined,
       },
     });
   }

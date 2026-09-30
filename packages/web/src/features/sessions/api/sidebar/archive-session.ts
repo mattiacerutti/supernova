@@ -6,6 +6,8 @@ import {RpcProtocolClientService} from "@/rpc/transport/client";
 
 interface ArchiveSessionInput {
   readonly projectPath: string;
+  /** Also delete the session's worktree and branch. */
+  readonly removeWorktree?: boolean;
   readonly sessionId: string;
 }
 
@@ -17,6 +19,7 @@ export function useArchiveSession() {
       mutationFn: (input: ArchiveSessionInput) => Effect.flatMap(Effect.service(RpcProtocolClientService), (rpc) => rpc.archiveProjectSession(input)),
       onSuccess: async (result) => {
         await queryClient.invalidateQueries({queryKey: sessionKeys.list(result.projectPath)});
+        await queryClient.invalidateQueries({queryKey: sessionKeys.branches(result.projectPath)});
       },
     })
   );

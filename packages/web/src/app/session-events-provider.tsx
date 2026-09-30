@@ -9,7 +9,7 @@ import {useRpcClient} from "@/rpc/use-rpc-client";
 
 /** Cross-feature reactions to the session stream. Session caches themselves are updated inside `connectSessionEvents`. */
 function handleSessionEvent(context: SessionEventContext): void {
-  const {event, projectPath, queryClient} = context;
+  const {event, queryClient, workspacePath} = context;
 
   if (event.type === "connected") {
     void queryClient.invalidateQueries({queryKey: configurationKeys.all});
@@ -17,8 +17,8 @@ function handleSessionEvent(context: SessionEventContext): void {
   }
 
   // The agent may have touched the working tree during the turn.
-  if (event.type === "session.agent.ended" && projectPath) {
-    void queryClient.invalidateQueries({queryKey: workspaceKeys.project(projectPath)});
+  if (event.type === "session.agent.ended" && workspacePath) {
+    void queryClient.invalidateQueries({queryKey: workspaceKeys.project(workspacePath)});
   }
 }
 

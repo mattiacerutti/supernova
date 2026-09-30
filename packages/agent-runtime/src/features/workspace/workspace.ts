@@ -1,6 +1,9 @@
 import {readFile} from "node:fs/promises";
 import {join} from "node:path";
 import type {
+  WorkspaceBranch,
+  WorkspaceBranchesListPayload,
+  WorkspaceBranchesListResult,
   WorkspaceChangesGetPayload,
   WorkspaceChangesGetResult,
   WorkspaceDiffContentsGetPayload,
@@ -19,6 +22,22 @@ import {decodeWorkspaceFile, workspaceGit} from "@supernova/agent-runtime/featur
 import {pathInProject} from "@supernova/agent-runtime/features/workspace/lib/paths";
 import {discoverWorkspaceRepositories, repositoryPath} from "@supernova/agent-runtime/features/workspace/lib/repositories";
 import {runGitResult} from "@supernova/agent-runtime/lib/git-process";
+import type {
+  TerminalClosePayload,
+  TerminalOpenPayload,
+  TerminalOpenResult,
+  TerminalResizePayload,
+  TerminalsListPayload,
+  TerminalsListResult,
+  TerminalWatchPayload,
+  TerminalWritePayload,
+} from "@supernova/contracts/terminals/procedures";
+import type {TerminalEvent} from "@supernova/contracts/terminals/schemas";
+import type {Terminals} from "@supernova/agent-runtime/features/workspace/terminals/terminals";
+
+export interface WorkspaceDeps {
+  readonly terminals: Terminals;
+}
 
 /** An untracked file has no HEAD side, so its whole content counts as additions. */
 async function untrackedEntry(repository: string, path: string): Promise<WorkspaceChangeEntry> {
@@ -55,8 +74,75 @@ async function repositoryFiles(projectPath: string, root: string): Promise<strin
   );
 }
 
-/** Read-only view of a project's files and uncommitted Git changes. */
+/** `git worktree list --porcelain` as branch → worktree path. */
+function parseWorktreeBranches(output: string): Map<string, string> {
+  const result = new Map<string, string>();
+  for (const block of output.split("\n\n")) {
+    const path = block.match(/^worktree (.+)$/m)?.[1];
+    const branch = block.match(/^branch refs\/heads\/(.+)$/m)?.[1];
+    if (path && branch) result.set(branch, path);
+  }
+  return result;
+}
+
+/** A session's folder: its files, uncommitted Git changes, branches, and the shells running in it. */
 export class Workspace {
+  public constructor(private readonly deps: WorkspaceDeps) {}
+
+  public openTerminal(input: TerminalOpenPayload): Promise<TerminalOpenResult> {
+    return this.deps.terminals.open(input);
+  }
+
+  public writeTerminal(input: TerminalWritePayload): Promise<void> {
+    return this.deps.terminals.write(input);
+  }
+
+  public resizeTerminal(input: TerminalResizePayload): Promise<void> {
+    return this.deps.terminals.resize(input);
+  }
+
+  /** Ends the shell; the only way a terminal goes away short of its session being released. */
+  public closeTerminal(input: TerminalClosePayload): Promise<void> {
+    return this.deps.terminals.close(input);
+  }
+
+  public listTerminals(input: TerminalsListPayload): Promise<TerminalsListResult> {
+    return this.deps.terminals.list(input);
+  }
+
+  public watchTerminal(input: TerminalWatchPayload): Promise<AsyncGenerator<TerminalEvent, void, undefined>> {
+    return this.deps.terminals.watch(input);
+  }
+
+  /** Kills a session's shells; runs before the session is archived and its worktree removed. */
+  public closeSessionTerminals(sessionId: string): Promise<void> {
+    return this.deps.terminals.closeSession(sessionId);
+  }
+
+  /** Local branches by most recent commit, then remote-tracking branches, with the worktree each is checked out in. */
+  public async listBranches(input: WorkspaceBranchesListPayload): Promise<WorkspaceBranchesListResult> {
+    const {projectPath} = input;
+    const [refs, worktrees, head] = await Promise.all([
+      workspaceGit(projectPath, ["for-each-ref", "--sort=-committerdate", "--format=%(refname)", "refs/heads", "refs/remotes"]),
+      workspaceGit(projectPath, ["worktree", "list", "--porcelain"]),
+      workspaceGit(projectPath, ["symbolic-ref", "--quiet", "--short", "HEAD"], [0, 1]),
+    ]);
+    const worktreeByBranch = parseWorktreeBranches(worktrees);
+    const local: WorkspaceBranch[] = [];
+    const remote: WorkspaceBranch[] = [];
+    for (const ref of refs.split("\n")) {
+      if (ref.startsWith("refs/heads/")) {
+        const name = ref.slice("refs/heads/".length);
+        const worktreePath = worktreeByBranch.get(name);
+        local.push({name, remote: false, ...(worktreePath ? {worktreePath} : {})});
+      } else if (ref.startsWith("refs/remotes/") && !ref.endsWith("/HEAD")) {
+        remote.push({name: ref.slice("refs/remotes/".length), remote: true});
+      }
+    }
+    const current = head.trim();
+    return {branches: [...local, ...remote], ...(current ? {current} : {})};
+  }
+
   /** Every change against HEAD, staged or not, plus untracked files with their line counts. */
   public async getChanges(input: WorkspaceChangesGetPayload): Promise<WorkspaceChangesGetResult> {
     const repository = await repositoryPath(input.projectPath, input.repositoryRoot);

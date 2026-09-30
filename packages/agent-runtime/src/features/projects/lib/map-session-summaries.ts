@@ -1,3 +1,4 @@
+import {resolve} from "node:path";
 import type {SessionInfo} from "@earendil-works/pi-coding-agent";
 import type {SessionSummary} from "@supernova/contracts/sessions/schemas";
 
@@ -14,17 +15,18 @@ function toSessionTitle(session: PiSessionInfo): string {
   return "Untitled session";
 }
 
-/** Maps Pi session metadata into a shared session summary. */
-export function toPiSessionSummary(session: PiSessionInfo): SessionSummary {
+/** Maps Pi session metadata into a shared session summary. A session whose cwd is not the project runs in a worktree. */
+export function toPiSessionSummary(session: PiSessionInfo, projectPath: string): SessionSummary {
   return {
     id: session.id,
-    ...(session.parentSessionPath ? {forked: true} : {}),
+    forked: session.parentSessionPath !== undefined,
     title: toSessionTitle(session),
     updatedAt: session.modified.toISOString(),
+    worktree: session.cwd.length > 0 && resolve(session.cwd) !== resolve(projectPath),
   };
 }
 
 /** Maps and sorts Pi sessions as newest-first shared session summaries. */
-export function toSessionSummaries(sessions: PiSessionInfo[]): SessionSummary[] {
-  return sessions.map(toPiSessionSummary).toSorted((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime());
+export function toSessionSummaries(sessions: PiSessionInfo[], projectPath: string): SessionSummary[] {
+  return sessions.map((session) => toPiSessionSummary(session, projectPath)).toSorted((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime());
 }

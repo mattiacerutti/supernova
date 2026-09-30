@@ -8,9 +8,12 @@ import Menu, {MenuItem} from "@/components/ui/menu";
 import FileIcon from "@/features/workspace/components/file-tree/file-icon";
 import ChangesTab from "@/features/workspace/components/tabs/changes-tab";
 import FilesTab from "@/features/workspace/components/tabs/files-tab";
+import TerminalTab from "@/features/workspace/components/terminal/terminal-tab";
+import {useCloseTerminal, useListTerminalIds} from "@/features/workspace/api/terminal/terminal-session";
 import {EMPTY_LAYOUT, MIN_WORKSPACE_PANEL_WIDTH, tabKind, useWorkspacePanelStore, WORKSPACE_TAB_KINDS} from "@/features/workspace/stores/workspace-panel-store";
 import type {WorkspacePanelTab, WorkspacePanelTabKind} from "@/features/workspace/types/workspace-panel";
 import {useDragResize} from "@/hooks/use-drag-resize";
+import {useMountEffect} from "@/hooks/use-mount-effect";
 import {cn} from "@/lib/cn";
 import {clampedPanelWidth, maxPanelWidth, observePanelWidth, PANEL_TRANSITION} from "@/components/layouts/panel-layout";
 
@@ -22,6 +25,8 @@ function renderTab(tab: WorkspacePanelTab, projectPath: string, sessionId: strin
       return <ChangesTab projectPath={projectPath} sessionId={sessionId} tab={tab} />;
     case "files":
       return <FilesTab projectPath={projectPath} sessionId={sessionId} tab={tab} />;
+    case "terminal":
+      return <TerminalTab cwd={projectPath} sessionId={sessionId} tab={tab} />;
   }
 }
 
@@ -71,6 +76,30 @@ function PanelTab(props: PanelTabProps) {
   );
 }
 
+interface AdoptServerTerminalsProps {
+  readonly sessionId: string;
+}
+
+/** Shells outlive the client's layout (which lives in memory), so a mounting panel adds tabs for the ones still running. */
+function AdoptServerTerminals(props: AdoptServerTerminalsProps) {
+  const {sessionId} = props;
+  const adoptTerminals = useWorkspacePanelStore((state) => state.adoptTerminals);
+  const listTerminalIds = useListTerminalIds();
+
+  useMountEffect(() => {
+    let cancelled = false;
+    void listTerminalIds(sessionId)
+      .then((ids) => {
+        if (!cancelled) adoptTerminals(sessionId, ids);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  });
+  return null;
+}
+
 interface WorkspacePanelContentProps {
   readonly projectPath: string;
   readonly sessionId: string;
@@ -80,6 +109,7 @@ function WorkspacePanelContent(props: WorkspacePanelContentProps) {
   const {projectPath, sessionId} = props;
   const {activeTabId, tabs} = useWorkspacePanelStore((state) => state.layouts[sessionId] ?? EMPTY_LAYOUT);
   const closeTab = useWorkspacePanelStore((state) => state.closeTab);
+  const closeTerminal = useCloseTerminal();
   const openTab = useWorkspacePanelStore((state) => state.openTab);
   const pinTab = useWorkspacePanelStore((state) => state.pinTab);
   const setActiveTab = useWorkspacePanelStore((state) => state.setActiveTab);
@@ -88,6 +118,7 @@ function WorkspacePanelContent(props: WorkspacePanelContentProps) {
 
   return (
     <section aria-label="Project workspace" className="flex h-full min-h-0 w-full flex-col bg-surface">
+      <AdoptServerTerminals sessionId={sessionId} />
       {/* Right padding clears the floating workspace toggle. */}
       <header className="relative z-20 flex h-12 shrink-0 items-center gap-1 pl-2 pr-[calc(--spacing(11)+var(--window-controls-right-inset))]">
         {/* Outside the titlebar drag region, or the gaps between tabs swallow wheel events. */}
@@ -105,7 +136,11 @@ function WorkspacePanelContent(props: WorkspacePanelContentProps) {
                 <PanelTab
                   active={tab.id === activeTabId}
                   onActivate={() => setActiveTab(sessionId, tab.id)}
-                  onClose={() => closeTab(sessionId, tab.id)}
+                  onClose={() => {
+                    // Closing a terminal tab is the one way to end its shell.
+                    if (tab.kind === "terminal") closeTerminal(tab.id);
+                    closeTab(sessionId, tab.id);
+                  }}
                   onPin={() => pinTab(sessionId, tab.id)}
                   tab={tab}
                 />

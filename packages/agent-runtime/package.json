@@ -24,6 +24,7 @@
   "dependencies": {
     "@earendil-works/pi-ai": "0.85.1",
     "@earendil-works/pi-coding-agent": "0.85.1",
+    "@lydell/node-pty": "1.2.0-beta.15",
     "@supernova/contracts": "workspace:*",
     "effect": "4.0.0-beta.60",
     "htmlparser2": "^12.0.0",

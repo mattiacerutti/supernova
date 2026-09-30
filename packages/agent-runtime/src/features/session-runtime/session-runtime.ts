@@ -1,10 +1,10 @@
-import type {ProjectSessionArchivePayload} from "@supernova/contracts/projects/procedures";
 import type {
   AbortSessionPayload,
   CompactSessionPayload,
   RedoCheckpointPayload,
   RevertToMessagePayload,
   SendMessagePayload,
+  SessionSetupStep,
   SessionStreamEvent,
   UndoCheckpointPayload,
 } from "@supernova/contracts/session-runtime/procedures";
@@ -81,10 +81,15 @@ export class SessionRuntime {
     this.deps.pool.reloadExtensions();
   }
 
-  /** Drops the retained runtime and its checkpoints; used before a session is archived. */
-  public async release(input: ProjectSessionArchivePayload): Promise<void> {
+  /** Marks a setup step of a session being created; see `SessionSetupStep`. */
+  public publishSetup(input: {readonly phase: "started" | "ended"; readonly sessionId: string; readonly step: SessionSetupStep}): void {
+    this.deps.pool.publishSetup(input.sessionId, input.phase, input.step);
+  }
+
+  /** Drops the retained runtime and its checkpoints; used before a session is archived. `workspacePath` is where the agent ran. */
+  public async release(input: {readonly sessionId: string; readonly workspacePath: string}): Promise<void> {
     await this.deps.pool.releaseSession(input.sessionId);
-    await this.deps.pool.deleteSessionCheckpoints(input.projectPath, input.sessionId);
+    await this.deps.pool.deleteSessionCheckpoints(input.workspacePath, input.sessionId);
   }
 
   /** A `connected` marker followed by every runtime event, until the consumer stops iterating. Subscribes immediately. */

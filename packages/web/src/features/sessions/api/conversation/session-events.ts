@@ -47,7 +47,7 @@ function applyEvent(input: {event: SessionStreamEvent; queryClient: QueryClient}
       projectPath: event.session.projectPath,
       queryClient,
       sessionId: event.sessionId,
-      summary: {id: event.session.id, title: event.session.title, updatedAt: event.session.updatedAt},
+      summary: {id: event.session.id, forked: event.session.forked, title: event.session.title, updatedAt: event.session.updatedAt, worktree: event.session.worktree !== undefined},
     });
   } else if (event.type === "session.updated") {
     queryClient.setQueryData<Session>(sessionKeys.detail(event.sessionId), (session) =>
@@ -62,8 +62,8 @@ function applyEvent(input: {event: SessionStreamEvent; queryClient: QueryClient}
 export interface SessionEventContext {
   readonly event: SessionStreamEvent;
   readonly queryClient: QueryClient;
-  /** Project of the session the event belongs to, when the session is cached. */
-  readonly projectPath: string | undefined;
+  /** Folder the session's agent runs in (its worktree or project), when the session is cached. */
+  readonly workspacePath: string | undefined;
 }
 
 interface ConnectSessionEventsInput {
@@ -89,8 +89,8 @@ export function connectSessionEvents(input: ConnectSessionEventsInput): () => vo
             Effect.sync(() => {
               if (generation !== connectionGeneration) return;
               applyEvent({event, queryClient: input.queryClient});
-              const projectPath = "sessionId" in event ? input.queryClient.getQueryData<Session>(sessionKeys.detail(event.sessionId))?.projectPath : undefined;
-              input.onEvent?.({event, projectPath, queryClient: input.queryClient});
+              const session = "sessionId" in event ? input.queryClient.getQueryData<Session>(sessionKeys.detail(event.sessionId)) : undefined;
+              input.onEvent?.({event, queryClient: input.queryClient, workspacePath: session && (session.worktree?.path ?? session.projectPath)});
             })
           )
         )

@@ -1,4 +1,4 @@
-import type {UserMessageAttachmentPart, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {SessionWorkspaceSelection, UserMessageAttachmentPart, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 import {create} from "zustand";
 import type {ComposerAttachmentsUpdate} from "@/features/sessions/hooks/composer/use-composer-attachments";
 import {attachmentComposerContentParts, editableComposerContentParts} from "@/features/sessions/lib/composer/editor/composer-content-parts";
@@ -7,6 +7,8 @@ export interface ComposerDraft {
   readonly attachments?: readonly UserMessageAttachmentPart[];
   readonly editableContentParts?: readonly UserMessageContentPart[];
   readonly revision: number;
+  /** Where the session will run, for a draft whose session does not exist yet. Defaults to the project's checkout. */
+  readonly workspace?: SessionWorkspaceSelection;
 }
 
 interface ComposerDraftsState {
@@ -23,6 +25,7 @@ interface ComposerDraftsState {
   readonly setDraftAttachments: (sessionId: string, update: ComposerAttachmentsUpdate) => void;
   readonly setDraftContentParts: (sessionId: string, contentParts: readonly UserMessageContentPart[]) => void;
   readonly setDraftEditableContentParts: (sessionId: string, contentParts: readonly UserMessageContentPart[]) => void;
+  readonly setDraftWorkspace: (sessionId: string, workspace: SessionWorkspaceSelection) => void;
   /** Clears the pending id once its session is being created, or puts it back when that failed. */
   readonly setNewSessionId: (projectPath: string, sessionId: string | undefined) => void;
 }
@@ -47,14 +50,15 @@ export const useComposerDraftsStore = create<ComposerDraftsState>()((set, get) =
   },
   setDraftContentParts: (sessionId, contentParts) => {
     set((state) => {
-      const revision = (state.drafts[sessionId]?.revision ?? 0) + 1;
+      const draft = state.drafts[sessionId];
       return {
         drafts: {
           ...state.drafts,
           [sessionId]: {
             attachments: attachmentComposerContentParts(contentParts),
             editableContentParts: editableComposerContentParts(contentParts),
-            revision,
+            revision: (draft?.revision ?? 0) + 1,
+            ...(draft?.workspace ? {workspace: draft.workspace} : {}),
           },
         },
       };
@@ -64,6 +68,12 @@ export const useComposerDraftsStore = create<ComposerDraftsState>()((set, get) =
     set((state) => {
       const draft = state.drafts[sessionId] ?? {revision: 0};
       return {drafts: {...state.drafts, [sessionId]: {...draft, editableContentParts}}};
+    });
+  },
+  setDraftWorkspace: (sessionId, workspace) => {
+    set((state) => {
+      const draft = state.drafts[sessionId] ?? {revision: 0};
+      return {drafts: {...state.drafts, [sessionId]: {...draft, workspace}}};
     });
   },
   ensureNewSessionId: (projectPath) => {

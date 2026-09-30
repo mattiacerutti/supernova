@@ -25,7 +25,8 @@ export async function sendMessage(runtime: SessionWorker, titleGenerator: TitleG
     // Selecting first lets an unknown or unauthenticated model fail before any provider work or checkpoint capture.
     const model = await runtime.selectModel(input.modelReference);
 
-    const generatedTitle = sessionManager.getSessionName() === undefined ? await generateSessionTitle({input, model, titleGenerator}) : undefined;
+    // The title is not needed to start; it is generated alongside the turn and applied when it arrives.
+    const titleGeneration = sessionManager.getSessionName() === undefined ? generateSessionTitle({input, model, titleGenerator}) : undefined;
     const messageContext = await prepareSendMessageContext(input, {
       projectPath: sessionManager.getCwd(),
       resourceCache: runtime.resourceCache,
@@ -35,7 +36,7 @@ export async function sendMessage(runtime: SessionWorker, titleGenerator: TitleG
     const checkpointId = randomUUID();
     const checkpointStatus = await runtime.createCheckpoint(checkpointId, captureCheckpoints);
 
-    const {completion} = runtime.startTurn({beforeCheckpoint: {checkpointId, status: checkpointStatus}, captureCheckpoints, messageContext, title: generatedTitle});
+    const {completion} = runtime.startTurn({beforeCheckpoint: {checkpointId, status: checkpointStatus}, captureCheckpoints, messageContext, titleGeneration});
 
     void completion
       .catch(async (cause) => {

@@ -1,4 +1,5 @@
 import {useMessageScroller, useMessageScrollerScrollable} from "@shadcn/react/message-scroller";
+import type {SessionSetupStep} from "@supernova/contracts/session-runtime/procedures";
 import {defaultRangeExtractor, elementScroll, useVirtualizer} from "@tanstack/react-virtual";
 import type {VirtualItem} from "@tanstack/react-virtual";
 import {animate, motionValue, useReducedMotion} from "framer-motion";
@@ -51,6 +52,7 @@ interface SessionTimelineProps {
   readonly onForkFromTurn?: (turnId: string) => void;
   readonly onRevertToMessage?: (turnId: string) => void;
   readonly sessionId: string;
+  readonly setupStep?: SessionSetupStep | null;
   readonly streamError: string | null;
 }
 
@@ -59,7 +61,7 @@ interface SessionTimelineViewportProps extends SessionTimelineProps {
 }
 
 function SessionTimelineViewport(props: SessionTimelineViewportProps) {
-  const {bottomOverlayHeight = 0, compacting, isStreaming, items, liveItems, onAnchorScrollingChange, onForkFromTurn, onRevertToMessage, sessionId, streamError} = props;
+  const {bottomOverlayHeight = 0, compacting, isStreaming, items, liveItems, onAnchorScrollingChange, onForkFromTurn, onRevertToMessage, sessionId, setupStep, streamError} = props;
   const {scrollToEnd} = useMessageScroller();
   const {end: canScrollToEnd} = useMessageScrollerScrollable();
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -400,7 +402,7 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
                   })}
                 </div>
               </div>
-              {isStreaming && <StreamingStatus compacting={compacting} pullIntoLastMessage={pullStatusIntoLastMessage} ref={footerRef} />}
+              {isStreaming && <StreamingStatus compacting={compacting} pullIntoLastMessage={pullStatusIntoLastMessage} ref={footerRef} setupStep={setupStep} />}
               <div aria-hidden="true" className="shrink-0" data-timeline-fake-space ref={anchorSpaceRef} />
             </MessageScrollerContent>
           </MessageScrollerViewport>

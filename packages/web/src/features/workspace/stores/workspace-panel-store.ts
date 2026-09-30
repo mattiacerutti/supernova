@@ -47,6 +47,13 @@ export const WORKSPACE_TAB_KINDS = {
     present: (tab) => (tab.file === null ? {icon: "folder", label: "Files", preview: false} : {icon: {file: tab.file}, label: fileNameOf(tab.file), preview: !tab.pinned}),
     singleton: false,
   },
+  terminal: {
+    create: () => ({id: `terminal:${crypto.randomUUID()}`, kind: "terminal"}),
+    icon: "terminal",
+    label: "Terminal",
+    present: () => ({icon: "terminal", label: "Terminal", preview: false}),
+    singleton: false,
+  },
 } satisfies {readonly [K in WorkspacePanelTabKind]: WorkspaceTabKind<Extract<WorkspacePanelTab, {kind: K}>>};
 
 export function tabKind<TTab extends WorkspacePanelTab>(tab: TTab): WorkspaceTabKind<TTab> {
@@ -76,6 +83,8 @@ interface WorkspacePanelState {
   readonly closeTab: (sessionId: string, tabId: string) => void;
   /** Opens a new tab of the kind, or activates the existing one for singleton kinds. */
   readonly openTab: (sessionId: string, kind: WorkspacePanelTabKind) => void;
+  /** Adds tabs for server terminals this layout does not know about, such as after a reload. Activates one only when no tab is active. */
+  readonly adoptTerminals: (sessionId: string, terminalIds: readonly string[]) => void;
   readonly pinTab: (sessionId: string, tabId: string) => void;
   readonly setActiveTab: (sessionId: string, tabId: string) => void;
   /** Replaces a session's layout; used by tab-specific behavior such as opening a file. */
@@ -108,6 +117,12 @@ export const useWorkspacePanelStore = create<WorkspacePanelState>()(
             if (existing) return {...layout, activeTabId: existing.id};
             const created = definition.create();
             return {...layout, activeTabId: created.id, tabs: [...layout.tabs, created]};
+          }),
+        adoptTerminals: (sessionId, terminalIds) =>
+          updateLayout(sessionId, (layout) => {
+            const missing = terminalIds.filter((id) => !layout.tabs.some((tab) => tab.id === id));
+            if (missing.length === 0) return layout;
+            return {...layout, activeTabId: layout.activeTabId ?? missing[0]!, tabs: [...layout.tabs, ...missing.map((id) => ({id, kind: "terminal" as const}))]};
           }),
         pinTab: (sessionId, tabId) =>
           updateLayout(sessionId, (layout) => ({...layout, tabs: layout.tabs.map((tab) => (tab.id === tabId ? (tabKind(tab).pin?.(tab) ?? tab) : tab))})),

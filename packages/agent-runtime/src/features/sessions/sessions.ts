@@ -1,6 +1,5 @@
 import {rm, writeFile} from "node:fs/promises";
 import type {
-  CreateSessionPayload,
   ForkSessionPayload,
   GetSessionPayload,
   ListComposerSuggestionsPayload,
@@ -10,7 +9,7 @@ import type {
   RenameSessionPayload,
 } from "@supernova/contracts/sessions/procedures";
 import {CreateSessionError, ForkSessionError, RenameSessionError} from "@supernova/contracts/sessions/procedures";
-import type {Session} from "@supernova/contracts/sessions/schemas";
+import type {Session, SessionWorktree} from "@supernova/contracts/sessions/schemas";
 import {toComposerSuggestions} from "@supernova/agent-runtime/features/sessions/lib/composer-suggestions";
 import {resolveModelContextWindow} from "@supernova/agent-runtime/pi/lib/models/context-window";
 import {toAgentModelDetails} from "@supernova/agent-runtime/pi/lib/models/map-model";
@@ -18,6 +17,7 @@ import {buildSessionSnapshot, sessionModelReference} from "@supernova/agent-runt
 import {refreshAuthAndModels} from "@supernova/agent-runtime/pi/lib/models/refresh-models";
 import {CHECKPOINT_CURSOR_CUSTOM_TYPE, FORK_CUSTOM_TYPE, isCheckpointAfterTurnEntry} from "@supernova/agent-runtime/pi/lib/session/checkpoint-entries";
 import {openSessionById, sessionPathById} from "@supernova/agent-runtime/pi/lib/session/open-session";
+import {sessionWorkspace, WORKTREE_CUSTOM_TYPE} from "@supernova/agent-runtime/pi/lib/session/worktree-entry";
 import type {ResourceCache} from "@supernova/agent-runtime/pi/resource-cache";
 import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";
 
@@ -30,27 +30,40 @@ export interface SessionsDeps {
 export class Sessions {
   public constructor(private readonly deps: SessionsDeps) {}
 
-  /** Creates a new empty Pi session for a project, under the client's id when it gives one. */
-  public async create(input: Pick<CreateSessionPayload, "id" | "projectPath">): Promise<Session> {
-    const {id, projectPath} = input;
+  /**
+   * Creates a new empty Pi session for a project under the client's id. With a worktree the agent runs there (Pi's
+   * cwd), while the file stays in the project's session folder so the project still lists it.
+   */
+  public async create(input: {readonly id: string; readonly projectPath: string; readonly worktree?: SessionWorktree}): Promise<Session> {
+    const {id, projectPath, worktree} = input;
     // Pi names files `<timestamp>_<id>.jsonl`, so the exclusive write below cannot catch a reused id.
-    if (id !== undefined && (await sessionPathById(this.deps.sdk, id)) !== undefined) throw new CreateSessionError({message: "A session with this id already exists."});
+    if ((await sessionPathById(this.deps.sdk, id)) !== undefined) throw new CreateSessionError({message: "A session with this id already exists."});
 
-    const sessionManager = this.deps.sdk.SessionManager.create(projectPath, undefined, {id});
+    const sessionDir = worktree ? this.deps.sdk.SessionManager.create(projectPath).getSessionDir() : undefined;
+    const sessionManager = this.deps.sdk.SessionManager.create(worktree?.path ?? projectPath, sessionDir, {id});
     const sessionFile = sessionManager.getSessionFile();
     const header = sessionManager.getHeader();
     if (!sessionFile || !header) throw new CreateSessionError({message: "Failed to create session."});
 
-    await writeFile(sessionFile, `${JSON.stringify(header)}\n`, {flag: "wx"});
+    // Pi only starts persisting once a conversation exists, so the header and the worktree marker are written here.
+    if (worktree) sessionManager.appendCustomEntry(WORKTREE_CUSTOM_TYPE, {projectPath, worktree});
+    await writeFile(sessionFile, [header, ...sessionManager.getEntries()].map((entry) => `${JSON.stringify(entry)}\n`).join(""), {flag: "wx"});
     return {
       id: sessionManager.getSessionId(),
       context: {usedTokens: 0, contextWindow: 0},
+      forked: false,
       projectPath,
       title: "Untitled session",
       turns: [],
       undoneTurns: [],
       updatedAt: header.timestamp,
+      worktree,
     };
+  }
+
+  /** The worktree a session runs in, if any. */
+  public async getWorktree(input: GetSessionPayload): Promise<SessionWorktree | undefined> {
+    return sessionWorkspace(await openSessionById(this.deps.sdk, input.sessionId)).worktree;
   }
 
   /** Removes a session's file. For undoing a `create` whose setup failed; archiving keeps the file. */
@@ -107,7 +120,8 @@ export class Sessions {
       return {
         id: sessionManager.getSessionId(),
         context: {usedTokens: 0, contextWindow: 0},
-        projectPath: sessionManager.getCwd(),
+        forked: sessionManager.getHeader()?.parentSession !== undefined,
+        ...sessionWorkspace(sessionManager),
         title,
         turns: [],
         undoneTurns: [],

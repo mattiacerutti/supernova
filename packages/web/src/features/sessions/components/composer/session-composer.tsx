@@ -165,6 +165,8 @@ function ComposerSubmitButton(props: ComposerSubmitButtonProps) {
 }
 
 interface SessionComposerProps {
+  /** Rendered below the composer surface, aligned left; the workspace pickers. The row's height is always reserved so the composer never shifts when it fills in. */
+  readonly bottomBar?: ReactNode;
   /** Rendered on the toolbar between the attach and submit buttons; typically the pickers. */
   readonly children?: ReactNode;
   readonly onInterrupt?: () => void;
@@ -178,7 +180,7 @@ interface SessionComposerProps {
 
 /** The message composer: editor, attachments, toolbar, and submit/stop. Reads its state from `ComposerContext`. */
 export default function SessionComposer(props: SessionComposerProps) {
-  const {children, onInterrupt, onSubmit, placeholder = DEFAULT_PLACEHOLDER, slashCommandActions, streamStatus = "idle", topExtension} = props;
+  const {bottomBar, children, onInterrupt, onSubmit, placeholder = DEFAULT_PLACEHOLDER, slashCommandActions, streamStatus = "idle", topExtension} = props;
   const {attachments, disabled, draft, projectPath} = useComposerContext();
 
   const [draftText, setDraftText] = useState(() => textFromComposerContentParts(draft.contentParts));
@@ -245,7 +247,7 @@ export default function SessionComposer(props: SessionComposerProps) {
   };
 
   return (
-    <div className="relative px-4 pb-7 md:px-6">
+    <div className="relative px-4 pb-3 md:px-6">
       <div className="relative mx-auto max-w-3xl">
         {topExtension && (
           <div className="pointer-events-none absolute inset-x-0 bottom-full z-0">
@@ -275,6 +277,7 @@ export default function SessionComposer(props: SessionComposerProps) {
             </div>
           </div>
         </div>
+        <div className="flex h-8 items-center px-1">{bottomBar}</div>
       </div>
     </div>
   );

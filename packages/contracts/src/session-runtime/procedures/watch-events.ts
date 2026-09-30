@@ -3,6 +3,9 @@ import {Session, SessionContextUsage, SessionSummary, Turn} from "@supernova/con
 
 export const WatchEventsPayload = Schema.Void;
 
+/** A step of new-session setup long enough to show progress for. */
+export const SessionSetupStep = Schema.Literals(["worktree"]);
+
 /** Global stream event emitted by the server-owned session runtime. */
 export const SessionStreamEvent = Schema.Union([
   Schema.Struct({type: Schema.Literal("connected")}),
@@ -11,6 +14,8 @@ export const SessionStreamEvent = Schema.Union([
   Schema.Struct({type: Schema.Literal("session.agent.ended"), revision: Schema.Number, sessionId: Schema.String}),
   Schema.Struct({type: Schema.Literal("session.compaction.started"), revision: Schema.Number, sessionId: Schema.String}),
   Schema.Struct({type: Schema.Literal("session.compaction.ended"), revision: Schema.Number, sessionId: Schema.String}),
+  Schema.Struct({type: Schema.Literal("session.setup.started"), revision: Schema.Number, sessionId: Schema.String, step: SessionSetupStep}),
+  Schema.Struct({type: Schema.Literal("session.setup.ended"), revision: Schema.Number, sessionId: Schema.String, step: SessionSetupStep}),
   Schema.Struct({type: Schema.Literal("session.turn"), revision: Schema.Number, sessionId: Schema.String, context: SessionContextUsage, turn: Turn}),
   Schema.Struct({type: Schema.Literal("session.snapshot"), revision: Schema.Number, sessionId: Schema.String, session: Session}),
   Schema.Struct({type: Schema.Literal("session.updated"), revision: Schema.Number, projectPath: Schema.String, sessionId: Schema.String, summary: SessionSummary}),
@@ -18,5 +23,6 @@ export const SessionStreamEvent = Schema.Union([
   Schema.Struct({type: Schema.Literal("server.disposed")}),
 ]);
 
+export type SessionSetupStep = typeof SessionSetupStep.Type;
 export type SessionStreamEvent = typeof SessionStreamEvent.Type;
 export type WatchEventsPayload = typeof WatchEventsPayload.Type;

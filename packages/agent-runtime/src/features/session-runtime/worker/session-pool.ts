@@ -4,6 +4,7 @@ import type {
   RedoCheckpointPayload,
   RevertToMessagePayload,
   SendMessagePayload,
+  SessionSetupStep,
   UndoCheckpointPayload,
 } from "@supernova/contracts/session-runtime/procedures";
 import {abortSession} from "@supernova/agent-runtime/features/session-runtime/worker/commands/abort-session";
@@ -50,6 +51,11 @@ export class SessionPool {
   /** Moves the session forward to the next checkpoint after an undo. */
   public async redoCheckpoint(input: RedoCheckpointPayload): Promise<void> {
     await redoCheckpoint(await this.prepareRuntime(input.sessionId), input);
+  }
+
+  /** Marks a setup step of a session being created, so clients can show progress before its first turn. */
+  public publishSetup(sessionId: string, phase: "started" | "ended", step: SessionSetupStep): void {
+    this.getOrCreateRuntime(sessionId).publishEvent({type: `session.setup.${phase}`, sessionId, step});
   }
 
   /** Aborts active work for one session while preserving the retained runtime. */

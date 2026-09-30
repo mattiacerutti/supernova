@@ -1,4 +1,4 @@
-import type {Session, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {Session, SessionWorkspaceSelection, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 import {useNavigate} from "@tanstack/react-router";
 import {useState} from "react";
 import {useConfiguration} from "@/api/configuration";
@@ -11,6 +11,7 @@ import SessionComposerSkeleton from "@/features/sessions/components/composer/ses
 import SessionContextIndicator from "@/features/sessions/components/composer/toolbar/session-context-indicator";
 import ThinkingLevelPicker from "@/features/sessions/components/composer/toolbar/thinking-level-picker";
 import UndoneTurnsDrawer from "@/features/sessions/components/composer/undone-turns-drawer";
+import WorkspacePicker, {WorkspacePickerSkeleton} from "@/features/sessions/components/composer/toolbar/workspace-picker";
 import AttachmentDropOverlay from "@/features/sessions/components/conversation/attachment-drop-overlay";
 import CheckpointConflictDialog from "@/features/sessions/components/conversation/checkpoint-conflict-dialog";
 import ForkSessionDialog from "@/features/sessions/components/conversation/fork-session-dialog";
@@ -42,7 +43,17 @@ function SessionTitle(props: SessionTitleProps) {
   const {inputProps, renaming, startRenaming} = useInlineRename({initialValue: session.title, onSave: (title) => renameSession.mutate({sessionId: session.id, title})});
 
   return (
-    <SessionHeader actions={<SessionActionsMenu onRename={startRenaming} projectPath={session.projectPath} sessionId={session.id} sessionTitle={session.title} />}>
+    <SessionHeader
+      actions={
+        <SessionActionsMenu
+          onRename={startRenaming}
+          projectPath={session.projectPath}
+          sessionId={session.id}
+          sessionTitle={session.title}
+          worktree={session.worktree !== undefined}
+        />
+      }
+    >
       {renaming ? (
         <input {...inputProps} className="block h-5 min-w-0 w-64 truncate border-0 bg-transparent p-0 text-sm font-medium leading-5 text-ink outline-none" />
       ) : (
@@ -115,14 +126,16 @@ export default function SessionPage(props: SessionPageProps) {
   const setNewSessionId = useComposerDraftsStore((state) => state.setNewSessionId);
 
   // Until the server has created the session it exists only in the cache; fetching it would race creation.
-  const [creatingSession, setCreatingSession] = useState(false);
+  // The workspace it was started with is kept here because the draft is cleared on submit.
+  const [creatingWorkspace, setCreatingWorkspace] = useState<SessionWorkspaceSelection | null>(null);
+  const creatingSession = creatingWorkspace !== null;
   const {data: session, error} = useSession(sessionId, {enabled: target.kind === "session" && !creatingSession});
   const newSessionProjectPath = target.kind === "new" ? target.projectPath : undefined;
   const configuration = useConfiguration(newSessionProjectPath);
   const projectPath = newSessionProjectPath ?? session?.projectPath ?? "";
 
   const composer = useComposer({
-    disabled: target.kind === "new" && configuration.isFetching,
+    disabled: target.kind === "new" && configuration.isPending,
     initialModelReference: session?.modelReference,
     modelDefaults: configuration.data?.modelDefaults,
     projectPath,
@@ -141,18 +154,20 @@ export default function SessionPage(props: SessionPageProps) {
     const modelReference = composer.models.modelReference;
     if (target.kind !== "new" || composer.disabled || !modelReference) return;
 
-    setCreatingSession(true);
+    const {workspace} = composer.draft;
+    setCreatingWorkspace(workspace);
     setNewSessionId(target.projectPath, undefined);
-    const pending = startSessionAction({contentParts, modelReference, projectPath: target.projectPath, sessionId});
+    const pending = startSessionAction({contentParts, modelReference, projectPath: target.projectPath, sessionId, workspace});
     void navigate({params: {sessionId}, replace: true, to: "/session/$sessionId"});
 
     const outcome = await pending;
-    setCreatingSession(false);
+    setCreatingWorkspace(null);
     if (outcome.status === "started") return;
 
     showToast("Unable to start the session", outcome.message);
     setNewSessionId(target.projectPath, sessionId);
     composer.draft.replaceContentParts(contentParts);
+    composer.draft.setWorkspace(workspace);
     void navigate({replace: true, search: {draft: sessionId, projectId: projectIdFromPath(target.projectPath)}, to: "/session/new"});
   };
 
@@ -207,7 +222,7 @@ export default function SessionPage(props: SessionPageProps) {
     <ComposerContext value={composer}>
       <SessionLayout
         {...composer.attachments.dropZoneProps}
-        aside={session && <WorkspacePanel projectPath={session.projectPath} sessionId={session.id} />}
+        aside={session && <WorkspacePanel projectPath={session.worktree?.path ?? session.projectPath} sessionId={session.id} />}
         overlay={
           <>
             {target.kind === "session" && (
@@ -228,6 +243,16 @@ export default function SessionPage(props: SessionPageProps) {
             ) : (
               <SessionComposer
                 key={composer.draft.revision}
+                bottomBar={
+                  target.kind === "new" ? (
+                    <WorkspacePicker />
+                  ) : session?.worktree ? (
+                    <WorkspacePicker worktreeBranch={session.worktree.branch} />
+                  ) : (
+                    // The branch name only arrives with the first snapshot.
+                    creatingWorkspace?.mode === "worktree" && <WorkspacePickerSkeleton />
+                  )
+                }
                 onInterrupt={stream.stopStreaming}
                 onSubmit={target.kind === "new" ? (contentParts) => void startSession(contentParts) : stream.submitMessage}
                 slashCommandActions={session && {...stream.slashCommandActions, redo: handleRedo, undo: handleUndo}}
@@ -262,6 +287,7 @@ export default function SessionPage(props: SessionPageProps) {
                 onForkFromTurn={idle ? handleForkFromTurn : undefined}
                 onRevertToMessage={handleRevertToMessage}
                 sessionId={session.id}
+                setupStep={stream.setupStep}
                 streamError={stream.streamError}
               />
             ) : (

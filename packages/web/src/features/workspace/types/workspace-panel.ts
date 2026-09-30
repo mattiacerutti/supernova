@@ -14,5 +14,11 @@ export interface WorkspaceFilesTab {
   readonly pinned: boolean;
 }
 
-export type WorkspacePanelTab = WorkspaceChangesTab | WorkspaceFilesTab;
+/** A shell on the server. The id doubles as the terminal id so the server can be asked for it by tab. */
+export interface WorkspaceTerminalTab {
+  readonly id: string;
+  readonly kind: "terminal";
+}
+
+export type WorkspacePanelTab = WorkspaceChangesTab | WorkspaceFilesTab | WorkspaceTerminalTab;
 export type WorkspacePanelTabKind = WorkspacePanelTab["kind"];

@@ -1,4 +1,4 @@
-import type {ModelReference, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {ModelReference, SessionWorkspaceSelection, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 import {useQueryClient} from "@tanstack/react-query";
 import type {CheckpointNavigationOutcome, StartSessionOutcome} from "@/features/sessions/stores/conversation/session-live-store";
 import {useSessionLiveStore} from "@/features/sessions/stores/conversation/session-live-store";
@@ -12,6 +12,7 @@ interface SendMessageInput {
 
 interface StartSessionInput extends SendMessageInput {
   readonly projectPath: string;
+  readonly workspace: SessionWorkspaceSelection;
 }
 
 interface CompactSessionInput {

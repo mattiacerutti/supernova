@@ -1,3 +1,4 @@
+import type {SessionSetupStep} from "@supernova/contracts/session-runtime/procedures";
 import type {ModelReference, SessionContextUsage, Turn, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 import {useMemo, useRef, useState} from "react";
 import {buildCommittedTimelineItems, buildLiveTimelineItems} from "@/features/sessions/lib/timeline/rows/build-session-timeline";
@@ -15,6 +16,8 @@ interface UseSessionTimelineResult {
   readonly committedTimelineItems: readonly SessionTimelineItem[];
   readonly liveContext: SessionContextUsage | null;
   readonly liveTimelineItems: readonly SessionTimelineItem[];
+  /** Setup step running before a new session's first turn. */
+  readonly setupStep: SessionSetupStep | null;
   readonly slashCommandActions: ClientSlashCommandActions;
   readonly stopStreaming: () => void;
   readonly streamError: string | null;
@@ -125,6 +128,7 @@ export function useSessionTimeline(options: UseSessionTimelineOptions): UseSessi
       open: confirmation.open,
       reason: confirmation.reason,
     },
+    setupStep: sessionState?.setupStep ?? null,
     streamStatus,
     streamError: sessionState?.error ?? null,
     liveContext: sessionState?.liveContext ?? null,
