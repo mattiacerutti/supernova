@@ -1,7 +1,8 @@
 import {createServer} from "node:http";
 import type {Server} from "node:http";
 import {afterEach, describe, expect, it} from "vitest";
-import {createPiCustomTools} from "@supernova/agent-runtime/features/session-runtime/tools/tools";
+import {createSupernovaTools} from "@supernova/agent-runtime/features/session-runtime/tools/tools";
+import {ModelRuntime} from "@earendil-works/pi-coding-agent";
 import {createWebFetchTool} from "@supernova/agent-runtime/features/session-runtime/tools/web-fetch-tool";
 
 let server: Server | undefined;
@@ -48,7 +49,9 @@ describe("Pi web fetch custom tool", () => {
     });
   });
 
-  it("composes Supernova custom Pi tools", () => {
-    expect(createPiCustomTools()).toEqual([expect.objectContaining({label: "Web Fetch", name: "web_fetch"})]);
+  it("composes Supernova's own tools", async () => {
+    const tools = createSupernovaTools(await ModelRuntime.create({modelsPath: null}));
+    expect(tools.map(({tool}) => tool.name)).toEqual(["web_fetch"]);
+    expect(tools[0]?.prompt.snippet).toContain("web_fetch");
   });
 });

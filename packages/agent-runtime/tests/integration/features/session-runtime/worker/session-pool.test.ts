@@ -1,4 +1,4 @@
-import {afterEach, describe, expect, it, vi} from "vitest";
+import {afterEach, describe, expect, it} from "vitest";
 import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
 import {createPiTestRuntime, fauxAssistantMessage, selectedModelReference, waitUntil} from "@tests/support/session-runtime";
 
@@ -6,26 +6,26 @@ function snapshots(events: readonly SessionStreamEvent[]) {
   return events.filter((event): event is Extract<SessionStreamEvent, {type: "session.snapshot"}> => event.type === "session.snapshot");
 }
 
-describe("reloading extensions in retained sessions", () => {
-  const runtimes: Array<{unregister: () => void}> = [];
+describe("reloading extensions in open sessions", () => {
+  const runtimes: Array<{unregister: () => Promise<void>}> = [];
 
-  afterEach(() => {
-    while (runtimes.length > 0) runtimes.pop()?.unregister();
+  afterEach(async () => {
+    while (runtimes.length > 0) await runtimes.pop()?.unregister();
   });
 
-  it("rebuilds an idle session at its next message and continues the conversation", async () => {
+  it("reloads resources of an idle session and continues the conversation", async () => {
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const createAgentSession = vi.spyOn(pi.agentSessionFactory, "createAgentSession");
-    const {info, manager} = pi.createSession();
-    pi.appendConversation(manager);
+    const {info} = await pi.createSession();
+    await pi.appendConversation(info.id);
     pi.faux.setResponses([fauxAssistantMessage("First."), fauxAssistantMessage("Second.")]);
 
     const first = await pi.sendMessage({message: "One", modelReference: selectedModelReference, sessionId: info.id});
-    pi.sessionRuntime.reloadExtensions();
+    const loadsBefore = pi.loadCount;
+    await pi.sessionRuntime.reloadExtensions();
     const second = await pi.sendMessage({message: "Two", modelReference: selectedModelReference, sessionId: info.id});
 
-    expect(createAgentSession).toHaveBeenCalledTimes(2);
+    expect(pi.loadCount).toBe(loadsBefore + 1);
     expect(
       snapshots(second)
         .at(-1)
@@ -37,12 +37,11 @@ describe("reloading extensions in retained sessions", () => {
     );
   });
 
-  it("lets an active turn finish on its loaded extensions and reloads at the following message", async () => {
+  it("lets an active turn finish while extensions reload", async () => {
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const createAgentSession = vi.spyOn(pi.agentSessionFactory, "createAgentSession");
-    const {info, manager} = pi.createSession();
-    pi.appendConversation(manager);
+    const {info} = await pi.createSession();
+    await pi.appendConversation(info.id);
     let releaseProvider: (() => void) | undefined;
     const providerStarted = new Promise<void>((resolve) => {
       pi.faux.setResponses([
@@ -61,18 +60,16 @@ describe("reloading extensions in retained sessions", () => {
     try {
       await pi.sessionRuntime.sendMessage({contentParts: [{text: "Long task", type: "text"}], modelReference: selectedModelReference, sessionId: info.id});
       await providerStarted;
-      pi.sessionRuntime.reloadExtensions();
+      await pi.sessionRuntime.reloadExtensions();
       releaseProvider?.();
       await waitUntil(() => expect(snapshots(events).at(-1)?.session.turns).toHaveLength(2));
-      await waitUntil(() => expect(pi.sessionRuntime.getCommittedSession({sessionId: info.id})).toBeUndefined());
     } finally {
       releaseProvider?.();
       await stop();
     }
     expect(events.some((event) => event.type === "session.error")).toBe(false);
-    expect(createAgentSession).toHaveBeenCalledTimes(1);
 
-    await pi.sendMessage({message: "Next", modelReference: selectedModelReference, sessionId: info.id});
-    expect(createAgentSession).toHaveBeenCalledTimes(2);
+    const next = await pi.sendMessage({message: "Next", modelReference: selectedModelReference, sessionId: info.id});
+    expect(snapshots(next).at(-1)?.session.turns).toHaveLength(3);
   });
 });

@@ -117,11 +117,11 @@ async function runRejectedSessionCommand(input: {
 }
 
 describe("checkpoint navigation", () => {
-  const runtimes: Array<{unregister: () => void}> = [];
+  const runtimes: Array<{unregister: () => Promise<void>}> = [];
   const tempDirs: string[] = [];
 
-  afterEach(() => {
-    while (runtimes.length > 0) runtimes.pop()?.unregister();
+  afterEach(async () => {
+    while (runtimes.length > 0) await runtimes.pop()?.unregister();
     while (tempDirs.length > 0) rmSync(tempDirs.pop()!, {force: true, recursive: true});
   });
 
@@ -130,7 +130,7 @@ describe("checkpoint navigation", () => {
     tempDirs.push(projectPath);
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const {info} = pi.createSession(projectPath);
+    const {info} = await pi.createSession(projectPath);
     pi.faux.setResponses([
       async () => {
         await writeFile(join(projectPath, "file.txt"), "one\n");
@@ -169,7 +169,7 @@ describe("checkpoint navigation", () => {
     tempDirs.push(projectPath);
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const {info} = pi.createSession(projectPath);
+    const {info} = await pi.createSession(projectPath);
     pi.faux.setResponses([
       async () => {
         await writeFile(join(projectPath, "file.txt"), "one\n");
@@ -200,7 +200,7 @@ describe("checkpoint navigation", () => {
     await git(projectPath, ["branch", "-M", "main"]);
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const {info} = pi.createSession(projectPath);
+    const {info} = await pi.createSession(projectPath);
     pi.faux.setResponses([
       async () => {
         await writeFile(join(projectPath, "file.txt"), "one\n");
@@ -232,7 +232,7 @@ describe("checkpoint navigation", () => {
     tempDirs.push(projectPath);
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const {info} = pi.createSession(projectPath);
+    const {info} = await pi.createSession(projectPath);
     pi.faux.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
 
     await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
@@ -298,7 +298,7 @@ describe("checkpoint navigation", () => {
     tempDirs.push(projectPath);
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const {info} = pi.createSession(projectPath);
+    const {info} = await pi.createSession(projectPath);
     pi.faux.setResponses([
       async () => {
         await writeFile(join(projectPath, "file.txt"), "one\n");
@@ -345,7 +345,7 @@ describe("checkpoint navigation", () => {
     tempDirs.push(projectPath);
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const {info} = pi.createSession(projectPath);
+    const {info} = await pi.createSession(projectPath);
     pi.faux.setResponses([
       async () => {
         await writeFile(join(projectPath, "file.txt"), "one\n");
@@ -404,7 +404,7 @@ describe("checkpoint navigation", () => {
 
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const {info} = pi.createSession(projectPath);
+    const {info} = await pi.createSession(projectPath);
     pi.faux.setResponses([
       async () => {
         await writeFile(join(firstRepository, "first.txt"), "first one\n");
@@ -443,7 +443,7 @@ describe("checkpoint navigation", () => {
     tempDirs.push(projectPath);
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const {info} = pi.createSession(projectPath);
+    const {info} = await pi.createSession(projectPath);
     pi.faux.setResponses([
       async () => {
         await writeFile(join(projectPath, "file.txt"), "root one\n");
@@ -505,7 +505,7 @@ describe("checkpoint navigation", () => {
     tempDirs.push(projectPath);
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const {info} = pi.createSession(projectPath);
+    const {info} = await pi.createSession(projectPath);
     pi.faux.setResponses([
       async () => {
         await writeFile(join(projectPath, "file.txt"), "root one\n");
@@ -543,7 +543,7 @@ describe("checkpoint navigation", () => {
     tempDirs.push(projectPath);
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const {info} = pi.createSession(projectPath);
+    const {info} = await pi.createSession(projectPath);
     pi.faux.setResponses([
       async () => {
         await writeFile(join(projectPath, "file.txt"), "one\n");
@@ -575,7 +575,7 @@ describe("checkpoint navigation", () => {
     tempDirs.push(projectPath);
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const {info} = pi.createSession(projectPath);
+    const {info} = await pi.createSession(projectPath);
     pi.faux.setResponses([
       async () => {
         await writeFile(join(projectPath, "file.txt"), "root one\n");
@@ -606,7 +606,7 @@ describe("checkpoint navigation", () => {
     tempDirs.push(projectPath);
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const {info} = pi.createSession(projectPath);
+    const {info} = await pi.createSession(projectPath);
     pi.faux.setResponses([
       async () => {
         await writeFile(join(projectPath, "file.txt"), "one\n");
@@ -658,7 +658,7 @@ describe("checkpoint navigation", () => {
       tempDirs.push(projectPath);
       const pi = await createPiTestRuntime();
       runtimes.push(pi);
-      const {info} = pi.createSession(projectPath);
+      const {info} = await pi.createSession(projectPath);
       pi.faux.setResponses([
         async () => {
           await writeFile(join(projectPath, "file.txt"), "root one\n");
@@ -695,7 +695,7 @@ describe("checkpoint navigation", () => {
     tempDirs.push(projectPath);
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const {info} = pi.createSession(projectPath);
+    const {info} = await pi.createSession(projectPath);
     pi.faux.setResponses([
       async () => {
         await writeFile(join(projectPath, "file.txt"), "one\n");
@@ -725,7 +725,7 @@ describe("checkpoint navigation", () => {
     tempDirs.push(projectPath);
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const {info} = pi.createSession(projectPath);
+    const {info} = await pi.createSession(projectPath);
     pi.faux.setResponses([
       async () => {
         await writeFile(join(projectPath, "file.txt"), "one\n");
@@ -793,7 +793,7 @@ describe("checkpoint navigation", () => {
     tempDirs.push(projectPath);
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const {info} = pi.createSession(projectPath);
+    const {info} = await pi.createSession(projectPath);
     const highModel = selectedModelReference;
     const offModel = {...selectedModelReference, thinkingLevel: "off"};
     pi.faux.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
@@ -815,9 +815,9 @@ describe("checkpoint navigation", () => {
     tempDirs.push(projectPath);
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const {info, manager} = pi.createSession(projectPath);
-    pi.appendConversation(manager, {requestText: "Older request", assistantText: "Older response."});
-    pi.appendConversation(manager, {requestText: "x".repeat(selectedPiModel.contextWindow * 4), assistantText: "Large response."});
+    const {info} = await pi.createSession(projectPath);
+    await pi.appendConversation(info.id, {requestText: "Older request", assistantText: "Older response."});
+    await pi.appendConversation(info.id, {requestText: "x".repeat(selectedPiModel.contextWindow * 4), assistantText: "Large response."});
     pi.faux.setResponses([fauxAssistantMessage("Compacted summary.")]);
 
     await runSessionCommand({
@@ -848,7 +848,7 @@ describe("checkpoint navigation", () => {
     tempDirs.push(projectPath);
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const {info} = pi.createSession(projectPath);
+    const {info} = await pi.createSession(projectPath);
     let providerUserTexts: string[] | undefined;
     pi.faux.setResponses([
       fauxAssistantMessage("one"),
@@ -885,7 +885,7 @@ describe("checkpoint navigation", () => {
     tempDirs.push(projectPath);
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const {info} = pi.createSession(projectPath);
+    const {info} = await pi.createSession(projectPath);
     pi.faux.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
 
     await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
@@ -937,7 +937,7 @@ describe("checkpoint navigation", () => {
     };
     const pi = await createPiTestRuntime({checkpointStore});
     runtimes.push(pi);
-    const {info, manager} = pi.createSession();
+    const {info} = await pi.createSession();
     pi.faux.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two"), fauxAssistantMessage("replacement")]);
 
     await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
@@ -947,10 +947,7 @@ describe("checkpoint navigation", () => {
 
     const events = await pi.sendMessage({message: "replacement", modelReference: selectedModelReference, sessionId: info.id});
     const loadedAfterFailure = await pi.sessions.get({sessionId: info.id});
-    const checkpointEntries = manager
-      .getBranch()
-      .filter((entry) => entry.type === "custom")
-      .filter((entry) => entry.customType === "supernova.checkpoint");
+    const replacement = (await pi.turnRecords(info.id)).at(-1);
 
     // The turn proceeds and branches from the undone checkpoint, so the redo path is
     // replaced rather than preserved. Its boundaries record the failed capture.
@@ -960,10 +957,7 @@ describe("checkpoint navigation", () => {
       {text: "replacement", type: "text"},
     ]);
     expect(loadedAfterFailure.undoneTurns).toEqual([]);
-    expect(checkpointEntries.map((entry) => entry.data).slice(-2)).toEqual([
-      {checkpointId: expect.any(String), phase: "before-turn", status: "failed"},
-      {checkpointId: expect.any(String), phase: "after-turn", status: "failed"},
-    ]);
+    expect(replacement).toMatchObject({before: {status: "failed"}, after: {status: "failed"}});
     expect(pi.faux.state.callCount).toBe(3);
   });
 
@@ -972,7 +966,7 @@ describe("checkpoint navigation", () => {
     tempDirs.push(projectPath);
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const {info} = pi.createSession(projectPath);
+    const {info} = await pi.createSession(projectPath);
     pi.faux.setResponses([
       async () => {
         await writeFile(join(projectPath, "file.txt"), "one\n");
@@ -1002,11 +996,10 @@ describe("checkpoint navigation", () => {
 
   it("loads the persisted checkpoint cursor after refresh", async () => {
     const projectPath = await createProject();
-    const sessionDir = mkdtempSync(join(tmpdir(), "supernova-checkpoint-session-"));
-    tempDirs.push(projectPath, sessionDir);
-    const pi = await createPiTestRuntime({reopenManagers: true, sessionDir});
+    tempDirs.push(projectPath);
+    const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const {info} = pi.createSession(projectPath);
+    const {info} = await pi.createSession(projectPath);
     pi.faux.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
 
     await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
@@ -1024,7 +1017,7 @@ describe("checkpoint navigation", () => {
     tempDirs.push(projectPath);
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const {info} = pi.createSession(projectPath);
+    const {info} = await pi.createSession(projectPath);
     pi.faux.setResponses([
       async () => {
         await writeFile(join(projectPath, "file.txt"), "one\n");
@@ -1068,7 +1061,7 @@ describe("checkpoint navigation", () => {
     tempDirs.push(projectPath);
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const {info} = pi.createSession(projectPath);
+    const {info} = await pi.createSession(projectPath);
     pi.faux.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two"), fauxAssistantMessage("three")]);
 
     await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
@@ -1107,7 +1100,7 @@ describe("checkpoint navigation", () => {
     };
     const pi = await createPiTestRuntime({checkpointStore});
     runtimes.push(pi);
-    const {info} = pi.createSession(projectPath);
+    const {info} = await pi.createSession(projectPath);
     pi.faux.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
 
     await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
@@ -1129,7 +1122,7 @@ describe("checkpoint navigation", () => {
     tempDirs.push(projectPath);
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const {info, manager} = pi.createSession(projectPath);
+    const {info} = await pi.createSession(projectPath);
     pi.faux.setResponses([
       async () => {
         await writeFile(join(projectPath, "file.txt"), "one\n");
@@ -1151,11 +1144,11 @@ describe("checkpoint navigation", () => {
       await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("two\n");
     }
     const turnId = snapshotEvents(firstEvents).at(-1)!.session.turns[0]!.id;
-    const leafBefore = manager.getLeafId();
+    const turnsBefore = (await pi.sessions.get({sessionId: info.id})).turns;
     const rejected = await runRejectedSessionCommand({pi, run: (runtime) => runtime.revertToMessage({sessionId: info.id, turnId})});
     expect(rejected.cause).toMatchObject({_tag: "CheckpointUncapturedError"});
     expect(snapshotEvents(rejected.events)).toEqual([]);
-    expect(manager.getLeafId()).toBe(leafBefore);
+    expect((await pi.sessions.get({sessionId: info.id})).turns).toEqual(turnsBefore);
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("two\n");
 
     if (removeRepository) {
@@ -1163,7 +1156,7 @@ describe("checkpoint navigation", () => {
       const failed = await runRejectedSessionCommand({pi, run: (runtime) => runtime.revertToMessage({force: true, sessionId: info.id, turnId})});
       expect(failed.cause).toMatchObject({_tag: "CheckpointGenericError"});
       expect(snapshotEvents(failed.events)).toEqual([]);
-      expect(manager.getLeafId()).toBe(leafBefore);
+      expect((await pi.sessions.get({sessionId: info.id})).turns).toEqual(turnsBefore);
       await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("two\n");
       await expect(readFile(join(projectPath, "later.txt"), "utf8")).resolves.toBe("uncaptured\n");
       return;
@@ -1188,7 +1181,7 @@ describe("checkpoint navigation", () => {
     };
     const pi = await createPiTestRuntime({checkpointStore});
     runtimes.push(pi);
-    const {info} = pi.createSession(projectPath);
+    const {info} = await pi.createSession(projectPath);
     pi.faux.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
 
     await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
@@ -1206,9 +1199,8 @@ describe("checkpoint navigation", () => {
   });
   it("rejects undoing a turn a fork carried over from its source session", async () => {
     const projectPath = await createGitProject();
-    const sessionDir = mkdtempSync(join(tmpdir(), "supernova-checkpoint-session-"));
-    tempDirs.push(projectPath, sessionDir);
-    const pi = await createPiTestRuntime({reopenManagers: true, sessionDir});
+    tempDirs.push(projectPath);
+    const pi = await createPiTestRuntime();
     runtimes.push(pi);
     const source = await pi.sessions.create({id: crypto.randomUUID(), projectPath});
     pi.faux.setResponses([

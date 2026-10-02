@@ -31,19 +31,17 @@ async function createRepo(tempDirs: string[]): Promise<string> {
 }
 
 describe("agent rpc: createSession", () => {
-  const runtimes: Array<{unregister: () => void}> = [];
+  const runtimes: Array<{unregister: () => Promise<void>}> = [];
   const tempDirs: string[] = [];
 
-  afterEach(() => {
-    while (runtimes.length > 0) runtimes.pop()?.unregister();
+  afterEach(async () => {
+    while (runtimes.length > 0) await runtimes.pop()?.unregister();
     cleanupTempDirs(tempDirs);
   });
 
   /** Drives the RPC layer over a test runtime whose sessions live on disk and are reopened by the worker, as in production. */
   async function setup() {
-    const sessionDir = await mkdtemp(join(tmpdir(), "supernova-rpc-"));
-    tempDirs.push(sessionDir);
-    const pi = await createPiTestRuntime({reopenManagers: true, sessionDir});
+    const pi = await createPiTestRuntime();
     runtimes.push(pi);
     const worktreeStorage = await mkdtemp(join(tmpdir(), "supernova-rpc-worktrees-"));
     tempDirs.push(worktreeStorage);
@@ -79,7 +77,8 @@ describe("agent rpc: createSession", () => {
       _tag: "CreateSessionError",
     });
 
-    expect(existsSync(pi.getSession("doomed")?.info.path ?? "")).toBe(false);
+    expect(await pi.store.find("doomed")).toBeUndefined();
+    expect(existsSync(join(pi.sessionStorageRoot, "doomed"))).toBe(false);
   });
 
   it("creates the session in a new worktree, reporting the setup step before the first turn", async () => {
@@ -99,7 +98,7 @@ describe("agent rpc: createSession", () => {
     expect(snapshot).toMatchObject({session: {projectPath: repo, title: "Generated title", worktree: {branch: expect.stringMatching(/^supernova\/[a-z]+-[a-z]+$/)}}});
     const worktreePath = snapshot?.type === "session.snapshot" ? snapshot.session.worktree?.path : undefined;
     expect(worktreePath && existsSync(join(worktreePath, "a.txt"))).toBe(true);
-    expect(pi.getSession("in-worktree")?.info.cwd).toBe(worktreePath);
+    expect(await pi.store.cwd("in-worktree")).toBe(worktreePath);
     const setupEvents = events.filter((event) => event.type === "session.setup.started" || event.type === "session.setup.ended").map((event) => event.type);
     expect(setupEvents).toEqual(["session.setup.started", "session.setup.ended"]);
     const firstTurnEvent = events.findIndex((event) => event.type === "session.agent.started");
@@ -115,7 +114,7 @@ describe("agent rpc: createSession", () => {
       createSession({id: "doomed-worktree", message: {...firstMessage, modelReference: unknownModel}, projectPath: repo, workspace: {baseRef: "main", mode: "worktree"}})
     ).rejects.toMatchObject({_tag: "CreateSessionError"});
 
-    expect(existsSync(pi.getSession("doomed-worktree")?.info.path ?? "")).toBe(false);
+    expect(await pi.store.find("doomed-worktree")).toBeUndefined();
     const {stdout} = await exec("git", ["worktree", "list", "--porcelain"], {cwd: repo, env: gitEnv});
     expect(stdout.split("\n").filter((line) => line.startsWith("worktree "))).toHaveLength(1);
     expect((await exec("git", ["branch", "--list", "supernova/*"], {cwd: repo, env: gitEnv})).stdout.trim()).toBe("");
@@ -127,6 +126,6 @@ describe("agent rpc: createSession", () => {
     const session = await createSession({id: "empty", projectPath: "/workspace"});
 
     expect(session).toMatchObject({id: "empty", turns: []});
-    expect(existsSync(pi.getSession("empty")?.info.path ?? "")).toBe(true);
+    expect(existsSync(join(pi.sessionStorageRoot, "empty", "session.sqlite"))).toBe(true);
   });
 });

@@ -2,6 +2,7 @@ import "@/environment";
 import {existsSync, mkdirSync, writeFileSync} from "node:fs";
 import {setTimeout} from "node:timers/promises";
 import type {Context} from "@earendil-works/pi-ai";
+import {getSystemMessageText} from "@earendil-works/pi-ai";
 import {fauxAssistantMessage, registerFauxProvider} from "@earendil-works/pi-ai/compat";
 import type {FauxResponseFactory} from "@earendil-works/pi-ai/providers/faux";
 import {startServer} from "@/server";
@@ -50,7 +51,8 @@ const faux = registerFauxProvider({
 const response: FauxResponseFactory = async (context, options) => {
   faux.appendResponses([response]);
   const prompt = messageText(context);
-  if (context.systemPrompt?.startsWith(TITLE_PROMPT_PREFIX)) return fauxAssistantMessage(prompt);
+  const system = context.messages.find((message) => message.role === "system");
+  if (system && getSystemMessageText(system).startsWith(TITLE_PROMPT_PREFIX)) return fauxAssistantMessage(prompt);
 
   if (prompt === "Provider failure message") {
     return fauxAssistantMessage("", {errorMessage: "Synthetic provider failure.", stopReason: "error"});

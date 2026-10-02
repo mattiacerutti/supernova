@@ -1,42 +1,30 @@
-import type {CompactionEntry, CustomEntry, SessionEntry, SessionMessageEntry} from "@earendil-works/pi-coding-agent";
 import type {AssistantMessage, ToolResultMessage, UserMessage as PiUserMessage} from "@earendil-works/pi-ai";
 import type {CompactionTurnEvent, ModelReference, ToolTurnEvent, Turn, TurnEvent, UserMessage} from "@supernova/contracts/sessions/schemas";
 import {generateStableId} from "@supernova/agent-runtime/lib/id-generator";
 import {createTurn} from "@supernova/agent-runtime/pi/lib/turns/turns";
 import {PiToolInvocationFactory} from "@supernova/agent-runtime/pi/lib/turns/tool-invocation-factory";
 import type {PiToolInvocation} from "@supernova/agent-runtime/pi/lib/turns/tool-invocation-factory";
-import {USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE, enrichContentPartsWithImages} from "@supernova/agent-runtime/pi/lib/user-message/content-parts";
+import {enrichContentPartsWithImages} from "@supernova/agent-runtime/pi/lib/user-message/content-parts";
 
-type UserMessageEntry = SessionMessageEntry & {message: PiUserMessage};
-type AssistantMessageEntry = SessionMessageEntry & {message: AssistantMessage};
-type ToolResultMessageEntry = SessionMessageEntry & {message: ToolResultMessage};
+/**
+ * One transcript record as the timeline sees it, independent of where it is stored. The engine's entries and the
+ * legacy JSONL reader both map onto it, so persisted, live, and legacy turns follow the same rules.
+ */
+export type TimelineEntry =
+  | {readonly type: "content-parts"; readonly id: string; readonly timestamp: string; readonly contentParts: UserMessage["contentParts"]}
+  | {readonly type: "user"; readonly id: string; readonly timestamp: string; readonly message: PiUserMessage}
+  | {readonly type: "assistant"; readonly id: string; readonly timestamp: string; readonly message: AssistantMessage}
+  | {readonly type: "tool-result"; readonly id: string; readonly timestamp: string; readonly message: ToolResultMessage}
+  /** `summary` is undefined while the compaction is still running. */
+  | {readonly type: "compaction"; readonly id: string; readonly timestamp: string; readonly summary: string | undefined};
 
-function isUserEntry(entry: SessionMessageEntry): entry is UserMessageEntry {
-  return entry.message.role === "user";
-}
-
-function isAssistantEntry(entry: SessionMessageEntry): entry is AssistantMessageEntry {
-  return entry.message.role === "assistant";
-}
-
-function isToolResultEntry(entry: SessionMessageEntry): entry is ToolResultMessageEntry {
-  return entry.message.role === "toolResult";
-}
-
-function isMessageEntry(entry: SessionEntry): entry is SessionMessageEntry {
-  return entry.type === "message";
-}
-
-function isContentPartsEntry(entry: SessionEntry): entry is CustomEntry<{readonly contentParts: UserMessage["contentParts"]}> {
-  return entry.type === "custom" && entry.customType === USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE;
-}
-
-function isCompactionEntry(entry: SessionEntry): entry is CompactionEntry {
-  return entry.type === "compaction";
-}
+type AssistantEntry = Extract<TimelineEntry, {type: "assistant"}>;
+type ToolResultEntry = Extract<TimelineEntry, {type: "tool-result"}>;
+type CompactionEntry = Extract<TimelineEntry, {type: "compaction"}>;
+type UserEntry = Extract<TimelineEntry, {type: "user"}>;
 
 /** Collects events for one user-started turn before finalizing it. */
-class PiTurnDraft {
+class TurnDraft {
   private readonly userMessage: UserMessage;
   private readonly events: TurnEvent[] = [];
   private readonly toolEventIndexes = new Map<string, {event: ToolTurnEvent; index: number; invocation: PiToolInvocation}>();
@@ -46,40 +34,26 @@ class PiTurnDraft {
   }
 
   /** Appends assistant content, reasoning, tool calls, and assistant errors as turn events. */
-  public addAssistantEntry(entry: AssistantMessageEntry): boolean {
+  public addAssistantEntry(entry: AssistantEntry): void {
     const message = entry.message;
     const error = message.stopReason === "aborted" ? undefined : message.errorMessage;
-    if (message.content.length === 0 && !error) return false;
-
-    let eventWasAdded = false;
+    if (message.content.length === 0 && !error) return;
 
     for (const [partIndex, part] of message.content.entries()) {
       const id = generateStableId("evt", [entry.id, partIndex.toString(), part.type]);
 
       switch (part.type) {
         case "thinking":
-          if (part.thinking.length > 0) {
-            this.events.push({content: part.thinking, id, timestamp: entry.timestamp, type: "reasoning"});
-            eventWasAdded = true;
-          }
+          if (part.thinking.length > 0) this.events.push({content: part.thinking, id, timestamp: entry.timestamp, type: "reasoning"});
           break;
         case "text":
-          if (part.text.length > 0) {
-            this.events.push({content: part.text, id, timestamp: entry.timestamp, type: "assistant"});
-            eventWasAdded = true;
-          }
+          if (part.text.length > 0) this.events.push({content: part.text, id, timestamp: entry.timestamp, type: "assistant"});
           break;
         case "toolCall": {
           const invocation = PiToolInvocationFactory.create(part.name, part.arguments);
-          const toolEvent: ToolTurnEvent = {
-            id,
-            timestamp: entry.timestamp,
-            tool: invocation.toTool(),
-            type: "tool",
-          };
+          const toolEvent: ToolTurnEvent = {id, timestamp: entry.timestamp, tool: invocation.toTool(), type: "tool"};
           this.toolEventIndexes.set(part.id, {event: toolEvent, index: this.events.length, invocation});
           this.events.push(toolEvent);
-          eventWasAdded = true;
           break;
         }
       }
@@ -87,20 +61,16 @@ class PiTurnDraft {
 
     if (error) {
       this.events.push({content: "", error, id: generateStableId("evt", [entry.id, message.content.length.toString(), "error"]), timestamp: entry.timestamp, type: "assistant"});
-      eventWasAdded = true;
     }
-
-    return eventWasAdded;
   }
 
   /** Completes a matching tool call event or appends an orphan tool result event. */
-  public addToolResultEntry(entry: ToolResultMessageEntry): boolean {
+  public addToolResultEntry(entry: ToolResultEntry): void {
     const message = entry.message;
     const completion = {details: message.details, isError: Boolean(message.isError), output: message.content};
 
     const existingTool = this.toolEventIndexes.get(message.toolCallId);
     const invocation = existingTool?.invocation ?? PiToolInvocationFactory.create(message.toolName, undefined);
-
     invocation.complete(completion);
 
     const completedTool = invocation.toTool();
@@ -108,7 +78,7 @@ class PiTurnDraft {
 
     if (!existingTool) {
       this.events.push(toolEvent);
-      return true;
+      return;
     }
 
     this.events[existingTool.index] = {
@@ -118,26 +88,18 @@ class PiTurnDraft {
       timestamp: existingTool.event.timestamp,
       tool: completedTool,
     };
-    return true;
   }
 
-  /** Appends a context compaction event to the active turn. */
-  public addCompactionEntry(entry: CompactionEntry): boolean {
-    // Since compaction entry is not persisted until it is completed, a pending compaction entry
-    // is created by synthetically with no data.
-    const pending = entry.summary.length === 0 && entry.firstKeptEntryId.length === 0 && entry.tokensBefore === 0;
-
-    const event = {
+  /** Appends a context compaction event; one without a summary is still running. */
+  public addCompactionEntry(entry: CompactionEntry): void {
+    const pending = entry.summary === undefined;
+    this.events.push({
       id: entry.id,
       status: pending ? "pending" : "completed",
       ...(pending ? {} : {summary: entry.summary}),
       timestamp: entry.timestamp,
       type: "compaction",
-    } satisfies CompactionTurnEvent;
-
-    this.events.push(event);
-
-    return true;
+    } satisfies CompactionTurnEvent);
   }
 
   /** Finalizes the draft into a shared turn. */
@@ -146,70 +108,56 @@ class PiTurnDraft {
   }
 }
 
-/** Builds ordered turns while preserving Pi parent/metadata relationships. */
-class PiTurnBuilder {
-  private readonly fallbackModel: ModelReference;
+/** Builds ordered turns: a turn starts at a user entry preceded by its authored content parts. */
+class TurnBuilder {
   private readonly turns: Turn[] = [];
-  private currentTurn: PiTurnDraft | undefined;
+  private currentTurn: TurnDraft | undefined;
   private pendingContentParts: UserMessage["contentParts"] = [];
-
   private pendingCompactionEntries: CompactionEntry[] = [];
 
-  public constructor(fallbackModel: ModelReference) {
-    this.fallbackModel = fallbackModel;
+  public constructor(private readonly fallbackModel: ModelReference) {}
+
+  public addEntry(entry: TimelineEntry): void {
+    switch (entry.type) {
+      case "content-parts":
+        this.completeCurrentTurn();
+        this.pendingContentParts = [...entry.contentParts];
+        return;
+      case "compaction":
+        if (this.currentTurn) this.currentTurn.addCompactionEntry(entry);
+        else this.pendingCompactionEntries.push(entry);
+        return;
+      case "user":
+        this.startUserTurn(entry);
+        return;
+      case "assistant":
+        // A turn must be started by a user message; earlier assistant and tool entries have no turn.
+        this.currentTurn?.addAssistantEntry(entry);
+        return;
+      case "tool-result":
+        this.currentTurn?.addToolResultEntry(entry);
+        return;
+    }
   }
 
-  /** Adds one Pi session entry to the current turn-building state. */
-  public addEntry(entry: SessionEntry): boolean {
-    if (isContentPartsEntry(entry)) {
-      this.completeCurrentTurn();
-      this.pendingContentParts = [...(entry.data?.contentParts ?? [])];
-      return true;
-    }
-
-    if (isCompactionEntry(entry)) {
-      if (!this.currentTurn) {
-        this.pendingCompactionEntries.push(entry);
-        return true;
-      }
-
-      return this.currentTurn.addCompactionEntry(entry);
-    }
-
-    if (!isMessageEntry(entry)) return false;
-    if (isUserEntry(entry)) return this.startUserTurn(entry);
-
-    // A turn must be started by a user message. If there is no current turn,
-    // assistant and tool result entries cannot be processed.
-    if (!this.currentTurn) return false;
-
-    if (isAssistantEntry(entry)) return this.currentTurn.addAssistantEntry(entry);
-    if (isToolResultEntry(entry)) return this.currentTurn.addToolResultEntry(entry);
-
-    return false;
-  }
-
-  /** Returns completed turns plus the active in-progress turn, if any. */
   public toTurns(): Turn[] {
     if (!this.currentTurn) return [...this.turns];
     return [...this.turns, this.currentTurn.toTurn(this.fallbackModel)];
   }
 
-  private startUserTurn(entry: UserMessageEntry): boolean {
-    if (this.pendingContentParts.length === 0) return false;
+  private startUserTurn(entry: UserEntry): void {
+    // User messages Supernova did not author (an extension's or a compaction's) do not start a turn.
+    if (this.pendingContentParts.length === 0) return;
 
     this.completeCurrentTurn();
-    this.currentTurn = new PiTurnDraft({
+    this.currentTurn = new TurnDraft({
       contentParts: enrichContentPartsWithImages({content: entry.message.content, contentParts: this.pendingContentParts}),
       id: entry.id,
       timestamp: entry.timestamp,
     });
     this.pendingContentParts = [];
-    for (const entry of this.pendingCompactionEntries) {
-      this.currentTurn.addCompactionEntry(entry);
-    }
+    for (const compaction of this.pendingCompactionEntries) this.currentTurn.addCompactionEntry(compaction);
     this.pendingCompactionEntries = [];
-    return true;
   }
 
   private completeCurrentTurn(): void {
@@ -219,13 +167,9 @@ class PiTurnBuilder {
   }
 }
 
-/** Builds normalized turns from Pi session entries. */
-export function buildPiTurns(entries: readonly SessionEntry[], fallbackModel: ModelReference): Turn[] {
-  const builder = new PiTurnBuilder(fallbackModel);
-
-  for (const entry of entries) {
-    builder.addEntry(entry);
-  }
-
+/** Builds normalized turns from timeline entries in transcript order. */
+export function buildTurns(entries: readonly TimelineEntry[], fallbackModel: ModelReference): Turn[] {
+  const builder = new TurnBuilder(fallbackModel);
+  for (const entry of entries) builder.addEntry(entry);
   return builder.toTurns();
 }
