@@ -1,17 +1,17 @@
 import {createContext} from "react";
-import type {RpcClient} from "@/rpc/transport/protocol";
+import type {RuntimeClient} from "@/rpc/transport/runtime-client";
 
 // eslint-disable-next-line react-refresh/only-export-components -- Context belongs to this provider; changes also invalidate its consumers.
-export const RpcClientContext = createContext<RpcClient | null>(null);
+export const RuntimeContext = createContext<RuntimeClient | null>(null);
 
-interface RpcProviderProps {
+interface RuntimeProviderProps {
   readonly children: React.ReactNode;
-  readonly client: RpcClient;
+  readonly runtime: RuntimeClient;
 }
 
-/** Makes the app-owned RPC client available without taking ownership of its lifecycle. */
-export default function RpcProvider(props: RpcProviderProps) {
-  const {children, client} = props;
+/** Makes the app-owned runtime connection available without taking ownership of its lifecycle. */
+export default function RuntimeProvider(props: RuntimeProviderProps) {
+  const {children, runtime} = props;
 
-  return <RpcClientContext value={client}>{children}</RpcClientContext>;
+  return <RuntimeContext value={runtime}>{children}</RuntimeContext>;
 }

@@ -1,30 +1,22 @@
 import type {ProviderLoginSession} from "@supernova/contracts/providers/schemas";
-import {Effect, Stream} from "effect";
-import {useRpcClient} from "@/rpc/use-rpc-client";
+import {useRuntime} from "@/rpc/use-runtime";
 
 type Unsubscribe = () => void;
 
-/** Returns a subscriber for one login session's step stream. Call the returned function from a mount effect. */
+/**
+ * Returns a subscriber for one login's steps: the providers' replicated state delivers its current step at once and
+ * every later one. Call the returned function from a mount effect.
+ */
 export function useWatchProviderLoginSession(): (loginSessionId: string, onSession: (session: ProviderLoginSession) => void) => Unsubscribe {
-  const rpcClient = useRpcClient();
+  const runtime = useRuntime();
 
   return (loginSessionId, onSession) => {
-    let disposed = false;
-    let interrupt: (() => Promise<void>) | undefined;
-
-    void rpcClient
-      .fork((rpc) => rpc.watchProviderLoginSession({loginSessionId}).pipe(Stream.runForEach((session) => Effect.sync(() => !disposed && onSession(session)))))
-      .then((fiber) => {
-        if (disposed) {
-          void fiber.interrupt();
-          return;
-        }
-        interrupt = fiber.interrupt;
-      });
-
-    return () => {
-      disposed = true;
-      void interrupt?.();
-    };
+    let last: ProviderLoginSession | undefined;
+    return runtime.providers.state.subscribe((state) => {
+      const session = state.logins[loginSessionId];
+      if (!session || session === last) return;
+      last = session;
+      onSession(session);
+    });
   };
 }

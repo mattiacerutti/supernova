@@ -1,16 +1,15 @@
+import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import {useMutation} from "@tanstack/react-query";
-import {Effect} from "effect";
-import {eq} from "@/rpc/effect-query";
-import {RpcProtocolClientService} from "@/rpc/transport/client";
+import {unwrap} from "@/rpc/runtime-result";
+import {useRuntime} from "@/rpc/use-runtime";
 
 interface CancelProviderLoginInput {
   readonly loginSessionId: string;
 }
 
 export function useCancelProviderLogin() {
-  return useMutation(
-    eq.mutationOptions({
-      mutationFn: (input: CancelProviderLoginInput) => Effect.flatMap(Effect.service(RpcProtocolClientService), (rpc) => rpc.cancelProviderLogin(input)),
-    })
-  );
+  const runtime = useRuntime();
+  return useMutation({
+    mutationFn: (input: CancelProviderLoginInput) => unwrap(runtime.providers.cancelLogin(input, BACKGROUND_CONTEXT)),
+  });
 }

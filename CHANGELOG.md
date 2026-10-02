@@ -13,6 +13,7 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+- The client now receives sessions in Pi's own shape (its entries and live run state) and builds the timeline from them. The runtime is now served entirely as Chord services over Pi's service protocol on the server's `/ws` WebSocket, replacing Effect RPC: a running session reaches the client as small deltas instead of the whole running turn on every update, and terminal output arrives as appended text. Clients of the old RPC protocol can no longer connect.
 - Session titles are now generated in the background: the first response starts immediately and the title appears when it is ready, instead of the first turn waiting for it.
 
 ### Fixed

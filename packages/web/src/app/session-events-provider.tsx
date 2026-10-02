@@ -5,19 +5,14 @@ import {connectSessionEvents} from "@/features/sessions/api/conversation/session
 import {workspaceKeys} from "@/features/workspace/api/query-keys";
 import {useMountEffect} from "@/hooks/use-mount-effect";
 import {configurationKeys} from "@/api/configuration";
-import {useRpcClient} from "@/rpc/use-rpc-client";
+import {useRuntime} from "@/rpc/use-runtime";
 
-/** Cross-feature reactions to the session stream. Session caches themselves are updated inside `connectSessionEvents`. */
+/** Cross-feature reactions to session state. Session caches themselves are updated inside `connectSessionEvents`. */
 function handleSessionEvent(context: SessionEventContext): void {
-  const {event, queryClient, workspacePath} = context;
-
-  if (event.type === "connected") {
-    void queryClient.invalidateQueries({queryKey: configurationKeys.all});
-    return;
-  }
+  const {entry, previous, queryClient, workspacePath} = context;
 
   // The agent may have touched the working tree during the turn.
-  if (event.type === "session.agent.ended" && workspacePath) {
+  if (previous && previous.activity !== "idle" && entry.activity === "idle" && workspacePath) {
     void queryClient.invalidateQueries({queryKey: workspaceKeys.project(workspacePath)});
   }
 }
@@ -29,9 +24,16 @@ interface SessionEventsProviderProps {
 export default function SessionEventsProvider(props: SessionEventsProviderProps) {
   const {children} = props;
   const queryClient = useQueryClient();
-  const rpcClient = useRpcClient();
+  const services = useRuntime();
 
-  useMountEffect(() => connectSessionEvents({onEvent: handleSessionEvent, queryClient, rpcClient}));
+  useMountEffect(() =>
+    connectSessionEvents({
+      onEvent: handleSessionEvent,
+      onReconnect: () => void queryClient.invalidateQueries({queryKey: configurationKeys.all}),
+      queryClient,
+      services,
+    })
+  );
 
   return children;
 }

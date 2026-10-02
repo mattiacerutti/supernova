@@ -1,22 +1,21 @@
+import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import {useMutation, useQueryClient} from "@tanstack/react-query";
-import {Effect} from "effect";
 import {projectKeys} from "@/features/projects/api/query-keys";
-import {eq} from "@/rpc/effect-query";
-import {RpcProtocolClientService} from "@/rpc/transport/client";
+import {unwrap} from "@/rpc/runtime-result";
+import {useRuntime} from "@/rpc/use-runtime";
 
 interface CreateFolderInput {
   readonly path: string;
 }
 
 export function useCreateFolder() {
+  const runtime = useRuntime();
   const queryClient = useQueryClient();
 
-  return useMutation(
-    eq.mutationOptions({
-      mutationFn: (input: CreateFolderInput) => Effect.flatMap(Effect.service(RpcProtocolClientService), (rpc) => rpc.createFolder(input)),
-      onSuccess: async () => {
-        await queryClient.invalidateQueries({queryKey: projectKeys.folderSuggestions()});
-      },
-    })
-  );
+  return useMutation({
+    mutationFn: (input: CreateFolderInput) => unwrap(runtime.folders.create(input, BACKGROUND_CONTEXT)),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({queryKey: projectKeys.folderSuggestions()});
+    },
+  });
 }

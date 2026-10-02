@@ -1,10 +1,8 @@
-import type {AgentState, EntryRecord} from "@earendil-works/pi-durable";
+import type {AgentState, EntryRecord, LiveState, UsageState} from "@earendil-works/pi-durable";
 import type {AssistantMessage, Message} from "@earendil-works/pi-ai";
 import {calculateContextTokens, estimateTokens} from "@earendil-works/pi-coding-agent";
-import type {ModelReference, Session, SessionContextUsage, Turn} from "@supernova/contracts/sessions/schemas";
+import type {Session, SessionContextUsage} from "@supernova/contracts/sessions/schemas";
 import type {SessionRecord, TurnRecord} from "@supernova/agent-runtime/pi/lib/session/session-state";
-import {buildTurns} from "@supernova/agent-runtime/pi/lib/turns/build-turns";
-import {toTimelineEntries} from "@supernova/agent-runtime/pi/lib/turns/entry-timeline";
 
 type ContextMessage = Parameters<typeof estimateTokens>[0];
 
@@ -14,8 +12,9 @@ function hasValidAssistantUsage(message: Message): message is AssistantMessage {
 }
 
 /** The first authored text of a session, its title until one is generated or set. */
-function fallbackTitle(turns: readonly Turn[]): string {
-  const text = turns[0]?.userMessage.contentParts
+function fallbackTitle(entries: readonly EntryRecord[], turns: Session["turns"]): string {
+  const first = entries.find((entry) => turns[String(entry.id)] !== undefined);
+  const text = (first ? turns[String(first.id)]!.contentParts : [])
     .map((part) => (part.type === "text" ? part.text : part.type === "reference" ? part.value : ""))
     .join("")
     .trim();
@@ -38,12 +37,6 @@ export function buildSessionContextUsage(input: {readonly contextWindow: number;
   return {contextWindow, usedTokens: calculateContextTokens((messages[index] as AssistantMessage).usage) + estimate(index + 1)};
 }
 
-/** The session's model choice as the contract names it, or undefined before its first turn. */
-export function modelReferenceOf(agent: AgentState | undefined): ModelReference | undefined {
-  const model = agent?.model;
-  return model ? {id: model.modelId, providerId: model.provider, thinkingLevel: agent.thinkingLevel ?? "off"} : undefined;
-}
-
 /**
  * Context usage of the next request. `entries` are the active context's entries, which start at the latest
  * compaction summary when there is one; until a response after it reports usage the count is unknown, because every
@@ -58,31 +51,47 @@ export function contextUsageOf(input: {readonly entries: readonly EntryRecord[];
   return buildSessionContextUsage({contextWindow, messages, unknown: startsAtCompaction && !respondedAfter});
 }
 
-/** The session's turns from a history, in order. */
-export function turnsOf(history: readonly EntryRecord[], turns: Readonly<Record<string, TurnRecord>>, modelReference: ModelReference): Turn[] {
-  return buildTurns(toTimelineEntries(history, turns), modelReference);
+/** The timeline's entries of a history: system prompt entries are model bookkeeping, not something to show. */
+export function timelineEntries(history: readonly EntryRecord[]): EntryRecord[] {
+  return history.filter((entry) => entry.kind !== "pi.system");
 }
 
-/** Builds the contract `Session` from its record and already-built turns. */
+/** What a session shows of its turn records: the authored content. Checkpoints stay on the server. */
+export function publicTurns(turns: Readonly<Record<string, TurnRecord>>): Session["turns"] {
+  return Object.fromEntries(Object.entries(turns).map(([id, record]) => [id, {contentParts: record.contentParts}]));
+}
+
+/**
+ * Builds the contract `Session`. Every value must be strict JSON: the session is diffed into Chord deltas, so optional
+ * fields are left out rather than set to undefined.
+ */
 export function buildSession(input: {
   readonly record: SessionRecord;
-  readonly modelReference: ModelReference | undefined;
-  readonly turns: readonly Turn[];
-  readonly undoneTurns: readonly Turn[];
+  readonly entries: readonly EntryRecord[];
+  readonly undone: readonly EntryRecord[];
+  readonly agent: AgentState | undefined;
+  readonly live: LiveState | undefined;
+  readonly usage: UsageState | undefined;
+  readonly runStart: number | undefined;
+  readonly turns: Session["turns"];
   readonly context: Session["context"];
 }): Session {
-  const {context, modelReference, record, turns, undoneTurns} = input;
-  const lastTurn = turns.at(-1);
+  const {context, entries, record, turns, undone} = input;
+  const lastTimestamp = entries.findLast((entry) => entry.model?.[0]?.timestamp !== undefined)?.model?.[0]?.timestamp;
   return {
     id: record.id,
-    context,
+    title: record.title ?? fallbackTitle(entries, turns),
     forked: record.forkedFrom !== undefined,
-    ...(modelReference ? {modelReference} : {}),
     projectPath: record.projectPath,
     ...(record.worktree ? {worktree: record.worktree} : {}),
-    title: record.title ?? fallbackTitle(turns),
-    turns: [...turns],
-    undoneTurns: [...undoneTurns],
-    updatedAt: lastTurn?.completedAt ?? lastTurn?.startedAt ?? record.updatedAt,
+    updatedAt: lastTimestamp !== undefined && new Date(lastTimestamp).toISOString() > record.updatedAt ? new Date(lastTimestamp).toISOString() : record.updatedAt,
+    entries,
+    undone,
+    agent: input.agent ?? {},
+    live: input.live ?? {},
+    usage: input.usage ?? {models: {}, tools: {}},
+    ...(input.runStart === undefined ? {} : {runStart: input.runStart}),
+    turns,
+    context,
   };
 }

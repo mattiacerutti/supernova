@@ -5,7 +5,9 @@ import type {SessionsDeps} from "@supernova/agent-runtime/features/sessions/sess
 import type {ResourceCache} from "@supernova/agent-runtime/pi/resource-cache";
 
 function run(resourceCache: ResourceCache) {
-  return new Sessions({resourceCache, sdk: {} as SessionsDeps["sdk"], store: {} as SessionsDeps["store"]}).listComposerSuggestions({projectPath: "/workspace"});
+  return new Sessions({documents: {} as SessionsDeps["documents"], resourceCache, sdk: {} as SessionsDeps["sdk"], store: {} as SessionsDeps["store"]}).listComposerSuggestions({
+    projectPath: "/workspace",
+  });
 }
 
 describe("listing composer suggestions", () => {

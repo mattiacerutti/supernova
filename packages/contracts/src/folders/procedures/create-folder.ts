@@ -1,17 +1,15 @@
-import {Schema} from "effect";
+import {z} from "zod";
+import {struct, TaggedError} from "@supernova/contracts/runtime/schemas";
 
-export const FolderCreatePayload = Schema.Struct({
-  path: Schema.String,
+export const FolderCreatePayload = struct({
+  path: z.string(),
 });
 
-export const FolderCreateResult = Schema.Struct({
-  path: Schema.String,
+export const FolderCreateResult = struct({
+  path: z.string(),
 });
 
-export class FolderCreateError extends Schema.TaggedErrorClass<FolderCreateError>()("FolderCreateError", {
-  cause: Schema.optional(Schema.Defect),
-  message: Schema.String,
-}) {}
+export class FolderCreateError extends TaggedError("FolderCreateError") {}
 
-export type FolderCreatePayload = typeof FolderCreatePayload.Type;
-export type FolderCreateResult = typeof FolderCreateResult.Type;
+export type FolderCreatePayload = z.infer<typeof FolderCreatePayload>;
+export type FolderCreateResult = z.infer<typeof FolderCreateResult>;

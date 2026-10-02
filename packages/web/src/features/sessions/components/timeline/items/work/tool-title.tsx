@@ -1,14 +1,15 @@
 import type {ReactNode} from "react";
 import FileIcon from "@/features/workspace/components/file-tree/file-icon";
-import {fileName, readLineRange, skillName} from "@/features/sessions/lib/timeline/work/tool-details";
+import {fileName, readLineRange, skillName, toolView} from "@/features/sessions/lib/timeline/work/tool-details";
+import type {ToolView} from "@/features/sessions/lib/timeline/work/tool-details";
+import type {SessionToolCall} from "@/features/sessions/types/session-turn";
 import {cn} from "@/lib/cn";
-import type {Tool} from "@supernova/contracts/sessions/schemas";
 
-type ToolOf<Kind extends Tool["kind"]> = Extract<Tool, {kind: Kind}>;
+type ViewOf<Kind extends ToolView["kind"]> = Extract<ToolView, {kind: Kind}>;
 
 /** Present participle while the tool runs, past tense once it has finished or failed. */
-function verb(tool: Tool, running: string, done: string): string {
-  return tool.status === "pending" ? running : done;
+function verb(pending: boolean, running: string, done: string): string {
+  return pending ? running : done;
 }
 
 function singleLine(text: string): string {
@@ -81,56 +82,60 @@ function TextArgument(props: TextArgumentProps) {
 }
 
 interface CommandTitleProps {
-  readonly tool: ToolOf<"command">;
+  readonly pending: boolean;
+  readonly view: ViewOf<"command">;
 }
 
 function CommandTitle(props: CommandTitleProps) {
-  const {tool} = props;
+  const {pending, view} = props;
   return (
     <>
-      <Label>{verb(tool, "Running", "Ran")}</Label>
-      <TextArgument mono>{singleLine(tool.input?.command ?? "")}</TextArgument>
+      <Label>{verb(pending, "Running", "Ran")}</Label>
+      <TextArgument mono>{singleLine(view.command ?? "")}</TextArgument>
     </>
   );
 }
 
 interface ReadTitleProps {
-  readonly tool: ToolOf<"file-read">;
+  readonly pending: boolean;
+  readonly view: ViewOf<"file-read">;
 }
 
 function ReadTitle(props: ReadTitleProps) {
-  const {tool} = props;
-  const skill = tool.input ? skillName(tool.input.path) : undefined;
+  const {pending, view} = props;
+  const skill = view.path === undefined ? undefined : skillName(view.path);
   if (skill !== undefined) {
     return (
       <>
-        <Label>{verb(tool, "Loading skill", "Loaded skill")}</Label>
+        <Label>{verb(pending, "Loading skill", "Loaded skill")}</Label>
         <TextArgument>{skill}</TextArgument>
       </>
     );
   }
 
-  const range = tool.input ? readLineRange(tool.input) : undefined;
+  const range =
+    view.path === undefined ? undefined : readLineRange({...(view.limit === undefined ? {} : {limit: view.limit}), ...(view.offset === undefined ? {} : {offset: view.offset})});
   return (
     <>
-      <Label>{verb(tool, "Reading", "Read")}</Label>
-      <FileArgument path={tool.input?.path}>{range && <span className="shrink-0 font-mono text-xs tabular-nums">{range}</span>}</FileArgument>
+      <Label>{verb(pending, "Reading", "Read")}</Label>
+      <FileArgument path={view.path}>{range && <span className="shrink-0 font-mono text-xs tabular-nums">{range}</span>}</FileArgument>
     </>
   );
 }
 
 interface FileMutationTitleProps {
-  readonly tool: ToolOf<"file-edit" | "file-write">;
+  readonly pending: boolean;
+  readonly view: ViewOf<"file-edit" | "file-write">;
 }
 
 function FileMutationTitle(props: FileMutationTitleProps) {
-  const {tool} = props;
-  const stats = tool.status === "completed" ? diffStats(tool.result.patch) : undefined;
+  const {pending, view} = props;
+  const stats = view.patch === undefined ? undefined : diffStats(view.patch);
 
   return (
     <>
-      <Label>{tool.kind === "file-edit" ? verb(tool, "Editing", "Edited") : verb(tool, "Writing", "Wrote")}</Label>
-      <FileArgument path={tool.input?.path}>
+      <Label>{view.kind === "file-edit" ? verb(pending, "Editing", "Edited") : verb(pending, "Writing", "Wrote")}</Label>
+      <FileArgument path={view.path}>
         {stats && (
           <span className="flex shrink-0 gap-1 font-mono text-xs tabular-nums">
             <span className="text-diff-added">+{stats.additions}</span>
@@ -143,87 +148,91 @@ function FileMutationTitle(props: FileMutationTitleProps) {
 }
 
 interface ListTitleProps {
-  readonly tool: ToolOf<"file-list">;
+  readonly pending: boolean;
+  readonly view: ViewOf<"file-list">;
 }
 
 function ListTitle(props: ListTitleProps) {
-  const {tool} = props;
+  const {pending, view} = props;
   return (
     <>
-      <Label>{verb(tool, "Listing", "Listed")}</Label>
-      <TextArgument>{tool.input?.path ?? ""}</TextArgument>
+      <Label>{verb(pending, "Listing", "Listed")}</Label>
+      <TextArgument>{view.path ?? ""}</TextArgument>
     </>
   );
 }
 
 interface FindTitleProps {
-  readonly tool: ToolOf<"file-find">;
+  readonly pending: boolean;
+  readonly view: ViewOf<"file-find">;
 }
 
 function FindTitle(props: FindTitleProps) {
-  const {tool} = props;
-  const target = tool.input ? (tool.input.path ? `${tool.input.pattern} in ${tool.input.path}` : tool.input.pattern) : "";
+  const {pending, view} = props;
+  const target = view.path ? `${view.pattern ?? ""} in ${view.path}` : (view.pattern ?? "");
   return (
     <>
-      <Label>{verb(tool, "Searching", "Searched")}</Label>
+      <Label>{verb(pending, "Searching", "Searched")}</Label>
       <TextArgument>{singleLine(target)}</TextArgument>
     </>
   );
 }
 
 interface FetchTitleProps {
-  readonly tool: ToolOf<"web-fetch">;
+  readonly pending: boolean;
+  readonly view: ViewOf<"web-fetch">;
 }
 
 function FetchTitle(props: FetchTitleProps) {
-  const {tool} = props;
+  const {pending, view} = props;
   return (
     <>
-      <Label>{verb(tool, "Fetching", "Fetched")}</Label>
-      <TextArgument>{tool.input?.url ?? (tool.status === "completed" ? tool.result.url : "")}</TextArgument>
+      <Label>{verb(pending, "Fetching", "Fetched")}</Label>
+      <TextArgument>{view.url ?? ""}</TextArgument>
     </>
   );
 }
 
 interface CustomTitleProps {
-  readonly tool: ToolOf<"custom">;
+  readonly pending: boolean;
+  readonly view: ViewOf<"custom">;
 }
 
 function CustomTitle(props: CustomTitleProps) {
-  const {tool} = props;
+  const {pending, view} = props;
   return (
     <>
-      <Label>{verb(tool, "Calling", "Called")}</Label>
-      <TextArgument>{tool.name}</TextArgument>
+      <Label>{verb(pending, "Calling", "Called")}</Label>
+      <TextArgument>{view.name}</TextArgument>
     </>
   );
 }
 
 interface ToolTitleProps {
-  readonly tool: Tool | undefined;
+  readonly tool: SessionToolCall;
 }
 
 /** A tool row's label and argument. Each tool kind owns its own title. */
 export default function ToolTitle(props: ToolTitleProps) {
   const {tool} = props;
+  const view = toolView(tool);
+  const pending = tool.status === "pending";
 
-  switch (tool?.kind) {
+  switch (view.kind) {
     case "command":
-      return <CommandTitle tool={tool} />;
+      return <CommandTitle pending={pending} view={view} />;
     case "file-read":
-      return <ReadTitle tool={tool} />;
+      return <ReadTitle pending={pending} view={view} />;
     case "file-edit":
     case "file-write":
-      return <FileMutationTitle tool={tool} />;
+      return <FileMutationTitle pending={pending} view={view} />;
     case "file-list":
-      return <ListTitle tool={tool} />;
+      return <ListTitle pending={pending} view={view} />;
     case "file-find":
-      return <FindTitle tool={tool} />;
+      return <FindTitle pending={pending} view={view} />;
     case "web-fetch":
-      return <FetchTitle tool={tool} />;
+      return <FetchTitle pending={pending} view={view} />;
     case "custom":
-      return <CustomTitle tool={tool} />;
-    default:
-      return <Label>Tool</Label>;
+      return <CustomTitle pending={pending} view={view} />;
   }
 }

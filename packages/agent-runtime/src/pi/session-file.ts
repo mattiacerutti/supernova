@@ -13,6 +13,7 @@ import type {
   Harness,
   LiveState,
   Registry,
+  UsageState,
 } from "@earendil-works/pi-durable";
 import {AgentDoc, ConversationBusy, createRegistry, defineExtension, Harness as HarnessFactory} from "@earendil-works/pi-durable";
 import {NodeExecutionEnv} from "@earendil-works/pi-durable/env/node";
@@ -46,6 +47,7 @@ export interface ConversationSnapshot {
   readonly entries: readonly EntryRecord[];
   readonly agent: AgentState | undefined;
   readonly live: LiveState | undefined;
+  readonly usage: UsageState | undefined;
 }
 
 export class SessionBusyError extends Error {
@@ -60,7 +62,13 @@ function strictJson<T>(value: T): T {
 }
 
 function snapshotOf(conversationId: number, value: ConversationView): ConversationSnapshot {
-  return {conversationId, entries: value.entries, agent: value.docs["pi.agent"] as AgentState | undefined, live: value.docs["pi.live"] as LiveState | undefined};
+  return {
+    conversationId,
+    entries: value.entries,
+    agent: value.docs["pi.agent"] as AgentState | undefined,
+    live: value.docs["pi.live"] as LiveState | undefined,
+    usage: value.docs["pi.usage"] as UsageState | undefined,
+  };
 }
 
 /**
@@ -143,13 +151,20 @@ export class SessionFile {
     }
   }
 
-  /** Every entry of a conversation's history in append order, inherited fork history and compacted entries included. */
-  public async history(conversationId: number): Promise<EntryRecord[]> {
+  /**
+   * A conversation's history in append order, inherited fork history and compacted entries included. `after` and
+   * `through` bound the entry ids, for reading only what a cached history lacks.
+   */
+  public async history(conversationId: number, range: {readonly after?: number; readonly through?: number} = {}): Promise<EntryRecord[]> {
     const conversation = await this.conversation(conversationId);
+    const query = {
+      ...(range.after === undefined ? {} : {minEntryId: (range.after + 1) as EntryId}),
+      ...(range.through === undefined ? {} : {maxEntryId: range.through as EntryId}),
+    };
     const items: EntryRecord[] = [];
     let cursor;
     do {
-      const page = await conversation.entries({}, 256, cursor, context);
+      const page = await conversation.entries(query, 256, cursor, context);
       items.push(...page.items);
       cursor = page.next;
     } while (cursor !== undefined);

@@ -13,7 +13,7 @@ describe("session store", () => {
     while (dirs.length) rmSync(dirs.pop()!, {recursive: true, force: true});
   });
 
-  it("runs a tool turn on a session file and snapshots it", async () => {
+  it("runs a tool turn on a session file and builds its document from Pi's entries", async () => {
     const root = mkdtempSync(join(tmpdir(), "sn-store-"));
     const project = mkdtempSync(join(tmpdir(), "sn-project-"));
     dirs.push(root, project);
@@ -58,13 +58,13 @@ describe("session store", () => {
       record: {contentParts: [{type: "text", text: "What does hello.txt say?"}], capture: false, before},
     });
     expect((await submitted.wait()).status).toBe("done");
-    const snapshot = await store.snapshot("s1");
-    expect(snapshot.turns).toHaveLength(1);
-    expect(snapshot.turns[0]).toMatchObject({userMessage: {contentParts: [{text: "What does hello.txt say?"}]}});
-    expect(snapshot.turns[0]!.events.map((event) => event.type)).toEqual(["tool", "assistant"]);
-    expect(snapshot.turns[0]!.events[0]).toMatchObject({tool: {kind: "file-read", status: "completed", result: {content: "hi there\n"}}});
+    const {session: snapshot} = await store.snapshot("s1");
+    const [user] = snapshot.entries;
+    expect(snapshot.entries.map((entry) => entry.kind)).toEqual(["pi.user", "pi.assistant", "pi.tool-result", "pi.assistant"]);
+    expect(snapshot.turns).toEqual({[String(user!.id)]: {contentParts: [{type: "text", text: "What does hello.txt say?"}]}});
+    expect(snapshot.entries[2]?.model?.[0]).toMatchObject({role: "toolResult", toolName: "read", content: [{type: "text", text: "hi there\n"}]});
     expect(systemPrompt).toContain("read: Read file contents");
-    expect((await session.state()).turns).toMatchObject({[snapshot.turns[0]!.id]: {before: {checkpointId: "c1"}}});
+    expect((await session.state()).turns).toMatchObject({[String(user!.id)]: {before: {checkpointId: "c1"}}});
     await store.dispose();
     faux.unregister();
   });

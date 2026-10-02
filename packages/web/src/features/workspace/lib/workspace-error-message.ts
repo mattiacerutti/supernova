@@ -1,16 +1,15 @@
-import type {WorkspaceFileError} from "@supernova/contracts/workspace/schemas";
-import type {InferQueryErrorResult} from "effect-query";
-import type {RpcClientError} from "effect/unstable/rpc/RpcClientError";
+import {errorCode} from "@/rpc/runtime-result";
 
 const GENERIC_MESSAGE = "Something went wrong loading this project.";
 
+const MESSAGES: Readonly<Record<string, string>> = {
+  WorkspaceBinaryFileError: "Binary files cannot be previewed.",
+  WorkspaceFileNotFoundError: "This file no longer exists.",
+  WorkspaceFileTooLargeError: "This file is too large to preview.",
+  WorkspaceNotARepositoryError: "This project is not a Git repository.",
+};
+
 /** User-facing copy for a failed workspace query. Transport failures and defects get the generic message. */
-export function workspaceErrorMessage(error: InferQueryErrorResult<WorkspaceFileError | RpcClientError>): string {
-  return error.match({
-    OrElse: () => GENERIC_MESSAGE,
-    WorkspaceBinaryFileError: () => "Binary files cannot be previewed.",
-    WorkspaceFileNotFoundError: () => "This file no longer exists.",
-    WorkspaceFileTooLargeError: () => "This file is too large to preview.",
-    WorkspaceNotARepositoryError: () => "This project is not a Git repository.",
-  });
+export function workspaceErrorMessage(error: unknown): string {
+  return MESSAGES[errorCode(error) ?? ""] ?? GENERIC_MESSAGE;
 }

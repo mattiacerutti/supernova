@@ -1,15 +1,16 @@
-import {Schema} from "effect";
+import {z} from "zod";
+import {array, struct} from "@supernova/contracts/runtime/schemas";
 import {WorkspaceChangeEntry} from "@supernova/contracts/workspace/schemas";
 
-export const WorkspaceChangesGetPayload = Schema.Struct({
-  projectPath: Schema.String,
+export const WorkspaceChangesGetPayload = struct({
+  projectPath: z.string(),
   /** One of the roots from `listWorkspaceRepositories`. */
-  repositoryRoot: Schema.String,
+  repositoryRoot: z.string(),
 });
 
-export const WorkspaceChangesGetResult = Schema.Struct({
-  uncommitted: Schema.Array(WorkspaceChangeEntry),
+export const WorkspaceChangesGetResult = struct({
+  uncommitted: array(WorkspaceChangeEntry),
 });
 
-export type WorkspaceChangesGetPayload = typeof WorkspaceChangesGetPayload.Type;
-export type WorkspaceChangesGetResult = typeof WorkspaceChangesGetResult.Type;
+export type WorkspaceChangesGetPayload = z.infer<typeof WorkspaceChangesGetPayload>;
+export type WorkspaceChangesGetResult = z.infer<typeof WorkspaceChangesGetResult>;

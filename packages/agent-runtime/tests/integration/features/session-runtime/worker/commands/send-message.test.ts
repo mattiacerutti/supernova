@@ -6,8 +6,10 @@ import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {afterEach, describe, expect, it, vi} from "vitest";
 import type {CheckpointStore} from "@supernova/agent-runtime/features/session-runtime/checkpoints/checkpoint-store";
-import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
+import type {Session} from "@supernova/contracts/sessions/schemas";
+import type {SessionDirectoryState} from "@supernova/contracts/sessions/services";
 import {
+  assistantTexts,
   createPiTestRuntime,
   fauxAssistantMessage,
   fauxText,
@@ -15,6 +17,7 @@ import {
   imageAttachment,
   selectedModelReference,
   selectedPiModel,
+  turnContents,
   waitUntil,
 } from "@tests/support/session-runtime";
 
@@ -35,20 +38,26 @@ async function createGitProject(): Promise<string> {
   return projectPath;
 }
 
-function isSnapshotEvent(event: SessionStreamEvent): event is Extract<SessionStreamEvent, {type: "session.snapshot"}> {
-  return event.type === "session.snapshot";
+/** Every tool call the session's live partials and entries showed, with the arguments shown. */
+function shownToolCalls(versions: readonly Session[]): Array<{readonly name: string; readonly arguments: Record<string, unknown>}> {
+  return versions.flatMap((session) => {
+    const partial = session.live.generation?.message;
+    const messages = [...session.entries.flatMap((entry) => entry.model ?? []), ...(partial ? [partial] : [])];
+    return messages.flatMap((message) => (message.role === "assistant" ? message.content.flatMap((part) => (part.type === "toolCall" ? [part] : [])) : []));
+  });
 }
 
-function snapshotEvents(events: readonly SessionStreamEvent[]): Array<Extract<SessionStreamEvent, {type: "session.snapshot"}>> {
-  return events.filter(isSnapshotEvent);
+/** Every activity the board showed for a session, in order, without repeats. */
+function activities(board: readonly SessionDirectoryState[], sessionId: string): string[] {
+  return board.flatMap((value) => value.sessions[sessionId]?.activity ?? []).filter((activity, index, all) => activity !== all[index - 1]);
 }
 
-function isTurnEvent(event: SessionStreamEvent): event is Extract<SessionStreamEvent, {type: "session.turn"}> {
-  return event.type === "session.turn";
-}
-
-function turnEvents(events: readonly SessionStreamEvent[]): Array<Extract<SessionStreamEvent, {type: "session.turn"}>> {
-  return events.filter(isTurnEvent);
+/** The pending blocking compactions any version showed, and the summaries entries carried. */
+function compactionsSeen(versions: readonly Session[]) {
+  return {
+    pending: versions.some((session) => (session.live.compactions ?? []).some((compaction) => compaction.blocking)),
+    summaries: versions.at(-1)!.entries.filter((entry) => entry.kind === "pi.compaction"),
+  };
 }
 
 describe("sending messages through Pi sessions", () => {
@@ -60,7 +69,7 @@ describe("sending messages through Pi sessions", () => {
     while (tempDirs.length > 0) rmSync(tempDirs.pop()!, {force: true, recursive: true});
   });
 
-  it("publishes session lifecycle, live turn, and final session snapshots", async () => {
+  it("streams the run as replicated Pi state, ending idle with the answer in its entries", async () => {
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
     const {info} = await pi.createSession();
@@ -68,35 +77,22 @@ describe("sending messages through Pi sessions", () => {
     pi.faux.setResponses([fauxAssistantMessage([fauxThinking("Checking the workspace"), fauxText("Done.")])]);
     const before = await pi.sessions.get({sessionId: info.id});
 
-    const events = await pi.sendMessage({message: "Fix it", modelReference: selectedModelReference, sessionId: info.id});
+    const {board, session, versions} = await pi.sendMessage({message: "Fix it", modelReference: selectedModelReference, sessionId: info.id});
 
-    expect(await pi.agent(info.id)).toMatchObject({model: {modelId: "claude-sonnet", provider: "anthropic"}, thinkingLevel: "high"});
-    expect(events.find((event) => event.type === "session.agent.started")).toMatchObject({sessionId: info.id, type: "session.agent.started"});
-    expect(snapshotEvents(events).every((event) => event.session.turns.length === 2)).toBe(true);
-    expect(events.find((event) => event.type === "session.turn")).toMatchObject({
-      turn: {status: "streaming", userMessage: {contentParts: [{text: "Fix it", type: "text"}]}},
-      type: "session.turn",
-    });
-    const finalSnapshot = snapshotEvents(events).at(-1);
-    expect(finalSnapshot).toMatchObject({
-      session: {
-        turns: [
-          {events: [{content: "Existing response", type: "assistant"}], userMessage: {contentParts: [{text: "Existing request", type: "text"}]}},
-          {
-            events: [
-              {content: "Checking the workspace", type: "reasoning"},
-              {content: "Done.", type: "assistant"},
-            ],
-            userMessage: {contentParts: [{text: "Fix it", type: "text"}]},
-          },
-        ],
-      },
-      type: "session.snapshot",
-    });
-    const liveContexts = turnEvents(events).map((event) => event.context.usedTokens);
-    // The first frame still measures the context before the answer: the earlier usage plus the new prompt.
-    expect(liveContexts[0]).toBeGreaterThan(before.context.usedTokens!);
-    expect(liveContexts.at(-1)).toEqual(finalSnapshot?.session.context.usedTokens);
+    expect(session.agent).toMatchObject({model: {modelId: "claude-sonnet", provider: "anthropic"}, thinkingLevel: "high"});
+    expect(activities(board, info.id)).toEqual(["idle", "running", "idle"]);
+    expect(session).toEqual(await pi.sessions.get({sessionId: info.id}));
+    // The run's user entry and its turn record arrive in the same version.
+    const running = versions.find((version) => version.runStart !== undefined);
+    expect(running && running.turns[String(running.runStart)]?.contentParts).toEqual([{text: "Fix it", type: "text"}]);
+    expect(turnContents(session)).toEqual([[{text: "Existing request", type: "text"}], [{text: "Fix it", type: "text"}]]);
+    expect(assistantTexts(session)).toEqual(["Existing response", "Done."]);
+    const answer = session.entries.at(-1)?.model?.[0];
+    expect(answer?.role === "assistant" && answer.content.map((part) => part.type)).toEqual(["thinking", "text"]);
+    expect(session.live.run).toBeUndefined();
+    expect(session.runStart).toBeUndefined();
+    // The first running version still measures the context before the answer: the earlier usage plus the new prompt.
+    expect(running?.context.usedTokens).toBeGreaterThan(before.context.usedTokens!);
   });
 
   it("reveals each tool's completed inputs while later calls are still streaming", async () => {
@@ -114,17 +110,12 @@ describe("sending messages through Pi sessions", () => {
       fauxAssistantMessage("Done."),
     ]);
 
-    const events = await pi.sendMessage({message: "Read both files", modelReference: selectedModelReference, sessionId: info.id});
-    const toolsByUpdate = turnEvents(events).map((event) => event.turn.events.flatMap((part) => (part.type === "tool" && part.tool ? [part.tool] : [])));
-    const shownPaths = toolsByUpdate.flat().flatMap((tool) => (tool.kind === "file-read" && tool.input ? [tool.input.path] : []));
+    const {session, versions} = await pi.sendMessage({message: "Read both files", modelReference: selectedModelReference, sessionId: info.id});
 
-    // Streaming partials are coalesced by the engine, so intermediate states may be skipped; a shown input is
-    // always complete, and both calls end up visible with their inputs.
-    expect(shownPaths.every((path) => path === "one.ts" || path === "two.ts")).toBe(true);
-    expect(toolsByUpdate).toContainEqual([
-      expect.objectContaining({kind: "file-read", input: expect.objectContaining({path: "one.ts"})}),
-      expect.objectContaining({kind: "file-read", input: expect.objectContaining({path: "two.ts"})}),
-    ]);
+    // Partials are coalesced by the engine; the client hides a streaming partial's last call, every other call is whole.
+    expect(shownToolCalls(versions).map((call) => call.name)).toContain("read");
+    expect(shownToolCalls([session]).map((call) => call.arguments)).toEqual([{path: "one.ts"}, {path: "two.ts"}]);
+    expect(session.entries.filter((entry) => entry.kind === "pi.tool-result")).toHaveLength(2);
   });
 
   it("uses the first user message without persisting a fallback when title generation fails", async () => {
@@ -134,10 +125,10 @@ describe("sending messages through Pi sessions", () => {
     vi.spyOn(pi.titleGenerator, "generateSessionTitle").mockRejectedValue(new Error("Title generation failed"));
     pi.faux.setResponses([fauxAssistantMessage("Done.")]);
 
-    const events = await pi.sendMessage({message: "Fix the flaky tests", modelReference: selectedModelReference, sessionId: info.id});
+    const {session} = await pi.sendMessage({message: "Fix the flaky tests", modelReference: selectedModelReference, sessionId: info.id});
 
     expect((await pi.store.record(info.id)).title).toBeUndefined();
-    expect(snapshotEvents(events).at(-1)?.session.title).toBe("Fix the flaky tests");
+    expect(session.title).toBe("Fix the flaky tests");
   });
 
   it("sends authored text and images to the provider while displaying authored content parts", async () => {
@@ -157,32 +148,26 @@ describe("sending messages through Pi sessions", () => {
       },
     ]);
 
-    const events = await pi.sendMessage({contentParts, modelReference: selectedModelReference, sessionId: info.id});
+    const {session} = await pi.sendMessage({contentParts, modelReference: selectedModelReference, sessionId: info.id});
 
     expect(providerUserContent).toEqual([
       {text: "Review @src/file.ts", type: "text"},
       {data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII=", mimeType: "image/png", type: "image"},
     ]);
-    expect(snapshotEvents(events).at(-1)).toMatchObject({
-      session: {
-        turns: [
-          {
-            events: [{content: "Reviewed.", type: "assistant"}],
-            userMessage: {
-              contentParts: [
-                {text: "Review ", type: "text"},
-                {id: "ref-1", kind: "file", value: "@src/file.ts"},
-                {contentBase64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII=", id: "image-1"},
-              ],
-            },
-          },
-        ],
-      },
-      type: "session.snapshot",
-    });
+    // Authored parts are stored without the image payload; Pi's user entry carries the image.
+    expect(turnContents(session)).toMatchObject([
+      [
+        {text: "Review ", type: "text"},
+        {id: "ref-1", kind: "file", value: "@src/file.ts"},
+        {id: "image-1", type: "attachment"},
+      ],
+    ]);
+    expect(turnContents(session)[0]?.[2]).not.toHaveProperty("contentBase64");
+    expect(session.entries[0]?.model?.[0]).toMatchObject({role: "user", content: expect.arrayContaining([expect.objectContaining({type: "image", mimeType: "image/png"})])});
+    expect(assistantTexts(session)).toEqual(["Reviewed."]);
   });
 
-  it("streams pending and completed auto-compaction as part of the live and final turn snapshots", async () => {
+  it("streams a pending auto-compaction in pi.live and commits its summary entry", async () => {
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
     const {info} = await pi.createSession();
@@ -191,17 +176,13 @@ describe("sending messages through Pi sessions", () => {
     // The engine compacts before the request once the estimate crosses the threshold, so the summary comes first.
     pi.faux.setResponses([fauxAssistantMessage("Compacted summary."), fauxAssistantMessage("Done.")]);
 
-    const events = await pi.sendMessage({message: "Continue", modelReference: selectedModelReference, sessionId: info.id});
-    const liveCompactionEvents = events.filter(isTurnEvent).flatMap((event) => event.turn.events.filter((turnEvent) => turnEvent.type === "compaction"));
+    const {board, versions} = await pi.sendMessage({message: "Continue", modelReference: selectedModelReference, sessionId: info.id});
+    const seen = compactionsSeen(versions);
 
-    expect(liveCompactionEvents.map((event) => event.status)).toEqual(expect.arrayContaining(["pending", "completed"]));
-    expect(liveCompactionEvents).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({status: "pending", type: "compaction"}),
-        expect.objectContaining({status: "completed", summary: expect.stringContaining("Compacted summary."), type: "compaction"}),
-      ])
-    );
-    expect(events.find((event) => event.type === "session.compaction.ended")).toMatchObject({type: "session.compaction.ended"});
+    expect(seen.pending).toBe(true);
+    expect(activities(board, info.id)).toContain("compacting");
+    expect(JSON.stringify(seen.summaries)).toContain("Compacted summary.");
+    expect(assistantTexts(versions.at(-1)!).at(-1)).toBe("Done.");
   });
 
   it("keeps pre-prompt compaction in the submitted turn", async () => {
@@ -213,36 +194,19 @@ describe("sending messages through Pi sessions", () => {
     pi.settings.applyOverrides({compaction: {enabled: true, reserveTokens: 1000}});
     pi.faux.setResponses([fauxAssistantMessage("Pre-prompt compacted summary."), fauxAssistantMessage("Response after pre-prompt compaction.")]);
 
-    const events = await pi.sendMessage({message: "Continue after pre-prompt compaction", modelReference: selectedModelReference, sessionId: info.id});
-    const liveTurn = turnEvents(events)
-      .map((event) => event.turn)
-      .find((turn) => turn?.events.some((turnEvent) => turnEvent.type === "assistant" && turnEvent.content === "Response after pre-prompt compaction."));
-    const pendingCompactionTurn = turnEvents(events)
-      .map((event) => event.turn)
-      .find((turn) => turn?.events.some((turnEvent) => turnEvent.type === "compaction" && turnEvent.status === "pending"));
+    const {session, versions} = await pi.sendMessage({message: "Continue after pre-prompt compaction", modelReference: selectedModelReference, sessionId: info.id});
+    const seen = compactionsSeen(versions);
+    const userIndex = session.entries.findIndex((entry) =>
+      session.turns[String(entry.id)]?.contentParts.some((part) => part.type === "text" && part.text === "Continue after pre-prompt compaction")
+    );
+    const summaryIndex = session.entries.findIndex((entry, index) => index > userIndex && entry.kind === "pi.compaction");
 
-    expect(events.find((event) => event.type === "session.compaction.ended")).toMatchObject({type: "session.compaction.ended"});
-    expect(pendingCompactionTurn).toMatchObject({
-      userMessage: {contentParts: [{text: "Continue after pre-prompt compaction", type: "text"}]},
-      events: expect.arrayContaining([expect.objectContaining({status: "pending", type: "compaction"})]),
-    });
-    expect(liveTurn).toMatchObject({
-      userMessage: {contentParts: [{text: "Continue after pre-prompt compaction", type: "text"}]},
-      events: expect.arrayContaining([
-        expect.objectContaining({status: "completed", summary: expect.stringContaining("Pre-prompt compacted summary."), type: "compaction"}),
-        expect.objectContaining({content: "Response after pre-prompt compaction.", type: "assistant"}),
-      ]),
-    });
-    const finalSnapshot = snapshotEvents(events).at(-1);
-    const persistedTurn = finalSnapshot?.session.turns.find((turn) =>
-      turn.userMessage.contentParts.some((part) => part.type === "text" && part.text === "Continue after pre-prompt compaction")
-    );
-    expect(finalSnapshot).toMatchObject({type: "session.snapshot"});
-    expect(persistedTurn).toMatchObject({userMessage: {contentParts: [{text: "Continue after pre-prompt compaction", type: "text"}]}});
-    expect(persistedTurn?.events).toContainEqual(
-      expect.objectContaining({status: "completed", summary: expect.stringContaining("Pre-prompt compacted summary."), type: "compaction"})
-    );
-    expect(persistedTurn?.events).toContainEqual(expect.objectContaining({content: "Response after pre-prompt compaction.", type: "assistant"}));
+    expect(seen.pending).toBe(true);
+    // The summary follows the turn's user entry, so it renders inside the submitted turn.
+    expect(userIndex).toBeGreaterThanOrEqual(0);
+    expect(summaryIndex).toBeGreaterThan(userIndex);
+    expect(JSON.stringify(session.entries[summaryIndex])).toContain("Pre-prompt compacted summary.");
+    expect(assistantTexts(session).at(-1)).toBe("Response after pre-prompt compaction.");
   });
 
   it("keeps one open session across commands and reopens it from its file", async () => {
@@ -254,17 +218,13 @@ describe("sending messages through Pi sessions", () => {
     await pi.sendMessage({message: "first", modelReference: selectedModelReference, sessionId: info.id});
     await pi.sendMessage({message: "second", modelReference: selectedModelReference, sessionId: info.id});
     const loadsBefore = pi.loadCount;
-    const events = await pi.sendMessage({message: "third", modelReference: selectedModelReference, sessionId: info.id});
+    const {session} = await pi.sendMessage({message: "third", modelReference: selectedModelReference, sessionId: info.id});
     expect(pi.loadCount).toBe(loadsBefore);
 
-    await pi.store.release(info.id);
+    await pi.sessionRuntime.dispose();
     const reopened = await pi.sessions.get({sessionId: info.id});
-    expect(reopened.turns).toEqual(snapshotEvents(events).at(-1)?.session.turns);
-    expect(reopened.turns.map((turn) => turn.userMessage.contentParts)).toEqual([
-      [{text: "first", type: "text"}],
-      [{text: "second", type: "text"}],
-      [{text: "third", type: "text"}],
-    ]);
+    expect(reopened.entries).toEqual(session.entries);
+    expect(turnContents(reopened)).toEqual([[{text: "first", type: "text"}], [{text: "second", type: "text"}], [{text: "third", type: "text"}]]);
   });
 
   it("persists stable checkpoint entries around git-backed turns", async () => {
@@ -304,10 +264,10 @@ describe("sending messages through Pi sessions", () => {
     const {info} = await pi.createSession();
     pi.faux.setResponses([fauxAssistantMessage("Changed files.")]);
 
-    const events = await pi.sendMessage({captureCheckpoints: false, message: "change files", modelReference: selectedModelReference, sessionId: info.id});
+    const {error} = await pi.sendMessage({captureCheckpoints: false, message: "change files", modelReference: selectedModelReference, sessionId: info.id});
 
     expect(captureCount).toBe(0);
-    expect(events.filter((event) => event.type === "session.error")).toEqual([]);
+    expect(error).toBeNull();
     expect(await pi.turnRecords(info.id)).toMatchObject([{before: {status: "disabled"}, after: {status: "disabled"}}]);
   });
 
@@ -326,11 +286,11 @@ describe("sending messages through Pi sessions", () => {
     const {info} = await pi.createSession();
     pi.faux.setResponses([fauxAssistantMessage("Changed files.")]);
 
-    const events = await pi.sendMessage({message: "change files", modelReference: selectedModelReference, sessionId: info.id});
+    const {error, session} = await pi.sendMessage({message: "change files", modelReference: selectedModelReference, sessionId: info.id});
 
-    expect(events.filter((event) => event.type === "session.error")).toEqual([]);
+    expect(error).toBeNull();
     expect(await pi.turnRecords(info.id)).toMatchObject([{before: {status: "failed"}, after: {status: "captured"}}]);
-    expect(snapshotEvents(events).at(-1)?.session.turns.at(-1)?.userMessage.contentParts).toEqual([{text: "change files", type: "text"}]);
+    expect(turnContents(session).at(-1)).toEqual([{text: "change files", type: "text"}]);
     expect(pi.faux.state.callCount).toBe(1);
   });
 
@@ -349,11 +309,11 @@ describe("sending messages through Pi sessions", () => {
     const {info} = await pi.createSession();
     pi.faux.setResponses([fauxAssistantMessage("Changed files.")]);
 
-    const events = await pi.sendMessage({message: "change files", modelReference: selectedModelReference, sessionId: info.id});
+    const {error, session} = await pi.sendMessage({message: "change files", modelReference: selectedModelReference, sessionId: info.id});
 
-    expect(events.filter((event) => event.type === "session.error")).toEqual([]);
+    expect(error).toBeNull();
     expect(await pi.turnRecords(info.id)).toMatchObject([{before: {status: "captured"}, after: {status: "failed"}}]);
-    expect(snapshotEvents(events).at(-1)?.session.turns.at(-1)?.userMessage.contentParts).toEqual([{text: "change files", type: "text"}]);
+    expect(turnContents(session).at(-1)).toEqual([{text: "change files", type: "text"}]);
     expect(pi.faux.state.callCount).toBe(1);
   });
 
@@ -370,27 +330,15 @@ describe("sending messages through Pi sessions", () => {
       fauxAssistantMessage("Continued after compaction."),
     ]);
 
-    const events = await pi.sendMessage({message: "Fix overflow", modelReference: selectedModelReference, sessionId: info.id});
-    const liveTurns = turnEvents(events);
-    const compactionTurn = liveTurns.find((event) => event.turn.events.some((turnEvent) => turnEvent.type === "compaction" && turnEvent.status === "completed"));
-    const continuationTurn = liveTurns.find((event) => event.turn.events.some((turnEvent) => turnEvent.type === "assistant" && turnEvent.content.includes("Continued")));
+    const {session, versions} = await pi.sendMessage({message: "Fix overflow", modelReference: selectedModelReference, sessionId: info.id});
+    const userIndex = session.entries.findIndex((entry) => session.turns[String(entry.id)]?.contentParts.some((part) => part.type === "text" && part.text === "Fix overflow"));
+    const after = session.entries.slice(userIndex + 1);
 
-    expect(events.find((event) => event.type === "session.compaction.ended")).toMatchObject({type: "session.compaction.ended"});
-    expect(compactionTurn).toMatchObject({
-      turn: {
-        userMessage: {contentParts: [{text: "Fix overflow", type: "text"}]},
-        events: expect.arrayContaining([expect.objectContaining({status: "completed", summary: expect.stringContaining("Compacted overflow summary."), type: "compaction"})]),
-      },
-    });
-    expect(continuationTurn).toMatchObject({
-      turn: {
-        userMessage: {contentParts: [{text: "Fix overflow", type: "text"}]},
-        events: expect.arrayContaining([
-          expect.objectContaining({status: "completed", summary: expect.stringContaining("Compacted overflow summary."), type: "compaction"}),
-          expect.objectContaining({content: "Continued after compaction.", type: "assistant"}),
-        ]),
-      },
-    });
+    expect(compactionsSeen(versions).pending).toBe(true);
+    // The summary and the continuation both follow the turn's user entry, with no other turn between.
+    expect(after.some((entry) => entry.kind === "pi.compaction" && JSON.stringify(entry).includes("Compacted overflow summary."))).toBe(true);
+    expect(assistantTexts({entries: after}).at(-1)).toBe("Continued after compaction.");
+    expect(after.some((entry) => session.turns[String(entry.id)] !== undefined)).toBe(false);
   });
 
   it("rejects an unavailable model without leaving the session locked", async () => {
@@ -476,7 +424,7 @@ describe("sending messages through Pi sessions", () => {
     expect(pi.faux.state.callCount).toBe(0);
   });
 
-  it("keeps committed reads stable while aborting an active provider request", async () => {
+  it("shows the running turn in reads and settles idle after aborting an active provider request", async () => {
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
     const {info} = await pi.createSession();
@@ -495,50 +443,51 @@ describe("sending messages through Pi sessions", () => {
         },
       ]);
     });
-    const {events, stop} = await pi.watchEvents();
+    const observation = await pi.observe(info.id);
     try {
       const run = pi.sessionRuntime.sendMessage({contentParts: [{text: "Fix it", type: "text"}], modelReference: selectedModelReference, sessionId: info.id});
       await providerStarted;
-      const committedSession = await pi.sessions.get({sessionId: info.id});
-      expect(committedSession.turns.map((turn) => turn.userMessage.contentParts)).toEqual([[{text: "Existing request", type: "text"}]]);
+      const running = await pi.sessions.get({sessionId: info.id});
+      expect(running.live.run).toBeDefined();
+      expect(turnContents(running)).toEqual([[{text: "Existing request", type: "text"}], [{text: "Fix it", type: "text"}]]);
 
       const abortRun = pi.sessionRuntime.abort({sessionId: info.id});
-      await waitUntil(() => expect(events.find((event) => event.type === "session.agent.started")).toBeDefined());
+      await waitUntil(() => expect(activities(observation.board, info.id)).toContain("running"));
       await waitUntil(() => expect(providerSignal?.aborted).toBe(true));
       releaseProvider?.();
       await abortRun;
       await run;
     } finally {
       releaseProvider?.();
-      await stop();
+      observation.stop();
     }
 
-    expect(events.find((event) => event.type === "session.agent.started")).toBeDefined();
     expect(providerSignal?.aborted).toBe(true);
+    await pi.settled(info.id);
+    expect((await pi.sessions.get({sessionId: info.id})).live.run).toBeUndefined();
   });
 });
 
-describe("committed reads around settlement", () => {
-  it("leaves a finished run out of committed reads until its settled snapshot is published", async () => {
-    const pi = await createPiTestRuntime();
-    const {info} = await pi.createSession();
-    pi.faux.setResponses([fauxAssistantMessage("Done.")]);
-    const committedTurnCounts: number[] = [];
-    const {events, stop} = await pi.watchEvents();
+describe("observing a run", () => {
+  it("lets an observer that subscribed mid-run follow the replicated state to the server's final document", async () => {
+    const pi = await createPiTestRuntime({tokensPerSecond: 1_000});
     try {
-      await pi.sessionRuntime.sendMessage({contentParts: [{text: "Fix it", type: "text"}], modelReference: selectedModelReference, sessionId: info.id});
-      // Read committed state as the client would, as often as possible, until the snapshot arrives.
-      while (!events.some((event) => event.type === "session.snapshot")) {
-        const session = (await pi.sessionRuntime.getCommittedSession({sessionId: info.id})) ?? (await pi.sessions.get({sessionId: info.id}));
-        if (!events.some((event) => event.type === "session.snapshot")) committedTurnCounts.push(session.turns.length);
-        await new Promise((resolve) => setTimeout(resolve, 0));
+      const {info} = await pi.createSession();
+      pi.faux.setResponses([fauxAssistantMessage(`Streamed. ${"word ".repeat(150)}`)]);
+      await pi.sessionRuntime.sendMessage({contentParts: [{text: "Go", type: "text"}], modelReference: selectedModelReference, sessionId: info.id});
+      const observation = await pi.observe(info.id);
+      try {
+        await pi.settled(info.id);
+        const final: Session = await pi.sessions.get({sessionId: info.id});
+        await waitUntil(() => expect(observation.versions.at(-1)).toEqual(final));
+      } finally {
+        observation.stop();
       }
+      expect(observation.versions[0]?.live.run).toBeDefined();
+      expect(observation.versions.length).toBeGreaterThan(1);
     } finally {
-      await stop();
       await pi.unregister();
     }
-    expect(committedTurnCounts.length).toBeGreaterThan(0);
-    expect(new Set(committedTurnCounts)).toEqual(new Set([0]));
   });
 });
 
@@ -564,16 +513,13 @@ describe("recovering a session after the server stops mid-turn", () => {
     const second = await createPiTestRuntime({sessionStorageRoot});
     try {
       second.faux.setResponses([fauxAssistantMessage("Recovered answer.")]);
-      const events = await second.collectEvents(
-        () => second.sessions.get({sessionId: info.id}).then(() => second.store.file(info.id)),
-        () => undefined
-      );
-      expect(events.filter((event) => event.type === "session.error")).toEqual([]);
+      await second.sessions.get({sessionId: info.id});
+      expect(second.lastError(info.id)).toBeNull();
       await waitUntil(async () => {
         const session = await second.sessions.get({sessionId: info.id});
-        expect(session.turns.at(-1)?.events).toContainEqual(expect.objectContaining({content: "Recovered answer.", type: "assistant"}));
+        expect(assistantTexts(session)).toContain("Recovered answer.");
       });
-      expect((await second.sessions.get({sessionId: info.id})).turns.map((turn) => turn.userMessage.contentParts)).toEqual([[{text: "Long task", type: "text"}]]);
+      expect(turnContents(await second.sessions.get({sessionId: info.id}))).toEqual([[{text: "Long task", type: "text"}]]);
     } finally {
       await second.unregister();
       rmSync(sessionStorageRoot, {force: true, recursive: true});
@@ -581,7 +527,7 @@ describe("recovering a session after the server stops mid-turn", () => {
   });
 });
 
-describe("live turns under delayed frames", () => {
+describe("state under delayed frames", () => {
   it("never shows a streamed answer and its final entry together", async () => {
     const pi = await createPiTestRuntime({tokensPerSecond: 1_000});
     try {
@@ -592,49 +538,13 @@ describe("live turns under delayed frames", () => {
       const session = await pi.store.file(info.id);
       const watch = session.watch.bind(session);
       session.watch = (conversationId, listener) => watch(conversationId, (view) => setTimeout(() => listener(view), 150));
-      const events = await pi.sendMessage({message: "Answer once", modelReference: selectedModelReference, sessionId: info.id});
-      for (const event of events) {
-        if (event.type !== "session.turn") continue;
-        expect(event.turn.events.filter((turnEvent) => turnEvent.type === "assistant" && turnEvent.content.includes("The one answer.")).length).toBeLessThanOrEqual(1);
+      const {versions} = await pi.sendMessage({message: "Answer once", modelReference: selectedModelReference, sessionId: info.id});
+      for (const version of versions) {
+        const partial = version.live.generation?.message;
+        const shown = assistantTexts(version).filter((text) => text.includes("The one answer.")).length;
+        const streaming = partial?.content.some((part) => part.type === "text" && part.text.includes("The one answer.")) ? 1 : 0;
+        expect(shown + streaming).toBeLessThanOrEqual(1);
       }
-    } finally {
-      await pi.unregister();
-    }
-  });
-});
-
-describe("a run that settles before its send returns", () => {
-  it("publishes no live turn after the settled snapshot", async () => {
-    const pi = await createPiTestRuntime();
-    try {
-      const {info} = await pi.createSession();
-      pi.faux.setResponses([fauxAssistantMessage("Quick.")]);
-      // Hold the send's return until the run has settled, as a fast model on a busy server does.
-      const session = await pi.store.file(info.id);
-      const submit = session.submit.bind(session);
-      let settled: () => void = () => undefined;
-      const snapshotSeen = new Promise<void>((resolve) => (settled = resolve));
-      session.submit = async (input) => {
-        const result = await submit(input);
-        await snapshotSeen;
-        return result;
-      };
-      const {events, stop} = await pi.watchEvents();
-      try {
-        const sent = pi.sessionRuntime.sendMessage({contentParts: [{text: "Fast", type: "text"}], modelReference: selectedModelReference, sessionId: info.id});
-        await waitUntil(() => expect(events.some((event) => event.type === "session.snapshot")).toBe(true));
-        settled();
-        await sent;
-        // Any later commit produces another frame.
-        await pi.sessions.rename({sessionId: info.id, title: "Renamed"});
-        await session.updateState(() => undefined);
-        await new Promise((resolve) => setTimeout(resolve, 50));
-      } finally {
-        await stop();
-      }
-      const snapshotIndex = events.findIndex((event) => event.type === "session.snapshot");
-      expect(events.slice(snapshotIndex + 1).filter((event) => event.type === "session.turn")).toEqual([]);
-      expect(await pi.sessionRuntime.getCommittedSession({sessionId: info.id})).toBeUndefined();
     } finally {
       await pi.unregister();
     }

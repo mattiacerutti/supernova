@@ -1,25 +1,26 @@
-import {Schema} from "effect";
+import {z} from "zod";
+import {array, struct} from "@supernova/contracts/runtime/schemas";
 
-export const WorkspaceBranchesListPayload = Schema.Struct({
-  projectPath: Schema.String,
+export const WorkspaceBranchesListPayload = struct({
+  projectPath: z.string(),
 });
 
-export const WorkspaceBranch = Schema.Struct({
+export const WorkspaceBranch = struct({
   /** Branch name; remote-tracking branches keep their `origin/` prefix. */
-  name: Schema.String,
+  name: z.string(),
   /** Whether the branch is a remote-tracking ref. */
-  remote: Schema.Boolean,
+  remote: z.boolean(),
   /** Path of the worktree that has this branch checked out, when one does. */
-  worktreePath: Schema.optional(Schema.String),
+  worktreePath: z.string().optional(),
 });
 
-export const WorkspaceBranchesListResult = Schema.Struct({
+export const WorkspaceBranchesListResult = struct({
   /** Local branches by most recent commit, then remote-tracking branches. */
-  branches: Schema.Array(WorkspaceBranch),
+  branches: array(WorkspaceBranch),
   /** Branch checked out in the project, or undefined on a detached HEAD. */
-  current: Schema.optional(Schema.String),
+  current: z.string().optional(),
 });
 
-export type WorkspaceBranch = typeof WorkspaceBranch.Type;
-export type WorkspaceBranchesListPayload = typeof WorkspaceBranchesListPayload.Type;
-export type WorkspaceBranchesListResult = typeof WorkspaceBranchesListResult.Type;
+export type WorkspaceBranch = z.infer<typeof WorkspaceBranch>;
+export type WorkspaceBranchesListPayload = z.infer<typeof WorkspaceBranchesListPayload>;
+export type WorkspaceBranchesListResult = z.infer<typeof WorkspaceBranchesListResult>;

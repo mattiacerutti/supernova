@@ -2,7 +2,7 @@ import type {ModelReference, SessionWorkspaceSelection, UserMessageContentPart} 
 import {useQueryClient} from "@tanstack/react-query";
 import type {CheckpointNavigationOutcome, StartSessionOutcome} from "@/features/sessions/stores/conversation/session-live-store";
 import {useSessionLiveStore} from "@/features/sessions/stores/conversation/session-live-store";
-import {useRpcClient} from "@/rpc/use-rpc-client";
+import {useRuntime} from "@/rpc/use-runtime";
 
 interface SendMessageInput {
   readonly contentParts: readonly UserMessageContentPart[];
@@ -24,6 +24,13 @@ interface CheckpointNavigationInput {
   readonly sessionId: string;
 }
 
+interface CheckpointStepInput extends CheckpointNavigationInput {
+  /** The last visible turn: what undo hides. */
+  readonly lastTurnId: string | undefined;
+  /** The first undone turn: what redo shows again. */
+  readonly firstUndoneTurnId: string | undefined;
+}
+
 interface RevertToMessageInput extends CheckpointNavigationInput {
   readonly turnId: string;
 }
@@ -31,12 +38,12 @@ interface RevertToMessageInput extends CheckpointNavigationInput {
 export interface SessionActions {
   readonly abortSession: (input: CheckpointNavigationInput) => void;
   readonly compactSession: (input: CompactSessionInput) => void;
-  readonly redoCheckpoint: (input: CheckpointNavigationInput) => Promise<CheckpointNavigationOutcome>;
+  readonly redoCheckpoint: (input: CheckpointStepInput) => Promise<CheckpointNavigationOutcome>;
   readonly revertToMessage: (input: RevertToMessageInput) => Promise<CheckpointNavigationOutcome>;
   readonly sendMessage: (input: SendMessageInput) => void;
   /** Creates a session under a client-chosen id with its first message; see `StartSessionOutcome`. */
   readonly startSession: (input: StartSessionInput) => Promise<StartSessionOutcome>;
-  readonly undoCheckpoint: (input: CheckpointNavigationInput) => Promise<CheckpointNavigationOutcome>;
+  readonly undoCheckpoint: (input: CheckpointStepInput) => Promise<CheckpointNavigationOutcome>;
 }
 
 /**
@@ -45,7 +52,7 @@ export interface SessionActions {
  */
 export function useSessionActions(): SessionActions {
   const queryClient = useQueryClient();
-  const rpcClient = useRpcClient();
+  const services = useRuntime();
   const abortSession = useSessionLiveStore((state) => state.abortSession);
   const compactSession = useSessionLiveStore((state) => state.compactSession);
   const redoCheckpoint = useSessionLiveStore((state) => state.redoCheckpoint);
@@ -55,12 +62,12 @@ export function useSessionActions(): SessionActions {
   const undoCheckpoint = useSessionLiveStore((state) => state.undoCheckpoint);
 
   return {
-    abortSession: (input) => abortSession({...input, rpcClient}),
-    compactSession: (input) => compactSession({...input, rpcClient}),
-    redoCheckpoint: (input) => redoCheckpoint({...input, queryClient, rpcClient}),
-    revertToMessage: (input) => revertToMessage({...input, queryClient, rpcClient}),
-    sendMessage: (input) => sendMessage({...input, queryClient, rpcClient}),
-    startSession: (input) => startSession({...input, queryClient, rpcClient}),
-    undoCheckpoint: (input) => undoCheckpoint({...input, queryClient, rpcClient}),
+    abortSession: (input) => abortSession({...input, services}),
+    compactSession: (input) => compactSession({...input, services}),
+    redoCheckpoint: (input) => redoCheckpoint({...input, queryClient, services}),
+    revertToMessage: (input) => revertToMessage({...input, queryClient, services}),
+    sendMessage: (input) => sendMessage({...input, queryClient, services}),
+    startSession: (input) => startSession({...input, queryClient, services}),
+    undoCheckpoint: (input) => undoCheckpoint({...input, queryClient, services}),
   };
 }

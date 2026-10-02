@@ -1,13 +1,14 @@
-import {useQuery} from "@tanstack/react-query";
-import {Effect} from "effect";
+import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
+import {queryOptions, useQuery} from "@tanstack/react-query";
 import {settingsKeys} from "@/features/settings/api/query-keys";
-import {eq} from "@/rpc/effect-query";
-import {RpcProtocolClientService} from "@/rpc/transport/client";
+import {unwrap} from "@/rpc/runtime-result";
+import {useRuntime} from "@/rpc/use-runtime";
 
 export function useListProviders() {
+  const runtime = useRuntime();
   return useQuery(
-    eq.queryOptions({
-      queryFn: () => Effect.flatMap(Effect.service(RpcProtocolClientService), (rpc) => rpc.listProviders()),
+    queryOptions({
+      queryFn: () => unwrap(runtime.providers.list(BACKGROUND_CONTEXT)),
       queryKey: settingsKeys.providers(),
     })
   );

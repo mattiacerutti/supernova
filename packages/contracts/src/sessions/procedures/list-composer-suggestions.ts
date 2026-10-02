@@ -1,41 +1,39 @@
-import {Schema} from "effect";
+import {z} from "zod";
+import {array, struct, TaggedError} from "@supernova/contracts/runtime/schemas";
 
-export const ComposerSuggestionTriggerKind = Schema.Union([Schema.Literal("skill"), Schema.Literal("slash")]);
+export const ComposerSuggestionTriggerKind = z.union([z.literal("skill"), z.literal("slash")]);
 
-export const ComposerSkillSuggestionItem = Schema.Struct({
-  id: Schema.String,
-  kind: Schema.Literal("skill"),
-  name: Schema.String,
-  subtitle: Schema.optional(Schema.String),
-  title: Schema.String,
+export const ComposerSkillSuggestionItem = struct({
+  id: z.string(),
+  kind: z.literal("skill"),
+  name: z.string(),
+  subtitle: z.string().optional(),
+  title: z.string(),
 });
 
-export const ComposerPromptTemplateSuggestionItem = Schema.Struct({
-  id: Schema.String,
-  kind: Schema.Literal("prompt-template"),
-  prompt: Schema.String,
-  subtitle: Schema.optional(Schema.String),
-  title: Schema.String,
+export const ComposerPromptTemplateSuggestionItem = struct({
+  id: z.string(),
+  kind: z.literal("prompt-template"),
+  prompt: z.string(),
+  subtitle: z.string().optional(),
+  title: z.string(),
 });
 
-export const ComposerSuggestionItem = Schema.Union([ComposerPromptTemplateSuggestionItem, ComposerSkillSuggestionItem]);
+export const ComposerSuggestionItem = z.union([ComposerPromptTemplateSuggestionItem, ComposerSkillSuggestionItem]);
 
-export const ListComposerSuggestionsPayload = Schema.Struct({
-  projectPath: Schema.String,
+export const ListComposerSuggestionsPayload = struct({
+  projectPath: z.string(),
 });
 
-export const ListComposerSuggestionsResult = Schema.Struct({
-  items: Schema.Array(ComposerSuggestionItem),
+export const ListComposerSuggestionsResult = struct({
+  items: array(ComposerSuggestionItem),
 });
 
-export class ListComposerSuggestionsError extends Schema.TaggedErrorClass<ListComposerSuggestionsError>()("ListComposerSuggestionsError", {
-  cause: Schema.optional(Schema.Defect),
-  message: Schema.String,
-}) {}
+export class ListComposerSuggestionsError extends TaggedError("ListComposerSuggestionsError") {}
 
-export type ComposerSuggestionTriggerKind = typeof ComposerSuggestionTriggerKind.Type;
-export type ComposerSkillSuggestionItem = typeof ComposerSkillSuggestionItem.Type;
-export type ComposerPromptTemplateSuggestionItem = typeof ComposerPromptTemplateSuggestionItem.Type;
-export type ComposerSuggestionItem = typeof ComposerSuggestionItem.Type;
-export type ListComposerSuggestionsPayload = typeof ListComposerSuggestionsPayload.Type;
-export type ListComposerSuggestionsResult = typeof ListComposerSuggestionsResult.Type;
+export type ComposerSuggestionTriggerKind = z.infer<typeof ComposerSuggestionTriggerKind>;
+export type ComposerSkillSuggestionItem = z.infer<typeof ComposerSkillSuggestionItem>;
+export type ComposerPromptTemplateSuggestionItem = z.infer<typeof ComposerPromptTemplateSuggestionItem>;
+export type ComposerSuggestionItem = z.infer<typeof ComposerSuggestionItem>;
+export type ListComposerSuggestionsPayload = z.infer<typeof ListComposerSuggestionsPayload>;
+export type ListComposerSuggestionsResult = z.infer<typeof ListComposerSuggestionsResult>;

@@ -1,22 +1,20 @@
-import {Schema} from "effect";
+import {z} from "zod";
+import {array, struct, TaggedError} from "@supernova/contracts/runtime/schemas";
 import {FolderQueryPathType, FolderSuggestion} from "../schemas";
 
-export const FolderSuggestionsListPayload = Schema.Struct({
-  query: Schema.String,
+export const FolderSuggestionsListPayload = struct({
+  query: z.string(),
 });
 
-export const FolderSuggestionsListResult = Schema.Struct({
-  homePath: Schema.String,
-  query: Schema.String,
-  queryPath: Schema.String,
+export const FolderSuggestionsListResult = struct({
+  homePath: z.string(),
+  query: z.string(),
+  queryPath: z.string(),
   queryPathType: FolderQueryPathType,
-  suggestions: Schema.Array(FolderSuggestion),
+  suggestions: array(FolderSuggestion),
 });
 
-export class FolderSuggestionsListError extends Schema.TaggedErrorClass<FolderSuggestionsListError>()("FolderSuggestionsListError", {
-  cause: Schema.optional(Schema.Defect),
-  message: Schema.String,
-}) {}
+export class FolderSuggestionsListError extends TaggedError("FolderSuggestionsListError") {}
 
-export type FolderSuggestionsListPayload = typeof FolderSuggestionsListPayload.Type;
-export type FolderSuggestionsListResult = typeof FolderSuggestionsListResult.Type;
+export type FolderSuggestionsListPayload = z.infer<typeof FolderSuggestionsListPayload>;
+export type FolderSuggestionsListResult = z.infer<typeof FolderSuggestionsListResult>;

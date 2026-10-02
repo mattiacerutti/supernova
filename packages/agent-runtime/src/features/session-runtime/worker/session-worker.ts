@@ -1,31 +1,36 @@
 import {randomUUID} from "node:crypto";
-import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
+import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
+import type {SessionActivity} from "@supernova/contracts/session-runtime/procedures";
 import type {Session} from "@supernova/contracts/sessions/schemas";
 import type {CheckpointRef, CheckpointStatus} from "@supernova/agent-runtime/pi/lib/session/session-state";
-import type {ConversationSnapshot, SessionFile} from "@supernova/agent-runtime/pi/session-file";
-import type {SessionStore} from "@supernova/agent-runtime/pi/session-store";
+import type {SessionFile} from "@supernova/agent-runtime/pi/session-file";
+import type {SessionHistory, SessionStore} from "@supernova/agent-runtime/pi/session-store";
 import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";
 import type {ResourceCache} from "@supernova/agent-runtime/pi/resource-cache";
 import type {CheckpointStore} from "@supernova/agent-runtime/features/session-runtime/checkpoints/checkpoint-store";
 import {CheckpointConflictError} from "@supernova/agent-runtime/features/session-runtime/checkpoints/shadow-repository";
-import type {EventBus} from "@supernova/agent-runtime/lib/event-bus";
-
-type RevisionedSessionStreamEvent = Extract<SessionStreamEvent, {readonly revision: number}>;
-type UnrevisionedSessionStreamEvent = RevisionedSessionStreamEvent extends infer Event ? (Event extends {readonly revision: number} ? Omit<Event, "revision"> : never) : never;
+import type {SessionBoard} from "@supernova/agent-runtime/features/session-runtime/worker/session-board";
+import {DocumentState} from "@supernova/agent-runtime/lib/document-state";
 
 export interface SessionWorkerInput {
+  readonly board: SessionBoard;
   readonly checkpointStore: CheckpointStore;
-  readonly eventBus: EventBus<SessionStreamEvent>;
   readonly resourceCache: ResourceCache;
   readonly sdk: Pick<PiSdk, "modelRuntime">;
   readonly sessionId: string;
   readonly store: SessionStore;
 }
 
+/** What a session is doing, from its `pi.live`. A manual compaction runs without a run, so it is listed on its own. */
+function activityOf(session: Session): SessionActivity {
+  if ((session.live.compactions ?? []).some((compaction) => compaction.blocking || compaction.reason === "manual")) return "compacting";
+  return session.live.run === undefined ? "idle" : "running";
+}
+
 /**
- * Publishes one session's events and serializes its navigation commands. The engine owns execution and turn state;
- * the worker watches the visible conversation and translates its committed views into the event stream:
- * `session.agent.*` from run transitions, `session.turn` while a run is active, `session.snapshot` when it settles.
+ * Publishes one session's state and serializes its navigation commands. The engine owns execution and turn state; the
+ * worker keeps the session document as Chord replicated state, whose subscribers receive each change as a delta, the
+ * same way the engine's view state reaches its own viewers. Its activity and problems go to the session board.
  */
 export class SessionWorker {
   public readonly resourceCache: ResourceCache;
@@ -33,30 +38,23 @@ export class SessionWorker {
   public readonly sdk: Pick<PiSdk, "modelRuntime">;
   public readonly store: SessionStore;
 
+  private readonly board: SessionBoard;
   private readonly checkpointStore: CheckpointStore;
-  private readonly eventBus: EventBus<SessionStreamEvent>;
 
-  private revision = 0;
-  private publishing: Promise<void> = Promise.resolve();
+  private publishing: Promise<unknown> = Promise.resolve();
   private commandRunning = false;
   private cancelled = false;
   private watched: {readonly conversationId: number; readonly unsubscribe: () => void} | undefined;
   private readonly background = new Set<Promise<unknown>>();
-  /**
-   * The first user entry of the run being published, from the send that placed it or the first frame that shows it
-   * (a run resumed after a restart). It is the committed/live boundary: committed reads end before it until the run's
-   * settled snapshot is published, because the engine may end a fast run before any frame of it arrives.
-   */
-  private runStart: number | undefined;
-  /** The last entry a settled snapshot covered; a send that returns after its run already settled is not reopened. */
-  private settledThrough = 0;
-  private wasCompacting = false;
-  private lastTurnJson: string | undefined;
+  /** The document clients mirror; absent until the session is first opened. */
+  private document: DocumentState<Session> | undefined;
+  /** The histories the document was built from. */
+  private history: SessionHistory | undefined;
 
   public constructor(input: SessionWorkerInput) {
+    this.board = input.board;
     this.checkpointStore = input.checkpointStore;
     this.store = input.store;
-    this.eventBus = input.eventBus;
     this.resourceCache = input.resourceCache;
     this.sdk = input.sdk;
     this.sessionId = input.sessionId;
@@ -67,6 +65,45 @@ export class SessionWorker {
     const session = await this.store.file(this.sessionId);
     await this.watch(session);
     return session;
+  }
+
+  /** The session document after every change already published. */
+  public async current(): Promise<Session> {
+    return (await this.transcript()).value;
+  }
+
+  /** The session document as replicated state, built on first use. */
+  public async transcript(): Promise<DocumentState<Session>> {
+    await this.session();
+    await this.enqueue(async () => {
+      if (!this.document) await this.publish();
+    });
+    return this.document!;
+  }
+
+  /** Rebuilds the document from the session file and publishes the change, for changes no engine frame shows. */
+  public async refresh(): Promise<Session> {
+    await this.session();
+    return this.enqueue(() => this.publish());
+  }
+
+  /**
+   * Runs a submission inside the publication queue and publishes after it: the engine places the input in one commit
+   * and its turn record follows in another, and no state may be published between them, or clients would show the user
+   * entry without its record.
+   */
+  public async submit<T>(work: () => Promise<T>): Promise<T> {
+    await this.session();
+    const outcome = await this.enqueue(async () => {
+      const result = await work().then(
+        (value) => ({value}),
+        (error: unknown) => ({error})
+      );
+      await this.publish();
+      return result;
+    });
+    if ("error" in outcome) throw outcome.error;
+    return outcome.value;
   }
 
   /**
@@ -108,50 +145,10 @@ export class SessionWorker {
     return this.cancelled;
   }
 
-  /** Publishes a public runtime event with a fresh revision. */
-  public publishEvent(event: UnrevisionedSessionStreamEvent): void {
-    this.eventBus.publish({...event, revision: this.nextRevision()} as RevisionedSessionStreamEvent);
-  }
-
-  /** Publishes the committed session; ordered with the view-driven events. */
-  public publishSessionSnapshot(): Promise<void> {
-    return this.enqueue(async () => {
-      this.publishEvent({type: "session.snapshot", sessionId: this.sessionId, session: await this.store.snapshot(this.sessionId)});
-    });
-  }
-
-  /**
-   * Marks a run as started from the moment its input was placed, before any frame of it arrives: the engine may
-   * finish a fast run within one frame, and committed reads must leave it out until its snapshot is published.
-   */
-  public markRunStarted(entryId: number): void {
-    if (this.runStart !== undefined || entryId <= this.settledThrough) return;
-    this.runStart = entryId;
-    this.publishEvent({type: "session.agent.started", sessionId: this.sessionId});
-  }
-
-  /**
-   * The committed session while this worker's view of a run has not settled: the engine may already have ended the
-   * run, but until the settled snapshot is published the client still shows it live, so committed reads leave it out.
-   */
-  public async committedSession(): Promise<Session | undefined> {
-    return this.runStart === undefined ? undefined : this.store.snapshot(this.sessionId, {before: this.runStart});
-  }
-
-  /** Publishes the session's summary after a title change. */
-  public async publishSessionUpdate(): Promise<void> {
-    const record = await this.store.record(this.sessionId);
-    this.publishEvent({
-      type: "session.updated",
-      projectPath: record.projectPath,
-      sessionId: this.sessionId,
-      summary: {
-        id: record.id,
-        forked: record.forkedFrom !== undefined,
-        title: record.title ?? (await this.store.snapshot(this.sessionId)).title,
-        updatedAt: record.updatedAt,
-        worktree: record.worktree !== undefined,
-      },
+  /** Reports a problem that did not fail a command; clients show it until the next run. */
+  public reportError(message: string): void {
+    void this.store.find(this.sessionId).then((record) => {
+      if (record) this.board.update(this.sessionId, record.projectPath, {error: {message, at: new Date().toISOString()}});
     });
   }
 
@@ -196,46 +193,42 @@ export class SessionWorker {
     this.watched?.unsubscribe();
     this.watched = undefined;
     await Promise.all([...this.background, this.publishing]);
+    this.document?.dispose();
   }
 
   private async watch(session: SessionFile): Promise<void> {
     const {visible} = await session.state();
     if (this.watched?.conversationId === visible) return;
     this.watched?.unsubscribe();
-    const first = this.watched === undefined;
-    const unsubscribe = await session.watch(visible, (view) => void this.enqueue(() => this.onView(view)));
+    // Frames only trigger a publication; it reads the current view, so a frame handled late never moves state back.
+    const unsubscribe = await session.watch(visible, () => void this.enqueue(() => this.onFrame()).catch(() => undefined));
     this.watched = {conversationId: visible, unsubscribe};
-    if (first && (await session.view()).live?.run === undefined) void this.enqueue(() => this.settleTurns());
+    // Also catches up on runs that finished after a restart, before anything watched them.
+    void this.enqueue(() => this.onFrame()).catch(() => undefined);
   }
 
   /**
-   * Translates one committed view into events: `session.agent.started` once per run, `session.turn` when the live
-   * turn changed, compaction phases, and, on the first frame after the run's input that shows no run,
-   * `session.agent.ended` and the settled `session.snapshot`. Frames may be coalesced, so a run can start and end in
-   * one frame; it is still announced, shown, and settled in that order.
+   * Publishes the current state; when no run is active, captures the after-turn checkpoint of turns that lack one. A
+   * run may start and end between two frames, so settlement follows idle state rather than a seen transition.
    */
-  private async onView(view: ConversationSnapshot): Promise<void> {
-    if (view.conversationId !== this.watched?.conversationId) return;
-    const live = await this.store.live(this.sessionId, view, this.runStart);
-    if (live.busy && this.runStart === undefined) this.markRunStarted(live.runStart!);
-    if (live.compacting !== this.wasCompacting) this.publishEvent({type: live.compacting ? "session.compaction.started" : "session.compaction.ended", sessionId: this.sessionId});
-    this.wasCompacting = live.compacting;
-    if (live.turn) {
-      const json = JSON.stringify([live.turn, live.context]);
-      if (json !== this.lastTurnJson) this.publishEvent({type: "session.turn", sessionId: this.sessionId, context: live.context, turn: live.turn});
-      this.lastTurnJson = json;
-    }
-    const frameEnd = view.entries.at(-1)?.id ?? 0;
-    // A frame from before the run's input (delivered late) does not settle it.
-    if (live.busy || this.runStart === undefined || frameEnd < this.runStart) return;
-    this.lastTurnJson = undefined;
-    this.publishEvent({type: "session.agent.ended", sessionId: this.sessionId});
-    await this.settleTurns();
-    const session = await this.store.snapshot(this.sessionId);
-    // Cleared together with publishing, so no committed read sees the run before the client gets the snapshot.
-    this.runStart = undefined;
-    this.settledThrough = Math.max(this.settledThrough, frameEnd);
-    this.publishEvent({type: "session.snapshot", sessionId: this.sessionId, session});
+  private async onFrame(): Promise<void> {
+    const session = await this.publish();
+    if (session.live.run === undefined) await this.settleTurns();
+  }
+
+  /**
+   * Rebuilds the document and publishes the change from the last one; the board follows its activity and summary. A
+   * new run clears the last reported problem.
+   */
+  private async publish(): Promise<Session> {
+    const {session, history} = await this.store.snapshot(this.sessionId, {previous: this.history});
+    this.history = history;
+    if (this.document) this.document.publish(session, BACKGROUND_CONTEXT);
+    else this.document = new DocumentState(session);
+    const activity = activityOf(session);
+    const summary = {id: session.id, forked: session.forked, title: session.title, updatedAt: session.updatedAt, worktree: session.worktree !== undefined};
+    this.board.update(this.sessionId, session.projectPath, {activity, summary, ...(activity === "running" ? {error: null, setupStep: null} : {})});
+    return session;
   }
 
   /**
@@ -254,17 +247,10 @@ export class SessionWorker {
     });
   }
 
-  /** Runs publications in order; a failed one never blocks later ones. */
-  private enqueue(work: () => Promise<void>): Promise<void> {
+  /** Runs publications in order; a failed one never blocks later ones and is reported. */
+  private enqueue<T>(work: () => Promise<T>): Promise<T> {
     const run = this.publishing.then(work);
-    this.publishing = run.catch((error) => {
-      this.publishEvent({type: "session.error", sessionId: this.sessionId, error: error instanceof Error ? error.message : "Failed to publish session state."});
-    });
+    this.publishing = run.catch((error) => this.reportError(error instanceof Error ? error.message : "Failed to publish session state."));
     return run;
-  }
-
-  private nextRevision(): number {
-    this.revision += 1;
-    return this.revision;
   }
 }

@@ -1,19 +1,17 @@
-import type {QueryClient} from "@tanstack/react-query";
-import {CheckpointConflictError, CheckpointUncapturedError} from "@supernova/contracts/session-runtime/procedures";
-import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
-import type {ModelReference, Session, SessionContextUsage, Turn, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
-import {QueryClient as TanStackQueryClient} from "@tanstack/react-query";
-import {Effect, Stream} from "effect";
+import {createRemoteServiceBinding, RemoteServiceProvider, replicatedState} from "@earendil-works/chord";
+import type {MutableReplicatedState} from "@earendil-works/chord";
+import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
+import type {ModelReference, Session, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {ServiceResult} from "@supernova/contracts/runtime/services";
+import type {SessionDirectoryEntry, SessionDirectoryState} from "@supernova/contracts/sessions/services";
+import {SessionController, SessionManagement} from "@supernova/contracts/sessions/services";
+import {QueryClient} from "@tanstack/react-query";
 import {afterEach, beforeEach, describe, expect, it, vi} from "vitest";
 import {sessionKeys} from "@/features/sessions/api/query-keys";
 import {connectSessionEvents} from "@/features/sessions/api/conversation/session-events";
 import {useSessionLiveStore} from "@/features/sessions/stores/conversation/session-live-store";
 import {hasUnseenActivity, useSessionVisitsStore} from "@/features/sessions/stores/sidebar/session-visits-store";
-import type {RpcClient, RpcClientFiber, RpcProtocolClient} from "@/rpc/transport/protocol";
-
-vi.mock("@/rpc/transport/client", () => ({
-  RpcProtocolClientService: class RpcProtocolClientService {},
-}));
+import type {RuntimeClient} from "@/rpc/transport/runtime-client";
 
 const model = {
   id: "claude-sonnet",
@@ -22,42 +20,37 @@ const model = {
 } satisfies ModelReference;
 
 const contentParts = [{text: "Fix this", type: "text"}] satisfies readonly UserMessageContentPart[];
-const contextUsage = {contextWindow: 200_000, usedTokens: 42_000} satisfies SessionContextUsage;
-
-function turn(input?: Partial<Turn>): Turn {
-  return {
-    events: [],
-    id: "turn-1",
-    modelReference: model,
-    startedAt: "2026-01-01T00:00:00.000Z",
-    status: "streaming",
-    userMessage: {contentParts, id: "message-1", timestamp: "2026-01-01T00:00:00.000Z"},
-    ...input,
-  };
-}
+const ok = {ok: true, value: null} as const;
 
 function session(input?: Partial<Session>): Session {
   return {
     id: "session-1",
-    context: {usedTokens: 0, contextWindow: 200_000},
+    title: "Session",
     forked: false,
     projectPath: "/workspace",
-    title: "Session",
-    turns: [],
-    undoneTurns: [],
     updatedAt: "2026-01-01T00:00:00.000Z",
+    entries: [],
+    undone: [],
+    agent: {},
+    live: {},
+    usage: {models: {}, tools: {}},
+    turns: {},
+    context: {usedTokens: 0, contextWindow: 200_000},
     ...input,
   };
 }
 
-function createQueryClient(): QueryClient {
-  return new TanStackQueryClient({defaultOptions: {queries: {retry: false}}});
+function entry(input?: Partial<SessionDirectoryEntry>): SessionDirectoryEntry {
+  return {activity: "idle", error: null, projectPath: "/workspace", setupStep: null, summary: null, ...input};
+}
+
+function failure(code: string, message: string): ServiceResult<never> {
+  return {ok: false, error: {code, message}};
 }
 
 async function waitUntil(assertion: () => void | Promise<void>): Promise<void> {
   const startedAt = Date.now();
   let lastError: unknown;
-
   while (Date.now() - startedAt < 2_000) {
     try {
       await assertion();
@@ -67,56 +60,68 @@ async function waitUntil(assertion: () => void | Promise<void>): Promise<void> {
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
   }
-
   throw lastError instanceof Error ? lastError : new Error("Timed out waiting for condition.");
 }
 
-function streamRpcClient(events: readonly SessionStreamEvent[]): RpcClient {
-  let interrupted = false;
-  return {
-    dispose: vi.fn(async () => undefined),
-    fork: vi.fn(async (execute) => {
-      void Effect.runPromise(execute({watchEvents: () => Stream.fromIterable(events)} as unknown as RpcProtocolClient));
-      return {
-        completed: new Promise<void>(() => undefined),
-        interrupt: vi.fn(async () => {
-          interrupted = true;
-        }),
-      } satisfies RpcClientFiber;
-    }),
-    run: vi.fn(async () => undefined),
-    runExit: vi.fn(),
-    get interrupted() {
-      return interrupted;
-    },
-  } as RpcClient & {readonly interrupted: boolean};
+/** Server-side state the fake services publish, and the calls the client made to them. */
+interface FakeServices {
+  readonly client: RuntimeClient;
+  readonly directory: MutableReplicatedState<SessionDirectoryState>;
+  readonly transcripts: Map<string, MutableReplicatedState<Session>>;
+  readonly controller: {-readonly [K in keyof SessionController]: SessionController[K]};
+  readonly management: {-readonly [K in keyof SessionManagement]: SessionManagement[K]};
+  readonly attached: string[];
 }
 
-function commandRpcClient(input?: {readonly rejectCreate?: boolean; readonly rejectNavigation?: boolean; readonly rejectSend?: boolean}): RpcClient {
-  return {
-    dispose: vi.fn(async () => undefined),
-    fork: vi.fn(),
-    run: vi.fn(async (execute) => {
-      const protocol = {
-        abortSession: () => Effect.void,
-        compactSession: () => Effect.void,
-        createSession: () => (input?.rejectCreate ? Effect.fail(new Error("Worktree could not be created.")) : Effect.succeed(session())),
-        redoCheckpoint: () => (input?.rejectNavigation ? Effect.fail(new Error("Checkpoint unavailable")) : Effect.void),
-        revertToMessage: () => (input?.rejectNavigation ? Effect.fail(new Error("Checkpoint unavailable")) : Effect.void),
-        sendMessage: () => (input?.rejectSend ? Effect.fail(new Error("Model unavailable")) : Effect.void),
-        undoCheckpoint: () => (input?.rejectNavigation ? Effect.fail(new Error("Checkpoint unavailable")) : Effect.void),
-      } as unknown as RpcProtocolClient;
-      return await Effect.runPromise(execute(protocol));
-    }),
-    runExit: vi.fn(),
-  } as RpcClient;
+/** A session service client backed by local replicated state, as Chord's binding would expose the server's. */
+function fakeServices(): FakeServices {
+  const directory = replicatedState<SessionDirectoryState>({sessions: {}});
+  const transcripts = new Map<string, MutableReplicatedState<Session>>();
+  const attached: string[] = [];
+  const controller = {
+    abort: vi.fn(async () => undefined),
+    compact: vi.fn(async () => ok),
+    redo: vi.fn(async () => ok),
+    revert: vi.fn(async () => ok),
+    send: vi.fn(async () => ok),
+    undo: vi.fn(async () => ok),
+  } as FakeServices["controller"];
+  const management = {
+    attach: vi.fn(async () => ok),
+    create: vi.fn(async (payload) => ({ok: true, value: session({id: payload.id})}) as const),
+    detach: vi.fn(async () => undefined),
+    fork: vi.fn(async () => ({ok: true, value: session()}) as const),
+    read: vi.fn(async ({sessionId}) => ({ok: true, value: transcripts.get(sessionId)?.value ?? session({id: sessionId})}) as const),
+    rename: vi.fn(async () => ({ok: true, value: session()}) as const),
+  } as FakeServices["management"];
+  // Only what the session store and events use; the other services are never reached.
+  const client = {
+    management,
+    directory,
+    attach: async (sessionId: string) => {
+      attached.push(sessionId);
+      let transcript = transcripts.get(sessionId);
+      if (!transcript) {
+        transcript = replicatedState(session({id: sessionId}));
+        transcripts.set(sessionId, transcript);
+      }
+      return {controller, sessionId, transcript};
+    },
+    ready: async () => undefined,
+    onConnectionChange: () => () => undefined,
+    dispose: async () => undefined,
+  } as unknown as RuntimeClient;
+  return {attached, client, controller, directory, management, transcripts};
+}
+
+function setDirectory(services: FakeServices, sessions: Record<string, SessionDirectoryEntry>): void {
+  services.directory.replace(BACKGROUND_CONTEXT, {sessions});
 }
 
 describe("session live store", () => {
   let disconnect = (): void => undefined;
 
   beforeEach(() => {
-    vi.stubGlobal("window", {clearTimeout, setTimeout});
     disconnect();
     useSessionLiveStore.setState({activeSessionId: null, sessions: {}});
     useSessionVisitsStore.setState({visits: {}});
@@ -127,170 +132,102 @@ describe("session live store", () => {
     disconnect = () => undefined;
     useSessionLiveStore.setState({activeSessionId: null, sessions: {}});
     useSessionVisitsStore.setState({visits: {}});
-    vi.unstubAllGlobals();
   });
 
-  it("applies stream events to live state and committed query data", async () => {
-    const queryClient = createQueryClient();
-    const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue(undefined);
-    const committedSession = session({title: "Committed", turns: [turn({status: "completed"})], updatedAt: "2026-01-01T00:00:01.000Z"});
-    const rpcClient = streamRpcClient([
-      {type: "connected"},
-      {revision: 1, sessionId: "session-1", type: "session.agent.started"},
-      {revision: 2, sessionId: "session-1", context: contextUsage, turn: turn(), type: "session.turn"},
-      {revision: 3, session: committedSession, sessionId: "session-1", type: "session.snapshot"},
-      {revision: 2, sessionId: "session-1", context: contextUsage, turn: turn({id: "stale"}), type: "session.turn"},
-    ]);
+  it("writes every value of the open session's replicated transcript into its cached document", async () => {
+    const queryClient = new QueryClient();
+    const services = fakeServices();
+    services.transcripts.set("session-1", replicatedState(session()));
+    disconnect = connectSessionEvents({queryClient, services: services.client});
 
-    disconnect = connectSessionEvents({queryClient, rpcClient});
+    useSessionLiveStore.getState().setActiveSession("session-1");
+    await waitUntil(() => expect(services.attached).toEqual(["session-1"]));
+    await waitUntil(() => expect(queryClient.getQueryData(sessionKeys.detail("session-1"))).toEqual(session()));
 
-    await waitUntil(() => {
-      expect(queryClient.getQueryData(sessionKeys.detail("session-1"))).toEqual(committedSession);
-      expect(useSessionLiveStore.getState().sessions["session-1"]).toMatchObject({liveContext: null, liveTurn: null, revision: 3, status: "idle"});
+    services.transcripts.get("session-1")!.change(BACKGROUND_CONTEXT, (draft) => {
+      draft.title = "Renamed";
     });
-    expect(invalidateQueries).toHaveBeenCalledWith({queryKey: sessionKeys.all});
+    expect(queryClient.getQueryData<Session>(sessionKeys.detail("session-1"))?.title).toBe("Renamed");
   });
 
-  it("keeps threshold compaction status while live turn updates arrive", async () => {
-    const queryClient = createQueryClient();
-    const rpcClient = streamRpcClient([
-      {type: "connected"},
-      {revision: 1, sessionId: "session-1", type: "session.agent.started"},
-      {revision: 2, sessionId: "session-1", context: contextUsage, turn: turn({id: "before-compaction"}), type: "session.turn"},
-      {revision: 3, sessionId: "session-1", type: "session.compaction.started"},
-      {revision: 4, sessionId: "session-1", context: {...contextUsage, usedTokens: null}, turn: turn({id: "during-compaction"}), type: "session.turn"},
-    ]);
+  it("takes every session's activity, setup step, and problems from the server's directory", async () => {
+    const queryClient = new QueryClient();
+    const services = fakeServices();
+    disconnect = connectSessionEvents({queryClient, services: services.client});
 
-    disconnect = connectSessionEvents({queryClient, rpcClient});
+    setDirectory(services, {"session-1": entry({activity: "running"}), "session-2": entry({setupStep: "worktree"})});
+    expect(useSessionLiveStore.getState().sessions["session-1"]).toMatchObject({activity: "running", status: "streaming"});
+    expect(useSessionLiveStore.getState().sessions["session-2"]).toMatchObject({setupStep: "worktree", status: "idle"});
 
-    await waitUntil(() => {
-      expect(useSessionLiveStore.getState().sessions["session-1"]).toMatchObject({
-        liveContext: {contextWindow: 200_000, usedTokens: null},
-        liveTurn: {id: "during-compaction"},
-        status: "compacting",
-      });
-    });
+    setDirectory(services, {"session-1": entry({activity: "compacting"}), "session-2": entry({error: {at: "t1", message: "Worktree failed"}})});
+    expect(useSessionLiveStore.getState().sessions["session-1"]).toMatchObject({status: "compacting"});
+    expect(useSessionLiveStore.getState().sessions["session-2"]).toMatchObject({error: "Worktree failed", setupStep: null, status: "idle"});
   });
 
-  it("tracks the setup step of a session being created until it ends or the turn settles", async () => {
-    const queryClient = createQueryClient();
-    const rpcClient = streamRpcClient([
-      {type: "connected"},
-      {revision: 1, sessionId: "session-1", step: "worktree", type: "session.setup.started"},
-      {revision: 2, sessionId: "session-1", step: "worktree", type: "session.setup.ended"},
-      {revision: 3, sessionId: "session-2", step: "worktree", type: "session.setup.started"},
-      {revision: 4, sessionId: "session-2", type: "session.error", error: "Worktree failed"},
-      {revision: 5, sessionId: "session-3", step: "worktree", type: "session.setup.started"},
-    ]);
-
-    disconnect = connectSessionEvents({queryClient, rpcClient});
-
-    await waitUntil(() => {
-      expect(useSessionLiveStore.getState().sessions["session-1"]).toMatchObject({revision: 2, setupStep: null});
-      expect(useSessionLiveStore.getState().sessions["session-2"]).toMatchObject({revision: 4, setupStep: null, status: "idle"});
-      expect(useSessionLiveStore.getState().sessions["session-3"]).toMatchObject({revision: 5, setupStep: "worktree"});
+  it("updates listed summaries when the directory changes a title", async () => {
+    const queryClient = new QueryClient();
+    const services = fakeServices();
+    queryClient.setQueryData(sessionKeys.list("/workspace"), {
+      projectPath: "/workspace",
+      sessions: [{forked: false, id: "session-1", title: "Old", updatedAt: "t0", worktree: false}],
     });
+    disconnect = connectSessionEvents({queryClient, services: services.client});
+
+    setDirectory(services, {"session-1": entry({summary: {forked: false, id: "session-1", title: "New", updatedAt: "t1", worktree: false}})});
+
+    expect(queryClient.getQueryData(sessionKeys.list("/workspace"))).toMatchObject({sessions: [{id: "session-1", title: "New"}]});
   });
 
-  it("clears stopped live turns when an authoritative snapshot arrives", async () => {
-    const queryClient = createQueryClient();
-    const stoppedTurn = turn({
-      id: "optimistic-turn",
-      status: "completed",
-      userMessage: {contentParts, id: "optimistic-message", timestamp: "2026-01-01T00:00:00.000Z"},
-    });
-    const committedSession = session({
-      turns: [
-        turn({
-          id: "committed-turn",
-          status: "completed",
-          userMessage: {contentParts, id: "committed-message", timestamp: "2026-01-01T00:00:00.000Z"},
-        }),
-      ],
-    });
-    const rpcClient = streamRpcClient([{type: "connected"}, {revision: 2, session: committedSession, sessionId: "session-1", type: "session.snapshot"}]);
+  it("shows a sent message until the session's state holds its turn", async () => {
+    const queryClient = new QueryClient();
+    const services = fakeServices();
+    queryClient.setQueryData(sessionKeys.detail("session-1"), session());
 
-    useSessionLiveStore.setState({
-      sessions: {
-        "session-1": {
-          error: null,
-          liveContext: contextUsage,
-          liveTurn: stoppedTurn,
-          revision: 1,
-          setupStep: null,
-          status: "stopping",
-        },
-      },
-    });
+    useSessionLiveStore.getState().sendMessage({contentParts, modelReference: model, queryClient, services: services.client, sessionId: "session-1"});
 
-    disconnect = connectSessionEvents({queryClient, rpcClient});
-
-    await waitUntil(() => {
-      expect(queryClient.getQueryData(sessionKeys.detail("session-1"))).toEqual(committedSession);
-      expect(useSessionLiveStore.getState().sessions["session-1"]).toMatchObject({liveContext: null, liveTurn: null, status: "idle"});
-    });
+    expect(useSessionLiveStore.getState().sessions["session-1"]).toMatchObject({pending: {contentParts, turnCount: 0}, status: "streaming"});
+    await waitUntil(() => expect(services.controller.send).toHaveBeenCalledWith({captureCheckpoints: true, contentParts, modelReference: model}, BACKGROUND_CONTEXT));
+    useSessionLiveStore.getState().settlePending("session-1", 0);
+    expect(useSessionLiveStore.getState().sessions["session-1"]?.pending).not.toBeNull();
+    useSessionLiveStore.getState().settlePending("session-1", 1);
+    expect(useSessionLiveStore.getState().sessions["session-1"]).toMatchObject({pending: null, status: "idle"});
   });
 
-  it("creates an optimistic turn and rolls back committed state when send fails", async () => {
-    const queryClient = createQueryClient();
-    const previousSession = session({undoneTurns: [turn({id: "undone"})]});
-    const rpcClient = commandRpcClient({rejectSend: true});
-    queryClient.setQueryData(sessionKeys.detail("session-1"), previousSession);
+  it("drops the sent message and reports the error when the send fails", async () => {
+    const queryClient = new QueryClient();
+    const services = fakeServices();
+    services.controller.send = vi.fn(async () => failure("SessionCommandError", "Model unavailable"));
+    queryClient.setQueryData(sessionKeys.detail("session-1"), session());
 
-    useSessionLiveStore.getState().sendMessage({contentParts, modelReference: model, queryClient, rpcClient, sessionId: "session-1"});
+    useSessionLiveStore.getState().sendMessage({contentParts, modelReference: model, queryClient, services: services.client, sessionId: "session-1"});
 
-    expect(useSessionLiveStore.getState().sessions["session-1"]).toMatchObject({status: "streaming"});
-    expect(queryClient.getQueryData<Session>(sessionKeys.detail("session-1"))?.undoneTurns).toEqual([]);
-
-    await waitUntil(() => {
-      expect(useSessionLiveStore.getState().sessions["session-1"]).toMatchObject({error: "Model unavailable", liveTurn: null, status: "idle"});
-    });
-    expect(queryClient.getQueryData(sessionKeys.detail("session-1"))).toEqual(previousSession);
+    await waitUntil(() => expect(useSessionLiveStore.getState().sessions["session-1"]).toMatchObject({error: "Model unavailable", pending: null, status: "idle"}));
   });
 
   it.each(
     [
-      {outcome: "conflict", error: new CheckpointConflictError({message: "Conflicting changes."})},
-      {outcome: "uncaptured", error: new CheckpointUncapturedError({message: "No current snapshot."})},
-    ].flatMap((item) =>
-      ["confirm", "cancel", "failed retry"].flatMap((decision) => ["undoCheckpoint", "redoCheckpoint", "revertToMessage"].map((operation) => ({...item, decision, operation})))
-    )
-  )("keeps $operation optimistic on $outcome until $decision", async ({outcome, error, decision, operation}) => {
+      {outcome: "conflict", code: "CheckpointConflictError"},
+      {outcome: "uncaptured", code: "CheckpointUncapturedError"},
+    ].flatMap((item) => ["confirm", "cancel", "failed retry"].flatMap((decision) => (["undo", "redo", "revert"] as const).map((operation) => ({...item, decision, operation}))))
+  )("keeps $operation optimistic on $outcome until $decision", async ({outcome, code, decision, operation}) => {
+    const services = fakeServices();
     const forceFlags: Array<boolean | undefined> = [];
-    const rpcClient = {
-      dispose: vi.fn(async () => undefined),
-      fork: vi.fn(),
-      run: vi.fn(async (execute) => {
-        const protocol = {
-          [operation]: (payload: {readonly force?: boolean}) => {
-            forceFlags.push(payload.force);
-            return payload.force ? (decision === "failed retry" ? Effect.fail(new Error("Restore failed")) : Effect.void) : Effect.fail(error);
-          },
-        } as unknown as RpcProtocolClient;
-        return await Effect.runPromise(execute(protocol));
-      }),
-      runExit: vi.fn(),
-    } as RpcClient;
-    const queryClient = createQueryClient();
-    const before = session({turns: [turn({id: "kept"}), turn({id: "undone"})], undoneTurns: [turn({id: "redoable"}), turn({id: "later"})]});
-    queryClient.setQueryData(sessionKeys.detail("session-1"), before);
-    const input = {queryClient, rpcClient, sessionId: "session-1", turnId: "undone"};
+    services.controller[operation] = vi.fn(async (payload: {readonly force?: boolean}) => {
+      forceFlags.push(payload.force);
+      if (!payload.force) return failure(code, "Refused.");
+      return decision === "failed retry" ? failure("CheckpointGenericError", "Restore failed") : ok;
+    });
+    const input = {firstUndoneTurnId: "redoable", lastTurnId: "undone", queryClient: new QueryClient(), services: services.client, sessionId: "session-1", turnId: "undone"};
     const store = useSessionLiveStore.getState();
-    const refused = await (operation === "undoCheckpoint"
-      ? store.undoCheckpoint(input)
-      : operation === "redoCheckpoint"
-        ? store.redoCheckpoint(input)
-        : store.revertToMessage(input));
+    const command = {redo: store.redoCheckpoint, revert: store.revertToMessage, undo: store.undoCheckpoint}[operation];
+    const refused = await command(input);
 
     expect(typeof refused).toBe("object");
     if (typeof refused === "string") throw new Error("Expected confirmation.");
     expect(refused.reason).toBe(outcome);
-    const optimisticTurns = operation === "redoCheckpoint" ? ["kept", "undone", "redoable"] : ["kept"];
-    expect(queryClient.getQueryData<Session>(sessionKeys.detail("session-1"))?.turns.map((item) => item.id)).toEqual(optimisticTurns);
-    expect(useSessionLiveStore.getState().sessions["session-1"]?.status).toBe("checkpoint-navigating");
+    const target = operation === "redo" ? "redoable" : "undone";
+    expect(useSessionLiveStore.getState().sessions["session-1"]).toMatchObject({navigationTurnId: target, status: "checkpoint-navigating"});
     expect(await store.undoCheckpoint(input)).toBe("failed");
-    store.sendMessage({...input, contentParts, modelReference: model});
-    expect(forceFlags).toEqual([undefined]);
 
     if (decision === "cancel") {
       refused.cancel();
@@ -298,62 +235,41 @@ describe("session live store", () => {
       expect(forceFlags).toEqual([undefined]);
     } else {
       expect(await refused.confirm()).toBe(decision === "confirm" ? "applied" : "failed");
-      refused.cancel();
-      expect(await refused.confirm()).toBe("failed");
       expect(forceFlags).toEqual([undefined, true]);
     }
-    if (decision === "confirm") {
-      expect(queryClient.getQueryData<Session>(sessionKeys.detail("session-1"))?.turns.map((item) => item.id)).toEqual(optimisticTurns);
-    } else {
-      expect(queryClient.getQueryData(sessionKeys.detail("session-1"))).toEqual(before);
-      expect(useSessionLiveStore.getState().sessions["session-1"]?.status).toBe("idle");
-    }
+    expect(useSessionLiveStore.getState().sessions["session-1"]).toMatchObject({navigationTurnId: null, status: "idle"});
   });
 
   it("shows a new session at once and creates it with its first message", async () => {
-    const queryClient = createQueryClient();
+    const queryClient = new QueryClient();
+    const services = fakeServices();
 
     const pending = useSessionLiveStore.getState().startSession({
       contentParts,
       modelReference: model,
       projectPath: "/workspace",
       queryClient,
-      rpcClient: commandRpcClient(),
-      sessionId: "new-session",
-      workspace: {mode: "local"},
-    });
-
-    expect(queryClient.getQueryData<Session>(sessionKeys.detail("new-session"))).toMatchObject({id: "new-session", projectPath: "/workspace", turns: []});
-    expect(useSessionLiveStore.getState().sessions["new-session"]).toMatchObject({liveTurn: {userMessage: {contentParts}}, setupStep: null, status: "streaming"});
-    await expect(pending).resolves.toEqual({status: "started"});
-  });
-
-  it("shows the worktree step at once when a new session asks for one", async () => {
-    const queryClient = createQueryClient();
-
-    const pending = useSessionLiveStore.getState().startSession({
-      contentParts,
-      modelReference: model,
-      projectPath: "/workspace",
-      queryClient,
-      rpcClient: commandRpcClient(),
+      services: services.client,
       sessionId: "new-session",
       workspace: {baseRef: "main", mode: "worktree"},
     });
 
-    expect(useSessionLiveStore.getState().sessions["new-session"]).toMatchObject({setupStep: "worktree", status: "streaming"});
+    expect(queryClient.getQueryData<Session>(sessionKeys.detail("new-session"))).toMatchObject({id: "new-session", entries: [], projectPath: "/workspace"});
+    expect(useSessionLiveStore.getState().sessions["new-session"]).toMatchObject({pending: {contentParts}, setupStep: "worktree", status: "streaming"});
     await expect(pending).resolves.toEqual({status: "started"});
   });
 
   it("removes every trace of a new session the server could not create", async () => {
-    const queryClient = createQueryClient();
+    const queryClient = new QueryClient();
+    const services = fakeServices();
+    services.management.create = vi.fn(async () => failure("CreateSessionError", "Worktree could not be created."));
 
     const outcome = await useSessionLiveStore.getState().startSession({
       contentParts,
       modelReference: model,
       projectPath: "/workspace",
       queryClient,
-      rpcClient: commandRpcClient({rejectCreate: true}),
+      services: services.client,
       sessionId: "new-session",
       workspace: {mode: "local"},
     });
@@ -363,105 +279,40 @@ describe("session live store", () => {
     expect(useSessionLiveStore.getState().sessions["new-session"]).toBeUndefined();
   });
 
-  it("optimistically moves turns when navigating checkpoints and rolls back failures", async () => {
-    const cases = [
-      {
-        name: "undo",
-        run: (queryClient: QueryClient, rpcClient: RpcClient) => useSessionLiveStore.getState().undoCheckpoint({queryClient, rpcClient, sessionId: "session-1"}),
-        before: session({turns: [turn({id: "kept"}), turn({id: "undone"})], undoneTurns: [turn({id: "redoable"})]}),
-        after: {turns: ["kept"], undoneTurns: ["undone", "redoable"]},
-      },
-      {
-        name: "redo",
-        run: (queryClient: QueryClient, rpcClient: RpcClient) => useSessionLiveStore.getState().redoCheckpoint({queryClient, rpcClient, sessionId: "session-1"}),
-        before: session({turns: [turn({id: "kept"})], undoneTurns: [turn({id: "restored"}), turn({id: "still-undone"})]}),
-        after: {turns: ["kept", "restored"], undoneTurns: ["still-undone"]},
-      },
-      {
-        name: "revert visible message",
-        run: (queryClient: QueryClient, rpcClient: RpcClient) =>
-          useSessionLiveStore.getState().revertToMessage({queryClient, rpcClient, sessionId: "session-1", turnId: "reverted"}),
-        before: session({turns: [turn({id: "kept"}), turn({id: "reverted"}), turn({id: "also-reverted"})], undoneTurns: [turn({id: "redoable"})]}),
-        after: {turns: ["kept"], undoneTurns: ["reverted", "also-reverted", "redoable"]},
-      },
-      {
-        name: "restore undone message",
-        run: (queryClient: QueryClient, rpcClient: RpcClient) =>
-          useSessionLiveStore.getState().revertToMessage({queryClient, rpcClient, sessionId: "session-1", turnId: "restored"}),
-        before: session({turns: [turn({id: "kept"})], undoneTurns: [turn({id: "restored-after"}), turn({id: "restored"}), turn({id: "still-undone"})]}),
-        after: {turns: ["kept", "restored-after", "restored"], undoneTurns: ["still-undone"]},
-      },
-    ];
-
-    for (const item of cases) {
-      useSessionLiveStore.setState({sessions: {}});
-      const queryClient = createQueryClient();
-      queryClient.setQueryData(sessionKeys.detail("session-1"), item.before);
-      item.run(queryClient, commandRpcClient());
-
-      expect(
-        queryClient.getQueryData<Session>(sessionKeys.detail("session-1"))?.turns.map((item) => item.id),
-        item.name
-      ).toEqual(item.after.turns);
-      expect(
-        queryClient.getQueryData<Session>(sessionKeys.detail("session-1"))?.undoneTurns.map((item) => item.id),
-        item.name
-      ).toEqual(item.after.undoneTurns);
-    }
-
-    const queryClient = createQueryClient();
-    const before = session({turns: [turn({id: "kept"}), turn({id: "undone"})]});
-    queryClient.setQueryData(sessionKeys.detail("session-1"), before);
-    useSessionLiveStore.setState({sessions: {}});
-
-    useSessionLiveStore.getState().undoCheckpoint({queryClient, rpcClient: commandRpcClient({rejectNavigation: true}), sessionId: "session-1"});
-
-    expect(queryClient.getQueryData<Session>(sessionKeys.detail("session-1"))?.turns.map((item) => item.id)).toEqual(["kept"]);
-    await waitUntil(() => expect(queryClient.getQueryData(sessionKeys.detail("session-1"))).toEqual(before));
-  });
-
   it("guards session commands while work is active", () => {
-    const rpcClient = commandRpcClient();
-    useSessionLiveStore.setState({
-      sessions: {"session-1": {error: null, liveContext: contextUsage, liveTurn: turn(), revision: 1, setupStep: null, status: "streaming"}},
-    });
+    const services = fakeServices();
+    useSessionLiveStore.getState().applyDirectory({sessions: {"session-1": entry({activity: "running"})}});
 
-    useSessionLiveStore.getState().sendMessage({contentParts, modelReference: model, queryClient: createQueryClient(), rpcClient, sessionId: "session-1"});
-    useSessionLiveStore.getState().compactSession({modelReference: model, rpcClient, sessionId: "session-1"});
-    useSessionLiveStore.getState().undoCheckpoint({queryClient: createQueryClient(), rpcClient, sessionId: "session-1"});
+    useSessionLiveStore.getState().sendMessage({contentParts, modelReference: model, queryClient: new QueryClient(), services: services.client, sessionId: "session-1"});
+    useSessionLiveStore.getState().compactSession({modelReference: model, services: services.client, sessionId: "session-1"});
 
-    expect(rpcClient.run).not.toHaveBeenCalled();
+    expect(services.controller.send).not.toHaveBeenCalled();
+    expect(services.controller.compact).not.toHaveBeenCalled();
   });
 
-  it("marks a streaming turn as stopping when aborting", () => {
-    const rpcClient = commandRpcClient();
-    useSessionLiveStore.setState({
-      sessions: {"session-1": {error: null, liveContext: contextUsage, liveTurn: turn(), revision: 1, setupStep: null, status: "streaming"}},
-    });
+  it("stops a running session until the server reports it idle", async () => {
+    const services = fakeServices();
+    useSessionLiveStore.getState().applyDirectory({sessions: {"session-1": entry({activity: "running"})}});
 
-    useSessionLiveStore.getState().abortSession({rpcClient, sessionId: "session-1"});
+    useSessionLiveStore.getState().abortSession({services: services.client, sessionId: "session-1"});
 
     expect(useSessionLiveStore.getState().sessions["session-1"]).toMatchObject({status: "stopping"});
-    expect(rpcClient.run).toHaveBeenCalledOnce();
+    await waitUntil(() => expect(services.controller.abort).toHaveBeenCalledOnce());
+    useSessionLiveStore.getState().applyDirectory({sessions: {"session-1": entry({activity: "idle"})}});
+    expect(useSessionLiveStore.getState().sessions["session-1"]).toMatchObject({command: null, status: "idle"});
   });
 
-  it("stamps the open session as visited when authoritative activity arrives", () => {
-    const {applyEvent, setActiveSession} = useSessionLiveStore.getState();
-    setActiveSession("session-open");
+  it("stamps the open session as visited at its activity time, so later activity elsewhere stays unseen", async () => {
+    const queryClient = new QueryClient();
+    const services = fakeServices();
+    services.transcripts.set("session-1", replicatedState(session()));
+    disconnect = connectSessionEvents({queryClient, services: services.client});
+    useSessionLiveStore.getState().setActiveSession("session-1");
+    await waitUntil(() => expect(queryClient.getQueryData(sessionKeys.detail("session-1"))).toBeDefined());
 
-    applyEvent({revision: 1, session: session({id: "session-open", updatedAt: "2026-01-01T00:05:00.000Z"}), sessionId: "session-open", type: "session.snapshot"});
-    applyEvent({revision: 1, session: session({updatedAt: "2026-01-01T00:05:00.000Z"}), sessionId: "session-1", type: "session.snapshot"});
-
-    expect(useSessionVisitsStore.getState().visits).toEqual({"session-open": "2026-01-01T00:05:00.000Z"});
-  });
-
-  it("keeps visit stamps at the activity time so later activity stays unseen", () => {
-    const {applyEvent, setActiveSession} = useSessionLiveStore.getState();
-    setActiveSession("session-1");
-    applyEvent({revision: 1, session: session({updatedAt: "2026-01-01T00:05:00.000Z"}), sessionId: "session-1", type: "session.snapshot"});
-
-    setActiveSession(null);
-    applyEvent({revision: 2, session: session({updatedAt: "2026-01-01T00:09:00.000Z"}), sessionId: "session-1", type: "session.snapshot"});
+    services.transcripts.get("session-1")!.change(BACKGROUND_CONTEXT, (draft) => {
+      draft.updatedAt = "2026-01-01T00:05:00.000Z";
+    });
 
     expect(useSessionVisitsStore.getState().visits["session-1"]).toBe("2026-01-01T00:05:00.000Z");
     expect(hasUnseenActivity({activityAtMs: Date.parse("2026-01-01T00:09:00.000Z"), visitedAt: useSessionVisitsStore.getState().visits["session-1"]})).toBe(true);

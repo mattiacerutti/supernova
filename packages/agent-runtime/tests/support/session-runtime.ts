@@ -14,12 +14,48 @@ import {Sessions} from "@supernova/agent-runtime/features/sessions/sessions";
 import {Projects} from "@supernova/agent-runtime/features/projects/projects";
 import {SessionStore} from "@supernova/agent-runtime/pi/session-store";
 import {createSupernovaTools} from "@supernova/agent-runtime/features/session-runtime/tools/tools";
-import {EventBus} from "@supernova/agent-runtime/lib/event-bus";
-import type {SendMessagePayload, SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
-import type {ModelReference} from "@supernova/contracts/sessions/schemas";
+import type {SendMessagePayload} from "@supernova/contracts/session-runtime/procedures";
+import type {AssistantMessage, ModelReference, Session} from "@supernova/contracts/sessions/schemas";
+import type {SessionDirectoryState} from "@supernova/contracts/sessions/services";
 import {waitUntil} from "@tests/support/async";
 
 export {fauxAssistantMessage, fauxText, fauxThinking, fauxToolCall, waitUntil};
+
+/** What one observer of a session saw: every transcript value delivered to it, and every directory value. */
+export interface Observation {
+  /** Transcript values in delivery order, starting with its value when observing began. */
+  readonly versions: Session[];
+  /** Directory values in delivery order, starting with its value when observing began. */
+  readonly board: SessionDirectoryState[];
+  readonly stop: () => void;
+}
+
+/** The authored content of each turn, in order. */
+export function turnContents(session: Pick<Session, "entries" | "turns">) {
+  return session.entries.flatMap((entry) => {
+    const record = session.turns[String(entry.id)];
+    return record ? [record.contentParts] : [];
+  });
+}
+
+/** The authored content of each undone turn, in order. */
+export function undoneContents(session: Pick<Session, "undone" | "turns">) {
+  return turnContents({entries: session.undone, turns: session.turns});
+}
+
+/** The id of each visible turn: its user entry's id. */
+export function turnIds(session: Pick<Session, "entries" | "turns">): string[] {
+  return session.entries.flatMap((entry) => (session.turns[String(entry.id)] ? [String(entry.id)] : []));
+}
+
+/** The text of every assistant entry, in order. */
+export function assistantTexts(session: Pick<Session, "entries">): string[] {
+  return session.entries.flatMap((entry) => {
+    const message = entry.model?.[0];
+    if (entry.kind !== "pi.assistant" || message?.role !== "assistant") return [];
+    return [(message as AssistantMessage).content.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("")];
+  });
+}
 export const selectedPiModel = {
   api: "faux:test" as Api,
   baseUrl: "https://faux.local",
@@ -145,7 +181,6 @@ export async function createPiTestRuntime(input?: {
 
   // One settings object for every session, so a test can change it between turns as a user edits settings.json.
   const settings = SettingsManager.inMemory(input?.settings);
-  const events = new EventBus<SessionStreamEvent>();
   const checkpointStore = input?.checkpointStore ?? new FileCheckpointStore(checkpointStorageRoot);
   const tools = createSupernovaTools(modelRuntime);
   const store = new SessionStore({
@@ -156,55 +191,72 @@ export async function createPiTestRuntime(input?: {
     settings: () => settings,
     onReport: (sessionId, message) => runtime.reportError(sessionId, message),
   });
-  const runtime: SessionRuntime = new SessionRuntime({checkpointStore, events, resourceCache, sdk, store, titleGenerator});
-  const sessionsFeature = new Sessions({resourceCache, sdk, store});
+  const runtime: SessionRuntime = new SessionRuntime({checkpointStore, resourceCache, sdk, store, titleGenerator});
+  const sessionsFeature = new Sessions({documents: runtime, resourceCache, sdk, store});
   const projects = new Projects({store});
 
-  /** Subscribes to runtime events and resolves once the stream has connected. Call `stop()` when done. */
-  const watchEvents = async (): Promise<{readonly events: SessionStreamEvent[]; readonly stop: () => Promise<void>}> => {
-    const events: SessionStreamEvent[] = [];
-    const watcher = runtime.watchEvents();
-    const pump = (async () => {
-      for await (const event of watcher) events.push(event);
-    })();
-    await waitUntil(() => {
-      if (!events.some((event) => event.type === "connected")) throw new Error("Stream did not connect.");
-    });
+  /**
+   * Observes a session as an attached client does: its transcript's replicated state, whose subscribers receive each
+   * Chord delta as a new value, and the session board.
+   */
+  const observe = async (sessionId: string): Promise<Observation> => {
+    const versions: Session[] = [];
+    const board: SessionDirectoryState[] = [];
+    const transcript = await runtime.transcript(sessionId);
+    const stopTranscript = transcript.state.subscribe((value) => void versions.push(value));
+    const stopBoard = runtime.board.state.subscribe((value) => void board.push(value));
     return {
-      events,
-      stop: async () => {
-        await watcher.return(undefined);
-        await pump;
+      versions,
+      board,
+      stop: () => {
+        stopTranscript();
+        stopBoard();
       },
     };
   };
 
-  /** Records runtime events while `run` executes, then waits for `settled(events)` to stop throwing. */
-  const collectEvents = async (run: () => Promise<unknown>, settled: (events: readonly SessionStreamEvent[]) => void): Promise<SessionStreamEvent[]> => {
-    const {events, stop} = await watchEvents();
+  /** Runs `work` while observing a session, then waits for `settled` to stop throwing. */
+  const observeWhile = async (sessionId: string, work: () => Promise<unknown>, settled: (observation: Observation) => void | Promise<void> = () => undefined) => {
+    const observation = await observe(sessionId);
     try {
-      await run();
-      await waitUntil(() => settled(events));
-      return events;
+      await work();
+      await waitUntil(() => settled(observation));
+      return observation;
     } finally {
-      await stop();
+      observation.stop();
     }
   };
 
-  /** Sends a message and waits for its run to end and the final snapshot. */
-  const sendMessage = (messageInput: Omit<SendMessagePayload, "contentParts"> & {readonly contentParts?: SendMessagePayload["contentParts"]; readonly message?: string}) =>
-    collectEvents(
-      () => {
-        const {message, ...payload} = messageInput;
-        return runtime.sendMessage({contentParts: message ? [{text: message, type: "text"}] : [], ...payload});
+  /** Waits until the session's run ended and every turn has its after-turn checkpoint. */
+  const settled = async (sessionId: string): Promise<void> => {
+    await waitUntil(async () => {
+      if ((await runtime.current(sessionId)).live.run !== undefined) throw new Error("Session is still running.");
+      const state = await (await store.file(sessionId)).state();
+      if (Object.values(state.turns).some((record) => record.after === undefined)) throw new Error("A turn has no after-turn checkpoint yet.");
+    });
+  };
+
+  /** The board's last problem for a session, or null. */
+  const lastError = (sessionId: string) => runtime.board.state.value.sessions[sessionId]?.error?.message ?? null;
+
+  /**
+   * Sends a message and waits for its run to settle. Returns every transcript value an attached client received, and
+   * the final document.
+   */
+  const sendMessage = async (messageInput: Omit<SendMessagePayload, "contentParts"> & {readonly contentParts?: SendMessagePayload["contentParts"]; readonly message?: string}) => {
+    const {message, ...payload} = messageInput;
+    const observation = await observeWhile(
+      payload.sessionId,
+      async () => {
+        await runtime.sendMessage({contentParts: message ? [{text: message, type: "text"}] : [], ...payload});
+        await settled(payload.sessionId);
       },
-      (events) => {
-        const endedRevision = events.find((event) => event.type === "session.agent.ended")?.revision;
-        if (events.some((event) => event.type === "session.error")) return;
-        if (endedRevision === undefined) throw new Error("Session agent did not end.");
-        if (!events.some((event) => event.type === "session.snapshot" && event.revision > endedRevision)) throw new Error("Session did not publish a final snapshot.");
+      async (seen) => {
+        if (seen.versions.at(-1) !== (await runtime.current(payload.sessionId))) throw new Error("The final value was not delivered yet.");
       }
     );
+    return {versions: observation.versions, board: observation.board, session: observation.versions.at(-1)!, error: lastError(payload.sessionId)};
+  };
 
   /** Creates an empty session under `projectPath`. */
   const createSession = async (projectPath = defaultProjectRoot) => {
@@ -233,7 +285,9 @@ export async function createPiTestRuntime(input?: {
     agent,
     appendConversation,
     createSession,
-    collectEvents,
+    lastError,
+    observe,
+    observeWhile,
     defaultProjectRoot,
     store,
     faux,
@@ -250,11 +304,11 @@ export async function createPiTestRuntime(input?: {
     sessionRuntime: runtime,
     sessionStorageRoot,
     sendMessage,
+    settled,
     settings,
     sessions: sessionsFeature,
     titleGenerator,
     turnRecords,
-    watchEvents,
     unregister: async () => {
       await runtime.dispose();
       faux.unregister();

@@ -7,10 +7,14 @@ Supernova uses the Pi SDK (`@earendil-works/pi-coding-agent`) as its execution e
 - `apps/server` is the authority for native capabilities: Pi runtime composition, workspace filesystem access, subprocesses, shell/Git, credentials, sessions, and API/WebSocket routing. It never hosts or bundles the UI.
 - `packages/agent-runtime` provides the Node-only runtime: feature modules over the Pi SDK, composed once by the server. Keep UI and server routing outside this package. See [Agent runtime](agent-runtime.md).
 - `packages/web` is an independently hosted React/Vite client. It communicates through server APIs and cannot assume browser-local filesystem or native access. See [Web](web.md).
-- `packages/contracts` defines shared Effect schemas, RPC boundaries, and serializable domain types. It owns no runtime resources and remains environment-neutral. See [Contracts](contracts.md).
+- `packages/contracts` defines shared Zod schemas, the Chord service contracts, and serializable domain types. It owns no runtime resources and remains environment-neutral. See [Contracts](contracts.md).
 - `apps/desktop` owns the Electron shell, bundled renderer asset loading, and OS integration. It starts a local API child rather than owning Pi runtime logic.
 
-Bun manages packages and scripts; Turborepo coordinates workspace tasks. The server runs on Node. Effect provides the RPC transport and the contract schemas; runtime code is plain TypeScript behind that edge.
+Bun manages packages and scripts; Turborepo coordinates workspace tasks. The server runs on Node.
+
+Clients talk to the runtime only through Chord services over Pi's service protocol (`@earendil-works/pi-server` and `pi-client`), the protocol Pi's own remote clients use, on the server's `/ws` WebSocket. Every domain is a service (`contracts/src/<domain>/services.ts`): methods for commands and reads, Chord replicated state for anything that changes over time (session transcripts and activity, terminal output, provider logins), which reaches clients as deltas. The server's only other route is `GET /health`. Runtime code is plain TypeScript; there is no Effect.
+
+Chord's extension facets (plugin UI in the client) are not used yet; serving the runtime as Chord services is what they would build on.
 
 ## Runtime modes
 

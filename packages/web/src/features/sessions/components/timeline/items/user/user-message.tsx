@@ -1,4 +1,5 @@
-import type {UserMessage as UserMessageModel} from "@supernova/contracts/sessions/schemas";
+import type {UserMessageReferencePart} from "@supernova/contracts/sessions/schemas";
+import type {SessionUserMessage} from "@/features/sessions/types/session-turn";
 import Icon from "@/components/ui/icon";
 import MessageAttachmentPreview from "@/features/sessions/components/timeline/items/user/message-attachment-preview";
 import MessageActions from "@/features/sessions/components/timeline/items/message-actions";
@@ -36,7 +37,7 @@ function UserMessageContent(props: UserMessageContentProps) {
 }
 
 interface ReferenceContentPartProps {
-  readonly part: Extract<NonNullable<UserMessageModel["contentParts"]>[number], {type: "reference"}>;
+  readonly part: UserMessageReferencePart;
 }
 
 function ReferenceContentPart(props: ReferenceContentPartProps) {
@@ -52,7 +53,7 @@ function ReferenceContentPart(props: ReferenceContentPartProps) {
 }
 
 interface UserMessageStructuredContentProps {
-  readonly message: UserMessageModel;
+  readonly message: SessionUserMessage;
 }
 
 function UserMessageStructuredContent(props: UserMessageStructuredContentProps) {
@@ -76,7 +77,7 @@ function UserMessageStructuredContent(props: UserMessageStructuredContentProps) 
 }
 
 interface UserMessageProps {
-  readonly message: UserMessageModel;
+  readonly message: SessionUserMessage;
   readonly onRevertToMessage?: (turnId: string) => void;
   readonly turnId: string;
 }

@@ -1,9 +1,10 @@
-import {Schema} from "effect";
+import {z} from "zod";
+import {struct} from "@supernova/contracts/runtime/schemas";
 import {ModelReference} from "@supernova/contracts/sessions/schemas";
 
-export const CompactSessionPayload = Schema.Struct({
+export const CompactSessionPayload = struct({
   modelReference: ModelReference,
-  sessionId: Schema.String,
+  sessionId: z.string(),
 });
 
-export type CompactSessionPayload = typeof CompactSessionPayload.Type;
+export type CompactSessionPayload = z.infer<typeof CompactSessionPayload>;

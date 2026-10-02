@@ -36,6 +36,18 @@ test("owned APIs bind distinct ports, report RPC readiness, serve no UI, and rel
     expect(await (await fetch(`${first.url}/health`)).json()).toEqual({ok: true});
     expect((await fetch(first.url)).status).toBe(404);
     expect((await fetch(`${first.url}/assets/missing.js`)).status).toBe(404);
+    // The runtime protocol answers on /ws: a frame that is not its hello is rejected and the socket closes.
+    const probe = new WebSocket(first.url.replace("http:", "ws:") + "/ws");
+    probe.binaryType = "arraybuffer";
+    await new Promise<void>((resolve, reject) => {
+      probe.onopen = () => resolve();
+      probe.onerror = reject;
+    });
+    const probeClosed = new Promise<void>((resolve) => {
+      probe.onclose = () => resolve();
+    });
+    probe.send(new Uint8Array([0, 0, 0, 1, 0]));
+    await probeClosed;
     const socket = new WebSocket(first.url.replace("http:", "ws:") + "/ws");
     await new Promise<void>((resolve, reject) => {
       socket.onopen = () => resolve();

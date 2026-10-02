@@ -9,13 +9,10 @@ export async function compactSession(runtime: SessionWorker, input: CompactSessi
   try {
     const model = findSelectedModel(runtime.sdk, input.modelReference);
     await session.configure({provider: model.provider, modelId: model.id, thinkingLevel: toPiThinkingLevel(input.modelReference.thinkingLevel)});
-    runtime.publishEvent({type: "session.compaction.started", sessionId: runtime.sessionId});
+    // Its progress reaches clients through `pi.live.compactions` in the session's state.
     await session.compact();
-    runtime.publishEvent({type: "session.compaction.ended", sessionId: runtime.sessionId});
-    await runtime.publishSessionSnapshot();
   } catch (cause) {
-    runtime.publishEvent({type: "session.compaction.ended", sessionId: runtime.sessionId});
-    runtime.publishEvent({type: "session.error", sessionId: runtime.sessionId, error: cause instanceof Error ? cause.message : "Failed to compact session."});
+    runtime.reportError(cause instanceof Error ? cause.message : "Failed to compact session.");
   } finally {
     runtime.endWork();
   }

@@ -35,7 +35,7 @@ export async function navigateToTurn(runtime: SessionWorker, input: {readonly ta
     }
     await runtime.store.show(runtime.sessionId, count, target);
     await runtime.refreshWatch();
-    await runtime.publishSessionSnapshot();
+    await runtime.refresh();
   } finally {
     runtime.endWork();
   }

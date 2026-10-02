@@ -1,46 +1,35 @@
-import {Schema} from "effect";
+import {z} from "zod";
+import {struct, TaggedError} from "@supernova/contracts/runtime/schemas";
 
 /** Shared fields for every checkpoint navigation command. */
 const CheckpointNavigationFields = {
   /** Allows discarding conflicting or uncaptured workspace changes. */
-  force: Schema.optional(Schema.Boolean),
-  sessionId: Schema.String,
+  force: z.boolean().optional(),
+  sessionId: z.string(),
 };
 
-export const RevertToMessagePayload = Schema.Struct({
+export const RevertToMessagePayload = struct({
   ...CheckpointNavigationFields,
-  turnId: Schema.String,
+  turnId: z.string(),
 });
 
-export const UndoCheckpointPayload = Schema.Struct(CheckpointNavigationFields);
+export const UndoCheckpointPayload = struct(CheckpointNavigationFields);
 
-export const RedoCheckpointPayload = Schema.Struct(CheckpointNavigationFields);
+export const RedoCheckpointPayload = struct(CheckpointNavigationFields);
 
 /** Navigation failure with no actionable detail, reported for every cause except a workspace conflict. */
-export class CheckpointGenericError extends Schema.TaggedErrorClass<CheckpointGenericError>()("CheckpointGenericError", {
-  cause: Schema.optional(Schema.Defect),
-  message: Schema.String,
-}) {}
+export class CheckpointGenericError extends TaggedError("CheckpointGenericError") {}
 
 /** Raised when restoring would discard workspace changes made after the current checkpoint. Retry with `force` to discard them. */
-export class CheckpointConflictError extends Schema.TaggedErrorClass<CheckpointConflictError>()("CheckpointConflictError", {
-  cause: Schema.optional(Schema.Defect),
-  message: Schema.String,
-}) {}
+export class CheckpointConflictError extends TaggedError("CheckpointConflictError") {}
 
 /** Raised when the current boundary has no workspace snapshot. Retry with `force` to restore the captured target. */
-export class CheckpointUncapturedError extends Schema.TaggedErrorClass<CheckpointUncapturedError>()("CheckpointUncapturedError", {
-  message: Schema.String,
-}) {}
+export class CheckpointUncapturedError extends TaggedError("CheckpointUncapturedError") {}
 
 /** Raised when the target was copied in by a fork, whose workspace snapshots belong to the session it forked from. */
-export class CheckpointInheritedError extends Schema.TaggedErrorClass<CheckpointInheritedError>()("CheckpointInheritedError", {
-  message: Schema.String,
-}) {}
+export class CheckpointInheritedError extends TaggedError("CheckpointInheritedError") {}
 
-export const CheckpointNavigationError = Schema.Union([CheckpointGenericError, CheckpointConflictError, CheckpointInheritedError, CheckpointUncapturedError]);
-
-export type CheckpointNavigationError = typeof CheckpointNavigationError.Type;
-export type RevertToMessagePayload = typeof RevertToMessagePayload.Type;
-export type UndoCheckpointPayload = typeof UndoCheckpointPayload.Type;
-export type RedoCheckpointPayload = typeof RedoCheckpointPayload.Type;
+export type CheckpointNavigationError = CheckpointGenericError | CheckpointConflictError | CheckpointInheritedError | CheckpointUncapturedError;
+export type RevertToMessagePayload = z.infer<typeof RevertToMessagePayload>;
+export type UndoCheckpointPayload = z.infer<typeof UndoCheckpointPayload>;
+export type RedoCheckpointPayload = z.infer<typeof RedoCheckpointPayload>;

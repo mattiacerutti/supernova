@@ -1,4 +1,5 @@
 import type {Ref} from "react";
+import {useRuntime} from "@/rpc/use-runtime";
 import {useState} from "react";
 import {useQueryClient} from "@tanstack/react-query";
 import Button from "@/components/ui/button";
@@ -59,6 +60,7 @@ interface OpenProjectDialogProps {
 }
 
 export default function OpenProjectDialog(props: OpenProjectDialogProps) {
+  const runtime = useRuntime();
   const {onClose, onOpenProject, open} = props;
   const [activeRowIndex, setActiveRowIndex] = useState(0);
   const [browseGeneration, setBrowseGeneration] = useState(0);
@@ -109,20 +111,20 @@ export default function OpenProjectDialog(props: OpenProjectDialogProps) {
     const row = rows[nextIndex];
     setActiveRowIndex(nextIndex);
     if (row?.type === "suggestion" && row.kind === "folder") {
-      void queryClient.prefetchQuery(listFolderSuggestionsQueryOptions(withTrailingProjectPathSeparator(row.path)));
+      void queryClient.prefetchQuery(listFolderSuggestionsQueryOptions(runtime, withTrailingProjectPathSeparator(row.path)));
     }
   };
 
   const handlePathChange = (value: string): void => {
     const parentPath = getProjectBrowseParentPath(getProjectBrowseDirectoryPath(value));
-    if (parentPath) void queryClient.prefetchQuery(listFolderSuggestionsQueryOptions(parentPath));
+    if (parentPath) void queryClient.prefetchQuery(listFolderSuggestionsQueryOptions(runtime, parentPath));
     setProjectPath(value);
     setActiveRowIndex(0);
   };
 
   const handleAutocomplete = (path: string): void => {
     const nextPath = withTrailingProjectPathSeparator(path);
-    void queryClient.prefetchQuery(listFolderSuggestionsQueryOptions(nextPath));
+    void queryClient.prefetchQuery(listFolderSuggestionsQueryOptions(runtime, nextPath));
     setProjectPath(nextPath);
     setActiveRowIndex(0);
     setBrowseGeneration((generation) => generation + 1);

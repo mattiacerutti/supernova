@@ -1,36 +1,34 @@
-import {Schema} from "effect";
+import {z} from "zod";
+import {struct, TaggedError} from "@supernova/contracts/runtime/schemas";
 import {ProviderLoginSession} from "../schemas";
 
-export const ProviderLoginAuthType = Schema.Union([Schema.Literal("api_key"), Schema.Literal("oauth")]);
+export const ProviderLoginAuthType = z.union([z.literal("api_key"), z.literal("oauth")]);
 
-export const ProviderLoginStartPayload = Schema.Struct({
+export const ProviderLoginStartPayload = struct({
   authType: ProviderLoginAuthType,
-  providerId: Schema.String,
+  providerId: z.string(),
 });
 
-export const ProviderLoginInputSubmitPayload = Schema.Struct({
-  input: Schema.String,
-  loginSessionId: Schema.String,
+export const ProviderLoginInputSubmitPayload = struct({
+  input: z.string(),
+  loginSessionId: z.string(),
 });
 
-export const ProviderLoginCancelPayload = Schema.Struct({
-  loginSessionId: Schema.String,
+export const ProviderLoginCancelPayload = struct({
+  loginSessionId: z.string(),
 });
 
-export const ProviderLoginWatchPayload = Schema.Struct({
-  loginSessionId: Schema.String,
+export const ProviderLoginWatchPayload = struct({
+  loginSessionId: z.string(),
 });
 
 export const ProviderLoginResult = ProviderLoginSession;
 
-export class ProviderLoginError extends Schema.TaggedErrorClass<ProviderLoginError>()("ProviderLoginError", {
-  cause: Schema.optional(Schema.Defect),
-  message: Schema.String,
-}) {}
+export class ProviderLoginError extends TaggedError("ProviderLoginError") {}
 
-export type ProviderLoginAuthType = typeof ProviderLoginAuthType.Type;
-export type ProviderLoginStartPayload = typeof ProviderLoginStartPayload.Type;
-export type ProviderLoginInputSubmitPayload = typeof ProviderLoginInputSubmitPayload.Type;
-export type ProviderLoginCancelPayload = typeof ProviderLoginCancelPayload.Type;
-export type ProviderLoginWatchPayload = typeof ProviderLoginWatchPayload.Type;
-export type ProviderLoginResult = typeof ProviderLoginResult.Type;
+export type ProviderLoginAuthType = z.infer<typeof ProviderLoginAuthType>;
+export type ProviderLoginStartPayload = z.infer<typeof ProviderLoginStartPayload>;
+export type ProviderLoginInputSubmitPayload = z.infer<typeof ProviderLoginInputSubmitPayload>;
+export type ProviderLoginCancelPayload = z.infer<typeof ProviderLoginCancelPayload>;
+export type ProviderLoginWatchPayload = z.infer<typeof ProviderLoginWatchPayload>;
+export type ProviderLoginResult = z.infer<typeof ProviderLoginResult>;

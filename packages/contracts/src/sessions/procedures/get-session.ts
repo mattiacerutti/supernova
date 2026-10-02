@@ -1,16 +1,10 @@
-import {Schema} from "effect";
-import {Session} from "../schemas";
+import {z} from "zod";
+import {struct, TaggedError} from "@supernova/contracts/runtime/schemas";
 
-export const GetSessionPayload = Schema.Struct({
-  sessionId: Schema.String,
+export const GetSessionPayload = struct({
+  sessionId: z.string(),
 });
 
-export const GetSessionResult = Session;
+export class LoadSessionError extends TaggedError("LoadSessionError") {}
 
-export class LoadSessionError extends Schema.TaggedErrorClass<LoadSessionError>()("LoadSessionError", {
-  cause: Schema.optional(Schema.Defect),
-  message: Schema.String,
-}) {}
-
-export type GetSessionPayload = typeof GetSessionPayload.Type;
-export type GetSessionResult = typeof GetSessionResult.Type;
+export type GetSessionPayload = z.infer<typeof GetSessionPayload>;

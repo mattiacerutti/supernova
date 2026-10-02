@@ -1,49 +1,44 @@
-import {Schema} from "effect";
-import {Terminal, TerminalEvent} from "../schemas";
+import {z} from "zod";
+import {array, struct} from "@supernova/contracts/runtime/schemas";
+import {Terminal} from "../schemas";
 
-export const TerminalOpenPayload = Schema.Struct({
-  cols: Schema.Number,
+export const TerminalOpenPayload = struct({
+  cols: z.number(),
   /** Where the shell starts; the session's worktree or project. */
-  cwd: Schema.String,
+  cwd: z.string(),
   /** Client-chosen id, so the tab can exist before the server replies. */
-  id: Schema.String,
-  rows: Schema.Number,
-  sessionId: Schema.String,
+  id: z.string(),
+  rows: z.number(),
+  sessionId: z.string(),
 });
 export const TerminalOpenResult = Terminal;
 
-export const TerminalWritePayload = Schema.Struct({
-  data: Schema.String,
-  id: Schema.String,
+export const TerminalWritePayload = struct({
+  data: z.string(),
+  id: z.string(),
 });
 
-export const TerminalResizePayload = Schema.Struct({
-  cols: Schema.Number,
-  id: Schema.String,
-  rows: Schema.Number,
+export const TerminalResizePayload = struct({
+  cols: z.number(),
+  id: z.string(),
+  rows: z.number(),
 });
 
-export const TerminalClosePayload = Schema.Struct({
-  id: Schema.String,
+export const TerminalClosePayload = struct({
+  id: z.string(),
 });
 
-export const TerminalWatchPayload = Schema.Struct({
-  id: Schema.String,
+export const TerminalsListPayload = struct({
+  sessionId: z.string(),
 });
-export const TerminalWatchResult = TerminalEvent;
-
-export const TerminalsListPayload = Schema.Struct({
-  sessionId: Schema.String,
-});
-export const TerminalsListResult = Schema.Struct({
-  terminals: Schema.Array(Terminal),
+export const TerminalsListResult = struct({
+  terminals: array(Terminal),
 });
 
-export type TerminalOpenPayload = typeof TerminalOpenPayload.Type;
-export type TerminalOpenResult = typeof TerminalOpenResult.Type;
-export type TerminalWritePayload = typeof TerminalWritePayload.Type;
-export type TerminalResizePayload = typeof TerminalResizePayload.Type;
-export type TerminalClosePayload = typeof TerminalClosePayload.Type;
-export type TerminalWatchPayload = typeof TerminalWatchPayload.Type;
-export type TerminalsListPayload = typeof TerminalsListPayload.Type;
-export type TerminalsListResult = typeof TerminalsListResult.Type;
+export type TerminalOpenPayload = z.infer<typeof TerminalOpenPayload>;
+export type TerminalOpenResult = z.infer<typeof TerminalOpenResult>;
+export type TerminalWritePayload = z.infer<typeof TerminalWritePayload>;
+export type TerminalResizePayload = z.infer<typeof TerminalResizePayload>;
+export type TerminalClosePayload = z.infer<typeof TerminalClosePayload>;
+export type TerminalsListPayload = z.infer<typeof TerminalsListPayload>;
+export type TerminalsListResult = z.infer<typeof TerminalsListResult>;

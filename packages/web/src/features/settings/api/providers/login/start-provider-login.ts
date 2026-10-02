@@ -1,13 +1,12 @@
+import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import {useMutation} from "@tanstack/react-query";
 import type {ProviderLoginStartPayload} from "@supernova/contracts/providers/procedures";
-import {Effect} from "effect";
-import {eq} from "@/rpc/effect-query";
-import {RpcProtocolClientService} from "@/rpc/transport/client";
+import {unwrap} from "@/rpc/runtime-result";
+import {useRuntime} from "@/rpc/use-runtime";
 
 export function useStartProviderLogin() {
-  return useMutation(
-    eq.mutationOptions({
-      mutationFn: (input: ProviderLoginStartPayload) => Effect.flatMap(Effect.service(RpcProtocolClientService), (rpc) => rpc.startProviderLogin(input)),
-    })
-  );
+  const runtime = useRuntime();
+  return useMutation({
+    mutationFn: (input: ProviderLoginStartPayload) => unwrap(runtime.providers.startLogin(input, BACKGROUND_CONTEXT)),
+  });
 }

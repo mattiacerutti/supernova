@@ -3,7 +3,7 @@ import {mkdir, mkdtemp, writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {afterEach, describe, expect, it} from "vitest";
-import {createPiTestRuntime, fauxAssistantMessage, selectedModelReference, selectedPiModel} from "@tests/support/session-runtime";
+import {assistantTexts, createPiTestRuntime, fauxAssistantMessage, selectedModelReference, selectedPiModel, turnContents, turnIds} from "@tests/support/session-runtime";
 import {cleanupTempDirs} from "@tests/support/async";
 
 describe("sessions", () => {
@@ -19,7 +19,7 @@ describe("sessions", () => {
 
     const session = await pi.sessions.create({id: "client-chosen-id", projectPath: "/workspace"});
 
-    expect(session).toMatchObject({id: "client-chosen-id", projectPath: "/workspace", title: "Untitled session", turns: []});
+    expect(session).toMatchObject({id: "client-chosen-id", projectPath: "/workspace", title: "Untitled session", entries: [], turns: {}});
     expect(existsSync(join(pi.sessionStorageRoot, "client-chosen-id", "session.sqlite"))).toBe(true);
     expect(await pi.store.find("client-chosen-id")).toMatchObject({projectPath: "/workspace"});
     await expect(pi.sessions.create({id: "client-chosen-id", projectPath: "/workspace"})).rejects.toMatchObject({
@@ -52,7 +52,7 @@ describe("sessions", () => {
     await expect(pi.sessions.rename({sessionId: info.id, title: "  "})).rejects.toMatchObject({_tag: "RenameSessionError"});
   });
 
-  it("loads turns from the full history, showing compactions where they happened", async () => {
+  it("loads the full history, keeping compaction summaries where they happened", async () => {
     const pi = await createPiTestRuntime({settings: {compaction: {enabled: false}}});
     runtimes.push(pi);
     const {info} = await pi.createSession();
@@ -65,14 +65,14 @@ describe("sessions", () => {
     const session = await pi.sessions.get({sessionId: info.id});
 
     expect(session.title).toBe("Generated title");
-    expect(session.turns.map((turn) => turn.userMessage.contentParts[0])).toEqual([
+    expect(turnContents(session).map((parts) => parts[0])).toEqual([
       {text: "Before compaction", type: "text"},
       {text: "x".repeat(selectedPiModel.contextWindow * 4), type: "text"},
       {text: "After compaction", type: "text"},
     ]);
-    expect(session.turns[0]?.events).toEqual([expect.objectContaining({content: "Original answer", type: "assistant"})]);
-    expect(session.turns[1]?.events).toContainEqual(expect.objectContaining({status: "completed", summary: "Summary of the work", type: "compaction"}));
-    expect(session.turns[2]?.events).toEqual([expect.objectContaining({content: "Recent answer", type: "assistant"})]);
+    expect(session.entries.map((entry) => entry.kind)).toEqual(["pi.user", "pi.assistant", "pi.user", "pi.assistant", "pi.compaction", "pi.user", "pi.assistant"]);
+    expect(JSON.stringify(session.entries[4])).toContain("Summary of the work");
+    expect(assistantTexts(session)).toEqual(["Original answer", "Large answer", "Recent answer"]);
   });
 
   it("refreshes credentials and model metadata before listing models", async () => {
@@ -100,8 +100,7 @@ describe("forking a session", () => {
     await pi.sessions.rename({sessionId: info.id, title: "Original title"});
     await pi.appendConversation(info.id, {requestText: "First", assistantText: "First answer"});
     await pi.appendConversation(info.id, {requestText: "Second", assistantText: "Second answer"});
-    const turnIds = (await pi.sessions.get({sessionId: info.id})).turns.map((turn) => turn.id);
-    return {pi, sessionId: info.id, turnIds};
+    return {pi, sessionId: info.id, turnIds: turnIds(await pi.sessions.get({sessionId: info.id}))};
   }
 
   it("copies the conversation through the chosen turn into a new session and leaves the source intact", async () => {
@@ -110,9 +109,14 @@ describe("forking a session", () => {
     const fork = await pi.sessions.fork({sessionId, turnId: turnIds[0]!});
 
     expect(fork.id).not.toBe(sessionId);
-    expect(fork).toMatchObject({forked: true, title: "Original title", undoneTurns: [], modelReference: selectedModelReference});
-    expect(fork.turns.map((turn) => turn.userMessage.contentParts)).toEqual([[{text: "First", type: "text"}]]);
-    expect((await pi.sessions.get({sessionId})).turns).toHaveLength(2);
+    expect(fork).toMatchObject({
+      forked: true,
+      title: "Original title",
+      undone: [],
+      agent: {model: {modelId: selectedModelReference.id, provider: selectedModelReference.providerId}, thinkingLevel: "high"},
+    });
+    expect(turnContents(fork)).toEqual([[{text: "First", type: "text"}]]);
+    expect(turnContents(await pi.sessions.get({sessionId}))).toHaveLength(2);
     expect((await pi.projects.listSessions({projectPath: pi.defaultProjectRoot})).sessions.map((session) => session.id)).toContain(fork.id);
 
     // The fork continues on its own with the copied history as context.
@@ -180,7 +184,8 @@ describe("legacy sessions", () => {
     const session = await pi.sessions.get({sessionId: "legacy-1"});
 
     expect(session).toMatchObject({id: "legacy-1", projectPath: "/workspace", title: "Legacy request"});
-    expect(session.turns).toMatchObject([{events: [{content: "Legacy answer", type: "assistant"}], userMessage: {contentParts: [{text: "Legacy request", type: "text"}]}}]);
+    expect(turnContents(session)).toEqual([[{text: "Legacy request", type: "text"}]]);
+    expect(assistantTexts(session)).toEqual(["Legacy answer"]);
     await expect(pi.sendMessage({message: "More", modelReference: selectedModelReference, sessionId: "legacy-1"})).rejects.toThrow("read-only");
     await expect(pi.sessions.rename({sessionId: "legacy-1", title: "New"})).rejects.toMatchObject({_tag: "RenameSessionError", message: expect.stringContaining("read-only")});
     await expect(pi.sessions.fork({sessionId: "legacy-1", turnId: "u1"})).rejects.toMatchObject({_tag: "ForkSessionError", message: expect.stringContaining("read-only")});

@@ -1,17 +1,19 @@
-import {useQuery} from "@tanstack/react-query";
-import {Effect} from "effect";
+import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
+import {queryOptions, useQuery} from "@tanstack/react-query";
 import {projectKeys} from "@/features/projects/api/query-keys";
-import {eq} from "@/rpc/effect-query";
-import {RpcProtocolClientService} from "@/rpc/transport/client";
+import {unwrap} from "@/rpc/runtime-result";
+import type {RuntimeClient} from "@/rpc/transport/runtime-client";
+import {useRuntime} from "@/rpc/use-runtime";
 
-export function listFolderSuggestionsQueryOptions(query: string) {
-  return eq.queryOptions({
-    queryFn: () => Effect.flatMap(Effect.service(RpcProtocolClientService), (rpc) => rpc.listFolderSuggestions({query})),
+export function listFolderSuggestionsQueryOptions(runtime: RuntimeClient, query: string) {
+  return queryOptions({
+    queryFn: () => unwrap(runtime.folders.listSuggestions({query}, BACKGROUND_CONTEXT)),
     queryKey: projectKeys.folderSuggestion(query),
     staleTime: 30_000,
   });
 }
 
 export function useListFolderSuggestions(query: string) {
-  return useQuery(listFolderSuggestionsQueryOptions(query));
+  const runtime = useRuntime();
+  return useQuery(listFolderSuggestionsQueryOptions(runtime, query));
 }

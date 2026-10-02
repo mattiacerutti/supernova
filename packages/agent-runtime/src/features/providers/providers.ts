@@ -3,7 +3,6 @@ import type {
   ProviderLoginCancelPayload,
   ProviderLoginInputSubmitPayload,
   ProviderLoginStartPayload,
-  ProviderLoginWatchPayload,
   ProviderLogoutPayload,
   ProviderLogoutResult,
   ProvidersListResult,
@@ -23,6 +22,11 @@ export interface ProvidersDeps {
 /** Model providers and their login flows. */
 export class Providers {
   public constructor(private readonly deps: ProvidersDeps) {}
+
+  /** Every login's current step as replicated state, for clients following one. */
+  public get logins() {
+    return this.deps.loginSessions.logins;
+  }
 
   /** Lists configured and configurable Pi providers with auth metadata. */
   public async list(): Promise<ProvidersListResult> {
@@ -67,18 +71,20 @@ export class Providers {
 
     const loginSessionId = randomUUID();
     this.deps.loginSessions.create({loginSessionId, providerId});
-    // Subscribe before the login runs so no step published synchronously by the provider is missed.
-    const steps = this.deps.loginSessions.watch(loginSessionId);
+    // Listen before the login runs so no step published synchronously by the provider is missed.
+    let stop: () => void = () => undefined;
+    const visible = new Promise<ProviderLoginSession>((resolve) => {
+      stop = this.deps.loginSessions.onChange(loginSessionId, (session) => {
+        if (session.step.type !== "starting" && session.step.type !== "authenticating") resolve(session);
+      });
+    });
+    // The login ends on a visible step (succeeded, failed, cancelled) even when it shows none before.
     void runProviderLogin(this.deps.sdk, this.deps.loginSessions, loginSessionId, providerId, authType);
-
     try {
-      for await (const session of steps) {
-        if (session.step.type !== "starting" && session.step.type !== "authenticating") return session;
-      }
+      return await visible;
     } finally {
-      await steps.return(undefined);
+      stop();
     }
-    throw new ProviderLoginError({message: "Provider login ended before producing a visible step."});
   }
 
   public cancelLogin(input: ProviderLoginCancelPayload): ProviderLoginSession {
@@ -87,9 +93,5 @@ export class Providers {
 
   public submitLoginInput(input: ProviderLoginInputSubmitPayload): ProviderLoginSession {
     return this.deps.loginSessions.submitInput(input.loginSessionId, input.input);
-  }
-
-  public watchLoginSession(input: ProviderLoginWatchPayload): AsyncIterable<ProviderLoginSession> {
-    return this.deps.loginSessions.watch(input.loginSessionId);
   }
 }
