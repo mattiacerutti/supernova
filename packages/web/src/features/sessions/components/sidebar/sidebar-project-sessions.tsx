@@ -1,5 +1,5 @@
 import {autoAnimate} from "@formkit/auto-animate";
-import {useState} from "react";
+import {useCallback, useState} from "react";
 import Button from "@/components/ui/button";
 import {useListProjectSessions} from "@/features/sessions/api/sidebar/list-project-sessions";
 import SidebarSessionItem from "@/features/sessions/components/sidebar/sidebar-session-item";
@@ -48,9 +48,12 @@ export default function SidebarProjectSessions(props: SidebarProjectSessionsProp
     setVisibleSessionLimit(INITIAL_SESSION_LIMIT);
   };
 
-  const attachAutoAnimate = (node: HTMLUListElement | null): void => {
-    if (node) autoAnimate(node, {duration: 180, easing: "ease-out"});
-  };
+  // Keep one observer per list, including Strict Mode's setup/cleanup replay.
+  const attachAutoAnimate = useCallback((node: HTMLUListElement | null) => {
+    if (!node) return;
+    const controller = autoAnimate(node, {duration: 180, easing: "ease-out"});
+    return controller.destroy;
+  }, []);
 
   return (
     <div className={cn("overflow-hidden", showsAnything && "py-0.5")} onPointerDown={(event) => event.stopPropagation()}>

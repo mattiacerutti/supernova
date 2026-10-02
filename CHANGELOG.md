@@ -17,6 +17,7 @@ All notable changes to Supernova are documented in this file.
 
 ### Fixed
 
+- Fixed project expansion animations in the sidebar during development.
 - Fixed sidebar and workspace widths animating during window resizing and growing back after being constrained by a narrower window.
 - Fixed the composer controls briefly disabling when returning to a project's new-session screen.
 
