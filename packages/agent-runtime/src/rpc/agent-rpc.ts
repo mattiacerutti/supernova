@@ -107,8 +107,7 @@ export function agentRpcLayer(runtime: AgentRuntime) {
       ),
     forkSession: (input) => run(() => sessions.fork(input), oneOf(ForkSessionError), fallback(ForkSessionError, "Failed to fork session.")),
     getConfiguration: (input) => runSync(() => configuration.get(input), oneOf(GetConfigurationError), fallback(GetConfigurationError, "Unable to load configuration.")),
-    getSession: (input) =>
-      run(async () => sessionRuntime.getCommittedSession(input) ?? sessions.get(input), oneOf(LoadSessionError), fallback(LoadSessionError, "Failed to load session.")),
+    getSession: (input) => run(() => sessions.get(input), oneOf(LoadSessionError), fallback(LoadSessionError, "Failed to load session.")),
     getWorkspaceChanges: (input) => run(() => workspace.getChanges(input), isWorkspaceGitError, fallback(WorkspaceGenericError, "Workspace operation failed.")),
     getWorkspaceDiffContents: (input) => run(() => workspace.getDiffContents(input), isWorkspaceFileError, fallback(WorkspaceGenericError, "Workspace operation failed.")),
     listComposerSuggestions: (input) =>
@@ -144,7 +143,7 @@ export function agentRpcLayer(runtime: AgentRuntime) {
             await extensions.update();
           } finally {
             // Even a partial failure may have replaced packages on disk, so every session reloads either way.
-            sessionRuntime.reloadExtensions();
+            await sessionRuntime.reloadExtensions();
           }
         },
         oneOf(UpdateExtensionsError),

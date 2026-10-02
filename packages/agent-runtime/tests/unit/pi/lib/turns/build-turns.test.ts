@@ -1,31 +1,68 @@
-import type {SessionEntry} from "@earendil-works/pi-coding-agent";
+import type {AssistantMessage, ToolResultMessage, UserMessage as PiUserMessage} from "@earendil-works/pi-ai";
+import type {UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 import {describe, expect, it} from "vitest";
-import {buildPiTurns} from "@supernova/agent-runtime/pi/lib/turns/build-turns";
-import {assistantMessage, contentPartsEntry, messageEntry, piAgentMessage, piEntries, selectedModelReference, userMessage} from "@tests/support/session-runtime";
+import {buildTurns} from "@supernova/agent-runtime/pi/lib/turns/build-turns";
+import type {TimelineEntry} from "@supernova/agent-runtime/pi/lib/turns/build-turns";
+import {selectedModelReference} from "@tests/support/session-runtime";
 
-describe("projecting Pi branch entries into session turns", () => {
+const at = (milliseconds: number) => new Date(milliseconds).toISOString();
+
+function parts(id: string, contentParts: readonly UserMessageContentPart[], timestamp = 0): TimelineEntry {
+  return {type: "content-parts", id, timestamp: at(timestamp), contentParts: [...contentParts]};
+}
+
+function user(id: string, content: PiUserMessage["content"], timestamp = 1): TimelineEntry {
+  return {type: "user", id, timestamp: at(timestamp), message: {role: "user", content, timestamp}};
+}
+
+/** An authored text turn start: content parts followed by its user message. */
+function request(id: string, text: string, timestamp = 1): TimelineEntry[] {
+  return [parts(`${id}-parts`, [{text, type: "text"}], timestamp), user(id, [{text, type: "text"}], timestamp)];
+}
+
+function assistant(id: string, content: AssistantMessage["content"] | string, timestamp = 2, extra?: Partial<AssistantMessage>): TimelineEntry {
+  const message = {
+    api: "faux",
+    content: typeof content === "string" ? [{text: content, type: "text"}] : content,
+    model: "m",
+    provider: "p",
+    role: "assistant",
+    stopReason: "stop",
+    timestamp,
+    usage: {cacheRead: 0, cacheWrite: 0, cost: {cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0}, input: 0, output: 0, totalTokens: 0},
+    ...extra,
+  } as AssistantMessage;
+  return {type: "assistant", id, timestamp: at(timestamp), message};
+}
+
+function toolResult(id: string, toolCallId: string, toolName: string, text: string, timestamp = 5): TimelineEntry {
+  const message = {role: "toolResult", toolCallId, toolName, content: [{text, type: "text"}], isError: false, timestamp} as ToolResultMessage;
+  return {type: "tool-result", id, timestamp: at(timestamp), message};
+}
+
+function compaction(id: string, summary: string | undefined, timestamp = 3): TimelineEntry {
+  return {type: "compaction", id, timestamp: at(timestamp), summary};
+}
+
+describe("projecting timeline entries into session turns", () => {
   it("groups user, assistant, and completed tool messages into one ordered turn", () => {
-    const turns = buildPiTurns(
-      piEntries([
-        userMessage("Run the tests", 1),
-        piAgentMessage({
-          content: [
-            {thinking: "Inspect first.", type: "thinking"},
-            {text: "Running tests.", type: "text"},
-            {arguments: {command: "bun test"}, id: "call-1", name: "bash", type: "toolCall"},
-            {text: "Green.", type: "text"},
-          ],
-          id: "assistant-1",
-          role: "assistant",
-          timestamp: 2,
-        }),
-        piAgentMessage({content: [{text: "passed", type: "text"}], id: "tool-1", role: "toolResult", timestamp: 5, toolCallId: "call-1", toolName: "bash"}),
-      ]),
+    const turns = buildTurns(
+      [
+        ...request("user-1", "Run the tests"),
+        assistant("assistant-1", [
+          {thinking: "Inspect first.", type: "thinking"},
+          {text: "Running tests.", type: "text"},
+          {arguments: {command: "bun test"}, id: "call-1", name: "bash", type: "toolCall"},
+          {text: "Green.", type: "text"},
+        ]),
+        toolResult("tool-1", "call-1", "bash", "passed"),
+      ],
       selectedModelReference
     );
 
     expect(turns).toMatchObject([
       {
+        id: "user-1",
         modelReference: selectedModelReference,
         status: "completed",
         userMessage: {contentParts: [{text: "Run the tests", type: "text"}]},
@@ -40,32 +77,19 @@ describe("projecting Pi branch entries into session turns", () => {
   });
 
   it("keeps projected ids stable across rebuilds", () => {
-    const entries = piEntries([userMessage("Fix it", 1), assistantMessage("Done", 2)]);
+    const entries = [...request("user-1", "Fix it"), assistant("assistant-1", "Done")];
 
-    const first = buildPiTurns(entries, selectedModelReference);
-    const second = buildPiTurns(entries, selectedModelReference);
+    const first = buildTurns(entries, selectedModelReference);
+    const second = buildTurns(entries, selectedModelReference);
 
     expect(second.map((turn) => turn.id)).toEqual(first.map((turn) => turn.id));
     expect(second.flatMap((turn) => turn.events.map((event) => event.id))).toEqual(first.flatMap((turn) => turn.events.map((event) => event.id)));
   });
 
   it("renders assistant failures, but not user-initiated aborts, as error turns", () => {
-    const failed = buildPiTurns(
-      piEntries([userMessage("Fix it", 1), piAgentMessage({content: [], errorMessage: "Model failed", id: "assistant-1", role: "assistant", timestamp: 2})]),
-      selectedModelReference
-    );
-    const aborted = buildPiTurns(
-      piEntries([
-        userMessage("Stop", 1),
-        piAgentMessage({
-          content: [{thinking: "Stopping.", type: "thinking"}],
-          errorMessage: "Request was aborted.",
-          id: "assistant-1",
-          role: "assistant",
-          stopReason: "aborted",
-          timestamp: 2,
-        }),
-      ]),
+    const failed = buildTurns([...request("user-1", "Fix it"), assistant("assistant-1", [], 2, {errorMessage: "Model failed", stopReason: "error"})], selectedModelReference);
+    const aborted = buildTurns(
+      [...request("user-1", "Stop"), assistant("assistant-1", [{thinking: "Stopping.", type: "thinking"}], 2, {errorMessage: "Request was aborted.", stopReason: "aborted"})],
       selectedModelReference
     );
 
@@ -73,27 +97,19 @@ describe("projecting Pi branch entries into session turns", () => {
     expect(aborted).toMatchObject([{events: [{content: "Stopping.", type: "reasoning"}], status: "completed"}]);
   });
 
-  it("adds compaction summaries to the turn that triggered them while preserving raw branch messages", () => {
-    const entries: SessionEntry[] = [
-      contentPartsEntry([{text: "First request", type: "text"}], {id: "first-content"}),
-      messageEntry(userMessage("First request", 1), {id: "first-user", parentId: "first-content"}),
-      messageEntry(assistantMessage("First response", 2), {id: "first-assistant", parentId: "first-user"}),
-      {
-        firstKeptEntryId: "second-user",
-        id: "compaction-1",
-        parentId: "first-assistant",
-        summary: "Compacted summary",
-        timestamp: "1970-01-01T00:00:00.003Z",
-        tokensBefore: 1000,
-        type: "compaction",
-      },
-      {customType: "supernova.other", id: "custom-1", parentId: "compaction-1", timestamp: "1970-01-01T00:00:00.004Z", type: "custom"},
-      contentPartsEntry([{text: "Second request", type: "text"}], {id: "second-content", parentId: "custom-1"}),
-      messageEntry(userMessage("Second request", 5), {id: "second-user", parentId: "second-content"}),
-      messageEntry(assistantMessage("Second response", 6), {id: "second-assistant", parentId: "second-user"}),
-    ];
+  it("adds compaction summaries to the turn that triggered them", () => {
+    const turns = buildTurns(
+      [
+        ...request("first-user", "First request"),
+        assistant("first-assistant", "First response"),
+        compaction("compaction-1", "Compacted summary"),
+        ...request("second-user", "Second request", 5),
+        assistant("second-assistant", "Second response", 6),
+      ],
+      selectedModelReference
+    );
 
-    expect(buildPiTurns(entries, selectedModelReference)).toMatchObject([
+    expect(turns).toMatchObject([
       {
         events: [
           {content: "First response", type: "assistant"},
@@ -106,21 +122,8 @@ describe("projecting Pi branch entries into session turns", () => {
   });
 
   it("adds pre-user compaction events to the following user turn", () => {
-    const turns = buildPiTurns(
-      [
-        contentPartsEntry([{text: "First request", type: "text"}], {id: "content"}),
-        {
-          firstKeptEntryId: "kept-user",
-          id: "compaction-before-user",
-          parentId: "content",
-          summary: "Live summary",
-          timestamp: "1970-01-01T00:00:00.002Z",
-          tokensBefore: 1000,
-          type: "compaction",
-        },
-        messageEntry(userMessage("First request", 1), {id: "user", parentId: "compaction-before-user"}),
-        messageEntry(assistantMessage("First response", 2), {id: "assistant", parentId: "user"}),
-      ],
+    const turns = buildTurns(
+      [compaction("compaction-before-user", "Live summary", 0), ...request("user", "First request"), assistant("assistant", "First response")],
       selectedModelReference
     );
 
@@ -134,22 +137,14 @@ describe("projecting Pi branch entries into session turns", () => {
     ]);
   });
 
-  it("keeps compaction events in order between other turn events", () => {
-    const turns = buildPiTurns(
+  it("keeps compaction events in order between other turn events and maps running ones as pending", () => {
+    const turns = buildTurns(
       [
-        contentPartsEntry([{text: "First request", type: "text"}], {id: "content"}),
-        messageEntry(userMessage("First request", 1), {id: "user", parentId: "content"}),
-        messageEntry(assistantMessage("Before compaction", 2), {id: "assistant-before", parentId: "user"}),
-        {
-          firstKeptEntryId: "user",
-          id: "compaction-between-events",
-          parentId: "assistant-before",
-          summary: "Compacted summary",
-          timestamp: "1970-01-01T00:00:00.003Z",
-          tokensBefore: 1000,
-          type: "compaction",
-        },
-        messageEntry(assistantMessage("After compaction", 4), {id: "assistant-after", parentId: "compaction-between-events"}),
+        ...request("user", "First request"),
+        assistant("assistant-before", "Before compaction"),
+        compaction("compaction-between-events", "Compacted summary"),
+        assistant("assistant-after", "After compaction", 4),
+        compaction("running-compaction", undefined, 5),
       ],
       selectedModelReference
     );
@@ -160,52 +155,32 @@ describe("projecting Pi branch entries into session turns", () => {
           {content: "Before compaction", type: "assistant"},
           {id: "compaction-between-events", status: "completed", summary: "Compacted summary", type: "compaction"},
           {content: "After compaction", type: "assistant"},
+          {id: "running-compaction", status: "pending", type: "compaction"},
         ],
         status: "completed",
       },
     ]);
   });
 
-  it("maps empty synthetic compaction entries as pending events", () => {
-    const turns = buildPiTurns(
-      [
-        contentPartsEntry([{text: "First request", type: "text"}], {id: "content"}),
-        {firstKeptEntryId: "", id: "pending-compaction", parentId: "content", summary: "", timestamp: "1970-01-01T00:00:00.002Z", tokensBefore: 0, type: "compaction"},
-        messageEntry(userMessage("First request", 1), {id: "user", parentId: "pending-compaction"}),
-      ],
-      selectedModelReference
-    );
-
-    expect(turns).toMatchObject([{events: [{id: "pending-compaction", status: "pending", type: "compaction"}]}]);
-  });
-
   it("uses stored content parts as the display source and restores image previews by image order", () => {
-    const contentParts = [
-      {text: "Review ", type: "text" as const},
-      {id: "file", kind: "file" as const, name: "file.ts", type: "reference" as const, value: "@src/file.ts"},
-      {id: "first-image", kind: "image" as const, mime: "image/png", name: "first.png", size: 11, type: "attachment" as const},
-      {id: "notes", kind: "text" as const, mime: "text/plain", name: "notes.txt", size: 12, type: "attachment" as const},
-      {id: "second-image", kind: "image" as const, mime: "image/jpeg", name: "second.jpg", size: 13, type: "attachment" as const},
+    const contentParts: UserMessageContentPart[] = [
+      {text: "Review ", type: "text"},
+      {id: "file", kind: "file", name: "file.ts", type: "reference", value: "@src/file.ts"},
+      {id: "first-image", kind: "image", mime: "image/png", name: "first.png", size: 11, type: "attachment"},
+      {id: "notes", kind: "text", mime: "text/plain", name: "notes.txt", size: 12, type: "attachment"},
+      {id: "second-image", kind: "image", mime: "image/jpeg", name: "second.jpg", size: 13, type: "attachment"},
     ];
     const entries = [
-      contentPartsEntry(contentParts),
-      messageEntry(
-        piAgentMessage({
-          content: [
-            {text: "Review @src/file.ts\n\n<skill>expanded context</skill>", type: "text"},
-            {data: "Zmlyc3Q=", mimeType: "image/png", type: "image"},
-            {data: "c2Vjb25k", mimeType: "image/jpeg", type: "image"},
-          ],
-          id: "user-message-1",
-          role: "user",
-          timestamp: 2,
-        }),
-        {id: "user-1", parentId: "content-parts-1"}
-      ),
-      messageEntry(assistantMessage("Reviewed.", 3), {id: "assistant-1", parentId: "user-1"}),
+      parts("content-parts-1", contentParts),
+      user("user-1", [
+        {text: "Review @src/file.ts\n\n<skill>expanded context</skill>", type: "text"},
+        {data: "Zmlyc3Q=", mimeType: "image/png", type: "image"},
+        {data: "c2Vjb25k", mimeType: "image/jpeg", type: "image"},
+      ]),
+      assistant("assistant-1", "Reviewed.", 3),
     ];
 
-    expect(buildPiTurns(entries, selectedModelReference)[0]?.userMessage.contentParts).toEqual([
+    expect(buildTurns(entries, selectedModelReference)[0]?.userMessage.contentParts).toEqual([
       {text: "Review ", type: "text"},
       {id: "file", kind: "file", name: "file.ts", type: "reference", value: "@src/file.ts"},
       {contentBase64: "Zmlyc3Q=", id: "first-image", kind: "image", mime: "image/png", name: "first.png", size: 11, type: "attachment"},
@@ -216,30 +191,37 @@ describe("projecting Pi branch entries into session turns", () => {
 
   it("keeps attachment-only user turns", () => {
     const entries = [
-      contentPartsEntry([{id: "image", kind: "image", mime: "image/png", name: "diagram.png", size: 12, type: "attachment"}]),
-      messageEntry(piAgentMessage({content: [{data: "aW1hZ2U=", mimeType: "image/png", type: "image"}], id: "user-message-1", role: "user", timestamp: 1}), {
-        id: "user-1",
-        parentId: "content-parts-1",
-      }),
-      messageEntry(assistantMessage("Reviewed.", 2), {id: "assistant-1", parentId: "user-1"}),
+      parts("content-parts-1", [{id: "image", kind: "image", mime: "image/png", name: "diagram.png", size: 12, type: "attachment"}]),
+      user("user-1", [{data: "aW1hZ2U=", mimeType: "image/png", type: "image"}]),
+      assistant("assistant-1", "Reviewed."),
     ];
 
-    expect(buildPiTurns(entries, selectedModelReference)).toMatchObject([
+    expect(buildTurns(entries, selectedModelReference)).toMatchObject([
       {events: [{content: "Reviewed.", type: "assistant"}], userMessage: {contentParts: [{contentBase64: "aW1hZ2U=", id: "image", kind: "image"}]}},
     ]);
   });
 
-  it("ignores assistant and tool result entries before the first user message", () => {
-    const turns = buildPiTurns(
-      piEntries([
-        assistantMessage("orphan response", 1),
-        piAgentMessage({content: [{text: "orphan output", type: "text"}], id: "tool-1", role: "toolResult", timestamp: 2, toolCallId: "call-1", toolName: "bash"}),
-        userMessage("Real request", 3),
-        assistantMessage("Real response", 4),
-      ]),
+  it("ignores entries before the first authored user message and folds unauthored user messages into the turn", () => {
+    const turns = buildTurns(
+      [
+        assistant("orphan", "orphan response", 1),
+        toolResult("tool-1", "call-1", "bash", "orphan output", 2),
+        ...request("user", "Real request", 3),
+        assistant("assistant", "Real response", 4),
+        user("continuation", "Keep going.", 5),
+        assistant("assistant-2", "Continued", 6),
+      ],
       selectedModelReference
     );
 
-    expect(turns).toMatchObject([{events: [{content: "Real response", type: "assistant"}], userMessage: {contentParts: [{text: "Real request", type: "text"}]}}]);
+    expect(turns).toMatchObject([
+      {
+        events: [
+          {content: "Real response", type: "assistant"},
+          {content: "Continued", type: "assistant"},
+        ],
+        userMessage: {contentParts: [{text: "Real request", type: "text"}]},
+      },
+    ]);
   });
 });

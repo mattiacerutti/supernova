@@ -18,7 +18,7 @@ src/
   runtime.ts      composition root: constructs every class once and owns dispose()
   rpc/            agent-rpc.ts maps each procedure to a feature function; edge.ts adapts thrown errors
   lib/            stateless helpers with no Pi or product knowledge
-  pi/             the Pi SDK wrapper
+  pi/             the Pi wrapper: the durable engine and Pi's file formats
   features/       configuration, extensions, folders, projects, providers, session-runtime, sessions, workspace, worktrees
 ```
 
@@ -49,7 +49,7 @@ Nothing else sits at a feature root.
 
 **A region** exists only when the feature owns a second stateful class. Helpers alone go in `lib/`, not a region. Inside a region:
 
-- The class file(s) at the root, named for the thing (`session-pool.ts`, `login-sessions.ts`). A class that holds resources exposes `dispose()`.
+- The class file(s) at the root, named for the thing (`session-worker.ts`, `login-sessions.ts`). A class that holds resources exposes `dispose()`.
 - `commands/` for functions the class dispatches to.
 - `lib/` for helpers that serve the region.
 - When the region's surface is a function rather than a class, the file takes the region's name (`tools/tools.ts`).
@@ -72,31 +72,39 @@ Long-lived output is an `AsyncGenerator` built on `lib/event-bus.ts`. Subscribin
 
 ```
 pi/
-  sdk.ts              PiSdk interface and createPiSdk(); the one seam onto @earendil-works/pi-coding-agent
-  resource-cache.ts   per-project memo of loaded extensions, prompts, and skills
-  config/             resource-loader and settings policy
-  lib/                every Pi ↔ contracts mapping and behavior Pi lacks: turns, content parts, models, session snapshots
+  sdk.ts              PiSdk interface and createPiSdk(); the seam onto @earendil-works/pi-coding-agent, and Pi's HTTP setup
+  resource-cache.ts   per-project memo of loaded extensions, prompts, skills, and context files
+  session-store.ts    SessionStore: every session's index record and open file; the seam onto @earendil-works/pi-durable
+  session-file.ts     SessionFile: one session's engine instance (Harness) and its operations
+  config/             resource-loader, settings policy, engine settings, and the system prompt
+  lib/                every Pi ↔ contracts mapping and behavior Pi lacks: turns, content parts, models, sessions, tools
 ```
 
-Reach Pi through `Pick<PiSdk, …>`. An object over part of the SDK earns a file only when it holds state or behavior Pi lacks: `resource-cache.ts` does; `openSessionById` is a `lib/` function; a rename of `modelRuntime.getModel` is nothing.
+Reach Pi through `Pick<PiSdk, …>` or `Pick<SessionStore, …>`; only `pi/` imports `@earendil-works/pi-durable`. An object over part of Pi earns a root file only when it holds state or behavior Pi lacks: `resource-cache.ts`, `session-store.ts`, and `session-file.ts` do; `turnPositions` is a `lib/` function.
 
-Inside `pi/` names drop the `Pi` prefix. Outside it, values that hold Pi types keep it (`PiModel`, `PiSessionManager`, `buildPiTurns`) so the reader knows which side of the boundary they are on.
+Two Pi packages, two roles. `@earendil-works/pi-durable` (vendored from source, see `vendor/pi/PROVENANCE.md`) runs agents. `@earendil-works/pi-coding-agent` is used only for what reads files and returns plain data: `ModelRuntime`, `SettingsManager`, skills, context files, prompt templates, extension loading, package management, and tool definitions for their prompt text. Its `SessionManager` is used only by `lib/session/legacy-sessions.ts` to read old sessions.
+
+Code ported from Pi because it is not exported (the system prompt in `config/system-prompt.ts`, the HTTP setup in `sdk.ts`) names its upstream path and commit; replace it with the import if Pi exports it.
+
+`lib/tools/extension-bridge.ts` turns loaded extensions into engine extensions: registered tools become engine tools, `tool_call`/`tool_result`/`context` handlers become engine hooks, and `session_start`/`session_shutdown` are delivered on open and close. Other events, commands, shortcuts, flags, and renderers are reported as unsupported, and `ctx.ui` or unknown context members throw on access, so nothing silently no-ops.
+
+Inside `pi/` names drop the `Pi` prefix. Outside it, values that hold Pi types keep it (`PiModel`) so the reader knows which side of the boundary they are on.
 
 ## `features/session-runtime`
 
-Live execution: send, abort, compact, checkpoint navigation, the event stream. `sessions` is the durable record: create, load, rename. They are separate features because the Pi harness migration replaces this one and barely touches that one (see [Pi harness v2 migration](../pi-harness-v2-migration.md)). Do not reshape `worker/` internals ahead of the migration.
+Live execution: send, abort, compact, checkpoint navigation, the event stream. `sessions` is the durable record: create, load, rename, fork. See [Session runtime](session-runtime.md).
 
-- `worker/session-pool.ts` keeps one `SessionWorker` per active session.
-- `worker/session-worker.ts` owns the Pi `AgentSession` subscription, revisions, and the live turn.
-- `worker/commands/` are what the pool dispatches to a worker.
-- `checkpoints/` is the store, shadow repositories, and git plumbing; it moves as one unit under the migration.
-- `tools/` are the Pi custom tools registered on every agent session.
+- `worker/session-worker.ts` watches the session's visible conversation, publishes its events with revisions, and captures after-turn checkpoints.
+- `session-runtime.ts` keeps one `SessionWorker` per session in use and dispatches to it.
+- `worker/commands/` are what the feature class dispatches to a worker; `worker/lib/navigate-to-turn.ts` is the one restore-then-show path undo, redo, and revert share.
+- `checkpoints/` is the store, shadow repositories, and git plumbing.
+- `tools/` are Supernova's own tools offered in every session (`web_fetch`).
 
 ## Testing
 
 See [Development](development.md#verification) for verification and the test workflow.
 
 - Tests mirror `src` file for file under `tests/unit` and `tests/integration` (`src/pi/lib/turns/build-turns.ts` → `tests/unit/pi/lib/turns/build-turns.test.ts`). Fixtures live in `tests/support`, named for what they build.
-- Construct the feature class with `Deps` built from Pi's in-memory pieces (`SessionManager.inMemory()`, `registerFauxProvider`) or a temp directory. `tests/support/session-runtime.ts` builds `SessionRuntime` and `Sessions` this way.
+- Construct the feature class with `Deps` built from real pieces: `tests/support/session-runtime.ts` builds `SessionRuntime`, `Sessions`, and `Projects` over a real engine with session files in a temp directory, Pi's `ModelRuntime` with `registerFauxProvider`, and in-memory settings. Seed history by running turns against the faux model, not by writing entries.
 - Assert with `await expect(feature.method(input)).rejects.toMatchObject({_tag: "…"})`. No Effect in tests below `rpc/`.
 - Cover runtime behavior, failure handling, stream and session lifecycle, persistence, emitted events, and cleanup. Prefer real in-memory dependencies over mocks.

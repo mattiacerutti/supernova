@@ -7,18 +7,19 @@ function isSnapshotEvent(event: SessionStreamEvent): event is Extract<SessionStr
 }
 
 describe("manual Pi session compaction", () => {
-  const runtimes: Array<{unregister: () => void}> = [];
+  const runtimes: Array<{unregister: () => Promise<void>}> = [];
 
-  afterEach(() => {
-    while (runtimes.length > 0) runtimes.pop()?.unregister();
+  afterEach(async () => {
+    while (runtimes.length > 0) await runtimes.pop()?.unregister();
   });
 
   it("publishes compaction lifecycle events and a refreshed session snapshot", async () => {
-    const pi = await createPiTestRuntime();
+    // Seeded without automatic compaction, so the large exchange stays until the manual compaction.
+    const pi = await createPiTestRuntime({settings: {compaction: {enabled: false}}});
     runtimes.push(pi);
-    const {info, manager} = pi.createSession();
-    pi.appendConversation(manager, {requestText: "Older request", assistantText: "Older response."});
-    pi.appendConversation(manager, {requestText: "x".repeat(selectedPiModel.contextWindow * 4), assistantText: "Old response."});
+    const {info} = await pi.createSession();
+    await pi.appendConversation(info.id, {requestText: "Older request", assistantText: "Older response."});
+    await pi.appendConversation(info.id, {requestText: "x".repeat(selectedPiModel.contextWindow * 4), assistantText: "Old response."});
     pi.faux.setResponses([fauxAssistantMessage("Manual compacted summary.")]);
     const events = await pi.collectEvents(
       () => pi.sessionRuntime.compact({modelReference: selectedModelReference, sessionId: info.id}),

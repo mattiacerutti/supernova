@@ -1,292 +1,111 @@
-import type {AgentSession} from "@earendil-works/pi-coding-agent";
 import {randomUUID} from "node:crypto";
-import {CheckpointInheritedError, CheckpointUncapturedError} from "@supernova/contracts/session-runtime/procedures";
 import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
-import type {ModelReference, Session} from "@supernova/contracts/sessions/schemas";
-import type {PiModel} from "@supernova/agent-runtime/pi/sdk";
+import type {Session} from "@supernova/contracts/sessions/schemas";
+import type {CheckpointRef, CheckpointStatus} from "@supernova/agent-runtime/pi/lib/session/session-state";
+import type {ConversationSnapshot, SessionFile} from "@supernova/agent-runtime/pi/session-file";
+import type {SessionStore} from "@supernova/agent-runtime/pi/session-store";
+import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";
 import type {ResourceCache} from "@supernova/agent-runtime/pi/resource-cache";
-import type {PiSdk, PiSessionManager} from "@supernova/agent-runtime/pi/sdk";
-import {restoreModels} from "@supernova/agent-runtime/pi/lib/models/refresh-models";
-import {openSessionById} from "@supernova/agent-runtime/pi/lib/session/open-session";
-import {sessionWorkspace} from "@supernova/agent-runtime/pi/lib/session/worktree-entry";
-import type {AgentSessionFactory} from "@supernova/agent-runtime/features/session-runtime/worker/agent-session-factory";
 import type {CheckpointStore} from "@supernova/agent-runtime/features/session-runtime/checkpoints/checkpoint-store";
 import {CheckpointConflictError} from "@supernova/agent-runtime/features/session-runtime/checkpoints/shadow-repository";
 import type {EventBus} from "@supernova/agent-runtime/lib/event-bus";
-import {
-  CHECKPOINT_CURSOR_CUSTOM_TYPE,
-  CHECKPOINT_CUSTOM_TYPE,
-  invalidateCheckpointRedo,
-  isCapturedCheckpoint,
-  isInheritedCheckpoint,
-} from "@supernova/agent-runtime/pi/lib/session/checkpoint-entries";
-import type {CheckpointEntry, CheckpointStatus} from "@supernova/agent-runtime/pi/lib/session/checkpoint-entries";
-import {buildSessionSnapshot} from "@supernova/agent-runtime/pi/lib/session/build-session-snapshot";
-import {findSelectedModel} from "@supernova/agent-runtime/pi/lib/models/selected-model";
-import {toPiThinkingLevel} from "@supernova/agent-runtime/pi/lib/models/thinking-levels";
-import {ActiveTurn} from "@supernova/agent-runtime/features/session-runtime/worker/lib/active-turn";
-import type {SendMessageContext} from "@supernova/agent-runtime/features/session-runtime/worker/lib/send-message-context";
 
 type RevisionedSessionStreamEvent = Extract<SessionStreamEvent, {readonly revision: number}>;
 type UnrevisionedSessionStreamEvent = RevisionedSessionStreamEvent extends infer Event ? (Event extends {readonly revision: number} ? Omit<Event, "revision"> : never) : never;
 
-export interface SessionWorkerDependencies {
-  readonly agentSessionFactory: AgentSessionFactory;
+export interface SessionWorkerInput {
+  readonly checkpointStore: CheckpointStore;
   readonly eventBus: EventBus<SessionStreamEvent>;
   readonly resourceCache: ResourceCache;
-  readonly sdk: Pick<PiSdk, "modelRuntime" | "SessionManager">;
-  readonly checkpointStore: CheckpointStore;
-}
-
-export interface SessionWorkerInput extends SessionWorkerDependencies {
+  readonly sdk: Pick<PiSdk, "modelRuntime">;
   readonly sessionId: string;
+  readonly store: SessionStore;
 }
 
-/** Maintains one long-lived Pi AgentSession subscription for a Supernova session. */
+/**
+ * Publishes one session's events and serializes its navigation commands. The engine owns execution and turn state;
+ * the worker watches the visible conversation and translates its committed views into the event stream:
+ * `session.agent.*` from run transitions, `session.turn` while a run is active, `session.snapshot` when it settles.
+ */
 export class SessionWorker {
   public readonly resourceCache: ResourceCache;
   public readonly sessionId: string;
+  public readonly sdk: Pick<PiSdk, "modelRuntime">;
+  public readonly store: SessionStore;
 
-  private readonly agentSessionFactory: AgentSessionFactory;
   private readonly checkpointStore: CheckpointStore;
   private readonly eventBus: EventBus<SessionStreamEvent>;
-  private readonly sdk: Pick<PiSdk, "modelRuntime" | "SessionManager">;
 
-  private agentSession: AgentSession | undefined;
-  private activeTurn: ActiveTurn | undefined;
-  private committedSession: Session | undefined;
-
-  private cancelled = false;
-  private extensionsStale = false;
-  private releasePromise: Promise<void> | undefined;
-  private running = false;
   private revision = 0;
-  private unsubscribe: (() => void) | undefined;
+  private publishing: Promise<void> = Promise.resolve();
+  private commandRunning = false;
+  private cancelled = false;
+  private watched: {readonly conversationId: number; readonly unsubscribe: () => void} | undefined;
+  private readonly background = new Set<Promise<unknown>>();
+  /**
+   * The first user entry of the run being published, from the send that placed it or the first frame that shows it
+   * (a run resumed after a restart). It is the committed/live boundary: committed reads end before it until the run's
+   * settled snapshot is published, because the engine may end a fast run before any frame of it arrives.
+   */
+  private runStart: number | undefined;
+  /** The last entry a settled snapshot covered; a send that returns after its run already settled is not reopened. */
+  private settledThrough = 0;
+  private wasCompacting = false;
+  private lastTurnJson: string | undefined;
 
   public constructor(input: SessionWorkerInput) {
-    this.agentSessionFactory = input.agentSessionFactory;
     this.checkpointStore = input.checkpointStore;
+    this.store = input.store;
     this.eventBus = input.eventBus;
     this.resourceCache = input.resourceCache;
     this.sdk = input.sdk;
     this.sessionId = input.sessionId;
   }
 
-  /** Marks this runtime as busy for a command. */
-  public beginWork(): void {
-    if (this.running) throw new Error("Session already has active work.");
-    this.running = true;
+  /** The session's open file, watched for events from the first use on. */
+  public async session(): Promise<SessionFile> {
+    const session = await this.store.file(this.sessionId);
+    await this.watch(session);
+    return session;
+  }
+
+  /**
+   * Marks a navigation or compaction command as running; sends are rejected by the engine while a run is active.
+   * Rejects when another command or a run is active, so navigation never races a turn.
+   */
+  public async beginWork(): Promise<SessionFile> {
+    if (this.commandRunning) throw new Error("Session already has active work.");
+    this.commandRunning = true;
+    this.cancelled = false;
+    try {
+      const session = await this.session();
+      if ((await session.view()).live?.run !== undefined) throw new Error("Session already has active work.");
+      return session;
+    } catch (error) {
+      this.commandRunning = false;
+      throw error;
+    }
+  }
+
+  public endWork(): void {
+    this.commandRunning = false;
+  }
+
+  /** Starts a send's preparation; an abort before the input is submitted cancels it. */
+  public beginSend(): void {
+    if (this.commandRunning) throw new Error("Session already has active work.");
     this.cancelled = false;
   }
 
-  /** Marks this runtime as no longer running an accepted command. */
-  public endWork(): void {
-    this.activeTurn = undefined;
-    this.committedSession = undefined;
-    this.running = false;
-  }
-
-  /**
-   * Disposes this runtime during server shutdown or pool teardown.
-   *
-   * This is a terminal lifecycle operation: it aborts any active Pi work,
-   * unsubscribes from Pi events, and disposes the underlying Pi AgentSession.
-   */
-  public async dispose(): Promise<void> {
-    if (!this.agentSession && !this.unsubscribe) return;
-    if (this.releasePromise) return this.releasePromise;
-
-    this.releasePromise = (async () => {
-      await this.abort();
-      await this.disposeAgentSession("quit");
-    })();
-
-    return this.releasePromise;
-  }
-
-  /** Marks the loaded extensions as outdated; the next command rebuilds the Pi session with the code on disk. */
-  public markExtensionsStale(): void {
-    this.extensionsStale = true;
-  }
-
-  /**
-   * Rebuilds the Pi session from its durable file when extensions are outdated. Call before a command begins.
-   *
-   * An active turn keeps its extensions: the flag stays set and the first command after the turn reloads.
-   * Pi's own `AgentSession.reload()` is not used because it resets the API provider registry every session shares.
-   */
-  public async reloadStaleExtensions(): Promise<void> {
-    if (!this.extensionsStale || this.running) return;
-    this.extensionsStale = false;
-    await this.disposeAgentSession("reload");
-  }
-
-  /**
-   * Stops the current user-facing agent run without tearing down this runtime.
-   *
-   * This is used by the manual stop action. It aborts provider/Pi work but keeps
-   * session-scoped runtime state, such as event revisions, available for the next command.
-   */
+  /** Stops the user-facing work of this session: preparation, the run, and queued inputs. */
   public async abort(): Promise<void> {
     this.cancelled = true;
-    await this.agentSession?.abort().catch(() => undefined);
+    if (!this.store.isOpen(this.sessionId)) return;
+    await (await this.session()).abort();
   }
 
-  /** Returns the session manager owned by this runtime's Pi agent session. */
-  public async getSessionManager(): Promise<PiSessionManager> {
-    return (await this.getAgentSession()).sessionManager;
-  }
-
-  /**
-   * Applies model and thinking level to the active session and returns the applied model.
-   *
-   * Pi's `setModel` verifies provider credentials, so an unauthenticated provider fails here
-   * with a specific auth error rather than a generic availability error.
-   */
-  public async selectModel(modelReference: ModelReference): Promise<PiModel> {
-    const agentSession = await this.getAgentSession();
-    const model = findSelectedModel(this.sdk, modelReference);
-
-    await agentSession.setModel(model);
-    agentSession.setThinkingLevel(toPiThinkingLevel(modelReference.thinkingLevel));
-    return model;
-  }
-
-  /** Returns the selected model state represented by the active session branch. */
-  public getSelectedModel(): {readonly model: PiModel; readonly modelReference: ModelReference} {
-    if (!this.agentSession) throw new Error("Agent session is not initialized.");
-
-    const {sessionManager} = this.agentSession;
-    const sessionContext = sessionManager.buildSessionContext();
-    if (!sessionContext.model) throw new Error("Session model was not found.");
-
-    const modelReference = {id: sessionContext.model.modelId, providerId: sessionContext.model.provider, thinkingLevel: sessionContext.thinkingLevel};
-    return {model: findSelectedModel(this.sdk, modelReference), modelReference};
-  }
-
-  /**
-   * Accepts and starts one prepared user turn, returning its background completion. A pending `titleGeneration` is
-   * applied and published whenever it resolves; the turn does not wait for it.
-   */
-  public startTurn(input: {
-    readonly beforeCheckpoint: {readonly checkpointId: string; readonly status: CheckpointStatus};
-    readonly captureCheckpoints: boolean;
-    readonly messageContext: SendMessageContext;
-    readonly titleGeneration: Promise<string | undefined> | undefined;
-  }): {readonly completion: Promise<void>} {
-    if (this.cancelled) throw new Error("Session was cancelled.");
-
-    const agentSession = this.agentSession;
-    if (!agentSession) throw new Error("Agent session is not initialized.");
-
-    const sessionManager = agentSession.sessionManager;
-    invalidateCheckpointRedo(sessionManager);
-
-    const selectedModel = this.getSelectedModel();
-    const activeTurn = new ActiveTurn(
-      {
-        baseParentId: sessionManager.getBranch().at(-1)?.id ?? null,
-        contextWindow: selectedModel.model.contextWindow,
-        customEntries: [
-          {
-            customType: CHECKPOINT_CUSTOM_TYPE,
-            data: {checkpointId: input.beforeCheckpoint.checkpointId, phase: "before-turn", status: input.beforeCheckpoint.status},
-          },
-        ],
-        messageContext: input.messageContext,
-        modelReference: selectedModel.modelReference,
-      },
-      sessionManager
-    );
-    activeTurn.appendCustomEntries();
-
-    this.activeTurn = activeTurn;
-    this.committedSession = buildSessionSnapshot({
-      contextWindow: selectedModel.model.contextWindow,
-      sessionManager,
-      modelReference: selectedModel.modelReference,
-    });
-    if (!this.unsubscribe) this.subscribeToLiveUpdates();
-
-    // Only a session's first turn has a title in flight; a user rename that lands first wins.
-    const sessionUpdate = input.titleGeneration
-      ? input.titleGeneration.then(async (title) => {
-          if (!title || sessionManager.getSessionName() !== undefined) return;
-          sessionManager.appendSessionInfo(title);
-          await this.publishSessionUpdate();
-        })
-      : Promise.resolve();
-
-    const execution = (async () => {
-      const images = activeTurn.images;
-      await agentSession.prompt(activeTurn.prompt, images.length > 0 ? {images: [...images]} : undefined);
-      await this.waitForPiSettlement();
-
-      const afterTurnCheckpointId = randomUUID();
-      const afterTurnStatus = await this.createCheckpoint(afterTurnCheckpointId, input.captureCheckpoints);
-      sessionManager.appendCustomEntry(CHECKPOINT_CUSTOM_TYPE, {checkpointId: afterTurnCheckpointId, phase: "after-turn", status: afterTurnStatus});
-      sessionManager.appendCustomEntry(CHECKPOINT_CURSOR_CUSTOM_TYPE, {leafEntryId: sessionManager.getLeafId()});
-
-      await this.publishSessionSnapshot();
-    })();
-
-    return {completion: Promise.all([execution, sessionUpdate]).then(() => undefined)};
-  }
-
-  /** Returns the committed session view while an active turn mutates Pi's branch. */
-  public getCommittedSession(): Session | undefined {
-    return this.running ? this.committedSession : undefined;
-  }
-
-  /**
-   * Restores the workspace and moves the active Pi session to a checkpoint.
-   *
-   * An uncovered target moves the conversation alone, leaving files as they are.
-   * A captured target with an uncovered current boundary requires explicit force.
-   * `force` discards conflicting manual changes; it bypasses no other preflight check.
-   */
-  public async navigateToCheckpoint(input: {
-    readonly current: CheckpointEntry;
-    readonly cursorLeafEntryId: string;
-    readonly force: boolean;
-    readonly target: CheckpointEntry;
-  }): Promise<void> {
-    const agentSession = this.agentSession;
-    if (!agentSession) throw new Error("Agent session is not initialized.");
-
-    const {current, cursorLeafEntryId, force, target} = input;
-    const sessionManager = agentSession.sessionManager;
-    if (isCapturedCheckpoint(target)) {
-      // A fork copies its history but not the workspace snapshots behind it, so those boundaries cannot restore files.
-      if (isInheritedCheckpoint(sessionManager.getEntries(), target)) {
-        throw new CheckpointInheritedError({message: "This message came from the session this one was forked from."});
-      }
-      if (!isCapturedCheckpoint(current) && !force) {
-        throw new CheckpointUncapturedError({message: "The current checkpoint has no workspace snapshot. Restoring may discard uncaptured changes."});
-      }
-      await this.restoreCheckpoint({
-        checkpointId: target.data.checkpointId,
-        force,
-        fromCheckpointId: isCapturedCheckpoint(current) ? current.data.checkpointId : undefined,
-        projectRoot: sessionManager.getCwd(),
-      });
-    }
-
-    sessionManager.branch(target.id);
-    sessionManager.appendCustomEntry(CHECKPOINT_CURSOR_CUSTOM_TYPE, {leafEntryId: cursorLeafEntryId});
-
-    const selectedModel = this.getSelectedModel();
-    agentSession.state.messages = sessionManager.buildSessionContext().messages;
-    agentSession.state.model = selectedModel.model;
-    agentSession.state.thinkingLevel = toPiThinkingLevel(selectedModel.modelReference.thinkingLevel);
-
-    await this.publishSessionSnapshot();
-  }
-
-  /** Runs Pi manual compaction on the active session. */
-  public async compactActiveSession(): Promise<void> {
-    await this.agentSession?.compact();
-    await this.waitForPiSettlement();
+  public isCancelled(): boolean {
+    return this.cancelled;
   }
 
   /** Publishes a public runtime event with a fresh revision. */
@@ -294,185 +113,154 @@ export class SessionWorker {
     this.eventBus.publish({...event, revision: this.nextRevision()} as RevisionedSessionStreamEvent);
   }
 
-  /** Publishes a committed snapshot for commands that do not own an active turn. */
-  public async publishSessionSnapshot(): Promise<void> {
-    const agentSession = await this.getAgentSession();
-    const selectedModel = this.getSelectedModel();
-    this.publishEvent({
-      type: "session.snapshot",
-      sessionId: this.sessionId,
-      session: buildSessionSnapshot({
-        contextWindow: selectedModel.model.contextWindow,
-        sessionManager: agentSession.sessionManager,
-        modelReference: selectedModel.modelReference,
-      }),
+  /** Publishes the committed session; ordered with the view-driven events. */
+  public publishSessionSnapshot(): Promise<void> {
+    return this.enqueue(async () => {
+      this.publishEvent({type: "session.snapshot", sessionId: this.sessionId, session: await this.store.snapshot(this.sessionId)});
     });
   }
 
-  /** Returns whether this runtime has been explicitly cancelled. */
-  public isCancelled(): boolean {
-    return this.cancelled;
+  /**
+   * Marks a run as started from the moment its input was placed, before any frame of it arrives: the engine may
+   * finish a fast run within one frame, and committed reads must leave it out until its snapshot is published.
+   */
+  public markRunStarted(entryId: number): void {
+    if (this.runStart !== undefined || entryId <= this.settledThrough) return;
+    this.runStart = entryId;
+    this.publishEvent({type: "session.agent.started", sessionId: this.sessionId});
   }
 
   /**
-   * Captures a workspace checkpoint for the current session project.
-   *
-   * Capture is best-effort: a failure leaves the boundary uncovered instead of
-   * rejecting the command, so provider work is never blocked by checkpoint storage.
+   * The committed session while this worker's view of a run has not settled: the engine may already have ended the
+   * run, but until the settled snapshot is published the client still shows it live, so committed reads leave it out.
    */
-  public async createCheckpoint(checkpointId: string, capture: boolean): Promise<CheckpointStatus> {
-    if (!capture) return "disabled";
-    const agentSession = await this.getAgentSession();
-    try {
-      await this.checkpointStore.capture({checkpointId, projectRoot: agentSession.sessionManager.getCwd(), sessionId: this.sessionId});
-      return "captured";
-    } catch {
-      return "failed";
-    }
+  public async committedSession(): Promise<Session | undefined> {
+    return this.runStart === undefined ? undefined : this.store.snapshot(this.sessionId, {before: this.runStart});
   }
 
-  /** Restores only files changed between checkpoints into the worktree, leaving Git HEAD and staged state untouched. */
-  private async restoreCheckpoint(input: {
-    readonly checkpointId: string;
-    readonly force: boolean;
-    readonly fromCheckpointId: string | undefined;
-    readonly projectRoot: string;
-  }): Promise<void> {
+  /** Publishes the session's summary after a title change. */
+  public async publishSessionUpdate(): Promise<void> {
+    const record = await this.store.record(this.sessionId);
+    this.publishEvent({
+      type: "session.updated",
+      projectPath: record.projectPath,
+      sessionId: this.sessionId,
+      summary: {
+        id: record.id,
+        forked: record.forkedFrom !== undefined,
+        title: record.title ?? (await this.store.snapshot(this.sessionId)).title,
+        updatedAt: record.updatedAt,
+        worktree: record.worktree !== undefined,
+      },
+    });
+  }
+
+  /**
+   * Captures a workspace checkpoint of this session's working directory. Best-effort: a failure leaves the boundary
+   * uncovered instead of failing the turn, so provider work is never blocked by checkpoint storage.
+   */
+  public async createCheckpoint(capture: boolean): Promise<CheckpointRef> {
+    const checkpointId = randomUUID();
+    const status: CheckpointStatus = !capture
+      ? "disabled"
+      : await this.checkpointStore
+          .capture({checkpointId, projectRoot: await this.store.cwd(this.sessionId), sessionId: this.sessionId})
+          .then(() => "captured" as const)
+          .catch(() => "failed" as const);
+    return {checkpointId, sessionId: this.sessionId, status};
+  }
+
+  /** Restores only files changed between checkpoints, leaving Git HEAD and staged state untouched. */
+  public async restoreCheckpoint(input: {readonly checkpointId: string; readonly force: boolean; readonly fromCheckpointId: string | undefined}): Promise<void> {
     try {
-      await this.checkpointStore.restore({...input, sessionId: this.sessionId});
+      await this.checkpointStore.restore({...input, projectRoot: await this.store.cwd(this.sessionId), sessionId: this.sessionId});
     } catch (cause) {
       if (cause instanceof CheckpointConflictError) throw cause;
       throw new Error("Failed to restore workspace checkpoint.");
     }
   }
 
-  /** Creates or returns the long-lived Pi AgentSession for this runtime. */
-  private async getAgentSession(): Promise<AgentSession> {
-    if (!this.agentSession) {
-      const sessionManager = await openSessionById(this.sdk, this.sessionId);
-      const {session} = await this.agentSessionFactory.createAgentSession({cwd: sessionManager.getCwd(), sessionManager});
-      this.agentSession = session;
-      try {
-        await session.bindExtensions({
-          mode: "print",
-          onError: ({extensionPath, error}) => {
-            this.publishEvent({type: "session.error", sessionId: this.sessionId, error: `Extension ${extensionPath}: ${error}`});
-          },
-        });
-      } catch (error) {
-        this.agentSession = undefined;
-        try {
-          await session.extensionRunner.emit({type: "session_shutdown", reason: "quit"});
-        } finally {
-          session.dispose();
-        }
-        throw error;
-      }
-      // Binding re-registers extension providers on the shared ModelRuntime, which recomposes them from
-      // their static config and drops any network-fetched catalog. Pi restores the cached catalog in a
-      // fire-and-forget refresh; await an equivalent restore so model resolution never sees the gap.
-      await restoreModels(this.sdk);
-    }
-
-    return this.agentSession;
+  /** Follows the visible conversation after navigation moved it. */
+  public async refreshWatch(): Promise<void> {
+    await this.watch(await this.store.file(this.sessionId));
   }
 
-  /** Detaches and disposes the Pi session; the next `getAgentSession` reopens it. Revisions continue on this worker. */
-  private async disposeAgentSession(reason: "quit" | "reload"): Promise<void> {
-    const agentSession = this.agentSession;
-    const unsubscribe = this.unsubscribe;
-
-    this.agentSession = undefined;
-    this.unsubscribe = undefined;
-
-    unsubscribe?.();
-    if (agentSession) {
-      try {
-        await agentSession.extensionRunner.emit({type: "session_shutdown", reason});
-      } finally {
-        agentSession.dispose();
-      }
-    }
+  /** Runs background work owned by this session (title generation) so disposal can wait for it. */
+  public track(work: Promise<unknown>): void {
+    const tracked = work.catch(() => undefined).finally(() => this.background.delete(tracked));
+    this.background.add(tracked);
   }
 
-  private subscribeToLiveUpdates(): void {
-    this.unsubscribe = this.agentSession?.subscribe((event) => {
-      const activeTurn = this.activeTurn;
-      if (!activeTurn) return;
+  /** Stops watching and waits for background work; the engine keeps the session's run going. */
+  public async dispose(): Promise<void> {
+    this.watched?.unsubscribe();
+    this.watched = undefined;
+    await Promise.all([...this.background, this.publishing]);
+  }
 
-      switch (event.type) {
-        case "agent_start":
-          this.publishEvent({type: "session.agent.started", sessionId: this.sessionId});
-          break;
-        case "agent_end":
-          this.publishEvent({type: "session.agent.ended", sessionId: this.sessionId});
-          break;
-        case "message_start":
-          activeTurn.appendLiveMessage(event.message);
-          this.publishLiveTurn(activeTurn);
-          break;
-        case "message_update":
-          activeTurn.replaceLastLiveMessage(event.message);
-          if (event.assistantMessageEvent.type === "toolcall_end") {
-            const {toolCall} = event.assistantMessageEvent;
-            activeTurn.recordToolArguments({args: toolCall.arguments, toolCallId: toolCall.id});
-          }
-          this.publishLiveTurn(activeTurn);
-          break;
-        case "message_end":
-          activeTurn.replaceLastLiveMessage(event.message);
-          // Pi persists completed messages immediately after notifying subscribers.
-          // Defer the context refresh so it observes the newly committed branch entry.
-          void Promise.resolve().then(async () => {
-            activeTurn.refreshContextUsage();
-            this.publishLiveTurn(activeTurn);
-          });
-          break;
-        case "tool_execution_start":
-          activeTurn.recordToolArguments({args: event.args, toolCallId: event.toolCallId});
-          this.publishLiveTurn(activeTurn);
-          break;
-        case "compaction_start":
-          activeTurn.appendLiveCompaction();
-          this.publishEvent({type: "session.compaction.started", sessionId: this.sessionId});
-          this.publishLiveTurn(activeTurn);
-          break;
-        case "compaction_end":
-          activeTurn.completeLiveCompaction(event.result);
-          activeTurn.refreshContextUsage();
-          this.publishEvent({type: "session.compaction.ended", sessionId: this.sessionId});
-          this.publishLiveTurn(activeTurn);
-          break;
-      }
+  private async watch(session: SessionFile): Promise<void> {
+    const {visible} = await session.state();
+    if (this.watched?.conversationId === visible) return;
+    this.watched?.unsubscribe();
+    const first = this.watched === undefined;
+    const unsubscribe = await session.watch(visible, (view) => void this.enqueue(() => this.onView(view)));
+    this.watched = {conversationId: visible, unsubscribe};
+    if (first && (await session.view()).live?.run === undefined) void this.enqueue(() => this.settleTurns());
+  }
+
+  /**
+   * Translates one committed view into events: `session.agent.started` once per run, `session.turn` when the live
+   * turn changed, compaction phases, and, on the first frame after the run's input that shows no run,
+   * `session.agent.ended` and the settled `session.snapshot`. Frames may be coalesced, so a run can start and end in
+   * one frame; it is still announced, shown, and settled in that order.
+   */
+  private async onView(view: ConversationSnapshot): Promise<void> {
+    if (view.conversationId !== this.watched?.conversationId) return;
+    const live = await this.store.live(this.sessionId, view, this.runStart);
+    if (live.busy && this.runStart === undefined) this.markRunStarted(live.runStart!);
+    if (live.compacting !== this.wasCompacting) this.publishEvent({type: live.compacting ? "session.compaction.started" : "session.compaction.ended", sessionId: this.sessionId});
+    this.wasCompacting = live.compacting;
+    if (live.turn) {
+      const json = JSON.stringify([live.turn, live.context]);
+      if (json !== this.lastTurnJson) this.publishEvent({type: "session.turn", sessionId: this.sessionId, context: live.context, turn: live.turn});
+      this.lastTurnJson = json;
+    }
+    const frameEnd = view.entries.at(-1)?.id ?? 0;
+    // A frame from before the run's input (delivered late) does not settle it.
+    if (live.busy || this.runStart === undefined || frameEnd < this.runStart) return;
+    this.lastTurnJson = undefined;
+    this.publishEvent({type: "session.agent.ended", sessionId: this.sessionId});
+    await this.settleTurns();
+    const session = await this.store.snapshot(this.sessionId);
+    // Cleared together with publishing, so no committed read sees the run before the client gets the snapshot.
+    this.runStart = undefined;
+    this.settledThrough = Math.max(this.settledThrough, frameEnd);
+    this.publishEvent({type: "session.snapshot", sessionId: this.sessionId, session});
+  }
+
+  /**
+   * Captures the after-turn checkpoint of every turn whose run ended without one: one capture serves all inputs a run
+   * answered. Also catches up on runs that finished after a restart, before anything watched them.
+   */
+  private async settleTurns(): Promise<void> {
+    const session = await this.store.file(this.sessionId);
+    const {turns} = await session.state();
+    const open = Object.entries(turns).filter(([, record]) => record.after === undefined);
+    if (open.length === 0) return;
+    const after = await this.createCheckpoint(open.some(([, record]) => record.capture));
+    await session.updateState((draft) => {
+      for (const [turnId, record] of open) draft.turns[turnId] = {...record, after: record.capture ? after : {...after, status: "disabled"}};
+      draft.current = after;
     });
   }
 
-  /** Publishes session metadata after generating its title. */
-  private async publishSessionUpdate(): Promise<void> {
-    const agentSession = await this.getAgentSession();
-    const {projectPath, worktree} = sessionWorkspace(agentSession.sessionManager);
-    this.publishEvent({
-      type: "session.updated",
-      projectPath,
-      sessionId: this.sessionId,
-      summary: {
-        id: agentSession.sessionManager.getSessionId(),
-        forked: agentSession.sessionManager.getHeader()?.parentSession !== undefined,
-        title: agentSession.sessionManager.getSessionName() ?? "Untitled session",
-        updatedAt: new Date().toISOString(),
-        worktree: worktree !== undefined,
-      },
+  /** Runs publications in order; a failed one never blocks later ones. */
+  private enqueue(work: () => Promise<void>): Promise<void> {
+    const run = this.publishing.then(work);
+    this.publishing = run.catch((error) => {
+      this.publishEvent({type: "session.error", sessionId: this.sessionId, error: error instanceof Error ? error.message : "Failed to publish session state."});
     });
-  }
-
-  private publishLiveTurn(activeTurn: ActiveTurn): void {
-    const turn = activeTurn.buildLiveTurn();
-    if (turn) this.publishEvent({type: "session.turn", sessionId: this.sessionId, context: activeTurn.context, turn});
-  }
-
-  /** Waits for Pi to finish its public run-settlement boundary before publishing committed state. */
-  private async waitForPiSettlement(): Promise<void> {
-    await this.agentSession?.waitForIdle();
+    return run;
   }
 
   private nextRevision(): number {
