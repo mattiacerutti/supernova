@@ -145,12 +145,12 @@ sequenceDiagram
   File-->>Worker: run ended (view)
   Worker->>Store: capture after-turn checkpoint
   Worker->>File: record after-turn checkpoint
-  Worker-->>Client: settled session snapshot
+  Worker-->>Client: session.state (run ended)
 ```
 
 `sendMessage()` captures the before-turn checkpoint, then submits the input; the engine places an idle session's input at once, and its turn record is written under the new user entry. When the run ends, the worker captures one after-turn checkpoint and records it on every turn that lacks one, including turns finished while the server was down.
 
-Capture is best-effort. A failed capture marks that boundary `failed` and the turn continues: provider work still runs, the after-turn checkpoint is still recorded, and the settled snapshot is still published. The turn stays navigable, but navigation across that boundary does not restore files. Because the turn proceeds, a turn started from an undone checkpoint invalidates the redo path whether or not its capture succeeded.
+Capture is best-effort. A failed capture marks that boundary `failed` and the turn continues: provider work still runs, the after-turn checkpoint is still recorded, and the turn still settles. The turn stays navigable, but navigation across that boundary does not restore files. Because the turn proceeds, a turn started from an undone checkpoint invalidates the redo path whether or not its capture succeeded.
 
 A workspace with no discovered Git repositories still receives valid manifests with empty `repositories` arrays. Conversation undo, redo, and revert therefore continue to work without changing loose files.
 
@@ -449,7 +449,7 @@ Safety trees are not referenced after the restore call and are eventually eligib
 
 1. Make the target turns visible: the leaf, or a fork of it after the last shown turn.
 2. Record the restored checkpoint as `current`.
-3. Publish the restored session snapshot.
+3. Publish the change to the session's state.
 
 The conversation's model and thinking level come back with it: a fork keeps the engine's `pi.agent` document as of its fork entry, so nothing is stored per turn.
 

@@ -3,10 +3,8 @@ import {mkdir, readdir, rename} from "node:fs/promises";
 import {basename, dirname, join, resolve} from "node:path";
 import type {CompactionEntry, CustomEntry, SessionEntry} from "@earendil-works/pi-coding-agent";
 import {getAgentDir, SessionManager} from "@earendil-works/pi-coding-agent";
-import type {AssistantMessage, ToolResultMessage, UserMessage as PiUserMessage} from "@earendil-works/pi-ai";
+import type {EntryRecord} from "@earendil-works/pi-durable";
 import type {Session, SessionSummary, SessionWorktree, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
-import {buildTurns} from "@supernova/agent-runtime/pi/lib/turns/build-turns";
-import type {TimelineEntry} from "@supernova/agent-runtime/pi/lib/turns/build-turns";
 
 /**
  * Read-only access to sessions written by the old Pi SDK (`<agentDir>/sessions/<project>/<timestamp>_<id>.jsonl`).
@@ -57,21 +55,31 @@ function workspaceOf(manager: SessionManager): {projectPath: string; worktree: S
   return entry?.data ? {projectPath: entry.data.projectPath, worktree: entry.data.worktree} : {projectPath: manager.getCwd(), worktree: undefined};
 }
 
-/** Maps the old SDK's entries onto the timeline: messages, compactions, and Supernova's authored content parts. */
-function toTimeline(entries: readonly SessionEntry[]): TimelineEntry[] {
-  return entries.flatMap((entry): TimelineEntry[] => {
+/**
+ * Maps the old SDK's branch onto engine entries, the shape every session is shown in: messages keep their role, a
+ * compaction becomes the engine's summary entry, and Supernova's authored content parts become the turn record of the
+ * user message after them. Ids are positions; legacy sessions are read-only, so nothing refers to them later.
+ */
+function toEngineEntries(entries: readonly SessionEntry[]): {entries: EntryRecord[]; turns: Record<string, {contentParts: UserMessageContentPart[]}>} {
+  const result: EntryRecord[] = [];
+  const turns: Record<string, {contentParts: UserMessageContentPart[]}> = {};
+  let pendingParts: UserMessageContentPart[] | undefined;
+  for (const entry of entries) {
+    const id = result.length + 1;
+    const record = {id, conversationId: 1} as const;
     if (entry.type === "custom" && entry.customType === CONTENT_PARTS_TYPE) {
-      const contentParts = (entry.data as {contentParts?: UserMessageContentPart[]} | undefined)?.contentParts ?? [];
-      return [{type: "content-parts", id: entry.id, timestamp: entry.timestamp, contentParts}];
+      pendingParts = (entry.data as {contentParts?: UserMessageContentPart[]} | undefined)?.contentParts ?? [];
+    } else if (entry.type === "compaction") {
+      const summary = (entry as CompactionEntry).summary;
+      result.push({...record, kind: "pi.compaction", model: [{role: "user", content: summary, timestamp: Date.parse(entry.timestamp)}]} as unknown as EntryRecord);
+    } else if (entry.type === "message" && ["user", "assistant", "toolResult"].includes(entry.message.role)) {
+      const kind = entry.message.role === "user" ? "pi.user" : entry.message.role === "assistant" ? "pi.assistant" : "pi.tool-result";
+      if (kind === "pi.user" && pendingParts) turns[String(id)] = {contentParts: pendingParts};
+      if (kind === "pi.user") pendingParts = undefined;
+      result.push({...record, kind, model: [entry.message]} as unknown as EntryRecord);
     }
-    if (entry.type === "compaction") return [{type: "compaction", id: entry.id, timestamp: entry.timestamp, summary: (entry as CompactionEntry).summary}];
-    if (entry.type !== "message") return [];
-    const {message} = entry;
-    if (message.role === "user") return [{type: "user", id: entry.id, timestamp: entry.timestamp, message: message as PiUserMessage}];
-    if (message.role === "assistant") return [{type: "assistant", id: entry.id, timestamp: entry.timestamp, message: message as AssistantMessage}];
-    if (message.role === "toolResult") return [{type: "tool-result", id: entry.id, timestamp: entry.timestamp, message: message as ToolResultMessage}];
-    return [];
-  });
+  }
+  return {entries: JSON.parse(JSON.stringify(result)) as EntryRecord[], turns};
 }
 
 function titleOf(manager: SessionManager, firstMessage: string | undefined): string {
@@ -89,21 +97,26 @@ export async function loadLegacySession(sessionId: string): Promise<Session | un
   if (!path) return undefined;
   const manager = SessionManager.open(path);
   const context = manager.buildSessionContext();
-  const modelReference = context.model ? {id: context.model.modelId, providerId: context.model.provider, thinkingLevel: context.thinkingLevel} : undefined;
-  const turns = modelReference ? buildTurns(toTimeline(manager.getBranch()), modelReference) : [];
-  const firstText = turns[0]?.userMessage.contentParts.map((part) => (part.type === "text" ? part.text : "")).join("");
+  const {entries, turns} = toEngineEntries(manager.getBranch());
+  const firstText = Object.values(turns)[0]
+    ?.contentParts.map((part) => (part.type === "text" ? part.text : ""))
+    .join("");
   const {projectPath, worktree} = workspaceOf(manager);
   return {
     id: sessionId,
-    context: {contextWindow: 0, usedTokens: null},
+    version: 0,
+    title: titleOf(manager, firstText),
     forked: manager.getEntries().some((entry) => entry.type === "custom" && entry.customType === FORK_TYPE) || manager.getHeader()?.parentSession !== undefined,
-    ...(modelReference ? {modelReference} : {}),
     projectPath,
     ...(worktree ? {worktree} : {}),
-    title: titleOf(manager, firstText),
+    updatedAt: manager.getLeafEntry()?.timestamp ?? manager.getHeader()?.timestamp ?? new Date(0).toISOString(),
+    entries,
+    undone: [],
+    agent: context.model ? {model: {provider: context.model.provider, modelId: context.model.modelId}, thinkingLevel: context.thinkingLevel as never} : {},
+    live: {},
+    usage: {models: {}, tools: {}},
     turns,
-    undoneTurns: [],
-    updatedAt: turns.at(-1)?.completedAt ?? manager.getLeafEntry()?.timestamp ?? manager.getHeader()?.timestamp ?? new Date(0).toISOString(),
+    context: {contextWindow: 0, usedTokens: null},
   };
 }
 

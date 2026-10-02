@@ -9,7 +9,18 @@ import {afterEach, describe, expect, it} from "vitest";
 import type {CheckpointStore} from "@supernova/agent-runtime/features/session-runtime/checkpoints/checkpoint-store";
 import type {SessionRuntime} from "@supernova/agent-runtime/features/session-runtime/session-runtime";
 import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
-import {createPiTestRuntime, fauxAssistantMessage, selectedModelReference, selectedPiModel, waitUntil} from "@tests/support/session-runtime";
+import type {ModelReference, Session} from "@supernova/contracts/sessions/schemas";
+import {
+  createPiTestRuntime,
+  fauxAssistantMessage,
+  selectedModelReference,
+  selectedPiModel,
+  stateEvents,
+  turnContents,
+  turnIds,
+  undoneContents,
+  waitUntil,
+} from "@tests/support/session-runtime";
 
 const execFilePromise = promisify(execFile);
 
@@ -72,8 +83,10 @@ const unavailableChildRepositoryCases = [
   },
 ] as const;
 
-function snapshotEvents(events: readonly SessionStreamEvent[]): Array<Extract<SessionStreamEvent, {type: "session.snapshot"}>> {
-  return events.filter((event): event is Extract<SessionStreamEvent, {type: "session.snapshot"}> => event.type === "session.snapshot");
+/** The model and thinking level the session's visible conversation runs with, as the composer names them. */
+function modelReferenceOf(session: Session): ModelReference | undefined {
+  const {model, thinkingLevel} = session.agent;
+  return model ? {id: model.modelId, providerId: model.provider, thinkingLevel: thinkingLevel ?? "off"} : undefined;
 }
 
 function errorEvents(events: readonly SessionStreamEvent[]): Array<Extract<SessionStreamEvent, {type: "session.error"}>> {
@@ -92,13 +105,19 @@ function assistantWithUsage(text: string, totalTokens: number, stopReason: Assis
 
 type TestRuntime = Awaited<ReturnType<typeof createPiTestRuntime>>;
 
-async function runSessionCommand(input: {readonly pi: TestRuntime; readonly run: (runtime: SessionRuntime) => Promise<void>}): Promise<SessionStreamEvent[]> {
-  return input.pi.collectEvents(
-    () => input.run(input.pi.sessionRuntime),
-    (events) => {
-      if (!events.some((event) => event.type === "session.snapshot" || event.type === "session.error")) throw new Error("Session command did not publish a result.");
-    }
-  );
+/** Runs a command and returns its events and the session document after it. */
+async function runSessionCommand(input: {
+  readonly pi: TestRuntime;
+  readonly sessionId: string;
+  readonly run: (runtime: SessionRuntime) => Promise<void>;
+}): Promise<{readonly events: readonly SessionStreamEvent[]; readonly session: Session}> {
+  const {events, stop} = await input.pi.watchEvents();
+  try {
+    await input.run(input.pi.sessionRuntime);
+  } finally {
+    await stop();
+  }
+  return {events, session: await input.pi.sessionRuntime.current(input.sessionId)};
 }
 
 async function runRejectedSessionCommand(input: {
@@ -149,18 +168,15 @@ describe("checkpoint navigation", () => {
     await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
     const secondEvents = await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
     await pi.sendMessage({message: "three", modelReference: selectedModelReference, sessionId: info.id});
-    const secondTurnId = snapshotEvents(secondEvents).at(-1)!.session.turns.at(-1)!.id;
+    const secondTurnId = turnIds(secondEvents.session).at(-1)!;
 
     const revertEvents = await runSessionCommand({
       pi,
+      sessionId: info.id,
       run: (runtime) => runtime.revertToMessage({sessionId: info.id, turnId: secondTurnId}),
     });
 
-    expect(
-      snapshotEvents(revertEvents)
-        .at(-1)
-        ?.session.turns.map((turn) => turn.userMessage.contentParts[0])
-    ).toEqual([{text: "one", type: "text"}]);
+    expect(turnContents(revertEvents.session).map((parts) => parts[0])).toEqual([{text: "one", type: "text"}]);
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("one\n");
   });
 
@@ -186,9 +202,9 @@ describe("checkpoint navigation", () => {
     await writeFile(join(projectPath, "manual.txt"), "manual between turns\n");
     await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
 
-    const undoEvents = await runSessionCommand({pi, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
+    const undoEvents = await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
 
-    expect(errorEvents(undoEvents)).toEqual([]);
+    expect(errorEvents(undoEvents.events)).toEqual([]);
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("one\n");
     await expect(readFile(join(projectPath, "manual.txt"), "utf8")).resolves.toBe("manual between turns\n");
     await expect(readFile(join(projectPath, "agent-two.txt"), "utf8")).rejects.toThrow();
@@ -218,9 +234,9 @@ describe("checkpoint navigation", () => {
     await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
     await git(projectPath, ["checkout", "-b", "second"]);
 
-    const undoEvents = await runSessionCommand({pi, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
+    const undoEvents = await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
 
-    expect(errorEvents(undoEvents)).toEqual([]);
+    expect(errorEvents(undoEvents.events)).toEqual([]);
     await expect(gitOutput(projectPath, ["branch", "--show-current"])).resolves.toBe("second");
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("one\n");
     await expect(readFile(join(projectPath, "manual.txt"), "utf8")).resolves.toBe("manual between turns\n");
@@ -237,7 +253,7 @@ describe("checkpoint navigation", () => {
 
     await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
     const secondEvents = await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
-    const secondTurnId = snapshotEvents(secondEvents).at(-1)!.session.turns.at(-1)!.id;
+    const secondTurnId = turnIds(secondEvents.session).at(-1)!;
 
     let providerSignal: AbortSignal | undefined;
     let releaseProvider: (() => void) | undefined;
@@ -259,7 +275,7 @@ describe("checkpoint navigation", () => {
       await pi.sessionRuntime.sendMessage({contentParts: [{text: "three", type: "text"}], modelReference: selectedModelReference, sessionId: info.id});
       await providerStarted;
       await waitUntil(() => {
-        if (!events.some((event) => event.type === "session.agent.started")) throw new Error("Session agent did not start.");
+        if (!stateEvents(events).some((event) => event.activity === "running")) throw new Error("Session agent did not start.");
       });
 
       const abortRun = pi.sessionRuntime.abort({sessionId: info.id});
@@ -268,22 +284,23 @@ describe("checkpoint navigation", () => {
       });
       releaseProvider?.();
       await abortRun;
-      await waitUntil(() => {
-        if (!events.some((event) => event.type === "session.snapshot")) throw new Error("Aborted session did not publish a snapshot.");
-      });
+      await pi.settled(info.id);
 
       const maxRevisionBeforeRevert = Math.max(...events.flatMap((event) => ("revision" in event ? [event.revision] : [])));
+      const versionBeforeRevert = (await pi.sessions.get({sessionId: info.id})).version;
 
       await pi.sessionRuntime.revertToMessage({sessionId: info.id, turnId: secondTurnId});
       await waitUntil(() => {
-        const latestSnapshot = snapshotEvents(events).at(-1);
-        if (!latestSnapshot || latestSnapshot.revision <= maxRevisionBeforeRevert) throw new Error("Revert snapshot did not advance the session revision.");
+        const latest = stateEvents(events).at(-1);
+        if (!latest || latest.revision <= maxRevisionBeforeRevert) throw new Error("Revert did not advance the session revision.");
       });
 
-      const latestSnapshot = snapshotEvents(events).at(-1)!;
-      expect(latestSnapshot.revision).toBeGreaterThan(maxRevisionBeforeRevert);
-      expect(latestSnapshot.session.turns.map((turn) => turn.userMessage.contentParts[0])).toEqual([{text: "one", type: "text"}]);
-      expect(latestSnapshot.session.undoneTurns.map((turn) => turn.userMessage.contentParts[0])).toEqual([
+      const latest = stateEvents(events).at(-1)!;
+      const session = await pi.sessions.get({sessionId: info.id});
+      expect(latest.version).toBe(session.version);
+      expect(session.version).toBeGreaterThan(versionBeforeRevert);
+      expect(turnContents(session).map((parts) => parts[0])).toEqual([{text: "one", type: "text"}]);
+      expect(undoneContents(session).map((parts) => parts[0])).toEqual([
         {text: "two", type: "text"},
         {text: "three", type: "text"},
       ]);
@@ -313,30 +330,18 @@ describe("checkpoint navigation", () => {
     await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
     await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
 
-    const undoEvents = await runSessionCommand({pi, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
-    expect(
-      snapshotEvents(undoEvents)
-        .at(-1)
-        ?.session.turns.map((turn) => turn.userMessage.contentParts[0])
-    ).toEqual([{text: "one", type: "text"}]);
-    expect(
-      snapshotEvents(undoEvents)
-        .at(-1)
-        ?.session.undoneTurns.map((turn) => turn.userMessage.contentParts[0])
-    ).toEqual([{text: "two", type: "text"}]);
+    const undoEvents = await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
+    expect(turnContents(undoEvents.session).map((parts) => parts[0])).toEqual([{text: "one", type: "text"}]);
+    expect(undoneContents(undoEvents.session).map((parts) => parts[0])).toEqual([{text: "two", type: "text"}]);
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("one\n");
 
-    const redoEvents = await runSessionCommand({pi, run: (runtime) => runtime.redoCheckpoint({sessionId: info.id})});
-    expect(errorEvents(redoEvents)).toEqual([]);
-    expect(
-      snapshotEvents(redoEvents)
-        .at(-1)
-        ?.session.turns.map((turn) => turn.userMessage.contentParts[0])
-    ).toEqual([
+    const redoEvents = await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.redoCheckpoint({sessionId: info.id})});
+    expect(errorEvents(redoEvents.events)).toEqual([]);
+    expect(turnContents(redoEvents.session).map((parts) => parts[0])).toEqual([
       {text: "one", type: "text"},
       {text: "two", type: "text"},
     ]);
-    expect(snapshotEvents(redoEvents).at(-1)?.session.undoneTurns).toEqual([]);
+    expect(redoEvents.session.undone).toEqual([]);
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("two\n");
   });
 
@@ -368,9 +373,9 @@ describe("checkpoint navigation", () => {
     await git(projectPath, ["add", "user-staged.txt"]);
     await writeFile(join(projectPath, "user-untracked.txt"), "keep untracked\n");
 
-    const undoEvents = await runSessionCommand({pi, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
+    const undoEvents = await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
 
-    expect(errorEvents(undoEvents)).toEqual([]);
+    expect(errorEvents(undoEvents.events)).toEqual([]);
     await expect(gitOutput(projectPath, ["rev-parse", "HEAD"])).resolves.toBe(headAfterSecondTurn);
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("one\n");
     await expect(readFile(join(projectPath, "user-staged.txt"), "utf8")).resolves.toBe("keep staged\n");
@@ -379,9 +384,9 @@ describe("checkpoint navigation", () => {
 
     await writeFile(join(projectPath, "redo-staged.txt"), "keep through redo\n");
     await git(projectPath, ["add", "redo-staged.txt"]);
-    const redoEvents = await runSessionCommand({pi, run: (runtime) => runtime.redoCheckpoint({sessionId: info.id})});
+    const redoEvents = await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.redoCheckpoint({sessionId: info.id})});
 
-    expect(errorEvents(redoEvents)).toEqual([]);
+    expect(errorEvents(redoEvents.events)).toEqual([]);
     await expect(gitOutput(projectPath, ["rev-parse", "HEAD"])).resolves.toBe(headAfterSecondTurn);
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("two\n");
     await expect(readFile(join(projectPath, "user-staged.txt"), "utf8")).resolves.toBe("keep staged\n");
@@ -423,16 +428,16 @@ describe("checkpoint navigation", () => {
     await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
     await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
 
-    const undoEvents = await runSessionCommand({pi, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
+    const undoEvents = await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
 
-    expect(errorEvents(undoEvents)).toEqual([]);
+    expect(errorEvents(undoEvents.events)).toEqual([]);
     await expect(readFile(join(firstRepository, "first.txt"), "utf8")).resolves.toBe("first one\n");
     await expect(readFile(join(secondRepository, "second.txt"), "utf8")).resolves.toBe("second one\n");
     await expect(readFile(join(projectPath, "loose.txt"), "utf8")).resolves.toBe("loose two\n");
 
-    const redoEvents = await runSessionCommand({pi, run: (runtime) => runtime.redoCheckpoint({sessionId: info.id})});
+    const redoEvents = await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.redoCheckpoint({sessionId: info.id})});
 
-    expect(errorEvents(redoEvents)).toEqual([]);
+    expect(errorEvents(redoEvents.events)).toEqual([]);
     await expect(readFile(join(firstRepository, "first.txt"), "utf8")).resolves.toBe("first two\n");
     await expect(readFile(join(secondRepository, "second.txt"), "utf8")).resolves.toBe("second two\n");
     await expect(readFile(join(projectPath, "loose.txt"), "utf8")).resolves.toBe("loose two\n");
@@ -471,9 +476,9 @@ describe("checkpoint navigation", () => {
     await writeFile(join(childPath, "child-staged.txt"), "child staged\n");
     await git(childPath, ["add", "child-staged.txt"]);
 
-    const undoEvents = await runSessionCommand({pi, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
+    const undoEvents = await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
 
-    expect(errorEvents(undoEvents)).toEqual([]);
+    expect(errorEvents(undoEvents.events)).toEqual([]);
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("root one\n");
     await expect(readFile(join(childPath, "child.txt"), "utf8")).resolves.toBe("child one\n");
     await expect(readFile(join(projectPath, "root-agent.txt"), "utf8")).rejects.toThrow();
@@ -485,9 +490,9 @@ describe("checkpoint navigation", () => {
     await expect(gitOutput(projectPath, ["diff", "--cached", "--name-only"])).resolves.toContain("root-staged.txt");
     await expect(gitOutput(childPath, ["diff", "--cached", "--name-only"])).resolves.toContain("child-staged.txt");
 
-    const redoEvents = await runSessionCommand({pi, run: (runtime) => runtime.redoCheckpoint({sessionId: info.id})});
+    const redoEvents = await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.redoCheckpoint({sessionId: info.id})});
 
-    expect(errorEvents(redoEvents)).toEqual([]);
+    expect(errorEvents(redoEvents.events)).toEqual([]);
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("root two\n");
     await expect(readFile(join(childPath, "child.txt"), "utf8")).resolves.toBe("child two\n");
     await expect(readFile(join(projectPath, "root-agent.txt"), "utf8")).resolves.toBe("root agent\n");
@@ -528,12 +533,12 @@ describe("checkpoint navigation", () => {
 
     expect(cause).toMatchObject({_tag: "CheckpointConflictError", message: "Restoring this checkpoint would discard changes made after it."});
     expect(errorEvents(events)).toEqual([]);
-    expect(snapshotEvents(events)).toEqual([]);
-    expect(loaded.turns.map((turn) => turn.userMessage.contentParts[0])).toEqual([
+    expect(stateEvents(events)).toEqual([]);
+    expect(turnContents(loaded).map((parts) => parts[0])).toEqual([
       {text: "one", type: "text"},
       {text: "two", type: "text"},
     ]);
-    expect(loaded.undoneTurns).toEqual([]);
+    expect(loaded.undone).toEqual([]);
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("root two\n");
     await expect(readFile(join(childPath, "child.txt"), "utf8")).resolves.toBe("manual conflict\n");
   });
@@ -559,14 +564,10 @@ describe("checkpoint navigation", () => {
     await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
     await writeFile(join(projectPath, "file.txt"), "manual conflict\n");
 
-    const undoEvents = await runSessionCommand({pi, run: (runtime) => runtime.undoCheckpoint({force: true, sessionId: info.id})});
+    const undoEvents = await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.undoCheckpoint({force: true, sessionId: info.id})});
 
-    expect(errorEvents(undoEvents)).toEqual([]);
-    expect(
-      snapshotEvents(undoEvents)
-        .at(-1)
-        ?.session.turns.map((turn) => turn.userMessage.contentParts[0])
-    ).toEqual([{text: "one", type: "text"}]);
+    expect(errorEvents(undoEvents.events)).toEqual([]);
+    expect(turnContents(undoEvents.session).map((parts) => parts[0])).toEqual([{text: "one", type: "text"}]);
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("one\n");
   });
 
@@ -596,7 +597,7 @@ describe("checkpoint navigation", () => {
     const {cause, events} = await runRejectedSessionCommand({pi, run: (runtime) => runtime.undoCheckpoint({force: true, sessionId: info.id})});
 
     expect(cause).toMatchObject({_tag: "CheckpointGenericError", message: "Failed to restore workspace checkpoint."});
-    expect(snapshotEvents(events)).toEqual([]);
+    expect(stateEvents(events)).toEqual([]);
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("root two\n");
   });
 
@@ -629,9 +630,9 @@ describe("checkpoint navigation", () => {
     await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
     const childHead = await gitOutput(childPath, ["rev-parse", "HEAD"]);
 
-    const undoEvents = await runSessionCommand({pi, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
+    const undoEvents = await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
 
-    expect(errorEvents(undoEvents)).toEqual([]);
+    expect(errorEvents(undoEvents.events)).toEqual([]);
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("one\n");
     await expect(readFile(join(childPath, "child.txt"), "utf8")).resolves.toBe("created by turn\n");
     await expect(gitOutput(childPath, ["rev-parse", "HEAD"])).resolves.toBe(childHead);
@@ -643,9 +644,9 @@ describe("checkpoint navigation", () => {
     await expect(readFile(join(childPath, "child.txt"), "utf8")).resolves.toBe("manual after undo\n");
 
     await writeFile(join(childPath, "child.txt"), "created by turn\n");
-    const redoEvents = await runSessionCommand({pi, run: (runtime) => runtime.redoCheckpoint({sessionId: info.id})});
+    const redoEvents = await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.redoCheckpoint({sessionId: info.id})});
 
-    expect(errorEvents(redoEvents)).toEqual([]);
+    expect(errorEvents(redoEvents.events)).toEqual([]);
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("two\n");
     await expect(readFile(join(childPath, "child.txt"), "utf8")).resolves.toBe("created by turn\n");
     await expect(gitOutput(childPath, ["rev-parse", "HEAD"])).resolves.toBe(childHead);
@@ -681,9 +682,9 @@ describe("checkpoint navigation", () => {
 
       expect(cause).toMatchObject({message: "Failed to restore workspace checkpoint."});
       expect(errorEvents(events)).toEqual([]);
-      expect(snapshotEvents(events)).toEqual([]);
-      expect(loaded.turns).toHaveLength(2);
-      expect(loaded.undoneTurns).toEqual([]);
+      expect(stateEvents(events)).toEqual([]);
+      expect(turnContents(loaded)).toHaveLength(2);
+      expect(loaded.undone).toEqual([]);
       await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("root two\n");
       if (expectedContents === undefined) await expect(readFile(join(childPath, "child.txt"), "utf8")).rejects.toThrow();
       else await expect(readFile(join(childPath, "child.txt"), "utf8")).resolves.toBe(expectedContents);
@@ -712,9 +713,9 @@ describe("checkpoint navigation", () => {
     await writeFile(join(projectPath, "stashed-only.txt"), "stash me\n");
     await git(projectPath, ["stash", "push", "--include-untracked", "-m", "manual stash", "--", "stashed-only.txt"]);
 
-    const undoEvents = await runSessionCommand({pi, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
+    const undoEvents = await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
 
-    expect(errorEvents(undoEvents)).toEqual([]);
+    expect(errorEvents(undoEvents.events)).toEqual([]);
     await expect(gitOutput(projectPath, ["stash", "list"])).resolves.toContain("manual stash");
     await expect(gitOutput(projectPath, ["stash", "show", "--include-untracked", "--name-only", "stash@{0}"])).resolves.toContain("stashed-only.txt");
     await expect(readFile(join(projectPath, "stashed-only.txt"), "utf8")).rejects.toThrow();
@@ -744,47 +745,37 @@ describe("checkpoint navigation", () => {
     await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
     const secondEvents = await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
     const thirdEvents = await pi.sendMessage({message: "three", modelReference: selectedModelReference, sessionId: info.id});
-    const secondTurnId = snapshotEvents(secondEvents).at(-1)!.session.turns.at(-1)!.id;
-    const thirdTurnId = snapshotEvents(thirdEvents).at(-1)!.session.turns.at(-1)!.id;
+    const secondTurnId = turnIds(secondEvents.session).at(-1)!;
+    const thirdTurnId = turnIds(thirdEvents.session).at(-1)!;
 
-    await runSessionCommand({pi, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
-    await runSessionCommand({pi, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
+    await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
+    await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
 
     const restoreSecondEvents = await runSessionCommand({
       pi,
+      sessionId: info.id,
       run: (runtime) => runtime.revertToMessage({sessionId: info.id, turnId: secondTurnId}),
     });
 
-    expect(
-      snapshotEvents(restoreSecondEvents)
-        .at(-1)
-        ?.session.turns.map((turn) => turn.userMessage.contentParts[0])
-    ).toEqual([
+    expect(turnContents(restoreSecondEvents.session).map((parts) => parts[0])).toEqual([
       {text: "one", type: "text"},
       {text: "two", type: "text"},
     ]);
-    expect(
-      snapshotEvents(restoreSecondEvents)
-        .at(-1)
-        ?.session.undoneTurns.map((turn) => turn.userMessage.contentParts[0])
-    ).toEqual([{text: "three", type: "text"}]);
+    expect(undoneContents(restoreSecondEvents.session).map((parts) => parts[0])).toEqual([{text: "three", type: "text"}]);
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("two\n");
 
     const restoreThirdEvents = await runSessionCommand({
       pi,
+      sessionId: info.id,
       run: (runtime) => runtime.revertToMessage({sessionId: info.id, turnId: thirdTurnId}),
     });
 
-    expect(
-      snapshotEvents(restoreThirdEvents)
-        .at(-1)
-        ?.session.turns.map((turn) => turn.userMessage.contentParts[0])
-    ).toEqual([
+    expect(turnContents(restoreThirdEvents.session).map((parts) => parts[0])).toEqual([
       {text: "one", type: "text"},
       {text: "two", type: "text"},
       {text: "three", type: "text"},
     ]);
-    expect(snapshotEvents(restoreThirdEvents).at(-1)?.session.undoneTurns).toEqual([]);
+    expect(restoreThirdEvents.session.undone).toEqual([]);
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("three\n");
   });
 
@@ -800,14 +791,14 @@ describe("checkpoint navigation", () => {
 
     const firstEvents = await pi.sendMessage({message: "one", modelReference: highModel, sessionId: info.id});
     const secondEvents = await pi.sendMessage({message: "two", modelReference: offModel, sessionId: info.id});
-    const firstTurnId = snapshotEvents(firstEvents).at(-1)!.session.turns.at(-1)!.id;
-    const secondTurnId = snapshotEvents(secondEvents).at(-1)!.session.turns.at(-1)!.id;
+    const firstTurnId = turnIds(firstEvents.session).at(-1)!;
+    const secondTurnId = turnIds(secondEvents.session).at(-1)!;
 
-    const revertFirstEvents = await runSessionCommand({pi, run: (runtime) => runtime.revertToMessage({sessionId: info.id, turnId: firstTurnId})});
-    expect(snapshotEvents(revertFirstEvents).at(-1)?.session.modelReference).toEqual(highModel);
+    const revertFirstEvents = await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.revertToMessage({sessionId: info.id, turnId: firstTurnId})});
+    expect(modelReferenceOf(revertFirstEvents.session)).toEqual(highModel);
 
-    const restoreSecondEvents = await runSessionCommand({pi, run: (runtime) => runtime.revertToMessage({sessionId: info.id, turnId: secondTurnId})});
-    expect(snapshotEvents(restoreSecondEvents).at(-1)?.session.modelReference).toEqual(offModel);
+    const restoreSecondEvents = await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.revertToMessage({sessionId: info.id, turnId: secondTurnId})});
+    expect(modelReferenceOf(restoreSecondEvents.session)).toEqual(offModel);
   });
 
   it("keeps valid post-compaction usage when navigating to an aborted turn", async () => {
@@ -822,14 +813,15 @@ describe("checkpoint navigation", () => {
 
     await runSessionCommand({
       pi,
+      sessionId: info.id,
       run: (runtime) => runtime.compact({modelReference: selectedModelReference, sessionId: info.id}),
     });
 
     pi.faux.setResponses([assistantWithUsage("Valid response.", 25_000), assistantWithUsage("Aborted response.", 0, "aborted")]);
     const validEvents = await pi.sendMessage({message: "valid", modelReference: selectedModelReference, sessionId: info.id});
     const abortedEvents = await pi.sendMessage({message: "abort", modelReference: selectedModelReference, sessionId: info.id});
-    const validContext = snapshotEvents(validEvents).at(-1)?.session.context.usedTokens;
-    const abortedContext = snapshotEvents(abortedEvents).at(-1)?.session.context.usedTokens;
+    const validContext = validEvents.session.context.usedTokens;
+    const abortedContext = abortedEvents.session.context.usedTokens;
 
     if (validContext === null || validContext === undefined || abortedContext === null || abortedContext === undefined) {
       throw new Error("Expected checkpoint snapshots to retain measurable context usage.");
@@ -837,10 +829,10 @@ describe("checkpoint navigation", () => {
     expect(validContext).toBeGreaterThan(0);
     expect(abortedContext).toBeGreaterThan(validContext);
 
-    await runSessionCommand({pi, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
-    const redoEvents = await runSessionCommand({pi, run: (runtime) => runtime.redoCheckpoint({sessionId: info.id})});
+    await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
+    const redoEvents = await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.redoCheckpoint({sessionId: info.id})});
 
-    expect(snapshotEvents(redoEvents).at(-1)?.session.context.usedTokens).toBe(abortedContext);
+    expect(redoEvents.session.context.usedTokens).toBe(abortedContext);
   });
 
   it("rebuilds provider context from the visible branch after undo", async () => {
@@ -866,15 +858,11 @@ describe("checkpoint navigation", () => {
 
     await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
     await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
-    await runSessionCommand({pi, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
+    await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
     const branchEvents = await pi.sendMessage({message: "branch", modelReference: selectedModelReference, sessionId: info.id});
 
     expect(providerUserTexts).toEqual(["one", "branch"]);
-    expect(
-      snapshotEvents(branchEvents)
-        .at(-1)
-        ?.session.turns.map((turn) => turn.userMessage.contentParts[0])
-    ).toEqual([
+    expect(turnContents(branchEvents.session).map((parts) => parts[0])).toEqual([
       {text: "one", type: "text"},
       {text: "branch", type: "text"},
     ]);
@@ -890,7 +878,7 @@ describe("checkpoint navigation", () => {
 
     await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
     await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
-    await runSessionCommand({pi, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
+    await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
 
     let releaseProvider: (() => void) | undefined;
     const providerStarted = new Promise<void>((resolve) => {
@@ -911,18 +899,18 @@ describe("checkpoint navigation", () => {
     try {
       const loadedWhileStreaming = await pi.sessions.get({sessionId: info.id});
 
-      expect(loadedWhileStreaming.undoneTurns).toEqual([]);
+      expect(loadedWhileStreaming.undone).toEqual([]);
     } finally {
       releaseProvider?.();
     }
 
     await waitUntil(async () => {
       const loaded = await pi.sessions.get({sessionId: info.id});
-      expect(loaded.turns.map((turn) => turn.userMessage.contentParts[0])).toEqual([
+      expect(turnContents(loaded).map((parts) => parts[0])).toEqual([
         {text: "one", type: "text"},
         {text: "branch", type: "text"},
       ]);
-      expect(loaded.undoneTurns).toEqual([]);
+      expect(loaded.undone).toEqual([]);
     });
   });
 
@@ -942,21 +930,21 @@ describe("checkpoint navigation", () => {
 
     await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
     await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
-    await runSessionCommand({pi, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
+    await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
     rejectCapture = true;
 
-    const events = await pi.sendMessage({message: "replacement", modelReference: selectedModelReference, sessionId: info.id});
+    const {events} = await pi.sendMessage({message: "replacement", modelReference: selectedModelReference, sessionId: info.id});
     const loadedAfterFailure = await pi.sessions.get({sessionId: info.id});
     const replacement = (await pi.turnRecords(info.id)).at(-1);
 
     // The turn proceeds and branches from the undone checkpoint, so the redo path is
     // replaced rather than preserved. Its boundaries record the failed capture.
     expect(errorEvents(events)).toEqual([]);
-    expect(loadedAfterFailure.turns.map((turn) => turn.userMessage.contentParts[0])).toEqual([
+    expect(turnContents(loadedAfterFailure).map((parts) => parts[0])).toEqual([
       {text: "one", type: "text"},
       {text: "replacement", type: "text"},
     ]);
-    expect(loadedAfterFailure.undoneTurns).toEqual([]);
+    expect(loadedAfterFailure.undone).toEqual([]);
     expect(replacement).toMatchObject({before: {status: "failed"}, after: {status: "failed"}});
     expect(pi.faux.state.callCount).toBe(3);
   });
@@ -984,7 +972,7 @@ describe("checkpoint navigation", () => {
 
     await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
     await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
-    await runSessionCommand({pi, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
+    await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
     await pi.sendMessage({message: "branch", modelReference: selectedModelReference, sessionId: info.id});
 
     const {cause, events: redoEvents} = await runRejectedSessionCommand({pi, run: (runtime) => runtime.redoCheckpoint({sessionId: info.id})});
@@ -1004,12 +992,12 @@ describe("checkpoint navigation", () => {
 
     await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
     await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
-    await runSessionCommand({pi, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
+    await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
 
     const loaded = await pi.sessions.get({sessionId: info.id});
 
-    expect(loaded.turns.map((turn) => turn.userMessage.contentParts[0])).toEqual([{text: "one", type: "text"}]);
-    expect(loaded.undoneTurns.map((turn) => turn.userMessage.contentParts[0])).toEqual([{text: "two", type: "text"}]);
+    expect(turnContents(loaded).map((parts) => parts[0])).toEqual([{text: "one", type: "text"}]);
+    expect(undoneContents(loaded).map((parts) => parts[0])).toEqual([{text: "two", type: "text"}]);
   });
 
   it("undoes and redoes chat turns without restoring files outside a git repository", async () => {
@@ -1032,24 +1020,16 @@ describe("checkpoint navigation", () => {
     await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
     await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
 
-    const undoEvents = await runSessionCommand({pi, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
+    const undoEvents = await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
 
-    expect(errorEvents(undoEvents)).toEqual([]);
-    expect(
-      snapshotEvents(undoEvents)
-        .at(-1)
-        ?.session.turns.map((turn) => turn.userMessage.contentParts[0])
-    ).toEqual([{text: "one", type: "text"}]);
+    expect(errorEvents(undoEvents.events)).toEqual([]);
+    expect(turnContents(undoEvents.session).map((parts) => parts[0])).toEqual([{text: "one", type: "text"}]);
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("two\n");
 
-    const redoEvents = await runSessionCommand({pi, run: (runtime) => runtime.redoCheckpoint({sessionId: info.id})});
+    const redoEvents = await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.redoCheckpoint({sessionId: info.id})});
 
-    expect(errorEvents(redoEvents)).toEqual([]);
-    expect(
-      snapshotEvents(redoEvents)
-        .at(-1)
-        ?.session.turns.map((turn) => turn.userMessage.contentParts[0])
-    ).toEqual([
+    expect(errorEvents(redoEvents.events)).toEqual([]);
+    expect(turnContents(redoEvents.session).map((parts) => parts[0])).toEqual([
       {text: "one", type: "text"},
       {text: "two", type: "text"},
     ]);
@@ -1067,19 +1047,16 @@ describe("checkpoint navigation", () => {
     await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
     const secondEvents = await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
     await pi.sendMessage({message: "three", modelReference: selectedModelReference, sessionId: info.id});
-    const secondTurnId = snapshotEvents(secondEvents).at(-1)!.session.turns.at(-1)!.id;
+    const secondTurnId = turnIds(secondEvents.session).at(-1)!;
 
     const revertEvents = await runSessionCommand({
       pi,
+      sessionId: info.id,
       run: (runtime) => runtime.revertToMessage({sessionId: info.id, turnId: secondTurnId}),
     });
 
-    expect(errorEvents(revertEvents)).toEqual([]);
-    expect(
-      snapshotEvents(revertEvents)
-        .at(-1)
-        ?.session.turns.map((turn) => turn.userMessage.contentParts[0])
-    ).toEqual([{text: "one", type: "text"}]);
+    expect(errorEvents(revertEvents.events)).toEqual([]);
+    expect(turnContents(revertEvents.session).map((parts) => parts[0])).toEqual([{text: "one", type: "text"}]);
   });
 
   it("requires confirmation when the current checkpoint capture failed", async () => {
@@ -1109,7 +1086,7 @@ describe("checkpoint navigation", () => {
     const {cause, events} = await runRejectedSessionCommand({pi, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
 
     expect(cause).toMatchObject({_tag: "CheckpointUncapturedError"});
-    expect(snapshotEvents(events)).toEqual([]);
+    expect(stateEvents(events)).toEqual([]);
     expect(restoreCalls).toEqual([]);
   });
 
@@ -1137,33 +1114,34 @@ describe("checkpoint navigation", () => {
     const firstEvents = await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
     await runSessionCommand({
       pi,
+      sessionId: info.id,
       run: (deps) => deps.sendMessage({captureCheckpoints: false, contentParts: [{type: "text", text: "two"}], modelReference: selectedModelReference, sessionId: info.id}),
     });
     if (rewindFirst) {
-      await runSessionCommand({pi, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
+      await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
       await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("two\n");
     }
-    const turnId = snapshotEvents(firstEvents).at(-1)!.session.turns[0]!.id;
-    const turnsBefore = (await pi.sessions.get({sessionId: info.id})).turns;
+    const turnId = turnIds(firstEvents.session)[0]!;
+    const turnsBefore = turnContents(await pi.sessions.get({sessionId: info.id}));
     const rejected = await runRejectedSessionCommand({pi, run: (runtime) => runtime.revertToMessage({sessionId: info.id, turnId})});
     expect(rejected.cause).toMatchObject({_tag: "CheckpointUncapturedError"});
-    expect(snapshotEvents(rejected.events)).toEqual([]);
-    expect((await pi.sessions.get({sessionId: info.id})).turns).toEqual(turnsBefore);
+    expect(stateEvents(rejected.events)).toEqual([]);
+    expect(turnContents(await pi.sessions.get({sessionId: info.id}))).toEqual(turnsBefore);
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("two\n");
 
     if (removeRepository) {
       await rm(join(projectPath, ".git"), {recursive: true, force: true});
       const failed = await runRejectedSessionCommand({pi, run: (runtime) => runtime.revertToMessage({force: true, sessionId: info.id, turnId})});
       expect(failed.cause).toMatchObject({_tag: "CheckpointGenericError"});
-      expect(snapshotEvents(failed.events)).toEqual([]);
-      expect((await pi.sessions.get({sessionId: info.id})).turns).toEqual(turnsBefore);
+      expect(stateEvents(failed.events)).toEqual([]);
+      expect(turnContents(await pi.sessions.get({sessionId: info.id}))).toEqual(turnsBefore);
       await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("two\n");
       await expect(readFile(join(projectPath, "later.txt"), "utf8")).resolves.toBe("uncaptured\n");
       return;
     }
 
-    const restored = await runSessionCommand({pi, run: (runtime) => runtime.revertToMessage({force: true, sessionId: info.id, turnId})});
-    expect(snapshotEvents(restored).at(-1)?.session.turns).toEqual([]);
+    const restored = await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.revertToMessage({force: true, sessionId: info.id, turnId})});
+    expect(turnContents(restored.session)).toEqual([]);
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("initial\n");
     await expect(readFile(join(projectPath, "later.txt"), "utf8")).rejects.toThrow();
   });
@@ -1187,15 +1165,11 @@ describe("checkpoint navigation", () => {
     await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
     await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
 
-    const undoEvents = await runSessionCommand({pi, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
+    const undoEvents = await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
 
-    expect(errorEvents(undoEvents)).toEqual([]);
+    expect(errorEvents(undoEvents.events)).toEqual([]);
     expect(restoreCalls).toEqual([{checkpointId: expect.any(String), fromCheckpointId: expect.any(String)}]);
-    expect(
-      snapshotEvents(undoEvents)
-        .at(-1)
-        ?.session.turns.map((turn) => turn.userMessage.contentParts[0])
-    ).toEqual([{text: "one", type: "text"}]);
+    expect(turnContents(undoEvents.session).map((parts) => parts[0])).toEqual([{text: "one", type: "text"}]);
   });
   it("rejects undoing a turn a fork carried over from its source session", async () => {
     const projectPath = await createGitProject();
@@ -1214,7 +1188,7 @@ describe("checkpoint navigation", () => {
       },
     ]);
     const firstEvents = await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: source.id});
-    const firstTurnId = snapshotEvents(firstEvents).at(-1)!.session.turns.at(-1)!.id;
+    const firstTurnId = turnIds(firstEvents.session).at(-1)!;
 
     const fork = await pi.sessions.fork({sessionId: source.id, turnId: firstTurnId});
     const undo = await runRejectedSessionCommand({pi, run: (runtime) => runtime.undoCheckpoint({sessionId: fork.id})});
@@ -1224,9 +1198,9 @@ describe("checkpoint navigation", () => {
 
     // The fork's own turn keeps its snapshot, so undoing it still restores files.
     await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: fork.id});
-    const undoOwnTurn = await runSessionCommand({pi, run: (runtime) => runtime.undoCheckpoint({sessionId: fork.id})});
+    const undoOwnTurn = await runSessionCommand({pi, sessionId: fork.id, run: (runtime) => runtime.undoCheckpoint({sessionId: fork.id})});
 
-    expect(errorEvents(undoOwnTurn)).toEqual([]);
+    expect(errorEvents(undoOwnTurn.events)).toEqual([]);
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("one\n");
   });
 });

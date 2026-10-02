@@ -24,6 +24,13 @@ interface CheckpointNavigationInput {
   readonly sessionId: string;
 }
 
+interface CheckpointStepInput extends CheckpointNavigationInput {
+  /** The last visible turn: what undo hides. */
+  readonly lastTurnId: string | undefined;
+  /** The first undone turn: what redo shows again. */
+  readonly firstUndoneTurnId: string | undefined;
+}
+
 interface RevertToMessageInput extends CheckpointNavigationInput {
   readonly turnId: string;
 }
@@ -31,12 +38,12 @@ interface RevertToMessageInput extends CheckpointNavigationInput {
 export interface SessionActions {
   readonly abortSession: (input: CheckpointNavigationInput) => void;
   readonly compactSession: (input: CompactSessionInput) => void;
-  readonly redoCheckpoint: (input: CheckpointNavigationInput) => Promise<CheckpointNavigationOutcome>;
+  readonly redoCheckpoint: (input: CheckpointStepInput) => Promise<CheckpointNavigationOutcome>;
   readonly revertToMessage: (input: RevertToMessageInput) => Promise<CheckpointNavigationOutcome>;
   readonly sendMessage: (input: SendMessageInput) => void;
   /** Creates a session under a client-chosen id with its first message; see `StartSessionOutcome`. */
   readonly startSession: (input: StartSessionInput) => Promise<StartSessionOutcome>;
-  readonly undoCheckpoint: (input: CheckpointNavigationInput) => Promise<CheckpointNavigationOutcome>;
+  readonly undoCheckpoint: (input: CheckpointStepInput) => Promise<CheckpointNavigationOutcome>;
 }
 
 /**

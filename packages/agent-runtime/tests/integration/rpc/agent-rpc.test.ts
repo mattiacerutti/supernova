@@ -13,7 +13,7 @@ import {Worktrees} from "@supernova/agent-runtime/features/worktrees/worktrees";
 import {agentRpcLayer} from "@supernova/agent-runtime/rpc/agent-rpc";
 import type {AgentRuntime} from "@supernova/agent-runtime/runtime";
 import {cleanupTempDirs} from "@tests/support/async";
-import {createPiTestRuntime, fauxAssistantMessage, selectedModelReference} from "@tests/support/session-runtime";
+import {assistantTexts, createPiTestRuntime, fauxAssistantMessage, selectedModelReference, stateEvents, turnContents} from "@tests/support/session-runtime";
 
 const firstMessage = {contentParts: [{text: "Hi", type: "text" as const}], modelReference: selectedModelReference};
 
@@ -56,17 +56,12 @@ describe("agent rpc: createSession", () => {
     const {createSession, pi} = await setup();
     pi.faux.setResponses([fauxAssistantMessage("Hello!")]);
 
-    const events = await pi.collectEvents(
-      () => createSession({id: "first-send", message: firstMessage, projectPath: "/workspace"}),
-      (events) => {
-        if (!events.some((event) => event.type === "session.snapshot" && event.sessionId === "first-send" && event.session.turns.length === 1))
-          throw new Error("No final snapshot.");
-      }
-    );
+    const created = await createSession({id: "first-send", message: firstMessage, projectPath: "/workspace"});
+    await pi.settled("first-send");
 
-    expect(events.findLast((event) => event.type === "session.snapshot")).toMatchObject({
-      session: {id: "first-send", turns: [{userMessage: {contentParts: firstMessage.contentParts}}]},
-    });
+    // The reply already holds the first turn, so the client's document starts at the turn.
+    expect(turnContents(created)).toEqual([firstMessage.contentParts]);
+    expect(assistantTexts(await pi.sessions.get({sessionId: "first-send"}))).toEqual(["Hello!"]);
   });
 
   it("removes the session again when its first turn cannot start", async () => {
@@ -89,19 +84,19 @@ describe("agent rpc: createSession", () => {
     const events = await pi.collectEvents(
       () => createSession({id: "in-worktree", message: firstMessage, projectPath: repo, workspace: {baseRef: "main", mode: "worktree"}}),
       (events) => {
-        if (!events.some((event) => event.type === "session.snapshot" && event.sessionId === "in-worktree" && event.session.turns.length === 1))
-          throw new Error("No final snapshot.");
+        if (stateEvents(events).at(-1)?.activity !== "idle") throw new Error("The first turn has not settled.");
       }
     );
+    await pi.settled("in-worktree");
 
-    const snapshot = events.findLast((event) => event.type === "session.snapshot");
-    expect(snapshot).toMatchObject({session: {projectPath: repo, title: "Generated title", worktree: {branch: expect.stringMatching(/^supernova\/[a-z]+-[a-z]+$/)}}});
-    const worktreePath = snapshot?.type === "session.snapshot" ? snapshot.session.worktree?.path : undefined;
+    const session = await pi.sessions.get({sessionId: "in-worktree"});
+    expect(session).toMatchObject({projectPath: repo, title: "Generated title", worktree: {branch: expect.stringMatching(/^supernova\/[a-z]+-[a-z]+$/)}});
+    const worktreePath = session.worktree?.path;
     expect(worktreePath && existsSync(join(worktreePath, "a.txt"))).toBe(true);
     expect(await pi.store.cwd("in-worktree")).toBe(worktreePath);
     const setupEvents = events.filter((event) => event.type === "session.setup.started" || event.type === "session.setup.ended").map((event) => event.type);
     expect(setupEvents).toEqual(["session.setup.started", "session.setup.ended"]);
-    const firstTurnEvent = events.findIndex((event) => event.type === "session.agent.started");
+    const firstTurnEvent = events.findIndex((event) => event.type === "session.state");
     expect(events.findIndex((event) => event.type === "session.setup.ended")).toBeLessThan(firstTurnEvent);
   });
 
@@ -125,7 +120,7 @@ describe("agent rpc: createSession", () => {
 
     const session = await createSession({id: "empty", projectPath: "/workspace"});
 
-    expect(session).toMatchObject({id: "empty", turns: []});
+    expect(session).toMatchObject({id: "empty", entries: [], turns: {}});
     expect(existsSync(join(pi.sessionStorageRoot, "empty", "session.sqlite"))).toBe(true);
   });
 });

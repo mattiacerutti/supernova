@@ -1,10 +1,5 @@
 import {afterEach, describe, expect, it} from "vitest";
-import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
-import {createPiTestRuntime, fauxAssistantMessage, selectedModelReference, waitUntil} from "@tests/support/session-runtime";
-
-function snapshots(events: readonly SessionStreamEvent[]) {
-  return events.filter((event): event is Extract<SessionStreamEvent, {type: "session.snapshot"}> => event.type === "session.snapshot");
-}
+import {createPiTestRuntime, fauxAssistantMessage, selectedModelReference, turnContents} from "@tests/support/session-runtime";
 
 describe("reloading extensions in open sessions", () => {
   const runtimes: Array<{unregister: () => Promise<void>}> = [];
@@ -26,15 +21,12 @@ describe("reloading extensions in open sessions", () => {
     const second = await pi.sendMessage({message: "Two", modelReference: selectedModelReference, sessionId: info.id});
 
     expect(pi.loadCount).toBe(loadsBefore + 1);
-    expect(
-      snapshots(second)
-        .at(-1)
-        ?.session.turns.map((turn) => turn.userMessage.contentParts)
-    ).toEqual([[{text: "Existing request", type: "text"}], [{text: "One", type: "text"}], [{text: "Two", type: "text"}]]);
+    expect(turnContents(second.session)).toEqual([[{text: "Existing request", type: "text"}], [{text: "One", type: "text"}], [{text: "Two", type: "text"}]]);
     // Revisions keep increasing on the same worker, so connected clients don't drop the new events as stale.
-    expect(Math.min(...second.flatMap((event) => ("revision" in event ? [event.revision] : [])))).toBeGreaterThan(
-      Math.max(...first.flatMap((event) => ("revision" in event ? [event.revision] : [])))
+    expect(Math.min(...second.events.flatMap((event) => ("revision" in event ? [event.revision] : [])))).toBeGreaterThan(
+      Math.max(...first.events.flatMap((event) => ("revision" in event ? [event.revision] : [])))
     );
+    expect(second.versions.at(-1)).toEqual(second.session);
   });
 
   it("lets an active turn finish while extensions reload", async () => {
@@ -62,7 +54,7 @@ describe("reloading extensions in open sessions", () => {
       await providerStarted;
       await pi.sessionRuntime.reloadExtensions();
       releaseProvider?.();
-      await waitUntil(() => expect(snapshots(events).at(-1)?.session.turns).toHaveLength(2));
+      await pi.settled(info.id);
     } finally {
       releaseProvider?.();
       await stop();
@@ -70,6 +62,6 @@ describe("reloading extensions in open sessions", () => {
     expect(events.some((event) => event.type === "session.error")).toBe(false);
 
     const next = await pi.sendMessage({message: "Next", modelReference: selectedModelReference, sessionId: info.id});
-    expect(snapshots(next).at(-1)?.session.turns).toHaveLength(3);
+    expect(turnContents(next.session)).toHaveLength(3);
   });
 });

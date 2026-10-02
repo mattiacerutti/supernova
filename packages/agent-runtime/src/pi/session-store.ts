@@ -4,15 +4,15 @@ import {mkdir, readFile, rename, rm, writeFile} from "node:fs/promises";
 import {dirname, join} from "node:path";
 import {getAgentDir} from "@earendil-works/pi-coding-agent";
 import type {SettingsManager} from "@earendil-works/pi-coding-agent";
-import type {Session, SessionContextUsage, SessionWorktree, Turn} from "@supernova/contracts/sessions/schemas";
+import type {EntryRecord} from "@earendil-works/pi-durable";
+import type {Session, SessionContextUsage, SessionWorktree} from "@supernova/contracts/sessions/schemas";
 import {loadPiSettings} from "@supernova/agent-runtime/pi/config/settings";
-import {buildSession, contextUsageOf, modelReferenceOf, turnsOf} from "@supernova/agent-runtime/pi/lib/session/session-snapshot";
+import {buildSession, contextUsageOf, publicTurns, timelineEntries} from "@supernova/agent-runtime/pi/lib/session/session-snapshot";
 import type {CheckpointRef, SessionRecord, TurnPosition} from "@supernova/agent-runtime/pi/lib/session/session-state";
 import {turnPositions} from "@supernova/agent-runtime/pi/lib/session/session-state";
 import type {PromptedTool} from "@supernova/agent-runtime/pi/lib/tools/coding-tools";
 import type {BridgedExtensions} from "@supernova/agent-runtime/pi/lib/tools/extension-bridge";
 import {bridgeExtensions} from "@supernova/agent-runtime/pi/lib/tools/extension-bridge";
-import {buildLiveTurn} from "@supernova/agent-runtime/pi/lib/turns/live-turn";
 import type {ResourceCache} from "@supernova/agent-runtime/pi/resource-cache";
 import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";
 import type {ConversationSnapshot, SessionFileSetup} from "@supernova/agent-runtime/pi/session-file";
@@ -34,14 +34,15 @@ export interface SessionStoreDeps {
   readonly onReport?: (sessionId: string, message: string) => void;
 }
 
-/** The running turn of a session and its context, built from one committed view. */
-export interface LiveSnapshot {
-  readonly busy: boolean;
-  readonly compacting: boolean;
-  readonly turn: Turn | undefined;
-  readonly context: SessionContextUsage;
-  /** The run's first user entry, or the settled run's when building it after it ended. */
-  readonly runStart: number | undefined;
+/**
+ * The histories a session document was built from. Entries are append-only, so while the visible conversation and the
+ * leaf stay the same the next build reads only entries after the last one.
+ */
+export interface SessionHistory {
+  readonly visible: number;
+  readonly leaf: number;
+  readonly entries: readonly EntryRecord[];
+  readonly undone: readonly EntryRecord[];
 }
 
 /** Where a session's history stands for checkpoint navigation. */
@@ -162,51 +163,32 @@ export class SessionStore {
   }
 
   /**
-   * The committed session: the visible history with undone turns. Entries of the active run are left out; they
-   * belong to the live turn until it settles. `before` leaves out entries from that id on regardless, for a run the
-   * engine ended whose settled snapshot is not published yet.
+   * The session document at `version`, from the visible conversation's current committed view. Entries are read only
+   * up to the view's newest one, so the final answer never shows beside the partial the view still streams.
+   * `previous` is the history of the last build, extended instead of read again.
    */
-  public async snapshot(sessionId: string, options?: {readonly before?: number}): Promise<Session> {
+  public async snapshot(
+    sessionId: string,
+    options: {readonly version: number; readonly previous?: SessionHistory}
+  ): Promise<{readonly session: Session; readonly history: SessionHistory}> {
     const record = await this.record(sessionId);
     const file = await this.file(sessionId);
     const state = await file.state();
     const view = await file.view(state.visible);
-    const modelReference = modelReferenceOf(view.agent);
-    const runStart = (await file.runStart(view.live)) ?? options?.before;
-    const history = (await file.history(state.visible)).filter((entry) => runStart === undefined || entry.id < runStart);
-    const turns = modelReference ? turnsOf(history, state.turns, modelReference) : [];
-
-    let undoneTurns: Turn[] = [];
-    if (state.leaf !== state.visible && modelReference) {
-      const visibleIds = new Set(history.map((entry) => entry.id));
-      const undone = (await file.history(state.leaf)).filter((entry) => !visibleIds.has(entry.id));
-      undoneTurns = turnsOf(undone, state.turns, modelReference).filter((turn) => state.turns[turn.id] !== undefined);
-    }
-
-    // Usage is not frozen while a run changes the context; the committed read reports it as not yet known.
-    const context = runStart === undefined ? await this.contextOf(file, view) : {contextWindow: this.contextWindow(view), usedTokens: null};
-    return buildSession({context, modelReference, record, turns, undoneTurns});
-  }
-
-  /**
-   * The running turn of a session, built from one committed view. `settledRunStart` builds the turn of a run that
-   * already ended: the engine commits a final answer together with the run's end, so no live frame shows it.
-   */
-  public async live(sessionId: string, view: ConversationSnapshot, settledRunStart?: number): Promise<LiveSnapshot> {
-    const file = await this.file(sessionId);
-    const modelReference = modelReferenceOf(view.agent);
-    const runStart = (await file.runStart(view.live)) ?? settledRunStart;
-    const busy = view.live?.run !== undefined;
-    const compacting = (view.live?.compactions ?? []).some((compaction) => compaction.blocking);
-    const context = await this.contextOf(file, view);
-    // Frames are handled after they were committed, so the history may already be ahead of this frame (for example
-    // with the final answer whose partial the frame still streams). Read it only up to the frame's last entry; a
-    // frame from before the run's input has no turn of it.
-    const frameEnd = view.entries.at(-1)?.id;
-    if (runStart === undefined || !modelReference || frameEnd === undefined || frameEnd < runStart) return {busy, compacting, turn: undefined, context, runStart};
-    const runEntries = (await file.history(view.conversationId)).filter((entry) => entry.id >= runStart && entry.id <= frameEnd);
-    const turn = buildLiveTurn({live: view.live, modelReference, runEntries, runStart, turns: (await file.state()).turns});
-    return {busy, compacting, turn, context, runStart};
+    const history = await this.historyOf(file, state, view, options.previous);
+    const session = buildSession({
+      record,
+      version: options.version,
+      entries: history.entries,
+      undone: history.undone,
+      agent: view.agent,
+      live: view.live,
+      usage: view.usage,
+      runStart: await file.runStart(view.live),
+      turns: publicTurns(state.turns),
+      context: await this.contextOf(file, view),
+    });
+    return {session, history};
   }
 
   /**
@@ -293,6 +275,27 @@ export class SessionStore {
   /** Closes every open session. */
   public async dispose(): Promise<void> {
     await Promise.all([...this.open.keys()].map((sessionId) => this.release(sessionId)));
+  }
+
+  private async historyOf(
+    file: SessionFile,
+    state: {readonly leaf: number; readonly visible: number},
+    view: ConversationSnapshot,
+    previous: SessionHistory | undefined
+  ): Promise<SessionHistory> {
+    const through = view.entries.reduce((newest, entry) => Math.max(newest, entry.id), 0);
+    const reuse = previous?.visible === state.visible && previous.leaf === state.leaf;
+    const known = reuse ? previous.entries : [];
+    const after = known.at(-1)?.id ?? 0;
+    const added = through > after ? timelineEntries(await file.history(state.visible, {after, through})) : [];
+    const entries = added.length > 0 ? [...known, ...added] : known;
+    if (reuse) return {...previous, entries};
+    let undone: EntryRecord[] = [];
+    if (state.leaf !== state.visible) {
+      const visibleIds = new Set((await file.history(state.visible)).map((entry) => entry.id));
+      undone = timelineEntries((await file.history(state.leaf)).filter((entry) => !visibleIds.has(entry.id)));
+    }
+    return {visible: state.visible, leaf: state.leaf, entries, undone};
   }
 
   private databasePath(sessionId: string): string {

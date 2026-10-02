@@ -15,11 +15,56 @@ import {Projects} from "@supernova/agent-runtime/features/projects/projects";
 import {SessionStore} from "@supernova/agent-runtime/pi/session-store";
 import {createSupernovaTools} from "@supernova/agent-runtime/features/session-runtime/tools/tools";
 import {EventBus} from "@supernova/agent-runtime/lib/event-bus";
+import {applyImmutable} from "@earendil-works/chord/delta";
 import type {SendMessagePayload, SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
-import type {ModelReference} from "@supernova/contracts/sessions/schemas";
+import type {AssistantMessage, ModelReference, Session} from "@supernova/contracts/sessions/schemas";
 import {waitUntil} from "@tests/support/async";
 
 export {fauxAssistantMessage, fauxText, fauxThinking, fauxToolCall, waitUntil};
+
+export type StateEvent = Extract<SessionStreamEvent, {type: "session.state"}>;
+
+export function stateEvents(events: readonly SessionStreamEvent[]): StateEvent[] {
+  return events.filter((event): event is StateEvent => event.type === "session.state");
+}
+
+/** Every version a client starting from `base` sees, applying the stream's deltas in order as the web client does. */
+export function mirror(base: Session, events: readonly SessionStreamEvent[]): Session[] {
+  const versions = [base];
+  for (const event of stateEvents(events)) {
+    if (event.sessionId !== base.id || event.version <= versions.at(-1)!.version) continue;
+    if (event.version !== versions.at(-1)!.version + 1) throw new Error(`Delta ${event.version} skips a version after ${versions.at(-1)!.version}.`);
+    versions.push(applyImmutable(versions.at(-1)!, event.ops));
+  }
+  return versions;
+}
+
+/** The authored content of each turn, in order. */
+export function turnContents(session: Pick<Session, "entries" | "turns">) {
+  return session.entries.flatMap((entry) => {
+    const record = session.turns[String(entry.id)];
+    return record ? [record.contentParts] : [];
+  });
+}
+
+/** The authored content of each undone turn, in order. */
+export function undoneContents(session: Pick<Session, "undone" | "turns">) {
+  return turnContents({entries: session.undone, turns: session.turns});
+}
+
+/** The id of each visible turn: its user entry's id. */
+export function turnIds(session: Pick<Session, "entries" | "turns">): string[] {
+  return session.entries.flatMap((entry) => (session.turns[String(entry.id)] ? [String(entry.id)] : []));
+}
+
+/** The text of every assistant entry, in order. */
+export function assistantTexts(session: Pick<Session, "entries">): string[] {
+  return session.entries.flatMap((entry) => {
+    const message = entry.model?.[0];
+    if (entry.kind !== "pi.assistant" || message?.role !== "assistant") return [];
+    return [(message as AssistantMessage).content.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("")];
+  });
+}
 export const selectedPiModel = {
   api: "faux:test" as Api,
   baseUrl: "https://faux.local",
@@ -157,7 +202,7 @@ export async function createPiTestRuntime(input?: {
     onReport: (sessionId, message) => runtime.reportError(sessionId, message),
   });
   const runtime: SessionRuntime = new SessionRuntime({checkpointStore, events, resourceCache, sdk, store, titleGenerator});
-  const sessionsFeature = new Sessions({resourceCache, sdk, store});
+  const sessionsFeature = new Sessions({documents: runtime, resourceCache, sdk, store});
   const projects = new Projects({store});
 
   /** Subscribes to runtime events and resolves once the stream has connected. Call `stop()` when done. */
@@ -191,20 +236,35 @@ export async function createPiTestRuntime(input?: {
     }
   };
 
-  /** Sends a message and waits for its run to end and the final snapshot. */
-  const sendMessage = (messageInput: Omit<SendMessagePayload, "contentParts"> & {readonly contentParts?: SendMessagePayload["contentParts"]; readonly message?: string}) =>
-    collectEvents(
-      () => {
-        const {message, ...payload} = messageInput;
-        return runtime.sendMessage({contentParts: message ? [{text: message, type: "text"}] : [], ...payload});
-      },
-      (events) => {
-        const endedRevision = events.find((event) => event.type === "session.agent.ended")?.revision;
-        if (events.some((event) => event.type === "session.error")) return;
-        if (endedRevision === undefined) throw new Error("Session agent did not end.");
-        if (!events.some((event) => event.type === "session.snapshot" && event.revision > endedRevision)) throw new Error("Session did not publish a final snapshot.");
-      }
-    );
+  /** Waits until the session's run ended and every turn has its after-turn checkpoint. */
+  const settled = async (sessionId: string): Promise<void> => {
+    await waitUntil(async () => {
+      if ((await runtime.current(sessionId)).live.run !== undefined) throw new Error("Session is still running.");
+      const state = await (await store.file(sessionId)).state();
+      if (Object.values(state.turns).some((record) => record.after === undefined)) throw new Error("A turn has no after-turn checkpoint yet.");
+    });
+  };
+
+  /**
+   * Sends a message and waits for its run to settle. Returns the stream's events and every version a client holding the
+   * session before the send saw.
+   */
+  const sendMessage = async (messageInput: Omit<SendMessagePayload, "contentParts"> & {readonly contentParts?: SendMessagePayload["contentParts"]; readonly message?: string}) => {
+    const {message, ...payload} = messageInput;
+    const base = await runtime.current(payload.sessionId);
+    const {events, stop} = await watchEvents();
+    try {
+      await runtime.sendMessage({contentParts: message ? [{text: message, type: "text"}] : [], ...payload});
+      await settled(payload.sessionId);
+      const final = await runtime.current(payload.sessionId);
+      await waitUntil(() => {
+        if (mirror(base, events).at(-1)!.version !== final.version) throw new Error("The stream has not delivered the final version yet.");
+      });
+      return {events, versions: mirror(base, events), session: final};
+    } finally {
+      await stop();
+    }
+  };
 
   /** Creates an empty session under `projectPath`. */
   const createSession = async (projectPath = defaultProjectRoot) => {
@@ -250,6 +310,7 @@ export async function createPiTestRuntime(input?: {
     sessionRuntime: runtime,
     sessionStorageRoot,
     sendMessage,
+    settled,
     settings,
     sessions: sessionsFeature,
     titleGenerator,

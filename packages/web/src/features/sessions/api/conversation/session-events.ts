@@ -2,9 +2,11 @@ import type {QueryClient} from "@tanstack/react-query";
 import type {ProjectSessionsListResult} from "@supernova/contracts/projects/procedures";
 import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
 import type {Session, SessionSummary} from "@supernova/contracts/sessions/schemas";
+import {applyImmutable} from "@earendil-works/chord/delta";
 import {Effect, Stream} from "effect";
 import {sessionKeys} from "@/features/sessions/api/query-keys";
 import {useSessionLiveStore} from "@/features/sessions/stores/conversation/session-live-store";
+import {useSessionVisitsStore} from "@/features/sessions/stores/sidebar/session-visits-store";
 import type {RpcClient, RpcClientFiber} from "@/rpc/transport/protocol";
 
 let connectionGeneration = 0;
@@ -24,6 +26,38 @@ function applyProjectSessionSummary(input: {projectPath: string; queryClient: Qu
   });
 }
 
+/**
+ * Applies a Chord delta to the cached session document. It applies only to the version it was made from; a cached
+ * document further behind (or a placeholder) is refetched, and stale or duplicate deltas are ignored.
+ */
+function applySessionState(input: {event: Extract<SessionStreamEvent, {type: "session.state"}>; queryClient: QueryClient}): void {
+  const {event, queryClient} = input;
+  const queryKey = sessionKeys.detail(event.sessionId);
+  const cached = queryClient.getQueryData<Session>(queryKey);
+  if (!cached || cached.version >= event.version) return;
+  if (cached.version !== event.version - 1) {
+    void queryClient.invalidateQueries({exact: true, queryKey});
+    return;
+  }
+
+  const session = applyImmutable(cached, event.ops);
+  void queryClient.cancelQueries({exact: true, queryKey});
+  queryClient.setQueryData<Session>(queryKey, session);
+  useSessionLiveStore.getState().settlePending(event.sessionId, Object.keys(session.turns).length);
+  // Activity in the open session is seen as it happens; stamping the activity time keeps a later completion unseen.
+  if (session.updatedAt !== cached.updatedAt && useSessionLiveStore.getState().activeSessionId === session.id) {
+    useSessionVisitsStore.getState().markSessionVisited(session.id, session.updatedAt);
+  }
+  if (session.title !== cached.title || session.updatedAt !== cached.updatedAt) {
+    applyProjectSessionSummary({
+      projectPath: session.projectPath,
+      queryClient,
+      sessionId: session.id,
+      summary: {id: session.id, forked: session.forked, title: session.title, updatedAt: session.updatedAt, worktree: session.worktree !== undefined},
+    });
+  }
+}
+
 /** Applies query-cache changes after the live store accepts an event revision. */
 function applyEvent(input: {event: SessionStreamEvent; queryClient: QueryClient}): void {
   const {event, queryClient} = input;
@@ -39,20 +73,9 @@ function applyEvent(input: {event: SessionStreamEvent; queryClient: QueryClient}
   const current = useSessionLiveStore.getState().sessions[event.sessionId];
   if (current && event.revision <= current.revision) return;
 
-  if (event.type === "session.snapshot") {
-    // Commit the replacement before removing liveTurn so the timeline never renders without either projection.
-    void queryClient.cancelQueries({exact: true, queryKey: sessionKeys.detail(event.sessionId)});
-    queryClient.setQueryData<Session>(sessionKeys.detail(event.sessionId), event.session);
-    applyProjectSessionSummary({
-      projectPath: event.session.projectPath,
-      queryClient,
-      sessionId: event.sessionId,
-      summary: {id: event.session.id, forked: event.session.forked, title: event.session.title, updatedAt: event.session.updatedAt, worktree: event.session.worktree !== undefined},
-    });
+  if (event.type === "session.state") {
+    applySessionState({event, queryClient});
   } else if (event.type === "session.updated") {
-    queryClient.setQueryData<Session>(sessionKeys.detail(event.sessionId), (session) =>
-      session ? {...session, title: event.summary.title, updatedAt: event.summary.updatedAt} : session
-    );
     applyProjectSessionSummary({projectPath: event.projectPath, queryClient, sessionId: event.sessionId, summary: event.summary});
   }
 

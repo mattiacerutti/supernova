@@ -104,7 +104,7 @@ Live execution: send, abort, compact, checkpoint navigation, the event stream. `
 
 See [Development](development.md#verification) for verification and the test workflow.
 
-- Tests mirror `src` file for file under `tests/unit` and `tests/integration` (`src/pi/lib/turns/build-turns.ts` → `tests/unit/pi/lib/turns/build-turns.test.ts`). Fixtures live in `tests/support`, named for what they build.
+- Tests mirror `src` file for file under `tests/unit` and `tests/integration` (`src/pi/lib/models/map-model.ts` → `tests/unit/pi/lib/models/map-model.test.ts`). Fixtures live in `tests/support`, named for what they build.
 - Construct the feature class with `Deps` built from real pieces: `tests/support/session-runtime.ts` builds `SessionRuntime`, `Sessions`, and `Projects` over a real engine with session files in a temp directory, Pi's `ModelRuntime` with `registerFauxProvider`, and in-memory settings. Seed history by running turns against the faux model, not by writing entries.
 - Assert with `await expect(feature.method(input)).rejects.toMatchObject({_tag: "…"})`. No Effect in tests below `rpc/`.
 - Cover runtime behavior, failure handling, stream and session lifecycle, persistence, emitted events, and cleanup. Prefer real in-memory dependencies over mocks.

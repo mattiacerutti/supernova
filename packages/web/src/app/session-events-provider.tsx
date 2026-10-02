@@ -16,8 +16,8 @@ function handleSessionEvent(context: SessionEventContext): void {
     return;
   }
 
-  // The agent may have touched the working tree during the turn.
-  if (event.type === "session.agent.ended" && workspacePath) {
+  // The agent or a checkpoint restore may have touched the working tree.
+  if (event.type === "session.state" && event.activity === "idle" && workspacePath) {
     void queryClient.invalidateQueries({queryKey: workspaceKeys.project(workspacePath)});
   }
 }

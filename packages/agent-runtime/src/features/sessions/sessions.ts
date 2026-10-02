@@ -18,7 +18,12 @@ import type {ResourceCache} from "@supernova/agent-runtime/pi/resource-cache";
 import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";
 
 export interface SessionsDeps {
-  readonly store: Pick<SessionStore, "create" | "delete" | "find" | "fork" | "snapshot" | "update">;
+  readonly store: Pick<SessionStore, "create" | "delete" | "find" | "fork" | "update">;
+  /**
+   * Each durable session's document, owned by the session runtime; reads go through it so they match its
+   * `session.state` deltas. `refresh` rebuilds and publishes it after a change outside the engine.
+   */
+  readonly documents: {readonly current: (sessionId: string) => Promise<Session>; readonly refresh: (sessionId: string) => Promise<Session>};
   readonly resourceCache: ResourceCache;
   readonly sdk: Pick<PiSdk, "modelRuntime">;
 }
@@ -31,18 +36,8 @@ export class Sessions {
   public async create(input: {readonly id: string; readonly projectPath: string; readonly worktree?: SessionWorktree}): Promise<Session> {
     const {id, projectPath, worktree} = input;
     if ((await this.deps.store.find(id)) || (await isLegacySession(id))) throw new CreateSessionError({message: "A session with this id already exists."});
-    const record = await this.deps.store.create({id, projectPath, ...(worktree ? {worktree} : {})});
-    return {
-      id,
-      context: {usedTokens: 0, contextWindow: 0},
-      forked: false,
-      projectPath,
-      title: "Untitled session",
-      turns: [],
-      undoneTurns: [],
-      updatedAt: record.createdAt,
-      worktree,
-    };
+    await this.deps.store.create({id, projectPath, ...(worktree ? {worktree} : {})});
+    return this.deps.documents.current(id);
   }
 
   /** The worktree a session runs in, if any. */
@@ -69,12 +64,12 @@ export class Sessions {
     const forked = await this.deps.store.fork({sessionId: input.sessionId, turnId: input.turnId}).catch((cause: unknown) => {
       throw new ForkSessionError({cause, message: cause instanceof Error ? cause.message : "Failed to fork session."});
     });
-    return this.deps.store.snapshot(forked);
+    return this.deps.documents.current(forked);
   }
 
   /** Loads one session: a durable one from its file, a legacy one read-only from its JSONL. */
   public async get(input: GetSessionPayload): Promise<Session> {
-    if (await this.deps.store.find(input.sessionId)) return this.deps.store.snapshot(input.sessionId);
+    if (await this.deps.store.find(input.sessionId)) return this.deps.documents.current(input.sessionId);
     const legacy = await loadLegacySession(input.sessionId);
     if (!legacy) throw new Error("Session not found.");
     return legacy;
@@ -88,7 +83,7 @@ export class Sessions {
       throw new RenameSessionError({message: (await isLegacySession(input.sessionId)) ? new LegacySessionError().message : "Session not found."});
     }
     await this.deps.store.update(input.sessionId, (record) => ({...record, title}));
-    return this.deps.store.snapshot(input.sessionId);
+    return this.deps.documents.refresh(input.sessionId);
   }
 
   /** Lists available Pi models mapped into shared model details. */

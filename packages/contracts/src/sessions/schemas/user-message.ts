@@ -33,20 +33,9 @@ export const UserMessageReferencePart = Schema.Struct({
 
 export const UserMessageContentPart = Schema.Union([UserMessageTextPart, UserMessageReferencePart, UserMessageAttachmentPart]);
 
-/** User-authored message that starts a session turn. */
-export const UserMessage = Schema.Struct({
-  /** Stable message identifier. */
-  id: Schema.String,
-  /** Structured user-authored content, including references and attachments. */
-  contentParts: Schema.Array(UserMessageContentPart),
-  /** ISO timestamp for when the message was sent or created. */
-  timestamp: Schema.optional(Schema.String),
-});
-
 export type UserMessageAttachmentKind = typeof UserMessageAttachmentKind.Type;
 export type UserMessageAttachmentPart = typeof UserMessageAttachmentPart.Type;
 export type UserMessageTextPart = typeof UserMessageTextPart.Type;
 export type UserMessageReferenceKind = typeof UserMessageReferenceKind.Type;
 export type UserMessageReferencePart = typeof UserMessageReferencePart.Type;
 export type UserMessageContentPart = typeof UserMessageContentPart.Type;
-export type UserMessage = typeof UserMessage.Type;

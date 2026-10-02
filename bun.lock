@@ -103,6 +103,9 @@
       "name": "@supernova/contracts",
       "version": "0.5.0",
       "dependencies": {
+        "@earendil-works/chord": "1.0.0",
+        "@earendil-works/pi-ai": "1.0.0",
+        "@earendil-works/pi-durable": "1.0.0",
         "effect": "4.0.0-beta.60",
       },
       "devDependencies": {
@@ -120,6 +123,7 @@
         "@dnd-kit/modifiers": "^9.0.0",
         "@dnd-kit/sortable": "^10.0.0",
         "@dnd-kit/utilities": "^3.2.2",
+        "@earendil-works/chord": "1.0.0",
         "@fontsource/inter": "^5.2.8",
         "@formkit/auto-animate": "^0.9.0",
         "@iconify-json/bx": "^1.2.3",

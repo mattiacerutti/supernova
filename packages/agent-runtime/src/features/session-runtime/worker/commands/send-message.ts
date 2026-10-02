@@ -47,11 +47,12 @@ export async function sendMessage(runtime: SessionWorker, titleGenerator: TitleG
   await session.configure(turnModel);
   const capture = input.captureCheckpoints ?? true;
   const before = await runtime.createCheckpoint(capture);
-  const submitted = await session.submit({
-    content: images.length > 0 ? [{type: "text", text}, ...images] : text,
-    record: {contentParts: [...messageContext.contentParts], capture, before},
-  });
-  runtime.markRunStarted(submitted.entryId);
+  const submitted = await runtime.submit(() =>
+    session.submit({
+      content: images.length > 0 ? [{type: "text", text}, ...images] : text,
+      record: {contentParts: [...messageContext.contentParts], capture, before},
+    })
+  );
   await runtime.store.update(runtime.sessionId, (current) => ({...current, updatedAt: new Date().toISOString()}));
 
   void submitted.wait().then(

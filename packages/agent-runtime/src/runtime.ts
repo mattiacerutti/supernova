@@ -71,7 +71,7 @@ export async function createAgentRuntime(options: CreateAgentRuntimeOptions = {}
     projects: new Projects({store}),
     providers: new Providers({loginSessions: new LoginSessions(), sdk}),
     sessionRuntime,
-    sessions: new Sessions({resourceCache, sdk, store}),
+    sessions: new Sessions({documents: sessionRuntime, resourceCache, sdk, store}),
     workspace: new Workspace({terminals}),
     worktrees: new Worktrees(options.worktreeStorageRoot),
     dispose: async () => {

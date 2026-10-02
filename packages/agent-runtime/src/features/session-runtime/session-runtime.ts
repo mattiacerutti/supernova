@@ -91,9 +91,14 @@ export class SessionRuntime {
     });
   }
 
-  /** The committed view of a session whose settled snapshot is not published yet, or undefined to read it normally. */
-  public async getCommittedSession(input: {readonly sessionId: string}): Promise<Session | undefined> {
-    return this.workers.get(input.sessionId)?.committedSession();
+  /** A durable session's document at its latest published version; `session.state` deltas continue from it. */
+  public async current(sessionId: string): Promise<Session> {
+    return (await this.worker(sessionId)).current();
+  }
+
+  /** Rebuilds a session's document after a change outside the engine (a rename) and publishes it. */
+  public async refresh(sessionId: string): Promise<Session> {
+    return (await this.worker(sessionId)).refresh();
   }
 
   /** Open sessions reinstall extensions from disk; an active turn finishes on the code it started with. */

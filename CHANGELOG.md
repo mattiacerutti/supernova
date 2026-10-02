@@ -13,6 +13,7 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+- The client now receives sessions in Pi's own shape (its entries and live run state) and builds the timeline from them; while a session runs, the server streams changes to it as small deltas instead of resending the whole running turn on every update.
 - Session titles are now generated in the background: the first response starts immediately and the title appears when it is ready, instead of the first turn waiting for it.
 
 ### Fixed

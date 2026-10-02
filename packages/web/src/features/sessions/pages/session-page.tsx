@@ -26,6 +26,7 @@ import {useSessionTimeline} from "@/features/sessions/hooks/conversation/use-ses
 import {useComposerDraftsStore} from "@/features/sessions/stores/composer/composer-drafts-store";
 import {useSessionLiveStore} from "@/features/sessions/stores/conversation/session-live-store";
 import {useSessionVisitsStore} from "@/features/sessions/stores/sidebar/session-visits-store";
+import type {SessionTurn} from "@/features/sessions/types/session-turn";
 import WorkspacePanel from "@/features/workspace/components/workspace-panel";
 import WorkspacePanelToggle from "@/features/workspace/components/workspace-panel-toggle";
 import {useInlineRename} from "@/hooks/use-inline-rename";
@@ -136,12 +137,12 @@ export default function SessionPage(props: SessionPageProps) {
 
   const composer = useComposer({
     disabled: target.kind === "new" && configuration.isPending,
-    initialModelReference: session?.modelReference,
+    initialModelReference: session?.agent.model && {id: session.agent.model.modelId, providerId: session.agent.model.provider, thinkingLevel: session.agent.thinkingLevel ?? "off"},
     modelDefaults: configuration.data?.modelDefaults,
     projectPath,
     sessionId,
   });
-  const stream = useSessionTimeline({modelReference: composer.models.modelReference, sessionId, sessionTurns: session?.turns ?? []});
+  const stream = useSessionTimeline({modelReference: composer.models.modelReference, session, sessionId});
   const [undoneDrawerHeight, setUndoneDrawerHeight] = useState(0);
   const [forkTurnId, setForkTurnId] = useState<string | null>(null);
 
@@ -172,32 +173,32 @@ export default function SessionPage(props: SessionPageProps) {
   };
 
   /** Puts a turn's prompt back into the composer before the checkpoint moves. */
-  const restoreDraftFrom = (turn: Session["turns"][number] | undefined): void => {
+  const restoreDraftFrom = (turn: SessionTurn | undefined): void => {
     composer.draft.replaceContentParts(turn?.userMessage.contentParts ?? []);
   };
 
   const handleUndo = (): void => {
     if (!session || !idle) return;
-    restoreDraftFrom(session.turns.at(-1));
+    restoreDraftFrom(stream.turns.at(-1));
     stream.slashCommandActions.undo?.();
   };
 
   const handleRedo = (): void => {
     if (!session || !idle) return;
-    restoreDraftFrom(session.undoneTurns[1]);
+    restoreDraftFrom(stream.undoneTurns[1]);
     stream.slashCommandActions.redo?.();
   };
 
   const handleRevertToMessage = (turnId: string): void => {
     if (!session || !idle) return;
-    restoreDraftFrom([...session.turns, ...session.undoneTurns].find((turn) => turn.id === turnId));
+    restoreDraftFrom([...stream.turns, ...stream.undoneTurns].find((turn) => turn.id === turnId));
     stream.revertToMessage(turnId);
   };
 
   const handleRestoreUndoneTurn = (turnId: string): void => {
     if (!session || !idle) return;
-    const restoredIndex = session.undoneTurns.findIndex((turn) => turn.id === turnId);
-    restoreDraftFrom(session.undoneTurns[restoredIndex + 1]);
+    const restoredIndex = stream.undoneTurns.findIndex((turn) => turn.id === turnId);
+    restoreDraftFrom(stream.undoneTurns[restoredIndex + 1]);
     stream.revertToMessage(turnId);
   };
 
@@ -263,12 +264,12 @@ export default function SessionPage(props: SessionPageProps) {
                       disabled={composer.disabled || !idle}
                       onHeightChange={handleUndoneDrawerHeightChange}
                       onRevertToMessage={handleRestoreUndoneTurn}
-                      turns={session.undoneTurns}
+                      turns={stream.undoneTurns}
                     />
                   )
                 }
               >
-                {session && <SessionContextIndicator context={stream.liveContext ?? session.context} />}
+                {session && <SessionContextIndicator context={session.context} />}
                 <ModelPicker />
                 <ThinkingLevelPicker />
               </SessionComposer>

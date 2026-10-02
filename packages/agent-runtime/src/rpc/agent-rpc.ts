@@ -100,7 +100,8 @@ export function agentRpcLayer(runtime: AgentRuntime) {
               return {value: undefined};
             },
           });
-          return session;
+          // The session with its first turn, so the client's document starts where the stream continues.
+          return sessionRuntime.current(session.id);
         },
         oneOf(CreateSessionError),
         fallback(CreateSessionError, "Failed to create session.")

@@ -1,10 +1,22 @@
 import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
 import type {CreateSessionPayload} from "@supernova/contracts/sessions/procedures";
 import {CreateSessionError} from "@supernova/contracts/sessions/procedures";
-import type {Session, Turn, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {JsonValue} from "@earendil-works/chord";
+import {diffRevisions} from "@earendil-works/chord/delta";
+import type {SessionActivity} from "@supernova/contracts/session-runtime/procedures";
+import type {LiveState, Session, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 import {Effect, Exit, Fiber, PubSub, Stream} from "effect";
 import type {RpcClient, RpcClientFiber, RpcExecute, RpcProtocolClient, RpcRunOptions} from "@/rpc/transport/protocol";
-import {createTimelineSessions, timelineModelDetails, timelineSessionSummary, timelineStreamTurn, TIMELINE_PROJECT_PATH, TIMELINE_SESSION_ID} from "@e2e/mocks/timeline-data";
+import {
+  assistantEntry,
+  createTimelineSessions,
+  timelineModelDetails,
+  timelineSessionSummary,
+  timelineStreamMessage,
+  userEntry,
+  TIMELINE_PROJECT_PATH,
+  TIMELINE_SESSION_ID,
+} from "@e2e/mocks/timeline-data";
 import type {TimelineMockState} from "@e2e/support/timeline-test-api";
 
 export {RpcProtocolClientService} from "@/rpc/transport/protocol";
@@ -16,7 +28,6 @@ const CREATE_SESSION_FAILURE_DELAY = "150 millis";
 class TimelineRpcClient implements RpcClient {
   private readonly events = Effect.runSync(PubSub.unbounded<SessionStreamEvent>());
   private readonly sessions = createTimelineSessions();
-  private activeContentParts: readonly UserMessageContentPart[] | null = null;
   private activeSessionId = TIMELINE_SESSION_ID;
   private createSessionFailure: string | null = null;
   private lineCount = 0;
@@ -26,7 +37,6 @@ class TimelineRpcClient implements RpcClient {
   private status: TimelineMockState["status"] = "idle";
   private streamFrame: number | null = null;
   private streamTargetLineCount = 0;
-  private streamSequence = 0;
 
   public constructor() {
     window.__supernovaTimelineMock = {
@@ -38,7 +48,8 @@ class TimelineRpcClient implements RpcClient {
       },
       getState: () => {
         const session = this.session(TIMELINE_SESSION_ID);
-        return {lineCount: this.lineCount, status: this.status, turnCount: session.turns.length, undoneTurnCount: session.undoneTurns.length};
+        const count = (entries: Session["entries"]) => entries.filter((entry) => session.turns[String(entry.id)] !== undefined).length;
+        return {lineCount: this.lineCount, status: this.status, turnCount: count(session.entries), undoneTurnCount: count(session.undone)};
       },
     };
   }
@@ -131,17 +142,22 @@ class TimelineRpcClient implements RpcClient {
   private createSession({id, message, projectPath}: CreateSessionPayload): Session {
     const session: Session = {
       id,
-      context: {usedTokens: 0, contextWindow: 0},
+      version: 1,
+      title: "Untitled session",
       forked: false,
       projectPath,
-      title: "Untitled session",
-      turns: [],
-      undoneTurns: [],
       updatedAt: new Date().toISOString(),
+      entries: [],
+      undone: [],
+      agent: {},
+      live: {},
+      usage: {models: {}, tools: {}},
+      turns: {},
+      context: {usedTokens: 0, contextWindow: 0},
     };
     this.sessions.set(session.id, session);
     if (message) this.startStream(session.id, message.contentParts);
-    return session;
+    return this.session(session.id);
   }
 
   /** Serializes publications so revisions arrive in exactly the order generated. */
@@ -154,66 +170,81 @@ class TimelineRpcClient implements RpcClient {
     return this.revision;
   }
 
-  /** Commits a checkpoint change and publishes its authoritative snapshot. */
-  private commitCheckpoint(session: Session): void {
-    const updatedSession = {...session, updatedAt: new Date().toISOString()};
-    this.sessions.set(session.id, updatedSession);
-    this.publish({revision: this.nextRevision(), session: updatedSession, sessionId: session.id, type: "session.snapshot"});
+  /** Replaces a session and publishes the change as a Chord delta, as the server does. */
+  private commit(next: Omit<Session, "version">, activity: SessionActivity): void {
+    const previous = this.session(next.id);
+    const version = previous.version + 1;
+    const session = {...next, version} as Session;
+    this.sessions.set(session.id, session);
+    const ops = diffRevisions(previous as unknown as JsonValue, session as unknown as JsonValue);
+    this.publish({activity, ops, revision: this.nextRevision(), sessionId: session.id, type: "session.state", version});
+  }
+
+  /** Index into `entries` of each turn's user entry. */
+  private turnStarts(session: Session, entries: Session["entries"]): number[] {
+    return entries.flatMap((entry, index) => (session.turns[String(entry.id)] ? [index] : []));
+  }
+
+  /** Shows the first `count` turns of the visible and undone entries together, as checkpoint navigation does. */
+  private showTurns(sessionId: string, count: number): void {
+    const session = this.session(sessionId);
+    const all = [...session.entries, ...session.undone];
+    const starts = this.turnStarts(session, all);
+    const cut = starts[count] ?? all.length;
+    this.commit({...session, entries: all.slice(0, cut), undone: all.slice(cut), updatedAt: new Date().toISOString()}, "idle");
+  }
+
+  private visibleTurnCount(session: Session): number {
+    return this.turnStarts(session, session.entries).length;
   }
 
   private undoCheckpoint(sessionId: string): void {
-    const session = this.session(sessionId);
-    const turn = session.turns.at(-1);
-    if (!turn) return;
-
-    this.commitCheckpoint({...session, turns: session.turns.slice(0, -1), undoneTurns: [turn, ...session.undoneTurns]});
+    const count = this.visibleTurnCount(this.session(sessionId));
+    if (count > 0) this.showTurns(sessionId, count - 1);
   }
 
   private redoCheckpoint(sessionId: string): void {
     const session = this.session(sessionId);
-    const turn = session.undoneTurns[0];
-    if (!turn) return;
-
-    this.commitCheckpoint({...session, turns: [...session.turns, turn], undoneTurns: session.undoneTurns.slice(1)});
+    if (this.turnStarts(session, session.undone).length > 0) this.showTurns(sessionId, this.visibleTurnCount(session) + 1);
   }
 
   private revertToMessage(sessionId: string, turnId: string): void {
     const session = this.session(sessionId);
-    const undoneIndex = session.undoneTurns.findIndex((turn) => turn.id === turnId);
-    if (undoneIndex >= 0) {
-      this.commitCheckpoint({
-        ...session,
-        turns: [...session.turns, ...session.undoneTurns.slice(0, undoneIndex + 1)],
-        undoneTurns: session.undoneTurns.slice(undoneIndex + 1),
-      });
-      return;
-    }
-
-    const turnIndex = session.turns.findIndex((turn) => turn.id === turnId);
-    if (turnIndex < 0) return;
-
-    this.commitCheckpoint({...session, turns: session.turns.slice(0, turnIndex), undoneTurns: [...session.turns.slice(turnIndex), ...session.undoneTurns]});
+    const ids = [...session.entries, ...session.undone].filter((entry) => session.turns[String(entry.id)]).map((entry) => String(entry.id));
+    const index = ids.indexOf(turnId);
+    if (index < 0) return;
+    const visible = this.visibleTurnCount(session);
+    this.showTurns(sessionId, index < visible ? index : index + 1);
   }
 
   /** Starts a stream with one line, then waits for tests to request deterministic high-speed bursts. */
   private startStream(sessionId: string, contentParts: readonly UserMessageContentPart[]): void {
     if (this.status === "streaming") return;
 
-    this.activeContentParts = contentParts;
     this.activeSessionId = sessionId;
-    this.streamSequence += 1;
     this.lineCount = 0;
     this.reasoningBreaks = [];
     this.streamTargetLineCount = 0;
     this.status = "streaming";
-    this.publish({revision: this.nextRevision(), sessionId, type: "session.agent.started"});
-    this.publish({
-      revision: this.nextRevision(),
-      sessionId,
-      context: this.session(sessionId).context,
-      turn: this.streamTurn(contentParts, this.lineCount, "streaming"),
-      type: "session.turn",
-    });
+    // A send drops the undone path, as on the server.
+    const session = this.session(sessionId);
+    const userId = this.nextEntryId(session);
+    const text = contentParts.map((part) => (part.type === "text" ? part.text : "")).join("");
+    this.commit(
+      {
+        ...session,
+        entries: [...session.entries, userEntry(userId, text, 80_000)],
+        undone: [],
+        runStart: userId,
+        turns: {...session.turns, [String(userId)]: {contentParts}},
+        live: this.streamLive(),
+      },
+      "running"
+    );
+  }
+
+  private nextEntryId(session: Session): number {
+    return Math.max(0, ...[...session.entries, ...session.undone].map((entry) => entry.id)) + 1;
   }
 
   /** Interrupts the response at the current line so later lines stream into a new assistant event after a reasoning step. */
@@ -223,14 +254,12 @@ class TimelineRpcClient implements RpcClient {
     this.reasoningBreaks.push(this.lineCount);
   }
 
-  private streamTurn(contentParts: readonly UserMessageContentPart[], lineCount: number, status: "completed" | "streaming"): Turn {
-    const turn = timelineStreamTurn({contentParts, lineCount, reasoningBreaks: this.reasoningBreaks, status});
+  /** `pi.live` with the run and its streaming partial. */
+  private streamLive(): LiveState {
     return {
-      ...turn,
-      id: `${turn.id}-${this.streamSequence}`,
-      userMessage: {...turn.userMessage, id: `${turn.userMessage.id}-${this.streamSequence}`},
-      events: turn.events.map((event) => ({...event, id: `${event.id}-${this.streamSequence}`})),
-    };
+      generation: {attempt: 0, message: timelineStreamMessage({lineCount: this.lineCount, reasoningBreaks: this.reasoningBreaks})},
+      run: {inputs: [1], taskId: 1},
+    } as unknown as LiveState;
   }
 
   /** Adds a finite burst at two complete lines per frame, keeping user gestures deterministic between bursts. */
@@ -244,14 +273,7 @@ class TimelineRpcClient implements RpcClient {
       if (this.status !== "streaming") return;
 
       this.lineCount = Math.min(this.lineCount + STREAM_LINES_PER_FRAME, this.streamTargetLineCount);
-      const contentParts = this.activeContentParts ?? [{text: "Timeline test prompt", type: "text"}];
-      this.publish({
-        revision: this.nextRevision(),
-        sessionId: this.activeSessionId,
-        context: this.session(this.activeSessionId).context,
-        turn: this.streamTurn(contentParts, this.lineCount, "streaming"),
-        type: "session.turn",
-      });
+      this.commit({...this.session(this.activeSessionId), live: this.streamLive()}, "running");
 
       if (this.lineCount < this.streamTargetLineCount) {
         this.streamFrame = window.requestAnimationFrame(tick);
@@ -270,21 +292,17 @@ class TimelineRpcClient implements RpcClient {
     this.streamTargetLineCount = this.lineCount;
   }
 
-  /** Commits the current turn using production event ordering after completion or an abort. */
+  /** Commits the answer as an entry and ends the run in one change, as the engine does. */
   private settleStream(status: "aborted" | "completed"): void {
     if (this.status !== "streaming") return;
 
     this.stopPump();
     this.status = status;
-    const contentParts = this.activeContentParts ?? [{text: "Timeline test prompt", type: "text"}];
-    const completedTurn = this.streamTurn(contentParts, Math.max(this.lineCount, 1), "completed");
     const previous = this.session(this.activeSessionId);
-    const session = {...previous, turns: [...previous.turns, completedTurn], updatedAt: new Date().toISOString()};
-    this.sessions.set(session.id, session);
-    this.activeContentParts = null;
-
-    this.publish({revision: this.nextRevision(), sessionId: session.id, type: "session.agent.ended"});
-    this.publish({revision: this.nextRevision(), session, sessionId: session.id, type: "session.snapshot"});
+    const answer = timelineStreamMessage({lineCount: Math.max(this.lineCount, 1), reasoningBreaks: this.reasoningBreaks});
+    const next = {...previous, entries: [...previous.entries, assistantEntry(this.nextEntryId(previous), answer)], live: {}, updatedAt: new Date().toISOString()};
+    delete next.runStart;
+    this.commit(next, "idle");
   }
 }
 

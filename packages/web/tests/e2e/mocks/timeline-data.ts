@@ -1,4 +1,4 @@
-import type {ModelDetails, ModelReference, Session, SessionSummary, Turn, TurnEvent, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {AssistantMessage, EntryRecord, ModelDetails, ModelReference, Session, SessionSummary, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 
 export const TIMELINE_PROJECT_PATH = "/tmp/supernova-timeline-e2e";
 export const TIMELINE_PROJECT_NAME = "supernova-timeline-e2e";
@@ -28,42 +28,58 @@ function timestamp(offsetMs: number): string {
   return new Date(Date.UTC(2026, 0, 1, 0, 0, 0, offsetMs)).toISOString();
 }
 
-function historyTurn(sessionId: string, index: number): Turn {
+const usage = {cacheRead: 0, cacheWrite: 0, cost: {cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0}, input: 0, output: 0, totalTokens: 0};
+
+/** A Pi user entry. */
+export function userEntry(id: number, text: string, offsetMs: number): EntryRecord {
+  return {conversationId: 1, id, kind: "pi.user", model: [{content: text, role: "user", timestamp: Date.parse(timestamp(offsetMs))}]} as unknown as EntryRecord;
+}
+
+/** A Pi assistant message as the engine stores and streams it. */
+export function assistantMessage(content: AssistantMessage["content"], offsetMs: number): AssistantMessage {
   return {
-    completedAt: timestamp(index * 1_000 + 500),
-    events: [
-      {
-        content: `Assistant history ${index}. ${"This deliberately makes the uncached transcript tall. ".repeat(6)}`,
-        id: `${sessionId}-assistant-${index}`,
-        timestamp: timestamp(index * 1_000 + 200),
-        type: "assistant",
-      },
-    ],
-    id: `${sessionId}-turn-${index}`,
-    modelReference: timelineModel,
-    startedAt: timestamp(index * 1_000),
-    status: "completed",
-    userMessage: {
-      contentParts: [{text: `User history ${index}. ${"Long prompt content. ".repeat(5)}`, type: "text"}],
-      id: `${sessionId}-user-${index}`,
-      timestamp: timestamp(index * 1_000),
-    },
+    api: "timeline",
+    content,
+    model: timelineModel.id,
+    provider: timelineModel.providerId,
+    role: "assistant",
+    stopReason: "stop",
+    timestamp: Date.parse(timestamp(offsetMs)),
+    usage,
   };
 }
 
+/** A Pi assistant entry. */
+export function assistantEntry(id: number, message: AssistantMessage): EntryRecord {
+  return {conversationId: 1, id, kind: "pi.assistant", model: [message]} as unknown as EntryRecord;
+}
+
 function historySession(input: {readonly historyTurnCount: number; readonly id: string; readonly title: string}): Session {
-  const turns = Array.from({length: input.historyTurnCount}, (_, index) => historyTurn(input.id, index));
+  const entries: EntryRecord[] = [];
+  const turns: Record<string, {contentParts: UserMessageContentPart[]}> = {};
+  for (let index = 0; index < input.historyTurnCount; index++) {
+    const text = `User history ${index}. ${"Long prompt content. ".repeat(5)}`;
+    const userId = entries.length + 1;
+    entries.push(userEntry(userId, text, index * 1_000));
+    turns[String(userId)] = {contentParts: [{text, type: "text"}]};
+    const answer = `Assistant history ${index}. ${"This deliberately makes the uncached transcript tall. ".repeat(6)}`;
+    entries.push(assistantEntry(entries.length + 1, assistantMessage([{text: answer, type: "text"}], index * 1_000 + 200)));
+  }
 
   return {
-    context: {contextWindow: 200_000, usedTokens: 20_000},
-    forked: false,
     id: input.id,
-    modelReference: timelineModel,
-    projectPath: TIMELINE_PROJECT_PATH,
+    version: 1,
     title: input.title,
+    forked: false,
+    projectPath: TIMELINE_PROJECT_PATH,
+    updatedAt: timestamp(input.historyTurnCount * 1_000),
+    entries,
+    undone: [],
+    agent: {model: {modelId: timelineModel.id, provider: timelineModel.providerId}, thinkingLevel: "high"},
+    live: {},
+    usage: {models: {}, tools: {}},
     turns,
-    undoneTurns: [],
-    updatedAt: timestamp(turns.length * 1_000),
+    context: {contextWindow: 200_000, usedTokens: 20_000},
   };
 }
 
@@ -89,44 +105,20 @@ export function timelineStreamLine(index: number): string {
 }
 
 /**
- * Builds one realistic turn whose assistant response grows by complete lines.
- * Each reasoning break is a line count after which a collapsed reasoning step
- * interrupts the response, so later lines flow into a fresh assistant event.
+ * Builds the assistant answer of the stress stream, growing by complete lines. Each reasoning break is a line count
+ * after which a reasoning step interrupts the response, so later lines flow into a fresh text part.
  */
-export function timelineStreamTurn(input: {
-  readonly contentParts: readonly UserMessageContentPart[];
-  readonly lineCount: number;
-  readonly reasoningBreaks?: readonly number[];
-  readonly status: "completed" | "streaming";
-}): Turn {
-  const {contentParts, lineCount, reasoningBreaks = [], status} = input;
-  const completedAt = status === "completed" ? timestamp(100_000 + lineCount) : undefined;
+export function timelineStreamMessage(input: {readonly lineCount: number; readonly reasoningBreaks?: readonly number[]}): AssistantMessage {
+  const {lineCount, reasoningBreaks = []} = input;
   const segmentStarts = [0, ...reasoningBreaks.filter((lineIndex) => lineIndex > 0 && lineIndex < lineCount)];
-  const events: TurnEvent[] = [];
+  const content: AssistantMessage["content"] = [];
 
   segmentStarts.forEach((segmentStart, segmentIndex) => {
     const segmentEnd = segmentStarts[segmentIndex + 1] ?? lineCount;
     const lines = Array.from({length: segmentEnd - segmentStart}, (_, index) => timelineStreamLine(segmentStart + index + 1));
-    const eventTimestamp = timestamp(90_000 + segmentStart);
-
-    if (reasoningBreaks.includes(segmentStart)) {
-      events.push({content: `Reasoning step ${segmentIndex} before continuing.`, id: `timeline-stream-reasoning-${segmentIndex}`, timestamp: eventTimestamp, type: "reasoning"});
-    }
-    events.push({
-      content: lines.length > 0 ? ["Extreme-speed streamed response:", ...lines].join("\n") : "",
-      id: segmentIndex === 0 ? "timeline-stream-assistant" : `timeline-stream-assistant-${segmentIndex}`,
-      timestamp: eventTimestamp,
-      type: "assistant",
-    });
+    if (reasoningBreaks.includes(segmentStart)) content.push({thinking: `Reasoning step ${segmentIndex} before continuing.`, type: "thinking"});
+    content.push({text: lines.length > 0 ? ["Extreme-speed streamed response:", ...lines].join("\n") : "", type: "text"});
   });
 
-  return {
-    completedAt,
-    events,
-    id: "timeline-stream-turn",
-    modelReference: timelineModel,
-    startedAt: timestamp(80_000),
-    status,
-    userMessage: {contentParts, id: "timeline-stream-user", timestamp: timestamp(80_000)},
-  };
+  return assistantMessage(content, 90_000);
 }
