@@ -139,6 +139,11 @@ describe("runtime services over the wire", () => {
     expect(created).toEqual({ok: true, value: {path: `${pi.defaultProjectRoot}/made-over-the-wire`}});
     // The default project is a plain folder, not a Git repository.
     expect(await workspace.listBranches({projectPath: pi.defaultProjectRoot}, BACKGROUND_CONTEXT)).toMatchObject({ok: false, error: {code: "WorkspaceNotARepositoryError"}});
+    // A member of an error union (`WorkspaceFileError`) keeps its own tag.
+    expect(await workspace.readFile({path: "../outside", projectPath: pi.defaultProjectRoot}, BACKGROUND_CONTEXT)).toMatchObject({
+      ok: false,
+      error: {code: "WorkspaceFileNotFoundError"},
+    });
     // Payloads are validated at the boundary.
     expect(await workspace.readFile({path: 1} as never, BACKGROUND_CONTEXT)).toMatchObject({ok: false, error: {code: "GenericError", message: "The request is invalid."}});
 

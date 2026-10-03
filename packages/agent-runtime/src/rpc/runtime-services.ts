@@ -26,17 +26,10 @@ import {
   ProviderLogoutPayload,
 } from "@supernova/contracts/providers/procedures";
 import {ProvidersService} from "@supernova/contracts/providers/services";
+import type {ErrorOf, ErrorValue, TaggedErrorInstance} from "@supernova/contracts/runtime/schemas";
 import {GenericError} from "@supernova/contracts/runtime/schemas";
 import type {ServiceResult} from "@supernova/contracts/runtime/services";
-import {
-  CheckpointConflictError,
-  CheckpointInheritedError,
-  CheckpointUncapturedError,
-  CompactSessionPayload,
-  RevertToMessagePayload,
-  SendMessagePayload,
-  UndoCheckpointPayload,
-} from "@supernova/contracts/session-runtime/procedures";
+import {CheckpointNavigationError, CompactSessionPayload, RevertToMessagePayload, SendMessagePayload, UndoCheckpointPayload} from "@supernova/contracts/session-runtime/procedures";
 import {
   CreateSessionError,
   CreateSessionPayload,
@@ -60,7 +53,7 @@ import {
   WorkspaceFilesListPayload,
   WorkspaceRepositoriesListPayload,
 } from "@supernova/contracts/workspace/procedures";
-import {WorkspaceBinaryFileError, WorkspaceFileNotFoundError, WorkspaceFileTooLargeError, WorkspaceNotARepositoryError} from "@supernova/contracts/workspace/schemas";
+import {WorkspaceFileError, WorkspaceGitError} from "@supernova/contracts/workspace/schemas";
 import {WorkspaceService} from "@supernova/contracts/workspace/services";
 import type {z} from "zod";
 import {errorMessage} from "@supernova/agent-runtime/lib/errors";
@@ -68,25 +61,16 @@ import {archiveSession, createSession} from "@supernova/agent-runtime/rpc/sessio
 import type {AgentRuntime} from "@supernova/agent-runtime/runtime";
 
 type Publish = (subscriptionId: string, update: ServiceProviderUpdate, context: Context) => void | Promise<void>;
-type TaggedError = Error & {readonly _tag: string};
-type ErrorClass = abstract new (...args: never[]) => TaggedError;
-
-const CHECKPOINT_ERRORS = [CheckpointConflictError, CheckpointInheritedError, CheckpointUncapturedError] as const;
-const WORKSPACE_GIT_ERRORS = [WorkspaceNotARepositoryError] as const;
-const WORKSPACE_FILE_ERRORS = [...WORKSPACE_GIT_ERRORS, WorkspaceFileNotFoundError, WorkspaceBinaryFileError, WorkspaceFileTooLargeError] as const;
-
 /**
- * How one service method runs: its payload schema, the feature call, and the contract errors it declares. Payloads
- * cross a trust boundary, so each is parsed. `E` is inferred from `declared`, so the method's result type, and with it
- * the contract the provider must satisfy, names exactly these errors.
+ * How one service method runs: its payload schema, the feature call, and its contract error value (a class, or an
+ * `errorUnion` named next to the payload). Payloads cross a trust boundary, so each is parsed. The method's result
+ * type comes from `error`, and the provider must satisfy the contract with it.
  */
-interface Operation<P extends z.ZodType, R, E extends readonly ErrorClass[]> {
+interface Operation<P extends z.ZodType, R, E extends ErrorValue> {
   readonly payload: P;
   readonly run: (payload: z.infer<P>, context: Context) => R | Promise<R>;
-  readonly declared?: E;
+  readonly error?: E;
 }
-
-type Declared<E extends readonly ErrorClass[]> = InstanceType<E[number]>;
 
 /**
  * Runs a service call and returns its outcome as a `ServiceResult`. The protocol carries only its own error codes, so
@@ -94,16 +78,11 @@ type Declared<E extends readonly ErrorClass[]> = InstanceType<E[number]>;
  * unexpected I/O failure, an invalid request) becomes a `GenericError` with the cause's message. Results are copied
  * to strict JSON: features may leave optional fields undefined.
  */
-async function run<P extends z.ZodType, R, E extends readonly ErrorClass[]>(
-  operation: Operation<P, R, E>,
-  input: unknown,
-  context: Context
-): Promise<ServiceResult<R, Declared<E>>> {
-  const declared: readonly ErrorClass[] = operation.declared ?? [];
+async function run<P extends z.ZodType, R, E extends ErrorValue = never>(operation: Operation<P, R, E>, input: unknown, context: Context): Promise<ServiceResult<R, ErrorOf<E>>> {
   // Clients see only the code and message; the cause (file paths, stack) stays in the server log.
-  const fail = (error: TaggedError) => {
+  const fail = (error: TaggedErrorInstance) => {
     console.error(`[runtime] ${error._tag}: ${error.message}`, ...(error.cause === undefined ? [] : [error.cause]));
-    return {ok: false, error: {code: error._tag, message: error.message}} as ServiceResult<R, Declared<E>>;
+    return {ok: false, error: {code: error._tag, message: error.message}} as ServiceResult<R, ErrorOf<E>>;
   };
   const parsed = operation.payload.safeParse(input);
   if (!parsed.success) return fail(new GenericError({cause: parsed.error, message: "The request is invalid."}));
@@ -111,22 +90,20 @@ async function run<P extends z.ZodType, R, E extends readonly ErrorClass[]>(
     const value = await operation.run(parsed.data, context);
     return {ok: true, value: (value === undefined ? null : copyJson(value, {omitUndefinedProperties: true})) as R};
   } catch (cause) {
-    if (declared.some((errorClass) => cause instanceof errorClass)) return fail(cause as TaggedError);
+    if (operation.error !== undefined && cause instanceof operation.error) return fail(cause as TaggedErrorInstance);
     return fail(new GenericError({cause, message: errorMessage(cause, "The operation failed.")}));
   }
 }
 
 /** A service method for `operation`: the payload, then Chord's `Context`. */
-function method<P extends z.ZodType, R, const E extends readonly ErrorClass[] = []>(
+function method<P extends z.ZodType, R, E extends ErrorValue = never>(
   operation: Operation<P, R, E>
-): (payload: z.infer<P>, context: Context) => Promise<ServiceResult<R, Declared<E>>> {
+): (payload: z.infer<P>, context: Context) => Promise<ServiceResult<R, ErrorOf<E>>> {
   return (payload, context) => run(operation, payload, context);
 }
 
 /** A service method without a payload. */
-function action<R, const E extends readonly ErrorClass[] = []>(
-  operation: Omit<Operation<z.ZodUndefined, R, E>, "payload">
-): (context: Context) => Promise<ServiceResult<R, Declared<E>>> {
+function action<R, E extends ErrorValue = never>(operation: Omit<Operation<z.ZodUndefined, R, E>, "payload">): (context: Context) => Promise<ServiceResult<R, ErrorOf<E>>> {
   return (context) => run({...operation, payload: undefinedPayload}, undefined, context);
 }
 
@@ -183,7 +160,7 @@ function serverServices(runtime: AgentRuntime): RoutedServerServiceHost {
             }
             return null;
           },
-          declared: [UpdateExtensionsError],
+          error: UpdateExtensionsError,
         }),
       });
       provider.provide(FoldersService, {
@@ -202,7 +179,7 @@ function serverServices(runtime: AgentRuntime): RoutedServerServiceHost {
         archiveSession: method({
           payload: ProjectSessionArchivePayload,
           run: (input) => archiveSession(runtime, input),
-          declared: [ProjectSessionArchiveError],
+          error: ProjectSessionArchiveError,
         }),
       });
       provider.provide(ProvidersService, {
@@ -212,17 +189,17 @@ function serverServices(runtime: AgentRuntime): RoutedServerServiceHost {
         startLogin: method({
           payload: ProviderLoginStartPayload,
           run: (input) => providers.startLogin(input),
-          declared: [ProviderLoginError],
+          error: ProviderLoginError,
         }),
         submitLoginInput: method({
           payload: ProviderLoginInputSubmitPayload,
           run: (input) => providers.submitLoginInput(input),
-          declared: [ProviderLoginError],
+          error: ProviderLoginError,
         }),
         cancelLogin: method({
           payload: ProviderLoginCancelPayload,
           run: (input) => providers.cancelLogin(input),
-          declared: [ProviderLoginError],
+          error: ProviderLoginError,
         }),
       });
       provider.provide(WorkspaceService, {
@@ -233,30 +210,30 @@ function serverServices(runtime: AgentRuntime): RoutedServerServiceHost {
         listBranches: method({
           payload: WorkspaceBranchesListPayload,
           run: (input) => workspace.listBranches(input),
-          declared: WORKSPACE_GIT_ERRORS,
+          error: WorkspaceGitError,
         }),
         listFiles: method({
           payload: WorkspaceFilesListPayload,
           run: (input) => workspace.listFiles(input),
-          declared: WORKSPACE_GIT_ERRORS,
+          error: WorkspaceGitError,
         }),
         getChanges: method({
           payload: WorkspaceChangesGetPayload,
           run: (input) => workspace.getChanges(input),
-          declared: WORKSPACE_GIT_ERRORS,
+          error: WorkspaceGitError,
         }),
         getDiffContents: method({
           payload: WorkspaceDiffContentsGetPayload,
           run: (input) => workspace.getDiffContents(input),
-          declared: WORKSPACE_FILE_ERRORS,
+          error: WorkspaceFileError,
         }),
-        readFile: method({payload: WorkspaceFileReadPayload, run: (input) => workspace.readFile(input), declared: WORKSPACE_FILE_ERRORS}),
+        readFile: method({payload: WorkspaceFileReadPayload, run: (input) => workspace.readFile(input), error: WorkspaceFileError}),
       });
       provider.provide(TerminalsService, {
         state: workspace.terminalsState,
-        open: method({payload: TerminalOpenPayload, run: (input) => workspace.openTerminal(input), declared: [TerminalError]}),
-        write: method({payload: TerminalWritePayload, run: (input) => workspace.writeTerminal(input).then(() => null), declared: [TerminalNotFoundError]}),
-        resize: method({payload: TerminalResizePayload, run: (input) => workspace.resizeTerminal(input).then(() => null), declared: [TerminalNotFoundError]}),
+        open: method({payload: TerminalOpenPayload, run: (input) => workspace.openTerminal(input), error: TerminalError}),
+        write: method({payload: TerminalWritePayload, run: (input) => workspace.writeTerminal(input).then(() => null), error: TerminalNotFoundError}),
+        resize: method({payload: TerminalResizePayload, run: (input) => workspace.resizeTerminal(input).then(() => null), error: TerminalNotFoundError}),
         close: method({payload: TerminalClosePayload, run: (input) => workspace.closeTerminal(input).then(() => null)}),
         list: method({payload: TerminalsListPayload, run: (input) => workspace.listTerminals(input)}),
       });
@@ -269,9 +246,9 @@ function serverServices(runtime: AgentRuntime): RoutedServerServiceHost {
       });
       provider.provide(SessionDirectory, {state: sessionRuntime.board.state});
       provider.provide(SessionManagement, {
-        create: method({payload: CreateSessionPayload, run: (input) => createSession(runtime, input), declared: [CreateSessionError]}),
-        fork: method({payload: ForkSessionPayload, run: (input) => sessions.fork(input), declared: [ForkSessionError]}),
-        rename: method({payload: RenameSessionPayload, run: (input) => sessions.rename(input), declared: [RenameSessionError]}),
+        create: method({payload: CreateSessionPayload, run: (input) => createSession(runtime, input), error: CreateSessionError}),
+        fork: method({payload: ForkSessionPayload, run: (input) => sessions.fork(input), error: ForkSessionError}),
+        rename: method({payload: RenameSessionPayload, run: (input) => sessions.rename(input), error: RenameSessionError}),
         read: method({payload: GetSessionPayload, run: (input) => sessions.get(input)}),
         attach: (sessionId: string, context: Context) =>
           run({payload: GetSessionPayload.unwrap().shape.sessionId, run: (id) => presentation.attachSession(id, context).then(() => null)}, sessionId, context),
@@ -289,7 +266,6 @@ function serverServices(runtime: AgentRuntime): RoutedServerServiceHost {
 async function sessionHandle(runtime: AgentRuntime, sessionId: string): Promise<RoutedSessionHandle> {
   const {sessionRuntime} = runtime;
   const transcript = await sessionRuntime.transcript(sessionId);
-  const checkpoint = {declared: CHECKPOINT_ERRORS} as const;
   // The attachment names the session; payloads carry the rest.
   const send = SendMessagePayload.unwrap().omit({sessionId: true});
   const compact = CompactSessionPayload.unwrap().omit({sessionId: true});
@@ -303,9 +279,9 @@ async function sessionHandle(runtime: AgentRuntime, sessionId: string): Promise<
         send: method({payload: send, run: (input) => sessionRuntime.sendMessage({...input, sessionId}).then(() => null)}),
         abort: action({run: () => sessionRuntime.abort({sessionId}).then(() => null)}),
         compact: method({payload: compact, run: (input) => sessionRuntime.compact({...input, sessionId}).then(() => null)}),
-        undo: method({...checkpoint, payload: step, run: (input) => sessionRuntime.undoCheckpoint({...input, sessionId}).then(() => null)}),
-        redo: method({...checkpoint, payload: step, run: (input) => sessionRuntime.redoCheckpoint({...input, sessionId}).then(() => null)}),
-        revert: method({...checkpoint, payload: revert, run: (input) => sessionRuntime.revertToMessage({...input, sessionId}).then(() => null)}),
+        undo: method({payload: step, error: CheckpointNavigationError, run: (input) => sessionRuntime.undoCheckpoint({...input, sessionId}).then(() => null)}),
+        redo: method({payload: step, error: CheckpointNavigationError, run: (input) => sessionRuntime.redoCheckpoint({...input, sessionId}).then(() => null)}),
+        revert: method({payload: revert, error: CheckpointNavigationError, run: (input) => sessionRuntime.revertToMessage({...input, sessionId}).then(() => null)}),
       });
       return attachment(provider);
     },

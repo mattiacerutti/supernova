@@ -1,5 +1,6 @@
 import {z} from "zod";
-import {struct, TaggedError} from "@supernova/contracts/runtime/schemas";
+import type {ErrorOf} from "@supernova/contracts/runtime/schemas";
+import {errorUnion, struct, TaggedError} from "@supernova/contracts/runtime/schemas";
 
 /** Shared fields for every checkpoint navigation command. */
 const CheckpointNavigationFields = {
@@ -27,7 +28,9 @@ export class CheckpointUncapturedError extends TaggedError("CheckpointUncaptured
 export class CheckpointInheritedError extends TaggedError("CheckpointInheritedError") {}
 
 /** Why checkpoint navigation was refused; anything else is a `GenericError`. */
-export type CheckpointNavigationError = CheckpointConflictError | CheckpointInheritedError | CheckpointUncapturedError;
+export const CheckpointNavigationError = errorUnion(CheckpointConflictError, CheckpointInheritedError, CheckpointUncapturedError);
+
+export type CheckpointNavigationError = ErrorOf<typeof CheckpointNavigationError>;
 export type RevertToMessagePayload = z.infer<typeof RevertToMessagePayload>;
 export type UndoCheckpointPayload = z.infer<typeof UndoCheckpointPayload>;
 export type RedoCheckpointPayload = z.infer<typeof RedoCheckpointPayload>;
