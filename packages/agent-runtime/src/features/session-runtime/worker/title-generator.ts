@@ -1,5 +1,5 @@
 import type {AssistantMessage, Context} from "@earendil-works/pi-ai";
-import type {UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
 import type {PiModel, PiSdk} from "@supernova/agent-runtime/pi/sdk";
 
 const sessionTitleSystemPrompt = `Generate a concise title for this coding session based on the user's first message.

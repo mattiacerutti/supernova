@@ -4,7 +4,7 @@ import {basename, dirname, join, resolve} from "node:path";
 import type {CompactionEntry, CustomEntry, SessionEntry} from "@earendil-works/pi-coding-agent";
 import {getAgentDir, SessionManager} from "@earendil-works/pi-coding-agent";
 import type {EntryRecord} from "@earendil-works/pi-durable";
-import type {Session, SessionSummary, SessionWorktree, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {Session, SessionSummary, SessionWorktree, UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
 
 /**
  * Read-only access to sessions written by the old Pi SDK (`<agentDir>/sessions/<project>/<timestamp>_<id>.jsonl`).

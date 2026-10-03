@@ -1,4 +1,4 @@
-import type {ProviderAuthSource} from "@supernova/contracts/providers/schemas";
+import type {ProviderAuthSource} from "@supernova/contracts/services/providers/schemas";
 
 /** Maps Pi provider auth source values into shared provider auth source values. */
 export function normalizeAuthSource(source: string | undefined): ProviderAuthSource | undefined {

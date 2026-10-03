@@ -17,7 +17,7 @@ export function useComposerSuggestions(projectPath: string, match: ComposerSugge
       enabled: !!projectPath,
       staleTime: Infinity,
       gcTime: Infinity,
-      queryFn: () => unwrap(runtime.composer.listSuggestions({projectPath}, BACKGROUND_CONTEXT)),
+      queryFn: () => unwrap(runtime.sessions.listComposerSuggestions({projectPath}, BACKGROUND_CONTEXT)),
     }),
     select: (result): ComposerSuggestionItem[] => {
       if (!match || match.kind === "file") return [];

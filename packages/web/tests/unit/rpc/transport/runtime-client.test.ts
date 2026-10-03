@@ -36,14 +36,14 @@ describe("runtime service facades", () => {
   });
 
   // Chord's facades answer every member, `then` included; a promise resolved with one calls a remote `then`. That
-  // is why the attachment record, not the controller, is what promises resolve with (see `attached` in the store).
+  // is why the attachment record, not the service, is what promises resolve with (see `attached` in the store).
   it("stay out of promise resolution when held by a record", async () => {
     const calls: string[] = [];
     const echo = facade(calls);
 
-    const record = await Promise.resolve({controller: echo});
+    const record = await Promise.resolve({sessionRuntime: echo});
 
-    expect(record.controller).toBe(echo);
+    expect(record.sessionRuntime).toBe(echo);
     expect(calls).toEqual([]);
   });
 });

@@ -1,4 +1,4 @@
-import type {UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
 import {Node} from "@tiptap/core";
 import Document from "@tiptap/extension-document";
 import HardBreak from "@tiptap/extension-hard-break";

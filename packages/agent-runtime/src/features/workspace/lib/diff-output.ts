@@ -1,4 +1,4 @@
-import type {WorkspaceChangeEntry, WorkspaceChangeStatus} from "@supernova/contracts/workspace/schemas";
+import type {WorkspaceChangeEntry, WorkspaceChangeStatus} from "@supernova/contracts/services/workspace/schemas";
 
 /** Parses `git diff --numstat -z` output into per-path line counts. Binary files report `-` and count as zero. */
 export function parseNumstat(output: string): Map<string, {additions: number; deletions: number}> {

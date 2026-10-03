@@ -1,5 +1,5 @@
-import type {SessionSetupStep} from "@supernova/contracts/session-runtime/procedures";
-import type {ModelReference, Session, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {SessionSetupStep} from "@supernova/contracts/services/session-runtime/procedures";
+import type {ModelReference, Session, UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
 import {useMemo, useRef, useState} from "react";
 import {buildCommittedTimelineItems, buildLiveTimelineItems} from "@/features/sessions/lib/timeline/rows/build-session-timeline";
 import {buildSessionTurns} from "@/features/sessions/lib/timeline/turns/build-turns";

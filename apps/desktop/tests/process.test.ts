@@ -5,7 +5,7 @@ import {createRequire} from "node:module";
 import {tmpdir} from "node:os";
 import {join, resolve} from "node:path";
 import {Client} from "@earendil-works/pi-client";
-import {RUNTIME_SERVER_ID} from "@supernova/contracts/runtime/services";
+import {RUNTIME_SERVER_ID} from "@supernova/contracts/lib/protocol";
 import {startServerProcess} from "@supernova/server/process";
 
 test("Electron's Node mode starts and stops the bundled headless API", async () => {

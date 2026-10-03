@@ -1,6 +1,6 @@
 import {useRef, useState} from "react";
-import type {ProviderLoginAuthType} from "@supernova/contracts/providers/procedures";
-import type {Provider} from "@supernova/contracts/providers/schemas";
+import type {ProviderLoginAuthType} from "@supernova/contracts/services/providers/procedures";
+import type {Provider} from "@supernova/contracts/services/providers/schemas";
 import {useCancelProviderLogin} from "@/features/settings/api/providers/login/cancel-provider-login";
 import {useStartProviderLogin} from "@/features/settings/api/providers/login/start-provider-login";
 

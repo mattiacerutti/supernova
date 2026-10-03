@@ -1,8 +1,9 @@
 import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import type {QueryClient} from "@tanstack/react-query";
-import type {SessionActivity, SessionSetupStep} from "@supernova/contracts/session-runtime/procedures";
-import type {ModelReference, OutgoingMessage, Session, SessionWorkspaceSelection, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
-import type {SessionController, SessionDirectoryState} from "@supernova/contracts/sessions/services";
+import type {SessionActivity, SessionSetupStep} from "@supernova/contracts/services/session-runtime/procedures";
+import type {ModelReference, OutgoingMessage, Session, SessionWorkspaceSelection, UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
+import type {SessionRuntimeService} from "@supernova/contracts/services/session-runtime/services";
+import type {SessionDirectoryState} from "@supernova/contracts/services/sessions/services";
 import {create} from "zustand";
 import {useSettingsStore} from "@/stores/settings-store";
 import {showToast} from "@/lib/toast";
@@ -185,9 +186,9 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
   };
 
   /**
-   * The attached session's controller. Chord's service facades answer every member, `then` included, so one must
+   * The attached session's runtime service. Chord's service facades answer every member, `then` included, so one must
    * never be what a promise resolves with: that would call a remote `then`. The attachment record is returned and the
-   * controller read from it.
+   * service read from it.
    */
   const attached = (services: RuntimeClient, sessionId: string): Promise<AttachedSession> => services.attach(sessionId);
 
@@ -210,7 +211,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
       turnCount: turnCount(queryClient.getQueryData<Session>(sessionKeys.detail(sessionId))),
     };
     update(sessionId, (entry) => ({...entry, error: null, pending}));
-    return {captureCheckpoints: useSettingsStore.getState().captureCheckpoints, contentParts, modelReference};
+    return {captureCheckpoints: useSettingsStore.getState().captureCheckpoints, contentParts: [...contentParts], modelReference};
   };
 
   const failPendingMessage = (sessionId: string, error: string | null): void => {
@@ -224,7 +225,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
 
     const message = beginPendingMessage(input);
     void attached(services, sessionId)
-      .then(({controller}) => unwrap(controller.send(message, BACKGROUND_CONTEXT)))
+      .then(({sessionRuntime}) => unwrap(sessionRuntime.sendMessage(message, BACKGROUND_CONTEXT)))
       .then(() => settlePending(sessionId, turnCount(queryClient.getQueryData<Session>(sessionKeys.detail(sessionId)))))
       .catch((cause: unknown) => failPendingMessage(sessionId, errorMessage(cause, "Failed to send message.")));
   };
@@ -237,7 +238,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
     if (workspace.mode === "worktree") update(sessionId, (entry) => ({...entry, setupStep: "worktree"}));
 
     try {
-      const session = await unwrap(services.management.create({id: sessionId, message, projectPath, workspace}, BACKGROUND_CONTEXT));
+      const session = await unwrap(services.sessions.create({id: sessionId, message, projectPath, workspace}, BACKGROUND_CONTEXT));
       // The transcript's first value replaces this once the page attaches; until then the reply is the newest state.
       queryClient.setQueryData<Session>(sessionKeys.detail(sessionId), (cached) => (cached && turnCount(cached) > turnCount(session) ? cached : session));
       settlePending(sessionId, turnCount(session));
@@ -261,7 +262,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
 
     update(sessionId, (entry) => ({...entry, command: "stopping"}));
     void attached(services, sessionId)
-      .then(({controller}) => controller.abort(BACKGROUND_CONTEXT))
+      .then(({sessionRuntime}) => sessionRuntime.abort(BACKGROUND_CONTEXT))
       .catch(() => update(sessionId, (entry) => ({...entry, command: entry.command === "stopping" ? null : entry.command})));
   };
 
@@ -274,7 +275,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
     const finish = (error: string | null): void =>
       update(sessionId, (entry) => ({...entry, command: entry.command === "compacting" ? null : entry.command, ...(error ? {error} : {})}));
     void attached(services, sessionId)
-      .then(({controller}) => unwrap(controller.compact({modelReference}, BACKGROUND_CONTEXT)))
+      .then(({sessionRuntime}) => unwrap(sessionRuntime.compact({modelReference}, BACKGROUND_CONTEXT)))
       .then(
         () => finish(null),
         (cause: unknown) => finish(errorMessage(cause, "Failed to compact session."))
@@ -283,7 +284,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
 
   const runCheckpointNavigation = (
     input: CheckpointNavigationInput & {
-      execute: (session: SessionController, force: boolean | undefined) => ReturnType<SessionController["undo"]>;
+      execute: (session: SessionRuntimeService, force: boolean | undefined) => ReturnType<SessionRuntimeService["undoCheckpoint"]>;
       turnId: string | undefined;
       title: string;
     }
@@ -301,13 +302,13 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
 
     const executeNavigation = (force: boolean | undefined): Promise<CheckpointNavigationOutcome> =>
       attached(services, sessionId)
-        .then(({controller}) => unwrap(execute(controller, force)))
+        .then(({sessionRuntime}) => unwrap(execute(sessionRuntime, force)))
         .then((): CheckpointNavigationOutcome => {
           finish();
           return "applied";
         })
         .catch((cause: unknown): CheckpointNavigationOutcome => {
-          const code = runtimeError<SessionController["undo"]>(cause)?.code;
+          const code = runtimeError<SessionRuntimeService["undoCheckpoint"]>(cause)?.code;
           const reason = code === "CheckpointConflictError" ? "conflict" : code === "CheckpointUncapturedError" ? "uncaptured" : undefined;
           if (reason && !force) {
             let pending = true;
@@ -342,7 +343,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
   const undoCheckpoint = (input: CheckpointNavigationInput & NavigationTargets): Promise<CheckpointNavigationOutcome> =>
     runCheckpointNavigation({
       ...input,
-      execute: (session, force) => session.undo({force}, BACKGROUND_CONTEXT),
+      execute: (session, force) => session.undoCheckpoint({force}, BACKGROUND_CONTEXT),
       turnId: input.lastTurnId,
       title: "Unable to undo checkpoint",
     });
@@ -350,7 +351,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
   const redoCheckpoint = (input: CheckpointNavigationInput & NavigationTargets): Promise<CheckpointNavigationOutcome> =>
     runCheckpointNavigation({
       ...input,
-      execute: (session, force) => session.redo({force}, BACKGROUND_CONTEXT),
+      execute: (session, force) => session.redoCheckpoint({force}, BACKGROUND_CONTEXT),
       turnId: input.firstUndoneTurnId,
       title: "Unable to redo checkpoint",
     });
@@ -358,7 +359,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
   const revertToMessage = (input: RevertToMessageInput): Promise<CheckpointNavigationOutcome> =>
     runCheckpointNavigation({
       ...input,
-      execute: (session, force) => session.revert({force, turnId: input.turnId}, BACKGROUND_CONTEXT),
+      execute: (session, force) => session.revertToMessage({force, turnId: input.turnId}, BACKGROUND_CONTEXT),
       title: "Unable to revert message",
     });
 

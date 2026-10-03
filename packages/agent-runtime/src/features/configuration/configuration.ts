@@ -1,5 +1,5 @@
-import type {GetConfigurationPayload} from "@supernova/contracts/configuration/procedures";
-import {GetConfigurationResult} from "@supernova/contracts/configuration/procedures";
+import type {GetConfigurationPayload} from "@supernova/contracts/services/configuration/procedures";
+import {GetConfigurationResult} from "@supernova/contracts/services/configuration/procedures";
 import {loadPiSettings} from "@supernova/agent-runtime/pi/config/settings";
 
 /** Client-safe view of the server's Pi settings. */

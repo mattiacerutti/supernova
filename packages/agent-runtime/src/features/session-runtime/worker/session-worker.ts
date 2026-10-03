@@ -1,8 +1,8 @@
 import {randomUUID} from "node:crypto";
 import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
-import {CheckpointConflictError} from "@supernova/contracts/session-runtime/procedures";
-import type {SessionActivity} from "@supernova/contracts/session-runtime/procedures";
-import type {Session} from "@supernova/contracts/sessions/schemas";
+import {CheckpointConflictError} from "@supernova/contracts/services/session-runtime/procedures";
+import type {SessionActivity} from "@supernova/contracts/services/session-runtime/procedures";
+import type {Session} from "@supernova/contracts/services/sessions/schemas";
 import type {CheckpointRef, CheckpointStatus} from "@supernova/agent-runtime/pi/lib/session/session-state";
 import type {SessionFile} from "@supernova/agent-runtime/pi/session-file";
 import type {SessionHistory, SessionStore} from "@supernova/agent-runtime/pi/session-store";

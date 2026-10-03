@@ -1,6 +1,6 @@
 import type {EntryRecord, JsonObject} from "@earendil-works/pi-durable";
 import {defineDoc} from "@earendil-works/pi-durable";
-import type {SessionWorktree, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {SessionWorktree, UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
 
 /** What Supernova knows about a session without opening its file: one entry of the session index. */
 export interface SessionRecord {

@@ -1,4 +1,4 @@
-import type {ServiceResult} from "@supernova/contracts/runtime/services";
+import type {ServiceResult} from "@supernova/contracts/lib/protocol";
 
 /** The failure codes a service method can return: its declared errors' tags and `GenericError`. */
 export type FailureCode<Method> = Method extends (...args: never[]) => Promise<infer Result>

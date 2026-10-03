@@ -1,5 +1,5 @@
 import {expect, test} from "bun:test";
-import type {DesktopUpdateState} from "@supernova/contracts/desktop/api";
+import type {DesktopUpdateState} from "@supernova/contracts/lib/desktop";
 import type {UpdaterEvent} from "@/updates/state";
 import {INITIAL_UPDATE_STATE, reduceUpdateState} from "@/updates/state";
 

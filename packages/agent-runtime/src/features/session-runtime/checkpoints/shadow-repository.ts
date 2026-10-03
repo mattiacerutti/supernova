@@ -1,7 +1,7 @@
 import {copyFile, lstat, mkdir, mkdtemp, readdir, realpath, rm, stat, writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {basename, dirname, join, relative, resolve} from "node:path";
-import {CheckpointConflictError} from "@supernova/contracts/session-runtime/procedures";
+import {CheckpointConflictError} from "@supernova/contracts/services/session-runtime/procedures";
 import {
   addPaths,
   clearIndexFlags,

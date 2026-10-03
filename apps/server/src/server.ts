@@ -2,7 +2,7 @@ import {createServer} from "node:http";
 import type {ServerResponse} from "node:http";
 import type {AddressInfo, Socket} from "node:net";
 import {Server as RuntimeServer} from "@earendil-works/pi-server";
-import {RUNTIME_SERVER_ID, RUNTIME_SOCKET_PATH} from "@supernova/contracts/runtime/services";
+import {RUNTIME_SERVER_ID, RUNTIME_SOCKET_PATH} from "@supernova/contracts/lib/protocol";
 import {createAgentRuntime, runtimeServiceHost} from "@supernova/agent-runtime";
 import {createWebSocketListener} from "@/runtime-socket";
 

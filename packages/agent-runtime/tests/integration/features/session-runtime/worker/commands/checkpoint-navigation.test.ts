@@ -8,7 +8,7 @@ import type {AssistantMessage} from "@earendil-works/pi-ai";
 import {afterEach, describe, expect, it} from "vitest";
 import type {CheckpointStore} from "@supernova/agent-runtime/features/session-runtime/checkpoints/checkpoint-store";
 import type {SessionRuntime} from "@supernova/agent-runtime/features/session-runtime/session-runtime";
-import type {ModelReference, Session} from "@supernova/contracts/sessions/schemas";
+import type {ModelReference, Session} from "@supernova/contracts/services/sessions/schemas";
 import {createPiTestRuntime, fauxAssistantMessage, selectedModelReference, selectedPiModel, turnContents, turnIds, undoneContents, waitUntil} from "@tests/support/session-runtime";
 
 const execFilePromise = promisify(execFile);

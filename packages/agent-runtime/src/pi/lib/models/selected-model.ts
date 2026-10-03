@@ -1,4 +1,4 @@
-import type {ModelReference} from "@supernova/contracts/sessions/schemas";
+import type {ModelReference} from "@supernova/contracts/services/sessions/schemas";
 import type {PiModel, PiSdk} from "@supernova/agent-runtime/pi/sdk";
 
 /**

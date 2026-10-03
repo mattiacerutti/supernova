@@ -1,7 +1,7 @@
 import type {QueryClient} from "@tanstack/react-query";
-import type {ProjectSessionsListResult} from "@supernova/contracts/projects/procedures";
-import type {Session, SessionSummary} from "@supernova/contracts/sessions/schemas";
-import type {SessionDirectoryEntry, SessionDirectoryState} from "@supernova/contracts/sessions/services";
+import type {ProjectSessionsListResult} from "@supernova/contracts/services/projects/procedures";
+import type {Session, SessionSummary} from "@supernova/contracts/services/sessions/schemas";
+import type {SessionDirectoryEntry, SessionDirectoryState} from "@supernova/contracts/services/sessions/services";
 import {sessionKeys} from "@/features/sessions/api/query-keys";
 import {useSessionLiveStore} from "@/features/sessions/stores/conversation/session-live-store";
 import {useSessionVisitsStore} from "@/features/sessions/stores/sidebar/session-visits-store";
@@ -71,7 +71,7 @@ interface ConnectSessionEventsInput {
 export function connectSessionEvents(input: ConnectSessionEventsInput): () => void {
   const {onEvent, onReconnect, queryClient, services} = input;
   let previous: SessionDirectoryState | undefined;
-  const stopDirectory = services.directory.subscribe((value) => {
+  const stopDirectory = services.sessions.directory.subscribe((value) => {
     applyDirectory({previous, queryClient, value});
     for (const [sessionId, entry] of Object.entries(value.sessions)) {
       const before = previous?.sessions[sessionId];
@@ -91,7 +91,7 @@ export function connectSessionEvents(input: ConnectSessionEventsInput): () => vo
     onReconnect?.();
   });
 
-  // The open session's transcript: attach when it changes, write every value into its cached document.
+  // The open session's document: attach when it changes, write every value into its cache.
   let attached: {readonly sessionId: string; readonly stop: () => void} | undefined;
   const follow = (sessionId: string | null): void => {
     if (attached?.sessionId === sessionId) return;
@@ -108,9 +108,9 @@ export function connectSessionEvents(input: ConnectSessionEventsInput): () => vo
       },
     };
     void services.attach(sessionId).then(
-      ({transcript}) => {
+      ({sessionRuntime}) => {
         if (stopped) return;
-        stopTranscript = transcript.subscribe((session) => {
+        stopTranscript = sessionRuntime.session.subscribe((session) => {
           if (session.id === sessionId) applyTranscript({queryClient, session});
         });
       },

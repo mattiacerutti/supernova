@@ -1,6 +1,6 @@
 import type {ImageContent} from "@earendil-works/pi-ai";
-import type {SendMessagePayload} from "@supernova/contracts/session-runtime/procedures";
-import type {UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {SendMessagePayload} from "@supernova/contracts/services/session-runtime/procedures";
+import type {UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
 import type {ResourceCache} from "@supernova/agent-runtime/pi/resource-cache";
 import {imageContentFromParts} from "@supernova/agent-runtime/pi/lib/user-message/content-parts";
 import {buildPrompt} from "@supernova/agent-runtime/features/session-runtime/worker/lib/prompt-builder";

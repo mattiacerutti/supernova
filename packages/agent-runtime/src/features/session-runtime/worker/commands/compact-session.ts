@@ -1,4 +1,4 @@
-import type {CompactSessionPayload} from "@supernova/contracts/session-runtime/procedures";
+import type {CompactSessionPayload} from "@supernova/contracts/services/session-runtime/procedures";
 import {findSelectedModel} from "@supernova/agent-runtime/pi/lib/models/selected-model";
 import {toPiThinkingLevel} from "@supernova/agent-runtime/pi/lib/models/thinking-levels";
 import type {SessionWorker} from "@supernova/agent-runtime/features/session-runtime/worker/session-worker";

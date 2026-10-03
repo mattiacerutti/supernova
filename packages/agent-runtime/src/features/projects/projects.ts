@@ -1,5 +1,10 @@
-import type {ProjectSessionArchivePayload, ProjectSessionArchiveResult, ProjectSessionsListPayload, ProjectSessionsListResult} from "@supernova/contracts/projects/procedures";
-import {ProjectSessionArchiveError} from "@supernova/contracts/projects/procedures";
+import type {
+  ProjectSessionArchivePayload,
+  ProjectSessionArchiveResult,
+  ProjectSessionsListPayload,
+  ProjectSessionsListResult,
+} from "@supernova/contracts/services/projects/procedures";
+import {ProjectSessionArchiveError} from "@supernova/contracts/services/projects/procedures";
 import {newestFirst, toSessionSummary} from "@supernova/agent-runtime/features/projects/lib/map-session-summaries";
 import type {SessionStore} from "@supernova/agent-runtime/pi/session-store";
 import {archiveLegacySession, listLegacySessions} from "@supernova/agent-runtime/pi/lib/session/legacy-sessions";

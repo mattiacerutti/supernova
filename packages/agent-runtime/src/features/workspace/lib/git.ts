@@ -1,4 +1,4 @@
-import {WorkspaceBinaryFileError, WorkspaceFileTooLargeError, WorkspaceNotARepositoryError} from "@supernova/contracts/workspace/schemas";
+import {WorkspaceBinaryFileError, WorkspaceFileTooLargeError, WorkspaceNotARepositoryError} from "@supernova/contracts/services/workspace/schemas";
 import {runGitResult} from "@supernova/agent-runtime/lib/git-process";
 
 /** Previews stay under this so a future editor never has to save a truncated file. */

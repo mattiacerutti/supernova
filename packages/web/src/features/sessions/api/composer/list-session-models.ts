@@ -14,7 +14,7 @@ export function useSessionModels(projectPath: string) {
   return useQuery(
     queryOptions({
       queryFn: () =>
-        unwrap(runtime.composer.listModels({projectPath}, BACKGROUND_CONTEXT)).catch((error: unknown) => {
+        unwrap(runtime.sessions.listModels({projectPath}, BACKGROUND_CONTEXT)).catch((error: unknown) => {
           showToast("Unable to load models", "Check your settings and extensions, then retry.", {
             id: `models-load-error:${projectPath}`,
             actionProps: {children: "Retry", onClick: () => void queryClient.invalidateQueries({queryKey})},

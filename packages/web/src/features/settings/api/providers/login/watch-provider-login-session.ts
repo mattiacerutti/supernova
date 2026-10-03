@@ -1,4 +1,4 @@
-import type {ProviderLoginSession} from "@supernova/contracts/providers/schemas";
+import type {ProviderLoginSession} from "@supernova/contracts/services/providers/schemas";
 import {useRuntime} from "@/rpc/use-runtime";
 
 type Unsubscribe = () => void;
@@ -12,7 +12,7 @@ export function useWatchProviderLoginSession(): (loginSessionId: string, onSessi
 
   return (loginSessionId, onSession) => {
     let last: ProviderLoginSession | undefined;
-    return runtime.providers.state.subscribe((state) => {
+    return runtime.providers.logins.subscribe((state) => {
       const session = state.logins[loginSessionId];
       if (!session || session === last) return;
       last = session;

@@ -1,5 +1,5 @@
 import type {Skill} from "@earendil-works/pi-coding-agent";
-import type {UserMessageAttachmentPart, UserMessageContentPart, UserMessageReferencePart} from "@supernova/contracts/sessions/schemas";
+import type {UserMessageAttachmentPart, UserMessageContentPart, UserMessageReferencePart} from "@supernova/contracts/services/sessions/schemas";
 import type {ResourceCache} from "@supernova/agent-runtime/pi/resource-cache";
 import {contentFromParts} from "@supernova/agent-runtime/pi/lib/user-message/content-parts";
 

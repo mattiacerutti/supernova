@@ -36,7 +36,7 @@ async function isWorktreeRoot(directory: string): Promise<boolean> {
  * Project-relative roots of the repositories at the project root and one level below it, sorted.
  * Same discovery rules as checkpoints: deeper repositories belong to whichever repository contains them.
  */
-export async function discoverWorkspaceRepositories(projectPath: string): Promise<readonly string[]> {
+export async function discoverWorkspaceRepositories(projectPath: string): Promise<string[]> {
   let children: string[];
   try {
     children = (await readdir(projectPath, {withFileTypes: true})).filter((entry) => entry.isDirectory()).map((entry) => entry.name);

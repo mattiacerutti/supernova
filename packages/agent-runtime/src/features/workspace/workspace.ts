@@ -1,6 +1,13 @@
 import {readFile} from "node:fs/promises";
 import {join} from "node:path";
 import type {
+  TerminalClosePayload,
+  TerminalOpenPayload,
+  TerminalOpenResult,
+  TerminalResizePayload,
+  TerminalsListPayload,
+  TerminalsListResult,
+  TerminalWritePayload,
   WorkspaceBranch,
   WorkspaceBranchesListPayload,
   WorkspaceBranchesListResult,
@@ -14,23 +21,14 @@ import type {
   WorkspaceFilesListResult,
   WorkspaceRepositoriesListPayload,
   WorkspaceRepositoriesListResult,
-} from "@supernova/contracts/workspace/procedures";
-import type {WorkspaceChangeEntry} from "@supernova/contracts/workspace/schemas";
-import {WorkspaceFileNotFoundError, WorkspaceNotARepositoryError} from "@supernova/contracts/workspace/schemas";
+} from "@supernova/contracts/services/workspace/procedures";
+import type {WorkspaceChangeEntry} from "@supernova/contracts/services/workspace/schemas";
+import {WorkspaceFileNotFoundError, WorkspaceNotARepositoryError} from "@supernova/contracts/services/workspace/schemas";
 import {parseNameStatus, parseNumstat} from "@supernova/agent-runtime/features/workspace/lib/diff-output";
 import {decodeWorkspaceFile, workspaceGit} from "@supernova/agent-runtime/features/workspace/lib/git";
 import {pathInProject} from "@supernova/agent-runtime/features/workspace/lib/paths";
 import {discoverWorkspaceRepositories, repositoryPath} from "@supernova/agent-runtime/features/workspace/lib/repositories";
 import {runGitResult} from "@supernova/agent-runtime/lib/git-process";
-import type {
-  TerminalClosePayload,
-  TerminalOpenPayload,
-  TerminalOpenResult,
-  TerminalResizePayload,
-  TerminalsListPayload,
-  TerminalsListResult,
-  TerminalWritePayload,
-} from "@supernova/contracts/terminals/procedures";
 import type {Terminals} from "@supernova/agent-runtime/features/workspace/terminals/terminals";
 
 export interface WorkspaceDeps {
@@ -109,7 +107,7 @@ export class Workspace {
   }
 
   /** Every terminal's output as replicated state. */
-  public get terminalsState() {
+  public get terminals() {
     return this.deps.terminals.state;
   }
 

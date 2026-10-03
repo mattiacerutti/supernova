@@ -1,4 +1,4 @@
-import type {AssistantMessage, EntryRecord, ModelDetails, ModelReference, Session, SessionSummary, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {AssistantMessage, EntryRecord, ModelDetails, ModelReference, Session, SessionSummary, UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
 
 export const TIMELINE_PROJECT_PATH = "/tmp/supernova-timeline-e2e";
 export const TIMELINE_PROJECT_NAME = "supernova-timeline-e2e";

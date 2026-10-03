@@ -1,4 +1,4 @@
-import type {WorkspaceService} from "@supernova/contracts/workspace/services";
+import type {WorkspaceService} from "@supernova/contracts/services/workspace/services";
 import type {FailureCode} from "@/rpc/runtime-result";
 import {runtimeError} from "@/rpc/runtime-result";
 

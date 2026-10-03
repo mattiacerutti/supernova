@@ -1,4 +1,4 @@
-import type {DesktopApi, DesktopUpdateState} from "@supernova/contracts/desktop/api";
+import type {DesktopApi, DesktopUpdateState} from "@supernova/contracts/lib/desktop";
 import type {IpcRendererEvent} from "electron";
 import {contextBridge, ipcRenderer} from "electron";
 import {DESKTOP_IPC_CHANNELS} from "@/ipc";

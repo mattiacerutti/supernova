@@ -61,7 +61,7 @@ flowchart BT
     end
 
     edge <-->|services, state deltas| client
-    client -->|transcript values| query
+    client -->|session document values| query
     client -->|directory| liveStore
     query --> timeline
 ```
@@ -80,16 +80,18 @@ flowchart BT
 
 ## Services
 
-The contracts are in `contracts/src/sessions/services.ts`; the host is `agent-runtime/src/rpc/runtime-services.ts`, served by `pi-server` with every other runtime service on the HTTP server's `/ws` WebSocket (`apps/server/src/runtime-socket.ts`).
+Two services carry sessions, one per feature: `SessionsService` (`contracts/src/services/sessions/services.ts`) and `SessionRuntimeService` (`contracts/src/services/session-runtime/services.ts`). The host is `agent-runtime/src/rpc/runtime-services.ts`, served by `pi-server` with every other runtime service on the HTTP server's `/ws` WebSocket (`apps/server/src/runtime-socket.ts`).
 
-| Scope            | Service             | Members                                                                   |
-| ---------------- | ------------------- | ------------------------------------------------------------------------- |
-| Server           | `SessionDirectory`  | `state`: every open session's activity, summary, setup step, last problem |
-| Server           | `SessionManagement` | `create`, `fork`, `rename`, `read`, `attach`, `detach`                    |
-| Attached session | `SessionController` | `send`, `abort`, `compact`, `undo`, `redo`, `revert`                      |
-| Attached session | `SessionTranscript` | `state`: the session document                                             |
+| Scope            | Service                 | Members                                                                                                            |
+| ---------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Connection       | `SessionsService`       | `directory` (every open session's activity, summary, setup step, last problem), `create`, `fork`, `rename`, `get`, |
+|                  |                         | `listModels`, `listComposerSuggestions`, `attach`, `detach`                                                        |
+| Attached session | `SessionRuntimeService` | `session` (the session document), `sendMessage`, `compact`, `abort`, `undoCheckpoint`, `redoCheckpoint`,           |
+|                  |                         | `revertToMessage`                                                                                                  |
 
-A connection attaches one session at a time, as Pi's protocol routes it: the server validates the attachment of every session call, so a delayed frame of a previous attachment cannot reach the new one. The browser attaches the session it shows and reads others (a sidebar prefetch) with `read`. A legacy session cannot attach; `read` returns it.
+`directory` is written by session runtime (`SessionBoard`) but served on `SessionsService`, because a client reads it before attaching anything; `attach` and `detach` are pi-server's routing, there for the same reason.
+
+A connection attaches one session at a time, as Pi's protocol routes it: the server validates the attachment of every session runtime call, so a delayed frame of a previous attachment cannot reach the new one. The browser attaches the session it shows and reads others (a sidebar prefetch) with `get`. A legacy session cannot attach; `get` returns it.
 
 Expected failures are results, not errors: the protocol carries only its own error codes, so a method returns `{ok: false, error: {code, message}}` with the contract error's tag, and the client branches on the tag (`CheckpointConflictError` offers a forced retry).
 

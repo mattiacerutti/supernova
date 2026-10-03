@@ -1,5 +1,5 @@
 import type {Pty, SpawnPty} from "@supernova/agent-runtime/features/workspace/terminals/pty";
-import type {Terminal} from "@supernova/contracts/terminals/schemas";
+import type {Terminal} from "@supernova/contracts/services/workspace/schemas";
 
 /** Output kept for clients that attach later. Enough for a few screens of scrollback without holding a build log forever. */
 const HISTORY_LIMIT_CHARS = 256 * 1024;

@@ -1,4 +1,4 @@
-import type {ToolResultMessage, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {ToolResultMessage, UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
 
 /** One tool call of a turn, as Pi recorded it: the call's name and arguments, and its result once it ran. */
 export interface SessionToolCall {

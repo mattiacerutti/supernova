@@ -6,8 +6,8 @@ import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {afterEach, describe, expect, it, vi} from "vitest";
 import type {CheckpointStore} from "@supernova/agent-runtime/features/session-runtime/checkpoints/checkpoint-store";
-import type {Session} from "@supernova/contracts/sessions/schemas";
-import type {SessionDirectoryState} from "@supernova/contracts/sessions/services";
+import type {Session} from "@supernova/contracts/services/sessions/schemas";
+import type {SessionDirectoryState} from "@supernova/contracts/services/sessions/services";
 import {
   assistantTexts,
   createPiTestRuntime,

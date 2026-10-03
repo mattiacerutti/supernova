@@ -81,10 +81,10 @@ A helper earns a place in `lib/` when several features use it. Something used by
 
 ### Runtime hooks
 
-- Get the runtime connection with `useRuntime()` (or take a `RuntimeClient` parameter in an options builder, like `getSessionQueryOptions(runtime, id)`). It exposes every service with methods that wait for the connection and take no `Context`.
+- Get the runtime connection with `useRuntime()` (or take a `RuntimeClient` parameter in an options builder, like `getSessionQueryOptions(runtime, id)`). It has one member per server service (`runtime.sessions`, `runtime.workspace`, …), whose methods take Chord's `Context` last as the contracts declare; `runtime.attach(id)` returns the attached session's `sessionRuntime`.
 - Calls return `ServiceResult`s. In React Query functions, `unwrap()` from `@/rpc/runtime-result` turns a failure into a thrown `RuntimeError`. Branch on its code with `runtimeError<Service["method"]>(error)?.code`, which is typed as the method's declared error tags plus `"GenericError"`; a `Record<FailureCode<…>, string>` of messages fails to compile when the contract gains an error.
-- Follow replicated state (`runtime.terminals.state`, `runtime.providers.state`, `runtime.directory`) with `subscribe`, which delivers the current value at once.
-- Sessions: `management` for lifecycle and reads, the attached session's `controller` for commands, and its transcript's replicated state, which `api/conversation/session-events.ts` writes into the session's React Query entry.
+- Follow replicated state (`runtime.workspace.terminals`, `runtime.providers.logins`, `runtime.sessions.directory`, `sessionRuntime.session`) with `subscribe`, which delivers the current value at once.
+- Sessions: `sessions` for lifecycle and reads, the attached session's `sessionRuntime` for commands and its document, which `api/conversation/session-events.ts` writes into the session's React Query entry.
 - Query keys come from the feature's `xKeys` object, shaped `[feature, ...scope]`, and are read from `queryOptions().queryKey` where an options object exists. Invalidate with the parent key (`sessionKeys.lists()`), never a literal array.
 
 ## Testing
@@ -102,7 +102,7 @@ See [Development](development.md#verification) for verification and the test wor
 - Keep Zustand stores feature-scoped under `src/features/<feature>/stores`; app-wide state (settings, sidebar) lives in `src/stores`.
 - Derive values from store state when possible instead of duplicating derived state.
 - Store actions take data and change state. They do not take callbacks, navigate, show toasts, or otherwise reach into the UI; a component reads store state and reacts to it.
-- `session-live-store` and `api/conversation/session-events` are bound to the session services and already do network I/O and optimistic updates. Add behavior around them, in a hook or at the page, not inside them.
+- `session-live-store` and `api/conversation/session-events` are bound to the session services (`sessions`, `sessionRuntime`) and already do network I/O and optimistic updates. Add behavior around them, in a hook or at the page, not inside them.
 
 ## UI language and design style
 

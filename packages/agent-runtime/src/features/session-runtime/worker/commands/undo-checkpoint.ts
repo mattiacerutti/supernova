@@ -1,4 +1,4 @@
-import type {UndoCheckpointPayload} from "@supernova/contracts/session-runtime/procedures";
+import type {UndoCheckpointPayload} from "@supernova/contracts/services/session-runtime/procedures";
 import {navigateToTurn} from "@supernova/agent-runtime/features/session-runtime/worker/lib/navigate-to-turn";
 import type {SessionWorker} from "@supernova/agent-runtime/features/session-runtime/worker/session-worker";
 

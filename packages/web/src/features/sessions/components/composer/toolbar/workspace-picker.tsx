@@ -1,4 +1,4 @@
-import type {WorkspaceBranch} from "@supernova/contracts/workspace/procedures";
+import type {WorkspaceBranch} from "@supernova/contracts/services/workspace/procedures";
 import {matchSorter} from "match-sorter";
 import {useState} from "react";
 import Button from "@/components/ui/button";

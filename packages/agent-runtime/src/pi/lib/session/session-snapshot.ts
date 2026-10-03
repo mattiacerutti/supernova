@@ -1,7 +1,7 @@
 import type {AgentState, EntryRecord, LiveState, UsageState} from "@earendil-works/pi-durable";
 import type {AssistantMessage, Message} from "@earendil-works/pi-ai";
 import {calculateContextTokens, estimateTokens} from "@earendil-works/pi-coding-agent";
-import type {Session, SessionContextUsage} from "@supernova/contracts/sessions/schemas";
+import type {Session, SessionContextUsage} from "@supernova/contracts/services/sessions/schemas";
 import type {SessionRecord, TurnRecord} from "@supernova/agent-runtime/pi/lib/session/session-state";
 
 type ContextMessage = Parameters<typeof estimateTokens>[0];

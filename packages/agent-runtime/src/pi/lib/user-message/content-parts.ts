@@ -1,5 +1,5 @@
 import type {ImageContent} from "@earendil-works/pi-ai";
-import type {UserMessageAttachmentPart, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {UserMessageAttachmentPart, UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
 
 /** Converts user message content parts into the plain text prompt content sent to Pi. */
 export function contentFromParts(contentParts: readonly UserMessageContentPart[]): string {

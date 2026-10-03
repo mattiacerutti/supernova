@@ -1,4 +1,4 @@
-import type {ModelReference} from "@supernova/contracts/sessions/schemas";
+import type {ModelReference} from "@supernova/contracts/services/sessions/schemas";
 import {afterEach, beforeEach, describe, expect, it, vi} from "vitest";
 
 function createLocalStorage() {

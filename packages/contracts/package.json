@@ -4,25 +4,21 @@
   "version": "0.5.0",
   "type": "module",
   "exports": {
-    ".": {
-      "types": "./src/index.ts",
-      "import": "./src/index.ts"
+    "./lib/*": {
+      "types": "./src/lib/*.ts",
+      "import": "./src/lib/*.ts"
     },
-    "./desktop/api": {
-      "types": "./src/desktop/api.ts",
-      "import": "./src/desktop/api.ts"
+    "./services/*/services": {
+      "types": "./src/services/*/services.ts",
+      "import": "./src/services/*/services.ts"
     },
-    "./*/services": {
-      "types": "./src/*/services.ts",
-      "import": "./src/*/services.ts"
+    "./services/*/procedures": {
+      "types": "./src/services/*/procedures/index.ts",
+      "import": "./src/services/*/procedures/index.ts"
     },
-    "./*/procedures": {
-      "types": "./src/*/procedures/index.ts",
-      "import": "./src/*/procedures/index.ts"
-    },
-    "./*/schemas": {
-      "types": "./src/*/schemas/index.ts",
-      "import": "./src/*/schemas/index.ts"
+    "./services/*/schemas": {
+      "types": "./src/services/*/schemas/index.ts",
+      "import": "./src/services/*/schemas/index.ts"
     }
   },
   "scripts": {

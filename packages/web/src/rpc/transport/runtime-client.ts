@@ -1,35 +1,22 @@
-import type {RemoteServiceTransport, ReplicatedState} from "@earendil-works/chord";
+import type {RemoteServiceTransport} from "@earendil-works/chord";
 import {copyJson, createRemoteServiceBinding} from "@earendil-works/chord";
 import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import type {ByteTransportFactory, ConnectionState} from "@earendil-works/pi-client";
 import {Client, createClientServiceTransport} from "@earendil-works/pi-client";
-import {ConfigurationService} from "@supernova/contracts/configuration/services";
-import {ExtensionsService} from "@supernova/contracts/extensions/services";
-import {FoldersService} from "@supernova/contracts/folders/services";
-import {ProjectsService} from "@supernova/contracts/projects/services";
-import {ProvidersService} from "@supernova/contracts/providers/services";
-import {RUNTIME_SERVER_ID, RUNTIME_SOCKET_PATH} from "@supernova/contracts/runtime/services";
-import type {Session} from "@supernova/contracts/sessions/schemas";
-import type {SessionDirectoryState} from "@supernova/contracts/sessions/services";
-import {ComposerService, SessionController, SessionDirectory, SessionManagement, SessionTranscript} from "@supernova/contracts/sessions/services";
-import {TerminalsService} from "@supernova/contracts/terminals/services";
-import {WorkspaceService} from "@supernova/contracts/workspace/services";
+import {ConfigurationService} from "@supernova/contracts/services/configuration/services";
+import {ExtensionsService} from "@supernova/contracts/services/extensions/services";
+import {FoldersService} from "@supernova/contracts/services/folders/services";
+import {ProjectsService} from "@supernova/contracts/services/projects/services";
+import {ProvidersService} from "@supernova/contracts/services/providers/services";
+import {RUNTIME_SERVER_ID, RUNTIME_SOCKET_PATH} from "@supernova/contracts/lib/protocol";
+import {SessionRuntimeService} from "@supernova/contracts/services/session-runtime/services";
+import {SessionsService} from "@supernova/contracts/services/sessions/services";
+import {WorkspaceService} from "@supernova/contracts/services/workspace/services";
 import {resolveSocketUrl} from "@/rpc/transport/endpoint";
 
 const RECONNECT_DELAY_MS = 1_000;
 
-const SERVER_SERVICES = [
-  ComposerService,
-  ConfigurationService,
-  ExtensionsService,
-  FoldersService,
-  ProjectsService,
-  ProvidersService,
-  SessionDirectory,
-  SessionManagement,
-  TerminalsService,
-  WorkspaceService,
-] as const;
+const SERVER_SERVICES = [ConfigurationService, ExtensionsService, FoldersService, ProjectsService, ProvidersService, SessionsService, WorkspaceService] as const;
 
 /** Connects one WebSocket carrying the runtime protocol's framed bytes as binary messages. */
 function webSocketTransport(url: string): ByteTransportFactory {
@@ -80,33 +67,30 @@ export function strictJsonTransport(transport: RemoteServiceTransport): RemoteSe
   };
 }
 
-/** The session the connection is attached to: its controller and transcript. */
+/** The session the connection is attached to, and its session runtime service. */
 export interface AttachedSession {
   readonly sessionId: string;
-  readonly controller: SessionController;
-  readonly transcript: ReplicatedState<Session>;
+  readonly sessionRuntime: SessionRuntimeService;
 }
 
 /**
- * The browser's connection to the runtime: Chord's facades of every server-wide service, and the services of the one
- * attached session. Methods take Chord's `Context` last, as the contracts declare them. A call made while the
+ * The browser's connection to the runtime: Chord's facades of the server's services, one per runtime feature, and
+ * the session runtime service of the one attached session. Methods take Chord's `Context` last, as the contracts declare them. A call made while the
  * connection is down fails as disconnected; wait for `ready()` first where that matters (startup, reconnects). The
  * client reconnects after a drop, rebinds every service, and attaches the same session again.
  */
 export interface RuntimeClient {
-  readonly composer: ComposerService;
   readonly configuration: ConfigurationService;
   readonly extensions: ExtensionsService;
   readonly folders: FoldersService;
   readonly projects: ProjectsService;
   readonly providers: ProvidersService;
-  readonly management: SessionManagement;
-  readonly directory: ReplicatedState<SessionDirectoryState>;
-  readonly terminals: TerminalsService;
+  /** Its `attach` also binds the attached session's runtime service, like the client's `attach`. */
+  readonly sessions: SessionsService;
   readonly workspace: WorkspaceService;
   /** Resolves once connected with every server-wide service bound; after a drop, once reconnected. */
   ready(): Promise<void>;
-  /** Attaches the session's services, replacing the previous attachment; resolves once its transcript arrived. */
+  /** Attaches the session, replacing the previous attachment; resolves once its document arrived. */
   attach(sessionId: string): Promise<AttachedSession>;
   /** Calls `listener` on every connection change; a reconnect means state was missed and must be read again. */
   onConnectionChange(listener: (state: ConnectionState) => void): () => void;
@@ -122,7 +106,7 @@ export function createRuntimeClient(endpoint: string): RuntimeClient {
     bound: false,
   });
   const sessionServices = createRemoteServiceBinding({
-    services: [SessionController, SessionTranscript],
+    services: [SessionRuntimeService],
     transport: strictJsonTransport(createClientServiceTransport(client, () => client.attachment)),
     bound: false,
   });
@@ -141,19 +125,18 @@ export function createRuntimeClient(endpoint: string): RuntimeClient {
   let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
   let disposed = false;
 
-  const remoteManagement = serverServices.use(SessionManagement);
-  const controller = sessionServices.use(SessionController);
-  const transcript = sessionServices.use(SessionTranscript).state;
+  const remoteSessions = serverServices.use(SessionsService);
+  const sessionRuntime = sessionServices.use(SessionRuntimeService);
 
-  /** Asks the server to route this connection's session services to the session, then binds them to it. */
+  /** Asks the server to route this connection's session runtime service to the session, then binds it. */
   const attachNow = async (sessionId: string): Promise<AttachedSession> => {
     await connected;
-    const outcome = await remoteManagement.attach(sessionId, BACKGROUND_CONTEXT);
+    const outcome = await remoteSessions.attach(sessionId, BACKGROUND_CONTEXT);
     if (!outcome.ok) throw new Error(outcome.error.message);
     await sessionServices.rebind(true, BACKGROUND_CONTEXT);
     await sessionServices.ready(BACKGROUND_CONTEXT);
     attachedId = sessionId;
-    return {sessionId, controller, transcript};
+    return {sessionId, sessionRuntime};
   };
 
   const attach = (sessionId: string): Promise<AttachedSession> => {
@@ -191,23 +174,23 @@ export function createRuntimeClient(endpoint: string): RuntimeClient {
   connect();
 
   return {
-    composer: serverServices.use(ComposerService),
     configuration: serverServices.use(ConfigurationService),
     extensions: serverServices.use(ExtensionsService),
     folders: serverServices.use(FoldersService),
     projects: serverServices.use(ProjectsService),
     providers: serverServices.use(ProvidersService),
-    // `attach` also binds this client's session services; the other members are Chord's.
-    management: {
-      create: (payload, context) => remoteManagement.create(payload, context),
-      fork: (payload, context) => remoteManagement.fork(payload, context),
-      rename: (payload, context) => remoteManagement.rename(payload, context),
-      read: (payload, context) => remoteManagement.read(payload, context),
+    // `attach` also binds this client's session runtime service; the other members are Chord's.
+    sessions: {
+      directory: remoteSessions.directory,
+      create: (payload, context) => remoteSessions.create(payload, context),
+      fork: (payload, context) => remoteSessions.fork(payload, context),
+      rename: (payload, context) => remoteSessions.rename(payload, context),
+      get: (payload, context) => remoteSessions.get(payload, context),
+      listModels: (payload, context) => remoteSessions.listModels(payload, context),
+      listComposerSuggestions: (payload, context) => remoteSessions.listComposerSuggestions(payload, context),
       attach: (sessionId) => attach(sessionId).then(() => ({ok: true, value: null}) as const),
-      detach: (context) => remoteManagement.detach(context),
+      detach: (context) => remoteSessions.detach(context),
     },
-    directory: serverServices.use(SessionDirectory).state,
-    terminals: serverServices.use(TerminalsService),
     workspace: serverServices.use(WorkspaceService),
     ready: () => connected,
     attach,
