@@ -9,7 +9,7 @@ import {SessionRuntime} from "@supernova/agent-runtime/features/session-runtime/
 import {createSupernovaTools} from "@supernova/agent-runtime/features/session-runtime/tools/tools";
 import {createTitleGenerator} from "@supernova/agent-runtime/features/session-runtime/worker/title-generator";
 import {Sessions} from "@supernova/agent-runtime/features/sessions/sessions";
-import {createSpawnPty} from "@supernova/agent-runtime/features/workspace/terminals/pty";
+import {spawnPty} from "@supernova/agent-runtime/features/workspace/terminals/pty";
 import {Terminals} from "@supernova/agent-runtime/features/workspace/terminals/terminals";
 import {Workspace} from "@supernova/agent-runtime/features/workspace/workspace";
 import {Worktrees} from "@supernova/agent-runtime/features/worktrees/worktrees";
@@ -59,7 +59,7 @@ export async function createAgentRuntime(options: CreateAgentRuntimeOptions = {}
   });
   const sessionRuntime: SessionRuntime = new SessionRuntime({checkpointStore, resourceCache, sdk, store, titleGenerator: createTitleGenerator(sdk)});
 
-  const terminals = new Terminals({spawnPty: createSpawnPty()});
+  const terminals = new Terminals({spawnPty});
 
   return {
     configuration: new Configuration(),

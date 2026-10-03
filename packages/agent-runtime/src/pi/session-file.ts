@@ -17,10 +17,10 @@ import type {
 } from "@earendil-works/pi-durable";
 import {AgentDoc, ConversationBusy, createRegistry, defineExtension, Harness as HarnessFactory} from "@earendil-works/pi-durable";
 import {NodeExecutionEnv} from "@earendil-works/pi-durable/env/node";
+import {openNodeSqliteStorage} from "@earendil-works/pi-durable/storage/sqlite/node";
 import {harnessModels, harnessSettings} from "@supernova/agent-runtime/pi/config/harness-settings";
 import type {PromptResources} from "@supernova/agent-runtime/pi/config/system-prompt";
 import {createPromptExtension} from "@supernova/agent-runtime/pi/config/system-prompt";
-import {openSqliteStorage} from "@supernova/agent-runtime/pi/lib/session/sqlite-storage";
 import type {CheckpointRef, SessionState, TurnRecord} from "@supernova/agent-runtime/pi/lib/session/session-state";
 import {SessionStateDoc} from "@supernova/agent-runtime/pi/lib/session/session-state";
 import type {PromptedTool} from "@supernova/agent-runtime/pi/lib/tools/coding-tools";
@@ -91,7 +91,7 @@ export class SessionFile {
     const env = new NodeExecutionEnv({cwd: input.cwd, ...(shellPath ? {shellPath} : {})});
     const registry = createRegistry();
     const harness = await HarnessFactory.open(
-      await openSqliteStorage(input.path),
+      await openNodeSqliteStorage(input.path),
       {
         models: harnessModels({modelRuntime: input.modelRuntime, sessionId: input.sessionId, settings: input.settings}),
         registry,

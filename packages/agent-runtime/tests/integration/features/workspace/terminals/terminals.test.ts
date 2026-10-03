@@ -3,13 +3,13 @@ import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {afterAll, afterEach, beforeAll, describe, expect, it} from "vitest";
 import type {TerminalOutput} from "@supernova/contracts/services/workspace/schemas";
-import {createSpawnPty} from "@supernova/agent-runtime/features/workspace/terminals/pty";
+import {spawnPty} from "@supernova/agent-runtime/features/workspace/terminals/pty";
 import {Terminals} from "@supernova/agent-runtime/features/workspace/terminals/terminals";
 import {cleanupTempDirs, waitUntil} from "@tests/support/async";
 
 describe("Terminals", () => {
   const tempDirs: string[] = [];
-  const terminals = new Terminals({spawnPty: createSpawnPty()});
+  const terminals = new Terminals({spawnPty});
   /** A terminal's entry in the replicated state, once `done(entry)` stops throwing. */
   const entry = async (id: string, done: (entry: TerminalOutput) => void): Promise<TerminalOutput> => {
     let found: TerminalOutput | undefined;

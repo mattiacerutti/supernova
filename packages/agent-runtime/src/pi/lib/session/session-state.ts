@@ -2,7 +2,7 @@ import type {EntryRecord, JsonObject} from "@earendil-works/pi-durable";
 import {defineDoc} from "@earendil-works/pi-durable";
 import type {SessionWorktree, UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
 
-/** What Supernova knows about a session without opening its file: one entry of the session index. */
+/** What Supernova knows about a session without opening its file: one row of the session catalog. */
 export interface SessionRecord {
   readonly id: string;
   /** The project the session is listed under; the agent runs in `worktree.path` when set. */

@@ -17,7 +17,7 @@ export interface ProjectsDeps {
 export class Projects {
   public constructor(private readonly deps: ProjectsDeps) {}
 
-  /** Lists a project's sessions newest-first from the index, plus its read-only legacy sessions. */
+  /** Lists a project's sessions newest-first from the catalog, plus its read-only legacy sessions. */
   public async listSessions(input: ProjectSessionsListPayload): Promise<ProjectSessionsListResult> {
     const [records, legacy] = await Promise.all([this.deps.store.list(input.projectPath), listLegacySessions(input.projectPath)]);
     return {projectPath: input.projectPath, sessions: newestFirst([...records.map(toSessionSummary), ...legacy])};

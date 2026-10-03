@@ -1,12 +1,13 @@
 import {randomUUID} from "node:crypto";
 import {existsSync} from "node:fs";
-import {mkdir, readFile, rename, rm, writeFile} from "node:fs/promises";
-import {dirname, join} from "node:path";
+import {rm} from "node:fs/promises";
+import {join} from "node:path";
 import {getAgentDir} from "@earendil-works/pi-coding-agent";
 import type {SettingsManager} from "@earendil-works/pi-coding-agent";
 import type {EntryRecord} from "@earendil-works/pi-durable";
 import type {Session, SessionContextUsage, SessionWorktree} from "@supernova/contracts/services/sessions/schemas";
 import {loadPiSettings} from "@supernova/agent-runtime/pi/config/settings";
+import {SessionCatalog} from "@supernova/agent-runtime/pi/lib/session/session-catalog";
 import {buildSession, contextUsageOf, publicTurns, timelineEntries} from "@supernova/agent-runtime/pi/lib/session/session-snapshot";
 import type {CheckpointRef, SessionRecord, TurnPosition} from "@supernova/agent-runtime/pi/lib/session/session-state";
 import {turnPositions} from "@supernova/agent-runtime/pi/lib/session/session-state";
@@ -60,26 +61,17 @@ interface OpenSession {
   readonly extensions: BridgedExtensions;
 }
 
-interface IndexFile {
-  readonly version: 1;
-  readonly sessions: Record<string, SessionRecord>;
-}
-
 /**
- * Every durable session: one SQLite file each under `<root>/<id>/session.sqlite`, and the index at
- * `<root>/index.json` that lists them by project without opening a file (the engine cannot list by project). Session
- * files open on first use and stay open until released or disposed; closing one never aborts its work, which resumes
- * when it opens again. The only seam onto the engine: features never import `pi-durable`.
- *
- * The index is held in memory and rewritten atomically on change; a few thousand sessions are a few hundred KB.
- * Revisit with SQLite if that grows.
+ * Every durable session: one SQLite file each under `<root>/<id>/session.sqlite`, and their records in the catalog at
+ * `<root>/catalog.sqlite`, which lists them by project without opening a file. Session files open on first use and
+ * stay open until released or disposed; closing one never aborts its work, which resumes when it opens again. The
+ * only seam onto the engine: features never import `pi-durable`.
  */
 export class SessionStore {
   private readonly root: string;
   private readonly open = new Map<string, Promise<OpenSession>>();
   private readonly settingsCache = new Map<string, SettingsManager>();
-  private records: Map<string, SessionRecord> | undefined;
-  private writing: Promise<void> = Promise.resolve();
+  private catalogOpening: Promise<SessionCatalog> | undefined;
 
   public constructor(private readonly deps: SessionStoreDeps) {
     this.root = deps.root ?? join(getAgentDir(), SESSIONS_DIR);
@@ -87,8 +79,9 @@ export class SessionStore {
 
   /** Records and creates a new session file; the first turn is an ordinary send afterwards. */
   public async create(input: {readonly id: string; readonly projectPath: string; readonly worktree?: SessionWorktree; readonly forkedFrom?: string}): Promise<SessionRecord> {
-    const records = await this.load();
-    if (records.has(input.id) || existsSync(this.databasePath(input.id))) throw new Error("A session with this id already exists.");
+    const catalog = await this.catalog();
+    if (catalog.find(input.id) || existsSync(this.databasePath(input.id))) throw new Error("A session with this id already exists.");
+
     const now = new Date().toISOString();
     const record: SessionRecord = {
       id: input.id,
@@ -98,8 +91,7 @@ export class SessionStore {
       createdAt: now,
       updatedAt: now,
     };
-    records.set(record.id, record);
-    await this.persist();
+    catalog.insert(record);
     try {
       await this.file(input.id);
     } catch (error) {
@@ -111,7 +103,7 @@ export class SessionStore {
 
   /** The record of a durable session, or undefined for unknown (or legacy) ids. */
   public async find(sessionId: string): Promise<SessionRecord | undefined> {
-    return (await this.load()).get(sessionId);
+    return (await this.catalog()).find(sessionId);
   }
 
   /** The record of an existing durable session; throws for unknown ids. */
@@ -123,17 +115,12 @@ export class SessionStore {
 
   /** Every unarchived session of a project, newest first. */
   public async list(projectPath: string): Promise<SessionRecord[]> {
-    return [...(await this.load()).values()]
-      .filter((record) => record.projectPath === projectPath && record.archivedAt === undefined)
-      .toSorted((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+    return (await this.catalog()).list(projectPath);
   }
 
   /** Applies `change` to an existing record and returns the result. */
   public async update(sessionId: string, change: (record: SessionRecord) => SessionRecord): Promise<SessionRecord> {
-    const next = change(await this.record(sessionId));
-    (await this.load()).set(sessionId, next);
-    await this.persist();
-    return next;
+    return (await this.catalog()).update(sessionId, change);
   }
 
   /** The open file of a session, opening it on first use. */
@@ -265,12 +252,15 @@ export class SessionStore {
   public async delete(sessionId: string): Promise<void> {
     await this.release(sessionId);
     await rm(join(this.root, sessionId), {force: true, recursive: true});
-    if ((await this.load()).delete(sessionId)) await this.persist();
+    (await this.catalog()).delete(sessionId);
   }
 
-  /** Closes every open session. */
+  /** Closes every open session, then the catalog. */
   public async dispose(): Promise<void> {
     await Promise.all([...this.open.keys()].map((sessionId) => this.release(sessionId)));
+    const catalog = await this.catalogOpening?.catch(() => undefined);
+    this.catalogOpening = undefined;
+    catalog?.close();
   }
 
   private async historyOf(
@@ -354,30 +344,12 @@ export class SessionStore {
     };
   }
 
-  private async load(): Promise<Map<string, SessionRecord>> {
-    if (this.records) return this.records;
-    const path = join(this.root, "index.json");
-    let file: IndexFile | undefined;
-    try {
-      file = JSON.parse(await readFile(path, "utf8")) as IndexFile;
-    } catch (cause) {
-      if ((cause as NodeJS.ErrnoException).code !== "ENOENT") throw new Error(`Could not read the session index at ${path}.`, {cause});
-    }
-    this.records ??= new Map(Object.entries(file?.sessions ?? {}));
-    return this.records;
-  }
-
-  /** Rewrites the index atomically; writes are serialized. */
-  private persist(): Promise<void> {
-    const write = async () => {
-      const path = join(this.root, "index.json");
-      const file: IndexFile = {version: 1, sessions: Object.fromEntries(this.records ?? [])};
-      await mkdir(dirname(path), {recursive: true});
-      const temporary = `${path}.${randomUUID()}.tmp`;
-      await writeFile(temporary, `${JSON.stringify(file)}\n`);
-      await rename(temporary, path);
-    };
-    this.writing = this.writing.then(write, write);
-    return this.writing;
+  /** The catalog, opened on first use; a failed open is retried by the next call. */
+  private catalog(): Promise<SessionCatalog> {
+    this.catalogOpening ??= SessionCatalog.open(join(this.root, "catalog.sqlite")).catch((error: unknown) => {
+      this.catalogOpening = undefined;
+      throw error;
+    });
+    return this.catalogOpening;
   }
 }

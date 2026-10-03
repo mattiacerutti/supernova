@@ -27,9 +27,9 @@ This document explains the design, its guarantees, and the reasoning behind its 
 
 Each Supernova session is one SQLite file, `<agentDir>/sessions-v2/<sessionId>/session.sqlite`, opened by one Harness. The session's chat starts as the file's root conversation; undo forks inside the same file (see [Checkpoint system](checkpoint-system.md)). One file per session follows Pi's own durable coding agent: a storage failure is fatal only to its own file, sessions never contend on one commit line, and idle sessions can close.
 
-`<agentDir>/sessions-v2/index.json` maps session ids to their record (project, worktree, title, fork source, archive time). Lookup and project listing read only the index; no session file is opened to list. The engine cannot list by project, so the index is ours.
+`<agentDir>/sessions-v2/catalog.sqlite` holds every session's record (project, worktree, title, fork source, archive time), one row each (`pi/lib/session/session-catalog.ts`). Lookup by id and listing by project read only the catalog; no session file is opened for either. The engine cannot list by project, so the catalog is ours. A partial index over `(project_path, updated_at DESC)` of unarchived rows answers a listing in order without scanning or sorting, so paging it later is a keyset query (`updated_at < ?` with a `LIMIT`). The schema version is SQLite's `user_version`; a catalog from a newer version is refused.
 
-Under `bun run dev:server` the server runs on Bun, which has no `node:sqlite`; `pi/lib/session/sqlite-storage.ts` adapts `bun:sqlite` to the engine's SQLite facade. Electron and the packaged server run Node.
+Both use Node's `node:sqlite`: session files through pi-durable's `openNodeSqliteStorage`, the catalog directly.
 
 Sessions written by the old SDK (`<agentDir>/sessions/`) are read-only: `pi/lib/session/legacy-sessions.ts` lists and renders them; mutating commands reject. Conversion into the engine is a `TODO(legacy-convert)` there.
 
@@ -72,7 +72,7 @@ flowchart BT
 | -------------------------------------- | ----------------------------------------- | --------------- |
 | Transcript, runs, tasks                | Engine session file                       | Durable         |
 | Turn records, navigation               | `supernova.session` document in that file | Durable         |
-| Session index                          | `index.json`                              | Durable         |
+| Session records                        | `catalog.sqlite`                          | Durable         |
 | Session document                       | `SessionWorker`                           | Server process  |
 | Activity, summaries, problems          | `SessionBoard`                            | Server process  |
 | Mirrored session document              | React Query                               | Browser cache   |
