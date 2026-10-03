@@ -29,10 +29,8 @@ import type {
   TerminalResizePayload,
   TerminalsListPayload,
   TerminalsListResult,
-  TerminalWatchPayload,
   TerminalWritePayload,
 } from "@supernova/contracts/terminals/procedures";
-import type {TerminalEvent} from "@supernova/contracts/terminals/schemas";
 import type {Terminals} from "@supernova/agent-runtime/features/workspace/terminals/terminals";
 
 export interface WorkspaceDeps {
@@ -110,8 +108,9 @@ export class Workspace {
     return this.deps.terminals.list(input);
   }
 
-  public watchTerminal(input: TerminalWatchPayload): Promise<AsyncGenerator<TerminalEvent, void, undefined>> {
-    return this.deps.terminals.watch(input);
+  /** Every terminal's output as replicated state. */
+  public get terminalsState() {
+    return this.deps.terminals.state;
   }
 
   /** Kills a session's shells; runs before the session is archived and its worktree removed. */

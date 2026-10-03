@@ -1,13 +1,13 @@
-import {useQuery} from "@tanstack/react-query";
-import {Effect} from "effect";
+import {queryOptions, useQuery} from "@tanstack/react-query";
 import {workspaceKeys} from "@/features/workspace/api/query-keys";
-import {eq} from "@/rpc/effect-query";
-import {RpcProtocolClientService} from "@/rpc/transport/client";
+import {unwrap} from "@/rpc/runtime-result";
+import {useRuntime} from "@/rpc/use-runtime";
 
 export function useWorkspaceChanges(projectPath: string, repositoryRoot: string) {
+  const runtime = useRuntime();
   return useQuery(
-    eq.queryOptions({
-      queryFn: () => Effect.flatMap(Effect.service(RpcProtocolClientService), (rpc) => rpc.getWorkspaceChanges({projectPath, repositoryRoot})),
+    queryOptions({
+      queryFn: () => unwrap(runtime.workspace.getChanges({projectPath, repositoryRoot})),
       queryKey: workspaceKeys.changes(projectPath, repositoryRoot),
       // Git and filesystem failures are deterministic; retrying only delays the message.
       retry: false,

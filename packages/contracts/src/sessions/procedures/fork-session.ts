@@ -1,14 +1,12 @@
-import {Schema} from "effect";
+import {z} from "zod";
+import {struct, TaggedError} from "@supernova/contracts/runtime/schemas";
 
-export const ForkSessionPayload = Schema.Struct({
-  sessionId: Schema.String,
+export const ForkSessionPayload = struct({
+  sessionId: z.string(),
   /** Turn the fork ends with, included. */
-  turnId: Schema.String,
+  turnId: z.string(),
 });
 
-export class ForkSessionError extends Schema.TaggedErrorClass<ForkSessionError>()("ForkSessionError", {
-  cause: Schema.optional(Schema.Defect),
-  message: Schema.String,
-}) {}
+export class ForkSessionError extends TaggedError("ForkSessionError") {}
 
-export type ForkSessionPayload = typeof ForkSessionPayload.Type;
+export type ForkSessionPayload = z.infer<typeof ForkSessionPayload>;

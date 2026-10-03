@@ -23,10 +23,6 @@ export default defineConfig(({mode}) => ({
         target: process.env.SUPERNOVA_SERVER_URL ?? "http://127.0.0.1:4317",
         ws: true,
       },
-      "/pi": {
-        target: process.env.SUPERNOVA_SERVER_URL ?? "http://127.0.0.1:4317",
-        ws: true,
-      },
     },
     strictPort: true,
   },
@@ -49,12 +45,8 @@ export default defineConfig(({mode}) => ({
       ...(mode === "e2e"
         ? [
             {
-              find: /^@\/rpc\/transport\/client$/,
-              replacement: resolve(__dirname, "tests/e2e/mocks/timeline-rpc-client.ts"),
-            },
-            {
-              find: /^@\/rpc\/transport\/session-services$/,
-              replacement: resolve(__dirname, "tests/e2e/mocks/timeline-session-services.ts"),
+              find: /^@\/rpc\/transport\/runtime-client$/,
+              replacement: resolve(__dirname, "tests/e2e/mocks/timeline-runtime-client.ts"),
             },
           ]
         : []),

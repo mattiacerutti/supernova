@@ -20,7 +20,7 @@ src/
   features/     product areas: projects, sessions, settings, updates, workspace
   hooks/        shared hooks
   lib/          helpers used across features (cn, toast, project-paths) and preconfigured dependencies (diffs/, themes/)
-  rpc/          transports: the Effect RPC client, and the Chord session service client (session-services.ts)
+  rpc/          the runtime connection: Chord service bindings over pi-client (transport/runtime-client.ts)
   stores/       app-wide Zustand stores
 ```
 
@@ -79,12 +79,12 @@ A helper earns a place in `lib/` when several features use it. Something used by
 - Use the shared `cn` helper from `@/lib/cn` for conditional class names so `clsx` handles conditions and `tailwind-merge` resolves conflicting Tailwind utilities.
 - For multi-step modal/dialog flows, prefer one shared dialog shell with swapped content instead of multiple dialogs that close/open between steps.
 
-### RPC hooks
+### Runtime hooks
 
-- Sessions come from the session service client (`useSessionServices`): `SessionManagement` for lifecycle and reads, the attached session's `SessionController` for commands, and its transcript's replicated state, which `api/conversation/session-events.ts` writes into the session's React Query entry. Service calls return `ServiceResult`s; unwrap them inside the `api/` hook or store action.
-- Use `effect-query` for RPC-backed React Query hooks, inside the feature's `api/` folder.
-- Prefer `eq.queryOptions` and `eq.mutationOptions` over manually wrapping RPC calls with an imperative client runner.
-- Get the RPC client from `RpcProtocolClientService` so typed RPC failures are preserved.
+- Get the runtime connection with `useRuntime()` (or take a `RuntimeClient` parameter in an options builder, like `getSessionQueryOptions(runtime, id)`). It exposes every service with methods that wait for the connection and take no `Context`.
+- Calls return `ServiceResult`s. In React Query functions, `unwrap()` from `@/rpc/runtime-result` turns a failure into a thrown `RuntimeError` whose `code` is the contract error's tag; branch on `errorCode(error)`.
+- Follow replicated state (`runtime.terminals.state`, `runtime.providers.state`, `runtime.directory`) with `subscribe`, which delivers the current value at once.
+- Sessions: `management` for lifecycle and reads, the attached session's `controller` for commands, and its transcript's replicated state, which `api/conversation/session-events.ts` writes into the session's React Query entry.
 - Query keys come from the feature's `xKeys` object, shaped `[feature, ...scope]`, and are read from `queryOptions().queryKey` where an options object exists. Invalidate with the parent key (`sessionKeys.lists()`), never a literal array.
 
 ## Testing

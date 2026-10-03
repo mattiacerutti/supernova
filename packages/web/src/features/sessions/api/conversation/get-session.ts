@@ -1,15 +1,14 @@
-import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import {queryOptions, useQuery, useQueryClient} from "@tanstack/react-query";
 import type {Session} from "@supernova/contracts/sessions/schemas";
 import {useSyncExternalStore} from "react";
 import {sessionKeys} from "@/features/sessions/api/query-keys";
-import type {SessionServicesClient} from "@/rpc/transport/session-services";
-import {useSessionServices} from "@/rpc/use-session-services";
+import type {RuntimeClient} from "@/rpc/transport/runtime-client";
+import {useRuntime} from "@/rpc/use-runtime";
 
-export function getSessionQueryOptions(services: SessionServicesClient, sessionId: string) {
+export function getSessionQueryOptions(services: RuntimeClient, sessionId: string) {
   return queryOptions({
     queryFn: async (): Promise<Session> => {
-      const result = await services.management.read({sessionId}, BACKGROUND_CONTEXT);
+      const result = await services.management.read({sessionId});
       if (!result.ok) throw new Error(result.error.message);
       return result.value;
     },
@@ -29,7 +28,7 @@ interface UseSessionOptions {
  */
 export function useSession(sessionId: string, options: UseSessionOptions = {}) {
   const queryClient = useQueryClient();
-  const services = useSessionServices();
+  const services = useRuntime();
   const {queryKey} = getSessionQueryOptions(services, sessionId);
   const {error} = useQuery({...getSessionQueryOptions(services, sessionId), enabled: options.enabled !== false});
   const getSession = () => queryClient.getQueryData<Session>(queryKey);

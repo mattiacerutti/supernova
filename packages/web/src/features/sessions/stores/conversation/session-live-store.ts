@@ -1,13 +1,15 @@
-import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import type {QueryClient} from "@tanstack/react-query";
 import type {SessionActivity, SessionSetupStep} from "@supernova/contracts/session-runtime/procedures";
 import type {ModelReference, OutgoingMessage, Session, SessionWorkspaceSelection, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
-import type {ServiceResult, SessionController, SessionDirectoryState} from "@supernova/contracts/sessions/services";
+import type {ClientService, ServiceResult} from "@supernova/contracts/runtime/services";
+import type {SessionController as SessionControllerService, SessionDirectoryState} from "@supernova/contracts/sessions/services";
 import {create} from "zustand";
 import {useSettingsStore} from "@/stores/settings-store";
 import {showToast} from "@/lib/toast";
 import {sessionKeys} from "@/features/sessions/api/query-keys";
-import type {SessionServicesClient} from "@/rpc/transport/session-services";
+import type {RuntimeClient} from "@/rpc/transport/runtime-client";
+
+type SessionController = ClientService<SessionControllerService>;
 
 export type SessionLiveStatus = "checkpoint-navigating" | "compacting" | "idle" | "stopping" | "streaming";
 
@@ -110,7 +112,7 @@ interface SendSessionMessageInput {
   readonly contentParts: readonly UserMessageContentPart[];
   readonly modelReference: ModelReference;
   readonly queryClient: QueryClient;
-  readonly services: SessionServicesClient;
+  readonly services: RuntimeClient;
   readonly sessionId: string;
 }
 
@@ -122,7 +124,7 @@ interface StartSessionInput extends SendSessionMessageInput {
 
 interface CompactSessionInput {
   readonly modelReference: ModelReference;
-  readonly services: SessionServicesClient;
+  readonly services: RuntimeClient;
   readonly sessionId: string;
 }
 
@@ -130,7 +132,7 @@ interface CheckpointNavigationInput {
   /** Set when retrying after the user confirmed discarding manual workspace changes. */
   readonly force?: boolean;
   readonly queryClient: QueryClient;
-  readonly services: SessionServicesClient;
+  readonly services: RuntimeClient;
   readonly sessionId: string;
 }
 
@@ -149,7 +151,7 @@ interface SessionLiveStoreState {
   /** Session currently open in the main view; its transcript is followed and its activity is stamped as seen. */
   readonly activeSessionId: string | null;
   readonly sessions: Record<string, SessionLiveState | undefined>;
-  readonly abortSession: (input: {services: SessionServicesClient; sessionId: string}) => void;
+  readonly abortSession: (input: {services: RuntimeClient; sessionId: string}) => void;
   /** Takes the server's activity, setup step, and last problem of every session it has open. */
   readonly applyDirectory: (directory: SessionDirectoryState) => void;
   readonly compactSession: (input: CompactSessionInput) => void;
@@ -193,7 +195,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
     });
   };
 
-  const controller = async (services: SessionServicesClient, sessionId: string): Promise<SessionController> => (await services.attach(sessionId)).controller;
+  const controller = async (services: RuntimeClient, sessionId: string): Promise<SessionController> => (await services.attach(sessionId)).controller;
 
   const settlePending = (sessionId: string, count: number): void => {
     const pending = get().sessions[sessionId]?.pending;
@@ -228,7 +230,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
 
     const message = beginPendingMessage(input);
     void controller(services, sessionId)
-      .then(async (session) => unwrap(await session.send(message, BACKGROUND_CONTEXT)))
+      .then(async (session) => unwrap(await session.send(message)))
       .then(() => settlePending(sessionId, turnCount(queryClient.getQueryData<Session>(sessionKeys.detail(sessionId)))))
       .catch((cause: unknown) => failPendingMessage(sessionId, errorMessage(cause, "Failed to send message.")));
   };
@@ -241,7 +243,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
     if (workspace.mode === "worktree") update(sessionId, (entry) => ({...entry, setupStep: "worktree"}));
 
     try {
-      const session = unwrap(await services.management.create({id: sessionId, message, projectPath, workspace}, BACKGROUND_CONTEXT));
+      const session = unwrap(await services.management.create({id: sessionId, message, projectPath, workspace}));
       // The transcript's first value replaces this once the page attaches; until then the reply is the newest state.
       queryClient.setQueryData<Session>(sessionKeys.detail(sessionId), (cached) => (cached && turnCount(cached) > turnCount(session) ? cached : session));
       settlePending(sessionId, turnCount(session));
@@ -258,14 +260,14 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
     }
   };
 
-  const abortSession = (input: {services: SessionServicesClient; sessionId: string}): void => {
+  const abortSession = (input: {services: RuntimeClient; sessionId: string}): void => {
     const {services, sessionId} = input;
     const stream = get().sessions[sessionId];
     if (!stream || (stream.status !== "streaming" && stream.status !== "stopping")) return;
 
     update(sessionId, (entry) => ({...entry, command: "stopping"}));
     void controller(services, sessionId)
-      .then((session) => session.abort(BACKGROUND_CONTEXT))
+      .then((session) => session.abort())
       .catch(() => update(sessionId, (entry) => ({...entry, command: entry.command === "stopping" ? null : entry.command})));
   };
 
@@ -278,7 +280,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
     const finish = (error: string | null): void =>
       update(sessionId, (entry) => ({...entry, command: entry.command === "compacting" ? null : entry.command, ...(error ? {error} : {})}));
     void controller(services, sessionId)
-      .then(async (session) => unwrap(await session.compact({modelReference}, BACKGROUND_CONTEXT)))
+      .then(async (session) => unwrap(await session.compact({modelReference})))
       .then(
         () => finish(null),
         (cause: unknown) => finish(errorMessage(cause, "Failed to compact session."))
@@ -346,7 +348,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
   const undoCheckpoint = (input: CheckpointNavigationInput & NavigationTargets): Promise<CheckpointNavigationOutcome> =>
     runCheckpointNavigation({
       ...input,
-      execute: (session, force) => session.undo({force}, BACKGROUND_CONTEXT),
+      execute: (session, force) => session.undo({force}),
       turnId: input.lastTurnId,
       title: "Unable to undo checkpoint",
     });
@@ -354,7 +356,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
   const redoCheckpoint = (input: CheckpointNavigationInput & NavigationTargets): Promise<CheckpointNavigationOutcome> =>
     runCheckpointNavigation({
       ...input,
-      execute: (session, force) => session.redo({force}, BACKGROUND_CONTEXT),
+      execute: (session, force) => session.redo({force}),
       turnId: input.firstUndoneTurnId,
       title: "Unable to redo checkpoint",
     });
@@ -362,7 +364,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
   const revertToMessage = (input: RevertToMessageInput): Promise<CheckpointNavigationOutcome> =>
     runCheckpointNavigation({
       ...input,
-      execute: (session, force) => session.revert({force, turnId: input.turnId}, BACKGROUND_CONTEXT),
+      execute: (session, force) => session.revert({force, turnId: input.turnId}),
       title: "Unable to revert message",
     });
 

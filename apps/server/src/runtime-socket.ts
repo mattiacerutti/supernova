@@ -39,21 +39,15 @@ function pathOf(request: IncomingMessage): string {
 }
 
 /**
- * Routes `path`'s WebSocket upgrades to the session service protocol and every other upgrade on to the HTTP server's
- * own handlers. Node delivers an event to every listener, so the server's other handlers (Effect's) are moved behind
- * this one rather than beside it; otherwise they would answer the same upgrade too.
+ * Accepts the runtime protocol as WebSockets on `path` of an HTTP server; other upgrades are refused. Each WebSocket
+ * carries the protocol's framed bytes as binary messages.
  */
 export function createWebSocketListener(server: HttpServer, path: string): ServerListener {
   const sockets = new WebSocketServer({noServer: true});
   let accept: ByteConnectionAcceptor | undefined;
-  let others: ((request: IncomingMessage, socket: Duplex, head: Buffer) => void)[] = [];
 
   const onUpgrade = (request: IncomingMessage, socket: Duplex, head: Buffer): void => {
-    if (pathOf(request) !== path) {
-      for (const listener of others) listener.call(server, request, socket, head);
-      return;
-    }
-    if (!accept) {
+    if (pathOf(request) !== path || !accept) {
       socket.destroy();
       return;
     }
@@ -69,15 +63,11 @@ export function createWebSocketListener(server: HttpServer, path: string): Serve
   return {
     async start(acceptConnection: ByteConnectionAcceptor) {
       accept = acceptConnection;
-      others = server.listeners("upgrade") as typeof others;
-      server.removeAllListeners("upgrade");
       server.on("upgrade", onUpgrade);
     },
     async close() {
       accept = undefined;
       server.off("upgrade", onUpgrade);
-      for (const listener of others) server.on("upgrade", listener);
-      others = [];
       for (const client of sockets.clients) client.terminate();
       await new Promise<void>((resolve) => sockets.close(() => resolve()));
     },

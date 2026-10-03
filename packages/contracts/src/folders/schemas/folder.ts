@@ -1,18 +1,19 @@
-import {Schema} from "effect";
+import {z} from "zod";
+import {struct} from "@supernova/contracts/runtime/schemas";
 
-export const FolderSuggestion = Schema.Struct({
-  name: Schema.String,
-  path: Schema.String,
+export const FolderSuggestion = struct({
+  name: z.string(),
+  path: z.string(),
 });
 
-export const FolderFile = Schema.Struct({
-  path: Schema.String,
-  title: Schema.String,
-  subtitle: Schema.optional(Schema.String),
+export const FolderFile = struct({
+  path: z.string(),
+  title: z.string(),
+  subtitle: z.string().optional(),
 });
 
-export const FolderQueryPathType = Schema.Union([Schema.Literal("directory"), Schema.Literal("file"), Schema.Literal("missing")]);
+export const FolderQueryPathType = z.union([z.literal("directory"), z.literal("file"), z.literal("missing")]);
 
-export type FolderSuggestion = typeof FolderSuggestion.Type;
-export type FolderFile = typeof FolderFile.Type;
-export type FolderQueryPathType = typeof FolderQueryPathType.Type;
+export type FolderSuggestion = z.infer<typeof FolderSuggestion>;
+export type FolderFile = z.infer<typeof FolderFile>;
+export type FolderQueryPathType = z.infer<typeof FolderQueryPathType>;

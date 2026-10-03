@@ -1,9 +1,6 @@
-import {Schema} from "effect";
+import {z} from "zod";
 import {OutgoingMessage} from "@supernova/contracts/sessions/schemas";
 
-export const SendMessagePayload = Schema.Struct({
-  ...OutgoingMessage.fields,
-  sessionId: Schema.String,
-});
+export const SendMessagePayload = OutgoingMessage.unwrap().extend({sessionId: z.string()}).readonly();
 
-export type SendMessagePayload = typeof SendMessagePayload.Type;
+export type SendMessagePayload = z.infer<typeof SendMessagePayload>;

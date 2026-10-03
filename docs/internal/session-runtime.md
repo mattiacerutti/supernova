@@ -80,7 +80,7 @@ flowchart BT
 
 ## Services
 
-The contracts are in `contracts/src/sessions/services.ts`; the host is `agent-runtime/src/rpc/session-services.ts`, served by `pi-server` on the HTTP server's `/pi` WebSocket (`apps/server/src/session-socket.ts`).
+The contracts are in `contracts/src/sessions/services.ts`; the host is `agent-runtime/src/rpc/runtime-services.ts`, served by `pi-server` with every other runtime service on the HTTP server's `/ws` WebSocket (`apps/server/src/runtime-socket.ts`).
 
 | Scope            | Service             | Members                                                                   |
 | ---------------- | ------------------- | ------------------------------------------------------------------------- |

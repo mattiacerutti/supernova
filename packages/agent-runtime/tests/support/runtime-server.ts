@@ -1,18 +1,18 @@
 import type {ServerListener} from "@earendil-works/pi-server";
 import {Server} from "@earendil-works/pi-server";
 import type {ByteTransportFactory} from "@earendil-works/pi-client";
-import {SESSION_SERVER_ID} from "@supernova/contracts/sessions/services";
-import {sessionServiceHost} from "@supernova/agent-runtime/rpc/session-services";
+import {RUNTIME_SERVER_ID} from "@supernova/contracts/runtime/services";
+import {runtimeServiceHost} from "@supernova/agent-runtime/rpc/runtime-services";
 import type {AgentRuntime} from "@supernova/agent-runtime/runtime";
 
 type Accept = Parameters<ServerListener["start"]>[0];
 
 /**
- * The session service protocol over in-memory byte pairs instead of sockets: a real `pi-server` over the runtime's
+ * The runtime protocol over in-memory byte pairs instead of sockets: a real `pi-server` over the runtime's
  * services, and a transport factory for `pi-client` that connects to it. Bytes are delivered asynchronously, as a
  * socket would.
  */
-export async function startSessionServer(runtime: AgentRuntime): Promise<{readonly transport: ByteTransportFactory; readonly close: () => Promise<void>}> {
+export async function startRuntimeServer(runtime: AgentRuntime): Promise<{readonly transport: ByteTransportFactory; readonly close: () => Promise<void>}> {
   let accept: Accept | undefined;
   const listener: ServerListener = {
     start: async (acceptConnection) => {
@@ -20,7 +20,7 @@ export async function startSessionServer(runtime: AgentRuntime): Promise<{readon
     },
     close: async () => undefined,
   };
-  const server = new Server(sessionServiceHost(runtime), {serverId: SESSION_SERVER_ID, listeners: [listener]});
+  const server = new Server(runtimeServiceHost(runtime), {serverId: RUNTIME_SERVER_ID, listeners: [listener]});
   await server.start();
 
   const transport: ByteTransportFactory = (client) => {

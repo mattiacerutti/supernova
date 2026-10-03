@@ -56,8 +56,6 @@
     "@tiptap/suggestion": "^3.23.4",
     "@toolwind/corner-shape": "^0.0.8-3",
     "clsx": "^2.1.1",
-    "effect": "4.0.0-beta.60",
-    "effect-query": "^1.0.0",
     "framer-motion": "^12.40.0",
     "ghostty-web": "0.4.0",
     "imurmurhash": "^0.1.4",

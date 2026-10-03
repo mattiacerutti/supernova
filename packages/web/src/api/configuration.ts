@@ -1,8 +1,7 @@
-import {useQuery} from "@tanstack/react-query";
-import {Effect} from "effect";
+import {queryOptions, useQuery} from "@tanstack/react-query";
 import {showToast} from "@/lib/toast";
-import {eq} from "@/rpc/effect-query";
-import {RpcProtocolClientService} from "@/rpc/transport/client";
+import {unwrap} from "@/rpc/runtime-result";
+import {useRuntime} from "@/rpc/use-runtime";
 
 export const configurationKeys = {
   all: ["configuration"] as const,
@@ -11,12 +10,14 @@ export const configurationKeys = {
 
 /** Caches effective server configuration in the query cache without persisting it in browser storage. */
 export function useConfiguration(projectPath?: string) {
+  const runtime = useRuntime();
   return useQuery(
-    eq.queryOptions({
+    queryOptions({
       queryFn: () =>
-        Effect.flatMap(Effect.service(RpcProtocolClientService), (rpc) => rpc.getConfiguration({projectPath})).pipe(
-          Effect.tapError(() => Effect.sync(() => showToast("Unable to load configuration", "Check your settings.json files.", {id: "configuration-load-error"})))
-        ),
+        unwrap(runtime.configuration.get({projectPath})).catch((error: unknown) => {
+          showToast("Unable to load configuration", "Check your settings.json files.", {id: "configuration-load-error"});
+          throw error;
+        }),
       queryKey: configurationKeys.project(projectPath ?? null),
       retry: false,
       staleTime: Infinity,

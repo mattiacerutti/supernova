@@ -21,7 +21,6 @@
   },
   "dependencies": {
     "@earendil-works/pi-server": "1.0.0",
-    "@effect/platform-node": "4.0.0-beta.60",
     "@lydell/node-pty": "1.2.0-beta.15",
     "@lydell/node-pty-darwin-arm64": "1.2.0-beta.15",
     "@lydell/node-pty-darwin-x64": "1.2.0-beta.15",
@@ -32,7 +31,6 @@
     "@supernova/agent-runtime": "workspace:*",
     "@supernova/contracts": "workspace:*",
     "commander": "^14.0.2",
-    "effect": "4.0.0-beta.60",
     "ws": "8.20.0"
   },
   "devDependencies": {

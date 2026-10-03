@@ -1,41 +1,42 @@
-import {Schema} from "effect";
+import {z} from "zod";
+import {struct} from "@supernova/contracts/runtime/schemas";
 
-export const UserMessageAttachmentKind = Schema.Union([Schema.Literal("image"), Schema.Literal("text")]);
+export const UserMessageAttachmentKind = z.union([z.literal("image"), z.literal("text")]);
 
-export const UserMessageAttachmentPart = Schema.Struct({
-  contentBase64: Schema.optional(Schema.String),
+export const UserMessageAttachmentPart = struct({
+  contentBase64: z.string().optional(),
   /** Stable client-generated attachment identifier. */
-  id: Schema.String,
+  id: z.string(),
   kind: UserMessageAttachmentKind,
   /** Original file name selected by the user. */
-  name: Schema.String,
+  name: z.string(),
   /** Attachment MIME type used by the backend and UI to interpret the file content. */
-  mime: Schema.String,
+  mime: z.string(),
   /** File size in bytes. */
-  size: Schema.Number,
-  type: Schema.Literal("attachment"),
+  size: z.number(),
+  type: z.literal("attachment"),
 });
 
-export const UserMessageTextPart = Schema.Struct({
-  text: Schema.String,
-  type: Schema.Literal("text"),
+export const UserMessageTextPart = struct({
+  text: z.string(),
+  type: z.literal("text"),
 });
 
-export const UserMessageReferenceKind = Schema.Union([Schema.Literal("file"), Schema.Literal("skill")]);
+export const UserMessageReferenceKind = z.union([z.literal("file"), z.literal("skill")]);
 
-export const UserMessageReferencePart = Schema.Struct({
-  id: Schema.String,
+export const UserMessageReferencePart = struct({
+  id: z.string(),
   kind: UserMessageReferenceKind,
-  name: Schema.String,
-  type: Schema.Literal("reference"),
-  value: Schema.String,
+  name: z.string(),
+  type: z.literal("reference"),
+  value: z.string(),
 });
 
-export const UserMessageContentPart = Schema.Union([UserMessageTextPart, UserMessageReferencePart, UserMessageAttachmentPart]);
+export const UserMessageContentPart = z.union([UserMessageTextPart, UserMessageReferencePart, UserMessageAttachmentPart]);
 
-export type UserMessageAttachmentKind = typeof UserMessageAttachmentKind.Type;
-export type UserMessageAttachmentPart = typeof UserMessageAttachmentPart.Type;
-export type UserMessageTextPart = typeof UserMessageTextPart.Type;
-export type UserMessageReferenceKind = typeof UserMessageReferenceKind.Type;
-export type UserMessageReferencePart = typeof UserMessageReferencePart.Type;
-export type UserMessageContentPart = typeof UserMessageContentPart.Type;
+export type UserMessageAttachmentKind = z.infer<typeof UserMessageAttachmentKind>;
+export type UserMessageAttachmentPart = z.infer<typeof UserMessageAttachmentPart>;
+export type UserMessageTextPart = z.infer<typeof UserMessageTextPart>;
+export type UserMessageReferenceKind = z.infer<typeof UserMessageReferenceKind>;
+export type UserMessageReferencePart = z.infer<typeof UserMessageReferencePart>;
+export type UserMessageContentPart = z.infer<typeof UserMessageContentPart>;

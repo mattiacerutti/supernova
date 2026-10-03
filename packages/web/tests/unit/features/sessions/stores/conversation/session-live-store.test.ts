@@ -2,14 +2,15 @@ import {replicatedState} from "@earendil-works/chord";
 import type {MutableReplicatedState} from "@earendil-works/chord";
 import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import type {ModelReference, Session, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
-import type {ServiceResult, SessionController, SessionDirectoryEntry, SessionDirectoryState, SessionManagement} from "@supernova/contracts/sessions/services";
+import type {ClientService, ServiceResult} from "@supernova/contracts/runtime/services";
+import type {SessionController, SessionDirectoryEntry, SessionDirectoryState, SessionManagement} from "@supernova/contracts/sessions/services";
 import {QueryClient} from "@tanstack/react-query";
 import {afterEach, beforeEach, describe, expect, it, vi} from "vitest";
 import {sessionKeys} from "@/features/sessions/api/query-keys";
 import {connectSessionEvents} from "@/features/sessions/api/conversation/session-events";
 import {useSessionLiveStore} from "@/features/sessions/stores/conversation/session-live-store";
 import {hasUnseenActivity, useSessionVisitsStore} from "@/features/sessions/stores/sidebar/session-visits-store";
-import type {SessionServicesClient} from "@/rpc/transport/session-services";
+import type {RuntimeClient} from "@/rpc/transport/runtime-client";
 
 const model = {
   id: "claude-sonnet",
@@ -63,11 +64,11 @@ async function waitUntil(assertion: () => void | Promise<void>): Promise<void> {
 
 /** Server-side state the fake services publish, and the calls the client made to them. */
 interface FakeServices {
-  readonly client: SessionServicesClient;
+  readonly client: RuntimeClient;
   readonly directory: MutableReplicatedState<SessionDirectoryState>;
   readonly transcripts: Map<string, MutableReplicatedState<Session>>;
-  readonly controller: {-readonly [K in keyof SessionController]: SessionController[K]};
-  readonly management: {-readonly [K in keyof SessionManagement]: SessionManagement[K]};
+  readonly controller: {-readonly [K in keyof ClientService<SessionController>]: ClientService<SessionController>[K]};
+  readonly management: {-readonly [K in keyof ClientService<SessionManagement>]: ClientService<SessionManagement>[K]};
   readonly attached: string[];
 }
 
@@ -92,10 +93,11 @@ function fakeServices(): FakeServices {
     read: vi.fn(async ({sessionId}) => ({ok: true, value: transcripts.get(sessionId)?.value ?? session({id: sessionId})}) as const),
     rename: vi.fn(async () => ({ok: true, value: session()}) as const),
   } as FakeServices["management"];
-  const client: SessionServicesClient = {
+  // Only what the session store and events use; the other services are never reached.
+  const client = {
     management,
     directory,
-    attach: async (sessionId) => {
+    attach: async (sessionId: string) => {
       attached.push(sessionId);
       let transcript = transcripts.get(sessionId);
       if (!transcript) {
@@ -106,7 +108,7 @@ function fakeServices(): FakeServices {
     },
     onConnectionChange: () => () => undefined,
     dispose: async () => undefined,
-  };
+  } as unknown as RuntimeClient;
   return {attached, client, controller, directory, management, transcripts};
 }
 
@@ -182,7 +184,7 @@ describe("session live store", () => {
     useSessionLiveStore.getState().sendMessage({contentParts, modelReference: model, queryClient, services: services.client, sessionId: "session-1"});
 
     expect(useSessionLiveStore.getState().sessions["session-1"]).toMatchObject({pending: {contentParts, turnCount: 0}, status: "streaming"});
-    await waitUntil(() => expect(services.controller.send).toHaveBeenCalledWith({captureCheckpoints: true, contentParts, modelReference: model}, BACKGROUND_CONTEXT));
+    await waitUntil(() => expect(services.controller.send).toHaveBeenCalledWith({captureCheckpoints: true, contentParts, modelReference: model}));
     useSessionLiveStore.getState().settlePending("session-1", 0);
     expect(useSessionLiveStore.getState().sessions["session-1"]?.pending).not.toBeNull();
     useSessionLiveStore.getState().settlePending("session-1", 1);

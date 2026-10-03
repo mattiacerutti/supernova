@@ -9,29 +9,18 @@ import type {
   SessionSetupStep,
   UndoCheckpointPayload,
 } from "@supernova/contracts/session-runtime/procedures";
-import type {CreateSessionPayload, ForkSessionPayload, GetSessionPayload, RenameSessionPayload} from "@supernova/contracts/sessions/procedures";
+import type {ServiceResult} from "@supernova/contracts/runtime/services";
+import type {
+  CreateSessionPayload,
+  ForkSessionPayload,
+  GetSessionPayload,
+  ListComposerSuggestionsPayload,
+  ListComposerSuggestionsResult,
+  ListModelsPayload,
+  ListModelsResult,
+  RenameSessionPayload,
+} from "@supernova/contracts/sessions/procedures";
 import type {Session, SessionSummary} from "@supernova/contracts/sessions/schemas";
-
-/**
- * The logical identity of a Supernova server on the session service protocol. A client checks it in the server's
- * hello; the server's URL already selects the server, so every Supernova server uses the same identity.
- */
-export const SESSION_SERVER_ID = "3f8c2a64-5d1e-4b7a-9c2f-6e1d0a8b4c57";
-
-/** Path of the session service protocol's WebSocket, beside the RPC one. */
-export const SESSION_SERVICES_PATH = "/pi";
-
-/** Why a session service call failed. `code` is the contract error class's tag, such as `CheckpointConflictError`. */
-export interface ServiceFailure {
-  readonly code: string;
-  readonly message: string;
-}
-
-/**
- * The outcome of a session service call. Expected failures are results rather than thrown errors: the protocol
- * carries only its own error codes, and the client needs the contract's.
- */
-export type ServiceResult<T> = {readonly ok: true; readonly value: T} | {readonly ok: false; readonly error: ServiceFailure};
 
 /** What clients see of a session the server has open, whether or not they attached it. */
 export interface SessionDirectoryEntry {
@@ -86,6 +75,13 @@ export interface SessionTranscript {
   readonly state: ReplicatedState<Session>;
 }
 
+/** What a project offers the composer: models and the skills and prompt templates it can reference. */
+export interface ComposerService {
+  listModels(payload: ListModelsPayload, context: Context): Promise<ServiceResult<ListModelsResult>>;
+  listSuggestions(payload: ListComposerSuggestionsPayload, context: Context): Promise<ServiceResult<ListComposerSuggestionsResult>>;
+}
+
+export const ComposerService = defineService<ComposerService>("supernova.composer");
 export const SessionDirectory = defineService<SessionDirectory>("supernova.session-directory");
 export const SessionManagement = defineService<SessionManagement>("supernova.session-management");
 export const SessionController = defineService<SessionController>("supernova.session-controller");

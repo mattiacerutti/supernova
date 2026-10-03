@@ -5,7 +5,7 @@ import type {SessionDirectoryEntry, SessionDirectoryState} from "@supernova/cont
 import {sessionKeys} from "@/features/sessions/api/query-keys";
 import {useSessionLiveStore} from "@/features/sessions/stores/conversation/session-live-store";
 import {useSessionVisitsStore} from "@/features/sessions/stores/sidebar/session-visits-store";
-import type {SessionServicesClient} from "@/rpc/transport/session-services";
+import type {RuntimeClient} from "@/rpc/transport/runtime-client";
 
 /** Upserts session metadata into cached project session lists. */
 function applyProjectSessionSummary(input: {projectPath: string; queryClient: QueryClient; summary: SessionSummary}): void {
@@ -57,7 +57,7 @@ export interface SessionEventContext {
 
 interface ConnectSessionEventsInput {
   readonly queryClient: QueryClient;
-  readonly services: SessionServicesClient;
+  readonly services: RuntimeClient;
   /** Runs after the session caches are updated for every changed directory entry; other features react here. */
   readonly onEvent?: (context: SessionEventContext) => void;
   /** Runs when the connection was re-established; state may have been missed. */

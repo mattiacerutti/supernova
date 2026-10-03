@@ -64,7 +64,7 @@ Don't overwrite unrelated work or use live sessions, credentials, or workspace s
 | `apps/desktop`           | Electron shell, bundled renderer loading, local API child, OS integration.                          |
 | `packages/web`           | React/Vite client. No native or filesystem assumptions.                                             |
 | `packages/agent-runtime` | Node-only Pi integration: feature modules, the session runtime, and the RPC edge.                   |
-| `packages/contracts`     | Environment-neutral Effect schemas, RPC definitions, and serializable domain types.                 |
+| `packages/contracts`     | Environment-neutral Zod schemas, Chord service contracts, and serializable domain types.            |
 
 Use Bun for dependencies and scripts, TypeScript for code, and workspace packages for shared boundaries. Run verification commands from the repository root; this is a Turborepo workspace.
 

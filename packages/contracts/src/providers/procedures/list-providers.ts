@@ -1,14 +1,12 @@
-import {Schema} from "effect";
+import {z} from "zod";
+import {array, TaggedError} from "@supernova/contracts/runtime/schemas";
 import {Provider} from "../schemas";
 
-export const ProvidersListPayload = Schema.Void;
+export const ProvidersListPayload = z.void();
 
-export const ProvidersListResult = Schema.Array(Provider);
+export const ProvidersListResult = array(Provider);
 
-export class ProvidersListError extends Schema.TaggedErrorClass<ProvidersListError>()("ProvidersListError", {
-  cause: Schema.optional(Schema.Defect),
-  message: Schema.String,
-}) {}
+export class ProvidersListError extends TaggedError("ProvidersListError") {}
 
-export type ProvidersListPayload = typeof ProvidersListPayload.Type;
-export type ProvidersListResult = typeof ProvidersListResult.Type;
+export type ProvidersListPayload = z.infer<typeof ProvidersListPayload>;
+export type ProvidersListResult = z.infer<typeof ProvidersListResult>;

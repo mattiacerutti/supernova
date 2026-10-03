@@ -1,77 +1,78 @@
-import {Schema} from "effect";
+import {z} from "zod";
+import {array, struct} from "@supernova/contracts/runtime/schemas";
 
 /** Text input requested during a provider login flow. */
-export const ProviderLoginTextInput = Schema.Struct({
+export const ProviderLoginTextInput = struct({
   /** Human-readable prompt message. */
-  message: Schema.String,
+  message: z.string(),
   /** Optional input placeholder or example value. */
-  placeholder: Schema.optional(Schema.String),
+  placeholder: z.string().optional(),
   /** Whether the browser should conceal the entered value. */
-  secret: Schema.optional(Schema.Boolean),
+  secret: z.boolean().optional(),
 });
 
 /** Informational link emitted by a provider-owned authentication flow. */
-const ProviderLoginInfoLink = Schema.Struct({
-  label: Schema.optional(Schema.String),
-  url: Schema.String,
+const ProviderLoginInfoLink = struct({
+  label: z.string().optional(),
+  url: z.string(),
 });
 
 /** Selectable option requested by a provider login flow. */
-const ProviderLoginSelectOption = Schema.Struct({
+const ProviderLoginSelectOption = struct({
   /** Optional supporting description displayed below the option label. */
-  description: Schema.optional(Schema.String),
+  description: z.string().optional(),
   /** Provider-native option identifier submitted back to the login flow. */
-  id: Schema.String,
+  id: z.string(),
   /** Human-readable option label displayed in the UI. */
-  label: Schema.String,
+  label: z.string(),
 });
 
 /** Current user-visible step in a provider login flow. */
-export const ProviderLoginStep = Schema.Union([
+export const ProviderLoginStep = z.union([
   /** Login session has been created and is waiting for the first provider callback. */
-  Schema.Struct({type: Schema.Literal("starting")}),
+  struct({type: z.literal("starting")}),
   /** Login flow is processing submitted input or waiting for provider authorization. */
-  Schema.Struct({type: Schema.Literal("authenticating")}),
+  struct({type: z.literal("authenticating")}),
   /** Provider emitted information while preparing the next authentication step. */
-  Schema.Struct({type: Schema.Literal("info"), links: Schema.Array(ProviderLoginInfoLink), message: Schema.String}),
+  struct({type: z.literal("info"), links: array(ProviderLoginInfoLink), message: z.string()}),
   /** Login flow needs the user to choose one of several provider-defined options. */
-  Schema.Struct({type: Schema.Literal("select"), message: Schema.String, options: Schema.Array(ProviderLoginSelectOption)}),
+  struct({type: z.literal("select"), message: z.string(), options: array(ProviderLoginSelectOption)}),
   /** Login flow needs the user to complete browser-based authorization. */
-  Schema.Struct({type: Schema.Literal("browser_auth"), authUrl: Schema.String, instructions: Schema.optional(Schema.String), manualInput: Schema.optional(ProviderLoginTextInput)}),
+  struct({type: z.literal("browser_auth"), authUrl: z.string(), instructions: z.string().optional(), manualInput: ProviderLoginTextInput.optional()}),
   /** Login flow needs the user to enter a device code on a verification page. */
-  Schema.Struct({
-    type: Schema.Literal("device_code"),
+  struct({
+    type: z.literal("device_code"),
     /** Seconds until the device code expires, when provided by the provider. */
-    expiresInSeconds: Schema.optional(Schema.Number),
+    expiresInSeconds: z.number().optional(),
     /** Recommended provider polling interval in seconds, when provided by the provider. */
-    intervalSeconds: Schema.optional(Schema.Number),
+    intervalSeconds: z.number().optional(),
     /** Short code the user must enter on the verification page. */
-    userCode: Schema.String,
+    userCode: z.string(),
     /** Provider verification URL for device-code login. */
-    verificationUri: Schema.String,
+    verificationUri: z.string(),
   }),
   /** Login flow needs free-form text input from the user. */
-  Schema.Struct({type: Schema.Literal("prompt"), input: ProviderLoginTextInput}),
+  struct({type: z.literal("prompt"), input: ProviderLoginTextInput}),
   /** Login completed and credentials were saved. */
-  Schema.Struct({type: Schema.Literal("succeeded")}),
+  struct({type: z.literal("succeeded")}),
   /** Login failed with a user-visible error. */
-  Schema.Struct({type: Schema.Literal("failed"), error: Schema.String}),
+  struct({type: z.literal("failed"), error: z.string()}),
   /** Login was cancelled by the user or host application. */
-  Schema.Struct({type: Schema.Literal("cancelled")}),
+  struct({type: z.literal("cancelled")}),
 ]);
 
 /** Snapshot of an in-flight provider login session. */
-export const ProviderLoginSession = Schema.Struct({
+export const ProviderLoginSession = struct({
   /** Stable login session identifier used for submit, cancel, and watch operations. */
-  loginSessionId: Schema.String,
+  loginSessionId: z.string(),
   /** Provider-supplied progress message, when available. */
-  progress: Schema.optional(Schema.String),
+  progress: z.string().optional(),
   /** Identifier of the provider being authenticated. */
-  providerId: Schema.String,
+  providerId: z.string(),
   /** Current user-visible login step. */
   step: ProviderLoginStep,
 });
 
-export type ProviderLoginTextInput = typeof ProviderLoginTextInput.Type;
-export type ProviderLoginStep = typeof ProviderLoginStep.Type;
-export type ProviderLoginSession = typeof ProviderLoginSession.Type;
+export type ProviderLoginTextInput = z.infer<typeof ProviderLoginTextInput>;
+export type ProviderLoginStep = z.infer<typeof ProviderLoginStep>;
+export type ProviderLoginSession = z.infer<typeof ProviderLoginSession>;

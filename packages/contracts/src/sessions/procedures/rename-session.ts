@@ -1,13 +1,11 @@
-import {Schema} from "effect";
+import {z} from "zod";
+import {struct, TaggedError} from "@supernova/contracts/runtime/schemas";
 
-export const RenameSessionPayload = Schema.Struct({
-  sessionId: Schema.String,
-  title: Schema.String,
+export const RenameSessionPayload = struct({
+  sessionId: z.string(),
+  title: z.string(),
 });
 
-export class RenameSessionError extends Schema.TaggedErrorClass<RenameSessionError>()("RenameSessionError", {
-  cause: Schema.optional(Schema.Defect),
-  message: Schema.String,
-}) {}
+export class RenameSessionError extends TaggedError("RenameSessionError") {}
 
-export type RenameSessionPayload = typeof RenameSessionPayload.Type;
+export type RenameSessionPayload = z.infer<typeof RenameSessionPayload>;

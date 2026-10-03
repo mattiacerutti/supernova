@@ -3,7 +3,7 @@ import {useLocation, useNavigate} from "@tanstack/react-router";
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import {getSessionQueryOptions} from "@/features/sessions/api/conversation/get-session";
-import {useSessionServices} from "@/rpc/use-session-services";
+import {useRuntime} from "@/rpc/use-runtime";
 import {useRenameSession} from "@/features/sessions/api/sidebar/rename-session";
 import SessionActionsMenu from "@/features/sessions/components/session-actions-menu";
 import SessionTitleText from "@/features/sessions/components/session-title-text";
@@ -29,7 +29,7 @@ export default function SidebarSessionItem(props: SidebarSessionItemProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const sessionServices = useSessionServices();
+  const sessionServices = useRuntime();
   const renameSession = useRenameSession();
   const liveStatus = useSessionLiveStore((state) => state.sessions[sessionId]?.status);
   const pinned = useSessionPinsStore((state) => state.pinnedSessionIds.includes(sessionId));

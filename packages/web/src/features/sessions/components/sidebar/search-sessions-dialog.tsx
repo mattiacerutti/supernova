@@ -1,4 +1,5 @@
 import type {Ref} from "react";
+import {useRuntime} from "@/rpc/use-runtime";
 import {useState} from "react";
 import {useQueries} from "@tanstack/react-query";
 import {useNavigate} from "@tanstack/react-router";
@@ -60,11 +61,12 @@ interface SearchSessionsDialogProps {
 }
 
 export default function SearchSessionsDialog(props: SearchSessionsDialogProps) {
+  const runtime = useRuntime();
   const {onClose, open, projects} = props;
   const [activeRowIndex, setActiveRowIndex] = useState(0);
   const [query, setQuery] = useState("");
   const navigate = useNavigate();
-  const projectSessionQueries = useQueries({queries: projects.map((project) => listProjectSessionsQueryOptions(project.path))});
+  const projectSessionQueries = useQueries({queries: projects.map((project) => listProjectSessionsQueryOptions(runtime, project.path))});
   const projectNamesByPath = new Map(projects.map((project) => [project.path, project.name]));
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const sessions = projectSessionQueries.flatMap((projectSessionsQuery) =>

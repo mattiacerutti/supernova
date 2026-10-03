@@ -12,10 +12,6 @@
       "types": "./src/desktop/api.ts",
       "import": "./src/desktop/api.ts"
     },
-    "./*/rpc": {
-      "types": "./src/*/rpc.ts",
-      "import": "./src/*/rpc.ts"
-    },
     "./*/services": {
       "types": "./src/*/services.ts",
       "import": "./src/*/services.ts"
@@ -38,7 +34,7 @@
     "@earendil-works/chord": "1.0.0",
     "@earendil-works/pi-ai": "1.0.0",
     "@earendil-works/pi-durable": "1.0.0",
-    "effect": "4.0.0-beta.60"
+    "zod": "4.4.2"
   },
   "devDependencies": {
     "eslint": "^10.3.0",

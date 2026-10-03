@@ -1,17 +1,15 @@
-import {Schema} from "effect";
+import {z} from "zod";
+import {struct, TaggedError} from "@supernova/contracts/runtime/schemas";
 
-export const ProviderLogoutPayload = Schema.Struct({
-  providerId: Schema.String,
+export const ProviderLogoutPayload = struct({
+  providerId: z.string(),
 });
 
-export const ProviderLogoutResult = Schema.Struct({
-  providerId: Schema.String,
+export const ProviderLogoutResult = struct({
+  providerId: z.string(),
 });
 
-export class ProviderLogoutError extends Schema.TaggedErrorClass<ProviderLogoutError>()("ProviderLogoutError", {
-  cause: Schema.optional(Schema.Defect),
-  message: Schema.String,
-}) {}
+export class ProviderLogoutError extends TaggedError("ProviderLogoutError") {}
 
-export type ProviderLogoutPayload = typeof ProviderLogoutPayload.Type;
-export type ProviderLogoutResult = typeof ProviderLogoutResult.Type;
+export type ProviderLogoutPayload = z.infer<typeof ProviderLogoutPayload>;
+export type ProviderLogoutResult = z.infer<typeof ProviderLogoutResult>;

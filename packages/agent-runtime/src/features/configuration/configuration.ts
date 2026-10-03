@@ -1,4 +1,3 @@
-import * as Schema from "effect/Schema";
 import type {GetConfigurationPayload} from "@supernova/contracts/configuration/procedures";
 import {GetConfigurationError, GetConfigurationResult} from "@supernova/contracts/configuration/procedures";
 import {loadPiSettings} from "@supernova/agent-runtime/pi/config/settings";
@@ -10,12 +9,12 @@ export class Configuration {
     try {
       const settings = loadPiSettings(input.projectPath);
       const modelThinkingLevels = settings.getAllModelThinkingLevels();
-      return Schema.decodeUnknownSync(GetConfigurationResult)({
+      return GetConfigurationResult.parse({
         modelDefaults: {
           providerId: settings.getDefaultProvider(),
           modelId: settings.getDefaultModel(),
           thinkingLevel: settings.getDefaultThinkingLevel(),
-          modelThinkingLevels: Object.keys(modelThinkingLevels).length > 0 ? modelThinkingLevels : undefined,
+          ...(Object.keys(modelThinkingLevels).length > 0 ? {modelThinkingLevels} : {}),
         },
       });
     } catch {

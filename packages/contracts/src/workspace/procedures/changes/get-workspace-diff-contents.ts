@@ -1,17 +1,18 @@
-import {Schema} from "effect";
+import {z} from "zod";
+import {struct} from "@supernova/contracts/runtime/schemas";
 
-export const WorkspaceDiffContentsGetPayload = Schema.Struct({
+export const WorkspaceDiffContentsGetPayload = struct({
   /** Repository-relative, as reported by `getWorkspaceChanges`. */
-  path: Schema.String,
-  projectPath: Schema.String,
-  repositoryRoot: Schema.String,
+  path: z.string(),
+  projectPath: z.string(),
+  repositoryRoot: z.string(),
 });
 
 /** Both sides in full so the client can show unchanged context on demand. A missing side (added or deleted file) is empty. */
-export const WorkspaceDiffContentsGetResult = Schema.Struct({
-  newContents: Schema.String,
-  oldContents: Schema.String,
+export const WorkspaceDiffContentsGetResult = struct({
+  newContents: z.string(),
+  oldContents: z.string(),
 });
 
-export type WorkspaceDiffContentsGetPayload = typeof WorkspaceDiffContentsGetPayload.Type;
-export type WorkspaceDiffContentsGetResult = typeof WorkspaceDiffContentsGetResult.Type;
+export type WorkspaceDiffContentsGetPayload = z.infer<typeof WorkspaceDiffContentsGetPayload>;
+export type WorkspaceDiffContentsGetResult = z.infer<typeof WorkspaceDiffContentsGetResult>;

@@ -5,7 +5,7 @@ import {connectSessionEvents} from "@/features/sessions/api/conversation/session
 import {workspaceKeys} from "@/features/workspace/api/query-keys";
 import {useMountEffect} from "@/hooks/use-mount-effect";
 import {configurationKeys} from "@/api/configuration";
-import {useSessionServices} from "@/rpc/use-session-services";
+import {useRuntime} from "@/rpc/use-runtime";
 
 /** Cross-feature reactions to session state. Session caches themselves are updated inside `connectSessionEvents`. */
 function handleSessionEvent(context: SessionEventContext): void {
@@ -24,7 +24,7 @@ interface SessionEventsProviderProps {
 export default function SessionEventsProvider(props: SessionEventsProviderProps) {
   const {children} = props;
   const queryClient = useQueryClient();
-  const services = useSessionServices();
+  const services = useRuntime();
 
   useMountEffect(() =>
     connectSessionEvents({

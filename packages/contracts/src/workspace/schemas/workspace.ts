@@ -1,54 +1,34 @@
-import {Schema} from "effect";
+import {z} from "zod";
+import {struct, TaggedError} from "@supernova/contracts/runtime/schemas";
 
-export const WorkspaceChangeStatus = Schema.Literals(["added", "deleted", "modified", "renamed", "untracked"]);
+export const WorkspaceChangeStatus = z.enum(["added", "deleted", "modified", "renamed", "untracked"]);
 
-export const WorkspaceChangeEntry = Schema.Struct({
-  additions: Schema.Number,
-  deletions: Schema.Number,
+export const WorkspaceChangeEntry = struct({
+  additions: z.number(),
+  deletions: z.number(),
   /** Relative to the repository root, POSIX separators. */
-  path: Schema.String,
+  path: z.string(),
   status: WorkspaceChangeStatus,
 });
 
 /** Any Git or filesystem failure with no actionable detail. */
-export class WorkspaceGenericError extends Schema.TaggedErrorClass<WorkspaceGenericError>()("WorkspaceGenericError", {
-  cause: Schema.optional(Schema.Defect),
-  message: Schema.String,
-}) {}
+export class WorkspaceGenericError extends TaggedError("WorkspaceGenericError") {}
 
 /** The project folder is not inside a Git repository; expected for plain folders. */
-export class WorkspaceNotARepositoryError extends Schema.TaggedErrorClass<WorkspaceNotARepositoryError>()("WorkspaceNotARepositoryError", {
-  message: Schema.String,
-}) {}
+export class WorkspaceNotARepositoryError extends TaggedError("WorkspaceNotARepositoryError") {}
 
 /** The path is missing or escapes the project. */
-export class WorkspaceFileNotFoundError extends Schema.TaggedErrorClass<WorkspaceFileNotFoundError>()("WorkspaceFileNotFoundError", {
-  message: Schema.String,
-}) {}
+export class WorkspaceFileNotFoundError extends TaggedError("WorkspaceFileNotFoundError") {}
 
 /** The file has binary content and cannot be shown as text. */
-export class WorkspaceBinaryFileError extends Schema.TaggedErrorClass<WorkspaceBinaryFileError>()("WorkspaceBinaryFileError", {
-  message: Schema.String,
-}) {}
+export class WorkspaceBinaryFileError extends TaggedError("WorkspaceBinaryFileError") {}
 
 /** The file exceeds the preview size cap. */
-export class WorkspaceFileTooLargeError extends Schema.TaggedErrorClass<WorkspaceFileTooLargeError>()("WorkspaceFileTooLargeError", {
-  message: Schema.String,
-}) {}
+export class WorkspaceFileTooLargeError extends TaggedError("WorkspaceFileTooLargeError") {}
 
+export type WorkspaceChangeStatus = z.infer<typeof WorkspaceChangeStatus>;
+export type WorkspaceChangeEntry = z.infer<typeof WorkspaceChangeEntry>;
 /** Failures shared by every operation that runs Git in the project. */
-export const WorkspaceGitError = Schema.Union([WorkspaceGenericError, WorkspaceNotARepositoryError]);
-
+export type WorkspaceGitError = WorkspaceGenericError | WorkspaceNotARepositoryError;
 /** Failures of operations that also return file contents. */
-export const WorkspaceFileError = Schema.Union([
-  WorkspaceGenericError,
-  WorkspaceNotARepositoryError,
-  WorkspaceFileNotFoundError,
-  WorkspaceBinaryFileError,
-  WorkspaceFileTooLargeError,
-]);
-
-export type WorkspaceChangeStatus = typeof WorkspaceChangeStatus.Type;
-export type WorkspaceChangeEntry = typeof WorkspaceChangeEntry.Type;
-export type WorkspaceGitError = typeof WorkspaceGitError.Type;
-export type WorkspaceFileError = typeof WorkspaceFileError.Type;
+export type WorkspaceFileError = WorkspaceGitError | WorkspaceFileNotFoundError | WorkspaceBinaryFileError | WorkspaceFileTooLargeError;

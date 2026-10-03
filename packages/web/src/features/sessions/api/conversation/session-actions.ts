@@ -2,7 +2,7 @@ import type {ModelReference, SessionWorkspaceSelection, UserMessageContentPart} 
 import {useQueryClient} from "@tanstack/react-query";
 import type {CheckpointNavigationOutcome, StartSessionOutcome} from "@/features/sessions/stores/conversation/session-live-store";
 import {useSessionLiveStore} from "@/features/sessions/stores/conversation/session-live-store";
-import {useSessionServices} from "@/rpc/use-session-services";
+import {useRuntime} from "@/rpc/use-runtime";
 
 interface SendMessageInput {
   readonly contentParts: readonly UserMessageContentPart[];
@@ -52,7 +52,7 @@ export interface SessionActions {
  */
 export function useSessionActions(): SessionActions {
   const queryClient = useQueryClient();
-  const services = useSessionServices();
+  const services = useRuntime();
   const abortSession = useSessionLiveStore((state) => state.abortSession);
   const compactSession = useSessionLiveStore((state) => state.compactSession);
   const redoCheckpoint = useSessionLiveStore((state) => state.redoCheckpoint);

@@ -1,33 +1,28 @@
-import {Schema} from "effect";
+import {z} from "zod";
+import {struct, TaggedError} from "@supernova/contracts/runtime/schemas";
 
 /** A shell the server runs for a session, in the session's workspace. */
-export const Terminal = Schema.Struct({
+export const Terminal = struct({
   /** Working directory the shell started in. */
-  cwd: Schema.String,
+  cwd: z.string(),
   /** Exit code once the shell has exited; the terminal stays listed until it is closed. */
-  exitCode: Schema.optional(Schema.Number),
-  id: Schema.String,
-  sessionId: Schema.String,
+  exitCode: z.number().optional(),
+  id: z.string(),
+  sessionId: z.string(),
 });
 
-/** Events of one terminal, streamed to attached clients. */
-export const TerminalEvent = Schema.Union([
-  /** Output since the shell started, capped; sent once on attach. */
-  Schema.Struct({type: Schema.Literal("terminal.history"), data: Schema.String}),
-  Schema.Struct({type: Schema.Literal("terminal.output"), data: Schema.String}),
-  Schema.Struct({type: Schema.Literal("terminal.exited"), exitCode: Schema.Number}),
-  /** The terminal was closed and no longer exists. */
-  Schema.Struct({type: Schema.Literal("terminal.closed")}),
-]);
+/** A terminal and its output, as the terminals' replicated state holds it. */
+export const TerminalOutput = struct({
+  terminal: Terminal,
+  /** Output since the shell started, capped from the front; new output is appended. */
+  output: z.string(),
+  /** How many characters the cap has dropped from the front so far; a client that drew past them only appends. */
+  dropped: z.number(),
+});
 
-export class TerminalError extends Schema.TaggedErrorClass<TerminalError>()("TerminalError", {
-  cause: Schema.optional(Schema.Defect),
-  message: Schema.String,
-}) {}
+export class TerminalError extends TaggedError("TerminalError") {}
 
-export class TerminalNotFoundError extends Schema.TaggedErrorClass<TerminalNotFoundError>()("TerminalNotFoundError", {
-  message: Schema.String,
-}) {}
+export class TerminalNotFoundError extends TaggedError("TerminalNotFoundError") {}
 
-export type Terminal = typeof Terminal.Type;
-export type TerminalEvent = typeof TerminalEvent.Type;
+export type Terminal = z.infer<typeof Terminal>;
+export type TerminalOutput = z.infer<typeof TerminalOutput>;

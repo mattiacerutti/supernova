@@ -1,7 +1,8 @@
-import {Schema} from "effect";
+import {z} from "zod";
+import {struct} from "@supernova/contracts/runtime/schemas";
 
-export const AbortSessionPayload = Schema.Struct({
-  sessionId: Schema.String,
+export const AbortSessionPayload = struct({
+  sessionId: z.string(),
 });
 
-export type AbortSessionPayload = typeof AbortSessionPayload.Type;
+export type AbortSessionPayload = z.infer<typeof AbortSessionPayload>;

@@ -4,10 +4,11 @@ import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import type {SessionActivity} from "@supernova/contracts/session-runtime/procedures";
 import type {CreateSessionPayload} from "@supernova/contracts/sessions/procedures";
 import type {LiveState, Session, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
-import type {ServiceResult, SessionController, SessionDirectoryState, SessionManagement} from "@supernova/contracts/sessions/services";
-import {Effect, Exit, Fiber, Stream} from "effect";
-import type {RpcClient, RpcClientFiber, RpcExecute, RpcProtocolClient, RpcRunOptions} from "@/rpc/transport/protocol";
-import type {AttachedSession, SessionServicesClient} from "@/rpc/transport/session-services";
+import type {ProviderLoginsState} from "@supernova/contracts/providers/services";
+import type {ClientService, ServiceResult} from "@supernova/contracts/runtime/services";
+import type {SessionController, SessionDirectoryState, SessionManagement} from "@supernova/contracts/sessions/services";
+import type {TerminalsState} from "@supernova/contracts/terminals/services";
+import type {AttachedSession, RuntimeClient} from "@/rpc/transport/runtime-client";
 import {
   assistantEntry,
   createTimelineSessions,
@@ -20,18 +21,20 @@ import {
 } from "@e2e/mocks/timeline-data";
 import type {TimelineMockState} from "@e2e/support/timeline-test-api";
 
-export {RpcProtocolClientService} from "@/rpc/transport/protocol";
-export type {RpcClient, RpcClientFiber, RpcProtocolClient} from "@/rpc/transport/protocol";
+export type {AttachedSession, RuntimeClient} from "@/rpc/transport/runtime-client";
 
 const STREAM_LINES_PER_FRAME = 2;
 const CREATE_SESSION_FAILURE_DELAY_MS = 150;
 const ok = {ok: true, value: null} as const;
 
+/** Resolves to a successful service result. */
+const value = async <T>(result: T): Promise<ServiceResult<T>> => ({ok: true, value: result});
+
 /**
- * The server side of the timeline tests, in the browser: sessions as Chord replicated state that the app's session
- * services read, as the real server's do, plus the RPC calls the session pages make.
+ * The server side of the timeline tests, in the browser: sessions as Chord replicated state, read through the same
+ * runtime client interface the app uses with the real server.
  */
-class TimelineServer implements RpcClient {
+class TimelineServer {
   private readonly sessions = createTimelineSessions();
   private readonly transcripts = new Map<string, MutableReplicatedState<Session>>();
   private readonly directory = replicatedState<SessionDirectoryState>({sessions: {}});
@@ -59,13 +62,9 @@ class TimelineServer implements RpcClient {
     };
   }
 
-  public async dispose(): Promise<void> {
-    this.stopPump();
-  }
-
-  /** The session services the app uses, over this server's state. */
-  public services(): SessionServicesClient {
-    const controller = (sessionId: string): SessionController => ({
+  /** The runtime client the app uses, over this server's state. */
+  public client(): RuntimeClient {
+    const controller = (sessionId: string): ClientService<SessionController> => ({
       abort: async () => this.settleStream("aborted"),
       compact: async () => ok,
       redo: async () => (this.redoCheckpoint(sessionId), ok),
@@ -73,7 +72,7 @@ class TimelineServer implements RpcClient {
       send: async ({contentParts}) => (this.startStream(sessionId, contentParts), ok),
       undo: async () => (this.undoCheckpoint(sessionId), ok),
     });
-    const management: SessionManagement = {
+    const management: ClientService<SessionManagement> = {
       attach: async () => ok,
       create: async (payload) => {
         const failure = this.createSessionFailure;
@@ -92,26 +91,45 @@ class TimelineServer implements RpcClient {
       management,
       directory: this.directory,
       attach: async (sessionId): Promise<AttachedSession> => ({sessionId, controller: controller(sessionId), transcript: this.transcript(sessionId)}),
+      composer: {listModels: () => value([timelineModelDetails]), listSuggestions: () => value({items: []})},
+      configuration: {get: () => value({modelDefaults: {}})},
+      extensions: {update: () => value(null)},
+      folders: {
+        create: ({path}) => value({path}),
+        listFiles: ({query}) => value({items: [], query}),
+        listSuggestions: ({query}) => value({homePath: TIMELINE_PROJECT_PATH, query, queryPath: query || TIMELINE_PROJECT_PATH, queryPathType: "directory", suggestions: []}),
+      },
+      projects: {
+        archiveSession: ({projectPath, sessionId}) => value({projectPath, sessionId}),
+        listSessions: () => value({projectPath: TIMELINE_PROJECT_PATH, sessions: [...this.sessions.values()].map(timelineSessionSummary)}),
+      },
+      providers: {
+        state: replicatedState<ProviderLoginsState>({logins: {}}),
+        cancelLogin: async () => ({ok: false, error: {code: "ProviderLoginError", message: "No login."}}),
+        list: () => value([]),
+        logout: ({providerId}) => value({providerId}),
+        startLogin: async () => ({ok: false, error: {code: "ProviderLoginError", message: "No login."}}),
+        submitLoginInput: async () => ({ok: false, error: {code: "ProviderLoginError", message: "No login."}}),
+      },
+      terminals: {
+        state: replicatedState<TerminalsState>({terminals: {}}),
+        close: () => value(null),
+        list: () => value({terminals: []}),
+        open: async () => ({ok: false, error: {code: "TerminalError", message: "Terminals are not available in timeline tests."}}),
+        resize: () => value(null),
+        write: () => value(null),
+      },
+      workspace: {
+        getChanges: () => value({uncommitted: []}),
+        getDiffContents: () => value({newContents: "", oldContents: ""}),
+        listBranches: async () => ({ok: false, error: {code: "WorkspaceNotARepositoryError", message: "Not a repository."}}),
+        listFiles: () => value({files: []}),
+        listRepositories: () => value({repositories: []}),
+        readFile: () => value({content: ""}),
+      },
       onConnectionChange: () => () => undefined,
-      dispose: async () => undefined,
+      dispose: async () => this.stopPump(),
     };
-  }
-
-  public async fork<TSuccess, TError>(execute: RpcExecute<TSuccess, TError>): Promise<RpcClientFiber> {
-    const fiber = Effect.runFork(execute(this.protocol()));
-
-    return {
-      completed: Effect.runPromise(Fiber.await(fiber)).then(() => undefined),
-      interrupt: () => Effect.runPromise(Effect.ignore(Fiber.interrupt(fiber))),
-    };
-  }
-
-  public async run<TSuccess, TError>(execute: RpcExecute<TSuccess, TError>): Promise<TSuccess> {
-    return await Effect.runPromise(execute(this.protocol()));
-  }
-
-  public async runExit<TSuccess, TError>(execute: RpcExecute<TSuccess, TError>, options?: RpcRunOptions): Promise<Exit.Exit<TSuccess, TError>> {
-    return (await Effect.runPromiseExit(execute(this.protocol()), options)) as Exit.Exit<TSuccess, TError>;
   }
 
   /** The replicated state of a session, created from its current value on first use. */
@@ -129,42 +147,6 @@ class TimelineServer implements RpcClient {
     const session = this.sessions.get(sessionId);
     if (!session) throw new Error(`Unknown timeline test session: ${sessionId}`);
     return session;
-  }
-
-  /** Exposes the same protocol boundary consumed by the real application. */
-  private protocol(): RpcProtocolClient {
-    return {
-      archiveProjectSession: () => Effect.void,
-      cancelProviderLogin: () => Effect.void,
-      createFolder: () => Effect.void,
-      getFolderStatus: () => Effect.succeed({exists: true, kind: "directory"}),
-      getWorkspaceChanges: () => Effect.succeed({uncommitted: []}),
-      getWorkspaceDiffContents: () => Effect.succeed({newContents: "", oldContents: ""}),
-      listComposerSuggestions: () => Effect.succeed({items: []}),
-      listFolderFiles: () => Effect.succeed({items: []}),
-      listFolderSuggestions: ({query}: {readonly query: string}) =>
-        Effect.succeed({
-          homePath: TIMELINE_PROJECT_PATH,
-          query,
-          queryPath: query || TIMELINE_PROJECT_PATH,
-          queryPathType: "directory",
-          suggestions: [],
-        }),
-      listModels: () => Effect.succeed([timelineModelDetails]),
-      listProjectSessions: () =>
-        Effect.succeed({
-          projectPath: TIMELINE_PROJECT_PATH,
-          sessions: [...this.sessions.values()].map(timelineSessionSummary),
-        }),
-      listProviders: () => Effect.succeed([]),
-      listWorkspaceFiles: () => Effect.succeed({files: []}),
-      listWorkspaceRepositories: () => Effect.succeed({repositories: []}),
-      logoutProvider: () => Effect.void,
-      readWorkspaceFile: () => Effect.succeed({content: ""}),
-      startProviderLogin: () => Effect.succeed({loginSessionId: "timeline-login", status: "completed"}),
-      submitProviderLoginInput: () => Effect.void,
-      watchProviderLoginSession: () => Stream.empty,
-    } as unknown as RpcProtocolClient;
   }
 
   /** Mirrors the server: the client's id names the session, and a first message starts its turn. */
@@ -331,7 +313,7 @@ export function timelineServer(): TimelineServer {
   return sharedServer;
 }
 
-/** Initializes the in-browser timeline RPC mock. */
-export async function getRpcClient(): Promise<RpcClient> {
-  return timelineServer();
+/** The app's runtime client over the in-browser timeline server. */
+export async function getRuntimeClient(): Promise<RuntimeClient> {
+  return timelineServer().client();
 }

@@ -1,13 +1,14 @@
-import {Schema} from "effect";
+import {z} from "zod";
+import {struct} from "@supernova/contracts/runtime/schemas";
 
-export const WorkspaceFileReadPayload = Schema.Struct({
-  path: Schema.String,
-  projectPath: Schema.String,
+export const WorkspaceFileReadPayload = struct({
+  path: z.string(),
+  projectPath: z.string(),
 });
 
-export const WorkspaceFileReadResult = Schema.Struct({
-  content: Schema.String,
+export const WorkspaceFileReadResult = struct({
+  content: z.string(),
 });
 
-export type WorkspaceFileReadPayload = typeof WorkspaceFileReadPayload.Type;
-export type WorkspaceFileReadResult = typeof WorkspaceFileReadResult.Type;
+export type WorkspaceFileReadPayload = z.infer<typeof WorkspaceFileReadPayload>;
+export type WorkspaceFileReadResult = z.infer<typeof WorkspaceFileReadResult>;
