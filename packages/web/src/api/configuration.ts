@@ -1,3 +1,4 @@
+import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import {queryOptions, useQuery} from "@tanstack/react-query";
 import {showToast} from "@/lib/toast";
 import {unwrap} from "@/rpc/runtime-result";
@@ -14,7 +15,7 @@ export function useConfiguration(projectPath?: string) {
   return useQuery(
     queryOptions({
       queryFn: () =>
-        unwrap(runtime.configuration.get({projectPath})).catch((error: unknown) => {
+        unwrap(runtime.configuration.get({projectPath}, BACKGROUND_CONTEXT)).catch((error: unknown) => {
           showToast("Unable to load configuration", "Check your settings.json files.", {id: "configuration-load-error"});
           throw error;
         }),

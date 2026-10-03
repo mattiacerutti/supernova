@@ -1,4 +1,4 @@
-import type {ReplicatedState, Service} from "@earendil-works/chord";
+import type {ReplicatedState} from "@earendil-works/chord";
 import {createRemoteServiceBinding} from "@earendil-works/chord";
 import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import type {ByteTransportFactory, ConnectionState} from "@earendil-works/pi-client";
@@ -8,7 +8,6 @@ import {ExtensionsService} from "@supernova/contracts/extensions/services";
 import {FoldersService} from "@supernova/contracts/folders/services";
 import {ProjectsService} from "@supernova/contracts/projects/services";
 import {ProvidersService} from "@supernova/contracts/providers/services";
-import type {ClientService} from "@supernova/contracts/runtime/services";
 import {RUNTIME_SERVER_ID, RUNTIME_SOCKET_PATH} from "@supernova/contracts/runtime/services";
 import type {Session} from "@supernova/contracts/sessions/schemas";
 import type {SessionDirectoryState} from "@supernova/contracts/sessions/services";
@@ -62,45 +61,32 @@ function webSocketTransport(url: string): ByteTransportFactory {
     });
 }
 
-/**
- * A service whose methods wait for the current connection and take no `Context`. A call made while (re)connecting
- * waits instead of failing as disconnected.
- */
-function connectedService<T extends object>(service: T, connected: () => Promise<void>): ClientService<T> {
-  return new Proxy(service, {
-    get: (target, member) => {
-      const value = Reflect.get(target, member) as unknown;
-      if (typeof value !== "function") return value;
-      return async (...args: unknown[]) => {
-        await connected();
-        return (value as (...args: unknown[]) => Promise<unknown>)(...args, BACKGROUND_CONTEXT);
-      };
-    },
-  }) as unknown as ClientService<T>;
-}
-
 /** The session the connection is attached to: its controller and transcript. */
 export interface AttachedSession {
   readonly sessionId: string;
-  readonly controller: ClientService<SessionController>;
+  readonly controller: SessionController;
   readonly transcript: ReplicatedState<Session>;
 }
 
 /**
- * The browser's connection to the runtime: every server-wide Chord service, and the services of the one attached
- * session. Reconnects after a drop, rebinds every service, and attaches the same session again.
+ * The browser's connection to the runtime: Chord's facades of every server-wide service, and the services of the one
+ * attached session. Methods take Chord's `Context` last, as the contracts declare them. A call made while the
+ * connection is down fails as disconnected; wait for `ready()` first where that matters (startup, reconnects). The
+ * client reconnects after a drop, rebinds every service, and attaches the same session again.
  */
 export interface RuntimeClient {
-  readonly composer: ClientService<ComposerService>;
-  readonly configuration: ClientService<ConfigurationService>;
-  readonly extensions: ClientService<ExtensionsService>;
-  readonly folders: ClientService<FoldersService>;
-  readonly projects: ClientService<ProjectsService>;
-  readonly providers: ClientService<ProvidersService>;
-  readonly management: ClientService<SessionManagement>;
+  readonly composer: ComposerService;
+  readonly configuration: ConfigurationService;
+  readonly extensions: ExtensionsService;
+  readonly folders: FoldersService;
+  readonly projects: ProjectsService;
+  readonly providers: ProvidersService;
+  readonly management: SessionManagement;
   readonly directory: ReplicatedState<SessionDirectoryState>;
-  readonly terminals: ClientService<TerminalsService>;
-  readonly workspace: ClientService<WorkspaceService>;
+  readonly terminals: TerminalsService;
+  readonly workspace: WorkspaceService;
+  /** Resolves once connected with every server-wide service bound; after a drop, once reconnected. */
+  ready(): Promise<void>;
   /** Attaches the session's services, replacing the previous attachment; resolves once its transcript arrived. */
   attach(sessionId: string): Promise<AttachedSession>;
   /** Calls `listener` on every connection change; a reconnect means state was missed and must be read again. */
@@ -122,30 +108,40 @@ export function createRuntimeClient(endpoint: string): RuntimeClient {
     bound: false,
   });
 
-  let connected: Promise<void> = Promise.resolve();
+  // Settles each time the connection is up with its services bound; replaced when the connection drops.
+  let connected!: Promise<void>;
   let markConnected: () => void = () => undefined;
   const awaitConnection = (): void => {
     connected = new Promise((resolve) => (markConnected = resolve));
   };
   awaitConnection();
-  const service = <T extends object>(token: Service<T>) => connectedService(serverServices.use(token), () => connected);
 
-  const management = service(SessionManagement);
   const listeners = new Set<(state: ConnectionState) => void>();
   let attachedId: string | undefined;
   let attaching: Promise<AttachedSession> | undefined;
   let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
   let disposed = false;
 
+  const remoteManagement = serverServices.use(SessionManagement);
+  const controller = sessionServices.use(SessionController);
+  const transcript = sessionServices.use(SessionTranscript).state;
+
+  /** Asks the server to route this connection's session services to the session, then binds them to it. */
   const attachNow = async (sessionId: string): Promise<AttachedSession> => {
-    const outcome = await management.attach(sessionId);
+    await connected;
+    const outcome = await remoteManagement.attach(sessionId, BACKGROUND_CONTEXT);
     if (!outcome.ok) throw new Error(outcome.error.message);
     await sessionServices.rebind(true, BACKGROUND_CONTEXT);
-    const transcript = sessionServices.use(SessionTranscript).state;
-    const controller = connectedService(sessionServices.use(SessionController), () => connected);
     await sessionServices.ready(BACKGROUND_CONTEXT);
     attachedId = sessionId;
     return {sessionId, controller, transcript};
+  };
+
+  const attach = (sessionId: string): Promise<AttachedSession> => {
+    const previous = attaching ?? Promise.resolve(undefined);
+    const next = previous.catch(() => undefined).then(() => attachNow(sessionId));
+    attaching = next;
+    return next;
   };
 
   const connect = (): void => {
@@ -176,22 +172,26 @@ export function createRuntimeClient(endpoint: string): RuntimeClient {
   connect();
 
   return {
-    composer: service(ComposerService),
-    configuration: service(ConfigurationService),
-    extensions: service(ExtensionsService),
-    folders: service(FoldersService),
-    projects: service(ProjectsService),
-    providers: service(ProvidersService),
-    management,
-    directory: serverServices.use(SessionDirectory).state,
-    terminals: service(TerminalsService),
-    workspace: service(WorkspaceService),
-    attach(sessionId) {
-      const previous = attaching ?? Promise.resolve(undefined);
-      const next = previous.catch(() => undefined).then(() => attachNow(sessionId));
-      attaching = next;
-      return next;
+    composer: serverServices.use(ComposerService),
+    configuration: serverServices.use(ConfigurationService),
+    extensions: serverServices.use(ExtensionsService),
+    folders: serverServices.use(FoldersService),
+    projects: serverServices.use(ProjectsService),
+    providers: serverServices.use(ProvidersService),
+    // `attach` also binds this client's session services; the other members are Chord's.
+    management: {
+      create: (payload, context) => remoteManagement.create(payload, context),
+      fork: (payload, context) => remoteManagement.fork(payload, context),
+      rename: (payload, context) => remoteManagement.rename(payload, context),
+      read: (payload, context) => remoteManagement.read(payload, context),
+      attach: (sessionId) => attach(sessionId).then(() => ({ok: true, value: null}) as const),
+      detach: (context) => remoteManagement.detach(context),
     },
+    directory: serverServices.use(SessionDirectory).state,
+    terminals: serverServices.use(TerminalsService),
+    workspace: serverServices.use(WorkspaceService),
+    ready: () => connected,
+    attach,
     onConnectionChange(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);
@@ -207,8 +207,12 @@ export function createRuntimeClient(endpoint: string): RuntimeClient {
 
 let sharedClient: RuntimeClient | undefined;
 
-/** The app's runtime connection to its local endpoint; connection selection can supply a different endpoint here. */
+/**
+ * The app's runtime connection to its local endpoint, once it is up; connection selection can supply a different
+ * endpoint here. Rendering waits for it, so the first calls never race the connection.
+ */
 export async function getRuntimeClient(): Promise<RuntimeClient> {
   sharedClient ??= createRuntimeClient(window.desktopApi?.serverUrl ?? window.location.origin);
+  await sharedClient.ready();
   return sharedClient;
 }

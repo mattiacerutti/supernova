@@ -1,9 +1,10 @@
-import {replicatedState} from "@earendil-works/chord";
+import {createRemoteServiceBinding, RemoteServiceProvider, replicatedState} from "@earendil-works/chord";
 import type {MutableReplicatedState} from "@earendil-works/chord";
 import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import type {ModelReference, Session, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
-import type {ClientService, ServiceResult} from "@supernova/contracts/runtime/services";
-import type {SessionController, SessionDirectoryEntry, SessionDirectoryState, SessionManagement} from "@supernova/contracts/sessions/services";
+import type {ServiceResult} from "@supernova/contracts/runtime/services";
+import type {SessionDirectoryEntry, SessionDirectoryState} from "@supernova/contracts/sessions/services";
+import {SessionController, SessionManagement} from "@supernova/contracts/sessions/services";
 import {QueryClient} from "@tanstack/react-query";
 import {afterEach, beforeEach, describe, expect, it, vi} from "vitest";
 import {sessionKeys} from "@/features/sessions/api/query-keys";
@@ -67,8 +68,8 @@ interface FakeServices {
   readonly client: RuntimeClient;
   readonly directory: MutableReplicatedState<SessionDirectoryState>;
   readonly transcripts: Map<string, MutableReplicatedState<Session>>;
-  readonly controller: {-readonly [K in keyof ClientService<SessionController>]: ClientService<SessionController>[K]};
-  readonly management: {-readonly [K in keyof ClientService<SessionManagement>]: ClientService<SessionManagement>[K]};
+  readonly controller: {-readonly [K in keyof SessionController]: SessionController[K]};
+  readonly management: {-readonly [K in keyof SessionManagement]: SessionManagement[K]};
   readonly attached: string[];
 }
 
@@ -106,6 +107,7 @@ function fakeServices(): FakeServices {
       }
       return {controller, sessionId, transcript};
     },
+    ready: async () => undefined,
     onConnectionChange: () => () => undefined,
     dispose: async () => undefined,
   } as unknown as RuntimeClient;
@@ -184,7 +186,7 @@ describe("session live store", () => {
     useSessionLiveStore.getState().sendMessage({contentParts, modelReference: model, queryClient, services: services.client, sessionId: "session-1"});
 
     expect(useSessionLiveStore.getState().sessions["session-1"]).toMatchObject({pending: {contentParts, turnCount: 0}, status: "streaming"});
-    await waitUntil(() => expect(services.controller.send).toHaveBeenCalledWith({captureCheckpoints: true, contentParts, modelReference: model}));
+    await waitUntil(() => expect(services.controller.send).toHaveBeenCalledWith({captureCheckpoints: true, contentParts, modelReference: model}, BACKGROUND_CONTEXT));
     useSessionLiveStore.getState().settlePending("session-1", 0);
     expect(useSessionLiveStore.getState().sessions["session-1"]?.pending).not.toBeNull();
     useSessionLiveStore.getState().settlePending("session-1", 1);

@@ -1,3 +1,4 @@
+import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import {queryOptions, useQuery} from "@tanstack/react-query";
 import type {ComposerSuggestionItem, ComposerSuggestionMatch} from "@/features/sessions/types/composer-suggestion";
 import {clientSlashCommandSuggestions} from "@/features/sessions/lib/composer/editor/client-slash-commands";
@@ -16,7 +17,7 @@ export function useComposerSuggestions(projectPath: string, match: ComposerSugge
       enabled: !!projectPath,
       staleTime: Infinity,
       gcTime: Infinity,
-      queryFn: () => unwrap(runtime.composer.listSuggestions({projectPath})),
+      queryFn: () => unwrap(runtime.composer.listSuggestions({projectPath}, BACKGROUND_CONTEXT)),
     }),
     select: (result): ComposerSuggestionItem[] => {
       if (!match || match.kind === "file") return [];
@@ -29,7 +30,7 @@ export function useComposerSuggestions(projectPath: string, match: ComposerSugge
       queryKey: sessionKeys.composerFiles(projectPath, match?.kind === "file" ? match.query : null),
       enabled: match?.kind === "file",
       placeholderData: (previousData, previousQuery) => (previousQuery?.queryKey[2] === projectPath ? previousData : undefined),
-      queryFn: () => unwrap(runtime.folders.listFiles({projectPath, query: match?.query ?? ""})),
+      queryFn: () => unwrap(runtime.folders.listFiles({projectPath, query: match?.query ?? ""}, BACKGROUND_CONTEXT)),
     }),
     select: (result): ComposerSuggestionItem[] => result.items.map((item) => ({id: item.path, kind: "file", path: item.path, subtitle: item.subtitle, title: item.title})),
   });

@@ -1,3 +1,4 @@
+import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import type {TerminalOutput} from "@supernova/contracts/terminals/schemas";
 import {unwrap} from "@/rpc/runtime-result";
 import type {RuntimeClient} from "@/rpc/transport/runtime-client";
@@ -70,7 +71,7 @@ function attachTerminal(runtime: RuntimeClient, input: AttachTerminalInput): Ter
     if (!detached) onError(cause instanceof Error && cause.message ? cause.message : fallback);
   };
 
-  void unwrap(runtime.terminals.open({cols: input.cols, cwd: input.cwd, id, rows: input.rows, sessionId: input.sessionId})).then(
+  void unwrap(runtime.terminals.open({cols: input.cols, cwd: input.cwd, id, rows: input.rows, sessionId: input.sessionId}, BACKGROUND_CONTEXT)).then(
     () => {
       if (detached) return;
       const apply = follow((event) => !detached && onEvent(event));
@@ -80,13 +81,13 @@ function attachTerminal(runtime: RuntimeClient, input: AttachTerminalInput): Ter
   );
 
   return {
-    close: () => void runtime.terminals.close({id}).catch(() => undefined),
+    close: () => void runtime.terminals.close({id}, BACKGROUND_CONTEXT).catch(() => undefined),
     detach: () => {
       detached = true;
       stop?.();
     },
-    resize: (cols, rows) => void runtime.terminals.resize({cols, id, rows}).catch(() => undefined),
-    write: (data) => void runtime.terminals.write({data, id}).catch(() => undefined),
+    resize: (cols, rows) => void runtime.terminals.resize({cols, id, rows}, BACKGROUND_CONTEXT).catch(() => undefined),
+    write: (data) => void runtime.terminals.write({data, id}, BACKGROUND_CONTEXT).catch(() => undefined),
   };
 }
 
@@ -99,11 +100,11 @@ export function useAttachTerminal(): (input: AttachTerminalInput) => TerminalSes
 /** Ids of the shells the server still runs for a session; a reloaded client reattaches tabs to them. */
 export function useListTerminalIds(): (sessionId: string) => Promise<readonly string[]> {
   const runtime = useRuntime();
-  return async (sessionId) => (await unwrap(runtime.terminals.list({sessionId}))).terminals.map((terminal) => terminal.id);
+  return async (sessionId) => (await unwrap(runtime.terminals.list({sessionId}, BACKGROUND_CONTEXT))).terminals.map((terminal) => terminal.id);
 }
 
 /** Kills a terminal by id; for closing a tab, where no component is attached anymore. */
 export function useCloseTerminal(): (id: string) => void {
   const runtime = useRuntime();
-  return (id) => void runtime.terminals.close({id}).catch(() => undefined);
+  return (id) => void runtime.terminals.close({id}, BACKGROUND_CONTEXT).catch(() => undefined);
 }

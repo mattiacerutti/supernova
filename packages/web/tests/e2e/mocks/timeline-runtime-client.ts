@@ -5,7 +5,7 @@ import type {SessionActivity} from "@supernova/contracts/session-runtime/procedu
 import type {CreateSessionPayload} from "@supernova/contracts/sessions/procedures";
 import type {LiveState, Session, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
 import type {ProviderLoginsState} from "@supernova/contracts/providers/services";
-import type {ClientService, ServiceResult} from "@supernova/contracts/runtime/services";
+import type {ServiceResult} from "@supernova/contracts/runtime/services";
 import type {SessionController, SessionDirectoryState, SessionManagement} from "@supernova/contracts/sessions/services";
 import type {TerminalsState} from "@supernova/contracts/terminals/services";
 import type {AttachedSession, RuntimeClient} from "@/rpc/transport/runtime-client";
@@ -64,7 +64,7 @@ class TimelineServer {
 
   /** The runtime client the app uses, over this server's state. */
   public client(): RuntimeClient {
-    const controller = (sessionId: string): ClientService<SessionController> => ({
+    const controller = (sessionId: string): SessionController => ({
       abort: async () => this.settleStream("aborted"),
       compact: async () => ok,
       redo: async () => (this.redoCheckpoint(sessionId), ok),
@@ -72,7 +72,7 @@ class TimelineServer {
       send: async ({contentParts}) => (this.startStream(sessionId, contentParts), ok),
       undo: async () => (this.undoCheckpoint(sessionId), ok),
     });
-    const management: ClientService<SessionManagement> = {
+    const management: SessionManagement = {
       attach: async () => ok,
       create: async (payload) => {
         const failure = this.createSessionFailure;
@@ -127,6 +127,7 @@ class TimelineServer {
         listRepositories: () => value({repositories: []}),
         readFile: () => value({content: ""}),
       },
+      ready: async () => undefined,
       onConnectionChange: () => () => undefined,
       dispose: async () => this.stopPump(),
     };

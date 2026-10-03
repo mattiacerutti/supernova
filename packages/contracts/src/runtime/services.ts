@@ -1,5 +1,3 @@
-import type {Context} from "@earendil-works/chord";
-
 /**
  * The logical identity of a Supernova server on the runtime protocol. A client checks it in the server's hello; the
  * server's URL already selects the server, so every Supernova server uses the same identity.
@@ -20,9 +18,3 @@ export interface ServiceFailure {
  * its own error codes, and clients need the contract's.
  */
 export type ServiceResult<T> = {readonly ok: true; readonly value: T} | {readonly ok: false; readonly error: ServiceFailure};
-
-/** A service method as a client calls it: the same arguments without the trailing Chord `Context`. */
-export type ClientMethod<M> = M extends (...args: [...infer Args, Context]) => infer Result ? (...args: Args) => Result : M;
-
-/** A service as a client calls it: every method without its trailing `Context`; states are unchanged. */
-export type ClientService<T> = {readonly [K in keyof T]: ClientMethod<T[K]>};

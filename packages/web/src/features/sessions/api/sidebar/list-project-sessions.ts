@@ -1,3 +1,4 @@
+import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import {queryOptions, useQuery} from "@tanstack/react-query";
 import {sessionKeys} from "@/features/sessions/api/query-keys";
 import {unwrap} from "@/rpc/runtime-result";
@@ -8,7 +9,7 @@ export function listProjectSessionsQueryOptions(runtime: RuntimeClient, projectP
   return queryOptions({
     enabled: projectPath.length > 0,
     placeholderData: (previousData) => previousData,
-    queryFn: () => unwrap(runtime.projects.listSessions({projectPath})),
+    queryFn: () => unwrap(runtime.projects.listSessions({projectPath}, BACKGROUND_CONTEXT)),
     queryKey: sessionKeys.list(projectPath),
   });
 }
