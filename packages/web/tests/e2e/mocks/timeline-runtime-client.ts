@@ -65,7 +65,7 @@ class TimelineServer {
   /** The runtime client the app uses, over this server's state. */
   public client(): RuntimeClient {
     const controller = (sessionId: string): SessionController => ({
-      abort: async () => this.settleStream("aborted"),
+      abort: async () => (this.settleStream("aborted"), ok),
       compact: async () => ok,
       redo: async () => (this.redoCheckpoint(sessionId), ok),
       revert: async ({turnId}) => (this.revertToMessage(sessionId, turnId), ok),
@@ -80,9 +80,9 @@ class TimelineServer {
         if (failure === null) return {ok: true, value: this.createSession(payload)};
         // A real failure arrives after a round trip, while the composer is already docking.
         await new Promise((resolve) => setTimeout(resolve, CREATE_SESSION_FAILURE_DELAY_MS));
-        return {ok: false, error: {code: "CreateSessionError", message: failure}} satisfies ServiceResult<never>;
+        return {ok: false, error: {code: "CreateSessionError", message: failure}};
       },
-      detach: async () => undefined,
+      detach: async () => ok,
       fork: async ({sessionId}) => ({ok: true, value: this.session(sessionId)}),
       read: async ({sessionId}) => ({ok: true, value: this.session(sessionId)}),
       rename: async ({sessionId}) => ({ok: true, value: this.session(sessionId)}),

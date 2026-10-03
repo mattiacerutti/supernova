@@ -1,15 +1,22 @@
-import {errorCode} from "@/rpc/runtime-result";
+import type {WorkspaceService} from "@supernova/contracts/workspace/services";
+import type {FailureCode} from "@/rpc/runtime-result";
+import {runtimeError} from "@/rpc/runtime-result";
 
 const GENERIC_MESSAGE = "Something went wrong loading this project.";
 
-const MESSAGES: Readonly<Record<string, string>> = {
+type WorkspaceFailureCode = FailureCode<WorkspaceService["readFile"]>;
+
+/** Copy for every code a workspace read can fail with; adding an error to the contract fails this until it has copy. */
+const MESSAGES: Readonly<Record<WorkspaceFailureCode, string>> = {
+  GenericError: GENERIC_MESSAGE,
   WorkspaceBinaryFileError: "Binary files cannot be previewed.",
   WorkspaceFileNotFoundError: "This file no longer exists.",
   WorkspaceFileTooLargeError: "This file is too large to preview.",
   WorkspaceNotARepositoryError: "This project is not a Git repository.",
 };
 
-/** User-facing copy for a failed workspace query. Transport failures and defects get the generic message. */
+/** User-facing copy for a failed workspace query. Transport failures get the generic message. */
 export function workspaceErrorMessage(error: unknown): string {
-  return MESSAGES[errorCode(error) ?? ""] ?? GENERIC_MESSAGE;
+  const code = runtimeError<WorkspaceService["readFile"]>(error)?.code;
+  return code === undefined ? GENERIC_MESSAGE : MESSAGES[code];
 }

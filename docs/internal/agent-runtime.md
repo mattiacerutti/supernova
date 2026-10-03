@@ -61,9 +61,9 @@ Group a folder once it holds more than about five files, by what the files are f
 
 ## Errors
 
-Throw the tagged error classes from `@supernova/contracts`; nothing else is needed inside a feature. Pi's service protocol carries only its own error codes, so the edge returns failures as data: a `ServiceResult` whose `code` is the contract error's tag. `run()` in `rpc/runtime-services.ts` parses the payload, passes declared errors through, and turns anything undeclared into the operation's first declared error with the cause's message. Use `lib/errors.ts` `errorMessage(cause, fallback)` to build messages from unknown causes.
+Throw the tagged error classes from `@supernova/contracts`; nothing else is needed inside a feature. Pi's service protocol carries only its own error codes, so the edge returns failures as data: a `ServiceResult` whose `code` is the contract error's tag. `run()` in `rpc/runtime-services.ts` parses the payload, passes the operation's `declared` errors through, and turns everything else (an invalid payload, a plain `Error`, a bug) into a `GenericError` with the cause's message; the cause is logged on the server only. `declared` also types the method's result, so it must match the contract. Use `lib/errors.ts` `errorMessage(cause, fallback)` to build messages from unknown causes.
 
-Checkpoint navigation is the one place errors are classified below the edge: `features/session-runtime/checkpoints/lib/checkpoint-error.ts` turns a workspace conflict into `CheckpointConflictError` so the client can offer a forced retry. See [Checkpoint system](checkpoint-system.md).
+Throw a contract error where the failure is detected, not by classifying causes later; a checkpoint conflict, for example, is thrown as `CheckpointConflictError` by the shadow repository. See [Checkpoint system](checkpoint-system.md).
 
 ## Streams
 

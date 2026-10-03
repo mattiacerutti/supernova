@@ -9,7 +9,6 @@ import type {
 } from "@supernova/contracts/session-runtime/procedures";
 import type {Session} from "@supernova/contracts/sessions/schemas";
 import type {CheckpointStore} from "@supernova/agent-runtime/features/session-runtime/checkpoints/checkpoint-store";
-import {toCheckpointNavigationError} from "@supernova/agent-runtime/features/session-runtime/checkpoints/lib/checkpoint-error";
 import {compactSession} from "@supernova/agent-runtime/features/session-runtime/worker/commands/compact-session";
 import {redoCheckpoint} from "@supernova/agent-runtime/features/session-runtime/worker/commands/redo-checkpoint";
 import {revertToMessage} from "@supernova/agent-runtime/features/session-runtime/worker/commands/revert-to-message";
@@ -56,23 +55,16 @@ export class SessionRuntime {
     await this.workers.get(input.sessionId)?.abort();
   }
 
-  /** Checkpoint navigation rejects with a `CheckpointNavigationError`; see `toCheckpointNavigationError`. */
   public async undoCheckpoint(input: UndoCheckpointPayload): Promise<void> {
-    await undoCheckpoint(await this.worker(input.sessionId), input).catch((cause: unknown) => {
-      throw toCheckpointNavigationError(cause);
-    });
+    await undoCheckpoint(await this.worker(input.sessionId), input);
   }
 
   public async redoCheckpoint(input: RedoCheckpointPayload): Promise<void> {
-    await redoCheckpoint(await this.worker(input.sessionId), input).catch((cause: unknown) => {
-      throw toCheckpointNavigationError(cause);
-    });
+    await redoCheckpoint(await this.worker(input.sessionId), input);
   }
 
   public async revertToMessage(input: RevertToMessagePayload): Promise<void> {
-    await revertToMessage(await this.worker(input.sessionId), input).catch((cause: unknown) => {
-      throw toCheckpointNavigationError(cause);
-    });
+    await revertToMessage(await this.worker(input.sessionId), input);
   }
 
   /** A durable session's document at its latest published revision. */

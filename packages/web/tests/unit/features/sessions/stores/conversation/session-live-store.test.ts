@@ -2,7 +2,6 @@ import {createRemoteServiceBinding, RemoteServiceProvider, replicatedState} from
 import type {MutableReplicatedState} from "@earendil-works/chord";
 import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import type {ModelReference, Session, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
-import type {ServiceResult} from "@supernova/contracts/runtime/services";
 import type {SessionDirectoryEntry, SessionDirectoryState} from "@supernova/contracts/sessions/services";
 import {SessionController, SessionManagement} from "@supernova/contracts/sessions/services";
 import {QueryClient} from "@tanstack/react-query";
@@ -44,7 +43,8 @@ function entry(input?: Partial<SessionDirectoryEntry>): SessionDirectoryEntry {
   return {activity: "idle", error: null, projectPath: "/workspace", setupStep: null, summary: null, ...input};
 }
 
-function failure(code: string, message: string): ServiceResult<never> {
+/** A failed result with any code; each fake returns one its method declares. */
+function failure<Code extends string>(code: Code, message: string): {readonly ok: false; readonly error: {readonly code: Code; readonly message: string}} {
   return {ok: false, error: {code, message}};
 }
 
@@ -79,7 +79,7 @@ function fakeServices(): FakeServices {
   const transcripts = new Map<string, MutableReplicatedState<Session>>();
   const attached: string[] = [];
   const controller = {
-    abort: vi.fn(async () => undefined),
+    abort: vi.fn(async () => ok),
     compact: vi.fn(async () => ok),
     redo: vi.fn(async () => ok),
     revert: vi.fn(async () => ok),
@@ -89,7 +89,7 @@ function fakeServices(): FakeServices {
   const management = {
     attach: vi.fn(async () => ok),
     create: vi.fn(async (payload) => ({ok: true, value: session({id: payload.id})}) as const),
-    detach: vi.fn(async () => undefined),
+    detach: vi.fn(async () => ok),
     fork: vi.fn(async () => ({ok: true, value: session()}) as const),
     read: vi.fn(async ({sessionId}) => ({ok: true, value: transcripts.get(sessionId)?.value ?? session({id: sessionId})}) as const),
     rename: vi.fn(async () => ({ok: true, value: session()}) as const),
@@ -196,7 +196,7 @@ describe("session live store", () => {
   it("drops the sent message and reports the error when the send fails", async () => {
     const queryClient = new QueryClient();
     const services = fakeServices();
-    services.controller.send = vi.fn(async () => failure("SessionCommandError", "Model unavailable"));
+    services.controller.send = vi.fn(async () => failure("GenericError", "Model unavailable"));
     queryClient.setQueryData(sessionKeys.detail("session-1"), session());
 
     useSessionLiveStore.getState().sendMessage({contentParts, modelReference: model, queryClient, services: services.client, sessionId: "session-1"});
@@ -206,8 +206,8 @@ describe("session live store", () => {
 
   it.each(
     [
-      {outcome: "conflict", code: "CheckpointConflictError"},
-      {outcome: "uncaptured", code: "CheckpointUncapturedError"},
+      {outcome: "conflict", code: "CheckpointConflictError" as const},
+      {outcome: "uncaptured", code: "CheckpointUncapturedError" as const},
     ].flatMap((item) => ["confirm", "cancel", "failed retry"].flatMap((decision) => (["undo", "redo", "revert"] as const).map((operation) => ({...item, decision, operation}))))
   )("keeps $operation optimistic on $outcome until $decision", async ({outcome, code, decision, operation}) => {
     const services = fakeServices();
@@ -215,7 +215,7 @@ describe("session live store", () => {
     services.controller[operation] = vi.fn(async (payload: {readonly force?: boolean}) => {
       forceFlags.push(payload.force);
       if (!payload.force) return failure(code, "Refused.");
-      return decision === "failed retry" ? failure("CheckpointGenericError", "Restore failed") : ok;
+      return decision === "failed retry" ? failure("GenericError", "Restore failed") : ok;
     });
     const input = {firstUndoneTurnId: "redoable", lastTurnId: "undone", queryClient: new QueryClient(), services: services.client, sessionId: "session-1", turnId: "undone"};
     const store = useSessionLiveStore.getState();

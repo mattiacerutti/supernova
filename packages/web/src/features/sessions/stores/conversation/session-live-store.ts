@@ -2,12 +2,12 @@ import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import type {QueryClient} from "@tanstack/react-query";
 import type {SessionActivity, SessionSetupStep} from "@supernova/contracts/session-runtime/procedures";
 import type {ModelReference, OutgoingMessage, Session, SessionWorkspaceSelection, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
-import type {ServiceResult} from "@supernova/contracts/runtime/services";
 import type {SessionController, SessionDirectoryState} from "@supernova/contracts/sessions/services";
 import {create} from "zustand";
 import {useSettingsStore} from "@/stores/settings-store";
 import {showToast} from "@/lib/toast";
 import {sessionKeys} from "@/features/sessions/api/query-keys";
+import {runtimeError, unwrap} from "@/rpc/runtime-result";
 import type {AttachedSession, RuntimeClient} from "@/rpc/transport/runtime-client";
 
 export type SessionLiveStatus = "checkpoint-navigating" | "compacting" | "idle" | "stopping" | "streaming";
@@ -70,16 +70,6 @@ function withStatus(entry: Omit<SessionLiveState, "status"> & {readonly status?:
 /** Normalizes command failures for user-facing messages. */
 function errorMessage(cause: unknown, fallback: string): string {
   return cause instanceof Error && cause.message.length > 0 ? cause.message : fallback;
-}
-
-/** The value of a service result, or throws its failure with the contract error's tag as `code`. */
-function unwrap<T>(result: ServiceResult<T>): T {
-  if (result.ok) return result.value;
-  throw Object.assign(new Error(result.error.message), {code: result.error.code});
-}
-
-function failureCode(cause: unknown): string | undefined {
-  return typeof cause === "object" && cause !== null && "code" in cause ? String(cause.code) : undefined;
 }
 
 function turnCount(session: Session | undefined): number {
@@ -234,7 +224,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
 
     const message = beginPendingMessage(input);
     void attached(services, sessionId)
-      .then(async ({controller}) => unwrap(await controller.send(message, BACKGROUND_CONTEXT)))
+      .then(({controller}) => unwrap(controller.send(message, BACKGROUND_CONTEXT)))
       .then(() => settlePending(sessionId, turnCount(queryClient.getQueryData<Session>(sessionKeys.detail(sessionId)))))
       .catch((cause: unknown) => failPendingMessage(sessionId, errorMessage(cause, "Failed to send message.")));
   };
@@ -247,7 +237,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
     if (workspace.mode === "worktree") update(sessionId, (entry) => ({...entry, setupStep: "worktree"}));
 
     try {
-      const session = unwrap(await services.management.create({id: sessionId, message, projectPath, workspace}, BACKGROUND_CONTEXT));
+      const session = await unwrap(services.management.create({id: sessionId, message, projectPath, workspace}, BACKGROUND_CONTEXT));
       // The transcript's first value replaces this once the page attaches; until then the reply is the newest state.
       queryClient.setQueryData<Session>(sessionKeys.detail(sessionId), (cached) => (cached && turnCount(cached) > turnCount(session) ? cached : session));
       settlePending(sessionId, turnCount(session));
@@ -284,7 +274,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
     const finish = (error: string | null): void =>
       update(sessionId, (entry) => ({...entry, command: entry.command === "compacting" ? null : entry.command, ...(error ? {error} : {})}));
     void attached(services, sessionId)
-      .then(async ({controller}) => unwrap(await controller.compact({modelReference}, BACKGROUND_CONTEXT)))
+      .then(({controller}) => unwrap(controller.compact({modelReference}, BACKGROUND_CONTEXT)))
       .then(
         () => finish(null),
         (cause: unknown) => finish(errorMessage(cause, "Failed to compact session."))
@@ -293,7 +283,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
 
   const runCheckpointNavigation = (
     input: CheckpointNavigationInput & {
-      execute: (session: SessionController, force: boolean | undefined) => Promise<ServiceResult<null>>;
+      execute: (session: SessionController, force: boolean | undefined) => ReturnType<SessionController["undo"]>;
       turnId: string | undefined;
       title: string;
     }
@@ -311,13 +301,13 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
 
     const executeNavigation = (force: boolean | undefined): Promise<CheckpointNavigationOutcome> =>
       attached(services, sessionId)
-        .then(async ({controller}) => unwrap(await execute(controller, force)))
+        .then(({controller}) => unwrap(execute(controller, force)))
         .then((): CheckpointNavigationOutcome => {
           finish();
           return "applied";
         })
         .catch((cause: unknown): CheckpointNavigationOutcome => {
-          const code = failureCode(cause);
+          const code = runtimeError<SessionController["undo"]>(cause)?.code;
           const reason = code === "CheckpointConflictError" ? "conflict" : code === "CheckpointUncapturedError" ? "uncaptured" : undefined;
           if (reason && !force) {
             let pending = true;

@@ -1,6 +1,7 @@
 import type {Context, ReplicatedState} from "@earendil-works/chord";
 import {defineService} from "@earendil-works/chord";
 import type {
+  CheckpointNavigationError,
   CompactSessionPayload,
   RedoCheckpointPayload,
   RevertToMessagePayload,
@@ -11,13 +12,16 @@ import type {
 } from "@supernova/contracts/session-runtime/procedures";
 import type {ServiceResult} from "@supernova/contracts/runtime/services";
 import type {
+  CreateSessionError,
   CreateSessionPayload,
+  ForkSessionError,
   ForkSessionPayload,
   GetSessionPayload,
   ListComposerSuggestionsPayload,
   ListComposerSuggestionsResult,
   ListModelsPayload,
   ListModelsResult,
+  RenameSessionError,
   RenameSessionPayload,
 } from "@supernova/contracts/sessions/procedures";
 import type {Session, SessionSummary} from "@supernova/contracts/sessions/schemas";
@@ -47,15 +51,15 @@ export interface SessionDirectory {
 /** Server-wide session lifecycle, and which session this connection's session services are bound to. */
 export interface SessionManagement {
   /** Creates a session under the client's id and starts its first turn; the session is removed again if it cannot start. */
-  create(payload: CreateSessionPayload, context: Context): Promise<ServiceResult<Session>>;
+  create(payload: CreateSessionPayload, context: Context): Promise<ServiceResult<Session, CreateSessionError>>;
   /** Copies the conversation through a turn into a new session. */
-  fork(payload: ForkSessionPayload, context: Context): Promise<ServiceResult<Session>>;
-  rename(payload: RenameSessionPayload, context: Context): Promise<ServiceResult<Session>>;
+  fork(payload: ForkSessionPayload, context: Context): Promise<ServiceResult<Session, ForkSessionError>>;
+  rename(payload: RenameSessionPayload, context: Context): Promise<ServiceResult<Session, RenameSessionError>>;
   /** One read of a session, for a session the connection has not attached (a prefetch). */
   read(payload: GetSessionPayload, context: Context): Promise<ServiceResult<Session>>;
   /** Binds this connection's session services to a session, replacing the previous one. */
   attach(sessionId: string, context: Context): Promise<ServiceResult<null>>;
-  detach(context: Context): Promise<void>;
+  detach(context: Context): Promise<ServiceResult<null>>;
 }
 
 /** Commands on the attached session. */
@@ -63,11 +67,11 @@ export interface SessionController {
   /** Starts a turn; resolves once the engine placed the input. */
   send(payload: Omit<SendMessagePayload, "sessionId">, context: Context): Promise<ServiceResult<null>>;
   /** Stops the session's preparation, run, and queued inputs. */
-  abort(context: Context): Promise<void>;
+  abort(context: Context): Promise<ServiceResult<null>>;
   compact(payload: Omit<CompactSessionPayload, "sessionId">, context: Context): Promise<ServiceResult<null>>;
-  undo(payload: Omit<UndoCheckpointPayload, "sessionId">, context: Context): Promise<ServiceResult<null>>;
-  redo(payload: Omit<RedoCheckpointPayload, "sessionId">, context: Context): Promise<ServiceResult<null>>;
-  revert(payload: Omit<RevertToMessagePayload, "sessionId">, context: Context): Promise<ServiceResult<null>>;
+  undo(payload: Omit<UndoCheckpointPayload, "sessionId">, context: Context): Promise<ServiceResult<null, CheckpointNavigationError>>;
+  redo(payload: Omit<RedoCheckpointPayload, "sessionId">, context: Context): Promise<ServiceResult<null, CheckpointNavigationError>>;
+  revert(payload: Omit<RevertToMessagePayload, "sessionId">, context: Context): Promise<ServiceResult<null, CheckpointNavigationError>>;
 }
 
 /** The attached session's document: Pi's entries and documents plus what Supernova adds. */

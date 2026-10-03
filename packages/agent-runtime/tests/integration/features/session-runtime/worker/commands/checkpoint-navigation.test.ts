@@ -592,7 +592,9 @@ describe("checkpoint navigation", () => {
 
     const {cause, published} = await runRejectedSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.undoCheckpoint({force: true, sessionId: info.id})});
 
-    expect(cause).toMatchObject({_tag: "CheckpointGenericError", message: "Failed to restore workspace checkpoint."});
+    // Not a contract error: the edge reports it as a GenericError with this message.
+    expect(cause).toMatchObject({message: "Failed to restore workspace checkpoint."});
+    expect(cause).not.toHaveProperty("_tag");
     expect(published).toEqual([]);
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("root two\n");
   });
@@ -1128,7 +1130,7 @@ describe("checkpoint navigation", () => {
     if (removeRepository) {
       await rm(join(projectPath, ".git"), {recursive: true, force: true});
       const failed = await runRejectedSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.revertToMessage({force: true, sessionId: info.id, turnId})});
-      expect(failed.cause).toMatchObject({_tag: "CheckpointGenericError"});
+      expect(failed.cause).toMatchObject({message: "Failed to restore workspace checkpoint."});
       expect(failed.published).toEqual([]);
       expect(turnContents(await pi.sessions.get({sessionId: info.id}))).toEqual(turnsBefore);
       await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("two\n");

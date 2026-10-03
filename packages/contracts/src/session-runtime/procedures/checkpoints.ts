@@ -17,9 +17,6 @@ export const UndoCheckpointPayload = struct(CheckpointNavigationFields);
 
 export const RedoCheckpointPayload = struct(CheckpointNavigationFields);
 
-/** Navigation failure with no actionable detail, reported for every cause except a workspace conflict. */
-export class CheckpointGenericError extends TaggedError("CheckpointGenericError") {}
-
 /** Raised when restoring would discard workspace changes made after the current checkpoint. Retry with `force` to discard them. */
 export class CheckpointConflictError extends TaggedError("CheckpointConflictError") {}
 
@@ -29,7 +26,8 @@ export class CheckpointUncapturedError extends TaggedError("CheckpointUncaptured
 /** Raised when the target was copied in by a fork, whose workspace snapshots belong to the session it forked from. */
 export class CheckpointInheritedError extends TaggedError("CheckpointInheritedError") {}
 
-export type CheckpointNavigationError = CheckpointGenericError | CheckpointConflictError | CheckpointInheritedError | CheckpointUncapturedError;
+/** Why checkpoint navigation was refused; anything else is a `GenericError`. */
+export type CheckpointNavigationError = CheckpointConflictError | CheckpointInheritedError | CheckpointUncapturedError;
 export type RevertToMessagePayload = z.infer<typeof RevertToMessagePayload>;
 export type UndoCheckpointPayload = z.infer<typeof UndoCheckpointPayload>;
 export type RedoCheckpointPayload = z.infer<typeof RedoCheckpointPayload>;

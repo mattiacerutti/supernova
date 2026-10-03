@@ -1,5 +1,5 @@
 import type {GetConfigurationPayload} from "@supernova/contracts/configuration/procedures";
-import {GetConfigurationError, GetConfigurationResult} from "@supernova/contracts/configuration/procedures";
+import {GetConfigurationResult} from "@supernova/contracts/configuration/procedures";
 import {loadPiSettings} from "@supernova/agent-runtime/pi/config/settings";
 
 /** Client-safe view of the server's Pi settings. */
@@ -18,7 +18,7 @@ export class Configuration {
         },
       });
     } catch {
-      throw new GetConfigurationError({message: "Unable to load configuration. Check the global and project settings.json files and model defaults."});
+      throw new Error("Unable to load configuration. Check the global and project settings.json files and model defaults.");
     }
   }
 }

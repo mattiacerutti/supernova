@@ -12,3 +12,9 @@ export function TaggedError<const Tag extends string>(tag: Tag) {
     }
   };
 }
+
+/**
+ * What every failure a service did not declare becomes on the wire: a bug, an unexpected I/O failure, an invalid
+ * request. Its message is the cause's; the cause itself stays in the server log.
+ */
+export class GenericError extends TaggedError("GenericError") {}

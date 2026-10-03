@@ -129,7 +129,7 @@ Different sessions run independently. Within a session the engine runs one input
 
 ## Failure and recovery
 
-- **Command rejection.** Failures while selecting the model, preparing, or admitting the input fail the command with a `SessionCommandError` result. The browser drops its pending message.
+- **Command rejection.** Failures while selecting the model, preparing, or admitting the input fail the command with a `GenericError` result. The browser drops its pending message.
 - **Run failure.** A model error is an assistant error entry, shown in the turn. An input that ends unanswered for another reason sets the session's problem on the board.
 - **User abort.** `abortSession` aborts the visible conversation's work; the run ends through the normal path and the document shows what was produced.
 - **Browser disconnect.** Releases that connection's attachment only. On reconnect the browser rebinds its services, attaches the shown session again, and refetches every cached session.
