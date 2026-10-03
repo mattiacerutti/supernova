@@ -2,6 +2,7 @@ import type {Context, ReplicatedState} from "@earendil-works/chord";
 import {defineService} from "@earendil-works/chord";
 import type {
   ProviderLoginCancelPayload,
+  ProviderLoginError,
   ProviderLoginInputSubmitPayload,
   ProviderLoginResult,
   ProviderLoginStartPayload,
@@ -24,9 +25,9 @@ export interface ProvidersService {
   list(context: Context): Promise<ServiceResult<ProvidersListResult>>;
   logout(payload: ProviderLogoutPayload, context: Context): Promise<ServiceResult<ProviderLogoutResult>>;
   /** Starts a provider-owned login and returns once it shows its first step. */
-  startLogin(payload: ProviderLoginStartPayload, context: Context): Promise<ServiceResult<ProviderLoginResult>>;
-  submitLoginInput(payload: ProviderLoginInputSubmitPayload, context: Context): Promise<ServiceResult<ProviderLoginResult>>;
-  cancelLogin(payload: ProviderLoginCancelPayload, context: Context): Promise<ServiceResult<ProviderLoginResult>>;
+  startLogin(payload: ProviderLoginStartPayload, context: Context): Promise<ServiceResult<ProviderLoginResult, ProviderLoginError>>;
+  submitLoginInput(payload: ProviderLoginInputSubmitPayload, context: Context): Promise<ServiceResult<ProviderLoginResult, ProviderLoginError>>;
+  cancelLogin(payload: ProviderLoginCancelPayload, context: Context): Promise<ServiceResult<ProviderLoginResult, ProviderLoginError>>;
 }
 
 export const ProvidersService = defineService<ProvidersService>("supernova.providers");

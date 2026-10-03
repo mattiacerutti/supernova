@@ -479,21 +479,16 @@ A forked session copies its source's turn records; their checkpoints keep the so
 
 ## Errors
 
-Checkpoint storage uses ordinary exceptions internally.
-
-At session boundaries:
+Checkpoint storage uses ordinary exceptions internally, except where the client must act on the failure: those are thrown as contract errors where they are detected.
 
 - Capture failures are absorbed and recorded as a `failed` checkpoint boundary instead of failing the turn.
-- Workspace conflicts become `CheckpointConflictError`, the one non-generic checkpoint failure, so clients can offer a forced retry. It carries a fixed message and no paths.
-- Every other restore failure becomes `CheckpointGenericError` with `Failed to restore workspace checkpoint.`
+- A workspace conflict is thrown by the shadow repository as `CheckpointConflictError`, so clients can offer a forced retry. It carries a fixed message and no paths.
+- Navigation throws `CheckpointUncapturedError` and `CheckpointInheritedError` itself when the target cannot be restored without `force`, or at all.
+- Every other restore failure is a plain `Error` with `Failed to restore workspace checkpoint.`, which clients receive as a `GenericError`.
 - Internal Git commands, paths, tree IDs, and manifest details are not sent to clients.
 - Checkpoint failures are not logged by the checkpoint system.
 
-`CheckpointNavigationError` is the union of those two and is the declared error for the undo,
-redo, and revert procedures. Navigation operations throw ordinary exceptions; the session-runtime
-feature's `undoCheckpoint`, `redoCheckpoint`, and `revertToMessage` catch them and classify
-whatever was thrown with `toCheckpointNavigationError()`. That is the single place a navigation
-failure becomes a client-facing error.
+`CheckpointNavigationError` is the union of those three contract errors and is the declared error for the undo, redo, and revert procedures.
 
 The store uses `Promise<void>` rather than booleans so callers cannot accidentally treat a failed capture as a valid checkpoint. `SessionWorker.createCheckpoint()` converts that rejection into a boundary status, which is the only place a capture failure is interpreted.
 

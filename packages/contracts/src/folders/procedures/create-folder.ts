@@ -1,5 +1,5 @@
 import {z} from "zod";
-import {struct, TaggedError} from "@supernova/contracts/runtime/schemas";
+import {struct} from "@supernova/contracts/runtime/schemas";
 
 export const FolderCreatePayload = struct({
   path: z.string(),
@@ -8,8 +8,6 @@ export const FolderCreatePayload = struct({
 export const FolderCreateResult = struct({
   path: z.string(),
 });
-
-export class FolderCreateError extends TaggedError("FolderCreateError") {}
 
 export type FolderCreatePayload = z.infer<typeof FolderCreatePayload>;
 export type FolderCreateResult = z.infer<typeof FolderCreateResult>;

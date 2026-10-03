@@ -1,5 +1,5 @@
 import {z} from "zod";
-import {array, struct, TaggedError} from "@supernova/contracts/runtime/schemas";
+import {array, struct} from "@supernova/contracts/runtime/schemas";
 import {FolderQueryPathType, FolderSuggestion} from "../schemas";
 
 export const FolderSuggestionsListPayload = struct({
@@ -13,8 +13,6 @@ export const FolderSuggestionsListResult = struct({
   queryPathType: FolderQueryPathType,
   suggestions: array(FolderSuggestion),
 });
-
-export class FolderSuggestionsListError extends TaggedError("FolderSuggestionsListError") {}
 
 export type FolderSuggestionsListPayload = z.infer<typeof FolderSuggestionsListPayload>;
 export type FolderSuggestionsListResult = z.infer<typeof FolderSuggestionsListResult>;

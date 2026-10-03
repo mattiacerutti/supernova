@@ -1,5 +1,5 @@
 import {z} from "zod";
-import {array, struct, TaggedError} from "@supernova/contracts/runtime/schemas";
+import {array, struct} from "@supernova/contracts/runtime/schemas";
 
 export const ComposerSuggestionTriggerKind = z.union([z.literal("skill"), z.literal("slash")]);
 
@@ -28,8 +28,6 @@ export const ListComposerSuggestionsPayload = struct({
 export const ListComposerSuggestionsResult = struct({
   items: array(ComposerSuggestionItem),
 });
-
-export class ListComposerSuggestionsError extends TaggedError("ListComposerSuggestionsError") {}
 
 export type ComposerSuggestionTriggerKind = z.infer<typeof ComposerSuggestionTriggerKind>;
 export type ComposerSkillSuggestionItem = z.infer<typeof ComposerSkillSuggestionItem>;

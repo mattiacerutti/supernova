@@ -10,7 +10,7 @@ import type {
   TerminalsListResult,
   TerminalWritePayload,
 } from "@supernova/contracts/terminals/procedures";
-import type {TerminalOutput} from "@supernova/contracts/terminals/schemas";
+import type {TerminalError, TerminalNotFoundError, TerminalOutput} from "@supernova/contracts/terminals/schemas";
 
 export interface TerminalsState {
   /** Every running or exited shell, keyed by terminal id; a closed one leaves. */
@@ -24,9 +24,9 @@ export interface TerminalsState {
 export interface TerminalsService {
   readonly state: ReplicatedState<TerminalsState>;
   /** Starts a shell, or returns the existing terminal with that id so a reopened tab reattaches. */
-  open(payload: TerminalOpenPayload, context: Context): Promise<ServiceResult<TerminalOpenResult>>;
-  write(payload: TerminalWritePayload, context: Context): Promise<ServiceResult<null>>;
-  resize(payload: TerminalResizePayload, context: Context): Promise<ServiceResult<null>>;
+  open(payload: TerminalOpenPayload, context: Context): Promise<ServiceResult<TerminalOpenResult, TerminalError>>;
+  write(payload: TerminalWritePayload, context: Context): Promise<ServiceResult<null, TerminalNotFoundError>>;
+  resize(payload: TerminalResizePayload, context: Context): Promise<ServiceResult<null, TerminalNotFoundError>>;
   /** Kills the shell; closing an unknown terminal is not an error. */
   close(payload: TerminalClosePayload, context: Context): Promise<ServiceResult<null>>;
   list(payload: TerminalsListPayload, context: Context): Promise<ServiceResult<TerminalsListResult>>;

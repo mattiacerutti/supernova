@@ -82,7 +82,7 @@ A helper earns a place in `lib/` when several features use it. Something used by
 ### Runtime hooks
 
 - Get the runtime connection with `useRuntime()` (or take a `RuntimeClient` parameter in an options builder, like `getSessionQueryOptions(runtime, id)`). It exposes every service with methods that wait for the connection and take no `Context`.
-- Calls return `ServiceResult`s. In React Query functions, `unwrap()` from `@/rpc/runtime-result` turns a failure into a thrown `RuntimeError` whose `code` is the contract error's tag; branch on `errorCode(error)`.
+- Calls return `ServiceResult`s. In React Query functions, `unwrap()` from `@/rpc/runtime-result` turns a failure into a thrown `RuntimeError`. Branch on its code with `runtimeError<Service["method"]>(error)?.code`, which is typed as the method's declared error tags plus `"GenericError"`; a `Record<FailureCode<…>, string>` of messages fails to compile when the contract gains an error.
 - Follow replicated state (`runtime.terminals.state`, `runtime.providers.state`, `runtime.directory`) with `subscribe`, which delivers the current value at once.
 - Sessions: `management` for lifecycle and reads, the attached session's `controller` for commands, and its transcript's replicated state, which `api/conversation/session-events.ts` writes into the session's React Query entry.
 - Query keys come from the feature's `xKeys` object, shaped `[feature, ...scope]`, and are read from `queryOptions().queryKey` where an options object exists. Invalidate with the parent key (`sessionKeys.lists()`), never a literal array.

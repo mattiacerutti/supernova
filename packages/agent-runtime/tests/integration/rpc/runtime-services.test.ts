@@ -109,20 +109,27 @@ describe("runtime services over the wire", () => {
     expect(directory.value?.sessions["wire-session"]).toMatchObject({activity: "idle", projectPath: pi.defaultProjectRoot, summary: {id: "wire-session"}});
   });
 
-  it("returns contract errors by tag instead of failing the call", async () => {
+  it("returns declared contract errors by tag, and every other failure as a GenericError", async () => {
     const {attach, management, pi} = await connect();
     pi.faux.setResponses([fauxAssistantMessage("one")]);
     await management.create({id: "errors", message: firstMessage, projectPath: pi.defaultProjectRoot}, BACKGROUND_CONTEXT);
     await pi.settled("errors");
     const {controller} = await attach("errors");
 
-    expect(await controller.redo({}, BACKGROUND_CONTEXT)).toMatchObject({ok: false, error: {code: "CheckpointGenericError", message: "No checkpoint is available to redo."}});
-    expect(await controller.send({contentParts: [{text: "x", type: "text"}], modelReference: {...selectedModelReference, id: "missing-model"}}, BACKGROUND_CONTEXT)).toMatchObject({
+    // A plain error thrown by a checkpoint method is undeclared, so it is a GenericError, never a declared one such as
+    // CheckpointConflictError (which would offer to discard changes).
+    expect(await controller.redo({}, BACKGROUND_CONTEXT)).toEqual({ok: false, error: {code: "GenericError", message: "No checkpoint is available to redo."}});
+    expect(await controller.send({contentParts: [{text: "x", type: "text"}], modelReference: {...selectedModelReference, id: "missing-model"}}, BACKGROUND_CONTEXT)).toEqual({
       ok: false,
-      error: {code: "SessionCommandError"},
+      error: {code: "GenericError", message: "Selected model is not available."},
     });
-    expect(await management.rename({sessionId: "errors", title: " "}, BACKGROUND_CONTEXT)).toMatchObject({ok: false, error: {code: "RenameSessionError"}});
-    expect(await management.attach("unknown", BACKGROUND_CONTEXT)).toMatchObject({ok: false, error: {code: "LoadSessionError"}});
+    // A declared error keeps its own tag and message.
+    expect(await management.rename({sessionId: "errors", title: " "}, BACKGROUND_CONTEXT)).toEqual({
+      ok: false,
+      error: {code: "RenameSessionError", message: "Session title cannot be empty."},
+    });
+    expect(await management.attach("unknown", BACKGROUND_CONTEXT)).toMatchObject({ok: false, error: {code: "GenericError"}});
+    expect(await controller.abort(BACKGROUND_CONTEXT)).toEqual({ok: true, value: null});
   });
 
   it("serves the non-session services: calls return results or tagged errors, terminal output replicates", async () => {
@@ -132,8 +139,13 @@ describe("runtime services over the wire", () => {
     expect(created).toEqual({ok: true, value: {path: `${pi.defaultProjectRoot}/made-over-the-wire`}});
     // The default project is a plain folder, not a Git repository.
     expect(await workspace.listBranches({projectPath: pi.defaultProjectRoot}, BACKGROUND_CONTEXT)).toMatchObject({ok: false, error: {code: "WorkspaceNotARepositoryError"}});
+    // A member of an error union (`WorkspaceFileError`) keeps its own tag.
+    expect(await workspace.readFile({path: "../outside", projectPath: pi.defaultProjectRoot}, BACKGROUND_CONTEXT)).toMatchObject({
+      ok: false,
+      error: {code: "WorkspaceFileNotFoundError"},
+    });
     // Payloads are validated at the boundary.
-    expect(await workspace.readFile({path: 1} as never, BACKGROUND_CONTEXT)).toMatchObject({ok: false, error: {code: "WorkspaceGenericError", message: "The request is invalid."}});
+    expect(await workspace.readFile({path: 1} as never, BACKGROUND_CONTEXT)).toMatchObject({ok: false, error: {code: "GenericError", message: "The request is invalid."}});
 
     const shell = process.env.SHELL;
     process.env.SHELL = "/bin/sh";

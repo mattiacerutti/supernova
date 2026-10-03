@@ -28,7 +28,8 @@ These public contract entry points are the exception to the shared no-barrel rul
 
 ## Errors
 
-- Define errors that cross the boundary with `TaggedError("Tag")` from `runtime/schemas`: an `Error` with a stable `_tag`. Features throw them; the service edge returns them as `ServiceResult` failures whose `code` is the tag, because the protocol carries only its own error codes.
+- Define errors that cross the boundary with `TaggedError("Tag")` from `runtime/schemas`: an `Error` with a stable `_tag`. Declare only errors a client branches on. Features throw a plain `Error` for everything else; the edge sends it as a `GenericError` with its message. Never throw `GenericError` yourself: it is the edge's wire tag.
+- A method declares its errors in its result type: `Promise<ServiceResult<null, CheckpointNavigationError>>`. A method with several errors names them once, as a value and a type of the same name next to its payload: `export const X = errorUnion(A, B); export type X = ErrorOf<typeof X>;`. The edge passes that same value (or the single class) as the operation's `error`. The failure's `code` is then typed as those tags plus `"GenericError"`, on the server (the provider must match) and on the client (`FailureCode<Method>`, `runtimeError<Method>(error)` in the web).
 - Use distinct tagged errors for distinct procedures unless there is a deliberate shared failure domain.
 - Keep error tags stable and descriptive, for example `AgentSessionCreateError`.
 
