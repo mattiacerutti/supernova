@@ -9,15 +9,17 @@ export interface ServerProcess {
 export interface StartServerProcessOptions {
   readonly entry: string;
   readonly execPath: string;
+  /** Runtime flags for `execPath`, such as `--import tsx` to run the TypeScript source. */
+  readonly execArgv?: readonly string[];
   readonly env?: NodeJS.ProcessEnv;
   readonly port?: number;
 }
 
 /** Owns a local API child, with IPC readiness and bounded shutdown. Never discovers or reuses another process. */
-export async function startServerProcess({entry, execPath, env, port = 0}: StartServerProcessOptions): Promise<ServerProcess> {
+export async function startServerProcess({entry, execPath, execArgv = [], env, port = 0}: StartServerProcessOptions): Promise<ServerProcess> {
   const child = fork(entry, ["--host", "127.0.0.1", "--port", String(port)], {
     execPath,
-    execArgv: [],
+    execArgv: [...execArgv],
     env: {...process.env, ...env},
     stdio: ["ignore", "inherit", "inherit", "ipc"],
   });

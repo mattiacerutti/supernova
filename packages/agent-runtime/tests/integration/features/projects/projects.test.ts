@@ -4,6 +4,7 @@ import {join} from "node:path";
 import {afterEach, describe, expect, it} from "vitest";
 import {Projects} from "@supernova/agent-runtime/features/projects/projects";
 import type {SessionRecord} from "@supernova/agent-runtime/pi/lib/session/session-state";
+import {SessionCatalog} from "@supernova/agent-runtime/pi/lib/session/session-catalog";
 import {SessionStore} from "@supernova/agent-runtime/pi/session-store";
 import {cleanupTempDirs} from "@tests/support/async";
 
@@ -14,26 +15,31 @@ function record(overrides: Partial<SessionRecord>): SessionRecord {
 describe("listing and archiving project sessions", () => {
   const tempDirs: string[] = [];
   const originalAgentDir = process.env.PI_CODING_AGENT_DIR;
+  const stores: SessionStore[] = [];
 
-  afterEach(() => {
+  afterEach(async () => {
+    while (stores.length > 0) await stores.pop()!.dispose();
     cleanupTempDirs(tempDirs);
     if (originalAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
     else process.env.PI_CODING_AGENT_DIR = originalAgentDir;
   });
 
-  /** A store whose index holds `records`. Records are written as the store persists them; no session file is opened. */
+  /** A store whose catalog holds `records`; no session file is opened. */
   async function projectsWith(records: readonly SessionRecord[]): Promise<{projects: Projects; store: SessionStore; agentDir: string}> {
     const agentDir = await mkdtemp(join(tmpdir(), "supernova-agent-"));
     tempDirs.push(agentDir);
     process.env.PI_CODING_AGENT_DIR = agentDir;
     const root = join(agentDir, "sessions-v2");
     await mkdir(root, {recursive: true});
-    await writeFile(join(root, "index.json"), JSON.stringify({version: 1, sessions: Object.fromEntries(records.map((item) => [item.id, item]))}));
+    const catalog = await SessionCatalog.open(join(root, "catalog.sqlite"));
+    for (const item of records) catalog.insert(item);
+    catalog.close();
     const store = new SessionStore({root, sdk: {} as never, resourceCache: {} as never, tools: () => []});
+    stores.push(store);
     return {projects: new Projects({store}), store, agentDir};
   }
 
-  it("returns the project's sessions newest-first from the index", async () => {
+  it("returns the project's sessions newest-first from the catalog", async () => {
     const {projects} = await projectsWith([
       record({id: "older", title: "Older", updatedAt: "2026-01-01T00:00:00.000Z"}),
       record({id: "newest", title: "Newest", updatedAt: "2026-01-03T00:00:00.000Z"}),

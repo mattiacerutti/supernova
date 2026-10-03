@@ -10,7 +10,7 @@
     "supernova-server": "./dist/cli.js"
   },
   "scripts": {
-    "dev": "SUPERNOVA_SERVER_DEV=1 bun --watch src/cli.ts",
+    "dev": "SUPERNOVA_SERVER_DEV=1 tsx watch src/cli.ts",
     "start": "node dist/cli.js",
     "build": "rm -rf dist && bun build src/cli.ts --define PI_BUNDLED_NODE=true --target node --external @lydell/node-pty --outdir dist && bun scripts/prepare-tools.ts",
     "test": "bun test tests",
@@ -39,6 +39,7 @@
     "@types/node": "^22.19.1",
     "@types/ws": "8.18.1",
     "eslint": "^10.3.0",
+    "tsx": "4.23.15",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.59.1"
   }

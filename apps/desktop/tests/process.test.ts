@@ -10,10 +10,13 @@ import {startServerProcess} from "@supernova/server/process";
 
 test("Electron's Node mode starts and stops the bundled headless API", async () => {
   const home = await mkdtemp(join(tmpdir(), "supernova-electron-api-"));
-  const entry = join(home, "cli.mjs");
+  const serverDir = resolve(import.meta.dir, "../../server");
+  // As the release build does: node-pty stays external, and the bundle sits where Node resolves it, the server's
+  // node_modules (a release copies it next to cli.js instead).
+  const entry = join(serverDir, `cli-electron-test-${process.pid}.mjs`);
   try {
-    const build = spawnSync("bun", ["build", "src/cli.ts", "--target", "node", "--outfile", entry], {
-      cwd: resolve(import.meta.dir, "../../server"),
+    const build = spawnSync("bun", ["build", "src/cli.ts", "--target", "node", "--external", "@lydell/node-pty", "--outfile", entry], {
+      cwd: serverDir,
       encoding: "utf8",
     });
     expect(build.status, build.stderr).toBe(0);
@@ -53,5 +56,6 @@ test("Electron's Node mode starts and stops the bundled headless API", async () 
     await expect(fetch(`${server.url}/health`)).rejects.toThrow();
   } finally {
     await rm(home, {recursive: true, force: true});
+    await rm(entry, {force: true});
   }
 }, 30_000);

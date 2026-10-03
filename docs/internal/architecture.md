@@ -23,7 +23,7 @@ Standalone server:
 terminal → supernova-server → runtime/filesystem/workspaces (no UI)
 
 Development (turbo run dev):
-API on 127.0.0.1:4317 (bun --watch) + Vite UI host on 127.0.0.1:48371
+API on 127.0.0.1:4317 (tsx watch, on Node) + Vite UI host on 127.0.0.1:48371
 browser or Electron → Vite UI; WebSocket via the UI host's proxy (browser) or directly (Electron) → API
 
 Desktop:
@@ -33,8 +33,10 @@ BrowserWindow → supernova://app → API endpoint supplied by preload
 
 UI hosting and API ownership are separate. Remote/LAN operations happen on the machine running `apps/server`, not the machine running the browser. New features must preserve that boundary even when developed locally.
 
-### Native modules in the server
+### Server runtime
 
-The server runs under Bun in development and under Electron's Node in the desktop app. Code that needs a native capability checks for the Bun API first and falls back to a native module for Node; `features/workspace/terminals/pty.ts` does this with `Bun.Terminal` and `@lydell/node-pty`. Such a module is marked `--external` in the server build and `scripts/prepare-tools.ts` copies it, with only the current platform's prebuilt binary, to `dist/node_modules`, which electron-builder ships next to `cli.js`.
+The server runs on Node everywhere: `tsx watch` runs the source in development, the packaged server runs the bundle with Node, and the desktop app with Electron's Node. Bun is the package manager, script runner, and bundler, not a runtime for the server, so runtime code uses Node's APIs directly: `node:sqlite` (through pi-durable's `openNodeSqliteStorage` for session files) and `@lydell/node-pty` for terminals. Don't add Bun-only APIs or runtime switches.
+
+`@lydell/node-pty` is a native module, so it is marked `--external` in the server build and `scripts/prepare-tools.ts` copies it, with only the current platform's prebuilt binaries, to `dist/node_modules`, which electron-builder ships next to `cli.js`.
 
 For execution and recovery guarantees, see [Session runtime](session-runtime.md). For workspace snapshot and restore guarantees, see [Checkpoint system](checkpoint-system.md).

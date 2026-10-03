@@ -11,7 +11,7 @@ import {Configuration} from "@supernova/agent-runtime/features/configuration/con
 import {Folders} from "@supernova/agent-runtime/features/folders/folders";
 import {LoginSessions} from "@supernova/agent-runtime/features/providers/login/login-sessions";
 import {Providers} from "@supernova/agent-runtime/features/providers/providers";
-import {createSpawnPty} from "@supernova/agent-runtime/features/workspace/terminals/pty";
+import {spawnPty} from "@supernova/agent-runtime/features/workspace/terminals/pty";
 import {Terminals} from "@supernova/agent-runtime/features/workspace/terminals/terminals";
 import {Workspace} from "@supernova/agent-runtime/features/workspace/workspace";
 import {afterEach, describe, expect, it} from "vitest";
@@ -33,7 +33,7 @@ describe("runtime services over the wire", () => {
   async function connect() {
     const pi = await createPiTestRuntime();
     cleanups.push(() => pi.unregister());
-    const terminals = new Terminals({spawnPty: createSpawnPty()});
+    const terminals = new Terminals({spawnPty});
     cleanups.push(() => terminals.dispose());
     // Every service the edge serves needs its feature; the ones these tests never call are inert.
     const runtime = {

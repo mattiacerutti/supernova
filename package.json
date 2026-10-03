@@ -38,5 +38,14 @@
   "dependencies": {
     "@tanstack/react-virtual": "^3.14.2",
     "turbo": "^2.9.7"
-  }
+  },
+  "version": "1.0.0",
+  "description": "<p align=\"center\">   <img src=\"packages/web/assets/icon.png\" alt=\"Supernova logo\" width=\"80\" /> </p>",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
 }
