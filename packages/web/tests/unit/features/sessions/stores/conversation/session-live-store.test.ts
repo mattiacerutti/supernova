@@ -1,9 +1,9 @@
 import {replicatedState} from "@earendil-works/chord";
 import type {MutableReplicatedState} from "@earendil-works/chord";
 import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
-import type {ModelReference, Session, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
-import type {SessionDirectoryEntry, SessionDirectoryState} from "@supernova/contracts/sessions/services";
-import {SessionController, SessionManagement} from "@supernova/contracts/sessions/services";
+import type {ModelReference, Session, UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
+import type {SessionRuntimeService} from "@supernova/contracts/services/session-runtime/services";
+import type {SessionDirectoryEntry, SessionDirectoryState, SessionsService} from "@supernova/contracts/services/sessions/services";
 import {QueryClient} from "@tanstack/react-query";
 import {afterEach, beforeEach, describe, expect, it, vi} from "vitest";
 import {sessionKeys} from "@/features/sessions/api/query-keys";
@@ -20,6 +20,8 @@ const model = {
 
 const contentParts = [{text: "Fix this", type: "text"}] satisfies readonly UserMessageContentPart[];
 const ok = {ok: true, value: null} as const;
+/** The session runtime method behind each checkpoint navigation command. */
+const NAVIGATION_METHODS = {redo: "redoCheckpoint", revert: "revertToMessage", undo: "undoCheckpoint"} as const;
 
 function session(input?: Partial<Session>): Session {
   return {
@@ -67,51 +69,53 @@ async function waitUntil(assertion: () => void | Promise<void>): Promise<void> {
 interface FakeServices {
   readonly client: RuntimeClient;
   readonly directory: MutableReplicatedState<SessionDirectoryState>;
-  readonly transcripts: Map<string, MutableReplicatedState<Session>>;
-  readonly controller: {-readonly [K in keyof SessionController]: SessionController[K]};
-  readonly management: {-readonly [K in keyof SessionManagement]: SessionManagement[K]};
+  /** Each attached session's document. */
+  readonly documents: Map<string, MutableReplicatedState<Session>>;
+  readonly sessionRuntime: {-readonly [K in keyof Omit<SessionRuntimeService, "session">]: SessionRuntimeService[K]};
+  readonly sessions: {-readonly [K in keyof Omit<SessionsService, "directory">]: SessionsService[K]};
   readonly attached: string[];
 }
 
-/** A session service client backed by local replicated state, as Chord's binding would expose the server's. */
+/** A runtime client backed by local replicated state, as Chord's binding would expose the server's. */
 function fakeServices(): FakeServices {
   const directory = replicatedState<SessionDirectoryState>({sessions: {}});
-  const transcripts = new Map<string, MutableReplicatedState<Session>>();
+  const documents = new Map<string, MutableReplicatedState<Session>>();
   const attached: string[] = [];
-  const controller = {
+  const sessionRuntime = {
     abort: vi.fn(async () => ok),
     compact: vi.fn(async () => ok),
-    redo: vi.fn(async () => ok),
-    revert: vi.fn(async () => ok),
-    send: vi.fn(async () => ok),
-    undo: vi.fn(async () => ok),
-  } as FakeServices["controller"];
-  const management = {
+    redoCheckpoint: vi.fn(async () => ok),
+    revertToMessage: vi.fn(async () => ok),
+    sendMessage: vi.fn(async () => ok),
+    undoCheckpoint: vi.fn(async () => ok),
+  } as FakeServices["sessionRuntime"];
+  const sessions = {
     attach: vi.fn(async () => ok),
     create: vi.fn(async (payload) => ({ok: true, value: session({id: payload.id})}) as const),
     detach: vi.fn(async () => ok),
     fork: vi.fn(async () => ({ok: true, value: session()}) as const),
-    read: vi.fn(async ({sessionId}) => ({ok: true, value: transcripts.get(sessionId)?.value ?? session({id: sessionId})}) as const),
+    get: vi.fn(async ({sessionId}) => ({ok: true, value: documents.get(sessionId)?.value ?? session({id: sessionId})}) as const),
+    listComposerSuggestions: vi.fn(async () => ({ok: true as const, value: {items: []}})),
+    listModels: vi.fn(async () => ({ok: true as const, value: []})),
     rename: vi.fn(async () => ({ok: true, value: session()}) as const),
-  } as FakeServices["management"];
+  } as FakeServices["sessions"];
   // Only what the session store and events use; the other services are never reached.
   const client = {
-    management,
-    directory,
+    sessions: Object.assign(sessions, {directory}),
     attach: async (sessionId: string) => {
       attached.push(sessionId);
-      let transcript = transcripts.get(sessionId);
-      if (!transcript) {
-        transcript = replicatedState(session({id: sessionId}));
-        transcripts.set(sessionId, transcript);
+      let document = documents.get(sessionId);
+      if (!document) {
+        document = replicatedState(session({id: sessionId}));
+        documents.set(sessionId, document);
       }
-      return {controller, sessionId, transcript};
+      return {sessionId, sessionRuntime: {...sessionRuntime, session: document}};
     },
     ready: async () => undefined,
     onConnectionChange: () => () => undefined,
     dispose: async () => undefined,
   } as unknown as RuntimeClient;
-  return {attached, client, controller, directory, management, transcripts};
+  return {attached, client, directory, documents, sessionRuntime, sessions};
 }
 
 function setDirectory(services: FakeServices, sessions: Record<string, SessionDirectoryEntry>): void {
@@ -137,14 +141,14 @@ describe("session live store", () => {
   it("writes every value of the open session's replicated transcript into its cached document", async () => {
     const queryClient = new QueryClient();
     const services = fakeServices();
-    services.transcripts.set("session-1", replicatedState(session()));
+    services.documents.set("session-1", replicatedState(session()));
     disconnect = connectSessionEvents({queryClient, services: services.client});
 
     useSessionLiveStore.getState().setActiveSession("session-1");
     await waitUntil(() => expect(services.attached).toEqual(["session-1"]));
     await waitUntil(() => expect(queryClient.getQueryData(sessionKeys.detail("session-1"))).toEqual(session()));
 
-    services.transcripts.get("session-1")!.change(BACKGROUND_CONTEXT, (draft) => {
+    services.documents.get("session-1")!.change(BACKGROUND_CONTEXT, (draft) => {
       draft.title = "Renamed";
     });
     expect(queryClient.getQueryData<Session>(sessionKeys.detail("session-1"))?.title).toBe("Renamed");
@@ -186,7 +190,7 @@ describe("session live store", () => {
     useSessionLiveStore.getState().sendMessage({contentParts, modelReference: model, queryClient, services: services.client, sessionId: "session-1"});
 
     expect(useSessionLiveStore.getState().sessions["session-1"]).toMatchObject({pending: {contentParts, turnCount: 0}, status: "streaming"});
-    await waitUntil(() => expect(services.controller.send).toHaveBeenCalledWith({captureCheckpoints: true, contentParts, modelReference: model}, BACKGROUND_CONTEXT));
+    await waitUntil(() => expect(services.sessionRuntime.sendMessage).toHaveBeenCalledWith({captureCheckpoints: true, contentParts, modelReference: model}, BACKGROUND_CONTEXT));
     useSessionLiveStore.getState().settlePending("session-1", 0);
     expect(useSessionLiveStore.getState().sessions["session-1"]?.pending).not.toBeNull();
     useSessionLiveStore.getState().settlePending("session-1", 1);
@@ -196,7 +200,7 @@ describe("session live store", () => {
   it("drops the sent message and reports the error when the send fails", async () => {
     const queryClient = new QueryClient();
     const services = fakeServices();
-    services.controller.send = vi.fn(async () => failure("GenericError", "Model unavailable"));
+    services.sessionRuntime.sendMessage = vi.fn(async () => failure("GenericError", "Model unavailable"));
     queryClient.setQueryData(sessionKeys.detail("session-1"), session());
 
     useSessionLiveStore.getState().sendMessage({contentParts, modelReference: model, queryClient, services: services.client, sessionId: "session-1"});
@@ -212,7 +216,7 @@ describe("session live store", () => {
   )("keeps $operation optimistic on $outcome until $decision", async ({outcome, code, decision, operation}) => {
     const services = fakeServices();
     const forceFlags: Array<boolean | undefined> = [];
-    services.controller[operation] = vi.fn(async (payload: {readonly force?: boolean}) => {
+    services.sessionRuntime[NAVIGATION_METHODS[operation]] = vi.fn(async (payload: {readonly force?: boolean}) => {
       forceFlags.push(payload.force);
       if (!payload.force) return failure(code, "Refused.");
       return decision === "failed retry" ? failure("GenericError", "Restore failed") : ok;
@@ -262,7 +266,7 @@ describe("session live store", () => {
   it("removes every trace of a new session the server could not create", async () => {
     const queryClient = new QueryClient();
     const services = fakeServices();
-    services.management.create = vi.fn(async () => failure("CreateSessionError", "Worktree could not be created."));
+    services.sessions.create = vi.fn(async () => failure("CreateSessionError", "Worktree could not be created."));
 
     const outcome = await useSessionLiveStore.getState().startSession({
       contentParts,
@@ -286,8 +290,8 @@ describe("session live store", () => {
     useSessionLiveStore.getState().sendMessage({contentParts, modelReference: model, queryClient: new QueryClient(), services: services.client, sessionId: "session-1"});
     useSessionLiveStore.getState().compactSession({modelReference: model, services: services.client, sessionId: "session-1"});
 
-    expect(services.controller.send).not.toHaveBeenCalled();
-    expect(services.controller.compact).not.toHaveBeenCalled();
+    expect(services.sessionRuntime.sendMessage).not.toHaveBeenCalled();
+    expect(services.sessionRuntime.compact).not.toHaveBeenCalled();
   });
 
   it("stops a running session until the server reports it idle", async () => {
@@ -297,7 +301,7 @@ describe("session live store", () => {
     useSessionLiveStore.getState().abortSession({services: services.client, sessionId: "session-1"});
 
     expect(useSessionLiveStore.getState().sessions["session-1"]).toMatchObject({status: "stopping"});
-    await waitUntil(() => expect(services.controller.abort).toHaveBeenCalledOnce());
+    await waitUntil(() => expect(services.sessionRuntime.abort).toHaveBeenCalledOnce());
     useSessionLiveStore.getState().applyDirectory({sessions: {"session-1": entry({activity: "idle"})}});
     expect(useSessionLiveStore.getState().sessions["session-1"]).toMatchObject({command: null, status: "idle"});
   });
@@ -305,12 +309,12 @@ describe("session live store", () => {
   it("stamps the open session as visited at its activity time, so later activity elsewhere stays unseen", async () => {
     const queryClient = new QueryClient();
     const services = fakeServices();
-    services.transcripts.set("session-1", replicatedState(session()));
+    services.documents.set("session-1", replicatedState(session()));
     disconnect = connectSessionEvents({queryClient, services: services.client});
     useSessionLiveStore.getState().setActiveSession("session-1");
     await waitUntil(() => expect(queryClient.getQueryData(sessionKeys.detail("session-1"))).toBeDefined());
 
-    services.transcripts.get("session-1")!.change(BACKGROUND_CONTEXT, (draft) => {
+    services.documents.get("session-1")!.change(BACKGROUND_CONTEXT, (draft) => {
       draft.updatedAt = "2026-01-01T00:05:00.000Z";
     });
 

@@ -1,4 +1,4 @@
-import type {DesktopApi, DesktopEnvironment} from "@supernova/contracts/desktop/api";
+import type {DesktopApi, DesktopEnvironment} from "@supernova/contracts/lib/desktop";
 
 declare global {
   interface Window {

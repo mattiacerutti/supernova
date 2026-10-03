@@ -1,6 +1,6 @@
 import type {SuggestionOptions} from "@tiptap/suggestion";
 import {describe, expect, it} from "vitest";
-import type {ComposerSuggestionItem} from "@supernova/contracts/sessions/procedures";
+import type {ComposerSuggestionItem} from "@supernova/contracts/services/sessions/procedures";
 import {filterComposerSuggestions, findComposerSuggestionMatch} from "@/features/sessions/lib/composer/editor/composer-suggestions";
 
 type SuggestionMatcherInput = Parameters<NonNullable<SuggestionOptions["findSuggestionMatch"]>>[0];

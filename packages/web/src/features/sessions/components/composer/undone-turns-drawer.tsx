@@ -1,4 +1,4 @@
-import type {UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
 import type {SessionTurn} from "@/features/sessions/types/session-turn";
 import {AnimatePresence, motion} from "framer-motion";
 import {useLayoutEffect, useRef, useState} from "react";

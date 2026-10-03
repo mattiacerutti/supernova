@@ -1,6 +1,6 @@
-import type {CreateSessionPayload} from "@supernova/contracts/sessions/procedures";
-import {CreateSessionError} from "@supernova/contracts/sessions/procedures";
-import type {Session} from "@supernova/contracts/sessions/schemas";
+import type {CreateSessionPayload} from "@supernova/contracts/services/sessions/procedures";
+import {CreateSessionError} from "@supernova/contracts/services/sessions/procedures";
+import type {Session} from "@supernova/contracts/services/sessions/schemas";
 import {errorMessage} from "@supernova/agent-runtime/lib/errors";
 import {Workflow} from "@supernova/agent-runtime/lib/workflow";
 import type {AgentRuntime} from "@supernova/agent-runtime/runtime";

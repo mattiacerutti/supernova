@@ -1,5 +1,5 @@
 import {useMessageScroller, useMessageScrollerScrollable} from "@shadcn/react/message-scroller";
-import type {SessionSetupStep} from "@supernova/contracts/session-runtime/procedures";
+import type {SessionSetupStep} from "@supernova/contracts/services/session-runtime/procedures";
 import {defaultRangeExtractor, elementScroll, useVirtualizer} from "@tanstack/react-virtual";
 import type {VirtualItem} from "@tanstack/react-virtual";
 import {animate, motionValue, useReducedMotion} from "framer-motion";

@@ -1,4 +1,4 @@
-import type {ProviderLoginAuthType} from "@supernova/contracts/providers/procedures";
+import type {ProviderLoginAuthType} from "@supernova/contracts/services/providers/procedures";
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 

@@ -9,9 +9,9 @@ import type {
   TerminalsListPayload,
   TerminalsListResult,
   TerminalWritePayload,
-} from "@supernova/contracts/terminals/procedures";
-import {TerminalError, TerminalNotFoundError} from "@supernova/contracts/terminals/schemas";
-import type {TerminalsState} from "@supernova/contracts/terminals/services";
+} from "@supernova/contracts/services/workspace/procedures";
+import {TerminalError, TerminalNotFoundError} from "@supernova/contracts/services/workspace/schemas";
+import type {TerminalsState} from "@supernova/contracts/services/workspace/services";
 import type {SpawnPty} from "@supernova/agent-runtime/features/workspace/terminals/pty";
 import {overflow, TerminalProcess} from "@supernova/agent-runtime/features/workspace/terminals/terminal-process";
 

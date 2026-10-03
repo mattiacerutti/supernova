@@ -10,26 +10,32 @@ import type {
   SessionMetadata,
 } from "@earendil-works/pi-server";
 import {SessionNotFoundError} from "@earendil-works/pi-server";
-import {GetConfigurationPayload} from "@supernova/contracts/configuration/procedures";
-import {ConfigurationService} from "@supernova/contracts/configuration/services";
-import {UpdateExtensionsError} from "@supernova/contracts/extensions/procedures";
-import {ExtensionsService} from "@supernova/contracts/extensions/services";
-import {FolderCreatePayload, FolderFilesListPayload, FolderSuggestionsListPayload} from "@supernova/contracts/folders/procedures";
-import {FoldersService} from "@supernova/contracts/folders/services";
-import {ProjectSessionArchiveError, ProjectSessionArchivePayload, ProjectSessionsListPayload} from "@supernova/contracts/projects/procedures";
-import {ProjectsService} from "@supernova/contracts/projects/services";
+import {GetConfigurationPayload} from "@supernova/contracts/services/configuration/procedures";
+import {ConfigurationService} from "@supernova/contracts/services/configuration/services";
+import {UpdateExtensionsError} from "@supernova/contracts/services/extensions/procedures";
+import {ExtensionsService} from "@supernova/contracts/services/extensions/services";
+import {FolderCreatePayload, FolderFilesListPayload, FolderSuggestionsListPayload} from "@supernova/contracts/services/folders/procedures";
+import {FoldersService} from "@supernova/contracts/services/folders/services";
+import {ProjectSessionArchiveError, ProjectSessionArchivePayload, ProjectSessionsListPayload} from "@supernova/contracts/services/projects/procedures";
+import {ProjectsService} from "@supernova/contracts/services/projects/services";
 import {
   ProviderLoginCancelPayload,
   ProviderLoginError,
   ProviderLoginInputSubmitPayload,
   ProviderLoginStartPayload,
   ProviderLogoutPayload,
-} from "@supernova/contracts/providers/procedures";
-import {ProvidersService} from "@supernova/contracts/providers/services";
-import type {ErrorOf, ErrorValue, TaggedErrorInstance} from "@supernova/contracts/runtime/schemas";
-import {GenericError} from "@supernova/contracts/runtime/schemas";
-import type {ServiceResult} from "@supernova/contracts/runtime/services";
-import {CheckpointNavigationError, CompactSessionPayload, RevertToMessagePayload, SendMessagePayload, UndoCheckpointPayload} from "@supernova/contracts/session-runtime/procedures";
+} from "@supernova/contracts/services/providers/procedures";
+import {ProvidersService} from "@supernova/contracts/services/providers/services";
+import type {ErrorOf, ErrorValue, TaggedErrorInstance} from "@supernova/contracts/lib/errors";
+import {GenericError} from "@supernova/contracts/lib/errors";
+import type {ServiceResult} from "@supernova/contracts/lib/protocol";
+import {
+  CheckpointNavigationError,
+  CompactSessionPayload,
+  RevertToMessagePayload,
+  SendMessagePayload,
+  UndoCheckpointPayload,
+} from "@supernova/contracts/services/session-runtime/procedures";
 import {
   CreateSessionError,
   CreateSessionPayload,
@@ -40,21 +46,24 @@ import {
   ListModelsPayload,
   RenameSessionError,
   RenameSessionPayload,
-} from "@supernova/contracts/sessions/procedures";
-import {ComposerService, SessionController, SessionDirectory, SessionManagement, SessionTranscript} from "@supernova/contracts/sessions/services";
-import {TerminalClosePayload, TerminalOpenPayload, TerminalResizePayload, TerminalsListPayload, TerminalWritePayload} from "@supernova/contracts/terminals/procedures";
-import {TerminalError, TerminalNotFoundError} from "@supernova/contracts/terminals/schemas";
-import {TerminalsService} from "@supernova/contracts/terminals/services";
+} from "@supernova/contracts/services/sessions/procedures";
+import {SessionRuntimeService} from "@supernova/contracts/services/session-runtime/services";
+import {SessionsService} from "@supernova/contracts/services/sessions/services";
 import {
+  TerminalClosePayload,
+  TerminalOpenPayload,
+  TerminalResizePayload,
+  TerminalsListPayload,
+  TerminalWritePayload,
   WorkspaceBranchesListPayload,
   WorkspaceChangesGetPayload,
   WorkspaceDiffContentsGetPayload,
   WorkspaceFileReadPayload,
   WorkspaceFilesListPayload,
   WorkspaceRepositoriesListPayload,
-} from "@supernova/contracts/workspace/procedures";
-import {WorkspaceFileError, WorkspaceGitError} from "@supernova/contracts/workspace/schemas";
-import {WorkspaceService} from "@supernova/contracts/workspace/services";
+} from "@supernova/contracts/services/workspace/procedures";
+import {TerminalError, TerminalNotFoundError, WorkspaceFileError, WorkspaceGitError} from "@supernova/contracts/services/workspace/schemas";
+import {WorkspaceService} from "@supernova/contracts/services/workspace/services";
 import type {z} from "zod";
 import {errorMessage} from "@supernova/agent-runtime/lib/errors";
 import {archiveSession, createSession} from "@supernova/agent-runtime/rpc/session-workflows";
@@ -134,18 +143,7 @@ function serverServices(runtime: AgentRuntime): RoutedServerServiceHost {
 
   return {
     attachClient(presentation: RoutedServerPresentation) {
-      const provider = new RemoteServiceProvider([
-        ComposerService,
-        ConfigurationService,
-        ExtensionsService,
-        FoldersService,
-        ProjectsService,
-        ProvidersService,
-        SessionDirectory,
-        SessionManagement,
-        TerminalsService,
-        WorkspaceService,
-      ]);
+      const provider = new RemoteServiceProvider([ConfigurationService, ExtensionsService, FoldersService, ProjectsService, ProvidersService, SessionsService, WorkspaceService]);
       provider.provide(ConfigurationService, {
         get: method({payload: GetConfigurationPayload, run: (input) => configuration.get(input)}),
       });
@@ -183,7 +181,7 @@ function serverServices(runtime: AgentRuntime): RoutedServerServiceHost {
         }),
       });
       provider.provide(ProvidersService, {
-        state: providers.logins,
+        logins: providers.logins,
         list: action({run: () => providers.list()}),
         logout: method({payload: ProviderLogoutPayload, run: (input) => providers.logout(input)}),
         startLogin: method({
@@ -203,55 +201,30 @@ function serverServices(runtime: AgentRuntime): RoutedServerServiceHost {
         }),
       });
       provider.provide(WorkspaceService, {
-        listRepositories: method({
-          payload: WorkspaceRepositoriesListPayload,
-          run: (input) => workspace.listRepositories(input),
-        }),
-        listBranches: method({
-          payload: WorkspaceBranchesListPayload,
-          run: (input) => workspace.listBranches(input),
-          error: WorkspaceGitError,
-        }),
-        listFiles: method({
-          payload: WorkspaceFilesListPayload,
-          run: (input) => workspace.listFiles(input),
-          error: WorkspaceGitError,
-        }),
-        getChanges: method({
-          payload: WorkspaceChangesGetPayload,
-          run: (input) => workspace.getChanges(input),
-          error: WorkspaceGitError,
-        }),
-        getDiffContents: method({
-          payload: WorkspaceDiffContentsGetPayload,
-          run: (input) => workspace.getDiffContents(input),
-          error: WorkspaceFileError,
-        }),
+        terminals: workspace.terminals,
+        openTerminal: method({payload: TerminalOpenPayload, run: (input) => workspace.openTerminal(input), error: TerminalError}),
+        writeTerminal: method({payload: TerminalWritePayload, run: (input) => workspace.writeTerminal(input).then(() => null), error: TerminalNotFoundError}),
+        resizeTerminal: method({payload: TerminalResizePayload, run: (input) => workspace.resizeTerminal(input).then(() => null), error: TerminalNotFoundError}),
+        closeTerminal: method({payload: TerminalClosePayload, run: (input) => workspace.closeTerminal(input).then(() => null)}),
+        listTerminals: method({payload: TerminalsListPayload, run: (input) => workspace.listTerminals(input)}),
+        listBranches: method({payload: WorkspaceBranchesListPayload, run: (input) => workspace.listBranches(input), error: WorkspaceGitError}),
+        getChanges: method({payload: WorkspaceChangesGetPayload, run: (input) => workspace.getChanges(input), error: WorkspaceGitError}),
+        getDiffContents: method({payload: WorkspaceDiffContentsGetPayload, run: (input) => workspace.getDiffContents(input), error: WorkspaceFileError}),
+        listRepositories: method({payload: WorkspaceRepositoriesListPayload, run: (input) => workspace.listRepositories(input)}),
+        listFiles: method({payload: WorkspaceFilesListPayload, run: (input) => workspace.listFiles(input), error: WorkspaceGitError}),
         readFile: method({payload: WorkspaceFileReadPayload, run: (input) => workspace.readFile(input), error: WorkspaceFileError}),
       });
-      provider.provide(TerminalsService, {
-        state: workspace.terminalsState,
-        open: method({payload: TerminalOpenPayload, run: (input) => workspace.openTerminal(input), error: TerminalError}),
-        write: method({payload: TerminalWritePayload, run: (input) => workspace.writeTerminal(input).then(() => null), error: TerminalNotFoundError}),
-        resize: method({payload: TerminalResizePayload, run: (input) => workspace.resizeTerminal(input).then(() => null), error: TerminalNotFoundError}),
-        close: method({payload: TerminalClosePayload, run: (input) => workspace.closeTerminal(input).then(() => null)}),
-        list: method({payload: TerminalsListPayload, run: (input) => workspace.listTerminals(input)}),
-      });
-      provider.provide(ComposerService, {
-        listModels: method({payload: ListModelsPayload, run: (input) => sessions.listModels(input)}),
-        listSuggestions: method({
-          payload: ListComposerSuggestionsPayload,
-          run: (input) => sessions.listComposerSuggestions(input),
-        }),
-      });
-      provider.provide(SessionDirectory, {state: sessionRuntime.board.state});
-      provider.provide(SessionManagement, {
+      provider.provide(SessionsService, {
+        // Written by session runtime; served here because clients read it before attaching a session.
+        directory: sessionRuntime.board.state,
         create: method({payload: CreateSessionPayload, run: (input) => createSession(runtime, input), error: CreateSessionError}),
         fork: method({payload: ForkSessionPayload, run: (input) => sessions.fork(input), error: ForkSessionError}),
         rename: method({payload: RenameSessionPayload, run: (input) => sessions.rename(input), error: RenameSessionError}),
-        read: method({payload: GetSessionPayload, run: (input) => sessions.get(input)}),
+        get: method({payload: GetSessionPayload, run: (input) => sessions.get(input)}),
+        listModels: method({payload: ListModelsPayload, run: (input) => sessions.listModels(input)}),
+        listComposerSuggestions: method({payload: ListComposerSuggestionsPayload, run: (input) => sessions.listComposerSuggestions(input)}),
         attach: (sessionId: string, context: Context) =>
-          run({payload: GetSessionPayload.unwrap().shape.sessionId, run: (id) => presentation.attachSession(id, context).then(() => null)}, sessionId, context),
+          run({payload: GetSessionPayload.shape.sessionId, run: (id) => presentation.attachSession(id, context).then(() => null)}, sessionId, context),
         detach: action({run: (_payload, context) => presentation.detachSession(context).then(() => null)}),
       });
       return attachment(provider);
@@ -259,29 +232,26 @@ function serverServices(runtime: AgentRuntime): RoutedServerServiceHost {
   };
 }
 
-/**
- * Services of one durable session, for each connection attached to it: the controller and the transcript, whose
- * replicated state is the session's document.
- */
+/** The session runtime service of one durable session, for each connection attached to it. */
 async function sessionHandle(runtime: AgentRuntime, sessionId: string): Promise<RoutedSessionHandle> {
   const {sessionRuntime} = runtime;
-  const transcript = await sessionRuntime.transcript(sessionId);
+  const document = await sessionRuntime.transcript(sessionId);
   // The attachment names the session; payloads carry the rest.
-  const send = SendMessagePayload.unwrap().omit({sessionId: true});
-  const compact = CompactSessionPayload.unwrap().omit({sessionId: true});
-  const step = UndoCheckpointPayload.unwrap().omit({sessionId: true});
-  const revert = RevertToMessagePayload.unwrap().omit({sessionId: true});
+  const send = SendMessagePayload.omit({sessionId: true});
+  const compact = CompactSessionPayload.omit({sessionId: true});
+  const step = UndoCheckpointPayload.omit({sessionId: true});
+  const revert = RevertToMessagePayload.omit({sessionId: true});
   return {
     attachClient() {
-      const provider = new RemoteServiceProvider([SessionController, SessionTranscript]);
-      provider.provide(SessionTranscript, {state: transcript.state});
-      provider.provide(SessionController, {
-        send: method({payload: send, run: (input) => sessionRuntime.sendMessage({...input, sessionId}).then(() => null)}),
-        abort: action({run: () => sessionRuntime.abort({sessionId}).then(() => null)}),
+      const provider = new RemoteServiceProvider([SessionRuntimeService]);
+      provider.provide(SessionRuntimeService, {
+        session: document.state,
+        sendMessage: method({payload: send, run: (input) => sessionRuntime.sendMessage({...input, sessionId}).then(() => null)}),
         compact: method({payload: compact, run: (input) => sessionRuntime.compact({...input, sessionId}).then(() => null)}),
-        undo: method({payload: step, error: CheckpointNavigationError, run: (input) => sessionRuntime.undoCheckpoint({...input, sessionId}).then(() => null)}),
-        redo: method({payload: step, error: CheckpointNavigationError, run: (input) => sessionRuntime.redoCheckpoint({...input, sessionId}).then(() => null)}),
-        revert: method({payload: revert, error: CheckpointNavigationError, run: (input) => sessionRuntime.revertToMessage({...input, sessionId}).then(() => null)}),
+        abort: action({run: () => sessionRuntime.abort({sessionId}).then(() => null)}),
+        undoCheckpoint: method({payload: step, error: CheckpointNavigationError, run: (input) => sessionRuntime.undoCheckpoint({...input, sessionId}).then(() => null)}),
+        redoCheckpoint: method({payload: step, error: CheckpointNavigationError, run: (input) => sessionRuntime.redoCheckpoint({...input, sessionId}).then(() => null)}),
+        revertToMessage: method({payload: revert, error: CheckpointNavigationError, run: (input) => sessionRuntime.revertToMessage({...input, sessionId}).then(() => null)}),
       });
       return attachment(provider);
     },
@@ -291,8 +261,9 @@ async function sessionHandle(runtime: AgentRuntime, sessionId: string): Promise<
 }
 
 /**
- * The runtime's service host for `pi-server`: every server-wide service per connection, and per-session services for
- * the session a connection attached. Only durable sessions attach; a legacy session is read through `SessionManagement`.
+ * The runtime's service host for `pi-server`: one service per feature. Every one but session runtime is served per
+ * connection; `SessionRuntimeService` is served for the session a connection attached. Only durable sessions attach;
+ * a legacy session is read through `SessionsService.get`.
  */
 export function runtimeServiceHost(runtime: AgentRuntime): ServerHost {
   return {

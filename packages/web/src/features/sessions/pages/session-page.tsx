@@ -1,4 +1,4 @@
-import type {Session, SessionWorkspaceSelection, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {Session, SessionWorkspaceSelection, UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
 import {useNavigate} from "@tanstack/react-router";
 import {useState} from "react";
 import {useConfiguration} from "@/api/configuration";

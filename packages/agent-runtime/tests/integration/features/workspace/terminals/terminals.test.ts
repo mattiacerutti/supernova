@@ -2,7 +2,7 @@ import {mkdtemp, realpath} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {afterAll, afterEach, beforeAll, describe, expect, it} from "vitest";
-import type {TerminalOutput} from "@supernova/contracts/terminals/schemas";
+import type {TerminalOutput} from "@supernova/contracts/services/workspace/schemas";
 import {createSpawnPty} from "@supernova/agent-runtime/features/workspace/terminals/pty";
 import {Terminals} from "@supernova/agent-runtime/features/workspace/terminals/terminals";
 import {cleanupTempDirs, waitUntil} from "@tests/support/async";

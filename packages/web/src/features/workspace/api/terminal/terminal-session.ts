@@ -1,5 +1,5 @@
 import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
-import type {TerminalOutput} from "@supernova/contracts/terminals/schemas";
+import type {TerminalOutput} from "@supernova/contracts/services/workspace/schemas";
 import {unwrap} from "@/rpc/runtime-result";
 import type {RuntimeClient} from "@/rpc/transport/runtime-client";
 import {useRuntime} from "@/rpc/use-runtime";
@@ -71,23 +71,23 @@ function attachTerminal(runtime: RuntimeClient, input: AttachTerminalInput): Ter
     if (!detached) onError(cause instanceof Error && cause.message ? cause.message : fallback);
   };
 
-  void unwrap(runtime.terminals.open({cols: input.cols, cwd: input.cwd, id, rows: input.rows, sessionId: input.sessionId}, BACKGROUND_CONTEXT)).then(
+  void unwrap(runtime.workspace.openTerminal({cols: input.cols, cwd: input.cwd, id, rows: input.rows, sessionId: input.sessionId}, BACKGROUND_CONTEXT)).then(
     () => {
       if (detached) return;
       const apply = follow((event) => !detached && onEvent(event));
-      stop = runtime.terminals.state.subscribe((state) => apply(state.terminals[id]));
+      stop = runtime.workspace.terminals.subscribe((state) => apply(state.terminals[id]));
     },
     (cause: unknown) => report(cause, "Failed to start the terminal.")
   );
 
   return {
-    close: () => void runtime.terminals.close({id}, BACKGROUND_CONTEXT).catch(() => undefined),
+    close: () => void runtime.workspace.closeTerminal({id}, BACKGROUND_CONTEXT).catch(() => undefined),
     detach: () => {
       detached = true;
       stop?.();
     },
-    resize: (cols, rows) => void runtime.terminals.resize({cols, id, rows}, BACKGROUND_CONTEXT).catch(() => undefined),
-    write: (data) => void runtime.terminals.write({data, id}, BACKGROUND_CONTEXT).catch(() => undefined),
+    resize: (cols, rows) => void runtime.workspace.resizeTerminal({cols, id, rows}, BACKGROUND_CONTEXT).catch(() => undefined),
+    write: (data) => void runtime.workspace.writeTerminal({data, id}, BACKGROUND_CONTEXT).catch(() => undefined),
   };
 }
 
@@ -100,11 +100,11 @@ export function useAttachTerminal(): (input: AttachTerminalInput) => TerminalSes
 /** Ids of the shells the server still runs for a session; a reloaded client reattaches tabs to them. */
 export function useListTerminalIds(): (sessionId: string) => Promise<readonly string[]> {
   const runtime = useRuntime();
-  return async (sessionId) => (await unwrap(runtime.terminals.list({sessionId}, BACKGROUND_CONTEXT))).terminals.map((terminal) => terminal.id);
+  return async (sessionId) => (await unwrap(runtime.workspace.listTerminals({sessionId}, BACKGROUND_CONTEXT))).terminals.map((terminal) => terminal.id);
 }
 
 /** Kills a terminal by id; for closing a tab, where no component is attached anymore. */
 export function useCloseTerminal(): (id: string) => void {
   const runtime = useRuntime();
-  return (id) => void runtime.terminals.close({id}, BACKGROUND_CONTEXT).catch(() => undefined);
+  return (id) => void runtime.workspace.closeTerminal({id}, BACKGROUND_CONTEXT).catch(() => undefined);
 }

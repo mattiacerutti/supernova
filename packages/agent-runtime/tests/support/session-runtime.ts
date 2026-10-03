@@ -14,9 +14,9 @@ import {Sessions} from "@supernova/agent-runtime/features/sessions/sessions";
 import {Projects} from "@supernova/agent-runtime/features/projects/projects";
 import {SessionStore} from "@supernova/agent-runtime/pi/session-store";
 import {createSupernovaTools} from "@supernova/agent-runtime/features/session-runtime/tools/tools";
-import type {SendMessagePayload} from "@supernova/contracts/session-runtime/procedures";
-import type {AssistantMessage, ModelReference, Session} from "@supernova/contracts/sessions/schemas";
-import type {SessionDirectoryState} from "@supernova/contracts/sessions/services";
+import type {SendMessagePayload} from "@supernova/contracts/services/session-runtime/procedures";
+import type {AssistantMessage, ModelReference, Session} from "@supernova/contracts/services/sessions/schemas";
+import type {SessionDirectoryState} from "@supernova/contracts/services/sessions/services";
 import {waitUntil} from "@tests/support/async";
 
 export {fauxAssistantMessage, fauxText, fauxThinking, fauxToolCall, waitUntil};

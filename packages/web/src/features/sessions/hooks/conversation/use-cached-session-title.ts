@@ -1,4 +1,4 @@
-import type {ProjectSessionsListResult} from "@supernova/contracts/projects/procedures";
+import type {ProjectSessionsListResult} from "@supernova/contracts/services/projects/procedures";
 import {useQueryClient} from "@tanstack/react-query";
 import {sessionKeys} from "@/features/sessions/api/query-keys";
 

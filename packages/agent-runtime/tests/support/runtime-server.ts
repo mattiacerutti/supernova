@@ -1,7 +1,7 @@
 import type {ServerListener} from "@earendil-works/pi-server";
 import {Server} from "@earendil-works/pi-server";
 import type {ByteTransportFactory} from "@earendil-works/pi-client";
-import {RUNTIME_SERVER_ID} from "@supernova/contracts/runtime/services";
+import {RUNTIME_SERVER_ID} from "@supernova/contracts/lib/protocol";
 import {runtimeServiceHost} from "@supernova/agent-runtime/rpc/runtime-services";
 import type {AgentRuntime} from "@supernova/agent-runtime/runtime";
 

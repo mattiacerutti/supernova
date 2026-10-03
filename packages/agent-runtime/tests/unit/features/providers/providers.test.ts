@@ -1,6 +1,6 @@
 import type {AuthInteraction} from "@earendil-works/pi-ai";
 import {afterEach, describe, expect, it, vi} from "vitest";
-import type {ProviderLoginSession} from "@supernova/contracts/providers/schemas";
+import type {ProviderLoginSession} from "@supernova/contracts/services/providers/schemas";
 import {LoginSessions} from "@supernova/agent-runtime/features/providers/login/login-sessions";
 import {Providers} from "@supernova/agent-runtime/features/providers/providers";
 import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";

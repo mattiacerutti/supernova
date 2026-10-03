@@ -1,5 +1,5 @@
 import {matchSorter} from "match-sorter";
-import type {ComposerSuggestionItem, ComposerSuggestionTriggerKind as ResourceTriggerKind} from "@supernova/contracts/sessions/procedures";
+import type {ComposerSuggestionItem, ComposerSuggestionTriggerKind as ResourceTriggerKind} from "@supernova/contracts/services/sessions/procedures";
 import type {Editor} from "@tiptap/core";
 import {Node} from "@tiptap/core";
 import type {ComposerSuggestionMatch, ComposerSuggestionTriggerKind} from "@/features/sessions/types/composer-suggestion";

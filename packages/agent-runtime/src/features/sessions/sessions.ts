@@ -6,9 +6,9 @@ import type {
   ListModelsPayload,
   ListModelsResult,
   RenameSessionPayload,
-} from "@supernova/contracts/sessions/procedures";
-import {CreateSessionError, ForkSessionError, RenameSessionError} from "@supernova/contracts/sessions/procedures";
-import type {Session, SessionWorktree} from "@supernova/contracts/sessions/schemas";
+} from "@supernova/contracts/services/sessions/procedures";
+import {CreateSessionError, ForkSessionError, RenameSessionError} from "@supernova/contracts/services/sessions/procedures";
+import type {Session, SessionWorktree} from "@supernova/contracts/services/sessions/schemas";
 import {toComposerSuggestions} from "@supernova/agent-runtime/features/sessions/lib/composer-suggestions";
 import {toAgentModelDetails} from "@supernova/agent-runtime/pi/lib/models/map-model";
 import {refreshAuthAndModels} from "@supernova/agent-runtime/pi/lib/models/refresh-models";

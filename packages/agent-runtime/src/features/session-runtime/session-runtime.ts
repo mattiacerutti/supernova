@@ -6,8 +6,8 @@ import type {
   SendMessagePayload,
   SessionSetupStep,
   UndoCheckpointPayload,
-} from "@supernova/contracts/session-runtime/procedures";
-import type {Session} from "@supernova/contracts/sessions/schemas";
+} from "@supernova/contracts/services/session-runtime/procedures";
+import type {Session} from "@supernova/contracts/services/sessions/schemas";
 import type {CheckpointStore} from "@supernova/agent-runtime/features/session-runtime/checkpoints/checkpoint-store";
 import {compactSession} from "@supernova/agent-runtime/features/session-runtime/worker/commands/compact-session";
 import {redoCheckpoint} from "@supernova/agent-runtime/features/session-runtime/worker/commands/redo-checkpoint";

@@ -1,7 +1,7 @@
 import type {MutableReplicatedState} from "@earendil-works/chord";
 import {replicatedState} from "@earendil-works/chord";
 import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
-import type {SessionDirectoryEntry, SessionDirectoryState} from "@supernova/contracts/sessions/services";
+import type {SessionDirectoryEntry, SessionDirectoryState} from "@supernova/contracts/services/sessions/services";
 
 /**
  * Every session the server opened since it started, as clients that have not attached it see it: activity, summary,

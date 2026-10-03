@@ -1,4 +1,4 @@
-import type {SessionSummary} from "@supernova/contracts/sessions/schemas";
+import type {SessionSummary} from "@supernova/contracts/services/sessions/schemas";
 import type {SessionRecord} from "@supernova/agent-runtime/pi/lib/session/session-state";
 
 /** A durable session's index record as the sidebar shows it. */

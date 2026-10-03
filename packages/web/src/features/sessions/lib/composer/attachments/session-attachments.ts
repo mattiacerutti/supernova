@@ -1,4 +1,4 @@
-import type {UserMessageAttachmentPart} from "@supernova/contracts/sessions/schemas";
+import type {UserMessageAttachmentPart} from "@supernova/contracts/services/sessions/schemas";
 import {attachmentMime, fileExtension} from "@/features/sessions/lib/composer/attachments/attachment-classification";
 
 export const MAX_SESSION_ATTACHMENTS = 10;

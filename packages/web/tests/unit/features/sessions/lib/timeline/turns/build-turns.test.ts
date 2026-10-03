@@ -1,4 +1,4 @@
-import type {EntryRecord, LiveState, Session} from "@supernova/contracts/sessions/schemas";
+import type {EntryRecord, LiveState, Session} from "@supernova/contracts/services/sessions/schemas";
 import {describe, expect, it} from "vitest";
 import {buildSessionTurns, buildTurns} from "@/features/sessions/lib/timeline/turns/build-turns";
 

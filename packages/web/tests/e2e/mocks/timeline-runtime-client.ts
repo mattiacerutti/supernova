@@ -1,13 +1,14 @@
 import type {MutableReplicatedState} from "@earendil-works/chord";
 import {replicatedState} from "@earendil-works/chord";
 import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
-import type {SessionActivity} from "@supernova/contracts/session-runtime/procedures";
-import type {CreateSessionPayload} from "@supernova/contracts/sessions/procedures";
-import type {LiveState, Session, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
-import type {ProviderLoginsState} from "@supernova/contracts/providers/services";
-import type {ServiceResult} from "@supernova/contracts/runtime/services";
-import type {SessionController, SessionDirectoryState, SessionManagement} from "@supernova/contracts/sessions/services";
-import type {TerminalsState} from "@supernova/contracts/terminals/services";
+import type {SessionActivity} from "@supernova/contracts/services/session-runtime/procedures";
+import type {CreateSessionPayload} from "@supernova/contracts/services/sessions/procedures";
+import type {LiveState, Session, UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
+import type {ProviderLoginsState} from "@supernova/contracts/services/providers/services";
+import type {ServiceResult} from "@supernova/contracts/lib/protocol";
+import type {SessionRuntimeService} from "@supernova/contracts/services/session-runtime/services";
+import type {SessionDirectoryState, SessionsService} from "@supernova/contracts/services/sessions/services";
+import type {TerminalsState} from "@supernova/contracts/services/workspace/services";
 import type {AttachedSession, RuntimeClient} from "@/rpc/transport/runtime-client";
 import {
   assistantEntry,
@@ -36,7 +37,7 @@ const value = async <T>(result: T): Promise<ServiceResult<T>> => ({ok: true, val
  */
 class TimelineServer {
   private readonly sessions = createTimelineSessions();
-  private readonly transcripts = new Map<string, MutableReplicatedState<Session>>();
+  private readonly documents = new Map<string, MutableReplicatedState<Session>>();
   private readonly directory = replicatedState<SessionDirectoryState>({sessions: {}});
   private activeSessionId = TIMELINE_SESSION_ID;
   private createSessionFailure: string | null = null;
@@ -64,15 +65,17 @@ class TimelineServer {
 
   /** The runtime client the app uses, over this server's state. */
   public client(): RuntimeClient {
-    const controller = (sessionId: string): SessionController => ({
+    const sessionRuntime = (sessionId: string): SessionRuntimeService => ({
+      session: this.document(sessionId),
       abort: async () => (this.settleStream("aborted"), ok),
       compact: async () => ok,
-      redo: async () => (this.redoCheckpoint(sessionId), ok),
-      revert: async ({turnId}) => (this.revertToMessage(sessionId, turnId), ok),
-      send: async ({contentParts}) => (this.startStream(sessionId, contentParts), ok),
-      undo: async () => (this.undoCheckpoint(sessionId), ok),
+      redoCheckpoint: async () => (this.redoCheckpoint(sessionId), ok),
+      revertToMessage: async ({turnId}) => (this.revertToMessage(sessionId, turnId), ok),
+      sendMessage: async ({contentParts}) => (this.startStream(sessionId, contentParts), ok),
+      undoCheckpoint: async () => (this.undoCheckpoint(sessionId), ok),
     });
-    const management: SessionManagement = {
+    const sessions: SessionsService = {
+      directory: this.directory,
       attach: async () => ok,
       create: async (payload) => {
         const failure = this.createSessionFailure;
@@ -84,14 +87,14 @@ class TimelineServer {
       },
       detach: async () => ok,
       fork: async ({sessionId}) => ({ok: true, value: this.session(sessionId)}),
-      read: async ({sessionId}) => ({ok: true, value: this.session(sessionId)}),
+      get: async ({sessionId}) => ({ok: true, value: this.session(sessionId)}),
+      listComposerSuggestions: () => value({items: []}),
+      listModels: () => value([timelineModelDetails]),
       rename: async ({sessionId}) => ({ok: true, value: this.session(sessionId)}),
     };
     return {
-      management,
-      directory: this.directory,
-      attach: async (sessionId): Promise<AttachedSession> => ({sessionId, controller: controller(sessionId), transcript: this.transcript(sessionId)}),
-      composer: {listModels: () => value([timelineModelDetails]), listSuggestions: () => value({items: []})},
+      sessions,
+      attach: async (sessionId): Promise<AttachedSession> => ({sessionId, sessionRuntime: sessionRuntime(sessionId)}),
       configuration: {get: () => value({modelDefaults: {}})},
       extensions: {update: () => value(null)},
       folders: {
@@ -104,22 +107,20 @@ class TimelineServer {
         listSessions: () => value({projectPath: TIMELINE_PROJECT_PATH, sessions: [...this.sessions.values()].map(timelineSessionSummary)}),
       },
       providers: {
-        state: replicatedState<ProviderLoginsState>({logins: {}}),
+        logins: replicatedState<ProviderLoginsState>({logins: {}}),
         cancelLogin: async () => ({ok: false, error: {code: "ProviderLoginError", message: "No login."}}),
         list: () => value([]),
         logout: ({providerId}) => value({providerId}),
         startLogin: async () => ({ok: false, error: {code: "ProviderLoginError", message: "No login."}}),
         submitLoginInput: async () => ({ok: false, error: {code: "ProviderLoginError", message: "No login."}}),
       },
-      terminals: {
-        state: replicatedState<TerminalsState>({terminals: {}}),
-        close: () => value(null),
-        list: () => value({terminals: []}),
-        open: async () => ({ok: false, error: {code: "TerminalError", message: "Terminals are not available in timeline tests."}}),
-        resize: () => value(null),
-        write: () => value(null),
-      },
       workspace: {
+        terminals: replicatedState<TerminalsState>({terminals: {}}),
+        closeTerminal: () => value(null),
+        listTerminals: () => value({terminals: []}),
+        openTerminal: async () => ({ok: false, error: {code: "TerminalError", message: "Terminals are not available in timeline tests."}}),
+        resizeTerminal: () => value(null),
+        writeTerminal: () => value(null),
         getChanges: () => value({uncommitted: []}),
         getDiffContents: () => value({newContents: "", oldContents: ""}),
         listBranches: async () => ({ok: false, error: {code: "WorkspaceNotARepositoryError", message: "Not a repository."}}),
@@ -134,13 +135,13 @@ class TimelineServer {
   }
 
   /** The replicated state of a session, created from its current value on first use. */
-  private transcript(sessionId: string): MutableReplicatedState<Session> {
-    let transcript = this.transcripts.get(sessionId);
-    if (!transcript) {
-      transcript = replicatedState(this.session(sessionId));
-      this.transcripts.set(sessionId, transcript);
+  private document(sessionId: string): MutableReplicatedState<Session> {
+    let document = this.documents.get(sessionId);
+    if (!document) {
+      document = replicatedState(this.session(sessionId));
+      this.documents.set(sessionId, document);
     }
-    return transcript;
+    return document;
   }
 
   /** Returns the current session snapshot for a valid test session. */
@@ -174,7 +175,7 @@ class TimelineServer {
   /** Replaces a session and publishes it to its replicated state and the directory, as the server does. */
   private commit(session: Session, activity: SessionActivity): void {
     this.sessions.set(session.id, session);
-    this.transcript(session.id).replace(BACKGROUND_CONTEXT, session);
+    this.document(session.id).replace(BACKGROUND_CONTEXT, session);
     this.directory.change(BACKGROUND_CONTEXT, (draft) => {
       draft.sessions[session.id] = {activity, error: null, projectPath: session.projectPath, setupStep: null, summary: timelineSessionSummary(session)};
     });
@@ -236,7 +237,7 @@ class TimelineServer {
         entries: [...session.entries, userEntry(userId, text, 80_000)],
         undone: [],
         runStart: userId,
-        turns: {...session.turns, [String(userId)]: {contentParts}},
+        turns: {...session.turns, [String(userId)]: {contentParts: [...contentParts]}},
         live: this.streamLive(),
       },
       "running"

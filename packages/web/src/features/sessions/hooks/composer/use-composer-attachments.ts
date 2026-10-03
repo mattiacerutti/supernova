@@ -1,7 +1,7 @@
 import type {DragEvent, HTMLAttributes} from "react";
 import {useRef, useState} from "react";
 import {useMutation} from "@tanstack/react-query";
-import type {UserMessageAttachmentPart} from "@supernova/contracts/sessions/schemas";
+import type {UserMessageAttachmentPart} from "@supernova/contracts/services/sessions/schemas";
 import {
   fileRequiresImageCapability,
   fileToSessionAttachmentPart,

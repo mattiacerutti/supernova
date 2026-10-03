@@ -2,7 +2,7 @@ import {existsSync} from "node:fs";
 import {readdir, stat} from "node:fs/promises";
 import {homedir} from "node:os";
 import {basename, dirname, isAbsolute, join} from "node:path";
-import type {FolderSuggestion} from "@supernova/contracts/folders/schemas";
+import type {FolderSuggestion} from "@supernova/contracts/services/folders/schemas";
 import {expandHomePath, normalizePathForDisplay, resolveFolderPath} from "@supernova/agent-runtime/features/folders/lib/paths";
 
 const MAX_SUGGESTIONS = 200;

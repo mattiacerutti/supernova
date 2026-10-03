@@ -1,4 +1,4 @@
-import {CheckpointInheritedError, CheckpointUncapturedError} from "@supernova/contracts/session-runtime/procedures";
+import {CheckpointInheritedError, CheckpointUncapturedError} from "@supernova/contracts/services/session-runtime/procedures";
 import type {CheckpointRef} from "@supernova/agent-runtime/pi/lib/session/session-state";
 import type {NavigationState} from "@supernova/agent-runtime/pi/session-store";
 import type {SessionWorker} from "@supernova/agent-runtime/features/session-runtime/worker/session-worker";

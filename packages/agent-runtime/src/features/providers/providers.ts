@@ -6,9 +6,9 @@ import type {
   ProviderLogoutPayload,
   ProviderLogoutResult,
   ProvidersListResult,
-} from "@supernova/contracts/providers/procedures";
-import {ProviderLoginError} from "@supernova/contracts/providers/procedures";
-import type {Provider, ProviderAuthType, ProviderLoginSession} from "@supernova/contracts/providers/schemas";
+} from "@supernova/contracts/services/providers/procedures";
+import {ProviderLoginError} from "@supernova/contracts/services/providers/procedures";
+import type {Provider, ProviderAuthType, ProviderLoginSession} from "@supernova/contracts/services/providers/schemas";
 import {normalizeAuthSource} from "@supernova/agent-runtime/features/providers/lib/auth-source";
 import {runProviderLogin} from "@supernova/agent-runtime/features/providers/login/commands/run-login";
 import type {LoginSessions} from "@supernova/agent-runtime/features/providers/login/login-sessions";

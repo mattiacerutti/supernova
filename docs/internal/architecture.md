@@ -12,7 +12,7 @@ Supernova uses the Pi SDK (`@earendil-works/pi-coding-agent`) as its execution e
 
 Bun manages packages and scripts; Turborepo coordinates workspace tasks. The server runs on Node.
 
-Clients talk to the runtime only through Chord services over Pi's service protocol (`@earendil-works/pi-server` and `pi-client`), the protocol Pi's own remote clients use, on the server's `/ws` WebSocket. Every domain is a service (`contracts/src/<domain>/services.ts`): methods for commands and reads, Chord replicated state for anything that changes over time (session transcripts and activity, terminal output, provider logins), which reaches clients as deltas. The server's only other route is `GET /health`. Runtime code is plain TypeScript; there is no Effect.
+Clients talk to the runtime only through Chord services over Pi's service protocol (`@earendil-works/pi-server` and `pi-client`), the protocol Pi's own remote clients use, on the server's `/ws` WebSocket. Each agent-runtime feature is one service, in the contracts folder of the same name (`features/workspace` is `WorkspaceService` in `contracts/src/services/workspace/services.ts`), with members named after the feature's methods: methods for commands and reads, Chord replicated state for anything that changes over time (session documents and activity, terminal output, provider logins), which reaches clients as deltas. `SessionRuntimeService` is served for the session a connection attached; every other service is served per connection. The server's only other route is `GET /health`. Runtime code is plain TypeScript; there is no Effect.
 
 Chord's extension facets (plugin UI in the client) are not used yet; serving the runtime as Chord services is what they would build on.
 

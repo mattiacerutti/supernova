@@ -1,9 +1,9 @@
 import type {MutableReplicatedState} from "@earendil-works/chord";
 import {copyJson, replicatedState} from "@earendil-works/chord";
 import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
-import {ProviderLoginError} from "@supernova/contracts/providers/procedures";
-import type {ProviderLoginSession, ProviderLoginStep} from "@supernova/contracts/providers/schemas";
-import type {ProviderLoginsState} from "@supernova/contracts/providers/services";
+import {ProviderLoginError} from "@supernova/contracts/services/providers/procedures";
+import type {ProviderLoginSession, ProviderLoginStep} from "@supernova/contracts/services/providers/schemas";
+import type {ProviderLoginsState} from "@supernova/contracts/services/providers/services";
 
 interface LoginWaiter {
   readonly cleanup: () => void;

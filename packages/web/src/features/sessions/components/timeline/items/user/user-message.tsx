@@ -1,4 +1,4 @@
-import type {UserMessageReferencePart} from "@supernova/contracts/sessions/schemas";
+import type {UserMessageReferencePart} from "@supernova/contracts/services/sessions/schemas";
 import type {SessionUserMessage} from "@/features/sessions/types/session-turn";
 import Icon from "@/components/ui/icon";
 import MessageAttachmentPreview from "@/features/sessions/components/timeline/items/user/message-attachment-preview";

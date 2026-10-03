@@ -1,4 +1,4 @@
-import type {ToolResultMessage} from "@supernova/contracts/sessions/schemas";
+import type {ToolResultMessage} from "@supernova/contracts/services/sessions/schemas";
 import {describe, expect, it} from "vitest";
 import {hasToolDetails, readLineRange} from "@/features/sessions/lib/timeline/work/tool-details";
 import {summarizeWork} from "@/features/sessions/lib/timeline/work/work-summary";

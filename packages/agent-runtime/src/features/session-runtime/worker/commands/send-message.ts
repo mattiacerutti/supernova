@@ -1,4 +1,4 @@
-import type {SendMessagePayload} from "@supernova/contracts/session-runtime/procedures";
+import type {SendMessagePayload} from "@supernova/contracts/services/session-runtime/procedures";
 import {preparePromptImages} from "@supernova/agent-runtime/pi/lib/user-message/prompt-images";
 import {findSelectedModel} from "@supernova/agent-runtime/pi/lib/models/selected-model";
 import {toPiThinkingLevel} from "@supernova/agent-runtime/pi/lib/models/thinking-levels";

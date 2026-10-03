@@ -4,7 +4,7 @@ import {mkdtemp, realpath, writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {promisify} from "node:util";
-import type {CreateSessionPayload} from "@supernova/contracts/sessions/procedures";
+import type {CreateSessionPayload} from "@supernova/contracts/services/sessions/procedures";
 import {afterEach, describe, expect, it} from "vitest";
 import {Worktrees} from "@supernova/agent-runtime/features/worktrees/worktrees";
 import {createSession as createSessionWorkflow} from "@supernova/agent-runtime/rpc/session-workflows";

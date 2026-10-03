@@ -5,7 +5,7 @@ import {dirname, join} from "node:path";
 import {getAgentDir} from "@earendil-works/pi-coding-agent";
 import type {SettingsManager} from "@earendil-works/pi-coding-agent";
 import type {EntryRecord} from "@earendil-works/pi-durable";
-import type {Session, SessionContextUsage, SessionWorktree} from "@supernova/contracts/sessions/schemas";
+import type {Session, SessionContextUsage, SessionWorktree} from "@supernova/contracts/services/sessions/schemas";
 import {loadPiSettings} from "@supernova/agent-runtime/pi/config/settings";
 import {buildSession, contextUsageOf, publicTurns, timelineEntries} from "@supernova/agent-runtime/pi/lib/session/session-snapshot";
 import type {CheckpointRef, SessionRecord, TurnPosition} from "@supernova/agent-runtime/pi/lib/session/session-state";

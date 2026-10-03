@@ -1,6 +1,6 @@
 import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import {useMutation, useQueryClient} from "@tanstack/react-query";
-import type {Session} from "@supernova/contracts/sessions/schemas";
+import type {Session} from "@supernova/contracts/services/sessions/schemas";
 import {sessionKeys} from "@/features/sessions/api/query-keys";
 import {useRuntime} from "@/rpc/use-runtime";
 
@@ -19,7 +19,7 @@ export function useRenameSession() {
 
   return useMutation({
     mutationFn: async (input: RenameSessionInput): Promise<Session> => {
-      const result = await services.management.rename(input, BACKGROUND_CONTEXT);
+      const result = await services.sessions.rename(input, BACKGROUND_CONTEXT);
       if (!result.ok) throw new Error(result.error.message);
       return result.value;
     },

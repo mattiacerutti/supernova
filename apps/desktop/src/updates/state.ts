@@ -1,4 +1,4 @@
-import type {DesktopUpdateState} from "@supernova/contracts/desktop/api";
+import type {DesktopUpdateState} from "@supernova/contracts/lib/desktop";
 
 export type UpdaterEvent =
   | {type: "checking"}

@@ -7,7 +7,7 @@ import type {
   Session,
   ToolResultMessage,
   UserMessageContentPart,
-} from "@supernova/contracts/sessions/schemas";
+} from "@supernova/contracts/services/sessions/schemas";
 import type {SessionToolCall, SessionTurn, SessionTurnEvent, SessionUserMessage} from "@/features/sessions/types/session-turn";
 
 /** Pi wraps compaction summaries for the model; the timeline shows the summary itself. */
