@@ -1,7 +1,6 @@
 import {randomUUID} from "node:crypto";
-import {diffRevisions} from "@earendil-works/chord/delta";
-import type {JsonValue} from "@earendil-works/chord";
-import type {SessionActivity, SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
+import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
+import type {SessionActivity} from "@supernova/contracts/session-runtime/procedures";
 import type {Session} from "@supernova/contracts/sessions/schemas";
 import type {CheckpointRef, CheckpointStatus} from "@supernova/agent-runtime/pi/lib/session/session-state";
 import type {SessionFile} from "@supernova/agent-runtime/pi/session-file";
@@ -10,14 +9,12 @@ import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";
 import type {ResourceCache} from "@supernova/agent-runtime/pi/resource-cache";
 import type {CheckpointStore} from "@supernova/agent-runtime/features/session-runtime/checkpoints/checkpoint-store";
 import {CheckpointConflictError} from "@supernova/agent-runtime/features/session-runtime/checkpoints/shadow-repository";
-import type {EventBus} from "@supernova/agent-runtime/lib/event-bus";
-
-type RevisionedSessionStreamEvent = Extract<SessionStreamEvent, {readonly revision: number}>;
-type UnrevisionedSessionStreamEvent = RevisionedSessionStreamEvent extends infer Event ? (Event extends {readonly revision: number} ? Omit<Event, "revision"> : never) : never;
+import type {SessionBoard} from "@supernova/agent-runtime/features/session-runtime/worker/session-board";
+import {DocumentState} from "@supernova/agent-runtime/lib/document-state";
 
 export interface SessionWorkerInput {
+  readonly board: SessionBoard;
   readonly checkpointStore: CheckpointStore;
-  readonly eventBus: EventBus<SessionStreamEvent>;
   readonly resourceCache: ResourceCache;
   readonly sdk: Pick<PiSdk, "modelRuntime">;
   readonly sessionId: string;
@@ -32,8 +29,8 @@ function activityOf(session: Session): SessionActivity {
 
 /**
  * Publishes one session's state and serializes its navigation commands. The engine owns execution and turn state; the
- * worker keeps the session document clients mirror and publishes each change to it as a Chord delta
- * (`session.state`), the same way the engine's replicated state reaches its own viewers.
+ * worker keeps the session document as Chord replicated state, whose subscribers receive each change as a delta, the
+ * same way the engine's view state reaches its own viewers. Its activity and problems go to the session board.
  */
 export class SessionWorker {
   public readonly resourceCache: ResourceCache;
@@ -41,22 +38,23 @@ export class SessionWorker {
   public readonly sdk: Pick<PiSdk, "modelRuntime">;
   public readonly store: SessionStore;
 
+  private readonly board: SessionBoard;
   private readonly checkpointStore: CheckpointStore;
-  private readonly eventBus: EventBus<SessionStreamEvent>;
 
-  private revision = 0;
   private publishing: Promise<unknown> = Promise.resolve();
   private commandRunning = false;
   private cancelled = false;
   private watched: {readonly conversationId: number; readonly unsubscribe: () => void} | undefined;
   private readonly background = new Set<Promise<unknown>>();
-  /** The document clients mirror and the histories it was built from; absent until first read or watched frame. */
-  private document: {readonly session: Session; readonly history: SessionHistory} | undefined;
+  /** The document clients mirror; absent until the session is first opened. */
+  private document: DocumentState<Session> | undefined;
+  /** The histories the document was built from. */
+  private history: SessionHistory | undefined;
 
   public constructor(input: SessionWorkerInput) {
+    this.board = input.board;
     this.checkpointStore = input.checkpointStore;
     this.store = input.store;
-    this.eventBus = input.eventBus;
     this.resourceCache = input.resourceCache;
     this.sdk = input.sdk;
     this.sessionId = input.sessionId;
@@ -69,10 +67,18 @@ export class SessionWorker {
     return session;
   }
 
-  /** The document clients apply `session.state` deltas to, after every change already published. */
+  /** The session document after every change already published. */
   public async current(): Promise<Session> {
+    return (await this.transcript()).value;
+  }
+
+  /** The session document as replicated state, built on first use. */
+  public async transcript(): Promise<DocumentState<Session>> {
     await this.session();
-    return this.enqueue(async () => this.document?.session ?? (await this.publish()));
+    await this.enqueue(async () => {
+      if (!this.document) await this.publish();
+    });
+    return this.document!;
   }
 
   /** Rebuilds the document from the session file and publishes the change, for changes no engine frame shows. */
@@ -139,20 +145,10 @@ export class SessionWorker {
     return this.cancelled;
   }
 
-  /** Publishes a public runtime event with a fresh revision. */
-  public publishEvent(event: UnrevisionedSessionStreamEvent): void {
-    this.eventBus.publish({...event, revision: this.nextRevision()} as RevisionedSessionStreamEvent);
-  }
-
-  /** Publishes the session's summary after a title change, for project listings, and the change to its document. */
-  public async publishSessionUpdate(): Promise<void> {
-    const record = await this.store.record(this.sessionId);
-    const session = await this.refresh();
-    this.publishEvent({
-      type: "session.updated",
-      projectPath: record.projectPath,
-      sessionId: this.sessionId,
-      summary: {id: record.id, forked: session.forked, title: session.title, updatedAt: session.updatedAt, worktree: session.worktree !== undefined},
+  /** Reports a problem that did not fail a command; clients show it until the next run. */
+  public reportError(message: string): void {
+    void this.store.find(this.sessionId).then((record) => {
+      if (record) this.board.update(this.sessionId, record.projectPath, {error: {message, at: new Date().toISOString()}});
     });
   }
 
@@ -197,6 +193,7 @@ export class SessionWorker {
     this.watched?.unsubscribe();
     this.watched = undefined;
     await Promise.all([...this.background, this.publishing]);
+    this.document?.dispose();
   }
 
   private async watch(session: SessionFile): Promise<void> {
@@ -220,26 +217,17 @@ export class SessionWorker {
   }
 
   /**
-   * Rebuilds the document and publishes the delta from the last one. The first build publishes nothing: no client can
-   * hold an earlier version. Versions start at the build time, so a client holding a document from before a server
-   * restart sees a gap and reloads instead of applying a delta to the wrong base.
+   * Rebuilds the document and publishes the change from the last one; the board follows its activity and summary. A
+   * new run clears the last reported problem.
    */
   private async publish(): Promise<Session> {
-    const previous = this.document;
-    const built = await this.store.snapshot(this.sessionId, {version: previous?.session.version ?? Date.now(), previous: previous?.history});
-    if (!previous) {
-      this.document = built;
-      return built.session;
-    }
-    const ops = diffRevisions(previous.session as unknown as JsonValue, built.session as unknown as JsonValue);
-    if (ops.length === 0) {
-      this.document = {session: previous.session, history: built.history};
-      return previous.session;
-    }
-    const version = previous.session.version + 1;
-    const session = {...built.session, version};
-    this.document = {session, history: built.history};
-    this.publishEvent({type: "session.state", sessionId: this.sessionId, version, ops: [...ops, ["s", ["version"], version]], activity: activityOf(session)});
+    const {session, history} = await this.store.snapshot(this.sessionId, {previous: this.history});
+    this.history = history;
+    if (this.document) this.document.publish(session, BACKGROUND_CONTEXT);
+    else this.document = new DocumentState(session);
+    const activity = activityOf(session);
+    const summary = {id: session.id, forked: session.forked, title: session.title, updatedAt: session.updatedAt, worktree: session.worktree !== undefined};
+    this.board.update(this.sessionId, session.projectPath, {activity, summary, ...(activity === "running" ? {error: null, setupStep: null} : {})});
     return session;
   }
 
@@ -262,14 +250,7 @@ export class SessionWorker {
   /** Runs publications in order; a failed one never blocks later ones and is reported. */
   private enqueue<T>(work: () => Promise<T>): Promise<T> {
     const run = this.publishing.then(work);
-    this.publishing = run.catch((error) => {
-      this.publishEvent({type: "session.error", sessionId: this.sessionId, error: error instanceof Error ? error.message : "Failed to publish session state."});
-    });
+    this.publishing = run.catch((error) => this.reportError(error instanceof Error ? error.message : "Failed to publish session state."));
     return run;
-  }
-
-  private nextRevision(): number {
-    this.revision += 1;
-    return this.revision;
   }
 }

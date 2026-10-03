@@ -1,13 +1,13 @@
+import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import type {QueryClient} from "@tanstack/react-query";
-import {CheckpointConflictError, CheckpointInheritedError, CheckpointUncapturedError} from "@supernova/contracts/session-runtime/procedures";
-import type {SessionActivity, SessionSetupStep, SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
+import type {SessionActivity, SessionSetupStep} from "@supernova/contracts/session-runtime/procedures";
 import type {ModelReference, OutgoingMessage, Session, SessionWorkspaceSelection, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {ServiceResult, SessionController, SessionDirectoryState} from "@supernova/contracts/sessions/services";
 import {create} from "zustand";
 import {useSettingsStore} from "@/stores/settings-store";
 import {showToast} from "@/lib/toast";
 import {sessionKeys} from "@/features/sessions/api/query-keys";
-import {useSessionVisitsStore} from "@/features/sessions/stores/sidebar/session-visits-store";
-import type {RpcClient, RpcProtocolClient} from "@/rpc/transport/protocol";
+import type {SessionServicesClient} from "@/rpc/transport/session-services";
 
 export type SessionLiveStatus = "checkpoint-navigating" | "compacting" | "idle" | "stopping" | "streaming";
 
@@ -32,27 +32,26 @@ export interface PendingMessage {
 
 /**
  * Client state around a session's server document. The document itself (Pi's entries and live state) is React
- * Query's and changes only by the server's deltas; what the user just did and the server has not shown yet lives here.
+ * Query's and changes only with the server's replicated transcript; what the server's directory says the session is
+ * doing, and what the user just did and the server has not shown yet, lives here.
  */
 export interface SessionLiveState {
   readonly error: string | null;
-  /** What the server says the session is doing; known for every session the stream mentions. */
+  /** What the server says the session is doing; known for every session the server has open. */
   readonly activity: SessionActivity;
   /** Command started here and not settled yet. */
   readonly command: "checkpoint-navigating" | "compacting" | "stopping" | null;
   readonly pending: PendingMessage | null;
   /** Turn an optimistic undo, redo, or revert moves to, until the command settles. */
   readonly navigationTurnId: string | null;
-  /** Latest server revision applied for this session. Older session-scoped events are ignored. */
-  readonly revision: number;
   /** Setup step running before a new session's first turn, shown in place of the thinking label. Set optimistically for steps the client asked for. */
   readonly setupStep: SessionSetupStep | null;
   readonly status: SessionLiveStatus;
 }
 
-/** Creates baseline state for sessions first seen from the global stream. */
-function emptyEntry(revision = 0): SessionLiveState {
-  return {activity: "idle", command: null, error: null, navigationTurnId: null, pending: null, revision, setupStep: null, status: "idle"};
+/** Creates baseline state for sessions first seen in the directory. */
+function emptyEntry(): SessionLiveState {
+  return {activity: "idle", command: null, error: null, navigationTurnId: null, pending: null, setupStep: null, status: "idle"};
 }
 
 /** Recomputes the status: a command in flight wins, then what the server runs, then a message not yet placed. */
@@ -72,44 +71,24 @@ function errorMessage(cause: unknown, fallback: string): string {
   return cause instanceof Error && cause.message.length > 0 ? cause.message : fallback;
 }
 
+/** The value of a service result, or throws its failure with the contract error's tag as `code`. */
+function unwrap<T>(result: ServiceResult<T>): T {
+  if (result.ok) return result.value;
+  throw Object.assign(new Error(result.error.message), {code: result.error.code});
+}
+
+function failureCode(cause: unknown): string | undefined {
+  return typeof cause === "object" && cause !== null && "code" in cause ? String(cause.code) : undefined;
+}
+
 function turnCount(session: Session | undefined): number {
   return session ? Object.keys(session.turns).length : 0;
-}
-
-type RevisionedSessionStreamEvent = Extract<SessionStreamEvent, {readonly revision: number}>;
-
-/** The session's latest activity timestamp, for events that carry authoritative session data. */
-function sessionEventActivityAt(event: RevisionedSessionStreamEvent): string | null {
-  return event.type === "session.updated" ? event.summary.updatedAt : null;
-}
-
-/** Reduces one accepted server event into client session state. */
-function reduceSessionEvent(entry: SessionLiveState, event: RevisionedSessionStreamEvent): SessionLiveState {
-  switch (event.type) {
-    case "session.updated":
-      return entry;
-    case "session.setup.started":
-      return {...entry, setupStep: event.step};
-    case "session.setup.ended":
-      return {...entry, setupStep: null};
-    case "session.state":
-      return withStatus({
-        ...entry,
-        activity: event.activity,
-        error: event.activity === "running" ? null : entry.error,
-        setupStep: event.activity === "idle" ? entry.setupStep : null,
-      });
-    case "session.error":
-      return withStatus({...entry, command: entry.command === "stopping" ? null : entry.command, error: event.error, pending: null, setupStep: null});
-  }
 }
 
 /** The session the server will create for a first message, shown until the server's document replaces it. */
 function createPendingSession(input: {projectPath: string; sessionId: string}): Session {
   return {
     id: input.sessionId,
-    // No server version: deltas never apply to it, the created session's document replaces it.
-    version: -1,
     title: "Untitled session",
     forked: false,
     projectPath: input.projectPath,
@@ -131,7 +110,7 @@ interface SendSessionMessageInput {
   readonly contentParts: readonly UserMessageContentPart[];
   readonly modelReference: ModelReference;
   readonly queryClient: QueryClient;
-  readonly rpcClient: RpcClient;
+  readonly services: SessionServicesClient;
   readonly sessionId: string;
 }
 
@@ -143,7 +122,7 @@ interface StartSessionInput extends SendSessionMessageInput {
 
 interface CompactSessionInput {
   readonly modelReference: ModelReference;
-  readonly rpcClient: RpcClient;
+  readonly services: SessionServicesClient;
   readonly sessionId: string;
 }
 
@@ -151,7 +130,7 @@ interface CheckpointNavigationInput {
   /** Set when retrying after the user confirmed discarding manual workspace changes. */
   readonly force?: boolean;
   readonly queryClient: QueryClient;
-  readonly rpcClient: RpcClient;
+  readonly services: SessionServicesClient;
   readonly sessionId: string;
 }
 
@@ -167,14 +146,14 @@ interface NavigationTargets {
 }
 
 interface SessionLiveStoreState {
-  /** Session currently open in the main view; its activity is stamped as seen. */
+  /** Session currently open in the main view; its transcript is followed and its activity is stamped as seen. */
   readonly activeSessionId: string | null;
   readonly sessions: Record<string, SessionLiveState | undefined>;
-  readonly abortSession: (input: {rpcClient: RpcClient; sessionId: string}) => void;
-  readonly applyEvent: (event: SessionStreamEvent) => boolean;
+  readonly abortSession: (input: {services: SessionServicesClient; sessionId: string}) => void;
+  /** Takes the server's activity, setup step, and last problem of every session it has open. */
+  readonly applyDirectory: (directory: SessionDirectoryState) => void;
   readonly compactSession: (input: CompactSessionInput) => void;
   readonly redoCheckpoint: (input: CheckpointNavigationInput & NavigationTargets) => Promise<CheckpointNavigationOutcome>;
-  readonly resetRevisions: () => void;
   readonly revertToMessage: (input: RevertToMessageInput) => Promise<CheckpointNavigationOutcome>;
   readonly sendMessage: (input: SendSessionMessageInput) => void;
   readonly setActiveSession: (sessionId: string | null) => void;
@@ -185,31 +164,36 @@ interface SessionLiveStoreState {
 }
 
 export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) => {
+  /** Problems already shown, by session, so the directory republishing one does not show it again. */
+  const seenErrors = new Map<string, string>();
+
   const update = (sessionId: string, change: (entry: SessionLiveState) => Omit<SessionLiveState, "status"> | SessionLiveState): void => {
     set((state) => ({sessions: {...state.sessions, [sessionId]: withStatus(change(state.sessions[sessionId] ?? emptyEntry()))}}));
   };
 
-  const applyEvent = (event: SessionStreamEvent): boolean => {
-    if (!("revision" in event)) return false;
-
-    let applied = false;
+  const applyDirectory = (directory: SessionDirectoryState): void => {
     set((state) => {
-      const current = state.sessions[event.sessionId];
-      if (current && event.revision <= current.revision) return state;
-
-      applied = true;
-      const entry = {...(current ?? emptyEntry()), revision: event.revision};
-      return {sessions: {...state.sessions, [event.sessionId]: reduceSessionEvent(entry, event)}};
+      const sessions = {...state.sessions};
+      for (const [sessionId, entry] of Object.entries(directory.sessions)) {
+        const current = sessions[sessionId] ?? emptyEntry();
+        const errorKey = entry.error ? `${entry.error.at}:${entry.error.message}` : undefined;
+        const newError = errorKey !== undefined && seenErrors.get(sessionId) !== errorKey;
+        if (errorKey) seenErrors.set(sessionId, errorKey);
+        const next = withStatus({
+          ...current,
+          activity: entry.activity,
+          // The step the client set optimistically stays until the server reports one or the run starts.
+          setupStep: entry.setupStep ?? (entry.activity === "idle" && current.pending ? current.setupStep : null),
+          error: newError ? entry.error!.message : entry.activity === "running" ? null : current.error,
+          ...(newError ? {pending: null, command: current.command === "stopping" ? null : current.command} : {}),
+        });
+        if (JSON.stringify(next) !== JSON.stringify(current)) sessions[sessionId] = next;
+      }
+      return {sessions};
     });
-
-    // Activity in the open session is seen as it happens. Stamping the
-    // activity time rather than now keeps a later completion unseen.
-    const activityAt = applied ? sessionEventActivityAt(event) : null;
-    if (activityAt !== null && event.sessionId === get().activeSessionId) {
-      useSessionVisitsStore.getState().markSessionVisited(event.sessionId, activityAt);
-    }
-    return applied;
   };
+
+  const controller = async (services: SessionServicesClient, sessionId: string): Promise<SessionController> => (await services.attach(sessionId)).controller;
 
   const settlePending = (sessionId: string, count: number): void => {
     const pending = get().sessions[sessionId]?.pending;
@@ -218,12 +202,6 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
 
   const setActiveSession = (sessionId: string | null): void => {
     set((state) => (state.activeSessionId === sessionId ? state : {activeSessionId: sessionId}));
-  };
-
-  const resetRevisions = (): void => {
-    set((state) => ({
-      sessions: Object.fromEntries(Object.entries(state.sessions).map(([sessionId, entry]) => [sessionId, entry ? {...entry, revision: 0} : entry])),
-    }));
   };
 
   /** Shows the user's message as the live turn before the server has accepted it. */
@@ -244,29 +222,28 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
   };
 
   const sendMessage = (input: SendSessionMessageInput): void => {
-    const {queryClient, rpcClient, sessionId} = input;
+    const {queryClient, services, sessionId} = input;
     const current = get().sessions[sessionId];
     if (current && current.status !== "idle") return;
 
     const message = beginPendingMessage(input);
-    void rpcClient
-      .run((rpc) => rpc.sendMessage({...message, sessionId}))
+    void controller(services, sessionId)
+      .then(async (session) => unwrap(await session.send(message, BACKGROUND_CONTEXT)))
       .then(() => settlePending(sessionId, turnCount(queryClient.getQueryData<Session>(sessionKeys.detail(sessionId)))))
       .catch((cause: unknown) => failPendingMessage(sessionId, errorMessage(cause, "Failed to send message.")));
   };
 
   const startSession = async (input: StartSessionInput): Promise<StartSessionOutcome> => {
-    const {projectPath, queryClient, rpcClient, sessionId, workspace} = input;
+    const {projectPath, queryClient, services, sessionId, workspace} = input;
     queryClient.setQueryData<Session>(sessionKeys.detail(sessionId), createPendingSession({projectPath, sessionId}));
     const message = beginPendingMessage(input);
-    // The worktree step starts before any event can arrive; showing it now keeps the thinking label from flashing first.
+    // The worktree step starts before any directory update can arrive; showing it now keeps the thinking label from flashing first.
     if (workspace.mode === "worktree") update(sessionId, (entry) => ({...entry, setupStep: "worktree"}));
 
     try {
-      const session = await rpcClient.run((rpc) => rpc.createSession({id: sessionId, message, projectPath, workspace}));
-      // Deltas published before this reply could not apply to the placeholder; the reply or a refetch catches up.
-      queryClient.setQueryData<Session>(sessionKeys.detail(sessionId), (cached) => (cached && cached.version >= session.version ? cached : session));
-      void queryClient.invalidateQueries({exact: true, queryKey: sessionKeys.detail(sessionId)});
+      const session = unwrap(await services.management.create({id: sessionId, message, projectPath, workspace}, BACKGROUND_CONTEXT));
+      // The transcript's first value replaces this once the page attaches; until then the reply is the newest state.
+      queryClient.setQueryData<Session>(sessionKeys.detail(sessionId), (cached) => (cached && turnCount(cached) > turnCount(session) ? cached : session));
       settlePending(sessionId, turnCount(session));
       return {status: "started"};
     } catch (cause) {
@@ -281,40 +258,41 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
     }
   };
 
-  const abortSession = (input: {rpcClient: RpcClient; sessionId: string}): void => {
-    const {rpcClient, sessionId} = input;
+  const abortSession = (input: {services: SessionServicesClient; sessionId: string}): void => {
+    const {services, sessionId} = input;
     const stream = get().sessions[sessionId];
     if (!stream || (stream.status !== "streaming" && stream.status !== "stopping")) return;
 
     update(sessionId, (entry) => ({...entry, command: "stopping"}));
-    void rpcClient
-      .run((rpc) => rpc.abortSession({sessionId}))
+    void controller(services, sessionId)
+      .then((session) => session.abort(BACKGROUND_CONTEXT))
       .catch(() => update(sessionId, (entry) => ({...entry, command: entry.command === "stopping" ? null : entry.command})));
   };
 
   const compactSession = (input: CompactSessionInput): void => {
-    const {modelReference, rpcClient, sessionId} = input;
+    const {modelReference, services, sessionId} = input;
     const current = get().sessions[sessionId];
     if (current && current.status !== "idle") return;
 
     update(sessionId, (entry) => ({...entry, command: "compacting", error: null}));
-    void rpcClient
-      .run((rpc) => rpc.compactSession({modelReference, sessionId}))
+    const finish = (error: string | null): void =>
+      update(sessionId, (entry) => ({...entry, command: entry.command === "compacting" ? null : entry.command, ...(error ? {error} : {})}));
+    void controller(services, sessionId)
+      .then(async (session) => unwrap(await session.compact({modelReference}, BACKGROUND_CONTEXT)))
       .then(
-        () => update(sessionId, (entry) => ({...entry, command: entry.command === "compacting" ? null : entry.command})),
-        (cause: unknown) =>
-          update(sessionId, (entry) => ({...entry, command: entry.command === "compacting" ? null : entry.command, error: errorMessage(cause, "Failed to compact session.")}))
+        () => finish(null),
+        (cause: unknown) => finish(errorMessage(cause, "Failed to compact session."))
       );
   };
 
   const runCheckpointNavigation = (
     input: CheckpointNavigationInput & {
-      execute: (rpc: RpcProtocolClient, force: boolean | undefined) => ReturnType<RpcProtocolClient["undoCheckpoint"]>;
+      execute: (session: SessionController, force: boolean | undefined) => Promise<ServiceResult<null>>;
       turnId: string | undefined;
       title: string;
     }
   ): Promise<CheckpointNavigationOutcome> => {
-    const {execute, rpcClient, sessionId, title, turnId} = input;
+    const {execute, services, sessionId, title, turnId} = input;
     const current = get().sessions[sessionId];
     if (current && current.status !== "idle") return Promise.resolve("failed");
 
@@ -326,14 +304,15 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
     };
 
     const executeNavigation = (force: boolean | undefined): Promise<CheckpointNavigationOutcome> =>
-      rpcClient
-        .run((rpc) => execute(rpc, force))
+      controller(services, sessionId)
+        .then(async (session) => unwrap(await execute(session, force)))
         .then((): CheckpointNavigationOutcome => {
           finish();
           return "applied";
         })
         .catch((cause: unknown): CheckpointNavigationOutcome => {
-          const reason = cause instanceof CheckpointConflictError ? "conflict" : cause instanceof CheckpointUncapturedError ? "uncaptured" : undefined;
+          const code = failureCode(cause);
+          const reason = code === "CheckpointConflictError" ? "conflict" : code === "CheckpointUncapturedError" ? "uncaptured" : undefined;
           if (reason && !force) {
             let pending = true;
             return {
@@ -351,7 +330,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
               },
             };
           }
-          if (cause instanceof CheckpointInheritedError) {
+          if (code === "CheckpointInheritedError") {
             showToast("Nothing to undo in this fork", "This message came from the session this one was forked from. Only messages sent in this session can be undone.");
             finish();
             return "failed";
@@ -367,7 +346,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
   const undoCheckpoint = (input: CheckpointNavigationInput & NavigationTargets): Promise<CheckpointNavigationOutcome> =>
     runCheckpointNavigation({
       ...input,
-      execute: (rpc, force) => rpc.undoCheckpoint({force, sessionId: input.sessionId}),
+      execute: (session, force) => session.undo({force}, BACKGROUND_CONTEXT),
       turnId: input.lastTurnId,
       title: "Unable to undo checkpoint",
     });
@@ -375,7 +354,7 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
   const redoCheckpoint = (input: CheckpointNavigationInput & NavigationTargets): Promise<CheckpointNavigationOutcome> =>
     runCheckpointNavigation({
       ...input,
-      execute: (rpc, force) => rpc.redoCheckpoint({force, sessionId: input.sessionId}),
+      execute: (session, force) => session.redo({force}, BACKGROUND_CONTEXT),
       turnId: input.firstUndoneTurnId,
       title: "Unable to redo checkpoint",
     });
@@ -383,17 +362,16 @@ export const useSessionLiveStore = create<SessionLiveStoreState>()((set, get) =>
   const revertToMessage = (input: RevertToMessageInput): Promise<CheckpointNavigationOutcome> =>
     runCheckpointNavigation({
       ...input,
-      execute: (rpc, force) => rpc.revertToMessage({force, sessionId: input.sessionId, turnId: input.turnId}),
+      execute: (session, force) => session.revert({force, turnId: input.turnId}, BACKGROUND_CONTEXT),
       title: "Unable to revert message",
     });
 
   return {
     abortSession,
     activeSessionId: null,
-    applyEvent,
+    applyDirectory,
     compactSession,
     redoCheckpoint,
-    resetRevisions,
     revertToMessage,
     sendMessage,
     sessions: {},

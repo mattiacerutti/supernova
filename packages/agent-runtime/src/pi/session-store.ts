@@ -163,14 +163,11 @@ export class SessionStore {
   }
 
   /**
-   * The session document at `version`, from the visible conversation's current committed view. Entries are read only
+   * The session document, from the visible conversation's current committed view. Entries are read only
    * up to the view's newest one, so the final answer never shows beside the partial the view still streams.
    * `previous` is the history of the last build, extended instead of read again.
    */
-  public async snapshot(
-    sessionId: string,
-    options: {readonly version: number; readonly previous?: SessionHistory}
-  ): Promise<{readonly session: Session; readonly history: SessionHistory}> {
+  public async snapshot(sessionId: string, options: {readonly previous?: SessionHistory} = {}): Promise<{readonly session: Session; readonly history: SessionHistory}> {
     const record = await this.record(sessionId);
     const file = await this.file(sessionId);
     const state = await file.state();
@@ -178,7 +175,6 @@ export class SessionStore {
     const history = await this.historyOf(file, state, view, options.previous);
     const session = buildSession({
       record,
-      version: options.version,
       entries: history.entries,
       undone: history.undone,
       agent: view.agent,

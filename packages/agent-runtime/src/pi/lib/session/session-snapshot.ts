@@ -67,7 +67,6 @@ export function publicTurns(turns: Readonly<Record<string, TurnRecord>>): Sessio
  */
 export function buildSession(input: {
   readonly record: SessionRecord;
-  readonly version: number;
   readonly entries: readonly EntryRecord[];
   readonly undone: readonly EntryRecord[];
   readonly agent: AgentState | undefined;
@@ -77,11 +76,10 @@ export function buildSession(input: {
   readonly turns: Session["turns"];
   readonly context: Session["context"];
 }): Session {
-  const {context, entries, record, turns, undone, version} = input;
+  const {context, entries, record, turns, undone} = input;
   const lastTimestamp = entries.findLast((entry) => entry.model?.[0]?.timestamp !== undefined)?.model?.[0]?.timestamp;
   return {
     id: record.id,
-    version,
     title: record.title ?? fallbackTitle(entries, turns),
     forked: record.forkedFrom !== undefined,
     projectPath: record.projectPath,

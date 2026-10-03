@@ -1,37 +1,46 @@
 import {createServer} from "node:http";
 import type {Socket} from "node:net";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
+import {Server as SessionServiceServer} from "@earendil-works/pi-server";
 import {AgentRpcGroup} from "@supernova/contracts";
-import {agentRpcLayer, createAgentRuntime} from "@supernova/agent-runtime";
+import {SESSION_SERVER_ID, SESSION_SERVICES_PATH} from "@supernova/contracts/sessions/services";
+import type {AgentRuntime} from "@supernova/agent-runtime";
+import {agentRpcLayer, createAgentRuntime, sessionServiceHost} from "@supernova/agent-runtime";
 import {Context, Effect, Exit, Layer, Scope} from "effect";
 import {HttpRouter, HttpServer, HttpServerResponse} from "effect/unstable/http";
 import {RpcSerialization, RpcServer} from "effect/unstable/rpc";
+import {createWebSocketListener} from "@/session-socket";
 
 export const DEFAULT_HOST = "127.0.0.1";
 export const DEFAULT_PORT = 4317;
 
-/** The runtime is created once per server and disposed with the server's scope. */
-const routes = Layer.unwrap(
-  Effect.gen(function* () {
-    const runtime = yield* Effect.acquireRelease(
-      Effect.promise(() => createAgentRuntime()),
-      (created) => Effect.promise(() => created.dispose())
-    );
-    const rpc = RpcServer.layerHttp({
-      group: AgentRpcGroup,
-      path: "/ws",
-      protocol: "websocket",
-      spanAttributes: {"rpc.system": "effect-rpc", "rpc.transport": "websocket"},
-      spanPrefix: "pi.ws.rpc",
-    }).pipe(Layer.provide(agentRpcLayer(runtime)), Layer.provide(RpcSerialization.layerJson));
+/**
+ * The runtime is created once per server and disposed with the server's scope. `onRuntime` receives it once it is
+ * built, so the session service protocol can be served beside the RPC routes.
+ */
+const routes = (onRuntime: (runtime: AgentRuntime) => Promise<void>) =>
+  Layer.unwrap(
+    Effect.gen(function* () {
+      const runtime = yield* Effect.acquireRelease(
+        Effect.promise(() => createAgentRuntime()),
+        (created) => Effect.promise(() => created.dispose())
+      );
+      yield* Effect.promise(() => onRuntime(runtime));
+      const rpc = RpcServer.layerHttp({
+        group: AgentRpcGroup,
+        path: "/ws",
+        protocol: "websocket",
+        spanAttributes: {"rpc.system": "effect-rpc", "rpc.transport": "websocket"},
+        spanPrefix: "pi.ws.rpc",
+      }).pipe(Layer.provide(agentRpcLayer(runtime)), Layer.provide(RpcSerialization.layerJson));
 
-    return Layer.mergeAll(
-      rpc,
-      HttpRouter.add("GET", "/health", Effect.succeed(HttpServerResponse.jsonUnsafe({ok: true}))),
-      HttpRouter.add("*", "*", Effect.succeed(HttpServerResponse.jsonUnsafe({error: "Not found"}, {status: 404})))
-    );
-  })
-);
+      return Layer.mergeAll(
+        rpc,
+        HttpRouter.add("GET", "/health", Effect.succeed(HttpServerResponse.jsonUnsafe({ok: true}))),
+        HttpRouter.add("*", "*", Effect.succeed(HttpServerResponse.jsonUnsafe({error: "Not found"}, {status: 404})))
+      );
+    })
+  );
 
 /** Parses a TCP port; zero asks the OS to allocate an available port. */
 export function parsePort(value: string): number {
@@ -71,14 +80,29 @@ export async function startServer({host, port}: StartServerOptions): Promise<Run
     socket.once("close", () => sockets.delete(socket));
   });
 
+  // Session lifecycle and execution are Chord services on their own WebSocket; started once the runtime exists and
+  // closed before it is disposed.
+  let sessionServices: SessionServiceServer | undefined;
+  const startSessionServices = async (runtime: AgentRuntime): Promise<void> => {
+    sessionServices = new SessionServiceServer(sessionServiceHost(runtime), {
+      serverId: SESSION_SERVER_ID,
+      listeners: [createWebSocketListener(listener, SESSION_SERVICES_PATH)],
+      onError: (error) => console.error("[session-services]", error),
+    });
+    await sessionServices.start();
+  };
+
   const transport = NodeHttpServer.layer(() => listener, {host, port, disablePreemptiveShutdown: true});
-  const server = HttpRouter.serve(routes, {disableLogger: true, disableListenLog: true}).pipe(Layer.provideMerge(transport));
+  const server = HttpRouter.serve(routes(startSessionServices), {disableLogger: true, disableListenLog: true}).pipe(Layer.provideMerge(transport));
   const scope = Effect.runSync(Scope.make());
 
   const close = (): Promise<void> => {
     for (const socket of sockets) socket.destroy();
 
-    closing ??= Effect.runPromise(Scope.close(scope, Exit.void));
+    closing ??= (async () => {
+      await sessionServices?.close().catch(() => undefined);
+      await Effect.runPromise(Scope.close(scope, Exit.void));
+    })();
     return closing;
   };
 

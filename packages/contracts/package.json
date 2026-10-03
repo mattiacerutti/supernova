@@ -16,6 +16,10 @@
       "types": "./src/*/rpc.ts",
       "import": "./src/*/rpc.ts"
     },
+    "./*/services": {
+      "types": "./src/*/services.ts",
+      "import": "./src/*/services.ts"
+    },
     "./*/procedures": {
       "types": "./src/*/procedures/index.ts",
       "import": "./src/*/procedures/index.ts"

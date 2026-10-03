@@ -36,11 +36,25 @@ test("owned APIs bind distinct ports, report RPC readiness, serve no UI, and rel
     expect(await (await fetch(`${first.url}/health`)).json()).toEqual({ok: true});
     expect((await fetch(first.url)).status).toBe(404);
     expect((await fetch(`${first.url}/assets/missing.js`)).status).toBe(404);
+    // The RPC socket and the session service socket share the server; each path reaches its own protocol.
     const socket = new WebSocket(first.url.replace("http:", "ws:") + "/ws");
-    await new Promise<void>((resolve, reject) => {
-      socket.onopen = () => resolve();
-      socket.onerror = reject;
+    const sessionSocket = new WebSocket(first.url.replace("http:", "ws:") + "/pi");
+    sessionSocket.binaryType = "arraybuffer";
+    await Promise.all(
+      [socket, sessionSocket].map(
+        (candidate) =>
+          new Promise<void>((resolve, reject) => {
+            candidate.onopen = () => resolve();
+            candidate.onerror = reject;
+          })
+      )
+    );
+    // The session protocol rejects a frame that is not its hello, and closes: proof the bytes reached pi-server.
+    const sessionClosed = new Promise<void>((resolve) => {
+      sessionSocket.onclose = () => resolve();
     });
+    sessionSocket.send(new Uint8Array([0, 0, 0, 1, 0]));
+    await sessionClosed;
     const closed = new Promise<void>((resolve) => {
       socket.onclose = () => resolve();
     });

@@ -1,9 +1,8 @@
+import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import {useMutation, useQueryClient} from "@tanstack/react-query";
 import type {Session} from "@supernova/contracts/sessions/schemas";
-import {Effect} from "effect";
 import {sessionKeys} from "@/features/sessions/api/query-keys";
-import {eq} from "@/rpc/effect-query";
-import {RpcProtocolClientService} from "@/rpc/transport/client";
+import {useSessionServices} from "@/rpc/use-session-services";
 
 interface ForkSessionInput {
   readonly sessionId: string;
@@ -12,14 +11,17 @@ interface ForkSessionInput {
 
 export function useForkSession() {
   const queryClient = useQueryClient();
+  const services = useSessionServices();
 
-  return useMutation(
-    eq.mutationOptions({
-      mutationFn: (input: ForkSessionInput) => Effect.flatMap(Effect.service(RpcProtocolClientService), (rpc) => rpc.forkSession(input)),
-      onSuccess: async (session: Session) => {
-        queryClient.setQueryData(sessionKeys.detail(session.id), session);
-        await queryClient.invalidateQueries({queryKey: sessionKeys.list(session.projectPath)});
-      },
-    })
-  );
+  return useMutation({
+    mutationFn: async (input: ForkSessionInput): Promise<Session> => {
+      const result = await services.management.fork(input, BACKGROUND_CONTEXT);
+      if (!result.ok) throw new Error(result.error.message);
+      return result.value;
+    },
+    onSuccess: async (session) => {
+      queryClient.setQueryData(sessionKeys.detail(session.id), session);
+      await queryClient.invalidateQueries({queryKey: sessionKeys.list(session.projectPath)});
+    },
+  });
 }

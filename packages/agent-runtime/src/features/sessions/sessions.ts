@@ -40,6 +40,11 @@ export class Sessions {
     return this.deps.documents.current(id);
   }
 
+  /** Whether a session is a durable one, which runs; a legacy session is only read. */
+  public async isDurable(input: GetSessionPayload): Promise<boolean> {
+    return (await this.deps.store.find(input.sessionId)) !== undefined;
+  }
+
   /** The worktree a session runs in, if any. */
   public async getWorktree(input: GetSessionPayload): Promise<SessionWorktree | undefined> {
     const record = await this.deps.store.find(input.sessionId);

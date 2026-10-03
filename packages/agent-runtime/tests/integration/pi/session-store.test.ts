@@ -58,7 +58,7 @@ describe("session store", () => {
       record: {contentParts: [{type: "text", text: "What does hello.txt say?"}], capture: false, before},
     });
     expect((await submitted.wait()).status).toBe("done");
-    const {session: snapshot} = await store.snapshot("s1", {version: 1});
+    const {session: snapshot} = await store.snapshot("s1");
     const [user] = snapshot.entries;
     expect(snapshot.entries.map((entry) => entry.kind)).toEqual(["pi.user", "pi.assistant", "pi.tool-result", "pi.assistant"]);
     expect(snapshot.turns).toEqual({[String(user!.id)]: {contentParts: [{type: "text", text: "What does hello.txt say?"}]}});

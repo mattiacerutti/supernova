@@ -4,16 +4,13 @@ import {mkdtemp, realpath, writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {promisify} from "node:util";
-import {AgentRpcGroup} from "@supernova/contracts";
 import type {CreateSessionPayload} from "@supernova/contracts/sessions/procedures";
-import {Effect} from "effect";
-import {RpcTest} from "effect/unstable/rpc";
 import {afterEach, describe, expect, it} from "vitest";
 import {Worktrees} from "@supernova/agent-runtime/features/worktrees/worktrees";
-import {agentRpcLayer} from "@supernova/agent-runtime/rpc/agent-rpc";
+import {createSession as createSessionWorkflow} from "@supernova/agent-runtime/rpc/session-workflows";
 import type {AgentRuntime} from "@supernova/agent-runtime/runtime";
 import {cleanupTempDirs} from "@tests/support/async";
-import {assistantTexts, createPiTestRuntime, fauxAssistantMessage, selectedModelReference, stateEvents, turnContents} from "@tests/support/session-runtime";
+import {assistantTexts, createPiTestRuntime, fauxAssistantMessage, selectedModelReference, turnContents} from "@tests/support/session-runtime";
 
 const firstMessage = {contentParts: [{text: "Hi", type: "text" as const}], modelReference: selectedModelReference};
 
@@ -30,7 +27,7 @@ async function createRepo(tempDirs: string[]): Promise<string> {
   return realpath(repo);
 }
 
-describe("agent rpc: createSession", () => {
+describe("creating a session with its first turn", () => {
   const runtimes: Array<{unregister: () => Promise<void>}> = [];
   const tempDirs: string[] = [];
 
@@ -39,7 +36,7 @@ describe("agent rpc: createSession", () => {
     cleanupTempDirs(tempDirs);
   });
 
-  /** Drives the RPC layer over a test runtime whose sessions live on disk and are reopened by the worker, as in production. */
+  /** Runs the workflow over a test runtime whose sessions live on disk and are reopened by the worker, as in production. */
   async function setup() {
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
@@ -47,8 +44,7 @@ describe("agent rpc: createSession", () => {
     tempDirs.push(worktreeStorage);
     // Only the features createSession orchestrates are real; the rest are never reached.
     const runtime = {sessionRuntime: pi.sessionRuntime, sessions: pi.sessions, worktrees: new Worktrees(worktreeStorage)} as AgentRuntime;
-    const createSession = (payload: CreateSessionPayload) =>
-      Effect.runPromise(Effect.scoped(Effect.flatMap(RpcTest.makeClient(AgentRpcGroup), (client) => client.createSession(payload))).pipe(Effect.provide(agentRpcLayer(runtime))));
+    const createSession = (payload: CreateSessionPayload) => createSessionWorkflow(runtime, payload);
     return {createSession, pi};
   }
 
@@ -81,23 +77,25 @@ describe("agent rpc: createSession", () => {
     const repo = await createRepo(tempDirs);
     pi.faux.setResponses([fauxAssistantMessage("Hello!")]);
 
-    const events = await pi.collectEvents(
-      () => createSession({id: "in-worktree", message: firstMessage, projectPath: repo, workspace: {baseRef: "main", mode: "worktree"}}),
-      (events) => {
-        if (stateEvents(events).at(-1)?.activity !== "idle") throw new Error("The first turn has not settled.");
-      }
-    );
-    await pi.settled("in-worktree");
+    const setupSteps: Array<string | null> = [];
+    const stop = pi.sessionRuntime.board.state.subscribe((value) => {
+      const entry = value.sessions["in-worktree"];
+      if (entry && entry.setupStep !== setupSteps.at(-1)) setupSteps.push(entry.setupStep);
+    });
+    try {
+      await createSession({id: "in-worktree", message: firstMessage, projectPath: repo, workspace: {baseRef: "main", mode: "worktree"}});
+      await pi.settled("in-worktree");
+    } finally {
+      stop();
+    }
 
     const session = await pi.sessions.get({sessionId: "in-worktree"});
     expect(session).toMatchObject({projectPath: repo, title: "Generated title", worktree: {branch: expect.stringMatching(/^supernova\/[a-z]+-[a-z]+$/)}});
     const worktreePath = session.worktree?.path;
     expect(worktreePath && existsSync(join(worktreePath, "a.txt"))).toBe(true);
     expect(await pi.store.cwd("in-worktree")).toBe(worktreePath);
-    const setupEvents = events.filter((event) => event.type === "session.setup.started" || event.type === "session.setup.ended").map((event) => event.type);
-    expect(setupEvents).toEqual(["session.setup.started", "session.setup.ended"]);
-    const firstTurnEvent = events.findIndex((event) => event.type === "session.state");
-    expect(events.findIndex((event) => event.type === "session.setup.ended")).toBeLessThan(firstTurnEvent);
+    // Shown while the worktree is set up, cleared before the first turn.
+    expect(setupSteps).toEqual(["worktree", null]);
   });
 
   it("removes the worktree and its branch again when the first turn cannot start", async () => {

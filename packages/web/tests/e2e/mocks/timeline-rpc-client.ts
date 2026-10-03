@@ -1,12 +1,13 @@
-import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
-import type {CreateSessionPayload} from "@supernova/contracts/sessions/procedures";
-import {CreateSessionError} from "@supernova/contracts/sessions/procedures";
-import type {JsonValue} from "@earendil-works/chord";
-import {diffRevisions} from "@earendil-works/chord/delta";
+import type {MutableReplicatedState} from "@earendil-works/chord";
+import {replicatedState} from "@earendil-works/chord";
+import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import type {SessionActivity} from "@supernova/contracts/session-runtime/procedures";
+import type {CreateSessionPayload} from "@supernova/contracts/sessions/procedures";
 import type {LiveState, Session, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
-import {Effect, Exit, Fiber, PubSub, Stream} from "effect";
+import type {ServiceResult, SessionController, SessionDirectoryState, SessionManagement} from "@supernova/contracts/sessions/services";
+import {Effect, Exit, Fiber, Stream} from "effect";
 import type {RpcClient, RpcClientFiber, RpcExecute, RpcProtocolClient, RpcRunOptions} from "@/rpc/transport/protocol";
+import type {AttachedSession, SessionServicesClient} from "@/rpc/transport/session-services";
 import {
   assistantEntry,
   createTimelineSessions,
@@ -23,17 +24,21 @@ export {RpcProtocolClientService} from "@/rpc/transport/protocol";
 export type {RpcClient, RpcClientFiber, RpcProtocolClient} from "@/rpc/transport/protocol";
 
 const STREAM_LINES_PER_FRAME = 2;
-const CREATE_SESSION_FAILURE_DELAY = "150 millis";
+const CREATE_SESSION_FAILURE_DELAY_MS = 150;
+const ok = {ok: true, value: null} as const;
 
-class TimelineRpcClient implements RpcClient {
-  private readonly events = Effect.runSync(PubSub.unbounded<SessionStreamEvent>());
+/**
+ * The server side of the timeline tests, in the browser: sessions as Chord replicated state that the app's session
+ * services read, as the real server's do, plus the RPC calls the session pages make.
+ */
+class TimelineServer implements RpcClient {
   private readonly sessions = createTimelineSessions();
+  private readonly transcripts = new Map<string, MutableReplicatedState<Session>>();
+  private readonly directory = replicatedState<SessionDirectoryState>({sessions: {}});
   private activeSessionId = TIMELINE_SESSION_ID;
   private createSessionFailure: string | null = null;
   private lineCount = 0;
-  private publishQueue: Promise<void> = Promise.resolve();
   private reasoningBreaks: number[] = [];
-  private revision = 0;
   private status: TimelineMockState["status"] = "idle";
   private streamFrame: number | null = null;
   private streamTargetLineCount = 0;
@@ -56,8 +61,40 @@ class TimelineRpcClient implements RpcClient {
 
   public async dispose(): Promise<void> {
     this.stopPump();
-    await this.publishQueue;
-    await Effect.runPromise(PubSub.shutdown(this.events));
+  }
+
+  /** The session services the app uses, over this server's state. */
+  public services(): SessionServicesClient {
+    const controller = (sessionId: string): SessionController => ({
+      abort: async () => this.settleStream("aborted"),
+      compact: async () => ok,
+      redo: async () => (this.redoCheckpoint(sessionId), ok),
+      revert: async ({turnId}) => (this.revertToMessage(sessionId, turnId), ok),
+      send: async ({contentParts}) => (this.startStream(sessionId, contentParts), ok),
+      undo: async () => (this.undoCheckpoint(sessionId), ok),
+    });
+    const management: SessionManagement = {
+      attach: async () => ok,
+      create: async (payload) => {
+        const failure = this.createSessionFailure;
+        this.createSessionFailure = null;
+        if (failure === null) return {ok: true, value: this.createSession(payload)};
+        // A real failure arrives after a round trip, while the composer is already docking.
+        await new Promise((resolve) => setTimeout(resolve, CREATE_SESSION_FAILURE_DELAY_MS));
+        return {ok: false, error: {code: "CreateSessionError", message: failure}} satisfies ServiceResult<never>;
+      },
+      detach: async () => undefined,
+      fork: async ({sessionId}) => ({ok: true, value: this.session(sessionId)}),
+      read: async ({sessionId}) => ({ok: true, value: this.session(sessionId)}),
+      rename: async ({sessionId}) => ({ok: true, value: this.session(sessionId)}),
+    };
+    return {
+      management,
+      directory: this.directory,
+      attach: async (sessionId): Promise<AttachedSession> => ({sessionId, controller: controller(sessionId), transcript: this.transcript(sessionId)}),
+      onConnectionChange: () => () => undefined,
+      dispose: async () => undefined,
+    };
   }
 
   public async fork<TSuccess, TError>(execute: RpcExecute<TSuccess, TError>): Promise<RpcClientFiber> {
@@ -77,6 +114,16 @@ class TimelineRpcClient implements RpcClient {
     return (await Effect.runPromiseExit(execute(this.protocol()), options)) as Exit.Exit<TSuccess, TError>;
   }
 
+  /** The replicated state of a session, created from its current value on first use. */
+  private transcript(sessionId: string): MutableReplicatedState<Session> {
+    let transcript = this.transcripts.get(sessionId);
+    if (!transcript) {
+      transcript = replicatedState(this.session(sessionId));
+      this.transcripts.set(sessionId, transcript);
+    }
+    return transcript;
+  }
+
   /** Returns the current session snapshot for a valid test session. */
   private session(sessionId: string): Session {
     const session = this.sessions.get(sessionId);
@@ -87,21 +134,10 @@ class TimelineRpcClient implements RpcClient {
   /** Exposes the same protocol boundary consumed by the real application. */
   private protocol(): RpcProtocolClient {
     return {
-      abortSession: () => Effect.sync(() => this.settleStream("aborted")),
       archiveProjectSession: () => Effect.void,
       cancelProviderLogin: () => Effect.void,
-      compactSession: () => Effect.void,
       createFolder: () => Effect.void,
-      createSession: (payload: CreateSessionPayload) =>
-        Effect.suspend(() => {
-          const failure = this.createSessionFailure;
-          this.createSessionFailure = null;
-          if (failure === null) return Effect.sync(() => this.createSession(payload));
-          // A real failure arrives after a round trip, while the composer is already docking.
-          return Effect.delay(Effect.fail(new CreateSessionError({message: failure})), CREATE_SESSION_FAILURE_DELAY);
-        }),
       getFolderStatus: () => Effect.succeed({exists: true, kind: "directory"}),
-      getSession: ({sessionId}: {readonly sessionId: string}) => Effect.sync(() => this.session(sessionId)),
       getWorkspaceChanges: () => Effect.succeed({uncommitted: []}),
       getWorkspaceDiffContents: () => Effect.succeed({newContents: "", oldContents: ""}),
       listComposerSuggestions: () => Effect.succeed({items: []}),
@@ -125,15 +161,8 @@ class TimelineRpcClient implements RpcClient {
       listWorkspaceRepositories: () => Effect.succeed({repositories: []}),
       logoutProvider: () => Effect.void,
       readWorkspaceFile: () => Effect.succeed({content: ""}),
-      redoCheckpoint: ({sessionId}: {readonly sessionId: string}) => Effect.sync(() => this.redoCheckpoint(sessionId)),
-      renameSession: ({sessionId}: {readonly sessionId: string}) => Effect.sync(() => this.session(sessionId)),
-      revertToMessage: ({sessionId, turnId}: {readonly sessionId: string; readonly turnId: string}) => Effect.sync(() => this.revertToMessage(sessionId, turnId)),
-      sendMessage: ({contentParts, sessionId}: {readonly contentParts: readonly UserMessageContentPart[]; readonly sessionId: string}) =>
-        Effect.sync(() => this.startStream(sessionId, contentParts)),
       startProviderLogin: () => Effect.succeed({loginSessionId: "timeline-login", status: "completed"}),
       submitProviderLoginInput: () => Effect.void,
-      undoCheckpoint: ({sessionId}: {readonly sessionId: string}) => Effect.sync(() => this.undoCheckpoint(sessionId)),
-      watchEvents: () => Stream.concat(Stream.succeed({type: "connected"} as const), Stream.fromPubSub(this.events)),
       watchProviderLoginSession: () => Stream.empty,
     } as unknown as RpcProtocolClient;
   }
@@ -142,7 +171,6 @@ class TimelineRpcClient implements RpcClient {
   private createSession({id, message, projectPath}: CreateSessionPayload): Session {
     const session: Session = {
       id,
-      version: 1,
       title: "Untitled session",
       forked: false,
       projectPath,
@@ -160,24 +188,13 @@ class TimelineRpcClient implements RpcClient {
     return this.session(session.id);
   }
 
-  /** Serializes publications so revisions arrive in exactly the order generated. */
-  private publish(event: SessionStreamEvent): void {
-    this.publishQueue = this.publishQueue.then(() => Effect.runPromise(PubSub.publish(this.events, event))).then(() => undefined);
-  }
-
-  private nextRevision(): number {
-    this.revision += 1;
-    return this.revision;
-  }
-
-  /** Replaces a session and publishes the change as a Chord delta, as the server does. */
-  private commit(next: Omit<Session, "version">, activity: SessionActivity): void {
-    const previous = this.session(next.id);
-    const version = previous.version + 1;
-    const session = {...next, version} as Session;
+  /** Replaces a session and publishes it to its replicated state and the directory, as the server does. */
+  private commit(session: Session, activity: SessionActivity): void {
     this.sessions.set(session.id, session);
-    const ops = diffRevisions(previous as unknown as JsonValue, session as unknown as JsonValue);
-    this.publish({activity, ops, revision: this.nextRevision(), sessionId: session.id, type: "session.state", version});
+    this.transcript(session.id).replace(BACKGROUND_CONTEXT, session);
+    this.directory.change(BACKGROUND_CONTEXT, (draft) => {
+      draft.sessions[session.id] = {activity, error: null, projectPath: session.projectPath, setupStep: null, summary: timelineSessionSummary(session)};
+    });
   }
 
   /** Index into `entries` of each turn's user entry. */
@@ -306,10 +323,15 @@ class TimelineRpcClient implements RpcClient {
   }
 }
 
-let sharedClient: TimelineRpcClient | null = null;
+let sharedServer: TimelineServer | null = null;
 
-/** Initializes the isolated in-browser timeline RPC mock used by Playwright. */
+/** The isolated in-browser timeline server used by Playwright. */
+export function timelineServer(): TimelineServer {
+  sharedServer ??= new TimelineServer();
+  return sharedServer;
+}
+
+/** Initializes the in-browser timeline RPC mock. */
 export async function getRpcClient(): Promise<RpcClient> {
-  sharedClient ??= new TimelineRpcClient();
-  return sharedClient;
+  return timelineServer();
 }

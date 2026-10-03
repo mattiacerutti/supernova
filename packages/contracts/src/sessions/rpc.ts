@@ -1,42 +1,12 @@
 import * as Rpc from "effect/unstable/rpc/Rpc";
 import {
-  CreateSessionError,
-  CreateSessionPayload,
-  CreateSessionResult,
-  ForkSessionError,
-  ForkSessionPayload,
-  ForkSessionResult,
   ListComposerSuggestionsError,
   ListComposerSuggestionsPayload,
   ListComposerSuggestionsResult,
-  GetSessionPayload,
-  GetSessionResult,
-  LoadSessionError,
   ListModelsError,
   ListModelsPayload,
   ListModelsResult,
-  RenameSessionError,
-  RenameSessionPayload,
-  RenameSessionResult,
 } from "@supernova/contracts/sessions/procedures";
-
-export const GetSessionRpc = Rpc.make("getSession", {
-  error: LoadSessionError,
-  payload: GetSessionPayload,
-  success: GetSessionResult,
-});
-
-export const CreateSessionRpc = Rpc.make("createSession", {
-  error: CreateSessionError,
-  payload: CreateSessionPayload,
-  success: CreateSessionResult,
-});
-
-export const ForkSessionRpc = Rpc.make("forkSession", {
-  error: ForkSessionError,
-  payload: ForkSessionPayload,
-  success: ForkSessionResult,
-});
 
 export const ListModelsRpc = Rpc.make("listModels", {
   error: ListModelsError,
@@ -50,10 +20,5 @@ export const ListComposerSuggestionsRpc = Rpc.make("listComposerSuggestions", {
   success: ListComposerSuggestionsResult,
 });
 
-export const RenameSessionRpc = Rpc.make("renameSession", {
-  error: RenameSessionError,
-  payload: RenameSessionPayload,
-  success: RenameSessionResult,
-});
-
-export const SessionRpcs = [GetSessionRpc, CreateSessionRpc, ForkSessionRpc, ListModelsRpc, ListComposerSuggestionsRpc, RenameSessionRpc] as const;
+/** Session lifecycle and execution are Chord services (`sessions/services`); these are project resources for the composer. */
+export const SessionRpcs = [ListModelsRpc, ListComposerSuggestionsRpc] as const;

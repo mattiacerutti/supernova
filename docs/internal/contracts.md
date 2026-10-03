@@ -8,6 +8,7 @@ Conventions for `packages/contracts`. See [Coding standards](coding-standards.md
 - Keep reusable domain schemas under `src/<domain>/schemas`.
 - Keep RPC-specific payload, result, and error schemas under `src/<domain>/procedures`.
 - Keep RPC definitions in `src/<domain>/rpc.ts`.
+- Keep Chord service contracts in `src/<domain>/services.ts`: the service tokens (`defineService`) and their TypeScript interfaces. Payloads reuse the procedure schemas' types. Expected failures are `ServiceResult` values carrying the contract error's tag, because the service protocol carries only its own error codes.
 
 ## Exports
 
@@ -18,6 +19,7 @@ These public contract entry points are the exception to the shared no-barrel rul
 - Import shared domain schemas from `@supernova/contracts/<domain>/schemas`.
 - Import RPC procedure contracts from `@supernova/contracts/<domain>/procedures`.
 - Import RPC definitions from `@supernova/contracts/<domain>/rpc`.
+- Import service contracts from `@supernova/contracts/<domain>/services`.
 
 ## Schema organization
 
@@ -34,5 +36,5 @@ These public contract entry points are the exception to the shared no-barrel rul
 
 ## Environment
 
-- Keep contracts environment-neutral and serializable.
+- Keep contracts environment-neutral and serializable. Pi and Chord types are imported type-only, except `defineService`, which only builds a token.
 - Do not add runtime ownership logic, filesystem access, subprocess access, or provider SDK logic here.

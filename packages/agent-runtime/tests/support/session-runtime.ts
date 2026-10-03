@@ -14,29 +14,20 @@ import {Sessions} from "@supernova/agent-runtime/features/sessions/sessions";
 import {Projects} from "@supernova/agent-runtime/features/projects/projects";
 import {SessionStore} from "@supernova/agent-runtime/pi/session-store";
 import {createSupernovaTools} from "@supernova/agent-runtime/features/session-runtime/tools/tools";
-import {EventBus} from "@supernova/agent-runtime/lib/event-bus";
-import {applyImmutable} from "@earendil-works/chord/delta";
-import type {SendMessagePayload, SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
+import type {SendMessagePayload} from "@supernova/contracts/session-runtime/procedures";
 import type {AssistantMessage, ModelReference, Session} from "@supernova/contracts/sessions/schemas";
+import type {SessionDirectoryState} from "@supernova/contracts/sessions/services";
 import {waitUntil} from "@tests/support/async";
 
 export {fauxAssistantMessage, fauxText, fauxThinking, fauxToolCall, waitUntil};
 
-export type StateEvent = Extract<SessionStreamEvent, {type: "session.state"}>;
-
-export function stateEvents(events: readonly SessionStreamEvent[]): StateEvent[] {
-  return events.filter((event): event is StateEvent => event.type === "session.state");
-}
-
-/** Every version a client starting from `base` sees, applying the stream's deltas in order as the web client does. */
-export function mirror(base: Session, events: readonly SessionStreamEvent[]): Session[] {
-  const versions = [base];
-  for (const event of stateEvents(events)) {
-    if (event.sessionId !== base.id || event.version <= versions.at(-1)!.version) continue;
-    if (event.version !== versions.at(-1)!.version + 1) throw new Error(`Delta ${event.version} skips a version after ${versions.at(-1)!.version}.`);
-    versions.push(applyImmutable(versions.at(-1)!, event.ops));
-  }
-  return versions;
+/** What one observer of a session saw: every transcript value delivered to it, and every directory value. */
+export interface Observation {
+  /** Transcript values in delivery order, starting with its value when observing began. */
+  readonly versions: Session[];
+  /** Directory values in delivery order, starting with its value when observing began. */
+  readonly board: SessionDirectoryState[];
+  readonly stop: () => void;
 }
 
 /** The authored content of each turn, in order. */
@@ -190,7 +181,6 @@ export async function createPiTestRuntime(input?: {
 
   // One settings object for every session, so a test can change it between turns as a user edits settings.json.
   const settings = SettingsManager.inMemory(input?.settings);
-  const events = new EventBus<SessionStreamEvent>();
   const checkpointStore = input?.checkpointStore ?? new FileCheckpointStore(checkpointStorageRoot);
   const tools = createSupernovaTools(modelRuntime);
   const store = new SessionStore({
@@ -201,38 +191,39 @@ export async function createPiTestRuntime(input?: {
     settings: () => settings,
     onReport: (sessionId, message) => runtime.reportError(sessionId, message),
   });
-  const runtime: SessionRuntime = new SessionRuntime({checkpointStore, events, resourceCache, sdk, store, titleGenerator});
+  const runtime: SessionRuntime = new SessionRuntime({checkpointStore, resourceCache, sdk, store, titleGenerator});
   const sessionsFeature = new Sessions({documents: runtime, resourceCache, sdk, store});
   const projects = new Projects({store});
 
-  /** Subscribes to runtime events and resolves once the stream has connected. Call `stop()` when done. */
-  const watchEvents = async (): Promise<{readonly events: SessionStreamEvent[]; readonly stop: () => Promise<void>}> => {
-    const events: SessionStreamEvent[] = [];
-    const watcher = runtime.watchEvents();
-    const pump = (async () => {
-      for await (const event of watcher) events.push(event);
-    })();
-    await waitUntil(() => {
-      if (!events.some((event) => event.type === "connected")) throw new Error("Stream did not connect.");
-    });
+  /**
+   * Observes a session as an attached client does: its transcript's replicated state, whose subscribers receive each
+   * Chord delta as a new value, and the session board.
+   */
+  const observe = async (sessionId: string): Promise<Observation> => {
+    const versions: Session[] = [];
+    const board: SessionDirectoryState[] = [];
+    const transcript = await runtime.transcript(sessionId);
+    const stopTranscript = transcript.state.subscribe((value) => void versions.push(value));
+    const stopBoard = runtime.board.state.subscribe((value) => void board.push(value));
     return {
-      events,
-      stop: async () => {
-        await watcher.return(undefined);
-        await pump;
+      versions,
+      board,
+      stop: () => {
+        stopTranscript();
+        stopBoard();
       },
     };
   };
 
-  /** Records runtime events while `run` executes, then waits for `settled(events)` to stop throwing. */
-  const collectEvents = async (run: () => Promise<unknown>, settled: (events: readonly SessionStreamEvent[]) => void): Promise<SessionStreamEvent[]> => {
-    const {events, stop} = await watchEvents();
+  /** Runs `work` while observing a session, then waits for `settled` to stop throwing. */
+  const observeWhile = async (sessionId: string, work: () => Promise<unknown>, settled: (observation: Observation) => void | Promise<void> = () => undefined) => {
+    const observation = await observe(sessionId);
     try {
-      await run();
-      await waitUntil(() => settled(events));
-      return events;
+      await work();
+      await waitUntil(() => settled(observation));
+      return observation;
     } finally {
-      await stop();
+      observation.stop();
     }
   };
 
@@ -245,25 +236,26 @@ export async function createPiTestRuntime(input?: {
     });
   };
 
+  /** The board's last problem for a session, or null. */
+  const lastError = (sessionId: string) => runtime.board.state.value.sessions[sessionId]?.error?.message ?? null;
+
   /**
-   * Sends a message and waits for its run to settle. Returns the stream's events and every version a client holding the
-   * session before the send saw.
+   * Sends a message and waits for its run to settle. Returns every transcript value an attached client received, and
+   * the final document.
    */
   const sendMessage = async (messageInput: Omit<SendMessagePayload, "contentParts"> & {readonly contentParts?: SendMessagePayload["contentParts"]; readonly message?: string}) => {
     const {message, ...payload} = messageInput;
-    const base = await runtime.current(payload.sessionId);
-    const {events, stop} = await watchEvents();
-    try {
-      await runtime.sendMessage({contentParts: message ? [{text: message, type: "text"}] : [], ...payload});
-      await settled(payload.sessionId);
-      const final = await runtime.current(payload.sessionId);
-      await waitUntil(() => {
-        if (mirror(base, events).at(-1)!.version !== final.version) throw new Error("The stream has not delivered the final version yet.");
-      });
-      return {events, versions: mirror(base, events), session: final};
-    } finally {
-      await stop();
-    }
+    const observation = await observeWhile(
+      payload.sessionId,
+      async () => {
+        await runtime.sendMessage({contentParts: message ? [{text: message, type: "text"}] : [], ...payload});
+        await settled(payload.sessionId);
+      },
+      async (seen) => {
+        if (seen.versions.at(-1) !== (await runtime.current(payload.sessionId))) throw new Error("The final value was not delivered yet.");
+      }
+    );
+    return {versions: observation.versions, board: observation.board, session: observation.versions.at(-1)!, error: lastError(payload.sessionId)};
   };
 
   /** Creates an empty session under `projectPath`. */
@@ -293,7 +285,9 @@ export async function createPiTestRuntime(input?: {
     agent,
     appendConversation,
     createSession,
-    collectEvents,
+    lastError,
+    observe,
+    observeWhile,
     defaultProjectRoot,
     store,
     faux,
@@ -315,7 +309,6 @@ export async function createPiTestRuntime(input?: {
     sessions: sessionsFeature,
     titleGenerator,
     turnRecords,
-    watchEvents,
     unregister: async () => {
       await runtime.dispose();
       faux.unregister();

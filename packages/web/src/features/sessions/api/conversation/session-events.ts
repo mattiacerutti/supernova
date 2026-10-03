@@ -1,89 +1,55 @@
 import type {QueryClient} from "@tanstack/react-query";
 import type {ProjectSessionsListResult} from "@supernova/contracts/projects/procedures";
-import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
 import type {Session, SessionSummary} from "@supernova/contracts/sessions/schemas";
-import {applyImmutable} from "@earendil-works/chord/delta";
-import {Effect, Stream} from "effect";
+import type {SessionDirectoryEntry, SessionDirectoryState} from "@supernova/contracts/sessions/services";
 import {sessionKeys} from "@/features/sessions/api/query-keys";
 import {useSessionLiveStore} from "@/features/sessions/stores/conversation/session-live-store";
 import {useSessionVisitsStore} from "@/features/sessions/stores/sidebar/session-visits-store";
-import type {RpcClient, RpcClientFiber} from "@/rpc/transport/protocol";
-
-let connectionGeneration = 0;
-let fiber: RpcClientFiber | null = null;
-let isConnecting = false;
-let reconnectTimer: number | null = null;
+import type {SessionServicesClient} from "@/rpc/transport/session-services";
 
 /** Upserts session metadata into cached project session lists. */
-function applyProjectSessionSummary(input: {projectPath: string; queryClient: QueryClient; sessionId: string; summary: SessionSummary}): void {
-  const {projectPath, queryClient, sessionId, summary} = input;
+function applyProjectSessionSummary(input: {projectPath: string; queryClient: QueryClient; summary: SessionSummary}): void {
+  const {projectPath, queryClient, summary} = input;
   queryClient.setQueriesData<ProjectSessionsListResult>({queryKey: sessionKeys.list(projectPath)}, (result) => {
     if (!result) return result;
 
-    const sessionExists = result.sessions.some((session) => session.id === sessionId);
-    const sessions = sessionExists ? result.sessions.map((session) => (session.id === sessionId ? {...session, ...summary} : session)) : [summary, ...result.sessions];
+    const current = result.sessions.find((session) => session.id === summary.id);
+    if (current && JSON.stringify(current) === JSON.stringify({...current, ...summary})) return result;
+    const sessions = current ? result.sessions.map((session) => (session.id === summary.id ? {...session, ...summary} : session)) : [summary, ...result.sessions];
     return {...result, sessions};
   });
 }
 
-/**
- * Applies a Chord delta to the cached session document. It applies only to the version it was made from; a cached
- * document further behind (or a placeholder) is refetched, and stale or duplicate deltas are ignored.
- */
-function applySessionState(input: {event: Extract<SessionStreamEvent, {type: "session.state"}>; queryClient: QueryClient}): void {
-  const {event, queryClient} = input;
-  const queryKey = sessionKeys.detail(event.sessionId);
-  const cached = queryClient.getQueryData<Session>(queryKey);
-  if (!cached || cached.version >= event.version) return;
-  if (cached.version !== event.version - 1) {
-    void queryClient.invalidateQueries({exact: true, queryKey});
-    return;
-  }
-
-  const session = applyImmutable(cached, event.ops);
-  void queryClient.cancelQueries({exact: true, queryKey});
-  queryClient.setQueryData<Session>(queryKey, session);
-  useSessionLiveStore.getState().settlePending(event.sessionId, Object.keys(session.turns).length);
-  // Activity in the open session is seen as it happens; stamping the activity time keeps a later completion unseen.
-  if (session.updatedAt !== cached.updatedAt && useSessionLiveStore.getState().activeSessionId === session.id) {
+/** Writes a value of the attached session's transcript into its cached document; the open session's activity is seen. */
+function applyTranscript(input: {queryClient: QueryClient; session: Session}): void {
+  const {queryClient, session} = input;
+  const previous = queryClient.getQueryData<Session>(sessionKeys.detail(session.id));
+  void queryClient.cancelQueries({exact: true, queryKey: sessionKeys.detail(session.id)});
+  queryClient.setQueryData<Session>(sessionKeys.detail(session.id), session);
+  useSessionLiveStore.getState().settlePending(session.id, Object.keys(session.turns).length);
+  // Stamping the activity time rather than now keeps a later completion unseen.
+  if (session.updatedAt !== previous?.updatedAt && useSessionLiveStore.getState().activeSessionId === session.id) {
     useSessionVisitsStore.getState().markSessionVisited(session.id, session.updatedAt);
-  }
-  if (session.title !== cached.title || session.updatedAt !== cached.updatedAt) {
-    applyProjectSessionSummary({
-      projectPath: session.projectPath,
-      queryClient,
-      sessionId: session.id,
-      summary: {id: session.id, forked: session.forked, title: session.title, updatedAt: session.updatedAt, worktree: session.worktree !== undefined},
-    });
   }
 }
 
-/** Applies query-cache changes after the live store accepts an event revision. */
-function applyEvent(input: {event: SessionStreamEvent; queryClient: QueryClient}): void {
-  const {event, queryClient} = input;
-
-  if (event.type === "connected") {
-    useSessionLiveStore.getState().resetRevisions();
-    void queryClient.invalidateQueries({queryKey: sessionKeys.all});
-    return;
+/** Applies one directory value: live state of every session the server has open, and their listing summaries. */
+function applyDirectory(input: {previous: SessionDirectoryState | undefined; queryClient: QueryClient; value: SessionDirectoryState}): void {
+  const {previous, queryClient, value} = input;
+  useSessionLiveStore.getState().applyDirectory(value);
+  for (const [sessionId, entry] of Object.entries(value.sessions)) {
+    if (!entry.summary || previous?.sessions[sessionId]?.summary === entry.summary) continue;
+    applyProjectSessionSummary({projectPath: entry.projectPath, queryClient, summary: entry.summary});
+    queryClient.setQueryData<Session>(sessionKeys.detail(sessionId), (session) =>
+      session ? {...session, title: entry.summary!.title, updatedAt: entry.summary!.updatedAt} : session
+    );
   }
-
-  if (!("revision" in event)) return;
-
-  const current = useSessionLiveStore.getState().sessions[event.sessionId];
-  if (current && event.revision <= current.revision) return;
-
-  if (event.type === "session.state") {
-    applySessionState({event, queryClient});
-  } else if (event.type === "session.updated") {
-    applyProjectSessionSummary({projectPath: event.projectPath, queryClient, sessionId: event.sessionId, summary: event.summary});
-  }
-
-  useSessionLiveStore.getState().applyEvent(event);
 }
 
 export interface SessionEventContext {
-  readonly event: SessionStreamEvent;
+  readonly sessionId: string;
+  readonly entry: SessionDirectoryEntry;
+  readonly previous: SessionDirectoryEntry | undefined;
   readonly queryClient: QueryClient;
   /** Folder the session's agent runs in (its worktree or project), when the session is cached. */
   readonly workspacePath: string | undefined;
@@ -91,64 +57,74 @@ export interface SessionEventContext {
 
 interface ConnectSessionEventsInput {
   readonly queryClient: QueryClient;
-  readonly rpcClient: RpcClient;
-  /** Runs after the session caches are updated; other features react to the stream here. */
+  readonly services: SessionServicesClient;
+  /** Runs after the session caches are updated for every changed directory entry; other features react here. */
   readonly onEvent?: (context: SessionEventContext) => void;
+  /** Runs when the connection was re-established; state may have been missed. */
+  readonly onReconnect?: () => void;
 }
 
-/** Connects the global session event stream and returns its cleanup. */
+/**
+ * Follows the server's replicated session state: the directory for every session, and the transcript of the session
+ * the live store has open. Returns the cleanup.
+ */
 export function connectSessionEvents(input: ConnectSessionEventsInput): () => void {
-  if (fiber || isConnecting) return () => undefined;
+  const {onEvent, onReconnect, queryClient, services} = input;
+  let previous: SessionDirectoryState | undefined;
+  const stopDirectory = services.directory.subscribe((value) => {
+    applyDirectory({previous, queryClient, value});
+    for (const [sessionId, entry] of Object.entries(value.sessions)) {
+      const before = previous?.sessions[sessionId];
+      if (before === entry) continue;
+      const session = queryClient.getQueryData<Session>(sessionKeys.detail(sessionId));
+      onEvent?.({entry, previous: before, queryClient, sessionId, workspacePath: session && (session.worktree?.path ?? session.projectPath)});
+    }
+    previous = value;
+  });
 
-  const generation = ++connectionGeneration;
-  const start = (): void => {
-    if (generation !== connectionGeneration || fiber || isConnecting) return;
-    isConnecting = true;
+  let reconnecting = false;
+  const stopConnection = services.onConnectionChange((state) => {
+    if (state === "disconnected") reconnecting = true;
+    if (state !== "connected" || !reconnecting) return;
+    reconnecting = false;
+    void queryClient.invalidateQueries({queryKey: sessionKeys.all});
+    onReconnect?.();
+  });
 
-    void input.rpcClient
-      .fork((rpc) =>
-        rpc.watchEvents().pipe(
-          Stream.runForEach((event) =>
-            Effect.sync(() => {
-              if (generation !== connectionGeneration) return;
-              applyEvent({event, queryClient: input.queryClient});
-              const session = "sessionId" in event ? input.queryClient.getQueryData<Session>(sessionKeys.detail(event.sessionId)) : undefined;
-              input.onEvent?.({event, queryClient: input.queryClient, workspacePath: session && (session.worktree?.path ?? session.projectPath)});
-            })
-          )
-        )
-      )
-      .then((newFiber) => {
-        if (generation !== connectionGeneration) {
-          void newFiber.interrupt();
-          return;
-        }
-
-        isConnecting = false;
-        fiber = newFiber;
-        void newFiber.completed.then(() => {
-          if (generation !== connectionGeneration || fiber !== newFiber) return;
-          fiber = null;
-          reconnectTimer = window.setTimeout(start, 1_000);
+  // The open session's transcript: attach when it changes, write every value into its cached document.
+  let attached: {readonly sessionId: string; readonly stop: () => void} | undefined;
+  const follow = (sessionId: string | null): void => {
+    if (attached?.sessionId === sessionId) return;
+    attached?.stop();
+    attached = undefined;
+    if (!sessionId) return;
+    let stopped = false;
+    let stopTranscript: (() => void) | undefined;
+    attached = {
+      sessionId,
+      stop: () => {
+        stopped = true;
+        stopTranscript?.();
+      },
+    };
+    void services.attach(sessionId).then(
+      ({transcript}) => {
+        if (stopped) return;
+        stopTranscript = transcript.subscribe((session) => {
+          if (session.id === sessionId) applyTranscript({queryClient, session});
         });
-      })
-      .catch(() => {
-        if (generation !== connectionGeneration) return;
-        isConnecting = false;
-        fiber = null;
-        reconnectTimer = window.setTimeout(start, 1_000);
-      });
+      },
+      // A session that is not durable (legacy, or still being created) has no transcript; its read stays as it is.
+      () => undefined
+    );
   };
-
-  start();
+  follow(useSessionLiveStore.getState().activeSessionId);
+  const stopFollowing = useSessionLiveStore.subscribe((state) => follow(state.activeSessionId));
 
   return () => {
-    connectionGeneration += 1;
-    if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
-
-    reconnectTimer = null;
-    isConnecting = false;
-    void fiber?.interrupt();
-    fiber = null;
+    stopDirectory();
+    stopConnection();
+    stopFollowing();
+    attached?.stop();
   };
 }

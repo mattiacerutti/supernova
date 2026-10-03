@@ -104,7 +104,6 @@ export async function loadLegacySession(sessionId: string): Promise<Session | un
   const {projectPath, worktree} = workspaceOf(manager);
   return {
     id: sessionId,
-    version: 0,
     title: titleOf(manager, firstText),
     forked: manager.getEntries().some((entry) => entry.type === "custom" && entry.customType === FORK_TYPE) || manager.getHeader()?.parentSession !== undefined,
     projectPath,

@@ -68,7 +68,6 @@ function historySession(input: {readonly historyTurnCount: number; readonly id: 
 
   return {
     id: input.id,
-    version: 1,
     title: input.title,
     forked: false,
     projectPath: TIMELINE_PROJECT_PATH,

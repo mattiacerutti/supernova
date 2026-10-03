@@ -32,7 +32,7 @@ export async function sendMessage(runtime: SessionWorker, titleGenerator: TitleG
         // A user rename that lands first wins.
         if (!title || (await runtime.store.record(runtime.sessionId)).title !== undefined) return;
         await runtime.store.update(runtime.sessionId, (current) => ({...current, title}));
-        await runtime.publishSessionUpdate();
+        await runtime.refresh();
       })
     );
   }
@@ -59,11 +59,7 @@ export async function sendMessage(runtime: SessionWorker, titleGenerator: TitleG
     (settled) => {
       // Aborts are user-initiated; model errors show in the turn itself as assistant errors.
       if (settled.status === "unanswered" && settled.reason !== "aborted" && settled.reason !== "model_error") {
-        runtime.publishEvent({
-          type: "session.error",
-          sessionId: runtime.sessionId,
-          error: typeof settled.detail === "string" ? settled.detail : `The message was not answered (${settled.reason}).`,
-        });
+        runtime.reportError(typeof settled.detail === "string" ? settled.detail : `The message was not answered (${settled.reason}).`);
       }
     },
     // Closing the session (archive, shutdown) ends the wait, not the work: the turn resumes when it opens again.

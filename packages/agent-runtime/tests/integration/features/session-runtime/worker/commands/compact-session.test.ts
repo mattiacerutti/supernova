@@ -1,5 +1,5 @@
 import {afterEach, describe, expect, it} from "vitest";
-import {createPiTestRuntime, fauxAssistantMessage, mirror, selectedModelReference, selectedPiModel, stateEvents} from "@tests/support/session-runtime";
+import {createPiTestRuntime, fauxAssistantMessage, selectedModelReference, selectedPiModel} from "@tests/support/session-runtime";
 
 describe("manual Pi session compaction", () => {
   const runtimes: Array<{unregister: () => Promise<void>}> = [];
@@ -16,15 +16,15 @@ describe("manual Pi session compaction", () => {
     await pi.appendConversation(info.id, {requestText: "Older request", assistantText: "Older response."});
     await pi.appendConversation(info.id, {requestText: "x".repeat(selectedPiModel.contextWindow * 4), assistantText: "Old response."});
     pi.faux.setResponses([fauxAssistantMessage("Manual compacted summary.")]);
-    const base = await pi.sessions.get({sessionId: info.id});
-    const events = await pi.collectEvents(
+    const observation = await pi.observeWhile(
+      info.id,
       () => pi.sessionRuntime.compact({modelReference: selectedModelReference, sessionId: info.id}),
-      (events) => {
-        if (stateEvents(events).at(-1)?.activity !== "idle" || !stateEvents(events).some((event) => event.activity === "compacting"))
-          throw new Error("Compaction has not settled.");
+      (seen) => {
+        const activities = seen.board.map((value) => value.sessions[info.id]?.activity);
+        if (activities.at(-1) !== "idle" || !activities.includes("compacting")) throw new Error("Compaction has not settled.");
       }
     );
-    const final = mirror(base, events).at(-1)!;
+    const final = observation.versions.at(-1)!;
 
     expect(final).toEqual(await pi.sessions.get({sessionId: info.id}));
     expect(final.context).toEqual({contextWindow: selectedPiModel.contextWindow, usedTokens: null});

@@ -1,4 +1,3 @@
-import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
 import {Configuration} from "@supernova/agent-runtime/features/configuration/configuration";
 import {Extensions} from "@supernova/agent-runtime/features/extensions/extensions";
 import {Folders} from "@supernova/agent-runtime/features/folders/folders";
@@ -14,7 +13,6 @@ import {createSpawnPty} from "@supernova/agent-runtime/features/workspace/termin
 import {Terminals} from "@supernova/agent-runtime/features/workspace/terminals/terminals";
 import {Workspace} from "@supernova/agent-runtime/features/workspace/workspace";
 import {Worktrees} from "@supernova/agent-runtime/features/worktrees/worktrees";
-import {EventBus} from "@supernova/agent-runtime/lib/event-bus";
 import {SessionStore} from "@supernova/agent-runtime/pi/session-store";
 import {createResourceCache} from "@supernova/agent-runtime/pi/resource-cache";
 import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";
@@ -49,7 +47,6 @@ interface CreateAgentRuntimeOptions {
 export async function createAgentRuntime(options: CreateAgentRuntimeOptions = {}): Promise<AgentRuntime> {
   const sdk = options.sdk ?? (await createPiSdk());
   const resourceCache = createResourceCache(sdk);
-  const events = new EventBus<SessionStreamEvent>();
   const checkpointStore = new FileCheckpointStore(options.checkpointStorageRoot);
   const supernovaTools = createSupernovaTools(sdk.modelRuntime);
   const store = new SessionStore({
@@ -57,10 +54,10 @@ export async function createAgentRuntime(options: CreateAgentRuntimeOptions = {}
     resourceCache,
     tools: () => supernovaTools,
     root: options.sessionStorageRoot,
-    // Reports do not fail the command that hit them; they reach the client as session errors.
+    // Reports do not fail the command that hit them; they reach clients through the session board.
     onReport: (sessionId, message) => sessionRuntime.reportError(sessionId, message),
   });
-  const sessionRuntime: SessionRuntime = new SessionRuntime({checkpointStore, events, resourceCache, sdk, store, titleGenerator: createTitleGenerator(sdk)});
+  const sessionRuntime: SessionRuntime = new SessionRuntime({checkpointStore, resourceCache, sdk, store, titleGenerator: createTitleGenerator(sdk)});
 
   const terminals = new Terminals({spawnPty: createSpawnPty()});
 

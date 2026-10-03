@@ -26,6 +26,7 @@
     "@earendil-works/pi-ai": "1.0.0",
     "@earendil-works/pi-coding-agent": "1.0.0",
     "@earendil-works/pi-durable": "1.0.0",
+    "@earendil-works/pi-server": "1.0.0",
     "@lydell/node-pty": "1.2.0-beta.15",
     "@supernova/contracts": "workspace:*",
     "effect": "4.0.0-beta.60",
@@ -36,6 +37,7 @@
     "undici": "8.10.2"
   },
   "devDependencies": {
+    "@earendil-works/pi-client": "1.0.0",
     "@types/node": "^22.19.1",
     "@types/turndown": "^5.0.6",
     "eslint": "^10.3.0",

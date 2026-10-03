@@ -20,7 +20,7 @@ src/
   features/     product areas: projects, sessions, settings, updates, workspace
   hooks/        shared hooks
   lib/          helpers used across features (cn, toast, project-paths) and preconfigured dependencies (diffs/, themes/)
-  rpc/          transport and Effect RPC client
+  rpc/          transports: the Effect RPC client, and the Chord session service client (session-services.ts)
   stores/       app-wide Zustand stores
 ```
 
@@ -81,6 +81,7 @@ A helper earns a place in `lib/` when several features use it. Something used by
 
 ### RPC hooks
 
+- Sessions come from the session service client (`useSessionServices`): `SessionManagement` for lifecycle and reads, the attached session's `SessionController` for commands, and its transcript's replicated state, which `api/conversation/session-events.ts` writes into the session's React Query entry. Service calls return `ServiceResult`s; unwrap them inside the `api/` hook or store action.
 - Use `effect-query` for RPC-backed React Query hooks, inside the feature's `api/` folder.
 - Prefer `eq.queryOptions` and `eq.mutationOptions` over manually wrapping RPC calls with an imperative client runner.
 - Get the RPC client from `RpcProtocolClientService` so typed RPC failures are preserved.
@@ -101,7 +102,7 @@ See [Development](development.md#verification) for verification and the test wor
 - Keep Zustand stores feature-scoped under `src/features/<feature>/stores`; app-wide state (settings, sidebar) lives in `src/stores`.
 - Derive values from store state when possible instead of duplicating derived state.
 - Store actions take data and change state. They do not take callbacks, navigate, show toasts, or otherwise reach into the UI; a component reads store state and reacts to it.
-- `session-live-store` and `api/conversation/session-events` are bound to the transport and already do network I/O and optimistic updates. Add behavior around them, in a hook or at the page, not inside them.
+- `session-live-store` and `api/conversation/session-events` are bound to the session services and already do network I/O and optimistic updates. Add behavior around them, in a hook or at the page, not inside them.
 
 ## UI language and design style
 

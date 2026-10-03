@@ -2,7 +2,7 @@ import type {ModelReference, SessionWorkspaceSelection, UserMessageContentPart} 
 import {useQueryClient} from "@tanstack/react-query";
 import type {CheckpointNavigationOutcome, StartSessionOutcome} from "@/features/sessions/stores/conversation/session-live-store";
 import {useSessionLiveStore} from "@/features/sessions/stores/conversation/session-live-store";
-import {useRpcClient} from "@/rpc/use-rpc-client";
+import {useSessionServices} from "@/rpc/use-session-services";
 
 interface SendMessageInput {
   readonly contentParts: readonly UserMessageContentPart[];
@@ -52,7 +52,7 @@ export interface SessionActions {
  */
 export function useSessionActions(): SessionActions {
   const queryClient = useQueryClient();
-  const rpcClient = useRpcClient();
+  const services = useSessionServices();
   const abortSession = useSessionLiveStore((state) => state.abortSession);
   const compactSession = useSessionLiveStore((state) => state.compactSession);
   const redoCheckpoint = useSessionLiveStore((state) => state.redoCheckpoint);
@@ -62,12 +62,12 @@ export function useSessionActions(): SessionActions {
   const undoCheckpoint = useSessionLiveStore((state) => state.undoCheckpoint);
 
   return {
-    abortSession: (input) => abortSession({...input, rpcClient}),
-    compactSession: (input) => compactSession({...input, rpcClient}),
-    redoCheckpoint: (input) => redoCheckpoint({...input, queryClient, rpcClient}),
-    revertToMessage: (input) => revertToMessage({...input, queryClient, rpcClient}),
-    sendMessage: (input) => sendMessage({...input, queryClient, rpcClient}),
-    startSession: (input) => startSession({...input, queryClient, rpcClient}),
-    undoCheckpoint: (input) => undoCheckpoint({...input, queryClient, rpcClient}),
+    abortSession: (input) => abortSession({...input, services}),
+    compactSession: (input) => compactSession({...input, services}),
+    redoCheckpoint: (input) => redoCheckpoint({...input, queryClient, services}),
+    revertToMessage: (input) => revertToMessage({...input, queryClient, services}),
+    sendMessage: (input) => sendMessage({...input, queryClient, services}),
+    startSession: (input) => startSession({...input, queryClient, services}),
+    undoCheckpoint: (input) => undoCheckpoint({...input, queryClient, services}),
   };
 }

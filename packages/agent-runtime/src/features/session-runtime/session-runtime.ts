@@ -5,7 +5,6 @@ import type {
   RevertToMessagePayload,
   SendMessagePayload,
   SessionSetupStep,
-  SessionStreamEvent,
   UndoCheckpointPayload,
 } from "@supernova/contracts/session-runtime/procedures";
 import type {Session} from "@supernova/contracts/sessions/schemas";
@@ -16,9 +15,10 @@ import {redoCheckpoint} from "@supernova/agent-runtime/features/session-runtime/
 import {revertToMessage} from "@supernova/agent-runtime/features/session-runtime/worker/commands/revert-to-message";
 import {sendMessage} from "@supernova/agent-runtime/features/session-runtime/worker/commands/send-message";
 import {undoCheckpoint} from "@supernova/agent-runtime/features/session-runtime/worker/commands/undo-checkpoint";
+import {SessionBoard} from "@supernova/agent-runtime/features/session-runtime/worker/session-board";
 import {SessionWorker} from "@supernova/agent-runtime/features/session-runtime/worker/session-worker";
 import type {TitleGenerator} from "@supernova/agent-runtime/features/session-runtime/worker/title-generator";
-import type {EventBus} from "@supernova/agent-runtime/lib/event-bus";
+import type {DocumentState} from "@supernova/agent-runtime/lib/document-state";
 import {LegacySessionError, isLegacySession} from "@supernova/agent-runtime/pi/lib/session/legacy-sessions";
 import type {ResourceCache} from "@supernova/agent-runtime/pi/resource-cache";
 import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";
@@ -26,35 +26,19 @@ import type {SessionStore} from "@supernova/agent-runtime/pi/session-store";
 
 export interface SessionRuntimeDeps {
   readonly checkpointStore: CheckpointStore;
-  readonly events: EventBus<SessionStreamEvent>;
   readonly resourceCache: ResourceCache;
   readonly sdk: Pick<PiSdk, "modelRuntime">;
   readonly store: SessionStore;
   readonly titleGenerator: TitleGenerator;
 }
 
-/** `first`, then everything from `rest`. Returning the result closes `rest`. */
-function prepend<T>(first: T, rest: AsyncGenerator<T, void, undefined>): AsyncGenerator<T, void, undefined> {
-  let started = false;
-  return {
-    next: () => {
-      if (started) return rest.next();
-      started = true;
-      return Promise.resolve({done: false, value: first});
-    },
-    return: () => rest.return(),
-    throw: (error) => rest.throw(error),
-    [Symbol.asyncIterator]() {
-      return this;
-    },
-  };
-}
-
 /**
- * Live session execution: sending, aborting, compacting, checkpoint navigation, and the event stream. Keeps one
+ * Live session execution: sending, aborting, compacting, checkpoint navigation, and each session's state. Keeps one
  * `SessionWorker` per session in use; the engine owns execution, the workers publish it.
  */
 export class SessionRuntime {
+  /** Activity, summaries, setup steps, and problems of every session in use, for clients that have not attached one. */
+  public readonly board = new SessionBoard();
   private readonly workers = new Map<string, SessionWorker>();
 
   public constructor(private readonly deps: SessionRuntimeDeps) {}
@@ -91,9 +75,14 @@ export class SessionRuntime {
     });
   }
 
-  /** A durable session's document at its latest published version; `session.state` deltas continue from it. */
+  /** A durable session's document at its latest published revision. */
   public async current(sessionId: string): Promise<Session> {
     return (await this.worker(sessionId)).current();
+  }
+
+  /** A durable session's document as replicated state, for attached clients. */
+  public async transcript(sessionId: string): Promise<DocumentState<Session>> {
+    return (await this.worker(sessionId)).transcript();
   }
 
   /** Rebuilds a session's document after a change outside the engine (a rename) and publishes it. */
@@ -106,14 +95,14 @@ export class SessionRuntime {
     return this.deps.store.reload();
   }
 
-  /** Marks a setup step of a session being created; see `SessionSetupStep`. */
-  public publishSetup(input: {readonly phase: "started" | "ended"; readonly sessionId: string; readonly step: SessionSetupStep}): void {
-    this.workerFor(input.sessionId).publishEvent({type: `session.setup.${input.phase}`, sessionId: input.sessionId, step: input.step});
+  /** Marks the setup step of a session being created under `projectPath`, or its end; see `SessionSetupStep`. */
+  public setSetupStep(input: {readonly projectPath: string; readonly sessionId: string; readonly step: SessionSetupStep | null}): void {
+    this.board.update(input.sessionId, input.projectPath, {setupStep: input.step});
   }
 
   /** Reports a problem that did not fail a command, such as an extension diagnostic. */
   public reportError(sessionId: string, error: string): void {
-    this.workerFor(sessionId).publishEvent({type: "session.error", sessionId, error});
+    this.workerFor(sessionId).reportError(error);
   }
 
   /** Stops the session's work, closes it, and drops its checkpoints; used before a session is archived. `workspacePath` is where the agent ran. */
@@ -122,13 +111,9 @@ export class SessionRuntime {
     this.workers.delete(input.sessionId);
     await worker?.abort();
     await worker?.dispose();
+    this.board.remove(input.sessionId);
     await this.deps.store.release(input.sessionId);
     await this.deps.checkpointStore.deleteSession({projectRoot: input.workspacePath, sessionId: input.sessionId});
-  }
-
-  /** A `connected` marker followed by every runtime event, until the consumer stops iterating. Subscribes immediately. */
-  public watchEvents(): AsyncGenerator<SessionStreamEvent, void, undefined> {
-    return prepend({type: "connected"}, this.deps.events.subscribe());
   }
 
   /** Stops every worker and closes every session file; interrupted work resumes at the next start. */
@@ -150,8 +135,8 @@ export class SessionRuntime {
   private workerFor(sessionId: string): SessionWorker {
     let worker = this.workers.get(sessionId);
     if (!worker) {
-      const {checkpointStore, events, resourceCache, sdk, store} = this.deps;
-      worker = new SessionWorker({checkpointStore, eventBus: events, resourceCache, sdk, sessionId, store});
+      const {checkpointStore, resourceCache, sdk, store} = this.deps;
+      worker = new SessionWorker({board: this.board, checkpointStore, resourceCache, sdk, sessionId, store});
       this.workers.set(sessionId, worker);
     }
     return worker;

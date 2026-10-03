@@ -12,7 +12,7 @@ export async function compactSession(runtime: SessionWorker, input: CompactSessi
     // Its progress reaches clients through `pi.live.compactions` in the session's state.
     await session.compact();
   } catch (cause) {
-    runtime.publishEvent({type: "session.error", sessionId: runtime.sessionId, error: cause instanceof Error ? cause.message : "Failed to compact session."});
+    runtime.reportError(cause instanceof Error ? cause.message : "Failed to compact session.");
   } finally {
     runtime.endWork();
   }

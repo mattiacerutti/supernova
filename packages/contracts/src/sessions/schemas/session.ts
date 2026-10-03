@@ -19,14 +19,12 @@ export const SessionTurnRecord = Schema.Struct({
 });
 
 /**
- * A session as Pi holds it, plus what Supernova adds. The server keeps one such document per session and streams
- * changes to it as Chord deltas (`session.state`); `version` counts them.
+ * A session as Pi holds it, plus what Supernova adds. The server keeps one such document per session as Chord
+ * replicated state (`SessionTranscript`), which reaches attached clients as deltas.
  */
 export const Session = Schema.Struct({
   /** Stable session identifier. */
   id: Schema.String,
-  /** Number of `session.state` deltas this value includes; the next applies to it only if it is `version + 1`. */
-  version: Schema.Number,
   /** Human-readable session title. */
   title: Schema.String,
   /** Whether the session was forked from another session. */

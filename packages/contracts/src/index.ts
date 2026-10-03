@@ -4,7 +4,6 @@ import {ExtensionRpcs} from "@supernova/contracts/extensions/rpc";
 import {FolderRpcs} from "@supernova/contracts/folders/rpc";
 import {ProjectRpcs} from "@supernova/contracts/projects/rpc";
 import {ProviderRpcs} from "@supernova/contracts/providers/rpc";
-import {SessionRuntimeRpcs} from "@supernova/contracts/session-runtime/rpc";
 import {SessionRpcs} from "@supernova/contracts/sessions/rpc";
 import {TerminalRpcs} from "@supernova/contracts/terminals/rpc";
 import {WorkspaceRpcs} from "@supernova/contracts/workspace/rpc";
@@ -14,7 +13,6 @@ export * from "@supernova/contracts/extensions/rpc";
 export * from "@supernova/contracts/folders/rpc";
 export * from "@supernova/contracts/projects/rpc";
 export * from "@supernova/contracts/providers/rpc";
-export * from "@supernova/contracts/session-runtime/rpc";
 export * from "@supernova/contracts/sessions/rpc";
 export * from "@supernova/contracts/terminals/rpc";
 export * from "@supernova/contracts/workspace/rpc";
@@ -26,7 +24,6 @@ export const AgentRpcGroup = RpcGroup.make(
   ...ProjectRpcs,
   ...ProviderRpcs,
   ...SessionRpcs,
-  ...SessionRuntimeRpcs,
   ...TerminalRpcs,
   ...WorkspaceRpcs
 );

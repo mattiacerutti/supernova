@@ -1,5 +1,5 @@
 import {Schema} from "effect";
-import {OutgoingMessage, Session, SessionWorkspaceSelection} from "../schemas";
+import {OutgoingMessage, SessionWorkspaceSelection} from "../schemas";
 
 export const CreateSessionPayload = Schema.Struct({
   /** Client-chosen id for the new session; must be unused. The client mints it so the session can be shown before the server replies. */
@@ -11,12 +11,9 @@ export const CreateSessionPayload = Schema.Struct({
   workspace: Schema.optional(SessionWorkspaceSelection),
 });
 
-export const CreateSessionResult = Session;
-
 export class CreateSessionError extends Schema.TaggedErrorClass<CreateSessionError>()("CreateSessionError", {
   cause: Schema.optional(Schema.Defect),
   message: Schema.String,
 }) {}
 
 export type CreateSessionPayload = typeof CreateSessionPayload.Type;
-export type CreateSessionResult = typeof CreateSessionResult.Type;

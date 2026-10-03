@@ -1,14 +1,18 @@
-import {useQuery, useQueryClient} from "@tanstack/react-query";
+import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
+import {queryOptions, useQuery, useQueryClient} from "@tanstack/react-query";
 import type {Session} from "@supernova/contracts/sessions/schemas";
-import {Effect} from "effect";
 import {useSyncExternalStore} from "react";
 import {sessionKeys} from "@/features/sessions/api/query-keys";
-import {eq} from "@/rpc/effect-query";
-import {RpcProtocolClientService} from "@/rpc/transport/client";
+import type {SessionServicesClient} from "@/rpc/transport/session-services";
+import {useSessionServices} from "@/rpc/use-session-services";
 
-export function getSessionQueryOptions(sessionId: string) {
-  return eq.queryOptions({
-    queryFn: () => Effect.flatMap(Effect.service(RpcProtocolClientService), (rpc) => rpc.getSession({sessionId})),
+export function getSessionQueryOptions(services: SessionServicesClient, sessionId: string) {
+  return queryOptions({
+    queryFn: async (): Promise<Session> => {
+      const result = await services.management.read({sessionId}, BACKGROUND_CONTEXT);
+      if (!result.ok) throw new Error(result.error.message);
+      return result.value;
+    },
     queryKey: sessionKeys.detail(sessionId),
     refetchOnWindowFocus: false,
   });
@@ -19,11 +23,15 @@ interface UseSessionOptions {
   readonly enabled?: boolean;
 }
 
-/** Loads a session and observes cache writes synchronously with live-store transitions. */
+/**
+ * Loads a session and observes cache writes synchronously with live-store transitions. While the session is open,
+ * its transcript's replicated state keeps the cache current (see `session-events`).
+ */
 export function useSession(sessionId: string, options: UseSessionOptions = {}) {
   const queryClient = useQueryClient();
-  const {queryKey} = getSessionQueryOptions(sessionId);
-  const {error} = useQuery({...getSessionQueryOptions(sessionId), enabled: options.enabled !== false});
+  const services = useSessionServices();
+  const {queryKey} = getSessionQueryOptions(services, sessionId);
+  const {error} = useQuery({...getSessionQueryOptions(services, sessionId), enabled: options.enabled !== false});
   const getSession = () => queryClient.getQueryData<Session>(queryKey);
   const session = useSyncExternalStore((onStoreChange) => queryClient.getQueryCache().subscribe(onStoreChange), getSession, getSession);
 

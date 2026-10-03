@@ -4,7 +4,7 @@ Conventions for `packages/agent-runtime`. See [Coding standards](coding-standard
 
 ## Boundaries
 
-The package is plain TypeScript. Effect exists in `rpc/` only, because the wire protocol and contract schemas are Effect. Do not import `effect` anywhere else; `effect/Schema` is allowed for validating against contracts.
+The package is plain TypeScript. Effect exists in `rpc/` only, because the RPC protocol and contract schemas are Effect. Do not import `effect` anywhere else; `effect/Schema` is allowed for validating against contracts. Chord (`@earendil-works/chord`) is plain TypeScript and may be used where replicated state is published (`lib/document-state.ts`, `session-runtime`); `@earendil-works/pi-server` appears only in `rpc/session-services.ts`.
 
 Dependencies flow one way: `lib/` ← `pi/` ← `features/` ← `runtime.ts` ← `rpc/`. A feature never depends on another feature, by import or by injection: it does not import one, and its `Deps` does not name one or declare an interface another feature's class happens to satisfy. `pi/` and `lib/` never import a feature. ESLint enforces the import half; the injection half is on you.
 
@@ -14,9 +14,10 @@ Shared serializable contracts belong in `@supernova/contracts`. UI and HTTP rout
 
 ```
 src/
-  index.ts        public exports: createAgentRuntime, agentRpcLayer
+  index.ts        public exports: createAgentRuntime, agentRpcLayer, sessionServiceHost
   runtime.ts      composition root: constructs every class once and owns dispose()
-  rpc/            agent-rpc.ts maps each procedure to a feature function; edge.ts adapts thrown errors
+  rpc/            the two edges: agent-rpc.ts (Effect RPC) and session-services.ts (Chord services); edge.ts adapts
+                  thrown errors; session-workflows.ts orchestrates create and archive for both
   lib/            stateless helpers with no Pi or product knowledge
   pi/             the Pi wrapper: the durable engine and Pi's file formats
   features/       configuration, extensions, folders, projects, providers, session-runtime, sessions, workspace, worktrees
@@ -28,7 +29,7 @@ Where a file goes:
 - Wraps or maps Pi, regardless of how many features use it → `pi/`.
 - Used by one feature → that feature, even if it looks generic.
 - Used by exactly one file → that file.
-- Orchestrates several features (archive a session across `session-runtime` and `projects`, create a session and send its first message) → `rpc/agent-rpc.ts`. It is the only file that sees every feature. If the sequence is not a transport concern but a product rule, the two features are one feature; merge them rather than wiring one into the other.
+- Orchestrates several features (archive a session across `session-runtime` and `projects`, create a session and send its first message) → `rpc/session-workflows.ts`. `rpc/` is the only layer that sees every feature. If the sequence is not a transport concern but a product rule, the two features are one feature; merge them rather than wiring one into the other.
 
 There is no `shared/`. A stateful class two features need is either Pi (`pi/`) or has no product owner; the second case has not occurred, so there is no folder for it.
 
@@ -36,7 +37,7 @@ There is no `shared/`. A stateful class two features need is either Pi (`pi/`) o
 
 ```
 features/<name>/
-  <name>.ts     the feature class: one public method per RPC procedure
+  <name>.ts     the feature class: one public method per RPC procedure or service member
   lib/          pure helpers used by several methods
   <region>/     a stateful class with everything that serves it
 ```
@@ -60,13 +61,15 @@ Group a folder once it holds more than about five files, by what the files are f
 
 ## Errors
 
-Throw the tagged error classes from `@supernova/contracts`. They are the wire format; nothing else is needed inside a feature. `rpc/edge.ts` passes declared errors through and turns anything undeclared into the procedure's generic error with the cause attached. Use `lib/errors.ts` `errorMessage(cause, fallback)` to build messages from unknown causes.
+Throw the tagged error classes from `@supernova/contracts`; nothing else is needed inside a feature. On the RPC edge they are the wire format: `rpc/edge.ts` passes declared errors through and turns anything undeclared into the procedure's generic error with the cause attached. Pi's service protocol carries only its own error codes, so the session service edge returns failures as data instead: a `ServiceResult` whose `code` is the contract error's tag (`result()` in `rpc/session-services.ts`). Use `lib/errors.ts` `errorMessage(cause, fallback)` to build messages from unknown causes.
 
 Checkpoint navigation is the one place errors are classified below the edge: `features/session-runtime/checkpoints/lib/checkpoint-error.ts` turns a workspace conflict into `CheckpointConflictError` so the client can offer a forced retry. See [Checkpoint system](checkpoint-system.md).
 
 ## Streams
 
-Long-lived output is an `AsyncGenerator` built on `lib/event-bus.ts`. Subscribing registers immediately, so subscribe before triggering the work you want to observe. Consumers must `return()` or exit their `for await` to unsubscribe. The RPC edge converts with `Stream.fromAsyncIterable`.
+Session state is Chord replicated state: `lib/document-state.ts` publishes whole documents as diffed revisions, and `SessionBoard` is mutable replicated state. Subscribers receive the current value at once and every later revision; the service edge serves them as service state.
+
+Other long-lived output (terminals, provider logins) is an `AsyncGenerator` built on `lib/event-bus.ts`. Subscribing registers immediately, so subscribe before triggering the work you want to observe. Consumers must `return()` or exit their `for await` to unsubscribe. The RPC edge converts with `Stream.fromAsyncIterable`.
 
 ## `pi/`
 
@@ -92,9 +95,10 @@ Inside `pi/` names drop the `Pi` prefix. Outside it, values that hold Pi types k
 
 ## `features/session-runtime`
 
-Live execution: send, abort, compact, checkpoint navigation, the event stream. `sessions` is the durable record: create, load, rename, fork. See [Session runtime](session-runtime.md).
+Live execution: send, abort, compact, checkpoint navigation, and each session's state. `sessions` is the durable record: create, load, rename, fork. See [Session runtime](session-runtime.md).
 
-- `worker/session-worker.ts` watches the session's visible conversation, publishes its events with revisions, and captures after-turn checkpoints.
+- `worker/session-worker.ts` watches the session's visible conversation, publishes its document as replicated state, and captures after-turn checkpoints.
+- `worker/session-board.ts` is every open session's activity, summary, setup step, and last problem, for clients that have not attached the session.
 - `session-runtime.ts` keeps one `SessionWorker` per session in use and dispatches to it.
 - `worker/commands/` are what the feature class dispatches to a worker; `worker/lib/navigate-to-turn.ts` is the one restore-then-show path undo, redo, and revert share.
 - `checkpoints/` is the store, shadow repositories, and git plumbing.
@@ -107,4 +111,5 @@ See [Development](development.md#verification) for verification and the test wor
 - Tests mirror `src` file for file under `tests/unit` and `tests/integration` (`src/pi/lib/models/map-model.ts` → `tests/unit/pi/lib/models/map-model.test.ts`). Fixtures live in `tests/support`, named for what they build.
 - Construct the feature class with `Deps` built from real pieces: `tests/support/session-runtime.ts` builds `SessionRuntime`, `Sessions`, and `Projects` over a real engine with session files in a temp directory, Pi's `ModelRuntime` with `registerFauxProvider`, and in-memory settings. Seed history by running turns against the faux model, not by writing entries.
 - Assert with `await expect(feature.method(input)).rejects.toMatchObject({_tag: "…"})`. No Effect in tests below `rpc/`.
+- Observe session state with `observe()` from `tests/support/session-runtime.ts`: the values a subscriber of the transcript and board received. `tests/support/session-server.ts` runs the real service protocol (`pi-server` and `pi-client`) over in-memory bytes for edge tests.
 - Cover runtime behavior, failure handling, stream and session lifecycle, persistence, emitted events, and cleanup. Prefer real in-memory dependencies over mocks.
