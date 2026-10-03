@@ -1,5 +1,5 @@
-import type {ReplicatedState} from "@earendil-works/chord";
-import {createRemoteServiceBinding} from "@earendil-works/chord";
+import type {RemoteServiceTransport, ReplicatedState} from "@earendil-works/chord";
+import {copyJson, createRemoteServiceBinding} from "@earendil-works/chord";
 import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import type {ByteTransportFactory, ConnectionState} from "@earendil-works/pi-client";
 import {Client, createClientServiceTransport} from "@earendil-works/pi-client";
@@ -61,6 +61,25 @@ function webSocketTransport(url: string): ByteTransportFactory {
     });
 }
 
+/**
+ * Sends calls as strict JSON. The protocol rejects `undefined` anywhere in a frame, and the contracts' optional fields
+ * are commonly set to `undefined` (`{projectPath: undefined}` for global configuration), so it is dropped here,
+ * once, rather than at every call site. Failures are logged with the service and member that failed.
+ */
+export function strictJsonTransport(transport: RemoteServiceTransport): RemoteServiceTransport {
+  return {
+    invoke: async (call, context) => {
+      try {
+        return await transport.invoke({...call, args: call.args.map((arg) => copyJson(arg, {omitUndefinedProperties: true}))}, context);
+      } catch (error) {
+        console.error(`[runtime] ${call.serviceId}.${call.member} failed`, error);
+        throw error;
+      }
+    },
+    subscribe: (serviceId, mode, listener, context) => transport.subscribe(serviceId, mode, listener, context),
+  };
+}
+
 /** The session the connection is attached to: its controller and transcript. */
 export interface AttachedSession {
   readonly sessionId: string;
@@ -99,12 +118,12 @@ export function createRuntimeClient(endpoint: string): RuntimeClient {
   const client = new Client({serverId: RUNTIME_SERVER_ID, transportFactory: webSocketTransport(resolveSocketUrl(endpoint, RUNTIME_SOCKET_PATH))});
   const serverServices = createRemoteServiceBinding({
     services: SERVER_SERVICES,
-    transport: createClientServiceTransport(client, () => ({serverId: RUNTIME_SERVER_ID})),
+    transport: strictJsonTransport(createClientServiceTransport(client, () => ({serverId: RUNTIME_SERVER_ID}))),
     bound: false,
   });
   const sessionServices = createRemoteServiceBinding({
     services: [SessionController, SessionTranscript],
-    transport: createClientServiceTransport(client, () => client.attachment),
+    transport: strictJsonTransport(createClientServiceTransport(client, () => client.attachment)),
     bound: false,
   });
 
