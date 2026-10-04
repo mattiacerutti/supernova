@@ -20,7 +20,8 @@ async function generateSessionTitle(input: {readonly payload: SendMessagePayload
 export async function sendMessage(runtime: SessionWorker, titleGenerator: TitleGenerator, input: SendMessagePayload): Promise<void> {
   runtime.beginSend();
   const session = await runtime.session();
-  const record = await runtime.store.record(runtime.sessionId);
+  const record = await runtime.store.find(runtime.sessionId);
+  if (!record) throw new Error("Session not found.");
   // Selecting first lets an unknown or unauthenticated model fail before any provider work or checkpoint capture.
   const model = findSelectedModel(runtime.sdk, input.modelReference);
   if (!(await runtime.sdk.modelRuntime.checkAuth(model.provider))) throw new Error(`No API key for ${model.provider}/${model.id}`);
@@ -30,7 +31,10 @@ export async function sendMessage(runtime: SessionWorker, titleGenerator: TitleG
     runtime.track(
       generateSessionTitle({payload: input, model, titleGenerator}).then(async (title) => {
         // A user rename that lands first wins.
-        if (!title || (await runtime.store.record(runtime.sessionId)).title !== undefined) return;
+        if (!title) return;
+        const current = await runtime.store.find(runtime.sessionId);
+        if (!current) throw new Error("Session not found.");
+        if (current.title !== undefined) return;
         await runtime.store.update(runtime.sessionId, (current) => ({...current, title}));
         await runtime.refresh();
       })

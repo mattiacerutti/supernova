@@ -86,7 +86,7 @@ export function projectSessions(input: {
 export function sessionView(input: {readonly session: Session | undefined; readonly entry: SessionDirectoryEntry | undefined; readonly optimism?: SessionOptimism}): SessionView {
   const {entry, optimism = {}, session} = input;
   const projected = session ? buildSessionTurns(session) : undefined;
-  const undone = session ? buildSessionTurns({entries: session.undone, live: {}, turns: session.turns}).turns : [];
+  const undone = session ? buildSessionTurns({entries: session.undone, live: {}}).turns : [];
   const shown = projected?.turns ?? [];
   const {turns, undoneTurns} = optimism.navigation ? navigated(shown, undone, optimism.navigation.turnId) : {turns: shown, undoneTurns: undone};
   return {

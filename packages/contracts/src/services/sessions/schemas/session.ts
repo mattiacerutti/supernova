@@ -11,11 +11,13 @@ export const SessionContextUsage = z.object({
   contextWindow: z.number(),
 });
 
-/** What Supernova adds to a user entry that starts a turn: the content as the composer authored it. */
-export const SessionTurnRecord = z.object({
-  /** Authored parts; image attachments carry no payload, the user entry's image content has it. */
-  contentParts: z.array(UserMessageContentPart),
-});
+/** Pi's entry plus authored content on user messages that start displayed turns; stored Pi entries are unchanged. */
+export const SessionEntry = z.custom<EntryRecord>().and(
+  z.object({
+    /** Authored parts; image payloads remain in the model message. Absent on extension continuations. */
+    contentParts: z.array(UserMessageContentPart).readonly().optional(),
+  })
+);
 
 /**
  * A session as Pi holds it, plus what Supernova adds. The server keeps one such document per session as Chord
@@ -35,9 +37,9 @@ export const Session = z.object({
   /** ISO timestamp for the last session update. */
   updatedAt: z.string(),
   /** The visible conversation's history in append order, compacted entries included; system prompt entries left out. */
-  entries: z.custom<readonly EntryRecord[]>(),
+  entries: z.array(SessionEntry).readonly(),
   /** Entries hidden behind undo, in append order, available for redo. */
-  undone: z.custom<readonly EntryRecord[]>(),
+  undone: z.array(SessionEntry).readonly(),
   /** The visible conversation's `pi.agent`: model, thinking level, working directory. */
   agent: z.custom<AgentState>(),
   /** The visible conversation's `pi.live`: the active run, its streaming partial, running tools, and compactions. */
@@ -49,8 +51,6 @@ export const Session = z.object({
    * Entries from it on are the turn being answered.
    */
   runStart: z.number().optional(),
-  /** Turn records keyed by the id of the user entry that starts the turn. A user entry without one continues a turn. */
-  turns: z.record(z.string(), SessionTurnRecord),
   /** Current token usage for the active model context. */
   context: SessionContextUsage,
 });
@@ -72,4 +72,4 @@ export const SessionSummary = z.object({
 export type Session = z.infer<typeof Session>;
 export type SessionContextUsage = z.infer<typeof SessionContextUsage>;
 export type SessionSummary = z.infer<typeof SessionSummary>;
-export type SessionTurnRecord = z.infer<typeof SessionTurnRecord>;
+export type SessionEntry = z.infer<typeof SessionEntry>;

@@ -13,7 +13,7 @@ This document explains the design, its guarantees, and the reasoning behind its 
 1. **Server-owned execution.** Agent work continues independently of the browser that started it, and across server restarts.
 2. **Parallel sessions.** Different sessions run at the same time without sharing lifecycle state or storage.
 3. **Single-run consistency.** A session runs one input at a time; sends while busy are rejected today (queueing is designed in, see below).
-4. **Pi's shapes end to end.** The browser receives Pi's entries and documents unchanged; mapping them to rows is rendering, done in the browser.
+4. **Pi's shapes end to end.** The browser receives Pi's documents unchanged and entries enriched with authored `contentParts`; mapping them to rows is rendering, done in the browser.
 5. **Responsive streaming.** Each engine commit reaches the browser as a delta of what changed, not a copy of the running turn.
 6. **Predictable failure behavior.** Disconnecting a client, stopping a run, and rejecting a command have distinct outcomes.
 
@@ -98,7 +98,7 @@ Expected failures are results, not errors: the protocol carries only its own err
 
 ## The session document
 
-`SessionStore.snapshot()` builds the `Session` from the visible conversation's current view: its history in append order (compacted entries included, system prompt entries left out), the leaf's entries past it as `undone`, `pi.agent`, `pi.live`, `pi.usage`, the turn records' authored content, `runStart`, and context usage. Entries are read only up to the view's newest one, so a final answer never appears beside the partial `pi.live` still streams. Entries are append-only, so a rebuild reads only entries after the last one it has while the visible conversation and leaf are unchanged.
+`SessionStore.snapshot()` builds the `Session` from the visible conversation's current view: its history in append order (compacted entries included, system prompt entries left out), the leaf's entries past it as `undone`, `pi.agent`, `pi.live`, `pi.usage`, authored `contentParts` attached to user entries in both history and `undone`, `runStart`, and context usage. The durable turn records and their checkpoints stay server-side; there is no separate public turns map. Entries are read only up to the view's newest one, so a final answer never appears beside the partial `pi.live` still streams. Entries are append-only, so a rebuild reads only entries after the last one it has while the visible conversation and leaf are unchanged.
 
 `runStart` is the first user entry of the active run. Pi's `pi.live.run` lists the run's input submissions, not entries; the server resolves them so the browser knows where the turn being answered starts.
 
@@ -124,7 +124,7 @@ Not exposed yet. The engine supports it (`whenBusy: "steer" | "followUp"` on sub
 
 ### Settings
 
-`pi/config/harness-settings.ts` maps Pi's file settings onto Harness settings read at every use: compaction, retry, stream timeouts, transport, queue modes. Thinking budgets and the websocket timeout, which the engine's stream options lack, are added to every request by the `Models` wrapper in the same file. Shell path, command prefix, and image resizing are applied by the tools. Background compaction is off (`TODO(pi-durable)` in `harness-settings.ts`): the old SDK never compacted in the background and the timeline has no design for it.
+`pi/config/harness-settings.ts` maps Pi's file settings onto Harness settings read at every use: compaction, retry, stream timeouts, transport, queue modes. Thinking budgets and the websocket timeout, which the engine's stream options lack, are added to every request by the `Models` wrapper in the same file. Shell path and command prefix configure command execution. The durable `read` tool does not support image files; images attached in the composer are still sent to the provider. Background compaction is off (`TODO(pi-durable)` in `harness-settings.ts`): the old SDK never compacted in the background and the timeline has no design for it.
 
 ## Concurrency
 
@@ -143,7 +143,7 @@ Different sessions run independently. Within a session the engine runs one input
 
 1. The server's session document is the only source of session state; the browser changes it only with values of its replicated state or a read.
 2. Replicated state reaches a client as a snapshot and then contiguous deltas; Chord resets a client that cannot follow.
-3. A user entry and its turn record appear in the same revision.
+3. A user entry and its authored `contentParts` appear in the same revision.
 4. Every visible state was committed to the session file first.
 5. One session runs one input at a time; sessions run concurrently.
 6. Unsubscribing a client never aborts server-owned work; closing a session never aborts it either.

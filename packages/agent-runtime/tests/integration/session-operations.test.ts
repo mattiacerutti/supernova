@@ -118,7 +118,7 @@ describe("creating a session with its first turn", () => {
 
     const session = await createSession({id: "empty", projectPath: "/workspace"});
 
-    expect(session).toMatchObject({id: "empty", entries: [], turns: {}});
+    expect(session).toMatchObject({id: "empty", entries: []});
     expect(existsSync(join(pi.sessionStorageRoot, "empty", "session.sqlite"))).toBe(true);
   });
 });

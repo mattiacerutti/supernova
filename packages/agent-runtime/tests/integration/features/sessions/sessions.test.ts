@@ -19,7 +19,7 @@ describe("sessions", () => {
 
     const session = await pi.sessions.create({id: "client-chosen-id", projectPath: "/workspace"});
 
-    expect(session).toMatchObject({id: "client-chosen-id", projectPath: "/workspace", title: "Untitled session", entries: [], turns: {}});
+    expect(session).toMatchObject({id: "client-chosen-id", projectPath: "/workspace", title: "Untitled session", entries: []});
     expect(existsSync(join(pi.sessionStorageRoot, "client-chosen-id", "session.sqlite"))).toBe(true);
     expect(await pi.store.find("client-chosen-id")).toMatchObject({projectPath: "/workspace"});
     await expect(pi.sessions.create({id: "client-chosen-id", projectPath: "/workspace"})).rejects.toMatchObject({

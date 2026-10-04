@@ -4,11 +4,11 @@ import {rm} from "node:fs/promises";
 import {join} from "node:path";
 import {getAgentDir} from "@earendil-works/pi-coding-agent";
 import type {SettingsManager} from "@earendil-works/pi-coding-agent";
-import type {EntryRecord} from "@earendil-works/pi-durable";
+import type {AgentState, ConversationView, EntryRecord, LiveState, UsageState} from "@earendil-works/pi-durable";
 import type {Session, SessionContextUsage, SessionWorktree} from "@supernova/contracts/services/sessions/schemas";
 import {loadPiSettings} from "@supernova/agent-runtime/pi/config/settings";
 import {SessionCatalog} from "@supernova/agent-runtime/pi/lib/session/session-catalog";
-import {buildSession, contextUsageOf, publicTurns, timelineEntries} from "@supernova/agent-runtime/pi/lib/session/session-snapshot";
+import {buildSession, contextUsageOf, timelineEntries} from "@supernova/agent-runtime/pi/lib/session/session-snapshot";
 import type {CheckpointRef, SessionRecord, TurnPosition} from "@supernova/agent-runtime/pi/lib/session/session-state";
 import {turnPositions} from "@supernova/agent-runtime/pi/lib/session/session-state";
 import type {PromptedTool} from "@supernova/agent-runtime/pi/lib/tools/coding-tools";
@@ -16,7 +16,7 @@ import type {BridgedExtensions} from "@supernova/agent-runtime/pi/lib/tools/exte
 import {bridgeExtensions} from "@supernova/agent-runtime/pi/lib/tools/extension-bridge";
 import type {ResourceCache} from "@supernova/agent-runtime/pi/resource-cache";
 import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";
-import type {ConversationSnapshot, SessionFileSetup} from "@supernova/agent-runtime/pi/session-file";
+import type {SessionFileSetup} from "@supernova/agent-runtime/pi/session-file";
 import {SessionFile} from "@supernova/agent-runtime/pi/session-file";
 
 /** Directory of the durable sessions, beside the old SDK's `sessions/`. */
@@ -69,6 +69,7 @@ interface OpenSession {
  */
 export class SessionStore {
   private readonly root: string;
+  // Stores promises to prevent multiple opens of the same file
   private readonly open = new Map<string, Promise<OpenSession>>();
   private readonly settingsCache = new Map<string, SettingsManager>();
   private catalogOpening: Promise<SessionCatalog> | undefined;
@@ -77,7 +78,7 @@ export class SessionStore {
     this.root = deps.root ?? join(getAgentDir(), SESSIONS_DIR);
   }
 
-  /** Records and creates a new session file; the first turn is an ordinary send afterwards. */
+  /** Records and creates a new session file. */
   public async create(input: {readonly id: string; readonly projectPath: string; readonly worktree?: SessionWorktree; readonly forkedFrom?: string}): Promise<SessionRecord> {
     const catalog = await this.catalog();
     if (catalog.find(input.id) || existsSync(this.databasePath(input.id))) throw new Error("A session with this id already exists.");
@@ -92,25 +93,20 @@ export class SessionStore {
       updatedAt: now,
     };
     catalog.insert(record);
+
     try {
-      await this.file(input.id);
+      await this.openSession(input.id);
     } catch (error) {
       await this.delete(input.id);
       throw error;
     }
+
     return record;
   }
 
   /** The record of a durable session, or undefined for unknown (or legacy) ids. */
   public async find(sessionId: string): Promise<SessionRecord | undefined> {
     return (await this.catalog()).find(sessionId);
-  }
-
-  /** The record of an existing durable session; throws for unknown ids. */
-  public async record(sessionId: string): Promise<SessionRecord> {
-    const record = await this.find(sessionId);
-    if (!record) throw new Error("Session not found.");
-    return record;
   }
 
   /** Every unarchived session of a project, newest first. */
@@ -135,7 +131,8 @@ export class SessionStore {
 
   /** The working directory a session's agent runs in. */
   public async cwd(sessionId: string): Promise<string> {
-    const record = await this.record(sessionId);
+    const record = await this.find(sessionId);
+    if (!record) throw new Error("Session not found.");
     return record.worktree?.path ?? record.projectPath;
   }
 
@@ -155,22 +152,27 @@ export class SessionStore {
    * `previous` is the history of the last build, extended instead of read again.
    */
   public async snapshot(sessionId: string, options: {readonly previous?: SessionHistory} = {}): Promise<{readonly session: Session; readonly history: SessionHistory}> {
-    const record = await this.record(sessionId);
+    const record = await this.find(sessionId);
+    if (!record) throw new Error("Session not found.");
+
     const file = await this.file(sessionId);
     const state = await file.state();
-    const view = await file.view(state.visible);
+    const view = await file.view();
     const history = await this.historyOf(file, state, view, options.previous);
+    const live = view.docs["pi.live"] as LiveState | undefined;
+
     const session = buildSession({
       record,
       entries: history.entries,
       undone: history.undone,
-      agent: view.agent,
-      live: view.live,
-      usage: view.usage,
-      runStart: await file.runStart(view.live),
-      turns: publicTurns(state.turns),
+      agent: view.docs["pi.agent"] as AgentState | undefined,
+      live,
+      usage: view.docs["pi.usage"] as UsageState | undefined,
+      runStart: await file.runStart(live),
+      turns: state.turns,
       context: await this.contextOf(file, view),
     });
+
     return {session, history};
   }
 
@@ -185,12 +187,13 @@ export class SessionStore {
     const history = await source.history(state.visible);
     const turn = turnPositions(history, state.turns).find((candidate) => candidate.turnId === input.turnId);
     if (!turn) throw new Error("This message cannot be forked.");
-    const record = await this.record(input.sessionId);
+    const record = await this.find(input.sessionId);
+    if (!record) throw new Error("Session not found.");
     const id = randomUUID();
     await this.create({id, projectPath: record.projectPath, ...(record.worktree ? {worktree: record.worktree} : {}), forkedFrom: input.sessionId});
     try {
       if (record.title) await this.update(id, (created) => ({...created, title: record.title}));
-      const agent = (await source.view(state.visible)).agent;
+      const agent = (await source.view(state.visible)).docs["pi.agent"] as AgentState | undefined;
       const fork = await this.file(id);
       await fork.seed({entries: history.filter((entry) => entry.id <= turn.endId && entry.kind !== "pi.system"), turns: state.turns});
       if (agent?.model) await fork.configure({provider: agent.model.provider, modelId: agent.model.modelId, thinkingLevel: agent.thinkingLevel ?? "off"});
@@ -266,38 +269,59 @@ export class SessionStore {
   private async historyOf(
     file: SessionFile,
     state: {readonly leaf: number; readonly visible: number},
-    view: ConversationSnapshot,
+    view: ConversationView,
     previous: SessionHistory | undefined
   ): Promise<SessionHistory> {
     const through = view.entries.reduce((newest, entry) => Math.max(newest, entry.id), 0);
-    const reuse = previous?.visible === state.visible && previous.leaf === state.leaf;
-    const known = reuse ? previous.entries : [];
-    const after = known.at(-1)?.id ?? 0;
-    const added = through > after ? timelineEntries(await file.history(state.visible, {after, through})) : [];
-    const entries = added.length > 0 ? [...known, ...added] : known;
-    if (reuse) return {...previous, entries};
-    let undone: EntryRecord[] = [];
-    if (state.leaf !== state.visible) {
-      const visibleIds = new Set((await file.history(state.visible)).map((entry) => entry.id));
-      undone = timelineEntries((await file.history(state.leaf)).filter((entry) => !visibleIds.has(entry.id)));
+    const sameLeaf = previous?.leaf === state.leaf;
+    const sameView = sameLeaf && previous.visible === state.visible;
+    const rewound = state.visible !== state.leaf;
+    if (sameView && rewound && through <= (previous.entries.at(-1)?.id ?? 0)) return previous;
+
+    let leafHistory: readonly EntryRecord[] = sameLeaf ? previous.entries : [];
+    if (sameLeaf && previous.visible !== state.leaf) {
+      // A compaction can append entries to an undo fork without changing the leaf; those are not leaf history.
+      leafHistory = [...previous.entries.filter((entry) => entry.conversationId !== previous.visible), ...previous.undone];
     }
-    return {visible: state.visible, leaf: state.leaf, entries, undone};
+    if (rewound && (!sameLeaf || previous.visible === state.leaf)) {
+      // Leaving the active leaf can outpace the cached snapshot. An already-undone leaf cannot run or grow.
+      const added = timelineEntries(await file.history(state.leaf, {after: leafHistory.at(-1)?.id ?? 0}));
+      if (added.length > 0) leafHistory = [...leafHistory, ...added];
+    }
+
+    const cutoff = view.conversation.parent?.at ?? 0;
+    const known = rewound
+      ? [...leafHistory.filter((entry) => entry.id <= cutoff), ...(sameView ? previous.entries.filter((entry) => entry.conversationId === state.visible) : [])]
+      : leafHistory;
+    const after = known.at(-1)?.id ?? 0;
+    const head = view.entries.find((entry) => entry.head !== undefined);
+    const headKnown = head === undefined || known.some((entry) => entry.id === head.id);
+    let added: EntryRecord[] = [];
+    if (through > after) {
+      const newer = (sameLeaf || rewound) && headKnown ? view.entries.filter((entry) => entry.id > after) : await file.history(state.visible, {after, through});
+      added = timelineEntries(newer);
+    }
+
+    return {
+      visible: state.visible,
+      leaf: state.leaf,
+      entries: added.length > 0 ? [...known, ...added] : known,
+      undone: rewound ? leafHistory.filter((entry) => entry.id > cutoff) : [],
+    };
   }
 
   private databasePath(sessionId: string): string {
     return join(this.root, sessionId, "session.sqlite");
   }
 
-  private async contextOf(file: SessionFile, view: ConversationSnapshot): Promise<SessionContextUsage> {
-    const contextWindow = this.contextWindow(view);
-    if (view.entries.length === 0) return {contextWindow, usedTokens: 0};
-    const {entries, messages} = await file.modelContext(view.conversationId);
-    return contextUsageOf({contextWindow, entries, messages});
-  }
+  private async contextOf(file: SessionFile, view: ConversationView): Promise<SessionContextUsage> {
+    const modelRef = (view.docs["pi.agent"] as AgentState | undefined)?.model;
+    const model = modelRef ? this.deps.sdk.modelRuntime.getModel(modelRef.provider, modelRef.modelId) : undefined;
+    const contextWindow = model?.contextWindow ?? 0;
 
-  private contextWindow(view: ConversationSnapshot): number {
-    const model = view.agent?.model;
-    return model ? (this.deps.sdk.modelRuntime.getModel(model.provider, model.modelId)?.contextWindow ?? 0) : 0;
+    if (view.entries.length === 0) return {contextWindow, usedTokens: 0};
+    const {entries, messages} = await file.modelContext(view.conversation.id);
+    return contextUsageOf({contextWindow, entries, messages});
   }
 
   private openSession(sessionId: string): Promise<OpenSession> {
@@ -325,12 +349,14 @@ export class SessionStore {
   /** Loads a working directory's resources and bridges its extensions into what a session file installs. */
   private async prepare(sessionId: string, cwd: string): Promise<{readonly extensions: BridgedExtensions; readonly setup: SessionFileSetup}> {
     const resources = await this.deps.resourceCache.load(cwd);
+
     const extensions = bridgeExtensions({
       cwd,
       loaded: resources.extensions,
       modelRuntime: this.deps.sdk.modelRuntime,
       report: ({extensionPath, message}) => this.deps.onReport?.(sessionId, `Extension ${extensionPath} ${message}`),
     });
+
     return {
       extensions,
       setup: {

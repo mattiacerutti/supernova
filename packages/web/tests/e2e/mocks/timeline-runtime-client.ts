@@ -59,7 +59,7 @@ class TimelineServer {
       },
       getState: () => {
         const session = this.session(TIMELINE_SESSION_ID);
-        const count = (entries: Session["entries"]) => entries.filter((entry) => session.turns[String(entry.id)] !== undefined).length;
+        const count = (entries: Session["entries"]) => entries.filter((entry) => entry.contentParts !== undefined).length;
         return {lineCount: this.lineCount, status: this.status, turnCount: count(session.entries), undoneTurnCount: count(session.undone)};
       },
     };
@@ -174,7 +174,6 @@ class TimelineServer {
       agent: {},
       live: {},
       usage: {models: {}, tools: {}},
-      turns: {},
       context: {usedTokens: 0, contextWindow: 0},
     };
     this.sessions.set(session.id, session);
@@ -192,21 +191,21 @@ class TimelineServer {
   }
 
   /** Index into `entries` of each turn's user entry. */
-  private turnStarts(session: Session, entries: Session["entries"]): number[] {
-    return entries.flatMap((entry, index) => (session.turns[String(entry.id)] ? [index] : []));
+  private turnStarts(entries: Session["entries"]): number[] {
+    return entries.flatMap((entry, index) => (entry.contentParts === undefined ? [] : [index]));
   }
 
   /** Shows the first `count` turns of the visible and undone entries together, as checkpoint navigation does. */
   private showTurns(sessionId: string, count: number): void {
     const session = this.session(sessionId);
     const all = [...session.entries, ...session.undone];
-    const starts = this.turnStarts(session, all);
+    const starts = this.turnStarts(all);
     const cut = starts[count] ?? all.length;
     this.commit({...session, entries: all.slice(0, cut), undone: all.slice(cut), updatedAt: new Date().toISOString()}, "idle");
   }
 
   private visibleTurnCount(session: Session): number {
-    return this.turnStarts(session, session.entries).length;
+    return this.turnStarts(session.entries).length;
   }
 
   private undoCheckpoint(sessionId: string): void {
@@ -216,12 +215,12 @@ class TimelineServer {
 
   private redoCheckpoint(sessionId: string): void {
     const session = this.session(sessionId);
-    if (this.turnStarts(session, session.undone).length > 0) this.showTurns(sessionId, this.visibleTurnCount(session) + 1);
+    if (this.turnStarts(session.undone).length > 0) this.showTurns(sessionId, this.visibleTurnCount(session) + 1);
   }
 
   private revertToMessage(sessionId: string, turnId: string): void {
     const session = this.session(sessionId);
-    const ids = [...session.entries, ...session.undone].filter((entry) => session.turns[String(entry.id)]).map((entry) => String(entry.id));
+    const ids = [...session.entries, ...session.undone].filter((entry) => entry.contentParts !== undefined).map((entry) => String(entry.id));
     const index = ids.indexOf(turnId);
     if (index < 0) return;
     const visible = this.visibleTurnCount(session);
@@ -244,10 +243,9 @@ class TimelineServer {
     this.commit(
       {
         ...session,
-        entries: [...session.entries, userEntry(userId, text, 80_000)],
+        entries: [...session.entries, {...userEntry(userId, text, 80_000), contentParts: [...contentParts]}],
         undone: [],
         runStart: userId,
-        turns: {...session.turns, [String(userId)]: {contentParts: [...contentParts]}},
         live: this.streamLive(),
       },
       "running"

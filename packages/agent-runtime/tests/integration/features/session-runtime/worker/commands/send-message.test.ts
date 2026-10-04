@@ -84,7 +84,7 @@ describe("sending messages through Pi sessions", () => {
     expect(session).toEqual(await pi.sessions.get({sessionId: info.id}));
     // The run's user entry and its turn record arrive in the same version.
     const running = versions.find((version) => version.runStart !== undefined);
-    expect(running && running.turns[String(running.runStart)]?.contentParts).toEqual([{text: "Fix it", type: "text"}]);
+    expect(running?.entries.find((entry) => entry.id === running.runStart)?.contentParts).toEqual([{text: "Fix it", type: "text"}]);
     expect(turnContents(session)).toEqual([[{text: "Existing request", type: "text"}], [{text: "Fix it", type: "text"}]]);
     expect(assistantTexts(session)).toEqual(["Existing response", "Done."]);
     const answer = session.entries.at(-1)?.model?.[0];
@@ -118,7 +118,7 @@ describe("sending messages through Pi sessions", () => {
     expect(session.entries.filter((entry) => entry.kind === "pi.tool-result")).toHaveLength(2);
   });
 
-  it("uses the first user message without persisting a fallback when title generation fails", async () => {
+  it("keeps the session untitled without persisting a fallback when title generation fails", async () => {
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
     const {info} = await pi.createSession();
@@ -127,8 +127,8 @@ describe("sending messages through Pi sessions", () => {
 
     const {session} = await pi.sendMessage({message: "Fix the flaky tests", modelReference: selectedModelReference, sessionId: info.id});
 
-    expect((await pi.store.record(info.id)).title).toBeUndefined();
-    expect(session.title).toBe("Fix the flaky tests");
+    expect((await pi.store.find(info.id))!.title).toBeUndefined();
+    expect(session.title).toBe("Untitled session");
   });
 
   it("sends authored text and images to the provider while displaying authored content parts", async () => {
@@ -196,9 +196,7 @@ describe("sending messages through Pi sessions", () => {
 
     const {session, versions} = await pi.sendMessage({message: "Continue after pre-prompt compaction", modelReference: selectedModelReference, sessionId: info.id});
     const seen = compactionsSeen(versions);
-    const userIndex = session.entries.findIndex((entry) =>
-      session.turns[String(entry.id)]?.contentParts.some((part) => part.type === "text" && part.text === "Continue after pre-prompt compaction")
-    );
+    const userIndex = session.entries.findIndex((entry) => entry.contentParts?.some((part) => part.type === "text" && part.text === "Continue after pre-prompt compaction"));
     const summaryIndex = session.entries.findIndex((entry, index) => index > userIndex && entry.kind === "pi.compaction");
 
     expect(seen.pending).toBe(true);
@@ -331,14 +329,14 @@ describe("sending messages through Pi sessions", () => {
     ]);
 
     const {session, versions} = await pi.sendMessage({message: "Fix overflow", modelReference: selectedModelReference, sessionId: info.id});
-    const userIndex = session.entries.findIndex((entry) => session.turns[String(entry.id)]?.contentParts.some((part) => part.type === "text" && part.text === "Fix overflow"));
+    const userIndex = session.entries.findIndex((entry) => entry.contentParts?.some((part) => part.type === "text" && part.text === "Fix overflow"));
     const after = session.entries.slice(userIndex + 1);
 
     expect(compactionsSeen(versions).pending).toBe(true);
     // The summary and the continuation both follow the turn's user entry, with no other turn between.
     expect(after.some((entry) => entry.kind === "pi.compaction" && JSON.stringify(entry).includes("Compacted overflow summary."))).toBe(true);
     expect(assistantTexts({entries: after}).at(-1)).toBe("Continued after compaction.");
-    expect(after.some((entry) => session.turns[String(entry.id)] !== undefined)).toBe(false);
+    expect(after.some((entry) => entry.contentParts !== undefined)).toBe(false);
   });
 
   it("rejects an unavailable model without leaving the session locked", async () => {

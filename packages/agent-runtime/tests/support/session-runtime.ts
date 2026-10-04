@@ -15,7 +15,7 @@ import {Projects} from "@supernova/agent-runtime/features/projects/projects";
 import {SessionStore} from "@supernova/agent-runtime/pi/session-store";
 import {createSupernovaTools} from "@supernova/agent-runtime/features/session-runtime/tools/tools";
 import type {SendMessagePayload} from "@supernova/contracts/services/session-runtime/procedures";
-import type {AssistantMessage, ModelReference, Session} from "@supernova/contracts/services/sessions/schemas";
+import type {AgentState, AssistantMessage, ModelReference, Session} from "@supernova/contracts/services/sessions/schemas";
 import type {SessionDirectoryState} from "@supernova/contracts/services/sessions/services";
 import {waitUntil} from "@tests/support/async";
 
@@ -31,21 +31,18 @@ export interface Observation {
 }
 
 /** The authored content of each turn, in order. */
-export function turnContents(session: Pick<Session, "entries" | "turns">) {
-  return session.entries.flatMap((entry) => {
-    const record = session.turns[String(entry.id)];
-    return record ? [record.contentParts] : [];
-  });
+export function turnContents(session: Pick<Session, "entries">) {
+  return session.entries.flatMap((entry) => (entry.contentParts === undefined ? [] : [entry.contentParts]));
 }
 
 /** The authored content of each undone turn, in order. */
-export function undoneContents(session: Pick<Session, "undone" | "turns">) {
-  return turnContents({entries: session.undone, turns: session.turns});
+export function undoneContents(session: Pick<Session, "undone">) {
+  return turnContents({entries: session.undone});
 }
 
 /** The id of each visible turn: its user entry's id. */
-export function turnIds(session: Pick<Session, "entries" | "turns">): string[] {
-  return session.entries.flatMap((entry) => (session.turns[String(entry.id)] ? [String(entry.id)] : []));
+export function turnIds(session: Pick<Session, "entries">): string[] {
+  return session.entries.flatMap((entry) => (entry.contentParts === undefined ? [] : [String(entry.id)]));
 }
 
 /** The text of every assistant entry, in order. */
@@ -279,7 +276,7 @@ export async function createPiTestRuntime(input?: {
   };
 
   /** The visible conversation's stored model and thinking level. */
-  const agent = async (sessionId: string) => (await (await store.file(sessionId)).view()).agent;
+  const agent = async (sessionId: string) => (await (await store.file(sessionId)).view()).docs["pi.agent"] as AgentState | undefined;
 
   return {
     agent,

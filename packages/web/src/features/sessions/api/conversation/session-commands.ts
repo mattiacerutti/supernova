@@ -56,7 +56,6 @@ function emptySession(projectPath: string, sessionId: string): Session {
     agent: {},
     live: {},
     usage: {models: {}, tools: {}},
-    turns: {},
     context: {usedTokens: 0, contextWindow: 0},
   };
 }

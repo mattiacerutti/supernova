@@ -1,10 +1,10 @@
 import {existsSync} from "node:fs";
 import {mkdir, readdir, rename} from "node:fs/promises";
 import {basename, dirname, join, resolve} from "node:path";
-import type {CompactionEntry, CustomEntry, SessionEntry} from "@earendil-works/pi-coding-agent";
+import type {CompactionEntry, CustomEntry, SessionEntry as PiSessionEntry} from "@earendil-works/pi-coding-agent";
 import {getAgentDir, SessionManager} from "@earendil-works/pi-coding-agent";
 import type {EntryRecord} from "@earendil-works/pi-durable";
-import type {Session, SessionSummary, SessionWorktree, UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
+import type {Session, SessionEntry, SessionSummary, SessionWorktree, UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
 
 /**
  * Read-only access to sessions written by the old Pi SDK (`<agentDir>/sessions/<project>/<timestamp>_<id>.jsonl`).
@@ -60,9 +60,8 @@ function workspaceOf(manager: SessionManager): {projectPath: string; worktree: S
  * compaction becomes the engine's summary entry, and Supernova's authored content parts become the turn record of the
  * user message after them. Ids are positions; legacy sessions are read-only, so nothing refers to them later.
  */
-function toEngineEntries(entries: readonly SessionEntry[]): {entries: EntryRecord[]; turns: Record<string, {contentParts: UserMessageContentPart[]}>} {
-  const result: EntryRecord[] = [];
-  const turns: Record<string, {contentParts: UserMessageContentPart[]}> = {};
+function toEngineEntries(entries: readonly PiSessionEntry[]): SessionEntry[] {
+  const result: SessionEntry[] = [];
   let pendingParts: UserMessageContentPart[] | undefined;
   for (const entry of entries) {
     const id = result.length + 1;
@@ -74,12 +73,11 @@ function toEngineEntries(entries: readonly SessionEntry[]): {entries: EntryRecor
       result.push({...record, kind: "pi.compaction", model: [{role: "user", content: summary, timestamp: Date.parse(entry.timestamp)}]} as unknown as EntryRecord);
     } else if (entry.type === "message" && ["user", "assistant", "toolResult"].includes(entry.message.role)) {
       const kind = entry.message.role === "user" ? "pi.user" : entry.message.role === "assistant" ? "pi.assistant" : "pi.tool-result";
-      if (kind === "pi.user" && pendingParts) turns[String(id)] = {contentParts: pendingParts};
+      result.push({...record, kind, model: [entry.message], ...(kind === "pi.user" && pendingParts ? {contentParts: pendingParts} : {})} as unknown as SessionEntry);
       if (kind === "pi.user") pendingParts = undefined;
-      result.push({...record, kind, model: [entry.message]} as unknown as EntryRecord);
     }
   }
-  return {entries: JSON.parse(JSON.stringify(result)) as EntryRecord[], turns};
+  return JSON.parse(JSON.stringify(result)) as SessionEntry[];
 }
 
 function titleOf(manager: SessionManager, firstMessage: string | undefined): string {
@@ -97,9 +95,10 @@ export async function loadLegacySession(sessionId: string): Promise<Session | un
   if (!path) return undefined;
   const manager = SessionManager.open(path);
   const context = manager.buildSessionContext();
-  const {entries, turns} = toEngineEntries(manager.getBranch());
-  const firstText = Object.values(turns)[0]
-    ?.contentParts.map((part) => (part.type === "text" ? part.text : ""))
+  const entries = toEngineEntries(manager.getBranch());
+  const firstText = entries
+    .find((entry) => entry.contentParts !== undefined)
+    ?.contentParts?.map((part) => (part.type === "text" ? part.text : ""))
     .join("");
   const {projectPath, worktree} = workspaceOf(manager);
   return {
@@ -114,7 +113,6 @@ export async function loadLegacySession(sessionId: string): Promise<Session | un
     agent: context.model ? {model: {provider: context.model.provider, modelId: context.model.modelId}, thinkingLevel: context.thinkingLevel as never} : {},
     live: {},
     usage: {models: {}, tools: {}},
-    turns,
     context: {contextWindow: 0, usedTokens: null},
   };
 }

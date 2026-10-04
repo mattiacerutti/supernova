@@ -1,11 +1,17 @@
-import type {EntryRecord, LiveState, Session} from "@supernova/contracts/services/sessions/schemas";
+import type {EntryRecord, LiveState, SessionEntry} from "@supernova/contracts/services/sessions/schemas";
 import {describe, expect, it} from "vitest";
 import {buildSessionTurns, buildTurns} from "@/features/sessions/lib/timeline/turns/build-turns";
 
 const usage = {cacheRead: 0, cacheWrite: 0, cost: {cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0}, input: 0, output: 0, totalTokens: 0};
 
-function user(id: number, text: string, content?: unknown): EntryRecord {
-  return {conversationId: 1, id, kind: "pi.user", model: [{content: content ?? text, role: "user", timestamp: id * 1000}]} as unknown as EntryRecord;
+function user(id: number, text: string, content?: unknown, authored = true): SessionEntry {
+  return {
+    conversationId: 1,
+    id,
+    kind: "pi.user",
+    model: [{content: content ?? text, role: "user", timestamp: id * 1000}],
+    ...(authored ? {contentParts: [{text, type: "text"}]} : {}),
+  } as unknown as SessionEntry;
 }
 
 function assistant(id: number, content: unknown[], extra: Record<string, unknown> = {}): EntryRecord {
@@ -23,10 +29,8 @@ function compaction(id: number, summary: string): EntryRecord {
   return {conversationId: 1, id, kind: "pi.compaction", model: [{content: text, role: "user", timestamp: id * 1000}]} as unknown as EntryRecord;
 }
 
-const turns: Session["turns"] = {"1": {contentParts: [{text: "First", type: "text"}]}, "5": {contentParts: [{text: "Second", type: "text"}]}};
-
 describe("building turns from Pi entries", () => {
-  it("starts a turn at each user entry with a record and attaches tool results to their calls", () => {
+  it("starts a turn at each user entry with authored content and attaches tool results to their calls", () => {
     const entries = [
       user(1, "First"),
       assistant(
@@ -43,7 +47,7 @@ describe("building turns from Pi entries", () => {
       assistant(6, [{text: "Again.", type: "text"}]),
     ];
 
-    const result = buildTurns({entries, turns});
+    const result = buildTurns({entries});
 
     expect(result.map((turn) => turn.id)).toEqual(["1", "5"]);
     expect(result[0]).toMatchObject({
@@ -57,16 +61,16 @@ describe("building turns from Pi entries", () => {
     });
   });
 
-  it("folds a user entry without a turn record into the current turn and shows compaction summaries where they happened", () => {
+  it("folds a user entry without authored content into the current turn and shows compaction summaries where they happened", () => {
     const entries = [
       user(1, "First"),
       assistant(2, [{text: "One", type: "text"}]),
-      user(3, "extension continuation"),
+      user(3, "extension continuation", undefined, false),
       compaction(4, "Summary"),
       assistant(6, [{text: "Two", type: "text"}]),
     ];
 
-    const [turn] = buildTurns({entries, turns});
+    const [turn] = buildTurns({entries});
 
     expect(turn?.events).toMatchObject([
       {content: "One", type: "assistant"},
@@ -76,25 +80,24 @@ describe("building turns from Pi entries", () => {
   });
 
   it("marks a turn with an assistant error as failed, but not an aborted one", () => {
-    const failed = buildTurns({entries: [user(1, "First"), assistant(2, [], {errorMessage: "Overloaded", stopReason: "error"})], turns});
-    const aborted = buildTurns({entries: [user(1, "First"), assistant(2, [], {errorMessage: "Aborted", stopReason: "aborted"})], turns});
+    const failed = buildTurns({entries: [user(1, "First"), assistant(2, [], {errorMessage: "Overloaded", stopReason: "error"})]});
+    const aborted = buildTurns({entries: [user(1, "First"), assistant(2, [], {errorMessage: "Aborted", stopReason: "aborted"})]});
 
     expect(failed[0]).toMatchObject({events: [{error: "Overloaded", type: "assistant"}], status: "error"});
     expect(aborted[0]).toMatchObject({events: [], status: "completed"});
   });
 
   it("restores image payloads from Pi's user message onto authored attachments", () => {
-    const parts: Session["turns"] = {
-      "1": {contentParts: [{id: "image-1", kind: "image", mime: "image/png", name: "a.png", size: 1, type: "attachment"}]},
-    };
     const [turn] = buildTurns({
       entries: [
-        user(1, "", [
-          {text: "", type: "text"},
-          {data: "BASE64", mimeType: "image/png", type: "image"},
-        ]),
+        {
+          ...user(1, "", [
+            {text: "", type: "text"},
+            {data: "BASE64", mimeType: "image/png", type: "image"},
+          ]),
+          contentParts: [{id: "image-1", kind: "image", mime: "image/png", name: "a.png", size: 1, type: "attachment"}],
+        },
       ],
-      turns: parts,
     });
 
     expect(turn?.userMessage.contentParts).toEqual([{contentBase64: "BASE64", id: "image-1", kind: "image", mime: "image/png", name: "a.png", size: 1, type: "attachment"}]);
@@ -118,7 +121,7 @@ describe("splitting a running session into committed and live turns", () => {
     } as unknown as LiveState;
     const entries = [user(1, "First"), assistant(2, [{text: "Old", type: "text"}]), user(5, "Second")];
 
-    const {liveTurn, turns: committed} = buildSessionTurns({entries, live, runStart: 5, turns});
+    const {liveTurn, turns: committed} = buildSessionTurns({entries, live, runStart: 5});
 
     expect(committed.map((turn) => turn.id)).toEqual(["1"]);
     expect(liveTurn).toMatchObject({
@@ -134,7 +137,7 @@ describe("splitting a running session into committed and live turns", () => {
   });
 
   it("has no live turn while idle", () => {
-    const {liveTurn, turns: committed} = buildSessionTurns({entries: [user(1, "First")], live: {}, turns});
+    const {liveTurn, turns: committed} = buildSessionTurns({entries: [user(1, "First")], live: {}});
 
     expect(liveTurn).toBeUndefined();
     expect(committed).toHaveLength(1);

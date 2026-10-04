@@ -1,7 +1,7 @@
 import type {AgentState, EntryRecord, LiveState, UsageState} from "@earendil-works/pi-durable";
 import type {AssistantMessage, Message} from "@earendil-works/pi-ai";
 import {calculateContextTokens, estimateTokens} from "@earendil-works/pi-coding-agent";
-import type {Session, SessionContextUsage} from "@supernova/contracts/services/sessions/schemas";
+import type {Session, SessionContextUsage, SessionEntry} from "@supernova/contracts/services/sessions/schemas";
 import type {SessionRecord, TurnRecord} from "@supernova/agent-runtime/pi/lib/session/session-state";
 
 type ContextMessage = Parameters<typeof estimateTokens>[0];
@@ -11,14 +11,11 @@ function hasValidAssistantUsage(message: Message): message is AssistantMessage {
   return message.role === "assistant" && message.stopReason !== "aborted" && message.stopReason !== "error" && calculateContextTokens(message.usage) > 0;
 }
 
-/** The first authored text of a session, its title until one is generated or set. */
-function fallbackTitle(entries: readonly EntryRecord[], turns: Session["turns"]): string {
-  const first = entries.find((entry) => turns[String(entry.id)] !== undefined);
-  const text = (first ? turns[String(first.id)]!.contentParts : [])
-    .map((part) => (part.type === "text" ? part.text : part.type === "reference" ? part.value : ""))
-    .join("")
-    .trim();
-  return text || "Untitled session";
+function authoredEntries(entries: readonly EntryRecord[], turns: Readonly<Record<string, TurnRecord>>): SessionEntry[] {
+  return entries.map((entry) => {
+    const record = entry.kind === "pi.user" ? turns[String(entry.id)] : undefined;
+    return record ? {...entry, contentParts: record.contentParts} : entry;
+  });
 }
 
 /**
@@ -56,11 +53,6 @@ export function timelineEntries(history: readonly EntryRecord[]): EntryRecord[] 
   return history.filter((entry) => entry.kind !== "pi.system");
 }
 
-/** What a session shows of its turn records: the authored content. Checkpoints stay on the server. */
-export function publicTurns(turns: Readonly<Record<string, TurnRecord>>): Session["turns"] {
-  return Object.fromEntries(Object.entries(turns).map(([id, record]) => [id, {contentParts: record.contentParts}]));
-}
-
 /**
  * Builds the contract `Session`. Every value must be strict JSON: the session is diffed into Chord deltas, so optional
  * fields are left out rather than set to undefined.
@@ -73,14 +65,16 @@ export function buildSession(input: {
   readonly live: LiveState | undefined;
   readonly usage: UsageState | undefined;
   readonly runStart: number | undefined;
-  readonly turns: Session["turns"];
+  readonly turns: Readonly<Record<string, TurnRecord>>;
   readonly context: Session["context"];
 }): Session {
-  const {context, entries, record, turns, undone} = input;
+  const {context, record, turns} = input;
+  const entries = authoredEntries(input.entries, turns);
+  const undone = authoredEntries(input.undone, turns);
   const lastTimestamp = entries.findLast((entry) => entry.model?.[0]?.timestamp !== undefined)?.model?.[0]?.timestamp;
   return {
     id: record.id,
-    title: record.title ?? fallbackTitle(entries, turns),
+    title: record.title ?? "Untitled session",
     forked: record.forkedFrom !== undefined,
     projectPath: record.projectPath,
     ...(record.worktree ? {worktree: record.worktree} : {}),
@@ -91,7 +85,6 @@ export function buildSession(input: {
     live: input.live ?? {},
     usage: input.usage ?? {models: {}, tools: {}},
     ...(input.runStart === undefined ? {} : {runStart: input.runStart}),
-    turns,
     context,
   };
 }

@@ -116,7 +116,7 @@ export class SessionWorker {
     this.cancelled = false;
     try {
       const session = await this.session();
-      if ((await session.view()).live?.run !== undefined) throw new Error("Session already has active work.");
+      if ((await session.view()).docs["pi.live"]?.run !== undefined) throw new Error("Session already has active work.");
       return session;
     } catch (error) {
       this.commandRunning = false;

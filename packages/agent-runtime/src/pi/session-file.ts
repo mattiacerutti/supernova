@@ -4,6 +4,7 @@ import type {ModelRuntime, SettingsManager} from "@earendil-works/pi-coding-agen
 import type {
   AgentState,
   CompactionResult,
+  ContextView,
   Conversation,
   ConversationId,
   ConversationView,
@@ -13,14 +14,13 @@ import type {
   Harness,
   LiveState,
   Registry,
-  UsageState,
 } from "@earendil-works/pi-durable";
 import {AgentDoc, ConversationBusy, createRegistry, defineExtension, Harness as HarnessFactory} from "@earendil-works/pi-durable";
 import {NodeExecutionEnv} from "@earendil-works/pi-durable/env/node";
 import {openNodeSqliteStorage} from "@earendil-works/pi-durable/storage/sqlite/node";
 import {harnessModels, harnessSettings} from "@supernova/agent-runtime/pi/config/harness-settings";
 import type {PromptResources} from "@supernova/agent-runtime/pi/config/system-prompt";
-import {createPromptExtension} from "@supernova/agent-runtime/pi/config/system-prompt";
+import {createPromptSections} from "@supernova/agent-runtime/pi/config/system-prompt";
 import type {CheckpointRef, SessionState, TurnRecord} from "@supernova/agent-runtime/pi/lib/session/session-state";
 import {SessionStateDoc} from "@supernova/agent-runtime/pi/lib/session/session-state";
 import type {PromptedTool} from "@supernova/agent-runtime/pi/lib/tools/coding-tools";
@@ -41,15 +41,6 @@ export interface SessionFileSetup {
   readonly extensions: () => readonly Extension[];
 }
 
-/** One committed view of a conversation: its transcript and built-in documents, as plain values. */
-export interface ConversationSnapshot {
-  readonly conversationId: number;
-  readonly entries: readonly EntryRecord[];
-  readonly agent: AgentState | undefined;
-  readonly live: LiveState | undefined;
-  readonly usage: UsageState | undefined;
-}
-
 export class SessionBusyError extends Error {
   public constructor() {
     super("Session already has active work.");
@@ -59,16 +50,6 @@ export class SessionBusyError extends Error {
 /** Document values are strict JSON; records may carry undefined optional fields, which this drops. */
 function strictJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
-}
-
-function snapshotOf(conversationId: number, value: ConversationView): ConversationSnapshot {
-  return {
-    conversationId,
-    entries: value.entries,
-    agent: value.docs["pi.agent"] as AgentState | undefined,
-    live: value.docs["pi.live"] as LiveState | undefined,
-    usage: value.docs["pi.usage"] as UsageState | undefined,
-  };
 }
 
 /**
@@ -88,7 +69,8 @@ export class SessionFile {
   /** Opens (creating when absent) a session file and resumes work the last process left unfinished. */
   public static async open(input: SessionFileSetup & {readonly sessionId: string; readonly path: string; readonly onReport: (error: unknown) => void}): Promise<SessionFile> {
     const shellPath = input.settings().getShellPath();
-    const env = new NodeExecutionEnv({cwd: input.cwd, ...(shellPath ? {shellPath} : {})});
+    const env = new NodeExecutionEnv({cwd: input.cwd, shellPath});
+
     const registry = createRegistry();
     const harness = await HarnessFactory.open(
       await openNodeSqliteStorage(input.path),
@@ -102,10 +84,13 @@ export class SessionFile {
       },
       context
     );
+
     const file = new SessionFile(input.sessionId, input.cwd, harness, registry, env);
     file.install(input);
+
     await harness.root(context, {agent: {cwd: input.cwd}});
     harness.resume();
+
     return file;
   }
 
@@ -114,15 +99,19 @@ export class SessionFile {
    * path: running work finishes on the code it took.
    */
   public install(setup: SessionFileSetup): void {
-    const tools = [...createCodingTools({cwd: setup.cwd, modelRuntime: setup.modelRuntime, sessionId: this.sessionId, settings: setup.settings()}), ...setup.extraTools()];
+    const codingTools = createCodingTools({cwd: setup.cwd, settings: setup.settings()});
+    const tools = [...codingTools, ...setup.extraTools()];
     const prompts = new Map(tools.map(({tool, prompt}) => [tool.name, prompt]));
-    const installed = [
-      defineExtension({name: "supernova-tools", tools: tools.map(({tool}) => tool)}),
-      createPromptExtension({cwd: setup.cwd, resources: setup.resources, toolPrompts: prompts}),
+
+    const extensions = [
+      defineExtension({name: "tools", tools: tools.map(({tool}) => tool)}),
+      defineExtension({name: "prompt", sections: createPromptSections({cwd: setup.cwd, resources: setup.resources, toolPrompts: prompts})}),
       ...setup.extensions(),
     ];
-    for (const extension of installed) this.registry.install(extension);
-    const names = new Set(installed.map((extension) => extension.name));
+
+    for (const extension of extensions) this.registry.install(extension);
+    const names = new Set(extensions.map((extension) => extension.name));
+
     for (const extension of this.registry.snapshot().installed()) {
       if (!names.has(extension.name)) this.registry.uninstall(extension);
     }
@@ -130,7 +119,8 @@ export class SessionFile {
 
   /** The `supernova.session` state; its initial value until the first write. */
   public async state(): Promise<SessionState> {
-    return ((await this.harness.snapshot(SessionStateDoc, context)) as SessionState | undefined) ?? (SessionStateDoc.definition.initial() as SessionState);
+    const state = (await this.harness.snapshot(SessionStateDoc, context)) as SessionState | undefined;
+    return state ?? (SessionStateDoc.definition.initial() as SessionState);
   }
 
   /** Changes the `supernova.session` state in one commit. */
@@ -141,11 +131,11 @@ export class SessionFile {
   }
 
   /** A conversation's committed view; the visible one by default. */
-  public async view(conversationId?: number): Promise<ConversationSnapshot> {
+  public async view(conversationId?: number): Promise<ConversationView> {
     const id = conversationId ?? (await this.state()).visible;
     const state = await (await this.conversation(id)).viewState(context);
     try {
-      return snapshotOf(id, state.value!);
+      return state.value!;
     } finally {
       state.dispose();
     }
@@ -172,14 +162,14 @@ export class SessionFile {
   }
 
   /** The active entries and model messages of a conversation's next request. */
-  public async modelContext(conversationId: number) {
+  public async modelContext(conversationId: number): Promise<ContextView> {
     return (await this.conversation(conversationId)).context(context);
   }
 
   /** Calls `listener` with every committed view of a conversation. Returns the unsubscribe. */
-  public async watch(conversationId: number, listener: (view: ConversationSnapshot) => void): Promise<() => void> {
+  public async watch(conversationId: number, listener: (view: ConversationView) => void): Promise<() => void> {
     const state = await (await this.conversation(conversationId)).viewState(context);
-    const unsubscribe = state.subscribe((value) => listener(snapshotOf(conversationId, value)));
+    const unsubscribe = state.subscribe(listener);
     return () => {
       unsubscribe();
       state.dispose();

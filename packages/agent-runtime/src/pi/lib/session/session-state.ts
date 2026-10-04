@@ -16,7 +16,6 @@ export interface SessionRecord {
   readonly updatedAt: string;
 }
 
-/** Whether a checkpoint boundary has durable workspace state behind it. */
 export type CheckpointStatus = "captured" | "disabled" | "failed";
 
 /** One workspace checkpoint boundary. `sessionId` is the session that captured it; a fork inherits foreign ones. */
@@ -36,18 +35,11 @@ export interface TurnRecord {
   readonly after?: CheckpointRef;
 }
 
-/**
- * Navigation and turn state of one session file.
- *
- * `leaf` is the conversation holding every turn, including undone ones. `visible` is the conversation the user sees
- * and talks to: `leaf` itself, or a fork of it after an undo. Sending on a fork makes it the new `leaf`, which drops
- * the redo path. `current` is the checkpoint the workspace was last captured at or restored to: after a redo it is the
- * shown turn's after-checkpoint, after an undo the hidden turn's before-checkpoint, which differ when files changed
- * between turns. `turns` is keyed by the turn's user entry id. The model each turn ran with is the engine's
- * `pi.agent` document, which forks inherit as of their fork entry, so navigation restores it without our help.
- */
+/** Navigation and turn state of one session file. */
 export type SessionState = {
+  /** Conversation ID of the current branch. */
   leaf: number;
+  /** Conversation ID of the visible leaf of the branch. Differs from `leaf` after checkpoint navigation. */
   visible: number;
   current?: CheckpointRef;
   turns: Record<string, TurnRecord>;

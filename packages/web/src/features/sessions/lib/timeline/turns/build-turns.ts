@@ -5,6 +5,7 @@ import type {
   LiveState,
   PiUserMessage,
   Session,
+  SessionEntry,
   ToolResultMessage,
   UserMessageContentPart,
 } from "@supernova/contracts/services/sessions/schemas";
@@ -134,19 +135,18 @@ function addLive(draft: TurnDraft, live: LiveState): void {
 }
 
 interface BuildTurnsInput {
-  readonly entries: readonly EntryRecord[];
-  readonly turns: Session["turns"];
+  readonly entries: readonly SessionEntry[];
   /** Set for the turn being answered: its live presentation follows its entries and it is streaming. */
   readonly live?: LiveState;
 }
 
 /**
- * Projects Pi entries onto turns. A user entry with a turn record starts a turn; one without (an extension's
+ * Projects session entries onto turns. A user entry with authored content starts a turn; one without (an extension's
  * continuation) is not shown, and what follows it folds into the current turn. Entries before the first turn have no
  * turn, except compactions, which open the next one.
  */
 export function buildTurns(input: BuildTurnsInput): SessionTurn[] {
-  const {entries, live, turns} = input;
+  const {entries, live} = input;
   const result: SessionTurn[] = [];
   let current: TurnDraft | undefined;
   const pendingCompactions: EntryRecord[] = [];
@@ -154,10 +154,9 @@ export function buildTurns(input: BuildTurnsInput): SessionTurn[] {
   for (const entry of entries) {
     const message = entry.model?.[0];
     if (entry.kind === "pi.user" && message?.role === "user") {
-      const record = turns[String(entry.id)];
-      if (!record) continue;
+      if (entry.contentParts === undefined) continue;
       if (current) result.push(current.toTurn(false));
-      current = new TurnDraft({id: String(entry.id), contentParts: withImages(record.contentParts, message), timestamp: isoTimestamp(message.timestamp)});
+      current = new TurnDraft({id: String(entry.id), contentParts: withImages(entry.contentParts, message), timestamp: isoTimestamp(message.timestamp)});
       for (const compaction of pendingCompactions.splice(0)) current.addCompaction(isoTimestamp(compaction.model?.[0]?.timestamp), compactionSummary(compaction));
     } else if (entry.kind === "pi.compaction") {
       if (current) current.addCompaction(isoTimestamp(message?.timestamp), compactionSummary(entry));
@@ -175,9 +174,9 @@ export function buildTurns(input: BuildTurnsInput): SessionTurn[] {
 }
 
 /** The session's committed turns, and the turn its active run is answering: entries from the run's first user entry on. */
-export function buildSessionTurns(session: Pick<Session, "entries" | "live" | "runStart" | "turns">): {readonly turns: SessionTurn[]; readonly liveTurn: SessionTurn | undefined} {
-  const {entries, live, runStart, turns} = session;
+export function buildSessionTurns(session: Pick<Session, "entries" | "live" | "runStart">): {readonly turns: SessionTurn[]; readonly liveTurn: SessionTurn | undefined} {
+  const {entries, live, runStart} = session;
   const start = runStart === undefined ? -1 : entries.findIndex((entry) => entry.id >= runStart);
-  if (start === -1) return {turns: buildTurns({entries, turns}), liveTurn: undefined};
-  return {turns: buildTurns({entries: entries.slice(0, start), turns}), liveTurn: buildTurns({entries: entries.slice(start), turns, live}).at(-1)};
+  if (start === -1) return {turns: buildTurns({entries}), liveTurn: undefined};
+  return {turns: buildTurns({entries: entries.slice(0, start)}), liveTurn: buildTurns({entries: entries.slice(start), live}).at(-1)};
 }

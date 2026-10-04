@@ -7,6 +7,7 @@ import {afterEach, describe, expect, it, vi} from "vitest";
 import {createPiSdk} from "@supernova/agent-runtime/pi/sdk";
 import type {Message} from "@earendil-works/pi-ai";
 import {getSystemMessageText} from "@earendil-works/pi-ai";
+import {createReadTool} from "@earendil-works/pi-durable/tools";
 import {createPiTestRuntime, fauxAssistantMessage, selectedModelReference} from "@tests/support/session-runtime";
 import type {TSchema} from "@earendil-works/pi-ai";
 import type {ToolDefinition} from "@earendil-works/pi-coding-agent";
@@ -333,7 +334,7 @@ export default function(pi) {
     }
   });
 
-  it("renders the same system prompt and offers the same tools as the old SDK for one project", async () => {
+  it("preserves the SDK's project prompt and tool set without advertising bash metadata or image reads", async () => {
     const testProject = await createTestProject();
     tempDirs.push(testProject.home, testProject.repo);
     const {home, project} = testProject;
@@ -387,15 +388,17 @@ export default function(pi) {
 
     const system = request!.messages.find((message) => message.role === "system")!;
     const newPrompt = getSystemMessageText(system);
-    // Section order and text match; only the old prompt's untagged tail newline differs.
-    expect(newPrompt.trim()).toBe(oldPrompt.trim());
+    // Bash no longer injects session metadata, so its guideline is deliberately omitted.
+    const expectedPrompt = oldPrompt.replace("- You can inspect PI_* environment variables for current model and session details.\n", "");
     expect(request!.tools).toEqual(oldTools);
     expect(oldTools).toEqual(["read", "bash", "edit", "write", "web_fetch"]);
-    // Same descriptions and schemas, except bash's wording (accepted) and read's (restored by the image wrapper).
+    // Read and bash use durable's descriptions; the other tools retain the SDK's wording.
     const offered = new Map((system.role === "system" ? (system.toolsAdded ?? []) : []).map((tool) => [tool.name, tool]));
+    expect(offered.get("read")?.description).toBe(createReadTool().description);
     for (const name of ["read", "write", "edit", "web_fetch"]) {
-      expect(offered.get(name)?.description).toBe(oldDefinitions.get(name)?.description);
+      if (name !== "read") expect(offered.get(name)?.description).toBe(oldDefinitions.get(name)?.description);
       expect(JSON.stringify(offered.get(name)?.parameters)).toBe(JSON.stringify(oldDefinitions.get(name)?.parameters));
     }
+    expect(newPrompt.trim()).toBe(expectedPrompt.trim());
   });
 });

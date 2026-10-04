@@ -45,20 +45,25 @@ function session(input?: Partial<Session>): Session {
     agent: {},
     live: {},
     usage: {models: {}, tools: {}},
-    turns: {},
     context: {usedTokens: 0, contextWindow: 200_000},
     ...input,
   };
 }
 
-/** A Pi user entry, the start of a turn when the session has a record for it. */
+/** A Pi user entry enriched with authored content, the start of a turn. */
 function userEntry(id: number): Session["entries"][number] {
-  return {conversationId: 1, id, kind: "pi.user", model: [{content: `Turn ${id}`, role: "user", timestamp: id}]} as unknown as Session["entries"][number];
+  return {
+    conversationId: 1,
+    id,
+    kind: "pi.user",
+    contentParts: [{text: `Turn ${id}`, type: "text"}],
+    model: [{content: `Turn ${id}`, role: "user", timestamp: id}],
+  } as unknown as Session["entries"][number];
 }
 
 /** A session with two turns, starting at entries 1 and 3. */
 function twoTurns(): Session {
-  return session({entries: [userEntry(1), userEntry(3)], turns: {"1": {contentParts: [{text: "Turn 1", type: "text"}]}, "3": {contentParts: [{text: "Turn 3", type: "text"}]}}});
+  return session({entries: [userEntry(1), userEntry(3)]});
 }
 
 /** The same session with its last turn undone. */
@@ -248,6 +253,29 @@ describe("session commands and views", () => {
     await waitUntil(() => expect(live()).toMatchObject({liveMessage: undefined, status: "idle"}));
   });
 
+  it("shows a new authored turn after undo without splitting extension continuations", async () => {
+    const {actions, document, open, services} = setup();
+    const initial = session({entries: [userEntry(1)], undone: [userEntry(3), userEntry(5)]});
+    services.documents.set("session-1", replicatedState(initial));
+    open("session-1");
+    await waitUntil(() => expect(document("session-1")).toEqual(initial));
+    let accept!: () => void;
+    services.sessionRuntime.sendMessage = vi.fn(() => new Promise<typeof ok>((resolve) => (accept = () => resolve(ok))));
+
+    actions.sendMessage({contentParts, modelReference: model, sessionId: "session-1"});
+    await waitUntil(() => expect(services.sessionRuntime.sendMessage).toHaveBeenCalledOnce());
+    const transcript = services.documents.get("session-1")!;
+    const continuation = {conversationId: 1, id: 6, kind: "pi.user", model: [{content: "Continuation", role: "user", timestamp: 6}]} as unknown as Session["entries"][number];
+    transcript.replace(BACKGROUND_CONTEXT, {...initial, entries: [...initial.entries, continuation]});
+    expect(live("session-1", document("session-1"))).toMatchObject({liveMessage: contentParts, turnIds: ["1"]});
+    expect(useSessionsStore.getState().optimism["session-1"]?.message).toBeDefined();
+
+    transcript.replace(BACKGROUND_CONTEXT, session({entries: [...transcript.value!.entries, {...userEntry(7), contentParts}], runStart: 7}));
+    expect(live("session-1", document("session-1"))).toMatchObject({liveMessage: contentParts, liveTurn: {id: "7"}, turnIds: ["1"], undoneTurns: []});
+    accept();
+    await waitUntil(() => expect(useSessionsStore.getState().optimism["session-1"]?.message).toBeUndefined());
+  });
+
   it("drops the sent message and reports the error when the send fails", async () => {
     const {actions, services} = setup();
     services.sessionRuntime.sendMessage = vi.fn(async () => failure("GenericError", "Model unavailable"));
@@ -318,7 +346,7 @@ describe("session commands and views", () => {
     services.sessions.create = vi.fn(
       (payload: Parameters<FakeServices["sessions"]["create"]>[0]) =>
         new Promise<{readonly ok: true; readonly value: Session}>((resolve) => {
-          resolveCreate = () => resolve({ok: true, value: session({id: payload.id, turns: {"1": {contentParts: [...contentParts]}}})});
+          resolveCreate = () => resolve({ok: true, value: session({id: payload.id, entries: [{...userEntry(1), contentParts}]})});
         })
     );
 

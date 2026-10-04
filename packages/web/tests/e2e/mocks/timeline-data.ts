@@ -1,4 +1,4 @@
-import type {AssistantMessage, EntryRecord, ModelDetails, ModelReference, Session, SessionSummary, UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
+import type {AssistantMessage, EntryRecord, ModelDetails, ModelReference, Session, SessionSummary, SessionEntry} from "@supernova/contracts/services/sessions/schemas";
 
 export const TIMELINE_PROJECT_PATH = "/tmp/supernova-timeline-e2e";
 export const TIMELINE_PROJECT_NAME = "supernova-timeline-e2e";
@@ -31,8 +31,14 @@ function timestamp(offsetMs: number): string {
 const usage = {cacheRead: 0, cacheWrite: 0, cost: {cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0}, input: 0, output: 0, totalTokens: 0};
 
 /** A Pi user entry. */
-export function userEntry(id: number, text: string, offsetMs: number): EntryRecord {
-  return {conversationId: 1, id, kind: "pi.user", model: [{content: text, role: "user", timestamp: Date.parse(timestamp(offsetMs))}]} as unknown as EntryRecord;
+export function userEntry(id: number, text: string, offsetMs: number): SessionEntry {
+  return {
+    conversationId: 1,
+    id,
+    kind: "pi.user",
+    model: [{content: text, role: "user", timestamp: Date.parse(timestamp(offsetMs))}],
+    contentParts: [{text, type: "text"}],
+  } as unknown as SessionEntry;
 }
 
 /** A Pi assistant message as the engine stores and streams it. */
@@ -55,13 +61,11 @@ export function assistantEntry(id: number, message: AssistantMessage): EntryReco
 }
 
 function historySession(input: {readonly historyTurnCount: number; readonly id: string; readonly title: string}): Session {
-  const entries: EntryRecord[] = [];
-  const turns: Record<string, {contentParts: UserMessageContentPart[]}> = {};
+  const entries: SessionEntry[] = [];
   for (let index = 0; index < input.historyTurnCount; index++) {
     const text = `User history ${index}. ${"Long prompt content. ".repeat(5)}`;
     const userId = entries.length + 1;
     entries.push(userEntry(userId, text, index * 1_000));
-    turns[String(userId)] = {contentParts: [{text, type: "text"}]};
     const answer = `Assistant history ${index}. ${"This deliberately makes the uncached transcript tall. ".repeat(6)}`;
     entries.push(assistantEntry(entries.length + 1, assistantMessage([{text: answer, type: "text"}], index * 1_000 + 200)));
   }
@@ -77,7 +81,6 @@ function historySession(input: {readonly historyTurnCount: number; readonly id: 
     agent: {model: {modelId: timelineModel.id, provider: timelineModel.providerId}, thinkingLevel: "high"},
     live: {},
     usage: {models: {}, tools: {}},
-    turns,
     context: {contextWindow: 200_000, usedTokens: 20_000},
   };
 }
