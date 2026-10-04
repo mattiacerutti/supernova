@@ -31,7 +31,7 @@ test.each(["", "abc", "1.5", "-1", "65536"])(
   30_000
 );
 
-test("owned APIs bind distinct ports, report RPC readiness, serve no UI, and release live sockets on close", async () => {
+test("owned APIs bind distinct ports, report readiness, serve no UI, and release live sockets on close", async () => {
   const home = await mkdtemp(join(tmpdir(), "supernova-server-test-"));
   const options = {entry, ...runtime, env: {SUPERNOVA_HOME: home, PI_OFFLINE: "1"}};
   const first = await startServerProcess(options);

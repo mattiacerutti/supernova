@@ -1,6 +1,6 @@
 import type {WorkspaceService} from "@supernova/contracts/services/workspace/services";
-import type {FailureCode} from "@/rpc/runtime-result";
-import {runtimeError} from "@/rpc/runtime-result";
+import type {FailureCode} from "@/runtime/runtime-result";
+import {runtimeError} from "@/runtime/runtime-result";
 
 const GENERIC_MESSAGE = "Something went wrong loading this project.";
 

@@ -2,8 +2,8 @@ import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import {queryOptions, useQuery, useQueryClient} from "@tanstack/react-query";
 import {showToast} from "@/lib/toast";
 import {sessionKeys} from "@/features/sessions/api/query-keys";
-import {unwrap} from "@/rpc/runtime-result";
-import {useRuntime} from "@/rpc/use-runtime";
+import {unwrap} from "@/runtime/runtime-result";
+import {useRuntime} from "@/runtime/use-runtime";
 
 /** Loads models after extension providers are registered, with an explicit retry on failure. */
 export function useSessionModels(projectPath: string) {

@@ -1,5 +1,5 @@
 import {createContext} from "react";
-import type {RuntimeClient} from "@/rpc/transport/runtime-client";
+import type {RuntimeClient} from "@/runtime/transport/runtime-client";
 
 // eslint-disable-next-line react-refresh/only-export-components -- Context belongs to this provider; changes also invalidate its consumers.
 export const RuntimeContext = createContext<RuntimeClient | null>(null);

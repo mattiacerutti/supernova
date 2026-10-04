@@ -23,7 +23,7 @@ import {
   trimComposerContentParts,
 } from "@/features/sessions/lib/composer/editor/composer-content-parts";
 import {createSuggestionExtension} from "@/features/sessions/lib/composer/editor/composer-suggestions";
-import type {SessionLiveStatus} from "@/features/sessions/stores/conversation/session-live-store";
+import type {SessionStatusKind} from "@/features/sessions/lib/session-view";
 import type {ComposerSuggestionMatch} from "@/features/sessions/types/composer-suggestion";
 import {cn} from "@/lib/cn";
 
@@ -141,7 +141,7 @@ interface ComposerSubmitButtonProps {
   readonly canInterrupt: boolean;
   readonly canSubmit: boolean;
   readonly onClick: () => void;
-  readonly streamStatus: SessionLiveStatus;
+  readonly streamStatus: SessionStatusKind;
 }
 
 function ComposerSubmitButton(props: ComposerSubmitButtonProps) {
@@ -173,7 +173,7 @@ interface SessionComposerProps {
   readonly onSubmit: (contentParts: readonly UserMessageContentPart[]) => void;
   readonly placeholder?: string;
   readonly slashCommandActions?: ClientSlashCommandActions;
-  readonly streamStatus?: SessionLiveStatus;
+  readonly streamStatus?: SessionStatusKind;
   /** Rendered above the composer surface, overlapping the timeline. */
   readonly topExtension?: ReactNode;
 }

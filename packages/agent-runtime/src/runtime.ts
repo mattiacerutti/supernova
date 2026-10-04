@@ -46,9 +46,11 @@ interface CreateAgentRuntimeOptions {
 /** Wires the Pi SDK, stateful components, and features. Call `dispose()` on shutdown. */
 export async function createAgentRuntime(options: CreateAgentRuntimeOptions = {}): Promise<AgentRuntime> {
   const sdk = options.sdk ?? (await createPiSdk());
+
   const resourceCache = createResourceCache(sdk);
   const checkpointStore = new FileCheckpointStore(options.checkpointStorageRoot);
   const supernovaTools = createSupernovaTools(sdk.modelRuntime);
+
   const store = new SessionStore({
     sdk,
     resourceCache,

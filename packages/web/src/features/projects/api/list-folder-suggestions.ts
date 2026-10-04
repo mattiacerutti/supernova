@@ -1,9 +1,9 @@
 import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import {queryOptions, useQuery} from "@tanstack/react-query";
 import {projectKeys} from "@/features/projects/api/query-keys";
-import {unwrap} from "@/rpc/runtime-result";
-import type {RuntimeClient} from "@/rpc/transport/runtime-client";
-import {useRuntime} from "@/rpc/use-runtime";
+import {unwrap} from "@/runtime/runtime-result";
+import type {RuntimeClient} from "@/runtime/transport/runtime-client";
+import {useRuntime} from "@/runtime/use-runtime";
 
 export function listFolderSuggestionsQueryOptions(runtime: RuntimeClient, query: string) {
   return queryOptions({

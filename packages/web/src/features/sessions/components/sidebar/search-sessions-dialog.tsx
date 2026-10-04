@@ -1,14 +1,12 @@
 import type {Ref} from "react";
-import {useRuntime} from "@/rpc/use-runtime";
 import {useState} from "react";
-import {useQueries} from "@tanstack/react-query";
 import {useNavigate} from "@tanstack/react-router";
 import Dialog from "@/components/ui/dialog";
 import Icon from "@/components/ui/icon";
 import {MenuLabel} from "@/components/ui/menu";
 import SearchField from "@/components/ui/search-field";
 import SearchableList from "@/components/searchable-list";
-import {listProjectSessionsQueryOptions} from "@/features/sessions/api/sidebar/list-project-sessions";
+import {useListProjectsSessions} from "@/features/sessions/api/sidebar/list-project-sessions";
 import type {Project} from "@/features/projects/types/project";
 import {formatRelativeTime} from "@/lib/format-relative-time";
 import SessionTitleText from "@/features/sessions/components/session-title-text";
@@ -61,21 +59,20 @@ interface SearchSessionsDialogProps {
 }
 
 export default function SearchSessionsDialog(props: SearchSessionsDialogProps) {
-  const runtime = useRuntime();
   const {onClose, open, projects} = props;
   const [activeRowIndex, setActiveRowIndex] = useState(0);
   const [query, setQuery] = useState("");
   const navigate = useNavigate();
-  const projectSessionQueries = useQueries({queries: projects.map((project) => listProjectSessionsQueryOptions(runtime, project.path))});
+  const projectSessions = useListProjectsSessions(projects.map((project) => project.path));
   const projectNamesByPath = new Map(projects.map((project) => [project.path, project.name]));
   const normalizedQuery = query.trim().toLocaleLowerCase();
-  const sessions = projectSessionQueries.flatMap((projectSessionsQuery) =>
-    (projectSessionsQuery.data?.sessions ?? [])
+  const sessions = projectSessions.flatMap(({projectPath, sessions: listed}) =>
+    listed
       .map(
         (session): SessionSearchResultRow => ({
           id: session.id,
-          projectName: projectNamesByPath.get(projectSessionsQuery.data?.projectPath ?? "") ?? projectSessionsQuery.data?.projectPath ?? "Unknown project",
-          projectPath: projectSessionsQuery.data?.projectPath ?? "",
+          projectName: projectNamesByPath.get(projectPath) ?? projectPath,
+          projectPath,
           timestamp: Date.parse(session.updatedAt),
           title: session.title,
           type: "session",

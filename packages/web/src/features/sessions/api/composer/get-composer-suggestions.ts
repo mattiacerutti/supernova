@@ -5,8 +5,8 @@ import {clientSlashCommandSuggestions} from "@/features/sessions/lib/composer/ed
 import {filterComposerSuggestions} from "@/features/sessions/lib/composer/editor/composer-suggestions";
 import type {ClientSlashCommandActions} from "@/features/sessions/lib/composer/editor/client-slash-commands";
 import {sessionKeys} from "@/features/sessions/api/query-keys";
-import {unwrap} from "@/rpc/runtime-result";
-import {useRuntime} from "@/rpc/use-runtime";
+import {unwrap} from "@/runtime/runtime-result";
+import {useRuntime} from "@/runtime/use-runtime";
 
 /** Loads project resources on composer mount; only file searches make requests while typing. */
 export function useComposerSuggestions(projectPath: string, match: ComposerSuggestionMatch | null, input: {readonly slashCommandActions?: ClientSlashCommandActions} = {}) {

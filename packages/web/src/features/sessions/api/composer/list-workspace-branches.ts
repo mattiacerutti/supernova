@@ -1,8 +1,8 @@
 import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import {queryOptions, useQuery} from "@tanstack/react-query";
 import {sessionKeys} from "@/features/sessions/api/query-keys";
-import {unwrap} from "@/rpc/runtime-result";
-import {useRuntime} from "@/rpc/use-runtime";
+import {unwrap} from "@/runtime/runtime-result";
+import {useRuntime} from "@/runtime/use-runtime";
 
 /** Branches of the project repository, for choosing where a new session runs. Fails with `WorkspaceNotARepositoryError` for plain folders. */
 export function useWorkspaceBranches(projectPath: string, options: {readonly enabled?: boolean} = {}) {

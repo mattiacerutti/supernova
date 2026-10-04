@@ -496,7 +496,7 @@ The store uses `Promise<void>` rather than booleans so callers cannot accidental
 
 Archiving a session follows this order:
 
-1. `the RPC edge` releases and disposes the session runtime.
+1. The archive operation in `session-operations.ts` releases and disposes the session runtime.
 2. The Pi session file moves into the archive directory.
 3. `CheckpointStore.deleteSession()` runs as best-effort cleanup.
 

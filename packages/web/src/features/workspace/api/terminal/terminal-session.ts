@@ -1,8 +1,8 @@
 import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import type {TerminalOutput} from "@supernova/contracts/services/workspace/schemas";
-import {unwrap} from "@/rpc/runtime-result";
-import type {RuntimeClient} from "@/rpc/transport/runtime-client";
-import {useRuntime} from "@/rpc/use-runtime";
+import {unwrap} from "@/runtime/runtime-result";
+import type {RuntimeClient} from "@/runtime/transport/runtime-client";
+import {useRuntime} from "@/runtime/use-runtime";
 
 export interface OpenTerminalInput {
   readonly cols: number;

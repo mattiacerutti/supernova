@@ -55,32 +55,33 @@ flowchart BT
 
     subgraph browser[Browser]
         client["pi-client<br/>Chord bindings"]
-        query["React Query<br/>Session document"]
-        liveStore["Zustand<br/>status, pending message, optimistic navigation"]
+        sync["sessions-sync<br/>directory + followed documents"]
+        sessionsStore["sessions store<br/>directory entries, documents, optimism"]
+        view["sessionView<br/>what a session shows"]
         timeline["build-turns<br/>entries + pi.live → rows"]
     end
 
     edge <-->|services, state deltas| client
-    client -->|session document values| query
-    client -->|directory| liveStore
-    query --> timeline
+    client --> sync
+    sync --> sessionsStore
+    sessionsStore --> view
+    view --> timeline
 ```
 
-`pi/session-store.ts` is the seam onto the engine; features never import `pi-durable`. Contracts import Pi's types (type-only) so the browser sees Pi's shapes; `PiJson` carries those values with a JSON check only.
+`pi/session-store.ts` is the seam onto the engine; features never import `pi-durable`. Contracts import Pi's types (type-only) so the browser sees Pi's shapes; `z.custom<PiType>()` carries those values unchecked.
 
-| State                                  | Owner                                     | Lifetime        |
-| -------------------------------------- | ----------------------------------------- | --------------- |
-| Transcript, runs, tasks                | Engine session file                       | Durable         |
-| Turn records, navigation               | `supernova.session` document in that file | Durable         |
-| Session records                        | `catalog.sqlite`                          | Durable         |
-| Session document                       | `SessionWorker`                           | Server process  |
-| Activity, summaries, problems          | `SessionBoard`                            | Server process  |
-| Mirrored session document              | React Query                               | Browser cache   |
-| Pending message, optimistic navigation | Zustand session live store                | Browser process |
+| State                                      | Owner                                     | Lifetime        |
+| ------------------------------------------ | ----------------------------------------- | --------------- |
+| Transcript, runs, tasks                    | Engine session file                       | Durable         |
+| Turn records, navigation                   | `supernova.session` document in that file | Durable         |
+| Session records                            | `catalog.sqlite`                          | Durable         |
+| Session document                           | `SessionWorker`                           | Server process  |
+| Activity, summaries, problems              | `SessionBoard`                            | Server process  |
+| Mirrored directory and documents, optimism | Zustand sessions store                    | Browser process |
 
 ## Services
 
-Two services carry sessions, one per feature: `SessionsService` (`contracts/src/services/sessions/services.ts`) and `SessionRuntimeService` (`contracts/src/services/session-runtime/services.ts`). The host is `agent-runtime/src/rpc/runtime-services.ts`, served by `pi-server` with every other runtime service on the HTTP server's `/ws` WebSocket (`apps/server/src/runtime-socket.ts`).
+Two services carry sessions, one per feature: `SessionsService` (`contracts/src/services/sessions/services.ts`) and `SessionRuntimeService` (`contracts/src/services/session-runtime/services.ts`). The host is `agent-runtime/src/runtime-services.ts`, served by `pi-server` with every other runtime service on the HTTP server's `/ws` WebSocket (`apps/server/src/runtime-socket.ts`).
 
 | Scope            | Service                 | Members                                                                                                            |
 | ---------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------ |
@@ -115,7 +116,7 @@ Submitting runs inside the worker's publication queue: the engine places the use
 
 When a frame shows no active run, the worker captures the after-turn checkpoint of every turn that lacks one: one capture serves all inputs a run answered, and runs that finished while nothing watched (after a restart) are caught up on first watch.
 
-The browser shows the message it sent at once as a pending turn, until the session's state has a new turn record. It projects entries before `runStart` as settled turns and entries from it on, plus `pi.live` (streamed partial, running tool output, blocking compactions), as the live turn (`lib/timeline/turns/build-turns.ts`). A streaming partial's last tool call shows no arguments: they may be cut. The engine commits partials at most every 100 ms, so intermediate states may be coalesced.
+The browser shows the message it sent at once as a pending turn, until the send resolves. The worker publishes the placed input's turn before the send's reply leaves, so the document already holds the turn when the pending one goes; the wire test asserts this order. It projects entries before `runStart` as settled turns and entries from it on, plus `pi.live` (streamed partial, running tool output, blocking compactions), as the live turn (`lib/timeline/turns/build-turns.ts`). A streaming partial's last tool call shows no arguments: they may be cut. The engine commits partials at most every 100 ms, so intermediate states may be coalesced.
 
 ### Queueing and steering
 

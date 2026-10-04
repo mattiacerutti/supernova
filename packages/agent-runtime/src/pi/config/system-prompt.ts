@@ -1,7 +1,4 @@
-// Ported from earendil-works/pi packages/coding-agent/src/core/system-prompt.ts (`buildSystemPromptSections` and its
-// helpers) at e792ba131ed0495f3ff58a0eb13f20540e344d5c (last changed in 8562bcf). Not exported by pi-coding-agent;
-// switch to the import and delete this copy if it ever is. Custom-prompt, addendum, and extra-section inputs are
-// dropped: Supernova sets none of them. `createPromptExtension` below is ours: it installs the sections in the engine.
+// Ported from Pi's packages/coding-agent/src/core/system-prompt.ts.
 import type {Skill} from "@earendil-works/pi-coding-agent";
 import {formatSkillsForPrompt, getDocsPath, getExamplesPath, getReadmePath} from "@earendil-works/pi-coding-agent";
 import type {Extension, PromptInput} from "@earendil-works/pi-durable";

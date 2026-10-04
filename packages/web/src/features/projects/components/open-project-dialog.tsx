@@ -1,5 +1,5 @@
 import type {Ref} from "react";
-import {useRuntime} from "@/rpc/use-runtime";
+import {useRuntime} from "@/runtime/use-runtime";
 import {useState} from "react";
 import {useQueryClient} from "@tanstack/react-query";
 import Button from "@/components/ui/button";

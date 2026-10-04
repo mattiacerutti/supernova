@@ -24,7 +24,7 @@ export default function SidebarProjectSessions(props: SidebarProjectSessionsProp
   const [visibleSessionLimit, setVisibleSessionLimit] = useState(INITIAL_SESSION_LIMIT);
   const sessionsQuery = useListProjectSessions(projectPath);
 
-  const sessions = (sessionsQuery.data?.sessions ?? [])
+  const sessions = (sessionsQuery.sessions ?? [])
     .map((session) => ({...session, pinned: pinnedSessionIds.includes(session.id), timestamp: Date.parse(session.updatedAt)}))
     .toSorted((left, right) => Number(right.pinned) - Number(left.pinned) || right.timestamp - left.timestamp);
 

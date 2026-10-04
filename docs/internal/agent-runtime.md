@@ -4,9 +4,9 @@ Conventions for `packages/agent-runtime`. See [Coding standards](coding-standard
 
 ## Boundaries
 
-The package is plain TypeScript. Chord (`@earendil-works/chord`) is used where state is published to clients (`lib/document-state.ts`, the session board, terminal output, provider logins); `@earendil-works/pi-server` appears only in `rpc/runtime-services.ts`. Contract schemas are Zod; features may parse with them.
+The package is plain TypeScript. Chord (`@earendil-works/chord`) is used where state is published to clients (`lib/document-state.ts`, the session board, terminal output, provider logins); `@earendil-works/pi-server` appears only in `runtime-services.ts`. Contract schemas are Zod; features may parse with them.
 
-Dependencies flow one way: `lib/` ← `pi/` ← `features/` ← `runtime.ts` ← `rpc/`. A feature never depends on another feature, by import or by injection: it does not import one, and its `Deps` does not name one or declare an interface another feature's class happens to satisfy. `pi/` and `lib/` never import a feature. ESLint enforces the import half; the injection half is on you.
+Dependencies flow one way: `lib/` ← `pi/` ← `features/` ← root composition (`runtime.ts`, `runtime-services.ts`, `session-operations.ts`). A feature never depends on another feature, by import or by injection: it does not import one, and its `Deps` does not name one or declare an interface another feature's class happens to satisfy. `pi/` and `lib/` never import a feature. ESLint enforces the import half; the injection half is on you.
 
 Shared serializable contracts belong in `@supernova/contracts`. UI and HTTP routing belong outside this package.
 
@@ -15,9 +15,9 @@ Shared serializable contracts belong in `@supernova/contracts`. UI and HTTP rout
 ```
 src/
   index.ts        public exports: createAgentRuntime, runtimeServiceHost
-  runtime.ts      composition root: constructs every class once and owns dispose()
-  rpc/            the edge: runtime-services.ts serves every feature as Chord services; session-workflows.ts
-                  orchestrates create and archive
+  runtime.ts             composition root: constructs every class once and owns dispose()
+  runtime-services.ts    remote boundary: exposes the features as Chord services through pi-server
+  session-operations.ts  product operations: coordinates create and archive across features
   lib/            stateless helpers with no Pi or product knowledge
   pi/             the Pi wrapper: the durable engine and Pi's file formats
   features/       configuration, extensions, folders, projects, providers, session-runtime, sessions, workspace, worktrees
@@ -29,7 +29,7 @@ Where a file goes:
 - Wraps or maps Pi, regardless of how many features use it → `pi/`.
 - Used by one feature → that feature, even if it looks generic.
 - Used by exactly one file → that file.
-- Orchestrates several features (archive a session across `session-runtime` and `projects`, create a session and send its first message) → `rpc/session-workflows.ts`. `rpc/` is the only layer that sees every feature. If the sequence is not a transport concern but a product rule, the two features are one feature; merge them rather than wiring one into the other.
+- Orchestrates several features (archive a session across `session-runtime` and `projects`, create a session and send its first message) → `session-operations.ts`. These are product operations, independent of transport. Root composition files may coordinate features; features never depend on each other.
 
 There is no `shared/`. A stateful class two features need is either Pi (`pi/`) or has no product owner; the second case has not occurred, so there is no folder for it.
 
@@ -61,7 +61,7 @@ Group a folder once it holds more than about five files, by what the files are f
 
 ## Errors
 
-Throw the tagged error classes from `@supernova/contracts`; nothing else is needed inside a feature. Pi's service protocol carries only its own error codes, so the edge returns failures as data: a `ServiceResult` whose `code` is the contract error's tag. `run()` in `rpc/runtime-services.ts` parses the payload, passes errors matching the operation's `error` (the contract's class or `errorUnion` value) through, and turns everything else (an invalid payload, a plain `Error`, a bug) into a `GenericError` with the cause's message; the cause is logged on the server only. `error` also types the method's result: passing an error the contract does not declare fails to compile, but leaving one out does not, so match the contract. Use `lib/errors.ts` `errorMessage(cause, fallback)` to build messages from unknown causes.
+Throw the tagged error classes from `@supernova/contracts`; nothing else is needed inside a feature. Pi's service protocol carries only its own error codes, so the edge returns failures as data: a `ServiceResult` whose `code` is the contract error's tag. `run()` in `runtime-services.ts` parses the payload, passes errors matching the operation's `error` (the contract's class or `errorUnion` value) through, and turns everything else (an invalid payload, a plain `Error`, a bug) into a `GenericError` with the cause's message; the cause is logged on the server only. `error` also types the method's result: passing an error the contract does not declare fails to compile, but leaving one out does not, so match the contract. Use `lib/errors.ts` `errorMessage(cause, fallback)` to build messages from unknown causes.
 
 Throw a contract error where the failure is detected, not by classifying causes later; a checkpoint conflict, for example, is thrown as `CheckpointConflictError` by the shadow repository. See [Checkpoint system](checkpoint-system.md).
 
@@ -87,7 +87,7 @@ Reach Pi through `Pick<PiSdk, …>` or `Pick<SessionStore, …>`; only `pi/` imp
 
 Two Pi packages, two roles. `@earendil-works/pi-durable` (vendored from source, see `vendor/pi/PROVENANCE.md`) runs agents. `@earendil-works/pi-coding-agent` is used only for what reads files and returns plain data: `ModelRuntime`, `SettingsManager`, skills, context files, prompt templates, extension loading, package management, and tool definitions for their prompt text. Its `SessionManager` is used only by `lib/session/legacy-sessions.ts` to read old sessions.
 
-Code ported from Pi because it is not exported (the system prompt in `config/system-prompt.ts`, the HTTP setup in `sdk.ts`) names its upstream path and commit; replace it with the import if Pi exports it.
+Code ported from Pi because it is not exported (the system prompt in `config/system-prompt.ts`, the HTTP setup in `sdk.ts`) names its upstream file path; replace it with the import if Pi exports it.
 
 `lib/tools/extension-bridge.ts` turns loaded extensions into engine extensions: registered tools become engine tools, `tool_call`/`tool_result`/`context` handlers become engine hooks, and `session_start`/`session_shutdown` are delivered on open and close. Other events, commands, shortcuts, flags, and renderers are reported as unsupported, and `ctx.ui` or unknown context members throw on access, so nothing silently no-ops.
 

@@ -1,5 +1,5 @@
 import type {ProviderLoginSession} from "@supernova/contracts/services/providers/schemas";
-import {useRuntime} from "@/rpc/use-runtime";
+import {useRuntime} from "@/runtime/use-runtime";
 
 type Unsubscribe = () => void;
 

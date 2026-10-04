@@ -1,13 +1,11 @@
-import {useQueryClient} from "@tanstack/react-query";
 import {useLocation, useNavigate} from "@tanstack/react-router";
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
-import {getSessionQueryOptions} from "@/features/sessions/api/conversation/get-session";
-import {useRuntime} from "@/rpc/use-runtime";
+import {usePrefetchSession} from "@/features/sessions/api/sessions-sync";
+import {useSessionStatus} from "@/features/sessions/hooks/use-session";
 import {useRenameSession} from "@/features/sessions/api/sidebar/rename-session";
 import SessionActionsMenu from "@/features/sessions/components/session-actions-menu";
 import SessionTitleText from "@/features/sessions/components/session-title-text";
-import {useSessionLiveStore} from "@/features/sessions/stores/conversation/session-live-store";
 import {useSessionPinsStore} from "@/features/sessions/stores/sidebar/session-pins-store";
 import {hasUnseenActivity, useSessionVisitsStore} from "@/features/sessions/stores/sidebar/session-visits-store";
 import {useInlineRename} from "@/hooks/use-inline-rename";
@@ -28,10 +26,9 @@ export default function SidebarSessionItem(props: SidebarSessionItemProps) {
   const {forked, projectPath, sessionId, title, updatedAt, worktree} = props;
   const location = useLocation();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const sessionServices = useRuntime();
+  const prefetchSession = usePrefetchSession();
   const renameSession = useRenameSession();
-  const liveStatus = useSessionLiveStore((state) => state.sessions[sessionId]?.status);
+  const liveStatus = useSessionStatus(sessionId).status;
   const pinned = useSessionPinsStore((state) => state.pinnedSessionIds.includes(sessionId));
   const visitedAt = useSessionVisitsStore((state) => state.visits[sessionId]);
   const {inputProps, renaming, startRenaming} = useInlineRename({initialValue: title, onSave: (nextTitle) => renameSession.mutate({sessionId, title: nextTitle})});
@@ -46,7 +43,7 @@ export default function SidebarSessionItem(props: SidebarSessionItemProps) {
 
   const handlePrefetch = (): void => {
     if (selected) return;
-    void queryClient.prefetchQuery(getSessionQueryOptions(sessionServices, sessionId));
+    prefetchSession(sessionId);
   };
 
   return (

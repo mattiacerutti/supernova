@@ -1,8 +1,9 @@
 import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import {useMutation, useQueryClient} from "@tanstack/react-query";
+import {forgetSession} from "@/features/sessions/api/sessions-sync";
 import {sessionKeys} from "@/features/sessions/api/query-keys";
-import {unwrap} from "@/rpc/runtime-result";
-import {useRuntime} from "@/rpc/use-runtime";
+import {unwrap} from "@/runtime/runtime-result";
+import {useRuntime} from "@/runtime/use-runtime";
 
 interface ArchiveSessionInput {
   readonly projectPath: string;
@@ -18,6 +19,7 @@ export function useArchiveSession() {
   return useMutation({
     mutationFn: (input: ArchiveSessionInput) => unwrap(runtime.projects.archiveSession(input, BACKGROUND_CONTEXT)),
     onSuccess: async (result) => {
+      forgetSession(result.sessionId);
       await queryClient.invalidateQueries({queryKey: sessionKeys.list(result.projectPath)});
       await queryClient.invalidateQueries({queryKey: sessionKeys.branches(result.projectPath)});
     },

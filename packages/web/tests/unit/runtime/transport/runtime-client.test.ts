@@ -3,7 +3,7 @@ import type {Context, RemoteServiceTransport} from "@earendil-works/chord";
 import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import {encodeClientMessage} from "@earendil-works/pi-protocol";
 import {describe, expect, it, vi} from "vitest";
-import {strictJsonTransport} from "@/rpc/transport/runtime-client";
+import {strictJsonTransport} from "@/runtime/transport/runtime-client";
 
 interface Echo {
   echo(text: string, context: Context): Promise<string>;
@@ -33,18 +33,6 @@ describe("runtime service facades", () => {
     const calls: string[] = [];
     expect(await facade(calls).echo("hi", BACKGROUND_CONTEXT)).toBe("hi");
     expect(calls).toEqual(["echo"]);
-  });
-
-  // Chord's facades answer every member, `then` included; a promise resolved with one calls a remote `then`. That
-  // is why the attachment record, not the service, is what promises resolve with (see `attached` in the store).
-  it("stay out of promise resolution when held by a record", async () => {
-    const calls: string[] = [];
-    const echo = facade(calls);
-
-    const record = await Promise.resolve({sessionRuntime: echo});
-
-    expect(record.sessionRuntime).toBe(echo);
-    expect(calls).toEqual([]);
   });
 });
 

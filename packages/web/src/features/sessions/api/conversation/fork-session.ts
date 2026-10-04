@@ -1,8 +1,9 @@
 import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import {useMutation, useQueryClient} from "@tanstack/react-query";
-import type {Session} from "@supernova/contracts/services/sessions/schemas";
 import {sessionKeys} from "@/features/sessions/api/query-keys";
-import {useRuntime} from "@/rpc/use-runtime";
+import {useSessionsStore} from "@/features/sessions/stores/sessions-store";
+import {unwrap} from "@/runtime/runtime-result";
+import {useRuntime} from "@/runtime/use-runtime";
 
 interface ForkSessionInput {
   readonly sessionId: string;
@@ -14,13 +15,10 @@ export function useForkSession() {
   const services = useRuntime();
 
   return useMutation({
-    mutationFn: async (input: ForkSessionInput): Promise<Session> => {
-      const result = await services.sessions.fork(input, BACKGROUND_CONTEXT);
-      if (!result.ok) throw new Error(result.error.message);
-      return result.value;
-    },
+    mutationFn: (input: ForkSessionInput) => unwrap(services.sessions.fork(input, BACKGROUND_CONTEXT)),
     onSuccess: async (session) => {
-      queryClient.setQueryData(sessionKeys.detail(session.id), session);
+      // The fork opens next; its document is already known.
+      useSessionsStore.getState().setDocument(session);
       await queryClient.invalidateQueries({queryKey: sessionKeys.list(session.projectPath)});
     },
   });

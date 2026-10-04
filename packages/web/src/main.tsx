@@ -4,7 +4,7 @@ import App from "@/app/app";
 import AppProviders from "@/app/providers";
 import {initializeAppearance} from "@/stores/settings-store";
 import {appEnvironment} from "@/config/app-environment";
-import {getRuntimeClient} from "@/rpc/transport/runtime-client";
+import {getRuntimeClient} from "@/runtime/transport/runtime-client";
 import "@/app/styles.css";
 
 document.documentElement.dataset.appEnvironment = appEnvironment;

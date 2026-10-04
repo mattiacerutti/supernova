@@ -7,7 +7,7 @@ import {promisify} from "node:util";
 import type {CreateSessionPayload} from "@supernova/contracts/services/sessions/procedures";
 import {afterEach, describe, expect, it} from "vitest";
 import {Worktrees} from "@supernova/agent-runtime/features/worktrees/worktrees";
-import {createSession as createSessionWorkflow} from "@supernova/agent-runtime/rpc/session-workflows";
+import {createSession as createSessionOperation} from "@supernova/agent-runtime/session-operations";
 import type {AgentRuntime} from "@supernova/agent-runtime/runtime";
 import {cleanupTempDirs} from "@tests/support/async";
 import {assistantTexts, createPiTestRuntime, fauxAssistantMessage, selectedModelReference, turnContents} from "@tests/support/session-runtime";
@@ -18,7 +18,7 @@ const exec = promisify(execFile);
 const gitEnv = {...process.env, GIT_AUTHOR_NAME: "Ada", GIT_AUTHOR_EMAIL: "a@x", GIT_COMMITTER_NAME: "Ada", GIT_COMMITTER_EMAIL: "a@x"};
 
 async function createRepo(tempDirs: string[]): Promise<string> {
-  const repo = await mkdtemp(join(tmpdir(), "supernova-rpc-repo-"));
+  const repo = await mkdtemp(join(tmpdir(), "supernova-workflow-repo-"));
   tempDirs.push(repo);
   await exec("git", ["init", "-q", "-b", "main"], {cwd: repo, env: gitEnv});
   await writeFile(join(repo, "a.txt"), "a\n");
@@ -40,11 +40,11 @@ describe("creating a session with its first turn", () => {
   async function setup() {
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const worktreeStorage = await mkdtemp(join(tmpdir(), "supernova-rpc-worktrees-"));
+    const worktreeStorage = await mkdtemp(join(tmpdir(), "supernova-workflow-worktrees-"));
     tempDirs.push(worktreeStorage);
     // Only the features createSession orchestrates are real; the rest are never reached.
     const runtime = {sessionRuntime: pi.sessionRuntime, sessions: pi.sessions, worktrees: new Worktrees(worktreeStorage)} as AgentRuntime;
-    const createSession = (payload: CreateSessionPayload) => createSessionWorkflow(runtime, payload);
+    const createSession = (payload: CreateSessionPayload) => createSessionOperation(runtime, payload);
     return {createSession, pi};
   }
 

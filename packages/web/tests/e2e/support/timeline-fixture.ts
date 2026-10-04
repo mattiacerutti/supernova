@@ -82,7 +82,7 @@ export class TimelineDriver {
 
   public async failNextCreateSession(message: string): Promise<void> {
     await this.page.evaluate((failure) => {
-      if (!window.__supernovaTimelineMock) throw new Error("Timeline RPC mock is not installed");
+      if (!window.__supernovaTimelineMock) throw new Error("Timeline runtime mock is not installed");
       window.__supernovaTimelineMock.failNextCreateSession(failure);
     }, message);
   }
@@ -186,7 +186,7 @@ export class TimelineDriver {
   /** Makes the mock server complete the current response naturally. */
   public async completeMessage(): Promise<void> {
     await this.page.evaluate(() => {
-      if (!window.__supernovaTimelineMock) throw new Error("Timeline RPC mock is not installed");
+      if (!window.__supernovaTimelineMock) throw new Error("Timeline runtime mock is not installed");
       window.__supernovaTimelineMock.completeStream();
     });
     await this.waitForSettledStatus("completed");
@@ -195,7 +195,7 @@ export class TimelineDriver {
   /** Interrupts the response with a collapsed reasoning step so the next lines start a new assistant message. */
   public async breakForReasoning(): Promise<void> {
     await this.page.evaluate(() => {
-      if (!window.__supernovaTimelineMock) throw new Error("Timeline RPC mock is not installed");
+      if (!window.__supernovaTimelineMock) throw new Error("Timeline runtime mock is not installed");
       window.__supernovaTimelineMock.breakForReasoning();
     });
   }
@@ -205,7 +205,7 @@ export class TimelineDriver {
     const initialLineCount = (await this.mockState()).lineCount;
     const targetLineCount = initialLineCount + additionalLines;
     await this.page.evaluate((lineCount) => {
-      if (!window.__supernovaTimelineMock) throw new Error("Timeline RPC mock is not installed");
+      if (!window.__supernovaTimelineMock) throw new Error("Timeline runtime mock is not installed");
       window.__supernovaTimelineMock.emitLines(lineCount);
     }, additionalLines);
     await expect.poll(() => this.mockState().then((state) => state.lineCount)).toBe(targetLineCount);
@@ -440,7 +440,7 @@ export class TimelineDriver {
 
   private async mockState(): Promise<TimelineMockState> {
     return await this.page.evaluate(() => {
-      if (!window.__supernovaTimelineMock) throw new Error("Timeline RPC mock is not installed");
+      if (!window.__supernovaTimelineMock) throw new Error("Timeline runtime mock is not installed");
       return window.__supernovaTimelineMock.getState();
     });
   }

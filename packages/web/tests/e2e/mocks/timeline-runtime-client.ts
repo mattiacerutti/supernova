@@ -9,7 +9,7 @@ import type {ServiceResult} from "@supernova/contracts/lib/protocol";
 import type {SessionRuntimeService} from "@supernova/contracts/services/session-runtime/services";
 import type {SessionDirectoryState, SessionsService} from "@supernova/contracts/services/sessions/services";
 import type {TerminalsState} from "@supernova/contracts/services/workspace/services";
-import type {AttachedSession, RuntimeClient} from "@/rpc/transport/runtime-client";
+import type {RuntimeClient} from "@/runtime/transport/runtime-client";
 import {
   assistantEntry,
   createTimelineSessions,
@@ -22,7 +22,7 @@ import {
 } from "@e2e/mocks/timeline-data";
 import type {TimelineMockState} from "@e2e/support/timeline-test-api";
 
-export type {AttachedSession, RuntimeClient} from "@/rpc/transport/runtime-client";
+export type {RuntimeClient} from "@/runtime/transport/runtime-client";
 
 const STREAM_LINES_PER_FRAME = 2;
 const CREATE_SESSION_FAILURE_DELAY_MS = 150;
@@ -40,6 +40,8 @@ class TimelineServer {
   private readonly documents = new Map<string, MutableReplicatedState<Session>>();
   private readonly directory = replicatedState<SessionDirectoryState>({sessions: {}});
   private activeSessionId = TIMELINE_SESSION_ID;
+  /** The session `sessions.attach` routed this client to. */
+  private attachedSessionId = TIMELINE_SESSION_ID;
   private createSessionFailure: string | null = null;
   private lineCount = 0;
   private reasoningBreaks: number[] = [];
@@ -65,18 +67,25 @@ class TimelineServer {
 
   /** The runtime client the app uses, over this server's state. */
   public client(): RuntimeClient {
-    const sessionRuntime = (sessionId: string): SessionRuntimeService => ({
-      session: this.document(sessionId),
+    // As on the server, the session runtime service is the attached session's.
+    const document = (): MutableReplicatedState<Session> => this.document(this.attachedSessionId);
+    const sessionRuntime: SessionRuntimeService = {
+      get session() {
+        return document();
+      },
       abort: async () => (this.settleStream("aborted"), ok),
       compact: async () => ok,
-      redoCheckpoint: async () => (this.redoCheckpoint(sessionId), ok),
-      revertToMessage: async ({turnId}) => (this.revertToMessage(sessionId, turnId), ok),
-      sendMessage: async ({contentParts}) => (this.startStream(sessionId, contentParts), ok),
-      undoCheckpoint: async () => (this.undoCheckpoint(sessionId), ok),
-    });
+      redoCheckpoint: async () => (this.redoCheckpoint(this.attachedSessionId), ok),
+      revertToMessage: async ({turnId}) => (this.revertToMessage(this.attachedSessionId, turnId), ok),
+      sendMessage: async ({contentParts}) => (this.startStream(this.attachedSessionId, contentParts), ok),
+      undoCheckpoint: async () => (this.undoCheckpoint(this.attachedSessionId), ok),
+    };
     const sessions: SessionsService = {
       directory: this.directory,
-      attach: async () => ok,
+      attach: async (sessionId) => {
+        this.attachedSessionId = sessionId;
+        return ok;
+      },
       create: async (payload) => {
         const failure = this.createSessionFailure;
         this.createSessionFailure = null;
@@ -94,7 +103,8 @@ class TimelineServer {
     };
     return {
       sessions,
-      attach: async (sessionId): Promise<AttachedSession> => ({sessionId, sessionRuntime: sessionRuntime(sessionId)}),
+      sessionRuntime,
+      bindSessionRuntime: async () => undefined,
       configuration: {get: () => value({modelDefaults: {}})},
       extensions: {update: () => value(null)},
       folders: {

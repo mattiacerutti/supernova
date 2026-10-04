@@ -63,7 +63,7 @@ Don't overwrite unrelated work or use live sessions, credentials, or workspace s
 | `apps/server`            | Headless Node API, CLI, runtime composition, HTTP/WebSocket routing. Never hosts or bundles the UI. |
 | `apps/desktop`           | Electron shell, bundled renderer loading, local API child, OS integration.                          |
 | `packages/web`           | React/Vite client. No native or filesystem assumptions.                                             |
-| `packages/agent-runtime` | Node-only Pi integration: feature modules, the session runtime, and the RPC edge.                   |
+| `packages/agent-runtime` | Node-only Pi integration: feature modules, the session runtime, and service composition.            |
 | `packages/contracts`     | Environment-neutral Zod schemas, Chord service contracts, and serializable domain types.            |
 
 Use Bun for dependencies and scripts, TypeScript for code, and workspace packages for shared boundaries. Run verification commands from the repository root; this is a Turborepo workspace.
@@ -77,9 +77,9 @@ This is the repository's only `AGENTS.md`. Shared and area-specific conventions 
 | Product direction and feature tradeoffs                        | [Product](docs/internal/product.md)                     |
 | Package boundaries, runtime ownership, desktop/browser hosting | [Architecture](docs/internal/architecture.md)           |
 | TypeScript implementation and code organization                | [Coding standards](docs/internal/coding-standards.md)   |
-| React UI, styling, client state, RPC hooks                     | [Web](docs/internal/web.md)                             |
+| React UI, styling, client state, runtime hooks                 | [Web](docs/internal/web.md)                             |
 | Runtime features, Pi integration, backend organization         | [Agent runtime](docs/internal/agent-runtime.md)         |
-| Shared schemas, RPC payloads, errors, exports                  | [Contracts](docs/internal/contracts.md)                 |
+| Shared schemas, service payloads, errors, exports              | [Contracts](docs/internal/contracts.md)                 |
 | Sessions, streaming, reconnects, committed/live state          | [Session runtime](docs/internal/session-runtime.md)     |
 | Checkpoint capture, restore, Git preservation                  | [Checkpoint system](docs/internal/checkpoint-system.md) |
 | Local setup, verification, test conventions                    | [Development](docs/internal/development.md)             |

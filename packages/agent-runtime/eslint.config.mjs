@@ -8,7 +8,7 @@ const tsconfigRootDir = dirname(fileURLToPath(import.meta.url));
 
 const features = ["configuration", "folders", "projects", "providers", "session-runtime", "sessions", "workspace"];
 
-/** A feature depends on `pi/`, `lib/`, and itself. Features never import each other; the RPC edge composes them. */
+/** A feature depends on `pi/`, `lib/`, and itself. Features never import each other; root composition files coordinate them. */
 const featureBoundaryRules = features.map((feature) => ({
   files: [`src/features/${feature}/**/*.ts`],
   rules: {
@@ -51,8 +51,13 @@ export default defineConfig(
         {
           patterns: [
             {
-              group: ["@supernova/agent-runtime/features/*", "@supernova/agent-runtime/rpc/*", "@supernova/agent-runtime/runtime"],
-              message: "pi/ and lib/ must not depend on features or the edge.",
+              group: [
+                "@supernova/agent-runtime/features/*",
+                "@supernova/agent-runtime/runtime",
+                "@supernova/agent-runtime/runtime-services",
+                "@supernova/agent-runtime/session-operations",
+              ],
+              message: "pi/ and lib/ must not depend on features or composition files.",
             },
           ],
         },

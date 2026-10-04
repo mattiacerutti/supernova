@@ -1,5 +1,5 @@
 import {test, expect} from "vitest";
-import {resolveSocketUrl} from "@/rpc/transport/endpoint";
+import {resolveSocketUrl} from "@/runtime/transport/endpoint";
 
 test.each([
   ["http://127.0.0.1:4317", "ws://127.0.0.1:4317/ws"],

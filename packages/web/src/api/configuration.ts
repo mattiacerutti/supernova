@@ -1,8 +1,8 @@
 import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import {queryOptions, useQuery} from "@tanstack/react-query";
 import {showToast} from "@/lib/toast";
-import {unwrap} from "@/rpc/runtime-result";
-import {useRuntime} from "@/rpc/use-runtime";
+import {unwrap} from "@/runtime/runtime-result";
+import {useRuntime} from "@/runtime/use-runtime";
 
 export const configurationKeys = {
   all: ["configuration"] as const,

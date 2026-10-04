@@ -5,9 +5,7 @@ import type {ResourceLoader} from "@earendil-works/pi-coding-agent";
 import {createPiResourceLoaderOptions} from "@supernova/agent-runtime/pi/config/resource-loader";
 import {loadPiSettings} from "@supernova/agent-runtime/pi/config/settings";
 
-// Pi's HTTP setup, ported from earendil-works/pi packages/coding-agent/src/core/http-dispatcher.ts at
-// e792ba131ed0495f3ff58a0eb13f20540e344d5c (last changed in 8562bcf). Not exported by pi-coding-agent; switch to the
-// import and delete this copy if it ever is. Only the parts Supernova calls are kept.
+// Ported from Pi's packages/coding-agent/src/core/http-dispatcher.ts.
 const DEFAULT_HTTP_IDLE_TIMEOUT_MS = 300_000;
 // Node's 250ms default can terminate valid connection attempts on high-latency routes.
 const DEFAULT_AUTO_SELECT_FAMILY_ATTEMPT_TIMEOUT_MS = 2_000;
@@ -86,7 +84,6 @@ export interface PiSdk {
 
 /** Connects to the real Pi SDK. Configures HTTP and discovers providers and models once; call at startup. */
 export async function createPiSdk(): Promise<PiSdk> {
-  // The old SDK set up Pi's HTTP stack implicitly; without it some provider streams end early.
   const settings = loadPiSettings();
   applyHttpProxySettings(settings.getGlobalSettings().httpProxy);
   configureHttpDispatcher(settings.getHttpIdleTimeoutMs());

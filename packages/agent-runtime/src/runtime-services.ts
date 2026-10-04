@@ -66,7 +66,7 @@ import {TerminalError, TerminalNotFoundError, WorkspaceFileError, WorkspaceGitEr
 import {WorkspaceService} from "@supernova/contracts/services/workspace/services";
 import type {z} from "zod";
 import {errorMessage} from "@supernova/agent-runtime/lib/errors";
-import {archiveSession, createSession} from "@supernova/agent-runtime/rpc/session-workflows";
+import {archiveSession, createSession} from "@supernova/agent-runtime/session-operations";
 import type {AgentRuntime} from "@supernova/agent-runtime/runtime";
 
 type Publish = (subscriptionId: string, update: ServiceProviderUpdate, context: Context) => void | Promise<void>;
@@ -93,8 +93,10 @@ async function run<P extends z.ZodType, R, E extends ErrorValue = never>(operati
     console.error(`[runtime] ${error._tag}: ${error.message}`, ...(error.cause === undefined ? [] : [error.cause]));
     return {ok: false, error: {code: error._tag, message: error.message}} as ServiceResult<R, ErrorOf<E>>;
   };
+
   const parsed = operation.payload.safeParse(input);
   if (!parsed.success) return fail(new GenericError({cause: parsed.error, message: "The request is invalid."}));
+
   try {
     const value = await operation.run(parsed.data, context);
     return {ok: true, value: (value === undefined ? null : copyJson(value, {omitUndefinedProperties: true})) as R};
@@ -113,11 +115,9 @@ function method<P extends z.ZodType, R, E extends ErrorValue = never>(
 
 /** A service method without a payload. */
 function action<R, E extends ErrorValue = never>(operation: Omit<Operation<z.ZodUndefined, R, E>, "payload">): (context: Context) => Promise<ServiceResult<R, ErrorOf<E>>> {
+  const undefinedPayload = {safeParse: () => ({success: true, data: undefined})} as unknown as z.ZodUndefined;
   return (context) => run({...operation, payload: undefinedPayload}, undefined, context);
 }
-
-/** No payload: what a method without arguments receives. */
-const undefinedPayload = {safeParse: () => ({success: true, data: undefined})} as unknown as z.ZodUndefined;
 
 /** One connection's endpoint over a provider, released with the connection. */
 function attachment(provider: RemoteServiceProvider): RoutedServerServiceAttachment & RoutedSessionAttachment {
@@ -141,92 +141,97 @@ function attachment(provider: RemoteServiceProvider): RoutedServerServiceAttachm
 function serverServices(runtime: AgentRuntime): RoutedServerServiceHost {
   const {configuration, extensions, folders, projects, providers, sessionRuntime, sessions, workspace} = runtime;
 
+  const createProvider = (presentation: RoutedServerPresentation) => {
+    const provider = new RemoteServiceProvider([ConfigurationService, ExtensionsService, FoldersService, ProjectsService, ProvidersService, SessionsService, WorkspaceService]);
+    provider.provide(ConfigurationService, {
+      get: method({payload: GetConfigurationPayload, run: (input) => configuration.get(input)}),
+    });
+    provider.provide(ExtensionsService, {
+      update: action({
+        run: async () => {
+          try {
+            await extensions.update();
+          } finally {
+            // Even a partial failure may have replaced packages on disk, so every session reloads either way.
+            await sessionRuntime.reloadExtensions();
+          }
+          return null;
+        },
+        error: UpdateExtensionsError,
+      }),
+    });
+    provider.provide(FoldersService, {
+      create: method({payload: FolderCreatePayload, run: (input) => folders.create(input)}),
+      listSuggestions: method({
+        payload: FolderSuggestionsListPayload,
+        run: (input) => folders.listSuggestions(input),
+      }),
+      listFiles: method({payload: FolderFilesListPayload, run: (input) => folders.listFiles(input)}),
+    });
+    provider.provide(ProjectsService, {
+      listSessions: method({
+        payload: ProjectSessionsListPayload,
+        run: (input) => projects.listSessions(input),
+      }),
+      archiveSession: method({
+        payload: ProjectSessionArchivePayload,
+        run: (input) => archiveSession(runtime, input),
+        error: ProjectSessionArchiveError,
+      }),
+    });
+    provider.provide(ProvidersService, {
+      logins: providers.logins,
+      list: action({run: () => providers.list()}),
+      logout: method({payload: ProviderLogoutPayload, run: (input) => providers.logout(input)}),
+      startLogin: method({
+        payload: ProviderLoginStartPayload,
+        run: (input) => providers.startLogin(input),
+        error: ProviderLoginError,
+      }),
+      submitLoginInput: method({
+        payload: ProviderLoginInputSubmitPayload,
+        run: (input) => providers.submitLoginInput(input),
+        error: ProviderLoginError,
+      }),
+      cancelLogin: method({
+        payload: ProviderLoginCancelPayload,
+        run: (input) => providers.cancelLogin(input),
+        error: ProviderLoginError,
+      }),
+    });
+    provider.provide(WorkspaceService, {
+      terminals: workspace.terminals,
+      openTerminal: method({payload: TerminalOpenPayload, run: (input) => workspace.openTerminal(input), error: TerminalError}),
+      writeTerminal: method({payload: TerminalWritePayload, run: (input) => workspace.writeTerminal(input).then(() => null), error: TerminalNotFoundError}),
+      resizeTerminal: method({payload: TerminalResizePayload, run: (input) => workspace.resizeTerminal(input).then(() => null), error: TerminalNotFoundError}),
+      closeTerminal: method({payload: TerminalClosePayload, run: (input) => workspace.closeTerminal(input).then(() => null)}),
+      listTerminals: method({payload: TerminalsListPayload, run: (input) => workspace.listTerminals(input)}),
+      listBranches: method({payload: WorkspaceBranchesListPayload, run: (input) => workspace.listBranches(input), error: WorkspaceGitError}),
+      getChanges: method({payload: WorkspaceChangesGetPayload, run: (input) => workspace.getChanges(input), error: WorkspaceGitError}),
+      getDiffContents: method({payload: WorkspaceDiffContentsGetPayload, run: (input) => workspace.getDiffContents(input), error: WorkspaceFileError}),
+      listRepositories: method({payload: WorkspaceRepositoriesListPayload, run: (input) => workspace.listRepositories(input)}),
+      listFiles: method({payload: WorkspaceFilesListPayload, run: (input) => workspace.listFiles(input), error: WorkspaceGitError}),
+      readFile: method({payload: WorkspaceFileReadPayload, run: (input) => workspace.readFile(input), error: WorkspaceFileError}),
+    });
+    provider.provide(SessionsService, {
+      // Written by session runtime; served here because clients read it before attaching a session.
+      directory: sessionRuntime.board.state,
+      create: method({payload: CreateSessionPayload, run: (input) => createSession(runtime, input), error: CreateSessionError}),
+      fork: method({payload: ForkSessionPayload, run: (input) => sessions.fork(input), error: ForkSessionError}),
+      rename: method({payload: RenameSessionPayload, run: (input) => sessions.rename(input), error: RenameSessionError}),
+      get: method({payload: GetSessionPayload, run: (input) => sessions.get(input)}),
+      listModels: method({payload: ListModelsPayload, run: (input) => sessions.listModels(input)}),
+      listComposerSuggestions: method({payload: ListComposerSuggestionsPayload, run: (input) => sessions.listComposerSuggestions(input)}),
+      attach: (sessionId: string, context: Context) =>
+        run({payload: GetSessionPayload.shape.sessionId, run: (id) => presentation.attachSession(id, context).then(() => null)}, sessionId, context),
+      detach: action({run: (_payload, context) => presentation.detachSession(context).then(() => null)}),
+    });
+    return provider;
+  };
+
   return {
-    attachClient(presentation: RoutedServerPresentation) {
-      const provider = new RemoteServiceProvider([ConfigurationService, ExtensionsService, FoldersService, ProjectsService, ProvidersService, SessionsService, WorkspaceService]);
-      provider.provide(ConfigurationService, {
-        get: method({payload: GetConfigurationPayload, run: (input) => configuration.get(input)}),
-      });
-      provider.provide(ExtensionsService, {
-        update: action({
-          run: async () => {
-            try {
-              await extensions.update();
-            } finally {
-              // Even a partial failure may have replaced packages on disk, so every session reloads either way.
-              await sessionRuntime.reloadExtensions();
-            }
-            return null;
-          },
-          error: UpdateExtensionsError,
-        }),
-      });
-      provider.provide(FoldersService, {
-        create: method({payload: FolderCreatePayload, run: (input) => folders.create(input)}),
-        listSuggestions: method({
-          payload: FolderSuggestionsListPayload,
-          run: (input) => folders.listSuggestions(input),
-        }),
-        listFiles: method({payload: FolderFilesListPayload, run: (input) => folders.listFiles(input)}),
-      });
-      provider.provide(ProjectsService, {
-        listSessions: method({
-          payload: ProjectSessionsListPayload,
-          run: (input) => projects.listSessions(input),
-        }),
-        archiveSession: method({
-          payload: ProjectSessionArchivePayload,
-          run: (input) => archiveSession(runtime, input),
-          error: ProjectSessionArchiveError,
-        }),
-      });
-      provider.provide(ProvidersService, {
-        logins: providers.logins,
-        list: action({run: () => providers.list()}),
-        logout: method({payload: ProviderLogoutPayload, run: (input) => providers.logout(input)}),
-        startLogin: method({
-          payload: ProviderLoginStartPayload,
-          run: (input) => providers.startLogin(input),
-          error: ProviderLoginError,
-        }),
-        submitLoginInput: method({
-          payload: ProviderLoginInputSubmitPayload,
-          run: (input) => providers.submitLoginInput(input),
-          error: ProviderLoginError,
-        }),
-        cancelLogin: method({
-          payload: ProviderLoginCancelPayload,
-          run: (input) => providers.cancelLogin(input),
-          error: ProviderLoginError,
-        }),
-      });
-      provider.provide(WorkspaceService, {
-        terminals: workspace.terminals,
-        openTerminal: method({payload: TerminalOpenPayload, run: (input) => workspace.openTerminal(input), error: TerminalError}),
-        writeTerminal: method({payload: TerminalWritePayload, run: (input) => workspace.writeTerminal(input).then(() => null), error: TerminalNotFoundError}),
-        resizeTerminal: method({payload: TerminalResizePayload, run: (input) => workspace.resizeTerminal(input).then(() => null), error: TerminalNotFoundError}),
-        closeTerminal: method({payload: TerminalClosePayload, run: (input) => workspace.closeTerminal(input).then(() => null)}),
-        listTerminals: method({payload: TerminalsListPayload, run: (input) => workspace.listTerminals(input)}),
-        listBranches: method({payload: WorkspaceBranchesListPayload, run: (input) => workspace.listBranches(input), error: WorkspaceGitError}),
-        getChanges: method({payload: WorkspaceChangesGetPayload, run: (input) => workspace.getChanges(input), error: WorkspaceGitError}),
-        getDiffContents: method({payload: WorkspaceDiffContentsGetPayload, run: (input) => workspace.getDiffContents(input), error: WorkspaceFileError}),
-        listRepositories: method({payload: WorkspaceRepositoriesListPayload, run: (input) => workspace.listRepositories(input)}),
-        listFiles: method({payload: WorkspaceFilesListPayload, run: (input) => workspace.listFiles(input), error: WorkspaceGitError}),
-        readFile: method({payload: WorkspaceFileReadPayload, run: (input) => workspace.readFile(input), error: WorkspaceFileError}),
-      });
-      provider.provide(SessionsService, {
-        // Written by session runtime; served here because clients read it before attaching a session.
-        directory: sessionRuntime.board.state,
-        create: method({payload: CreateSessionPayload, run: (input) => createSession(runtime, input), error: CreateSessionError}),
-        fork: method({payload: ForkSessionPayload, run: (input) => sessions.fork(input), error: ForkSessionError}),
-        rename: method({payload: RenameSessionPayload, run: (input) => sessions.rename(input), error: RenameSessionError}),
-        get: method({payload: GetSessionPayload, run: (input) => sessions.get(input)}),
-        listModels: method({payload: ListModelsPayload, run: (input) => sessions.listModels(input)}),
-        listComposerSuggestions: method({payload: ListComposerSuggestionsPayload, run: (input) => sessions.listComposerSuggestions(input)}),
-        attach: (sessionId: string, context: Context) =>
-          run({payload: GetSessionPayload.shape.sessionId, run: (id) => presentation.attachSession(id, context).then(() => null)}, sessionId, context),
-        detach: action({run: (_payload, context) => presentation.detachSession(context).then(() => null)}),
-      });
+    attachClient: (presentation) => {
+      const provider = createProvider(presentation);
       return attachment(provider);
     },
   };
@@ -235,7 +240,9 @@ function serverServices(runtime: AgentRuntime): RoutedServerServiceHost {
 /** The session runtime service of one durable session, for each connection attached to it. */
 async function sessionHandle(runtime: AgentRuntime, sessionId: string): Promise<RoutedSessionHandle> {
   const {sessionRuntime} = runtime;
+
   const document = await sessionRuntime.transcript(sessionId);
+
   // The attachment names the session; payloads carry the rest.
   const send = SendMessagePayload.omit({sessionId: true});
   const compact = CompactSessionPayload.omit({sessionId: true});
@@ -248,10 +255,10 @@ async function sessionHandle(runtime: AgentRuntime, sessionId: string): Promise<
         session: document.state,
         sendMessage: method({payload: send, run: (input) => sessionRuntime.sendMessage({...input, sessionId}).then(() => null)}),
         compact: method({payload: compact, run: (input) => sessionRuntime.compact({...input, sessionId}).then(() => null)}),
-        abort: action({run: () => sessionRuntime.abort({sessionId}).then(() => null)}),
         undoCheckpoint: method({payload: step, error: CheckpointNavigationError, run: (input) => sessionRuntime.undoCheckpoint({...input, sessionId}).then(() => null)}),
         redoCheckpoint: method({payload: step, error: CheckpointNavigationError, run: (input) => sessionRuntime.redoCheckpoint({...input, sessionId}).then(() => null)}),
         revertToMessage: method({payload: revert, error: CheckpointNavigationError, run: (input) => sessionRuntime.revertToMessage({...input, sessionId}).then(() => null)}),
+        abort: action({run: () => sessionRuntime.abort({sessionId}).then(() => null)}),
       });
       return attachment(provider);
     },

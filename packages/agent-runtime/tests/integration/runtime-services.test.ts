@@ -91,11 +91,13 @@ describe("runtime services over the wire", () => {
       await waitUntil(async () => expect(sessionRuntime.session.value).toEqual(await pi.sessions.get({sessionId: "wire-session"})));
       expect(assistantTexts(sessionRuntime.session.value!)).toEqual(["Hello!"]);
 
-      // A command streams back through the same replicated state.
+      // A command streams back through the same replicated state, and its turn arrives before the send resolves: the
+      // client shows a sent message until then.
       expect(await sessionRuntime.sendMessage({contentParts: [{text: "More", type: "text"}], modelReference: selectedModelReference}, BACKGROUND_CONTEXT)).toEqual({
         ok: true,
         value: null,
       });
+      expect(turnContents(sessionRuntime.session.value!)).toEqual([firstMessage.contentParts, [{text: "More", type: "text"}]]);
       await pi.settled("wire-session");
       await waitUntil(async () => expect(sessionRuntime.session.value).toEqual(await pi.sessions.get({sessionId: "wire-session"})));
       expect(assistantTexts(sessionRuntime.session.value!)).toEqual(["Hello!", "Again."]);
