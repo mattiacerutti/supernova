@@ -313,12 +313,16 @@ describe("session commands and views", () => {
     const document = twoTurns();
     // Undo and revert move the timeline back before turn 3; redo moves the undone turn 3 forward again.
     const shown = action === "redo" ? undoneLast(document) : document;
-    const navigation = {action, sessionId: "session-1", turnId: "3"} as const;
+    // Undo and revert of turn 3 end with turn 1 last; redo ends with turn 3 last.
+    const navigation =
+      action === "revert"
+        ? ({action, lastTurnId: "1", sessionId: "session-1", turnId: "3"} as const)
+        : ({action, lastTurnId: action === "redo" ? "3" : "1", sessionId: "session-1"} as const);
 
     expect(await actions.navigateCheckpoint(navigation)).toEqual({reason: outcome, status: "refused"});
     expect(live("session-1", shown)).toMatchObject({status: "checkpoint-navigating", turnIds: action === "redo" ? ["1", "3"] : ["1"]});
     // Nothing else starts while a refused restore waits for the user.
-    expect(await actions.navigateCheckpoint({...navigation, action: "undo"})).toMatchObject({status: "failed"});
+    expect(await actions.navigateCheckpoint({action: "undo", lastTurnId: "1", sessionId: "session-1"})).toMatchObject({status: "failed"});
 
     if (decision === "cancel") {
       actions.cancelNavigation("session-1");
@@ -330,11 +334,35 @@ describe("session commands and views", () => {
     expect(live("session-1", shown)).toMatchObject({status: "idle", turnIds: action === "redo" ? ["1"] : ["1", "3"]});
   });
 
+  it.each([
+    {action: "undo", before: twoTurns(), after: undoneLast(twoTurns()), navigation: {action: "undo", lastTurnId: "1"}, shown: ["1"]},
+    {action: "redo", before: undoneLast(twoTurns()), after: twoTurns(), navigation: {action: "redo", lastTurnId: "3"}, shown: ["1", "3"]},
+    {action: "revert", before: twoTurns(), after: undoneLast(twoTurns()), navigation: {action: "revert", lastTurnId: "1", turnId: "3"}, shown: ["1"]},
+  ] as const)("keeps $action shown when the runtime's document applies it before the command's reply", async ({after, before, navigation, shown}) => {
+    const {actions, document, open, services} = setup();
+    services.documents.set("session-1", replicatedState(before));
+    open("session-1");
+    await waitUntil(() => expect(document("session-1")).toEqual(before));
+    let reply!: () => void;
+    services.sessionRuntime[NAVIGATION_METHODS[navigation.action]] = vi.fn(() => new Promise<typeof ok>((resolve) => (reply = () => resolve(ok))));
+
+    const outcome = actions.navigateCheckpoint({...navigation, sessionId: "session-1"});
+    expect(live("session-1", document("session-1"))).toMatchObject({turnIds: shown});
+
+    // The runtime publishes the navigated document first; the reply follows.
+    await waitUntil(() => expect(services.sessionRuntime[NAVIGATION_METHODS[navigation.action]]).toHaveBeenCalledOnce());
+    services.documents.get("session-1")!.replace(BACKGROUND_CONTEXT, after);
+    expect(live("session-1", document("session-1"))).toMatchObject({turnIds: shown});
+    reply();
+    await expect(outcome).resolves.toEqual({status: "applied"});
+    expect(live("session-1", document("session-1"))).toMatchObject({status: "idle", turnIds: shown});
+  });
+
   it("reports a navigation the server rejects outright by its code", async () => {
     const {actions, services} = setup();
     services.sessionRuntime.undoCheckpoint = vi.fn(async () => failure("CheckpointInheritedError", "Inherited."));
 
-    const outcome = await actions.navigateCheckpoint({action: "undo", sessionId: "session-1", turnId: "t"});
+    const outcome = await actions.navigateCheckpoint({action: "undo", lastTurnId: null, sessionId: "session-1"});
 
     expect(outcome).toEqual({code: "CheckpointInheritedError", message: "Inherited.", status: "failed"});
     expect(live("session-1", twoTurns())).toMatchObject({status: "idle", turnIds: ["1", "3"]});

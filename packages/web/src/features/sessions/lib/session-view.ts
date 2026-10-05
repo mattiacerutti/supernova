@@ -41,13 +41,13 @@ function pendingTurn(pending: PendingMessage): SessionTurn {
   return {completedAt: undefined, events: [], id: pending.id, startedAt: pending.timestamp, status: "streaming", userMessage};
 }
 
-/** Moves turns between visible and undone so `turnId` is where an unconfirmed undo, redo, or revert takes the timeline. */
-function navigated(turns: readonly SessionTurn[], undoneTurns: readonly SessionTurn[], turnId: string | undefined) {
-  const undoneIndex = undoneTurns.findIndex((turn) => turn.id === turnId);
-  if (undoneIndex >= 0) return {turns: [...turns, ...undoneTurns.slice(0, undoneIndex + 1)], undoneTurns: undoneTurns.slice(undoneIndex + 1)};
-  const turnIndex = turns.findIndex((turn) => turn.id === turnId);
-  if (turnIndex >= 0) return {turns: turns.slice(0, turnIndex), undoneTurns: [...turns.slice(turnIndex), ...undoneTurns]};
-  return {turns, undoneTurns};
+/** Splits a session's turns at an unconfirmed undo, redo, or revert: every turn through `lastTurnId` shown, the rest undone. */
+function navigated(turns: readonly SessionTurn[], undoneTurns: readonly SessionTurn[], lastTurnId: string | null) {
+  const all = [...turns, ...undoneTurns];
+  const shown = lastTurnId === null ? 0 : all.findIndex((turn) => turn.id === lastTurnId) + 1;
+  // A target the document no longer has leaves the timeline as the runtime shows it.
+  if (lastTurnId !== null && shown === 0) return {turns, undoneTurns};
+  return {turns: all.slice(0, shown), undoneTurns: all.slice(shown)};
 }
 
 /** What a session is doing as the UI shows it; for a sidebar row or a command's idle check. */
@@ -88,7 +88,7 @@ export function sessionView(input: {readonly session: Session | undefined; reado
   const projected = session ? buildSessionTurns(session) : undefined;
   const undone = session ? buildSessionTurns({entries: session.undone, live: {}}).turns : [];
   const shown = projected?.turns ?? [];
-  const {turns, undoneTurns} = optimism.navigation ? navigated(shown, undone, optimism.navigation.turnId) : {turns: shown, undoneTurns: undone};
+  const {turns, undoneTurns} = optimism.navigation ? navigated(shown, undone, optimism.navigation.lastTurnId) : {turns: shown, undoneTurns: undone};
   return {
     ...sessionStatus(entry, optimism),
     session,

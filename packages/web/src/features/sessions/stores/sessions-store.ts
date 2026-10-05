@@ -13,8 +13,11 @@ export interface PendingMessage {
 /** What the user did in a session that the server's state does not show yet. */
 export interface SessionOptimism {
   readonly message?: PendingMessage;
-  /** An undo, redo, or revert in flight, and the turn it moves the timeline to. */
-  readonly navigation?: {readonly turnId: string | undefined};
+  /**
+   * An undo, redo, or revert in flight, as the timeline it leads to: every turn through `lastTurnId` shown, the rest
+   * undone; `null` when it leaves no turn shown. Where it leads does not change when the runtime applies it.
+   */
+  readonly navigation?: {readonly lastTurnId: string | null};
   readonly stopping?: boolean;
   readonly compacting?: boolean;
   readonly title?: string;

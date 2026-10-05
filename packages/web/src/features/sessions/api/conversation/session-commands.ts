@@ -29,8 +29,11 @@ interface StartSessionInput extends SendMessageInput {
 /** Whether the runtime created the session and accepted its first turn. On failure nothing of the session remains here. */
 export type StartSessionOutcome = {readonly status: "started"} | {readonly status: "failed"; readonly message: string};
 
-/** An undo, redo, or revert; `turnId` is the turn the timeline moves to, and the revert's target. */
-export type CheckpointNavigation = {readonly action: "redo" | "undo"; readonly turnId: string | undefined} | {readonly action: "revert"; readonly turnId: string};
+/**
+ * An undo, redo, or revert (the revert's `turnId` is the turn it is for), and `lastTurnId`, the last turn the timeline
+ * shows once it is applied; `null` when it shows none.
+ */
+export type CheckpointNavigation = ({readonly action: "redo" | "undo"} | {readonly action: "revert"; readonly turnId: string}) & {readonly lastTurnId: string | null};
 
 export type CheckpointNavigationOutcome =
   | {readonly status: "applied"}
@@ -159,7 +162,7 @@ export function sessionActions(runtime: RuntimeClient) {
       const current = status(sessionId);
       // Only a forced retry may start while a refused restore holds the timeline.
       if (current !== "idle" && !(force && current === "checkpoint-navigating")) return {status: "failed", code: undefined, message: "The session is busy."};
-      begin(sessionId, {navigation: {turnId: input.turnId}});
+      begin(sessionId, {navigation: {lastTurnId: input.lastTurnId}});
       try {
         await attachSession(runtime, sessionId);
         await unwrap(navigate(runtime.sessionRuntime, input, force));
@@ -252,9 +255,14 @@ export function useSessionCommands(options: UseSessionCommandsOptions) {
     compact: (): void => {
       if (modelReference) actions.compactSession({modelReference, sessionId});
     },
-    undo: (): void => void navigate({action: "undo", turnId: view.turns.at(-1)?.id}),
-    redo: (): void => void navigate({action: "redo", turnId: view.undoneTurns[0]?.id}),
-    revertToMessage: (turnId: string): void => void navigate({action: "revert", turnId}),
+    undo: (): void => void navigate({action: "undo", lastTurnId: view.turns.at(-2)?.id ?? null}),
+    redo: (): void => void navigate({action: "redo", lastTurnId: view.undoneTurns[0]?.id ?? view.turns.at(-1)?.id ?? null}),
+    /** Shows the timeline as it was when `turnId` was sent: before it when it is shown, through it when it is undone. */
+    revertToMessage: (turnId: string): void => {
+      const shownIndex = view.turns.findIndex((turn) => turn.id === turnId);
+      const lastTurnId = shownIndex >= 0 ? (view.turns[shownIndex - 1]?.id ?? null) : turnId;
+      void navigate({action: "revert", lastTurnId, turnId});
+    },
     /** The pending confirmation for a restore that would discard manual workspace changes. */
     checkpointConflict: {
       open: confirmation.open,
