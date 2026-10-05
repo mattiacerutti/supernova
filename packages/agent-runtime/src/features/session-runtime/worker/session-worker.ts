@@ -177,9 +177,10 @@ export class SessionWorker {
     }
   }
 
-  /** Follows the visible conversation after navigation moved it. */
-  public async refreshWatch(): Promise<void> {
-    await this.watch(await this.store.file(this.sessionId));
+  /** Forks at the leaf before the agent acts (see `SessionFile.diverge`) and follows the new branch. */
+  public async diverge(session: SessionFile): Promise<void> {
+    await session.diverge();
+    await this.watch(session);
   }
 
   /** Runs background work owned by this session (title generation) so disposal can wait for it. */
@@ -197,12 +198,12 @@ export class SessionWorker {
   }
 
   private async watch(session: SessionFile): Promise<void> {
-    const {visible} = await session.state();
-    if (this.watched?.conversationId === visible) return;
+    const {branch} = await session.state();
+    if (this.watched?.conversationId === branch) return;
     this.watched?.unsubscribe();
     // Frames only trigger a publication; it reads the current view, so a frame handled late never moves state back.
-    const unsubscribe = await session.watch(visible, () => void this.enqueue(() => this.onFrame()).catch(() => undefined));
-    this.watched = {conversationId: visible, unsubscribe};
+    const unsubscribe = await session.watch(branch, () => void this.enqueue(() => this.onFrame()).catch(() => undefined));
+    this.watched = {conversationId: branch, unsubscribe};
     // Also catches up on runs that finished after a restart, before anything watched them.
     void this.enqueue(() => this.onFrame()).catch(() => undefined);
   }

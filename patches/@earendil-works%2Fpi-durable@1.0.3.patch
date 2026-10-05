@@ -1,0 +1,28 @@
+diff --git a/dist/harness/harness.js b/dist/harness/harness.js
+index 22b0bbe007354343d7e2502a0b007d6607d5014f..bb7f904fae82ac79744ed4942afef8dd040c7d1a 100644
+--- a/dist/harness/harness.js
++++ b/dist/harness/harness.js
+@@ -47,8 +47,8 @@ class ConversationImpl {
+     commit(change, context) {
+         return this.#host.harness.commitWith(change, context, { conversationId: this.id });
+     }
+-    context(context) {
+-        return readContext(this.#host.harness, this.#host.storage, this.id, context);
++    context(context, at) {
++        return readContext(this.#host.harness, this.#host.storage, this.id, context, at);
+     }
+     entries(query, limit, cursor, context) {
+         const bounded = {
+diff --git a/dist/harness/types.d.ts b/dist/harness/types.d.ts
+index 7f56f20988b0a96dda2cff11f2959c17708296a6..efeda45ecb173338156ec0f1abfdcf389506e5e1 100644
+--- a/dist/harness/types.d.ts
++++ b/dist/harness/types.d.ts
+@@ -469,7 +469,7 @@ export interface Conversation {
+     compact(instructions: string | undefined, context: Context): Promise<TaskId<CompactionResult>>;
+     /** Session commit whose `tx.createTask()` defaults to this conversation. */
+     commit<T>(change: (tx: Tx) => T | Promise<T>, context: Context): Promise<T>;
+-    context(context: Context): Promise<ContextView>;
++    context(context: Context, at?: EntryId): Promise<ContextView>;
+     /** Newest-first fork-aware history of this conversation. */
+     entries(query: Omit<EntryQuery, "conversationId">, limit: number, cursor: Cursor | undefined, context: Context): Promise<Page<EntryRecord, Cursor>>;
+     fork(at: EntryId, options: ConversationCreateOptions, context: Context): Promise<Conversation>;

@@ -14,7 +14,7 @@ describe("session store", () => {
     while (dirs.length) rmSync(dirs.pop()!, {recursive: true, force: true});
   });
 
-  it("uses view entries between compactions and repartitions cached leaf history across undo and redo", async () => {
+  it("moves only the leaf on undo and redo, and forks once when the agent acts from an undone leaf", async () => {
     const pi = await createPiTestRuntime({settings: {compaction: {enabled: false, keepRecentTokens: 1}}});
     try {
       const id = crypto.randomUUID();
@@ -22,6 +22,7 @@ describe("session store", () => {
       const file = await pi.store.file(id);
       await file.configure({provider: selectedPiModel.provider, modelId: selectedPiModel.id, thinkingLevel: "off"});
       const send = async (text: string) => {
+        await file.diverge();
         pi.faux.setResponses([fauxAssistantMessage(`Response to ${text}`)]);
         const submitted = await file.submit({
           content: text,
@@ -29,67 +30,45 @@ describe("session store", () => {
         });
         expect((await submitted.wait()).status).toBe("done");
       };
+      const userTexts = (entries: readonly {readonly kind: string; readonly model?: readonly unknown[]}[]) =>
+        entries.filter((entry) => entry.kind === "pi.user").map((entry) => (entry.model?.[0] as {content?: unknown} | undefined)?.content);
 
       await send("First");
-      const first = await pi.store.snapshot(id);
-      const read = vi.spyOn(file, "history");
       await send("Second");
-      const second = await pi.store.snapshot(id, {previous: first.history});
-      expect(read).not.toHaveBeenCalled();
-      expect(second.history.entries.slice(0, first.history.entries.length)).toEqual(first.history.entries);
+      const full = await pi.store.snapshot(id);
+      const read = vi.spyOn(file, "history");
+      // A snapshot after navigation reads no history: the leaf only splits the cached branch.
+      const snapshotAt = async (count: number) => {
+        await pi.store.show(id, count, undefined);
+        read.mockClear();
+        const snapshot = await pi.store.snapshot(id, {previous: full.history});
+        expect(read).not.toHaveBeenCalled();
+        return snapshot.session;
+      };
+
+      const undone = await snapshotAt(1);
+      expect(userTexts(undone.entries)).toEqual(["First"]);
+      expect(userTexts(undone.undone)).toEqual(["Second"]);
+      expect((await snapshotAt(0)).entries).toEqual([]);
+      expect((await snapshotAt(2)).entries).toEqual(full.session.entries);
+      // Undo and redo forked nothing: the root is still the only conversation.
+      expect((await file.state()).branch).toBe(1);
+      expect(await file.view(2).catch(() => undefined)).toBeUndefined();
 
       await pi.store.show(id, 1, undefined);
-      read.mockClear();
-      // Deliberately pass a snapshot from before the second turn to exercise catching up an uncached leaf suffix.
-      const undone = await pi.store.snapshot(id, {previous: first.history});
-      expect(read).toHaveBeenCalledExactlyOnceWith(first.history.leaf, {after: first.history.entries.at(-1)!.id});
-      expect(undone.history.entries).toEqual(first.history.entries);
-      expect(undone.history.undone).toEqual(second.history.entries.slice(first.history.entries.length));
-      read.mockClear();
-      expect((await pi.store.snapshot(id, {previous: undone.history})).history).toEqual(undone.history);
-      expect(read).not.toHaveBeenCalled();
+      await send("Branch");
+      const state = await file.state();
+      expect(state.branch).not.toBe(1);
+      expect(state.leaf).toBeUndefined();
+      const branched = await pi.store.snapshot(id);
+      expect(userTexts(branched.session.entries)).toEqual(["First", "Branch"]);
+      expect(branched.session.undone).toEqual([]);
 
-      await pi.store.show(id, 2, undefined);
-      read.mockClear();
-      const redone = await pi.store.snapshot(id, {previous: undone.history});
-      expect(read).not.toHaveBeenCalled();
-      expect(redone.history.entries).toEqual(second.history.entries);
-      expect(redone.history.undone).toEqual([]);
-
-      await send("Third");
       pi.faux.setResponses([fauxAssistantMessage("Compacted summary")]);
       await file.compact();
-      read.mockClear();
-      const compacted = await pi.store.snapshot(id, {previous: redone.history});
-      expect(read).toHaveBeenCalledOnce();
-      expect(read.mock.calls[0]).toEqual([redone.history.leaf, {after: redone.history.entries.at(-1)!.id, through: compacted.history.entries.at(-1)!.id}]);
-      expect(compacted.history.entries.filter((entry) => entry.kind === "pi.user")).toHaveLength(3);
-      expect(compacted.history.entries.at(-1)?.kind).toBe("pi.compaction");
-      expect((await pi.store.snapshot(id)).history.entries).toEqual(compacted.history.entries);
-
-      await pi.store.show(id, 0, undefined);
-      const empty = await pi.store.snapshot(id, {previous: compacted.history});
-      expect(empty.history.entries).toEqual([]);
-      expect(empty.history.undone).toEqual(compacted.history.entries);
-      await pi.store.show(id, 1, undefined);
-      read.mockClear();
-      const partial = await pi.store.snapshot(id, {previous: empty.history});
-      expect(read).not.toHaveBeenCalled();
-      expect(partial.history.entries).toEqual(first.history.entries);
-      expect(partial.history.undone).toEqual(compacted.history.entries.slice(first.history.entries.length));
-
-      await pi.store.show(id, 2, undefined);
-      const twoVisible = await pi.store.snapshot(id, {previous: partial.history});
-      pi.faux.setResponses([fauxAssistantMessage("Compacted undo view")]);
-      await file.compact();
-      const compactedUndo = await pi.store.snapshot(id, {previous: twoVisible.history});
-      expect(compactedUndo.history.entries.at(-1)).toMatchObject({kind: "pi.compaction", conversationId: twoVisible.history.visible});
-      expect(compactedUndo.history.undone).toEqual(twoVisible.history.undone);
-      await pi.store.show(id, 3, undefined);
-      read.mockClear();
-      const redoAfterCompaction = await pi.store.snapshot(id, {previous: compactedUndo.history});
-      expect(read).not.toHaveBeenCalled();
-      expect(redoAfterCompaction.history.entries).toEqual(compacted.history.entries);
+      const compacted = await pi.store.snapshot(id, {previous: branched.history});
+      expect(compacted.session.entries.at(-1)?.kind).toBe("pi.compaction");
+      expect(compacted.session.entries).toEqual((await pi.store.snapshot(id)).session.entries);
     } finally {
       await pi.unregister();
     }

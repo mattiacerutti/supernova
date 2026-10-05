@@ -25,7 +25,7 @@ This document explains the design, its guarantees, and the reasoning behind its 
 
 ## Storage
 
-Each Supernova session is one SQLite file, `<agentDir>/sessions-v2/<sessionId>/session.sqlite`, opened by one Harness. The session's chat starts as the file's root conversation; undo forks inside the same file (see [Checkpoint system](checkpoint-system.md)). One file per session follows Pi's own durable coding agent: a storage failure is fatal only to its own file, sessions never contend on one commit line, and idle sessions can close.
+Each Supernova session is one SQLite file, `<agentDir>/sessions-v2/<sessionId>/session.sqlite`, opened by one Harness. The session's chat starts as the file's root conversation; undo moves a pointer into it, and the next send forks there inside the same file (see [Checkpoint system](checkpoint-system.md)). One file per session follows Pi's own durable coding agent: a storage failure is fatal only to its own file, sessions never contend on one commit line, and idle sessions can close.
 
 `<agentDir>/sessions-v2/catalog.sqlite` holds every session's record (project, worktree, title, fork source, pin, archive time), one row each (`pi/lib/session/session-catalog.ts`). Lookup by id, listing by project, and title search read only the catalog; no session file is opened for any. The engine cannot list by project, so the catalog is ours.
 
@@ -100,13 +100,13 @@ Expected failures are results, not errors: the protocol carries only its own err
 
 ## The session document
 
-`SessionStore.snapshot()` builds the `Session` from the visible conversation's current view: its history in append order (compacted entries included, system prompt entries left out), the leaf's entries past it as `undone`, `pi.agent`, `pi.live`, `pi.usage`, authored `contentParts` attached to user entries in both history and `undone`, `runStart`, and context usage. The durable turn records and their checkpoints stay server-side; there is no separate public turns map. Entries are read only up to the view's newest one, so a final answer never appears beside the partial `pi.live` still streams. Entries are append-only, so a rebuild reads only entries after the last one it has while the visible conversation and leaf are unchanged.
+`SessionStore.snapshot()` builds the `Session` from the branch's current view, split at the leaf: its history through the leaf in append order (compacted entries included, system prompt entries left out), the entries past the leaf as `undone`, `pi.agent` as of the leaf, `pi.live`, `pi.usage`, authored `contentParts` attached to user entries in both history and `undone`, `runStart`, and the context usage of a request from the leaf (`Conversation.context(context, at)`, patched into pi-durable until earendil-works/pi#10513 ships). The durable turn records and their checkpoints stay server-side; there is no separate public turns map. Entries are read only up to the view's newest one, so a final answer never appears beside the partial `pi.live` still streams. Entries are append-only, so a rebuild reads only entries after the last one it has while the branch is unchanged; moving the leaf reads nothing.
 
 `runStart` is the first user entry of the active run. Pi's `pi.live.run` lists the run's input submissions, not entries; the server resolves them so the browser knows where the turn being answered starts.
 
 ## Streaming
 
-`SessionWorker` holds the session document as Chord replicated state (`lib/document-state.ts`). Every engine frame of the visible conversation, and every change no frame shows (a rename, navigation, a placed input's turn record), rebuilds it, diffs it against the previous one with Chord's `diffRevisions`, and publishes the change as one revision. A frame only triggers a rebuild of the current state, so a frame handled late never moves the document backwards. The board follows the document's activity (`idle`, `running`, `compacting`, from `pi.live`) and summary, for sessions a client has not attached.
+`SessionWorker` holds the session document as Chord replicated state (`lib/document-state.ts`). Every engine frame of the branch, and every change no frame shows (a rename, navigation, a placed input's turn record), rebuilds it, diffs it against the previous one with Chord's `diffRevisions`, and publishes the change as one revision. A frame only triggers a rebuild of the current state, so a frame handled late never moves the document backwards. The board follows the document's activity (`idle`, `running`, `compacting`, from `pi.live`) and summary, for sessions a client has not attached.
 
 Chord owns replication from there: a subscription starts with a snapshot, later revisions arrive as deltas encoded per client, and a client that falls behind gets a full reset. A reconnecting client attaches again and starts from a new snapshot; nothing is versioned by hand.
 
@@ -114,7 +114,7 @@ Submitting runs inside the worker's publication queue: the engine places the use
 
 ## Running a turn
 
-`sendMessage` selects and checks the model, prepares the prompt and images, configures the visible conversation's model, captures the before-turn checkpoint, and submits the input; a busy session rejects it. It resolves once the engine placed the input; the run continues under the engine. The title is generated alongside and published with the document and the board.
+`sendMessage` selects and checks the model, prepares the prompt and images, forks at an undone leaf, configures the branch's model, captures the before-turn checkpoint, and submits the input; a busy session rejects it. It resolves once the engine placed the input; the run continues under the engine. The title is generated alongside and published with the document and the board.
 
 When a frame shows no active run, the worker captures the after-turn checkpoint of every turn that lacks one: one capture serves all inputs a run answered, and runs that finished while nothing watched (after a restart) are caught up on first watch.
 
@@ -136,7 +136,7 @@ Different sessions run independently. Within a session the engine runs one input
 
 - **Command rejection.** Failures while selecting the model, preparing, or admitting the input fail the command with a `GenericError` result. The browser drops its pending message.
 - **Run failure.** A model error is an assistant error entry, shown in the turn. An input that ends unanswered for another reason sets the session's problem on the board.
-- **User abort.** `abortSession` aborts the visible conversation's work; the run ends through the normal path and the document shows what was produced.
+- **User abort.** `abortSession` aborts the branch's work; the run ends through the normal path and the document shows what was produced.
 - **Browser disconnect.** Releases that connection's attachment only. On reconnect the browser rebinds its services, attaches the shown session again, and refetches every cached session.
 - **Server shutdown or crash.** Closing the server closes every session file without aborting work. On the next open the engine resumes the run from its last commit: an interrupted tool call that is not replay-safe gets an interrupted result, and the turn finishes. Turns that finished without an after-turn checkpoint get one when their session is next watched.
 - **Extension reload.** Updating extensions reinstalls them on every open session in place; a running call finishes on the code it took.

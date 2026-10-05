@@ -39,10 +39,10 @@ export interface TurnRecord {
 
 /** Navigation and turn state of one session file. */
 export type SessionState = {
-  /** Conversation ID of the current branch. */
-  leaf: number;
-  /** Conversation ID of the visible leaf of the branch. Differs from `leaf` after checkpoint navigation. */
-  visible: number;
+  /** Conversation of the current branch: every turn, undone ones included. */
+  branch: number;
+  /** Last shown entry of the branch: absent when at its end, null when nothing is shown. The next send forks here. */
+  leaf?: number | null;
   current?: CheckpointRef;
   turns: Record<string, TurnRecord>;
 };
@@ -51,10 +51,10 @@ export const SessionStateDoc = defineDoc<SessionState & JsonObject>({
   kind: "supernova.session",
   version: 1,
   scope: "session",
-  initial: () => ({leaf: 1, visible: 1, turns: {}}),
+  initial: () => ({branch: 1, turns: {}}),
 });
 
-/** One user turn of a session's leaf history, as navigation sees it. */
+/** One user turn of a session's branch history, as navigation sees it. */
 export interface TurnPosition {
   /** The user entry id; the turn's id in the timeline and the key of its record. */
   readonly turnId: string;

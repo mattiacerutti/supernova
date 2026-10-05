@@ -15,7 +15,7 @@ import {Projects} from "@supernova/agent-runtime/features/projects/projects";
 import {SessionStore} from "@supernova/agent-runtime/pi/session-store";
 import {createSupernovaTools} from "@supernova/agent-runtime/features/session-runtime/tools/tools";
 import type {SendMessagePayload} from "@supernova/contracts/services/session-runtime/procedures";
-import type {AgentState, AssistantMessage, ModelReference, Session} from "@supernova/contracts/services/sessions/schemas";
+import type {AssistantMessage, ModelReference, Session} from "@supernova/contracts/services/sessions/schemas";
 import type {SessionDirectoryState} from "@supernova/contracts/services/sessions/services";
 import {waitUntil} from "@tests/support/async";
 
@@ -275,8 +275,8 @@ export async function createPiTestRuntime(input?: {
       .map(([, record]) => record);
   };
 
-  /** The visible conversation's stored model and thinking level. */
-  const agent = async (sessionId: string) => (await (await store.file(sessionId)).view()).docs["pi.agent"] as AgentState | undefined;
+  /** The model and thinking level the session's next send starts from. */
+  const agent = async (sessionId: string) => (await store.file(sessionId)).agent();
 
   return {
     agent,

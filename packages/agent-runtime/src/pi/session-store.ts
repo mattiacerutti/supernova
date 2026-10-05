@@ -36,19 +36,17 @@ export interface SessionStoreDeps {
 }
 
 /**
- * The histories a session document was built from. Entries are append-only, so while the visible conversation and the
- * leaf stay the same the next build reads only entries after the last one.
+ * The branch history a session document was built from. Entries are append-only, so while the branch stays the same
+ * the next build reads only entries after the last one.
  */
 export interface SessionHistory {
-  readonly visible: number;
-  readonly leaf: number;
+  readonly branch: number;
   readonly entries: readonly EntryRecord[];
-  readonly undone: readonly EntryRecord[];
 }
 
 /** Where a session's history stands for checkpoint navigation. */
 export interface NavigationState {
-  /** Every turn of the leaf, undone ones included, in order. */
+  /** Every turn of the branch, undone ones included, in order. */
   readonly turns: readonly TurnPosition[];
   /** How many of `turns` are visible; the rest are undone. */
   readonly visibleCount: number;
@@ -153,9 +151,9 @@ export class SessionStore {
   }
 
   /**
-   * The session document, from the visible conversation's current committed view. Entries are read only
-   * up to the view's newest one, so the final answer never shows beside the partial the view still streams.
-   * `previous` is the history of the last build, extended instead of read again.
+   * The session document, from the branch's current committed view split at the leaf. Entries are read only up to the
+   * view's newest one, so the final answer never shows beside the partial the view still streams. `previous` is the
+   * history of the last build, extended instead of read again.
    */
   public async snapshot(sessionId: string, options: {readonly previous?: SessionHistory} = {}): Promise<{readonly session: Session; readonly history: SessionHistory}> {
     const record = await this.find(sessionId);
@@ -164,33 +162,36 @@ export class SessionStore {
     const file = await this.file(sessionId);
     const state = await file.state();
     const view = await file.view();
-    const history = await this.historyOf(file, state, view, options.previous);
+    const history = await this.historyOf(file, state.branch, view, options.previous);
+    const {leaf} = state;
+    const shown = leaf === undefined ? history.entries : history.entries.filter((entry) => leaf !== null && entry.id <= leaf);
     const live = view.docs["pi.live"] as LiveState | undefined;
+    const agent = await file.agent(history.entries);
 
     const session = buildSession({
       record,
-      entries: history.entries,
-      undone: history.undone,
-      agent: view.docs["pi.agent"] as AgentState | undefined,
+      entries: shown,
+      undone: history.entries.slice(shown.length),
+      agent,
       live,
       usage: view.docs["pi.usage"] as UsageState | undefined,
       runStart: await file.runStart(live),
       turns: state.turns,
-      context: await this.contextOf(file, view),
+      context: await this.contextOf(file, state.branch, leaf, agent),
     });
 
     return {session, history};
   }
 
   /**
-   * Forks a session at a visible turn into a new session file with a fresh id: the visible history through the
-   * turn's end, its turn records (checkpoints stay keyed by the source, so inherited turns cannot restore files), and
-   * the source's model.
+   * Forks a session at a shown turn into a new session file with a fresh id: the shown history through the turn's end,
+   * its turn records (checkpoints stay keyed by the source, so inherited turns cannot restore files), and the model.
    */
   public async fork(input: {readonly sessionId: string; readonly turnId: string}): Promise<string> {
     const source = await this.file(input.sessionId);
     const state = await source.state();
-    const history = await source.history(state.visible);
+    const {leaf} = state;
+    const history = (await source.history(state.branch)).filter((entry) => leaf === undefined || (leaf !== null && entry.id <= leaf));
     const turn = turnPositions(history, state.turns).find((candidate) => candidate.turnId === input.turnId);
     if (!turn) throw new Error("This message cannot be forked.");
     const record = await this.find(input.sessionId);
@@ -199,7 +200,7 @@ export class SessionStore {
     await this.create({id, projectPath: record.projectPath, ...(record.worktree ? {worktree: record.worktree} : {}), forkedFrom: input.sessionId});
     try {
       if (record.title) await this.update(id, (created) => ({...created, title: record.title}));
-      const agent = (await source.view(state.visible)).docs["pi.agent"] as AgentState | undefined;
+      const agent = await source.agent();
       const fork = await this.file(id);
       await fork.seed({entries: history.filter((entry) => entry.id <= turn.endId && entry.kind !== "pi.system"), turns: state.turns});
       if (agent?.model) await fork.configure({provider: agent.model.provider, modelId: agent.model.modelId, thinkingLevel: agent.thinkingLevel ?? "off"});
@@ -213,21 +214,24 @@ export class SessionStore {
   /** The session's turns and how many are visible, for undo, redo, and revert. */
   public async navigation(sessionId: string): Promise<NavigationState> {
     const file = await this.file(sessionId);
-    const state = await file.state();
-    const turns = turnPositions(await file.history(state.leaf), state.turns);
-    const visibleIds = new Set((await file.history(state.visible)).map((entry) => String(entry.id)));
-    return {turns, visibleCount: turns.filter((turn) => visibleIds.has(turn.turnId)).length, current: state.current};
+    const {branch, leaf, current, turns: records} = await file.state();
+    const turns = turnPositions(await file.history(branch), records);
+    const visibleCount = leaf === undefined ? turns.length : turns.filter((turn) => leaf !== null && Number(turn.turnId) <= leaf).length;
+    return {turns, visibleCount, current};
   }
 
   /**
-   * Shows the first `count` turns of the leaf: the leaf itself (all turns), a fork after the last shown turn, or an
-   * empty conversation (none). The engine restores the model the conversation had there. `current` records the
-   * checkpoint the workspace now matches.
+   * Shows the first `count` turns of the branch by moving the leaf; nothing forks until the agent acts again (see
+   * `SessionFile.diverge`). `current` records the checkpoint the workspace now matches.
    */
   public async show(sessionId: string, count: number, current: CheckpointRef | undefined): Promise<void> {
     const file = await this.file(sessionId);
     const {turns} = await this.navigation(sessionId);
-    await file.navigate(turns[count] === undefined ? "leaf" : turns[count - 1]?.endId, current);
+    await file.updateState((state) => {
+      if (count >= turns.length) delete state.leaf;
+      else state.leaf = turns[count - 1]?.endId ?? null;
+      if (current) state.current = current;
+    });
   }
 
   /** Reinstalls every open session's tools, prompt, and extensions from disk; running work keeps its code. */
@@ -272,61 +276,31 @@ export class SessionStore {
     catalog?.close();
   }
 
-  private async historyOf(
-    file: SessionFile,
-    state: {readonly leaf: number; readonly visible: number},
-    view: ConversationView,
-    previous: SessionHistory | undefined
-  ): Promise<SessionHistory> {
+  /** The branch's timeline entries through the view's newest one; extends `previous` while the branch is the same. */
+  private async historyOf(file: SessionFile, branch: number, view: ConversationView, previous: SessionHistory | undefined): Promise<SessionHistory> {
     const through = view.entries.reduce((newest, entry) => Math.max(newest, entry.id), 0);
-    const sameLeaf = previous?.leaf === state.leaf;
-    const sameView = sameLeaf && previous.visible === state.visible;
-    const rewound = state.visible !== state.leaf;
-    if (sameView && rewound && through <= (previous.entries.at(-1)?.id ?? 0)) return previous;
-
-    let leafHistory: readonly EntryRecord[] = sameLeaf ? previous.entries : [];
-    if (sameLeaf && previous.visible !== state.leaf) {
-      // A compaction can append entries to an undo fork without changing the leaf; those are not leaf history.
-      leafHistory = [...previous.entries.filter((entry) => entry.conversationId !== previous.visible), ...previous.undone];
-    }
-    if (rewound && (!sameLeaf || previous.visible === state.leaf)) {
-      // Leaving the active leaf can outpace the cached snapshot. An already-undone leaf cannot run or grow.
-      const added = timelineEntries(await file.history(state.leaf, {after: leafHistory.at(-1)?.id ?? 0}));
-      if (added.length > 0) leafHistory = [...leafHistory, ...added];
-    }
-
-    const cutoff = view.conversation.parent?.at ?? 0;
-    const known = rewound
-      ? [...leafHistory.filter((entry) => entry.id <= cutoff), ...(sameView ? previous.entries.filter((entry) => entry.conversationId === state.visible) : [])]
-      : leafHistory;
+    const cached = previous?.branch === branch ? previous : undefined;
+    const known = cached?.entries ?? [];
     const after = known.at(-1)?.id ?? 0;
+    if (cached && through <= after) return cached;
+    // The view starts at its compaction head, so it extends the cache only when that head is already cached.
     const head = view.entries.find((entry) => entry.head !== undefined);
-    const headKnown = head === undefined || known.some((entry) => entry.id === head.id);
-    let added: EntryRecord[] = [];
-    if (through > after) {
-      const newer = (sameLeaf || rewound) && headKnown ? view.entries.filter((entry) => entry.id > after) : await file.history(state.visible, {after, through});
-      added = timelineEntries(newer);
-    }
-
-    return {
-      visible: state.visible,
-      leaf: state.leaf,
-      entries: added.length > 0 ? [...known, ...added] : known,
-      undone: rewound ? leafHistory.filter((entry) => entry.id > cutoff) : [],
-    };
+    const extendsCache = cached !== undefined && (head === undefined || known.some((entry) => entry.id === head.id));
+    const added = timelineEntries(extendsCache ? view.entries.filter((entry) => entry.id > after) : await file.history(branch, {after, through}));
+    return {branch, entries: added.length > 0 ? [...known, ...added] : known};
   }
 
   private databasePath(sessionId: string): string {
     return join(this.root, sessionId, "session.sqlite");
   }
 
-  private async contextOf(file: SessionFile, view: ConversationView): Promise<SessionContextUsage> {
-    const modelRef = (view.docs["pi.agent"] as AgentState | undefined)?.model;
-    const model = modelRef ? this.deps.sdk.modelRuntime.getModel(modelRef.provider, modelRef.modelId) : undefined;
+  /** Context usage of the next request from the leaf. */
+  private async contextOf(file: SessionFile, branch: number, leaf: number | null | undefined, agent: AgentState | undefined): Promise<SessionContextUsage> {
+    const model = agent?.model ? this.deps.sdk.modelRuntime.getModel(agent.model.provider, agent.model.modelId) : undefined;
     const contextWindow = model?.contextWindow ?? 0;
-
-    if (view.entries.length === 0) return {contextWindow, usedTokens: 0};
-    const {entries, messages} = await file.modelContext(view.conversation.id);
+    if (leaf === null) return {contextWindow, usedTokens: 0};
+    const {entries, messages} = await file.modelContext(branch, leaf);
+    if (entries.length === 0) return {contextWindow, usedTokens: 0};
     return contextUsageOf({contextWindow, entries, messages});
   }
 

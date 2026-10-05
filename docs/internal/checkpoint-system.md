@@ -6,10 +6,10 @@ Supernova checkpoints keep conversation navigation and workspace files at the sa
 
 The system coordinates two durable state models:
 
-- The session's durable engine file, whose conversations hold the turns and whose `supernova.session` document holds each turn's checkpoints and which conversation is visible.
+- The session's durable engine file, whose conversations hold the turns and whose `supernova.session` document holds each turn's checkpoints and how much of the branch is shown.
 - App-owned shadow Git repositories, which store workspace file snapshots.
 
-A checkpoint navigation succeeds only when the workspace restore completes before the visible conversation changes.
+A checkpoint navigation succeeds only when the workspace restore completes before the shown turns change.
 
 ## Architecture overview
 
@@ -39,7 +39,7 @@ The architecture is divided into four responsibilities:
 
 1. A turn record claiming coverage is written only after its workspace manifest is durable.
 2. A checkpoint manifest is published only after every covered repository has a tree and private ref.
-3. Workspace restoration completes and verifies before the visible conversation changes.
+3. Workspace restoration completes and verifies before the shown turns change.
 4. Restore mutates only paths changed between the current and target checkpoint trees.
 5. The user's Git `HEAD`, branch, index, refs, and stash are never changed.
 6. A direct child repository owns its subtree; a parent repository snapshot excludes that subtree.
@@ -68,16 +68,16 @@ interface TurnRecord {
 }
 
 type SessionState = {
-  leaf: number; // conversation holding every turn, undone ones included
-  visible: number; // conversation the user sees and talks to
+  branch: number; // conversation holding every turn, undone ones included
+  leaf?: number | null; // last shown entry of the branch; absent at its end, null when nothing is shown
   current?: CheckpointRef; // checkpoint the workspace last matched
   turns: Record<string, TurnRecord>; // keyed by the turn's user entry id
 };
 ```
 
 - A turn is a user entry with a turn record; its id is the user entry id.
-- `leaf` keeps every turn. Undo makes the visible conversation an engine fork of the leaf after the last shown turn (or an empty conversation), so redo can show the leaf's later turns again.
-- Sending on a fork makes it the new leaf, which drops the redo path.
+- Undo, redo, and revert only move `leaf`; the branch keeps every turn, so redo shows its later turns again.
+- Sending or compacting from an undone leaf first forks the branch at `leaf` (or starts an empty conversation when nothing is shown) and makes that the branch, which drops the redo path. The engine forks only when the agent acts again.
 - Checkpoint boundaries are per turn, not per entry, so they need no position in the transcript.
 
 ### Checkpoint coverage
@@ -118,9 +118,9 @@ its checkpoint. Neither is reported as an uncovered-boundary problem.
 ```mermaid
 flowchart LR
   T1[Turn 1: before B1, after A1] --> T2[Turn 2: before B2, after A2]
-  LEAF[Leaf conversation] --- T1
-  LEAF --- T2
-  UNDO[Visible after undo: fork of leaf after turn 1] -. shows .-> T1
+  BRANCH[Branch conversation] --- T1
+  BRANCH --- T2
+  UNDO[leaf after undo: end of turn 1] -. shows .-> T1
 ```
 
 Undo returns the workspace to the first hidden turn's before-turn checkpoint (keeping manual changes made before that turn was sent); redo and forward revert return it to the last shown turn's after-turn checkpoint. Undo, redo, and revert-to-message resolve different target entries, but all use the same workspace restore operation.
@@ -415,12 +415,11 @@ sequenceDiagram
   end
   alt all plans succeed
     Store-->>Nav: success
-    Nav->>Pi: show target turns (fork or leaf)
-    Nav->>Pi: restore the target turn's model
+    Nav->>Pi: move the leaf to the target turn
   else a plan fails
     Store->>Shadow: best-effort rollback applied plans
     Store-->>Nav: failure
-    Note over Nav,Pi: visible conversation unchanged
+    Note over Nav,Pi: leaf unchanged
   end
 ```
 
@@ -447,13 +446,13 @@ Safety trees are not referenced after the restore call and are eventually eligib
 
 `navigateToTurn()` calls `SessionWorker.restoreCheckpoint()` before changing the conversation, and only when both the current and target boundaries are captured. Only after restore succeeds, or is skipped because a boundary is uncovered, does it:
 
-1. Make the target turns visible: the leaf, or a fork of it after the last shown turn.
+1. Move `leaf` to the target turn's last entry.
 2. Record the restored checkpoint as `current`.
 3. Publish the change to the session's state.
 
-The conversation's model and thinking level come back with it: a fork keeps the engine's `pi.agent` document as of its fork entry, so nothing is stored per turn.
+The model and thinking level come back with it: the session document reads the branch's `pi.agent` as of the leaf, and the fork a later send makes keeps that copy, so nothing is stored per turn.
 
-A restore failure is converted to `Failed to restore workspace checkpoint.` The visible conversation does not change.
+A restore failure is converted to `Failed to restore workspace checkpoint.` The leaf does not change.
 
 A forked session copies its source's turn records; their checkpoints keep the source's `sessionId`, so navigating to an inherited captured boundary rejects with `CheckpointInheritedError`.
 

@@ -48,6 +48,7 @@ export async function sendMessage(runtime: SessionWorker, titleGenerator: TitleG
   if (runtime.isCancelled()) throw new Error("Session was cancelled.");
 
   const turnModel = {provider: model.provider, modelId: model.id, thinkingLevel: toPiThinkingLevel(input.modelReference.thinkingLevel)};
+  await runtime.diverge(session);
   await session.configure(turnModel);
   const capture = input.captureCheckpoints ?? true;
   const before = await runtime.createCheckpoint(capture);

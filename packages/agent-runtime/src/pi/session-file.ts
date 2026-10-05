@@ -21,7 +21,7 @@ import {openNodeSqliteStorage} from "@earendil-works/pi-durable/storage/sqlite/n
 import {harnessModels, harnessSettings} from "@supernova/agent-runtime/pi/config/harness-settings";
 import type {PromptResources} from "@supernova/agent-runtime/pi/config/system-prompt";
 import {createPromptSections} from "@supernova/agent-runtime/pi/config/system-prompt";
-import type {CheckpointRef, SessionState, TurnRecord} from "@supernova/agent-runtime/pi/lib/session/session-state";
+import type {SessionState, TurnRecord} from "@supernova/agent-runtime/pi/lib/session/session-state";
 import {SessionStateDoc} from "@supernova/agent-runtime/pi/lib/session/session-state";
 import type {PromptedTool} from "@supernova/agent-runtime/pi/lib/tools/coding-tools";
 import {createCodingTools} from "@supernova/agent-runtime/pi/lib/tools/coding-tools";
@@ -54,8 +54,8 @@ function strictJson<T>(value: T): T {
 
 /**
  * One open session file: a Harness over its SQLite storage, the extensions installed in it, and its
- * `supernova.session` state. The session's chat starts as the root conversation; undo forks inside the same file.
- * Operations act on the visible conversation unless they take a conversation id.
+ * `supernova.session` state. The session's chat starts as the root conversation. Undo only moves the state's `leaf`;
+ * `diverge()` forks there when the agent acts again. Operations act on the branch unless they take a conversation id.
  */
 export class SessionFile {
   private constructor(
@@ -130,9 +130,9 @@ export class SessionFile {
     }, context);
   }
 
-  /** A conversation's committed view; the visible one by default. */
+  /** A conversation's committed view; the branch by default. */
   public async view(conversationId?: number): Promise<ConversationView> {
-    const id = conversationId ?? (await this.state()).visible;
+    const id = conversationId ?? (await this.state()).branch;
     const state = await (await this.conversation(id)).viewState(context);
     try {
       return state.value!;
@@ -161,9 +161,21 @@ export class SessionFile {
     return items.reverse();
   }
 
-  /** The active entries and model messages of a conversation's next request. */
-  public async modelContext(conversationId: number): Promise<ContextView> {
-    return (await this.conversation(conversationId)).context(context);
+  /** The active entries and model messages of a conversation's next request, as of entry `at` when given. */
+  public async modelContext(conversationId: number, at?: number): Promise<ContextView> {
+    //TODO: Being able to pass `at` to context currently relies on a patch applied to pi-durable, waiting for upstream adoption
+    return (await this.conversation(conversationId)).context(context, at as EntryId | undefined);
+  }
+
+  /**
+   * The agent (model, thinking level) the next send starts from: the branch's as of the leaf, or as of the first entry
+   * of `history` when nothing is shown. `history` is the branch's, for that case only.
+   */
+  public async agent(history?: readonly EntryRecord[]): Promise<AgentState | undefined> {
+    const {branch, leaf} = await this.state();
+    if (leaf === undefined) return (await this.view(branch)).docs["pi.agent"] as AgentState | undefined;
+    const at = leaf ?? (history ?? (await this.history(branch)))[0]?.id;
+    return at !== undefined ? this.harness.snapshotAsOf(AgentDoc, branch as ConversationId, at as EntryId, context) : undefined;
   }
 
   /** Calls `listener` with every committed view of a conversation. Returns the unsubscribe. */
@@ -186,9 +198,9 @@ export class SessionFile {
     return entries.length > 0 ? Math.min(...entries) : undefined;
   }
 
-  /** Sets the visible conversation's model and thinking level; they apply from its next request. */
+  /** Sets the branch's model and thinking level; they apply from its next request. */
   public async configure(model: {readonly provider: string; readonly modelId: string; readonly thinkingLevel: string}): Promise<void> {
-    const conversation = await this.conversation((await this.state()).visible);
+    const conversation = await this.conversation((await this.state()).branch);
     await conversation.configure(
       {model: {provider: model.provider, modelId: model.modelId}, thinkingLevel: model.thinkingLevel as NonNullable<AgentState["thinkingLevel"]>},
       context
@@ -196,18 +208,35 @@ export class SessionFile {
   }
 
   /**
-   * Submits a user input to the visible conversation and records its turn under the placed user entry. An undone
-   * path is dropped: the visible conversation becomes the leaf. Rejects with `SessionBusyError` while a run is active.
+   * Makes the leaf the branch's end before the agent acts: forks the branch there (or starts an empty conversation when
+   * nothing is shown), which drops the undone turns. No-op at the branch's end.
+   */
+  public async diverge(): Promise<void> {
+    const {branch, leaf} = await this.state();
+    if (leaf === undefined) return;
+    const next =
+      leaf === null
+        ? await this.harness.createConversation({ownership: {kind: "ownerless"}, agent: {cwd: this.cwd}}, context)
+        : await (await this.conversation(branch)).fork(leaf as EntryId, {ownership: {kind: "ownerless"}}, context);
+    await this.updateState((state) => {
+      state.branch = next.id;
+      delete state.leaf;
+    });
+  }
+
+  /**
+   * Submits a user input to the branch and records its turn under the placed user entry; call `diverge()` first.
+   * Rejects with `SessionBusyError` while a run is active.
    * Resolves with the user entry and a wait for the input's settlement.
    *
    * TODO(queue): with `whenBusy: "steer" | "followUp"` the engine places the input later, at a turn boundary; its
    * turn record (and before-turn checkpoint) must then be written when it is placed, not here.
    */
   public async submit(input: {readonly content: string | (TextContent | ImageContent)[]; readonly record: TurnRecord}) {
-    const {visible} = await this.state();
+    const {branch} = await this.state();
     let submission;
     try {
-      submission = await (await this.conversation(visible)).submit({type: "input", content: input.content, whenBusy: "reject"}, context);
+      submission = await (await this.conversation(branch)).submit({type: "input", content: input.content, whenBusy: "reject"}, context);
     } catch (error) {
       throw error instanceof ConversationBusy ? new SessionBusyError() : error;
     }
@@ -215,7 +244,6 @@ export class SessionFile {
     if (placed.type !== "input" || placed.entry === undefined) throw new Error("The message was not placed.");
     const entryId = placed.entry;
     await this.updateState((state) => {
-      state.leaf = state.visible;
       state.turns[String(entryId)] = strictJson(input.record);
       state.current = input.record.before;
     });
@@ -225,14 +253,14 @@ export class SessionFile {
     };
   }
 
-  /** Aborts the visible conversation's work and resolves once it is idle. */
+  /** Aborts the branch's work and resolves once it is idle. */
   public async abort(): Promise<void> {
-    await (await this.conversation((await this.state()).visible)).abort(context);
+    await (await this.conversation((await this.state()).branch)).abort(context);
   }
 
-  /** Compacts the visible conversation; resolves once the summary is placed or the compaction ended. */
+  /** Compacts the branch; resolves once the summary is placed or the compaction ended. Call `diverge()` first. */
   public async compact(): Promise<void> {
-    const taskId = await (await this.conversation((await this.state()).visible)).compact(undefined, context);
+    const taskId = await (await this.conversation((await this.state()).branch)).compact(undefined, context);
     const {outcome} = (await this.harness.waitForTask(taskId, context)).state;
     if (outcome.status === "aborted") return;
     if (outcome.status !== "completed") throw new Error(outcome.error?.message ?? `Compaction ${outcome.status}.`);
@@ -241,33 +269,12 @@ export class SessionFile {
   }
 
   /**
-   * Makes the leaf (`"leaf"`), a fork of it through entry `at`, or an empty conversation (`undefined`) visible. A fork
-   * keeps the agent (model, thinking level) the leaf had at `at`; an empty one starts with the agent the leaf had at
-   * its first turn. The leaf keeps every turn, so a later navigation can show undone turns again.
-   */
-  public async navigate(at: number | "leaf" | undefined, current: CheckpointRef | undefined): Promise<void> {
-    const {leaf} = await this.state();
-    let visible = leaf;
-    if (typeof at === "number") visible = (await (await this.conversation(leaf)).fork(at as EntryId, {ownership: {kind: "ownerless"}}, context)).id;
-    if (at === undefined) {
-      const firstUser = (await this.history(leaf)).find((entry) => entry.kind === "pi.user");
-      const agent = firstUser ? await this.harness.snapshotAsOf(AgentDoc, leaf as ConversationId, firstUser.id, context) : undefined;
-      const change = {cwd: this.cwd, ...(agent?.model ? {model: agent.model} : {}), ...(agent?.thinkingLevel ? {thinkingLevel: agent.thinkingLevel} : {})};
-      visible = (await this.harness.createConversation({ownership: {kind: "ownerless"}, agent: change}, context)).id;
-    }
-    await this.updateState((state) => {
-      state.visible = visible;
-      if (current) state.current = current;
-    });
-  }
-
-  /**
    * Seeds an empty session with copied history, for forking across session files: entries are appended to the root
    * conversation in one commit with their kind, model messages, data, and head, and turn records follow their
    * remapped user entries.
    */
   public async seed(input: {readonly entries: readonly EntryRecord[]; readonly turns: Readonly<Record<string, TurnRecord>>}): Promise<void> {
-    const root = await this.conversation((await this.state()).visible);
+    const root = await this.conversation((await this.state()).branch);
     const ids = new Map<number, number>();
     await root.commit(async (tx) => {
       const turns: Record<string, TurnRecord> = {};

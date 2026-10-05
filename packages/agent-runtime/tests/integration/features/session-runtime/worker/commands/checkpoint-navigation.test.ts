@@ -72,7 +72,7 @@ const unavailableChildRepositoryCases = [
   },
 ] as const;
 
-/** The model and thinking level the session's visible conversation runs with, as the composer names them. */
+/** The model and thinking level the session's next send starts from, as the composer names them. */
 function modelReferenceOf(session: Session): ModelReference | undefined {
   const {model, thinkingLevel} = session.agent;
   return model ? {id: model.modelId, providerId: model.provider, thinkingLevel: thinkingLevel ?? "off"} : undefined;

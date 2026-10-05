@@ -8,6 +8,7 @@ export async function compactSession(runtime: SessionWorker, input: CompactSessi
   const session = await runtime.beginWork();
   try {
     const model = findSelectedModel(runtime.sdk, input.modelReference);
+    await runtime.diverge(session);
     await session.configure({provider: model.provider, modelId: model.id, thinkingLevel: toPiThinkingLevel(input.modelReference.thinkingLevel)});
     // Its progress reaches clients through `pi.live.compactions` in the session's state.
     await session.compact();
