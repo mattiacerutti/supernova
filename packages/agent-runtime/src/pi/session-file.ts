@@ -75,7 +75,7 @@ export class SessionFile {
     const harness = await HarnessFactory.open(
       await openNodeSqliteStorage(input.path),
       {
-        models: harnessModels({modelRuntime: input.modelRuntime, sessionId: input.sessionId, settings: input.settings}),
+        models: harnessModels({modelRuntime: input.modelRuntime, settings: input.settings}),
         registry,
         settings: harnessSettings(input.settings),
         // One environment: every conversation of a session runs in its working directory.

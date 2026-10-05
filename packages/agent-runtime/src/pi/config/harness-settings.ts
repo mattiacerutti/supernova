@@ -47,7 +47,7 @@ export function harnessSettings(settings: () => SettingsManager): HarnessSetting
 }
 
 /** What the old SDK added to every request from settings; the engine forwards only `ConversationStreamOptions`. */
-function requestOptions(settings: SettingsManager, sessionId: string | undefined): ModelsSimpleStreamOptions {
+function requestOptions(settings: SettingsManager): ModelsSimpleStreamOptions {
   const budgets = settings.getThinkingBudgets();
   const websocketConnectTimeoutMs = settings.getWebSocketConnectTimeoutMs();
   return {
@@ -57,10 +57,6 @@ function requestOptions(settings: SettingsManager, sessionId: string | undefined
     // `HarnessSettings.stream` and delete this; if they explain the omission as deliberate, reconsider forwarding them.
     ...(budgets === undefined ? {} : {thinkingBudgets: budgets}),
     ...(websocketConnectTimeoutMs === undefined ? {} : {websocketConnectTimeoutMs}),
-    // TODO(pi-durable): workaround. Providers key prompt caches by session id, which the old SDK sent on every request.
-    // pi-durable never passes `sessionId` and it is not in `ConversationStreamOptions`; upstream gives no reason.
-    // Monitor upstream for engine support (then delete this) or a stated reason not to send it.
-    ...(sessionId === undefined ? {} : {sessionId}),
   };
 }
 
@@ -68,14 +64,14 @@ function requestOptions(settings: SettingsManager, sessionId: string | undefined
  * Wraps `ModelRuntime` for one session's Harness. Calls the engine makes go through unchanged except streaming, which
  * gets the session's settings-derived request options underneath the engine's own.
  */
-export function harnessModels(input: {readonly modelRuntime: ModelRuntime; readonly settings: () => SettingsManager; readonly sessionId: string}): Models {
-  const {modelRuntime, settings, sessionId} = input;
+export function harnessModels(input: {readonly modelRuntime: ModelRuntime; readonly settings: () => SettingsManager}): Models {
+  const {modelRuntime, settings} = input;
   return new Proxy(modelRuntime as unknown as Models, {
     get(target, property, receiver) {
       if (property === "streamSimple" || property === "completeSimple") {
         const call = Reflect.get(target, property, receiver) as Models["streamSimple"];
         return (model: Parameters<Models["streamSimple"]>[0], context: Parameters<Models["streamSimple"]>[1], options?: ModelsSimpleStreamOptions) =>
-          call.call(target, model, context, {...requestOptions(settings(), sessionId), ...options});
+          call.call(target, model, context, {...requestOptions(settings()), ...options});
       }
       const value = Reflect.get(target, property, receiver);
       return typeof value === "function" ? value.bind(target) : value;
