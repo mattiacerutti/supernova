@@ -211,22 +211,25 @@ export class SessionStore {
     return id;
   }
 
-  /** The session's turns and how many are visible, for undo, redo, and revert. */
-  public async navigation(sessionId: string): Promise<NavigationState> {
+  /**
+   * The session's turns and how many are visible, for undo, redo, and revert. `cached` is the history of the last
+   * snapshot; its branch's entries are used when it is the current branch, instead of reading them again.
+   */
+  public async navigation(sessionId: string, cached?: SessionHistory): Promise<NavigationState> {
     const file = await this.file(sessionId);
     const {branch, leaf, current, turns: records} = await file.state();
-    const turns = turnPositions(await file.history(branch), records);
+    const history = cached?.branch === branch ? cached.entries : timelineEntries(await file.history(branch));
+    const turns = turnPositions(history, records);
     const visibleCount = leaf === undefined ? turns.length : turns.filter((turn) => leaf !== null && Number(turn.turnId) <= leaf).length;
     return {turns, visibleCount, current};
   }
 
   /**
-   * Shows the first `count` turns of the branch by moving the leaf; nothing forks until the agent acts again (see
-   * `SessionFile.diverge`). `current` records the checkpoint the workspace now matches.
+   * Shows the first `count` of `turns` (from `navigation()`) by moving the leaf; nothing forks until the agent acts
+   * again (see `SessionFile.diverge`). `current` records the checkpoint the workspace now matches.
    */
-  public async show(sessionId: string, count: number, current: CheckpointRef | undefined): Promise<void> {
+  public async show(sessionId: string, turns: readonly TurnPosition[], count: number, current: CheckpointRef | undefined): Promise<void> {
     const file = await this.file(sessionId);
-    const {turns} = await this.navigation(sessionId);
     await file.updateState((state) => {
       if (count >= turns.length) delete state.leaf;
       else state.leaf = turns[count - 1]?.endId ?? null;
@@ -280,12 +283,15 @@ export class SessionStore {
   private async historyOf(file: SessionFile, branch: number, view: ConversationView, previous: SessionHistory | undefined): Promise<SessionHistory> {
     const through = view.entries.reduce((newest, entry) => Math.max(newest, entry.id), 0);
     const cached = previous?.branch === branch ? previous : undefined;
-    const known = cached?.entries ?? [];
+    // A branch forked from the cached one inherits its entries through the fork point.
+    const parent = view.conversation.parent;
+    const inherited = !cached && parent && previous?.branch === parent.conversationId ? previous.entries.filter((entry) => entry.id <= parent.at) : undefined;
+    const known = cached?.entries ?? inherited ?? [];
     const after = known.at(-1)?.id ?? 0;
     if (cached && through <= after) return cached;
-    // The view starts at its compaction head, so it extends the cache only when that head is already cached.
+    // The view starts at its compaction head, so it extends what is known only when that head is already known.
     const head = view.entries.find((entry) => entry.head !== undefined);
-    const extendsCache = cached !== undefined && (head === undefined || known.some((entry) => entry.id === head.id));
+    const extendsCache = (cached ?? inherited) !== undefined && (head === undefined || known.some((entry) => entry.id === head.id));
     const added = timelineEntries(extendsCache ? view.entries.filter((entry) => entry.id > after) : await file.history(branch, {after, through}));
     return {branch, entries: added.length > 0 ? [...known, ...added] : known};
   }

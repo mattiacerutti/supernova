@@ -20,7 +20,7 @@ function boundaryAt(navigation: NavigationState, count: number): CheckpointRef |
 export async function navigateToTurn(runtime: SessionWorker, input: {readonly target: (navigation: NavigationState) => number; readonly force: boolean}): Promise<void> {
   await runtime.beginWork();
   try {
-    const navigation = await runtime.store.navigation(runtime.sessionId);
+    const navigation = await runtime.navigation();
     const count = input.target(navigation);
     const target = boundaryAt(navigation, count);
     const current = navigation.current;
@@ -33,7 +33,7 @@ export async function navigateToTurn(runtime: SessionWorker, input: {readonly ta
       }
       await runtime.restoreCheckpoint({checkpointId: target.checkpointId, force: input.force, fromCheckpointId: currentCaptured ? current.checkpointId : undefined});
     }
-    await runtime.store.show(runtime.sessionId, count, target);
+    await runtime.store.show(runtime.sessionId, navigation.turns, count, target);
     await runtime.refresh();
   } finally {
     runtime.endWork();

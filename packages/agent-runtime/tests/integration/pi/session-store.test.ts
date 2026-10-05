@@ -37,10 +37,10 @@ describe("session store", () => {
       await send("Second");
       const full = await pi.store.snapshot(id);
       const read = vi.spyOn(file, "history");
-      // A snapshot after navigation reads no history: the leaf only splits the cached branch.
+      // Navigation and the snapshot after it read no history: the leaf only splits the cached branch.
       const snapshotAt = async (count: number) => {
-        await pi.store.show(id, count, undefined);
-        read.mockClear();
+        const {turns} = await pi.store.navigation(id, full.history);
+        await pi.store.show(id, turns, count, undefined);
         const snapshot = await pi.store.snapshot(id, {previous: full.history});
         expect(read).not.toHaveBeenCalled();
         return snapshot.session;
@@ -55,12 +55,17 @@ describe("session store", () => {
       expect((await file.state()).branch).toBe(1);
       expect(await file.view(2).catch(() => undefined)).toBeUndefined();
 
-      await pi.store.show(id, 1, undefined);
+      await pi.store.show(id, (await pi.store.navigation(id, full.history)).turns, 1, undefined);
+      const undoneHistory = (await pi.store.snapshot(id, {previous: full.history})).history;
       await send("Branch");
       const state = await file.state();
       expect(state.branch).not.toBe(1);
       expect(state.leaf).toBeUndefined();
-      const branched = await pi.store.snapshot(id);
+      // The forked branch reuses the cached entries through its fork point and reads only after it.
+      read.mockClear();
+      const branched = await pi.store.snapshot(id, {previous: undoneHistory});
+      expect(read).not.toHaveBeenCalled();
+      expect(branched.session.entries).toEqual((await pi.store.snapshot(id)).session.entries);
       expect(userTexts(branched.session.entries)).toEqual(["First", "Branch"]);
       expect(branched.session.undone).toEqual([]);
 

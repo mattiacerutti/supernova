@@ -5,7 +5,7 @@ import type {SessionActivity} from "@supernova/contracts/services/session-runtim
 import type {Session} from "@supernova/contracts/services/sessions/schemas";
 import type {CheckpointRef, CheckpointStatus} from "@supernova/agent-runtime/pi/lib/session/session-state";
 import type {SessionFile} from "@supernova/agent-runtime/pi/session-file";
-import type {SessionHistory, SessionStore} from "@supernova/agent-runtime/pi/session-store";
+import type {NavigationState, SessionHistory, SessionStore} from "@supernova/agent-runtime/pi/session-store";
 import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";
 import type {ResourceCache} from "@supernova/agent-runtime/pi/resource-cache";
 import type {CheckpointStore} from "@supernova/agent-runtime/features/session-runtime/checkpoints/checkpoint-store";
@@ -79,6 +79,12 @@ export class SessionWorker {
       if (!this.document) await this.publish();
     });
     return this.document!;
+  }
+
+  /** The session's turns for undo, redo, and revert, from the history the document was last built from. */
+  public async navigation(): Promise<NavigationState> {
+    await this.session();
+    return this.enqueue(() => this.store.navigation(this.sessionId, this.history));
   }
 
   /** Rebuilds the document from the session file and publishes the change, for changes no engine frame shows. */
