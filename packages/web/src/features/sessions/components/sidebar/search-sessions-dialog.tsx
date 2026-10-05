@@ -1,16 +1,19 @@
 import type {Ref} from "react";
-import {useState} from "react";
+import {useRef, useState} from "react";
 import {useNavigate} from "@tanstack/react-router";
 import Dialog from "@/components/ui/dialog";
 import Icon from "@/components/ui/icon";
 import {MenuLabel} from "@/components/ui/menu";
 import SearchField from "@/components/ui/search-field";
 import SearchableList from "@/components/searchable-list";
-import {useListProjectsSessions} from "@/features/sessions/api/sidebar/list-project-sessions";
+import {useSearchSessions} from "@/features/sessions/api/sidebar/search-sessions";
 import type {Project} from "@/features/projects/types/project";
 import {formatRelativeTime} from "@/lib/format-relative-time";
 import SessionTitleText from "@/features/sessions/components/session-title-text";
 import {cn} from "@/lib/cn";
+
+/** How long typing pauses before the query is sent. */
+const SEARCH_DELAY_MS = 150;
 
 interface SessionSearchProjectRow {
   readonly id: string;
@@ -23,7 +26,6 @@ interface SessionSearchResultRow {
   readonly id: string;
   readonly projectName: string;
   readonly projectPath: string;
-  readonly timestamp: number;
   readonly title: string;
   readonly type: "session";
   readonly updatedAt: string;
@@ -62,26 +64,29 @@ export default function SearchSessionsDialog(props: SearchSessionsDialogProps) {
   const {onClose, open, projects} = props;
   const [activeRowIndex, setActiveRowIndex] = useState(0);
   const [query, setQuery] = useState("");
+  // What the server is asked for: the query once typing pauses.
+  const [searchedQuery, setSearchedQuery] = useState("");
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const navigate = useNavigate();
-  const projectSessions = useListProjectsSessions(projects.map((project) => project.path));
-  const projectNamesByPath = new Map(projects.map((project) => [project.path, project.name]));
-  const normalizedQuery = query.trim().toLocaleLowerCase();
-  const sessions = projectSessions.flatMap(({projectPath, sessions: listed}) =>
-    listed
-      .map(
-        (session): SessionSearchResultRow => ({
-          id: session.id,
-          projectName: projectNamesByPath.get(projectPath) ?? projectPath,
-          projectPath,
-          timestamp: Date.parse(session.updatedAt),
-          title: session.title,
-          type: "session",
-          updatedAt: formatRelativeTime(session.updatedAt),
-        })
-      )
-      .filter((session) => normalizedQuery.length === 0 || session.title.toLocaleLowerCase().includes(normalizedQuery))
-      .toSorted((left, right) => right.timestamp - left.timestamp)
+  const search = useSearchSessions(
+    searchedQuery,
+    projects.map((project) => project.path)
   );
+  const projectNamesByPath = new Map(projects.map((project) => [project.path, project.name]));
+  const sessions = search.sessions.map(
+    (session): SessionSearchResultRow => ({
+      id: session.id,
+      projectName: projectNamesByPath.get(session.projectPath) ?? session.projectPath,
+      projectPath: session.projectPath,
+      title: session.title,
+      type: "session",
+      updatedAt: formatRelativeTime(session.updatedAt),
+    })
+  );
+  // TODO(search-grouping): results arrive newest first across projects, so a project's header repeats whenever
+  // activity alternates between projects. Decide how to present them: group loaded results per project (a later page
+  // can insert rows above the scroll position), one paged search per project (a request per project per query), or
+  // no headers and the project on each row, as t3code and opencode do.
   const rows = sessions.reduce<SessionSearchRow[]>((result, session) => {
     if (session.projectPath !== result.at(-1)?.projectPath) {
       result.push({id: `project-${session.projectPath}`, projectName: session.projectName, projectPath: session.projectPath, type: "project"});
@@ -98,6 +103,8 @@ export default function SearchSessionsDialog(props: SearchSessionsDialogProps) {
   const handleQueryChange = (value: string): void => {
     setQuery(value);
     setActiveRowIndex(0);
+    clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => setSearchedQuery(value.trim()), SEARCH_DELAY_MS);
   };
 
   const handleDialogOpenChangeComplete = (nextOpen: boolean): void => {
@@ -105,6 +112,8 @@ export default function SearchSessionsDialog(props: SearchSessionsDialogProps) {
 
     setActiveRowIndex(0);
     setQuery("");
+    clearTimeout(searchTimer.current);
+    setSearchedQuery("");
   };
 
   const handleOpenSession = (row: SessionSearchRow): void => {
@@ -122,8 +131,9 @@ export default function SearchSessionsDialog(props: SearchSessionsDialogProps) {
         getItemKey={(row) => `${row.type}-${row.projectPath}-${row.id}`}
         isItemSelectable={(row) => row.type === "session"}
         items={rows}
-        listStatus={sessions.length === 0 && <p className="px-3 py-2 text-sm text-ink-faint">No matching sessions.</p>}
+        listStatus={!search.isPending && sessions.length === 0 && <p className="px-3 py-2 text-sm text-ink-faint">No matching sessions.</p>}
         onActiveIndexChange={setActiveRowIndex}
+        onEndReached={search.loadMore}
         onSelect={handleOpenSession}
         className="pt-1"
         renderInput={({onKeyDown}) => (

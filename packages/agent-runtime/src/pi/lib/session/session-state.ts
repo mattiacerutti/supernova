@@ -10,6 +10,8 @@ export interface SessionRecord {
   readonly worktree?: SessionWorktree;
   readonly title?: string;
   readonly forkedFrom?: string;
+  /** Pinned sessions list first in their project. */
+  readonly pinned: boolean;
   /** Set when archived: the session leaves its project's listing; its file stays. */
   readonly archivedAt?: string;
   readonly createdAt: string;

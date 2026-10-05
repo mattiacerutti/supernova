@@ -34,21 +34,25 @@ import {showToast} from "@/lib/toast";
 
 interface SessionTitleProps {
   readonly session: Session;
+  /** The title and pin as shown, with a rename or pin the runtime has not shown yet. */
+  readonly title: string;
+  readonly pinned: boolean;
 }
 
 function SessionTitle(props: SessionTitleProps) {
-  const {session} = props;
+  const {pinned, session, title} = props;
   const renameSession = useRenameSession();
-  const {inputProps, renaming, startRenaming} = useInlineRename({initialValue: session.title, onSave: (title) => renameSession.mutate({sessionId: session.id, title})});
+  const {inputProps, renaming, startRenaming} = useInlineRename({initialValue: title, onSave: (nextTitle) => renameSession.mutate({sessionId: session.id, title: nextTitle})});
 
   return (
     <SessionHeader
       actions={
         <SessionActionsMenu
           onRename={startRenaming}
+          pinned={pinned}
           projectPath={session.projectPath}
           sessionId={session.id}
-          sessionTitle={session.title}
+          sessionTitle={title}
           worktree={session.worktree !== undefined}
         />
       }
@@ -56,7 +60,7 @@ function SessionTitle(props: SessionTitleProps) {
       {renaming ? (
         <input {...inputProps} className="block h-5 min-w-0 w-64 truncate border-0 bg-transparent p-0 text-sm font-medium leading-5 text-ink outline-none" />
       ) : (
-        <SessionTitleText className="block truncate" title={session.title} />
+        <SessionTitleText className="block truncate" title={title} />
       )}
     </SessionHeader>
   );
@@ -226,7 +230,13 @@ export default function SessionPage(props: SessionPageProps) {
           </>
         }
       >
-        {target.kind === "new" ? <SessionHeader /> : session ? <SessionTitle session={session} /> : <LoadingTitle title={view.title} />}
+        {target.kind === "new" ? (
+          <SessionHeader />
+        ) : session ? (
+          <SessionTitle pinned={view.pinned} session={session} title={view.title ?? session.title} />
+        ) : (
+          <LoadingTitle title={view.title} />
+        )}
 
         <SessionBody
           composer={

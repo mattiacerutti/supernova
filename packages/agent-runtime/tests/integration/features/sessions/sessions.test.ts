@@ -1,10 +1,7 @@
 import {existsSync} from "node:fs";
-import {mkdir, mkdtemp, writeFile} from "node:fs/promises";
-import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {afterEach, describe, expect, it} from "vitest";
 import {assistantTexts, createPiTestRuntime, fauxAssistantMessage, selectedModelReference, selectedPiModel, turnContents, turnIds} from "@tests/support/session-runtime";
-import {cleanupTempDirs} from "@tests/support/async";
 
 describe("sessions", () => {
   const runtimes: Array<{unregister: () => Promise<void>}> = [];
@@ -117,7 +114,7 @@ describe("forking a session", () => {
     });
     expect(turnContents(fork)).toEqual([[{text: "First", type: "text"}]]);
     expect(turnContents(await pi.sessions.get({sessionId}))).toHaveLength(2);
-    expect((await pi.projects.listSessions({projectPath: pi.defaultProjectRoot})).sessions.map((session) => session.id)).toContain(fork.id);
+    expect((await pi.projects.listSessions({projectPath: pi.defaultProjectRoot, limit: 10})).sessions.map((session) => session.id)).toContain(fork.id);
 
     // The fork continues on its own with the copied history as context.
     let providerTexts: string[] = [];
@@ -135,60 +132,5 @@ describe("forking a session", () => {
     const {pi, sessionId} = await sessionWithTwoTurns();
 
     await expect(pi.sessions.fork({sessionId, turnId: "missing"})).rejects.toMatchObject({_tag: "ForkSessionError"});
-  });
-});
-
-describe("legacy sessions", () => {
-  const runtimes: Array<{unregister: () => Promise<void>}> = [];
-  const tempDirs: string[] = [];
-  const originalAgentDir = process.env.PI_CODING_AGENT_DIR;
-
-  afterEach(async () => {
-    while (runtimes.length > 0) await runtimes.pop()?.unregister();
-    cleanupTempDirs(tempDirs);
-    if (originalAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
-    else process.env.PI_CODING_AGENT_DIR = originalAgentDir;
-  });
-
-  /** A session file as the old runtime wrote it: authored content parts, a user message, and an answer. */
-  async function writeLegacySession(id: string): Promise<string> {
-    const agentDir = await mkdtemp(join(tmpdir(), "supernova-agent-"));
-    tempDirs.push(agentDir);
-    process.env.PI_CODING_AGENT_DIR = agentDir;
-    const directory = join(agentDir, "sessions", "--workspace--");
-    await mkdir(directory, {recursive: true});
-    const lines = [
-      {type: "session", version: 3, id, timestamp: "2026-01-01T00:00:00.000Z", cwd: "/workspace"},
-      {type: "model_change", id: "m1", parentId: null, timestamp: "2026-01-01T00:00:00.500Z", provider: "anthropic", modelId: "claude-sonnet"},
-      {
-        type: "custom",
-        id: "c1",
-        parentId: "m1",
-        timestamp: "2026-01-01T00:00:01.000Z",
-        customType: "supernova.user-message-content-parts",
-        data: {contentParts: [{text: "Legacy request", type: "text"}]},
-      },
-      {type: "message", id: "u1", parentId: "c1", timestamp: "2026-01-01T00:00:01.000Z", message: {role: "user", content: [{type: "text", text: "Legacy request"}], timestamp: 1}},
-      {type: "message", id: "a1", parentId: "u1", timestamp: "2026-01-01T00:00:02.000Z", message: fauxAssistantMessage("Legacy answer", {timestamp: 2})},
-    ];
-    const path = join(directory, `2026-01-01T00-00-00-000Z_${id}.jsonl`);
-    await writeFile(path, lines.map((line) => JSON.stringify(line)).join("\n") + "\n");
-    return path;
-  }
-
-  it("shows an old session read-only and rejects changes to it", async () => {
-    await writeLegacySession("legacy-1");
-    const pi = await createPiTestRuntime();
-    runtimes.push(pi);
-
-    const session = await pi.sessions.get({sessionId: "legacy-1"});
-
-    expect(session).toMatchObject({id: "legacy-1", projectPath: "/workspace", title: "Legacy request"});
-    expect(turnContents(session)).toEqual([[{text: "Legacy request", type: "text"}]]);
-    expect(assistantTexts(session)).toEqual(["Legacy answer"]);
-    await expect(pi.sendMessage({message: "More", modelReference: selectedModelReference, sessionId: "legacy-1"})).rejects.toThrow("read-only");
-    await expect(pi.sessions.rename({sessionId: "legacy-1", title: "New"})).rejects.toMatchObject({_tag: "RenameSessionError", message: expect.stringContaining("read-only")});
-    await expect(pi.sessions.fork({sessionId: "legacy-1", turnId: "u1"})).rejects.toMatchObject({_tag: "ForkSessionError", message: expect.stringContaining("read-only")});
-    await expect(pi.sessions.create({id: "legacy-1", projectPath: "/workspace"})).rejects.toMatchObject({_tag: "CreateSessionError"});
   });
 });

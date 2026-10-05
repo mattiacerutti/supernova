@@ -21,6 +21,7 @@ export interface SessionOptimism {
   readonly stopping?: boolean;
   readonly compacting?: boolean;
   readonly title?: string;
+  readonly pinned?: boolean;
   readonly setupStep?: SessionSetupStep;
   /** The last command that failed. */
   readonly error?: string;

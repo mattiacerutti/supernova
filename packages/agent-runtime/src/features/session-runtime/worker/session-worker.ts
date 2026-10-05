@@ -226,7 +226,14 @@ export class SessionWorker {
     if (this.document) this.document.publish(session, BACKGROUND_CONTEXT);
     else this.document = new DocumentState(session);
     const activity = activityOf(session);
-    const summary = {id: session.id, forked: session.forked, title: session.title, updatedAt: session.updatedAt, worktree: session.worktree !== undefined};
+    const summary = {
+      id: session.id,
+      forked: session.forked,
+      pinned: session.pinned,
+      title: session.title,
+      updatedAt: session.updatedAt,
+      worktree: session.worktree !== undefined,
+    };
     this.board.update(this.sessionId, session.projectPath, {activity, summary, ...(activity === "running" ? {error: null, setupStep: null} : {})});
     return session;
   }

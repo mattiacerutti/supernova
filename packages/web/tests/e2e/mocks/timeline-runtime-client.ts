@@ -114,7 +114,19 @@ class TimelineServer {
       },
       projects: {
         archiveSession: ({projectPath, sessionId}) => value({projectPath, sessionId}),
-        listSessions: () => value({projectPath: TIMELINE_PROJECT_PATH, sessions: [...this.sessions.values()].map(timelineSessionSummary)}),
+        // One page holds every timeline session; paging is the server's and covered by its tests.
+        listSessions: () => value({projectPath: TIMELINE_PROJECT_PATH, sessions: [...this.sessions.values()].map(timelineSessionSummary), nextCursor: null}),
+        searchSessions: ({query}) =>
+          value({
+            sessions: [...this.sessions.values()]
+              .filter((session) => session.title.toLowerCase().includes(query.toLowerCase()))
+              .map((session) => ({...timelineSessionSummary(session), projectPath: session.projectPath})),
+            nextCursor: null,
+          }),
+        pinSession: async ({pinned, sessionId}) => {
+          this.commit({...this.session(sessionId), pinned}, "idle");
+          return ok;
+        },
       },
       providers: {
         logins: replicatedState<ProviderLoginsState>({logins: {}}),
@@ -167,6 +179,7 @@ class TimelineServer {
       id,
       title: "Untitled session",
       forked: false,
+      pinned: false,
       projectPath,
       updatedAt: new Date().toISOString(),
       entries: [],

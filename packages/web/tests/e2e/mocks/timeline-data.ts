@@ -74,6 +74,7 @@ function historySession(input: {readonly historyTurnCount: number; readonly id: 
     id: input.id,
     title: input.title,
     forked: false,
+    pinned: false,
     projectPath: TIMELINE_PROJECT_PATH,
     updatedAt: timestamp(input.historyTurnCount * 1_000),
     entries,
@@ -98,7 +99,7 @@ export function createTimelineSessions(): Map<string, Session> {
 
 /** Builds a summary for the real project-session list UI. */
 export function timelineSessionSummary(session: Session): SessionSummary {
-  return {forked: false, id: session.id, title: session.title, updatedAt: session.updatedAt, worktree: false};
+  return {forked: false, id: session.id, pinned: session.pinned, title: session.title, updatedAt: session.updatedAt, worktree: false};
 }
 
 /** Formats a unique full-height line emitted by the stress stream. */

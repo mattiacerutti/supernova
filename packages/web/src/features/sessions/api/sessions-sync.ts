@@ -68,7 +68,7 @@ export function attachSession(runtime: RuntimeClient, sessionId: string): Promis
 
 /**
  * Puts every value of the attached session's replicated document in the store. Returns the stop. A session that
- * cannot attach (legacy, or not created yet) keeps the document it was read with.
+ * cannot attach yet (still being created) keeps the document it was read with.
  */
 function followDocument(runtime: RuntimeClient, sessionId: string): () => void {
   let stopped = false;

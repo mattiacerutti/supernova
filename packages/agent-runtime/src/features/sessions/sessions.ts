@@ -13,7 +13,6 @@ import {toComposerSuggestions} from "@supernova/agent-runtime/features/sessions/
 import {toAgentModelDetails} from "@supernova/agent-runtime/pi/lib/models/map-model";
 import {refreshAuthAndModels} from "@supernova/agent-runtime/pi/lib/models/refresh-models";
 import type {SessionStore} from "@supernova/agent-runtime/pi/session-store";
-import {LegacySessionError, isLegacySession, loadLegacySession} from "@supernova/agent-runtime/pi/lib/session/legacy-sessions";
 import type {ResourceCache} from "@supernova/agent-runtime/pi/resource-cache";
 import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";
 
@@ -35,20 +34,19 @@ export class Sessions {
   /** Creates a new empty session for a project under the client's id. With a worktree the agent runs there. */
   public async create(input: {readonly id: string; readonly projectPath: string; readonly worktree?: SessionWorktree}): Promise<Session> {
     const {id, projectPath, worktree} = input;
-    if ((await this.deps.store.find(id)) || (await isLegacySession(id))) throw new CreateSessionError({message: "A session with this id already exists."});
+    if (await this.deps.store.find(id)) throw new CreateSessionError({message: "A session with this id already exists."});
     await this.deps.store.create({id, projectPath, ...(worktree ? {worktree} : {})});
     return this.deps.documents.current(id);
   }
 
-  /** Whether a session is a durable one, which runs; a legacy session is only read. */
-  public async isDurable(input: GetSessionPayload): Promise<boolean> {
+  /** Whether the session exists. */
+  public async exists(input: GetSessionPayload): Promise<boolean> {
     return (await this.deps.store.find(input.sessionId)) !== undefined;
   }
 
   /** The worktree a session runs in, if any. */
   public async getWorktree(input: GetSessionPayload): Promise<SessionWorktree | undefined> {
-    const record = await this.deps.store.find(input.sessionId);
-    return record ? record.worktree : (await loadLegacySession(input.sessionId))?.worktree;
+    return (await this.deps.store.find(input.sessionId))?.worktree;
   }
 
   /** Removes a session's file and record. For undoing a `create` whose setup failed; archiving keeps the file. */
@@ -62,31 +60,24 @@ export class Sessions {
    * inherited turns; only turns made after the fork restore files.
    */
   public async fork(input: ForkSessionPayload): Promise<Session> {
-    if (!(await this.deps.store.find(input.sessionId))) {
-      if (await isLegacySession(input.sessionId)) throw new ForkSessionError({message: new LegacySessionError().message});
-      throw new ForkSessionError({message: "Session not found."});
-    }
+    if (!(await this.deps.store.find(input.sessionId))) throw new ForkSessionError({message: "Session not found."});
     const forked = await this.deps.store.fork({sessionId: input.sessionId, turnId: input.turnId}).catch((cause: unknown) => {
       throw new ForkSessionError({cause, message: cause instanceof Error ? cause.message : "Failed to fork session."});
     });
     return this.deps.documents.current(forked);
   }
 
-  /** Loads one session: a durable one from its file, a legacy one read-only from its JSONL. */
+  /** Loads one session's document. */
   public async get(input: GetSessionPayload): Promise<Session> {
-    if (await this.deps.store.find(input.sessionId)) return this.deps.documents.current(input.sessionId);
-    const legacy = await loadLegacySession(input.sessionId);
-    if (!legacy) throw new Error("Session not found.");
-    return legacy;
+    if (!(await this.deps.store.find(input.sessionId))) throw new Error("Session not found.");
+    return this.deps.documents.current(input.sessionId);
   }
 
   /** Renames a session. */
   public async rename(input: RenameSessionPayload): Promise<Session> {
     const title = input.title.trim();
     if (title.length === 0) throw new RenameSessionError({message: "Session title cannot be empty."});
-    if (!(await this.deps.store.find(input.sessionId))) {
-      throw new RenameSessionError({message: (await isLegacySession(input.sessionId)) ? new LegacySessionError().message : "Session not found."});
-    }
+    if (!(await this.deps.store.find(input.sessionId))) throw new RenameSessionError({message: "Session not found."});
     await this.deps.store.update(input.sessionId, (record) => ({...record, title}));
     return this.deps.documents.refresh(input.sessionId);
   }

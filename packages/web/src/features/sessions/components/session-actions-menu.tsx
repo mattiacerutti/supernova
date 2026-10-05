@@ -4,13 +4,14 @@ import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import Menu, {MenuItem} from "@/components/ui/menu";
 import {useArchiveSession} from "@/features/sessions/api/sidebar/archive-session";
+import {usePinSession} from "@/features/sessions/api/sidebar/pin-session";
 import ArchiveWorktreeSessionDialog from "@/features/sessions/components/sidebar/archive-worktree-session-dialog";
-import {useSessionPinsStore} from "@/features/sessions/stores/sidebar/session-pins-store";
 import {cn} from "@/lib/cn";
 import {projectIdFromPath} from "@/lib/project-paths";
 
 interface SessionActionsMenuProps {
   readonly onRename: () => void;
+  readonly pinned: boolean;
   readonly triggerClassName?: string;
   readonly projectPath: string;
   readonly sessionId: string;
@@ -21,19 +22,18 @@ interface SessionActionsMenuProps {
 
 /** Shares session actions between the header and sidebar. */
 export default function SessionActionsMenu(props: SessionActionsMenuProps) {
-  const {onRename, projectPath, sessionId, sessionTitle, triggerClassName, worktree} = props;
+  const {onRename, pinned, projectPath, sessionId, sessionTitle, triggerClassName, worktree} = props;
 
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
 
   const navigate = useNavigate();
   const location = useLocation();
-  const pinned = useSessionPinsStore((state) => state.pinnedSessionIds.includes(sessionId));
-  const toggleSessionPinned = useSessionPinsStore((state) => state.toggleSessionPinned);
+  const pinSession = usePinSession();
   const archiveSessionMutation = useArchiveSession();
 
   const handleToggleSessionPinned = (): void => {
-    toggleSessionPinned(sessionId);
+    pinSession.mutate({pinned: !pinned, sessionId});
   };
 
   const archiveSession = (removeWorktree: boolean): void => {

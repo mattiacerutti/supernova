@@ -6,12 +6,13 @@ import type {SessionRecord} from "@supernova/agent-runtime/pi/lib/session/sessio
 /** Time SQLite waits for a competing lock, as pi-durable's session files do. */
 const BUSY_TIMEOUT_MS = 5_000;
 
-/** Bumped with every schema change; `open` refuses a catalog written by a newer version. */
-const SCHEMA_VERSION = 1;
+/** Bumped with every schema change; `open` refuses a catalog written by a different version. */
+const SCHEMA_VERSION = 2;
 
 /**
- * Listing is the hot query: a project's unarchived sessions, newest first. The index holds exactly those rows in that
- * order, so a listing (and a later keyset page, `updated_at < ? LIMIT n`) reads only what it returns.
+ * Both reads page through an index in its order, so a page reads only the rows it returns: a project's unarchived
+ * sessions, pinned first then newest (`sessions_listing`), and every unarchived session newest first for title search
+ * (`sessions_recent`). Pages continue after the last row with a row-value comparison on the same columns.
  */
 const SCHEMA = `
   CREATE TABLE sessions (
@@ -21,14 +22,16 @@ const SCHEMA = `
     worktree_path TEXT,
     title TEXT,
     forked_from TEXT,
+    pinned INTEGER NOT NULL DEFAULT 0 CHECK (pinned IN (0, 1)),
     archived_at TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   ) STRICT;
-  CREATE INDEX sessions_by_project ON sessions (project_path, updated_at DESC) WHERE archived_at IS NULL;
+  CREATE INDEX sessions_listing ON sessions (project_path, pinned DESC, updated_at DESC, id DESC) WHERE archived_at IS NULL;
+  CREATE INDEX sessions_recent ON sessions (updated_at DESC, id DESC) WHERE archived_at IS NULL;
 `;
 
-const COLUMNS = "id, project_path, worktree_branch, worktree_path, title, forked_from, archived_at, created_at, updated_at";
+const COLUMNS = "id, project_path, worktree_branch, worktree_path, title, forked_from, pinned, archived_at, created_at, updated_at";
 
 interface SessionRow {
   readonly id: string;
@@ -37,9 +40,18 @@ interface SessionRow {
   readonly worktree_path: string | null;
   readonly title: string | null;
   readonly forked_from: string | null;
+  readonly pinned: number;
   readonly archived_at: string | null;
   readonly created_at: string;
   readonly updated_at: string;
+}
+
+/** The row a page continues after, by the columns pages are ordered on. */
+type PageKey = Pick<SessionRecord, "id" | "pinned" | "updatedAt">;
+
+/** `value` as a literal inside a `LIKE` pattern escaped with `\`. */
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (character) => `\\${character}`);
 }
 
 /** A row as a record; absent optional fields stay absent, as callers test them with `!== undefined`. */
@@ -50,6 +62,7 @@ function toRecord(row: SessionRow): SessionRecord {
     ...(row.worktree_branch !== null && row.worktree_path !== null ? {worktree: {branch: row.worktree_branch, path: row.worktree_path}} : {}),
     ...(row.title !== null ? {title: row.title} : {}),
     ...(row.forked_from !== null ? {forkedFrom: row.forked_from} : {}),
+    pinned: row.pinned === 1,
     ...(row.archived_at !== null ? {archivedAt: row.archived_at} : {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -57,7 +70,7 @@ function toRecord(row: SessionRow): SessionRecord {
 }
 
 /** A record's column values, in `COLUMNS` order. */
-function toValues(record: SessionRecord): (string | null)[] {
+function toValues(record: SessionRecord): (string | number | null)[] {
   return [
     record.id,
     record.projectPath,
@@ -65,6 +78,7 @@ function toValues(record: SessionRecord): (string | null)[] {
     record.worktree?.path ?? null,
     record.title ?? null,
     record.forkedFrom ?? null,
+    record.pinned ? 1 : 0,
     record.archivedAt ?? null,
     record.createdAt,
     record.updatedAt,
@@ -87,7 +101,7 @@ export class SessionCatalog {
       database.exec("PRAGMA journal_mode = WAL");
       database.exec("PRAGMA synchronous = NORMAL");
       const {user_version: version} = database.prepare("PRAGMA user_version").get() as {user_version: number};
-      if (version > SCHEMA_VERSION) throw new Error(`The session catalog at ${path} was written by a newer Supernova.`);
+      if (version !== 0 && version !== SCHEMA_VERSION) throw new Error(`The session catalog at ${path} was written by another version of Supernova.`);
       if (version === 0) {
         database.exec("BEGIN IMMEDIATE");
         database.exec(SCHEMA);
@@ -106,17 +120,41 @@ export class SessionCatalog {
     return row ? toRecord(row) : undefined;
   }
 
-  /** A project's unarchived sessions, newest first. */
-  public list(projectPath: string): SessionRecord[] {
+  /** One page of a project's unarchived sessions, pinned first, then newest; `after` is the last row of the page before. */
+  public list(input: {readonly projectPath: string; readonly limit: number; readonly after?: PageKey}): SessionRecord[] {
+    const {after, limit, projectPath} = input;
+    const continued = after ? "AND (pinned, updated_at, id) < (?, ?, ?)" : "";
     const rows = this.database
-      .prepare(`SELECT ${COLUMNS} FROM sessions WHERE project_path = ? AND archived_at IS NULL ORDER BY updated_at DESC`)
-      .all(projectPath) as unknown as SessionRow[];
+      .prepare(`SELECT ${COLUMNS} FROM sessions WHERE project_path = ? AND archived_at IS NULL ${continued} ORDER BY pinned DESC, updated_at DESC, id DESC LIMIT ?`)
+      .all(projectPath, ...(after ? [after.pinned ? 1 : 0, after.updatedAt, after.id] : []), limit) as unknown as SessionRow[];
+    return rows.map(toRecord);
+  }
+
+  /**
+   * One page of unarchived sessions whose title contains `query` (case-insensitive), newest first, in `projectPaths`
+   * when given; `after` is the last row of the page before.
+   */
+  public search(input: {readonly query: string; readonly projectPaths?: readonly string[]; readonly limit: number; readonly after?: PageKey}): SessionRecord[] {
+    const {after, limit, projectPaths, query} = input;
+    const inProjects = projectPaths ? `AND project_path IN (${projectPaths.map(() => "?").join(", ")})` : "";
+    const continued = after ? "AND (updated_at, id) < (?, ?)" : "";
+    const rows = this.database
+      .prepare(
+        `SELECT ${COLUMNS} FROM sessions INDEXED BY sessions_recent WHERE archived_at IS NULL AND COALESCE(title, '') LIKE ? ESCAPE '\\' ${inProjects} ${continued} ORDER BY updated_at DESC, id DESC LIMIT ?`
+      )
+      .all(`%${escapeLike(query)}%`, ...(projectPaths ?? []), ...(after ? [after.updatedAt, after.id] : []), limit) as unknown as SessionRow[];
     return rows.map(toRecord);
   }
 
   /** Adds a record; fails if its id exists. */
   public insert(record: SessionRecord): void {
-    this.database.prepare(`INSERT INTO sessions (${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(...toValues(record));
+    this.database
+      .prepare(
+        `INSERT INTO sessions (${COLUMNS}) VALUES (${COLUMNS.split(", ")
+          .map(() => "?")
+          .join(", ")})`
+      )
+      .run(...toValues(record));
   }
 
   /** Applies `change` to an existing record and returns the result; throws for unknown ids. */
@@ -128,7 +166,7 @@ export class SessionCatalog {
     const [, ...values] = toValues(next);
     this.database
       .prepare(
-        "UPDATE sessions SET project_path = ?, worktree_branch = ?, worktree_path = ?, title = ?, forked_from = ?, archived_at = ?, created_at = ?, updated_at = ? WHERE id = ?"
+        "UPDATE sessions SET project_path = ?, worktree_branch = ?, worktree_path = ?, title = ?, forked_from = ?, pinned = ?, archived_at = ?, created_at = ?, updated_at = ? WHERE id = ?"
       )
       .run(...values, sessionId);
     return next;

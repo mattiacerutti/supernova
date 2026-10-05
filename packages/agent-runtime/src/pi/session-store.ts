@@ -89,6 +89,7 @@ export class SessionStore {
       projectPath: input.projectPath,
       ...(input.worktree ? {worktree: input.worktree} : {}),
       ...(input.forkedFrom ? {forkedFrom: input.forkedFrom} : {}),
+      pinned: false,
       createdAt: now,
       updatedAt: now,
     };
@@ -104,14 +105,19 @@ export class SessionStore {
     return record;
   }
 
-  /** The record of a durable session, or undefined for unknown (or legacy) ids. */
+  /** The record of a session, or undefined for unknown ids. */
   public async find(sessionId: string): Promise<SessionRecord | undefined> {
     return (await this.catalog()).find(sessionId);
   }
 
-  /** Every unarchived session of a project, newest first. */
-  public async list(projectPath: string): Promise<SessionRecord[]> {
-    return (await this.catalog()).list(projectPath);
+  /** One page of a project's unarchived sessions, pinned first, then newest; see `SessionCatalog.list`. */
+  public async list(input: Parameters<SessionCatalog["list"]>[0]): Promise<SessionRecord[]> {
+    return (await this.catalog()).list(input);
+  }
+
+  /** One page of unarchived sessions whose title matches, newest first; see `SessionCatalog.search`. */
+  public async search(input: Parameters<SessionCatalog["search"]>[0]): Promise<SessionRecord[]> {
+    return (await this.catalog()).search(input);
   }
 
   /** Applies `change` to an existing record and returns the result. */

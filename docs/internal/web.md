@@ -109,6 +109,7 @@ See [Development](development.md#verification) for verification and the test wor
   - `lib/session-view` decides what is shown from the store: `sessionView` for a page, `sessionStatus` for a row, `projectSessions` for a listing. It is the only place optimism is applied. Components read it through `useSession` and `useSessionStatus` (`hooks/use-session`) and `useListProjectSessions`.
   - A new optimistic command adds a field to `SessionOptimism`, patches it in its command, and reads it in `lib/session-view`.
 - React Query holds what is fetched on request: listings, models, suggestions, workspace data. Live session state is never written into it.
+- Session listings and search are paged on the server: `useListProjectSessions` and `useSearchSessions` are infinite queries over cursors, and nothing loads every session to filter or slice it. Rows already loaded stay current from the store; a pin is optimism (`pinned`) like a rename (`title`).
 - App-wide reactions to server state are in `app/providers.tsx`: everything is read again after a reconnect, and workspace data after any run ends.
 
 ## UI language and design style

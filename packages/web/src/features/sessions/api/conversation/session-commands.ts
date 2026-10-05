@@ -52,6 +52,7 @@ function emptySession(projectPath: string, sessionId: string): Session {
     id: sessionId,
     title: "Untitled session",
     forked: false,
+    pinned: false,
     projectPath,
     updatedAt: new Date().toISOString(),
     entries: [],

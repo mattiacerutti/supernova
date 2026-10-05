@@ -1,3 +1,4 @@
+import type {ProjectSessionPinPayload} from "@supernova/contracts/services/projects/procedures";
 import type {CreateSessionPayload} from "@supernova/contracts/services/sessions/procedures";
 import {CreateSessionError} from "@supernova/contracts/services/sessions/procedures";
 import type {Session} from "@supernova/contracts/services/sessions/schemas";
@@ -47,6 +48,13 @@ export async function createSession(runtime: AgentRuntime, payload: CreateSessio
     throw new CreateSessionError({cause, message: errorMessage(cause, "Failed to start the session.")});
   }
   return sessionRuntime.current(session.id);
+}
+
+/** Pins or unpins a session, and publishes it, so every client's listing shows the pin. */
+export async function pinSession(runtime: AgentRuntime, input: ProjectSessionPinPayload): Promise<null> {
+  await runtime.projects.pinSession(input);
+  await runtime.sessionRuntime.refresh(input.sessionId);
+  return null;
 }
 
 /**

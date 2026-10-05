@@ -30,6 +30,8 @@ export const Session = z.object({
   title: z.string(),
   /** Whether the session was forked from another session. */
   forked: z.boolean(),
+  /** Pinned sessions list first in their project. */
+  pinned: z.boolean(),
   /** Absolute path of the project the session belongs to. The agent runs here unless `worktree` is set. */
   projectPath: z.string(),
   /** The worktree the agent runs in, for sessions started in a new worktree. */
@@ -67,6 +69,8 @@ export const SessionSummary = z.object({
   updatedAt: z.string(),
   /** Whether the session runs in its own worktree. */
   worktree: z.boolean(),
+  /** Pinned sessions list first in their project. */
+  pinned: z.boolean(),
 });
 
 export type Session = z.infer<typeof Session>;

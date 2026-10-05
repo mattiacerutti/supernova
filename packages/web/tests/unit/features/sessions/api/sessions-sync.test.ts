@@ -38,6 +38,7 @@ function session(input?: Partial<Session>): Session {
     id: "session-1",
     title: "Session",
     forked: false,
+    pinned: false,
     projectPath: "/workspace",
     updatedAt: "2026-01-01T00:00:00.000Z",
     entries: [],
@@ -223,20 +224,21 @@ describe("session commands and views", () => {
     expect(useSessionsStore.getState().optimism).toEqual({});
   });
 
-  it("lists sessions with the runtime's newest summaries, new ones first, and renames not yet applied", () => {
-    const summary = (id: string, title: string) => ({forked: false, id, title, updatedAt: "t1", worktree: false});
-    const listed = [summary("session-1", "Old"), summary("session-3", "Untouched")];
+  it("lists loaded sessions with the runtime's newest summaries, new ones, and renames and pins not yet applied, in the runtime's order", () => {
+    const summary = (id: string, title: string, updatedAt: string, pinned = false) => ({forked: false, id, pinned, title, updatedAt, worktree: false});
+    const loaded = [summary("session-1", "Old", "t1"), summary("session-3", "Untouched", "t0"), summary("session-4", "Unpinning", "t0", true)];
     const entries = {
-      "session-1": entry({summary: summary("session-1", "New")}),
-      "session-2": entry({summary: summary("session-2", "Just created")}),
-      elsewhere: entry({projectPath: "/other", summary: summary("elsewhere", "Other project")}),
+      "session-1": entry({summary: summary("session-1", "New", "t3")}),
+      "session-2": entry({summary: summary("session-2", "Just created", "t2")}),
+      elsewhere: entry({projectPath: "/other", summary: summary("elsewhere", "Other project", "t9")}),
     };
-    const optimism = {"session-3": {title: "Renaming"}};
+    const optimism = {"session-3": {pinned: true, title: "Renaming"}, "session-4": {pinned: false}};
 
-    expect(projectSessions({entries, listed, optimism, projectPath: "/workspace"}).map((session) => [session.id, session.title])).toEqual([
-      ["session-2", "Just created"],
-      ["session-1", "New"],
-      ["session-3", "Renaming"],
+    expect(projectSessions({entries, loaded, optimism, projectPath: "/workspace"}).map((session) => [session.id, session.title, session.pinned])).toEqual([
+      ["session-3", "Renaming", true],
+      ["session-1", "New", false],
+      ["session-2", "Just created", false],
+      ["session-4", "Unpinning", false],
     ]);
   });
 
@@ -457,5 +459,23 @@ describe("session commands and views", () => {
     expect(useSessionVisitsStore.getState().visits["session-1"]).toBe("2026-01-01T00:05:00.000Z");
     expect(hasUnseenActivity({activityAtMs: Date.parse("2026-01-01T00:09:00.000Z"), visitedAt: useSessionVisitsStore.getState().visits["session-1"]})).toBe(true);
     stopMarking();
+  });
+
+  it("moves a pin at once and keeps it until the runtime confirms", async () => {
+    const summary = (id: string, updatedAt: string, pinned = false) => ({forked: false, id, pinned, title: id, updatedAt, worktree: false});
+    const loaded = [summary("newer", "t2"), summary("older", "t1")];
+    const order = () =>
+      projectSessions({entries: useSessionsStore.getState().entries, loaded, optimism: useSessionsStore.getState().optimism, projectPath: "/workspace"}).map(
+        (session) => session.id
+      );
+    const {patchOptimism, setEntries} = useSessionsStore.getState();
+
+    patchOptimism("older", {pinned: true});
+    expect(order()).toEqual(["older", "newer"]);
+    // The runtime reports the pin, then the mutation settles: the order never flips back.
+    setEntries({older: entry({summary: summary("older", "t1", true)})});
+    expect(order()).toEqual(["older", "newer"]);
+    patchOptimism("older", {pinned: undefined});
+    expect(order()).toEqual(["older", "newer"]);
   });
 });

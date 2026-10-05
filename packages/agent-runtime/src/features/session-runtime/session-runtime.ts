@@ -18,7 +18,6 @@ import {SessionBoard} from "@supernova/agent-runtime/features/session-runtime/wo
 import {SessionWorker} from "@supernova/agent-runtime/features/session-runtime/worker/session-worker";
 import type {TitleGenerator} from "@supernova/agent-runtime/features/session-runtime/worker/title-generator";
 import type {DocumentState} from "@supernova/agent-runtime/lib/document-state";
-import {LegacySessionError, isLegacySession} from "@supernova/agent-runtime/pi/lib/session/legacy-sessions";
 import type {ResourceCache} from "@supernova/agent-runtime/pi/resource-cache";
 import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";
 import type {SessionStore} from "@supernova/agent-runtime/pi/session-store";
@@ -115,12 +114,9 @@ export class SessionRuntime {
     await this.deps.store.dispose();
   }
 
-  /** The worker of a durable session. Legacy sessions are read-only; unknown ids fail. */
+  /** The worker of a session; unknown ids fail. */
   private async worker(sessionId: string): Promise<SessionWorker> {
-    if (!(await this.deps.store.find(sessionId))) {
-      if (await isLegacySession(sessionId)) throw new LegacySessionError();
-      throw new Error("Session not found.");
-    }
+    if (!(await this.deps.store.find(sessionId))) throw new Error("Session not found.");
     return this.workerFor(sessionId);
   }
 

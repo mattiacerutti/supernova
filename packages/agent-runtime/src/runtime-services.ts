@@ -16,7 +16,13 @@ import {UpdateExtensionsError} from "@supernova/contracts/services/extensions/pr
 import {ExtensionsService} from "@supernova/contracts/services/extensions/services";
 import {FolderCreatePayload, FolderFilesListPayload, FolderSuggestionsListPayload} from "@supernova/contracts/services/folders/procedures";
 import {FoldersService} from "@supernova/contracts/services/folders/services";
-import {ProjectSessionArchiveError, ProjectSessionArchivePayload, ProjectSessionsListPayload} from "@supernova/contracts/services/projects/procedures";
+import {
+  ProjectSessionArchiveError,
+  ProjectSessionArchivePayload,
+  ProjectSessionPinPayload,
+  ProjectSessionsListPayload,
+  ProjectSessionsSearchPayload,
+} from "@supernova/contracts/services/projects/procedures";
 import {ProjectsService} from "@supernova/contracts/services/projects/services";
 import {
   ProviderLoginCancelPayload,
@@ -66,7 +72,7 @@ import {TerminalError, TerminalNotFoundError, WorkspaceFileError, WorkspaceGitEr
 import {WorkspaceService} from "@supernova/contracts/services/workspace/services";
 import type {z} from "zod";
 import {errorMessage} from "@supernova/agent-runtime/lib/errors";
-import {archiveSession, createSession} from "@supernova/agent-runtime/session-operations";
+import {archiveSession, createSession, pinSession} from "@supernova/agent-runtime/session-operations";
 import type {AgentRuntime} from "@supernova/agent-runtime/runtime";
 
 type Publish = (subscriptionId: string, update: ServiceProviderUpdate, context: Context) => void | Promise<void>;
@@ -169,10 +175,9 @@ function serverServices(runtime: AgentRuntime): RoutedServerServiceHost {
       listFiles: method({payload: FolderFilesListPayload, run: (input) => folders.listFiles(input)}),
     });
     provider.provide(ProjectsService, {
-      listSessions: method({
-        payload: ProjectSessionsListPayload,
-        run: (input) => projects.listSessions(input),
-      }),
+      listSessions: method({payload: ProjectSessionsListPayload, run: (input) => projects.listSessions(input)}),
+      searchSessions: method({payload: ProjectSessionsSearchPayload, run: (input) => projects.searchSessions(input)}),
+      pinSession: method({payload: ProjectSessionPinPayload, run: (input) => pinSession(runtime, input)}),
       archiveSession: method({
         payload: ProjectSessionArchivePayload,
         run: (input) => archiveSession(runtime, input),
@@ -269,14 +274,13 @@ async function sessionHandle(runtime: AgentRuntime, sessionId: string): Promise<
 
 /**
  * The runtime's service host for `pi-server`: one service per feature. Every one but session runtime is served per
- * connection; `SessionRuntimeService` is served for the session a connection attached. Only durable sessions attach;
- * a legacy session is read through `SessionsService.get`.
+ * connection; `SessionRuntimeService` is served for the session a connection attached.
  */
 export function runtimeServiceHost(runtime: AgentRuntime): ServerHost {
   return {
     serverServices: serverServices(runtime),
     async resolveSession(sessionId: string): Promise<SessionMetadata> {
-      if (!(await runtime.sessions.isDurable({sessionId}))) throw new SessionNotFoundError("Session not found.");
+      if (!(await runtime.sessions.exists({sessionId}))) throw new SessionNotFoundError("Session not found.");
       return {id: sessionId};
     },
     openSession: (metadata) => sessionHandle(runtime, metadata.id),

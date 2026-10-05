@@ -20,6 +20,7 @@ export interface SessionStatus {
 export interface SessionView extends SessionStatus {
   readonly session: Session | undefined;
   readonly title: string | undefined;
+  readonly pinned: boolean;
   /** Visible turns, moved by an undo, redo, or revert the runtime has not confirmed. */
   readonly turns: readonly SessionTurn[];
   readonly undoneTurns: readonly SessionTurn[];
@@ -50,6 +51,17 @@ function navigated(turns: readonly SessionTurn[], undoneTurns: readonly SessionT
   return {turns: all.slice(0, shown), undoneTurns: all.slice(shown)};
 }
 
+/** A session's summary as the UI shows it: the runtime's newest, with a rename or pin it has not shown yet. */
+function sessionSummary(listed: SessionSummary, entry: SessionDirectoryEntry | undefined, optimism: SessionOptimism = {}): SessionSummary {
+  const summary = entry?.summary ?? listed;
+  return {...summary, title: optimism.title ?? summary.title, pinned: optimism.pinned ?? summary.pinned};
+}
+
+/** The order the runtime lists sessions in: pinned first, then newest. */
+function listingOrder(left: SessionSummary, right: SessionSummary): number {
+  return Number(right.pinned) - Number(left.pinned) || right.updatedAt.localeCompare(left.updatedAt) || right.id.localeCompare(left.id);
+}
+
 /** What a session is doing as the UI shows it; for a sidebar row or a command's idle check. */
 export function sessionStatus(entry: SessionDirectoryEntry | undefined, optimism: SessionOptimism = {}): SessionStatus {
   const activity = entry?.activity ?? "idle";
@@ -63,23 +75,20 @@ export function sessionStatus(entry: SessionDirectoryEntry | undefined, optimism
 }
 
 /**
- * A project's sessions as the sidebar lists them: the fetched listing, with the runtime's newest summary of every
- * session it has open (sessions created since the listing was read come first) and renames it has not shown yet.
+ * The pages of a project's sessions loaded so far, as the sidebar lists them: the runtime's newest summary of every
+ * session it has open, sessions created since the first page was read, and renames and pins it has not shown yet,
+ * in the runtime's order. A row a pin or new activity moves past the last loaded page stays in view until it reloads.
  */
 export function projectSessions(input: {
-  readonly listed: readonly SessionSummary[];
+  readonly loaded: readonly SessionSummary[];
   readonly projectPath: string;
   readonly entries: Readonly<Record<string, SessionDirectoryEntry>>;
   readonly optimism: Readonly<Record<string, SessionOptimism>>;
 }): SessionSummary[] {
-  const {entries, listed, optimism, projectPath} = input;
-  const listedIds = new Set(listed.map((session) => session.id));
-  const added = Object.values(entries).flatMap((entry) => (entry.projectPath === projectPath && entry.summary && !listedIds.has(entry.summary.id) ? [entry.summary] : []));
-  return [...added, ...listed].map((listedSummary) => {
-    const summary = entries[listedSummary.id]?.summary ?? listedSummary;
-    const title = optimism[summary.id]?.title;
-    return title === undefined ? summary : {...summary, title};
-  });
+  const {entries, loaded, optimism, projectPath} = input;
+  const loadedIds = new Set(loaded.map((session) => session.id));
+  const added = Object.values(entries).flatMap((entry) => (entry.projectPath === projectPath && entry.summary && !loadedIds.has(entry.summary.id) ? [entry.summary] : []));
+  return [...added, ...loaded].map((summary) => sessionSummary(summary, entries[summary.id], optimism[summary.id])).toSorted(listingOrder);
 }
 
 /** A session as its page shows it: its document and the runtime's report, with the user's optimism applied to both. */
@@ -93,6 +102,7 @@ export function sessionView(input: {readonly session: Session | undefined; reado
     ...sessionStatus(entry, optimism),
     session,
     title: optimism.title ?? entry?.summary?.title ?? session?.title,
+    pinned: optimism.pinned ?? entry?.summary?.pinned ?? session?.pinned ?? false,
     turns,
     undoneTurns,
     liveTurn: projected?.liveTurn ?? (optimism.message && pendingTurn(optimism.message)),

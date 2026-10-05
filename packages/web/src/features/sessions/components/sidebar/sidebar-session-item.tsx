@@ -1,3 +1,4 @@
+import type {SessionSummary} from "@supernova/contracts/services/sessions/schemas";
 import {useLocation, useNavigate} from "@tanstack/react-router";
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
@@ -6,30 +7,25 @@ import {useSessionStatus} from "@/features/sessions/hooks/use-session";
 import {useRenameSession} from "@/features/sessions/api/sidebar/rename-session";
 import SessionActionsMenu from "@/features/sessions/components/session-actions-menu";
 import SessionTitleText from "@/features/sessions/components/session-title-text";
-import {useSessionPinsStore} from "@/features/sessions/stores/sidebar/session-pins-store";
 import {hasUnseenActivity, useSessionVisitsStore} from "@/features/sessions/stores/sidebar/session-visits-store";
 import {useInlineRename} from "@/hooks/use-inline-rename";
 import {cn} from "@/lib/cn";
 import {formatRelativeTime} from "@/lib/format-relative-time";
 
 interface SidebarSessionItemProps {
-  readonly forked: boolean;
   readonly projectPath: string;
-  readonly sessionId: string;
-  readonly title: string;
-  readonly updatedAt: string;
-  readonly worktree: boolean;
+  readonly session: SessionSummary;
 }
 
 /** One session row in the sidebar: opens on click, prefetches on hover, and owns rename, pin, live, and unseen state. */
 export default function SidebarSessionItem(props: SidebarSessionItemProps) {
-  const {forked, projectPath, sessionId, title, updatedAt, worktree} = props;
+  const {projectPath, session} = props;
+  const {forked, id: sessionId, pinned, title, updatedAt, worktree} = session;
   const location = useLocation();
   const navigate = useNavigate();
   const prefetchSession = usePrefetchSession();
   const renameSession = useRenameSession();
   const liveStatus = useSessionStatus(sessionId).status;
-  const pinned = useSessionPinsStore((state) => state.pinnedSessionIds.includes(sessionId));
   const visitedAt = useSessionVisitsStore((state) => state.visits[sessionId]);
   const {inputProps, renaming, startRenaming} = useInlineRename({initialValue: title, onSave: (nextTitle) => renameSession.mutate({sessionId, title: nextTitle})});
 
@@ -86,6 +82,7 @@ export default function SidebarSessionItem(props: SidebarSessionItemProps) {
           </span>
           <SessionActionsMenu
             onRename={startRenaming}
+            pinned={pinned}
             projectPath={projectPath}
             sessionId={sessionId}
             sessionTitle={title}

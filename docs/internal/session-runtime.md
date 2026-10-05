@@ -27,11 +27,13 @@ This document explains the design, its guarantees, and the reasoning behind its 
 
 Each Supernova session is one SQLite file, `<agentDir>/sessions-v2/<sessionId>/session.sqlite`, opened by one Harness. The session's chat starts as the file's root conversation; undo forks inside the same file (see [Checkpoint system](checkpoint-system.md)). One file per session follows Pi's own durable coding agent: a storage failure is fatal only to its own file, sessions never contend on one commit line, and idle sessions can close.
 
-`<agentDir>/sessions-v2/catalog.sqlite` holds every session's record (project, worktree, title, fork source, archive time), one row each (`pi/lib/session/session-catalog.ts`). Lookup by id and listing by project read only the catalog; no session file is opened for either. The engine cannot list by project, so the catalog is ours. A partial index over `(project_path, updated_at DESC)` of unarchived rows answers a listing in order without scanning or sorting, so paging it later is a keyset query (`updated_at < ?` with a `LIMIT`). The schema version is SQLite's `user_version`; a catalog from a newer version is refused.
+`<agentDir>/sessions-v2/catalog.sqlite` holds every session's record (project, worktree, title, fork source, pin, archive time), one row each (`pi/lib/session/session-catalog.ts`). Lookup by id, listing by project, and title search read only the catalog; no session file is opened for any. The engine cannot list by project, so the catalog is ours.
+
+Listings and searches are paged on the server. Two partial indexes over unarchived rows hold them in order: `(project_path, pinned DESC, updated_at DESC, id DESC)` for a project's listing, and `(updated_at DESC, id DESC)` for search, which filters titles with an escaped `LIKE` while it walks it. A page is a keyset query that continues after the last row's sort key, read from the index without sorting; its cursor is that key, opaque to clients. The id breaks ties, so a page boundary never skips or repeats a row. The schema version is SQLite's `user_version`; a catalog from any other version is refused.
 
 Both use Node's `node:sqlite`: session files through pi-durable's `openNodeSqliteStorage`, the catalog directly.
 
-Sessions written by the old SDK (`<agentDir>/sessions/`) are read-only: `pi/lib/session/legacy-sessions.ts` lists and renders them; mutating commands reject. Conversion into the engine is a `TODO(legacy-convert)` there.
+Sessions written by the old SDK (`<agentDir>/sessions/`) are ignored: they are not listed, read, or changed, and their files stay where they are.
 
 ## Architecture
 
@@ -92,7 +94,7 @@ Two services carry sessions, one per feature: `SessionsService` (`contracts/src/
 
 `directory` is written by session runtime (`SessionBoard`) but served on `SessionsService`, because a client reads it before attaching anything; `attach` and `detach` are pi-server's routing, there for the same reason.
 
-A connection attaches one session at a time, as Pi's protocol routes it: the server validates the attachment of every session runtime call, so a delayed frame of a previous attachment cannot reach the new one. The browser attaches the session it shows and reads others (a sidebar prefetch) with `get`. A legacy session cannot attach; `get` returns it.
+A connection attaches one session at a time, as Pi's protocol routes it: the server validates the attachment of every session runtime call, so a delayed frame of a previous attachment cannot reach the new one. The browser attaches the session it shows and reads others (a sidebar prefetch) with `get`.
 
 Expected failures are results, not errors: the protocol carries only its own error codes, so a method returns `{ok: false, error: {code, message}}` with the contract error's tag, and the client branches on the tag (`CheckpointConflictError` offers a forced retry).
 

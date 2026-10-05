@@ -37,7 +37,7 @@ describe("session entries", () => {
       "3": {contentParts: [], capture: false, before: {checkpointId: "undone", sessionId: "s", status: "disabled"}},
     };
     const session = buildSession({
-      record: {id: "s", projectPath: "/project", createdAt: new Date(0).toISOString(), updatedAt: new Date(0).toISOString()},
+      record: {id: "s", projectPath: "/project", pinned: false, createdAt: new Date(0).toISOString(), updatedAt: new Date(0).toISOString()},
       entries: [authored, continuation],
       undone: [undone],
       agent: undefined,

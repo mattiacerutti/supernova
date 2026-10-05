@@ -76,6 +76,7 @@ export function buildSession(input: {
     id: record.id,
     title: record.title ?? "Untitled session",
     forked: record.forkedFrom !== undefined,
+    pinned: record.pinned,
     projectPath: record.projectPath,
     ...(record.worktree ? {worktree: record.worktree} : {}),
     updatedAt: lastTimestamp !== undefined && new Date(lastTimestamp).toISOString() > record.updatedAt ? new Date(lastTimestamp).toISOString() : record.updatedAt,

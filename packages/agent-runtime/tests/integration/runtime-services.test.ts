@@ -3,6 +3,7 @@ import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import {Client, createClientServiceTransport} from "@earendil-works/pi-client";
 import type {Session} from "@supernova/contracts/services/sessions/schemas";
 import {FoldersService} from "@supernova/contracts/services/folders/services";
+import {ProjectsService} from "@supernova/contracts/services/projects/services";
 import {RUNTIME_SERVER_ID} from "@supernova/contracts/lib/protocol";
 import {SessionRuntimeService} from "@supernova/contracts/services/session-runtime/services";
 import {SessionsService} from "@supernova/contracts/services/sessions/services";
@@ -52,7 +53,7 @@ describe("runtime services over the wire", () => {
     const client = await Client.connect({serverId: RUNTIME_SERVER_ID, transportFactory: server.transport});
     cleanups.push(() => client.dispose());
     const serverServices = createRemoteServiceBinding({
-      services: [FoldersService, SessionsService, WorkspaceService],
+      services: [FoldersService, ProjectsService, SessionsService, WorkspaceService],
       transport: createClientServiceTransport(client, () => ({serverId: RUNTIME_SERVER_ID})),
     });
     const sessionServices = createRemoteServiceBinding({
@@ -73,7 +74,14 @@ describe("runtime services over the wire", () => {
       // In a record: a Chord facade answers `then` too, so awaiting one directly would call a remote `then`.
       return {sessionRuntime: sessionServices.use(SessionRuntimeService)};
     };
-    return {attach, folders: serverServices.use(FoldersService), pi, sessions, workspace: serverServices.use(WorkspaceService)};
+    return {
+      attach,
+      folders: serverServices.use(FoldersService),
+      pi,
+      projects: serverServices.use(ProjectsService),
+      sessions,
+      workspace: serverServices.use(WorkspaceService),
+    };
   }
 
   it("creates a session, runs its turn, and replicates its transcript to the attached client", async () => {
@@ -107,6 +115,34 @@ describe("runtime services over the wire", () => {
     }
 
     expect(sessions.directory.value?.sessions["wire-session"]).toMatchObject({activity: "idle", projectPath: pi.defaultProjectRoot, summary: {id: "wire-session"}});
+  });
+
+  it("pages and searches a project's sessions, and pins one for every client", async () => {
+    const {pi, projects, sessions} = await connect();
+    for (const id of ["first", "second", "third"]) await sessions.create({id, projectPath: pi.defaultProjectRoot}, BACKGROUND_CONTEXT);
+    await sessions.rename({sessionId: "second", title: "Fix the login"}, BACKGROUND_CONTEXT);
+
+    const firstPage = await projects.listSessions({projectPath: pi.defaultProjectRoot, limit: 2}, BACKGROUND_CONTEXT);
+    expect(firstPage.ok && firstPage.value.sessions).toHaveLength(2);
+    const nextCursor = firstPage.ok ? firstPage.value.nextCursor : null;
+    expect(nextCursor).not.toBeNull();
+    const lastPage = await projects.listSessions({projectPath: pi.defaultProjectRoot, limit: 2, cursor: nextCursor!}, BACKGROUND_CONTEXT);
+    expect(lastPage).toMatchObject({ok: true, value: {nextCursor: null}});
+
+    expect(await projects.searchSessions({query: "LOGIN", projectPaths: [pi.defaultProjectRoot], limit: 10}, BACKGROUND_CONTEXT)).toMatchObject({
+      ok: true,
+      value: {sessions: [{id: "second", projectPath: pi.defaultProjectRoot, title: "Fix the login"}], nextCursor: null},
+    });
+
+    expect(await projects.pinSession({sessionId: "first", pinned: true}, BACKGROUND_CONTEXT)).toEqual({ok: true, value: null});
+    // The pin reaches every client through the directory, and the listing puts the session first.
+    await waitUntil(() => expect(sessions.directory.value?.sessions.first?.summary).toMatchObject({pinned: true}));
+    expect(await projects.listSessions({projectPath: pi.defaultProjectRoot, limit: 1}, BACKGROUND_CONTEXT)).toMatchObject({
+      ok: true,
+      value: {sessions: [{id: "first", pinned: true}]},
+    });
+    // An invalid limit is refused at the boundary.
+    expect(await projects.listSessions({projectPath: pi.defaultProjectRoot, limit: 0}, BACKGROUND_CONTEXT)).toMatchObject({ok: false, error: {code: "GenericError"}});
   });
 
   it("returns declared contract errors by tag, and every other failure as a GenericError", async () => {

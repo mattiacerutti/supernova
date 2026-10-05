@@ -85,7 +85,7 @@ pi/
 
 Reach Pi through `Pick<PiSdk, …>` or `Pick<SessionStore, …>`; only `pi/` imports `@earendil-works/pi-durable`. An object over part of Pi earns a root file only when it holds state or behavior Pi lacks: `resource-cache.ts`, `session-store.ts`, and `session-file.ts` do; `turnPositions` is a `lib/` function.
 
-Two Pi packages, two roles. `@earendil-works/pi-durable` (vendored from source, see `vendor/pi/PROVENANCE.md`) runs agents. `@earendil-works/pi-coding-agent` is used only for what reads files and returns plain data: `ModelRuntime`, `SettingsManager`, skills, context files, prompt templates, extension loading, package management, and tool definitions for their prompt text. Its `SessionManager` is used only by `lib/session/legacy-sessions.ts` to read old sessions.
+Two Pi packages, two roles. `@earendil-works/pi-durable` (vendored from source, see `vendor/pi/PROVENANCE.md`) runs agents. `@earendil-works/pi-coding-agent` is used only for what reads files and returns plain data: `ModelRuntime`, `SettingsManager`, skills, context files, prompt templates, extension loading, package management, and tool definitions for their prompt text.
 
 Code ported from Pi because it is not exported (the system prompt in `config/system-prompt.ts`, the HTTP setup in `sdk.ts`) names its upstream file path; replace it with the import if Pi exports it.
 

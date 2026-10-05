@@ -3,6 +3,9 @@ import {useRef, useState} from "react";
 import {useVirtualizer} from "@tanstack/react-virtual";
 import {cn} from "@/lib/cn";
 
+/** How close to the end, in pixels, a scroll asks a paged list for more. */
+const END_REACHED_DISTANCE = 200;
+
 interface SearchableListInputProps {
   readonly onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void;
 }
@@ -35,6 +38,8 @@ interface StaticSearchableListProps<TItem> extends SearchableListBaseProps<TItem
 
 interface VirtualizedSearchableListProps<TItem> extends SearchableListBaseProps<TItem> {
   readonly estimateSize: (index: number) => number;
+  /** Called when the list is scrolled near its end; for loading the next page of a paged list. */
+  readonly onEndReached?: () => void;
   readonly virtualized: true;
 }
 
@@ -130,10 +135,16 @@ export default function SearchableList<TItem>(props: SearchableListProps<TItem>)
 
   const virtualItems = virtualizer.getVirtualItems();
 
+  const handleScroll = (): void => {
+    const scrollParent = scrollParentRef.current;
+    if (!virtualized || !props.onEndReached || !scrollParent) return;
+    if (scrollParent.scrollHeight - scrollParent.scrollTop - scrollParent.clientHeight < END_REACHED_DISTANCE) props.onEndReached();
+  };
+
   return (
     <>
       {renderInput({onKeyDown: handleKeyDown})}
-      <div className={cn("scroll-fade-y -ml-3 -mr-5 min-h-0 flex-1 overflow-y-auto pb-2 pr-2", className)} ref={scrollParentRef}>
+      <div className={cn("scroll-fade-y -ml-3 -mr-5 min-h-0 flex-1 overflow-y-auto pb-2 pr-2", className)} onScroll={handleScroll} ref={scrollParentRef}>
         {listStatus}
         {virtualized && (
           <div className="relative w-full" style={{height: `${virtualizer.getTotalSize()}px`}}>
