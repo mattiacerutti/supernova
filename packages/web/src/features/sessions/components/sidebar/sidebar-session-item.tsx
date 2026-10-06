@@ -76,7 +76,7 @@ export default function SidebarSessionItem(props: SidebarSessionItemProps) {
           )}
         </div>
         <span className="grid w-12 shrink-0 place-items-center justify-items-end">
-          <span className="col-start-1 row-start-1 w-full justify-self-end whitespace-nowrap pr-0.75 text-right text-xs text-ink-muted group-hover/session:invisible group-focus-within/session:invisible group-has-[[data-popup-open]]/session:invisible">
+          <span className="col-start-1 row-start-1 w-full justify-self-end whitespace-nowrap pr-0.75 text-right text-xs text-ink-muted group-hover/session:invisible group-focus-visible/session:invisible group-has-[:focus-visible]/session:invisible group-has-[[data-popup-open]]/session:invisible">
             {streaming ? (
               <span className="inline-block size-2 animate-spin rounded-full border border-border-strong border-t-ink" aria-label="Session streaming" />
             ) : unseen ? (
@@ -91,7 +91,7 @@ export default function SidebarSessionItem(props: SidebarSessionItemProps) {
             sessionId={sessionId}
             sessionTitle={title}
             worktree={worktree}
-            triggerClassName="col-start-1 row-start-1 size-5 opacity-0 group-hover/session:opacity-100 group-focus-within/session:opacity-100 data-popup-open:opacity-100"
+            triggerClassName="col-start-1 row-start-1 size-5 opacity-0 group-hover/session:opacity-100 group-focus-visible/session:opacity-100 group-has-[:focus-visible]/session:opacity-100 data-popup-open:opacity-100"
           />
         </span>
       </Button>
