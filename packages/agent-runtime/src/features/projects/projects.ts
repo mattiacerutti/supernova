@@ -20,7 +20,7 @@ export class Projects {
   public async listSessions(input: ProjectSessionsListPayload): Promise<ProjectSessionsListResult> {
     // SessionManager.list eagerly parses every session file; revisit if projects grow large enough for this to show.
     const sessions = await this.deps.sdk.SessionManager.list(input.projectPath);
-    return {projectPath: input.projectPath, sessions: toSessionSummaries(sessions, input.projectPath)};
+    return {projectPath: input.projectPath, sessions: await toSessionSummaries(sessions, input.projectPath)};
   }
 
   /** Archives a project session by moving its backing session file out of Pi's listing. */

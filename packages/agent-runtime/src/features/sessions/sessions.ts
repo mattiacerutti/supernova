@@ -16,7 +16,7 @@ import {toAgentModelDetails} from "@supernova/agent-runtime/pi/lib/models/map-mo
 import {buildSessionSnapshot, sessionModelReference} from "@supernova/agent-runtime/pi/lib/session/build-session-snapshot";
 import {refreshAuthAndModels} from "@supernova/agent-runtime/pi/lib/models/refresh-models";
 import {CHECKPOINT_CURSOR_CUSTOM_TYPE, FORK_CUSTOM_TYPE, isCheckpointAfterTurnEntry} from "@supernova/agent-runtime/pi/lib/session/checkpoint-entries";
-import {openSessionById, sessionPathById} from "@supernova/agent-runtime/pi/lib/session/open-session";
+import {openSessionById, parentSessionId, sessionPathById} from "@supernova/agent-runtime/pi/lib/session/open-session";
 import {sessionWorkspace, WORKTREE_CUSTOM_TYPE} from "@supernova/agent-runtime/pi/lib/session/worktree-entry";
 import type {ResourceCache} from "@supernova/agent-runtime/pi/resource-cache";
 import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";
@@ -51,7 +51,6 @@ export class Sessions {
     return {
       id: sessionManager.getSessionId(),
       context: {usedTokens: 0, contextWindow: 0},
-      forked: false,
       projectPath,
       title: "Untitled session",
       turns: [],
@@ -120,7 +119,7 @@ export class Sessions {
       return {
         id: sessionManager.getSessionId(),
         context: {usedTokens: 0, contextWindow: 0},
-        forked: sessionManager.getHeader()?.parentSession !== undefined,
+        parentSessionId: parentSessionId(sessionManager),
         ...sessionWorkspace(sessionManager),
         title,
         turns: [],

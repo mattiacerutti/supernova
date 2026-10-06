@@ -47,7 +47,13 @@ function applyEvent(input: {event: SessionStreamEvent; queryClient: QueryClient}
       projectPath: event.session.projectPath,
       queryClient,
       sessionId: event.sessionId,
-      summary: {id: event.session.id, forked: event.session.forked, title: event.session.title, updatedAt: event.session.updatedAt, worktree: event.session.worktree !== undefined},
+      summary: {
+        id: event.session.id,
+        parentSessionId: event.session.parentSessionId,
+        title: event.session.title,
+        updatedAt: event.session.updatedAt,
+        worktree: event.session.worktree,
+      },
     });
   } else if (event.type === "session.updated") {
     queryClient.setQueryData<Session>(sessionKeys.detail(event.sessionId), (session) =>

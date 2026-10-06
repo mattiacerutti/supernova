@@ -1,5 +1,5 @@
 import {readdir} from "node:fs/promises";
-import {join} from "node:path";
+import {basename, join} from "node:path";
 import {getAgentDir} from "@earendil-works/pi-coding-agent";
 import type {PiSdk, PiSessionManager} from "@supernova/agent-runtime/pi/sdk";
 
@@ -34,6 +34,20 @@ export async function findPiSessionPath(sessionId: string, sessionsDir = join(ge
 
   if (matches.length > 1) throw new Error("Multiple sessions found with the same ID.");
   return matches[0];
+}
+
+/** The id of the session stored at `path`, read from its `<timestamp>_<sessionId>.jsonl` file name. Timestamps contain no `_`. */
+export function sessionIdFromPath(path: string): string | undefined {
+  const fileName = basename(path);
+  const separator = fileName.indexOf("_");
+  if (separator === -1 || !fileName.endsWith(".jsonl")) return undefined;
+  return fileName.slice(separator + 1, -".jsonl".length) || undefined;
+}
+
+/** The session this one was forked from. Pi records the parent's file path in the header. */
+export function parentSessionId(sessionManager: PiSessionManager): string | undefined {
+  const parentPath = sessionManager.getHeader()?.parentSession;
+  return parentPath ? sessionIdFromPath(parentPath) : undefined;
 }
 
 /** The session file for an id, or undefined when no session has it. Fast path by filename, then Pi's full listing. */

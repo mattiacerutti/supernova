@@ -17,8 +17,8 @@ export const Session = Schema.Struct({
   id: Schema.String,
   /** Human-readable session title. */
   title: Schema.String,
-  /** Whether the session was forked from another session. */
-  forked: Schema.Boolean,
+  /** The session this one was forked from. It may since have been archived. */
+  parentSessionId: Schema.optional(Schema.String),
   /** Current session model configuration, when the runtime exposes one. */
   modelReference: Schema.optional(ModelReference),
   /** Current token usage for the active model context. */
@@ -39,14 +39,14 @@ export const Session = Schema.Struct({
 export const SessionSummary = Schema.Struct({
   /** Stable session identifier. */
   id: Schema.String,
-  /** Whether the session was forked from another session. */
-  forked: Schema.Boolean,
+  /** The session this one was forked from. It may since have been archived. */
+  parentSessionId: Schema.optional(Schema.String),
   /** Human-readable session title. */
   title: Schema.String,
   /** ISO timestamp for the last session update. */
   updatedAt: Schema.String,
-  /** Whether the session runs in its own worktree. */
-  worktree: Schema.Boolean,
+  /** The worktree the session runs in, for sessions started in a new worktree. */
+  worktree: Schema.optional(SessionWorktree),
 });
 
 export type Session = typeof Session.Type;

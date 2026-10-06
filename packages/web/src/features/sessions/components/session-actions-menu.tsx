@@ -10,6 +10,8 @@ import {cn} from "@/lib/cn";
 import {projectIdFromPath} from "@/lib/project-paths";
 
 interface SessionActionsMenuProps {
+  /** Called when the menu opens or closes, for callers that hide competing UI while it is open. */
+  readonly onOpenChange?: (open: boolean) => void;
   readonly onRename: () => void;
   readonly triggerClassName?: string;
   readonly projectPath: string;
@@ -21,7 +23,7 @@ interface SessionActionsMenuProps {
 
 /** Shares session actions between the header and sidebar. */
 export default function SessionActionsMenu(props: SessionActionsMenuProps) {
-  const {onRename, projectPath, sessionId, sessionTitle, triggerClassName, worktree} = props;
+  const {onOpenChange, onRename, projectPath, sessionId, sessionTitle, triggerClassName, worktree} = props;
 
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
@@ -34,6 +36,11 @@ export default function SessionActionsMenu(props: SessionActionsMenuProps) {
 
   const handleToggleSessionPinned = (): void => {
     toggleSessionPinned(sessionId);
+  };
+
+  const handleActionsMenuOpenChange = (open: boolean): void => {
+    setActionsMenuOpen(open);
+    onOpenChange?.(open);
   };
 
   const archiveSession = (removeWorktree: boolean): void => {
@@ -59,7 +66,7 @@ export default function SessionActionsMenu(props: SessionActionsMenuProps) {
     <>
       <ArchiveWorktreeSessionDialog onArchive={archiveSession} onCancel={() => setArchiveDialogOpen(false)} open={archiveDialogOpen} />
       <Menu
-        onOpenChange={setActionsMenuOpen}
+        onOpenChange={handleActionsMenuOpenChange}
         open={actionsMenuOpen}
         trigger={(triggerProps) => (
           <Button {...triggerProps} className={cn("size-7 text-ink-muted hover:text-ink", triggerClassName)} shape="icon" size="md" variant="ghost">

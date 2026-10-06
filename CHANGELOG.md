@@ -14,6 +14,7 @@ All notable changes to Supernova are documented in this file.
 ### Changed
 
 - Session titles are now generated in the background: the first response starts immediately and the title appears when it is ready, instead of the first turn waiting for it.
+- Changed the sidebar so a chat's leading icon only marks pins. Worktree and forked chats now show small markers after their title. Hovering or focusing a chat opens a card beside it with its full title, status, worktree branch, and the chat it was forked from.
 
 ### Fixed
 

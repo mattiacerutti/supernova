@@ -132,7 +132,6 @@ class TimelineRpcClient implements RpcClient {
     const session: Session = {
       id,
       context: {usedTokens: 0, contextWindow: 0},
-      forked: false,
       projectPath,
       title: "Untitled session",
       turns: [],

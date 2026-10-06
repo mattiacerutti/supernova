@@ -43,6 +43,33 @@ describe("listing and archiving Pi project sessions", () => {
     expect(result).toMatchObject({projectPath: "/workspace", sessions: [{id: "newest"}, {id: "middle"}, {id: "older"}]});
   });
 
+  it("includes the parent of forks and the worktree of sessions that run in one", async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), "supernova-agent-runtime-"));
+    tempDirs.push(tempDir);
+    const worktree = {branch: "supernova/quiet-comet", path: "/worktrees/quiet-comet"};
+    const worktreeSessionPath = join(tempDir, "2026-01-01T00-00-00-000Z_in-worktree.jsonl");
+    await writeFile(
+      worktreeSessionPath,
+      [
+        {cwd: worktree.path, id: "in-worktree", timestamp: "2026-01-01T00:00:00.000Z", type: "session", version: 3},
+        {customType: "supernova.worktree", data: {projectPath: "/workspace", worktree}, id: "marker", parentId: null, timestamp: "2026-01-01T00:00:00.000Z", type: "custom"},
+      ]
+        .map((entry) => `${JSON.stringify(entry)}\n`)
+        .join("")
+    );
+    const projects = projectsWith([
+      session({id: "in-worktree", cwd: worktree.path, path: worktreeSessionPath}),
+      session({id: "fork", parentSessionPath: join(tempDir, "2026-01-01T00-00-00-000Z_source.jsonl")}),
+      session({id: "local"}),
+    ]);
+
+    const {sessions} = await projects.listSessions({projectPath: "/workspace"});
+
+    expect(sessions.find((summary) => summary.id === "in-worktree")).toMatchObject({worktree});
+    expect(sessions.find((summary) => summary.id === "fork")).toMatchObject({parentSessionId: "source", worktree: undefined});
+    expect(sessions.find((summary) => summary.id === "local")).toMatchObject({parentSessionId: undefined, worktree: undefined});
+  });
+
   it("archives a session by moving the backing session file into an archive directory", async () => {
     const tempDir = await mkdtemp(join(tmpdir(), "supernova-agent-runtime-"));
     tempDirs.push(tempDir);

@@ -123,7 +123,6 @@ function createPendingSession(input: {projectPath: string; sessionId: string}): 
   return {
     id: input.sessionId,
     context: {usedTokens: 0, contextWindow: 0},
-    forked: false,
     projectPath: input.projectPath,
     title: "Untitled session",
     turns: [],

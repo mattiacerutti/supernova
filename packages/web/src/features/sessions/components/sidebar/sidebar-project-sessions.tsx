@@ -28,6 +28,8 @@ export default function SidebarProjectSessions(props: SidebarProjectSessionsProp
     .map((session) => ({...session, pinned: pinnedSessionIds.includes(session.id), timestamp: Date.parse(session.updatedAt)}))
     .toSorted((left, right) => Number(right.pinned) - Number(left.pinned) || right.timestamp - left.timestamp);
 
+  // Forks are stored beside the session they came from, so a parent missing here has been archived.
+  const sessionTitles = new Map(sessions.map((session) => [session.id, session.title]));
   const activeSession = sessions.find((session) => session.id === activeSessionId);
   const pinnedSessions = sessions.filter((session) => session.pinned);
   const unpinnedSessions = sessions.filter((session) => !session.pinned);
@@ -67,13 +69,13 @@ export default function SidebarProjectSessions(props: SidebarProjectSessionsProp
         {expanded && sessionsQuery.error != null && <li className="px-8 py-1 text-sm text-danger-ink">Unable to load sessions.</li>}
         {displayedSessions.map((session) => (
           <SidebarSessionItem
-            forked={session.forked}
             key={session.id}
+            parent={session.parentSessionId === undefined ? undefined : {title: sessionTitles.get(session.parentSessionId)}}
             projectPath={projectPath}
             sessionId={session.id}
             title={session.title}
             updatedAt={session.updatedAt}
-            worktree={session.worktree}
+            worktreeBranch={session.worktree?.branch}
           />
         ))}
         {canShowMore && (
