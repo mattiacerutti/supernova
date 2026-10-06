@@ -44,8 +44,8 @@ flowchart BT
         sessions["Sessions<br/>create, load, rename, fork"]
         runtimeService["SessionRuntime<br/>commands, board"]
         worker["SessionWorker per session<br/>document as replicated state"]
-        store["SessionStore<br/>index + open session files"]
-        file["SessionFile<br/>Harness on one file"]
+        store["SessionStore<br/>catalog + open session files"]
+        file["SessionFile<br/>Harness, branch, document"]
 
         edge --> sessions
         edge --> runtimeService
@@ -100,7 +100,7 @@ Expected failures are results, not errors: the protocol carries only its own err
 
 ## The session document
 
-`SessionStore.snapshot()` builds the `Session` from the branch's current view, split at the leaf: its history through the leaf in append order (compacted entries included, system prompt entries left out), the entries past the leaf as `undone`, `pi.agent` as of the leaf, `pi.live`, `pi.usage`, authored `contentParts` attached to user entries in both history and `undone`, `runStart`, and the context usage of a request from the leaf (`Conversation.context(context, at)`, patched into pi-durable until earendil-works/pi#10513 ships). The durable turn records and their checkpoints stay server-side; there is no separate public turns map. Entries are read only up to the view's newest one, so a final answer never appears beside the partial `pi.live` still streams. Entries are append-only, so a rebuild reads only entries after the last one it has while the branch is unchanged; moving the leaf reads nothing.
+`SessionFile.snapshot()` builds the `Session` from the branch's current view, split at the leaf: its history through the leaf in append order (compacted entries included, system prompt entries left out), the entries past the leaf as `undone`, `pi.agent` as of the leaf, `pi.live`, `pi.usage`, authored `contentParts` attached to user entries in both history and `undone`, `runStart`, and the context usage of a request from the leaf (`Conversation.context(context, at)`, patched into pi-durable until earendil-works/pi#10513 ships). The durable turn records and their checkpoints stay server-side; there is no separate public turns map. Entries are read only up to the view's newest one, so a final answer never appears beside the partial `pi.live` still streams. Entries are append-only, so a rebuild reads only entries after the last one it has while the branch is unchanged; moving the leaf reads nothing.
 
 `runStart` is the first user entry of the active run. Pi's `pi.live.run` lists the run's input submissions, not entries; the server resolves them so the browser knows where the turn being answered starts.
 

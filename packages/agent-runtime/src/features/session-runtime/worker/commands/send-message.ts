@@ -15,12 +15,12 @@ async function generateSessionTitle(input: {readonly payload: SendMessagePayload
 /**
  * Accepts a user message: selects its model, prepares its content, captures the before-turn checkpoint, and submits
  * it. Resolves once the engine placed it; the run continues in the background and settles through the session's event
- * stream. A busy session rejects; see `SessionFile.submit` for queueing.
+ * stream. A busy session rejects; see `SessionFile.send` for queueing.
  */
-export async function sendMessage(runtime: SessionWorker, titleGenerator: TitleGenerator, input: SendMessagePayload): Promise<void> {
-  runtime.beginSend();
-  const session = await runtime.session();
-  const record = await runtime.store.find(runtime.sessionId);
+export async function sendMessage(runtime: SessionWorker, input: SendMessagePayload): Promise<void> {
+  const {file, store} = runtime;
+  const {sessionId} = file;
+  const record = await store.find(sessionId);
   if (!record) throw new Error("Session not found.");
   // Selecting first lets an unknown or unauthenticated model fail before any provider work or checkpoint capture.
   const model = findSelectedModel(runtime.sdk, input.modelReference);
@@ -29,36 +29,33 @@ export async function sendMessage(runtime: SessionWorker, titleGenerator: TitleG
   // The title is not needed to start; it is generated alongside the turn and applied when it arrives.
   if (record.title === undefined) {
     runtime.track(
-      generateSessionTitle({payload: input, model, titleGenerator}).then(async (title) => {
+      generateSessionTitle({payload: input, model, titleGenerator: runtime.titleGenerator}).then(async (title) => {
         // A user rename that lands first wins.
         if (!title) return;
-        const current = await runtime.store.find(runtime.sessionId);
+        const current = await store.find(sessionId);
         if (!current) throw new Error("Session not found.");
         if (current.title !== undefined) return;
-        await runtime.store.update(runtime.sessionId, (current) => ({...current, title}));
+        await store.update(sessionId, (current) => ({...current, title}));
         await runtime.refresh();
       })
     );
   }
 
-  const messageContext = await prepareSendMessageContext(input, {projectPath: session.cwd, resourceCache: runtime.resourceCache});
-  const settings = runtime.store.settings(session.cwd);
-  const {images, hints} = await preparePromptImages(messageContext.images, {autoResize: settings.getImageAutoResize(), model: model as never});
+  const messageContext = await prepareSendMessageContext(input, {projectPath: file.cwd, resourceCache: runtime.resourceCache});
+  const {images, hints} = await preparePromptImages(messageContext.images, {autoResize: file.settings().getImageAutoResize(), model: model as never});
   const text = hints.length > 0 ? `${messageContext.prompt}\n\n${hints.join("\n")}` : messageContext.prompt;
   if (runtime.isCancelled()) throw new Error("Session was cancelled.");
 
-  const turnModel = {provider: model.provider, modelId: model.id, thinkingLevel: toPiThinkingLevel(input.modelReference.thinkingLevel)};
-  await runtime.diverge(session);
-  await session.configure(turnModel);
   const capture = input.captureCheckpoints ?? true;
-  const before = await runtime.createCheckpoint(capture);
-  const submitted = await runtime.submit(() =>
-    session.submit({
+  const before = await runtime.captureCheckpoint(capture);
+  const submitted = await runtime.publishAfter(() =>
+    file.send({
       content: images.length > 0 ? [{type: "text", text}, ...images] : text,
       record: {contentParts: [...messageContext.contentParts], capture, before},
+      model: {provider: model.provider, modelId: model.id, thinkingLevel: toPiThinkingLevel(input.modelReference.thinkingLevel)},
     })
   );
-  await runtime.store.update(runtime.sessionId, (current) => ({...current, updatedAt: new Date().toISOString()}));
+  await store.update(sessionId, (current) => ({...current, updatedAt: new Date().toISOString()}));
 
   void submitted.wait().then(
     (settled) => {

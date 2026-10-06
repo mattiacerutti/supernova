@@ -489,7 +489,7 @@ Checkpoint storage uses ordinary exceptions internally, except where the client 
 
 `CheckpointNavigationError` is the union of those three contract errors and is the declared error for the undo, redo, and revert procedures.
 
-The store uses `Promise<void>` rather than booleans so callers cannot accidentally treat a failed capture as a valid checkpoint. `SessionWorker.createCheckpoint()` converts that rejection into a boundary status, which is the only place a capture failure is interpreted.
+The store uses `Promise<void>` rather than booleans so callers cannot accidentally treat a failed capture as a valid checkpoint. `SessionWorker.captureCheckpoint()` converts that rejection into a boundary status, which is the only place a capture failure is interpreted.
 
 ## Session archival and cleanup
 
@@ -545,7 +545,7 @@ Objects available only through the source repository alternate remain dependent 
 
 ## Concurrency and lifecycle
 
-`SessionRuntime` keeps one `SessionWorker` per session in use. Navigation and compaction run one at a time per session (`beginWork()`/`endWork()`) and reject while a run is active, so a restore never races a turn's file changes.
+`SessionRuntime` keeps one `SessionWorker` per session in use. Navigation and compaction run one at a time per session and reject while a run is active, so a restore never races a turn's file changes.
 
 - Session archival aborts the session's work, closes its file, then deletes its checkpoint refs.
 - Runtime shutdown closes every session file without aborting work; an interrupted turn resumes, and gets its after-turn checkpoint, when its session next opens.

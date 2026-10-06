@@ -529,13 +529,15 @@ describe("state under delayed frames", () => {
   it("never shows a streamed answer and its final entry together", async () => {
     const pi = await createPiTestRuntime({tokensPerSecond: 1_000});
     try {
-      const {info} = await pi.createSession();
+      // Created through the store, so the delay below is installed before the session's worker subscribes.
+      const info = {id: crypto.randomUUID()};
+      await pi.store.create({id: info.id, projectPath: pi.defaultProjectRoot});
       // A slow stream: partials are committed (every 100 ms) before the final answer.
       pi.faux.setResponses([fauxAssistantMessage(`The one answer. ${"word ".repeat(200)}`)]);
       // Delay every frame's handling past the next commit, as a busy server would.
       const session = await pi.store.file(info.id);
       const watch = session.watch.bind(session);
-      session.watch = (conversationId, listener) => watch(conversationId, (view) => setTimeout(() => listener(view), 150));
+      session.watch = (listener) => watch(() => setTimeout(listener, 150));
       const {versions} = await pi.sendMessage({message: "Answer once", modelReference: selectedModelReference, sessionId: info.id});
       for (const version of versions) {
         const partial = version.live.generation?.message;

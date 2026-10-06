@@ -77,8 +77,8 @@ Anything clients follow over time is Chord replicated state, served as a service
 pi/
   sdk.ts              PiSdk interface and createPiSdk(); the seam onto @earendil-works/pi-coding-agent, and Pi's HTTP setup
   resource-cache.ts   per-project memo of loaded extensions, prompts, skills, and context files
-  session-store.ts    SessionStore: every session's index record and open file; the seam onto @earendil-works/pi-durable
-  session-file.ts     SessionFile: one session's engine instance (Harness) and its operations
+  session-store.ts    SessionStore: the collection of sessions (catalog records) and their open files
+  session-file.ts     SessionFile: one session's Harness, branch and leaf, document build, and actions; the seam onto @earendil-works/pi-durable
   config/             resource-loader, settings policy, engine settings, and the system prompt
   lib/                every Pi ↔ contracts mapping and behavior Pi lacks: turns, content parts, models, sessions, tools
 ```
@@ -99,7 +99,7 @@ Live execution: send, abort, compact, checkpoint navigation, and each session's 
 
 - `worker/session-worker.ts` watches the session's branch, publishes its document as replicated state, and captures after-turn checkpoints.
 - `worker/session-board.ts` is every open session's activity, summary, setup step, and last problem, for clients that have not attached the session.
-- `session-runtime.ts` keeps one `SessionWorker` per session in use and dispatches to it.
+- `session-runtime.ts` keeps one `SessionWorker` per session in use and dispatches to it. A worker opens with its file and runs the commands in `worker/commands/`, which receive the worker and use its file, checkpoint, and publication steps.
 - `worker/commands/` are what the feature class dispatches to a worker; `worker/lib/navigate-to-turn.ts` is the one restore-then-show path undo, redo, and revert share.
 - `checkpoints/` is the store, shadow repositories, and git plumbing.
 - `tools/` are Supernova's own tools offered in every session (`web_fetch`).

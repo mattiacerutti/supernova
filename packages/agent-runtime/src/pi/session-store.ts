@@ -4,13 +4,10 @@ import {rm} from "node:fs/promises";
 import {join} from "node:path";
 import {getAgentDir} from "@earendil-works/pi-coding-agent";
 import type {SettingsManager} from "@earendil-works/pi-coding-agent";
-import type {AgentState, ConversationView, EntryRecord, LiveState, UsageState} from "@earendil-works/pi-durable";
-import type {Session, SessionContextUsage, SessionWorktree} from "@supernova/contracts/services/sessions/schemas";
+import type {SessionWorktree} from "@supernova/contracts/services/sessions/schemas";
 import {loadPiSettings} from "@supernova/agent-runtime/pi/config/settings";
 import {SessionCatalog} from "@supernova/agent-runtime/pi/lib/session/session-catalog";
-import {buildSession, contextUsageOf, timelineEntries} from "@supernova/agent-runtime/pi/lib/session/session-snapshot";
-import type {CheckpointRef, SessionRecord, TurnPosition} from "@supernova/agent-runtime/pi/lib/session/session-state";
-import {turnPositions} from "@supernova/agent-runtime/pi/lib/session/session-state";
+import type {SessionRecord} from "@supernova/agent-runtime/pi/lib/session/session-state";
 import type {PromptedTool} from "@supernova/agent-runtime/pi/lib/tools/coding-tools";
 import type {BridgedExtensions} from "@supernova/agent-runtime/pi/lib/tools/extension-bridge";
 import {bridgeExtensions} from "@supernova/agent-runtime/pi/lib/tools/extension-bridge";
@@ -33,25 +30,6 @@ export interface SessionStoreDeps {
   readonly settings?: (cwd: string) => SettingsManager;
   /** Problems that do not fail a command: extension diagnostics and engine reports. */
   readonly onReport?: (sessionId: string, message: string) => void;
-}
-
-/**
- * The branch history a session document was built from. Entries are append-only, so while the branch stays the same
- * the next build reads only entries after the last one.
- */
-export interface SessionHistory {
-  readonly branch: number;
-  readonly entries: readonly EntryRecord[];
-}
-
-/** Where a session's history stands for checkpoint navigation. */
-export interface NavigationState {
-  /** Every turn of the branch, undone ones included, in order. */
-  readonly turns: readonly TurnPosition[];
-  /** How many of `turns` are visible; the rest are undone. */
-  readonly visibleCount: number;
-  /** The checkpoint the workspace was last captured at or restored to. */
-  readonly current: CheckpointRef | undefined;
 }
 
 interface OpenSession {
@@ -123,14 +101,9 @@ export class SessionStore {
     return (await this.catalog()).update(sessionId, change);
   }
 
-  /** The open file of a session, opening it on first use. */
+  /** A session's file, opened on first use and kept open until released. */
   public async file(sessionId: string): Promise<SessionFile> {
     return (await this.openSession(sessionId)).file;
-  }
-
-  /** Whether the session's file is open; a closed session has no work running. */
-  public isOpen(sessionId: string): boolean {
-    return this.open.has(sessionId);
   }
 
   /** The working directory a session's agent runs in. */
@@ -141,7 +114,7 @@ export class SessionStore {
   }
 
   /** Pi's file settings for a working directory, loaded once until `reload()`. */
-  public settings(cwd: string): SettingsManager {
+  private settings(cwd: string): SettingsManager {
     let settings = this.settingsCache.get(cwd);
     if (!settings) {
       settings = this.deps.settings?.(cwd) ?? loadPiSettings(cwd);
@@ -151,90 +124,23 @@ export class SessionStore {
   }
 
   /**
-   * The session document, from the branch's current committed view split at the leaf. Entries are read only up to the
-   * view's newest one, so the final answer never shows beside the partial the view still streams. `previous` is the
-   * history of the last build, extended instead of read again.
-   */
-  public async snapshot(sessionId: string, options: {readonly previous?: SessionHistory} = {}): Promise<{readonly session: Session; readonly history: SessionHistory}> {
-    const record = await this.find(sessionId);
-    if (!record) throw new Error("Session not found.");
-
-    const file = await this.file(sessionId);
-    const state = await file.state();
-    const view = await file.view();
-    const history = await this.historyOf(file, state.branch, view, options.previous);
-    const {leaf} = state;
-    const shown = leaf === undefined ? history.entries : history.entries.filter((entry) => leaf !== null && entry.id <= leaf);
-    const live = view.docs["pi.live"] as LiveState | undefined;
-    const agent = await file.agent(history.entries);
-
-    const session = buildSession({
-      record,
-      entries: shown,
-      undone: history.entries.slice(shown.length),
-      agent,
-      live,
-      usage: view.docs["pi.usage"] as UsageState | undefined,
-      runStart: await file.runStart(live),
-      turns: state.turns,
-      context: await this.contextOf(file, state.branch, leaf, agent),
-    });
-
-    return {session, history};
-  }
-
-  /**
    * Forks a session at a shown turn into a new session file with a fresh id: the shown history through the turn's end,
    * its turn records (checkpoints stay keyed by the source, so inherited turns cannot restore files), and the model.
    */
   public async fork(input: {readonly sessionId: string; readonly turnId: string}): Promise<string> {
-    const source = await this.file(input.sessionId);
-    const state = await source.state();
-    const {leaf} = state;
-    const history = (await source.history(state.branch)).filter((entry) => leaf === undefined || (leaf !== null && entry.id <= leaf));
-    const turn = turnPositions(history, state.turns).find((candidate) => candidate.turnId === input.turnId);
-    if (!turn) throw new Error("This message cannot be forked.");
     const record = await this.find(input.sessionId);
     if (!record) throw new Error("Session not found.");
+    const source = await this.file(input.sessionId);
     const id = randomUUID();
     await this.create({id, projectPath: record.projectPath, ...(record.worktree ? {worktree: record.worktree} : {}), forkedFrom: input.sessionId});
     try {
       if (record.title) await this.update(id, (created) => ({...created, title: record.title}));
-      const agent = await source.agent();
-      const fork = await this.file(id);
-      await fork.seed({entries: history.filter((entry) => entry.id <= turn.endId && entry.kind !== "pi.system"), turns: state.turns});
-      if (agent?.model) await fork.configure({provider: agent.model.provider, modelId: agent.model.modelId, thinkingLevel: agent.thinkingLevel ?? "off"});
+      await (await this.file(id)).copyFrom(source, input.turnId);
     } catch (error) {
       await this.delete(id);
       throw error;
     }
     return id;
-  }
-
-  /**
-   * The session's turns and how many are visible, for undo, redo, and revert. `cached` is the history of the last
-   * snapshot; its branch's entries are used when it is the current branch, instead of reading them again.
-   */
-  public async navigation(sessionId: string, cached?: SessionHistory): Promise<NavigationState> {
-    const file = await this.file(sessionId);
-    const {branch, leaf, current, turns: records} = await file.state();
-    const history = cached?.branch === branch ? cached.entries : timelineEntries(await file.history(branch));
-    const turns = turnPositions(history, records);
-    const visibleCount = leaf === undefined ? turns.length : turns.filter((turn) => leaf !== null && Number(turn.turnId) <= leaf).length;
-    return {turns, visibleCount, current};
-  }
-
-  /**
-   * Shows the first `count` of `turns` (from `navigation()`) by moving the leaf; nothing forks until the agent acts
-   * again (see `SessionFile.diverge`). `current` records the checkpoint the workspace now matches.
-   */
-  public async show(sessionId: string, turns: readonly TurnPosition[], count: number, current: CheckpointRef | undefined): Promise<void> {
-    const file = await this.file(sessionId);
-    await file.updateState((state) => {
-      if (count >= turns.length) delete state.leaf;
-      else state.leaf = turns[count - 1]?.endId ?? null;
-      if (current) state.current = current;
-    });
   }
 
   /** Reinstalls every open session's tools, prompt, and extensions from disk; running work keeps its code. */
@@ -279,35 +185,8 @@ export class SessionStore {
     catalog?.close();
   }
 
-  /** The branch's timeline entries through the view's newest one; extends `previous` while the branch is the same. */
-  private async historyOf(file: SessionFile, branch: number, view: ConversationView, previous: SessionHistory | undefined): Promise<SessionHistory> {
-    const through = view.entries.reduce((newest, entry) => Math.max(newest, entry.id), 0);
-    const cached = previous?.branch === branch ? previous : undefined;
-    // A branch forked from the cached one inherits its entries through the fork point.
-    const parent = view.conversation.parent;
-    const inherited = !cached && parent && previous?.branch === parent.conversationId ? previous.entries.filter((entry) => entry.id <= parent.at) : undefined;
-    const known = cached?.entries ?? inherited ?? [];
-    const after = known.at(-1)?.id ?? 0;
-    if (cached && through <= after) return cached;
-    // The view starts at its compaction head, so it extends what is known only when that head is already known.
-    const head = view.entries.find((entry) => entry.head !== undefined);
-    const extendsCache = (cached ?? inherited) !== undefined && (head === undefined || known.some((entry) => entry.id === head.id));
-    const added = timelineEntries(extendsCache ? view.entries.filter((entry) => entry.id > after) : await file.history(branch, {after, through}));
-    return {branch, entries: added.length > 0 ? [...known, ...added] : known};
-  }
-
   private databasePath(sessionId: string): string {
     return join(this.root, sessionId, "session.sqlite");
-  }
-
-  /** Context usage of the next request from the leaf. */
-  private async contextOf(file: SessionFile, branch: number, leaf: number | null | undefined, agent: AgentState | undefined): Promise<SessionContextUsage> {
-    const model = agent?.model ? this.deps.sdk.modelRuntime.getModel(agent.model.provider, agent.model.modelId) : undefined;
-    const contextWindow = model?.contextWindow ?? 0;
-    if (leaf === null) return {contextWindow, usedTokens: 0};
-    const {entries, messages} = await file.modelContext(branch, leaf);
-    if (entries.length === 0) return {contextWindow, usedTokens: 0};
-    return contextUsageOf({contextWindow, entries, messages});
   }
 
   private openSession(sessionId: string): Promise<OpenSession> {

@@ -228,8 +228,8 @@ export async function createPiTestRuntime(input?: {
   const settled = async (sessionId: string): Promise<void> => {
     await waitUntil(async () => {
       if ((await runtime.current(sessionId)).live.run !== undefined) throw new Error("Session is still running.");
-      const state = await (await store.file(sessionId)).state();
-      if (Object.values(state.turns).some((record) => record.after === undefined)) throw new Error("A turn has no after-turn checkpoint yet.");
+      const turns = await (await store.file(sessionId)).turnRecords();
+      if (Object.values(turns).some((record) => record.after === undefined)) throw new Error("A turn has no after-turn checkpoint yet.");
     });
   };
 
@@ -269,17 +269,12 @@ export async function createPiTestRuntime(input?: {
 
   /** The session's turn records in turn order: authored content, checkpoints, and the model each was sent with. */
   const turnRecords = async (sessionId: string) => {
-    const state = await (await store.file(sessionId)).state();
-    return Object.entries(state.turns)
+    return Object.entries(await (await store.file(sessionId)).turnRecords())
       .toSorted(([left], [right]) => Number(left) - Number(right))
       .map(([, record]) => record);
   };
 
-  /** The model and thinking level the session's next send starts from. */
-  const agent = async (sessionId: string) => (await store.file(sessionId)).agent();
-
   return {
-    agent,
     appendConversation,
     createSession,
     lastError,

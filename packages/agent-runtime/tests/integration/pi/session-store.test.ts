@@ -18,62 +18,54 @@ describe("session store", () => {
     const pi = await createPiTestRuntime({settings: {compaction: {enabled: false, keepRecentTokens: 1}}});
     try {
       const id = crypto.randomUUID();
-      await pi.store.create({id, projectPath: pi.defaultProjectRoot});
+      const record = await pi.store.create({id, projectPath: pi.defaultProjectRoot});
       const file = await pi.store.file(id);
-      await file.configure({provider: selectedPiModel.provider, modelId: selectedPiModel.id, thinkingLevel: "off"});
+      const model = {provider: selectedPiModel.provider, modelId: selectedPiModel.id, thinkingLevel: "off"};
       const send = async (text: string) => {
-        await file.diverge();
         pi.faux.setResponses([fauxAssistantMessage(`Response to ${text}`)]);
-        const submitted = await file.submit({
+        const submitted = await file.send({
           content: text,
           record: {contentParts: [{type: "text", text}], capture: false, before: {checkpointId: crypto.randomUUID(), sessionId: id, status: "disabled"}},
+          model,
         });
         expect((await submitted.wait()).status).toBe("done");
       };
       const userTexts = (entries: readonly {readonly kind: string; readonly model?: readonly unknown[]}[]) =>
         entries.filter((entry) => entry.kind === "pi.user").map((entry) => (entry.model?.[0] as {content?: unknown} | undefined)?.content);
+      // Every engine read of entries goes through the file's private `history`; spying on it counts SQLite reads.
+      const read = vi.spyOn(file as unknown as {history: () => Promise<unknown>}, "history");
 
       await send("First");
       await send("Second");
-      const full = await pi.store.snapshot(id);
-      const read = vi.spyOn(file, "history");
+      const full = await file.snapshot(record);
       // Navigation and the snapshot after it read no history: the leaf only splits the cached branch.
       const snapshotAt = async (count: number) => {
-        const {turns} = await pi.store.navigation(id, full.history);
-        await pi.store.show(id, turns, count, undefined);
-        const snapshot = await pi.store.snapshot(id, {previous: full.history});
+        read.mockClear();
+        await file.show((await file.navigation()).turns, count, undefined);
+        const snapshot = await file.snapshot(record);
         expect(read).not.toHaveBeenCalled();
-        return snapshot.session;
+        return snapshot;
       };
 
       const undone = await snapshotAt(1);
       expect(userTexts(undone.entries)).toEqual(["First"]);
       expect(userTexts(undone.undone)).toEqual(["Second"]);
       expect((await snapshotAt(0)).entries).toEqual([]);
-      expect((await snapshotAt(2)).entries).toEqual(full.session.entries);
-      // Undo and redo forked nothing: the root is still the only conversation.
-      expect((await file.state()).branch).toBe(1);
-      expect(await file.view(2).catch(() => undefined)).toBeUndefined();
+      expect((await snapshotAt(2)).entries).toEqual(full.entries);
 
-      await pi.store.show(id, (await pi.store.navigation(id, full.history)).turns, 1, undefined);
-      const undoneHistory = (await pi.store.snapshot(id, {previous: full.history})).history;
+      // Sending from an undone leaf forks once; the new branch reuses the cache through the fork point.
+      await snapshotAt(1);
       await send("Branch");
-      const state = await file.state();
-      expect(state.branch).not.toBe(1);
-      expect(state.leaf).toBeUndefined();
-      // The forked branch reuses the cached entries through its fork point and reads only after it.
       read.mockClear();
-      const branched = await pi.store.snapshot(id, {previous: undoneHistory});
+      const branched = await file.snapshot(record);
       expect(read).not.toHaveBeenCalled();
-      expect(branched.session.entries).toEqual((await pi.store.snapshot(id)).session.entries);
-      expect(userTexts(branched.session.entries)).toEqual(["First", "Branch"]);
-      expect(branched.session.undone).toEqual([]);
+      expect(userTexts(branched.entries)).toEqual(["First", "Branch"]);
+      expect(branched.undone).toEqual([]);
+      expect((await pi.store.file(id)) === file).toBe(true);
 
       pi.faux.setResponses([fauxAssistantMessage("Compacted summary")]);
-      await file.compact();
-      const compacted = await pi.store.snapshot(id, {previous: branched.history});
-      expect(compacted.session.entries.at(-1)?.kind).toBe("pi.compaction");
-      expect(compacted.session.entries).toEqual((await pi.store.snapshot(id)).session.entries);
+      await file.compact(model);
+      expect((await file.snapshot(record)).entries.at(-1)?.kind).toBe("pi.compaction");
     } finally {
       await pi.unregister();
     }
@@ -114,24 +106,23 @@ describe("session store", () => {
       tools: () => [],
       settings: () => SettingsManager.inMemory(),
     });
-    await store.create({id: "s1", projectPath: project});
+    const record = await store.create({id: "s1", projectPath: project});
     const session = await store.file("s1");
-    const turnModel = {provider: "anthropic", modelId: "m", thinkingLevel: "off"};
-    await session.configure(turnModel);
     const before = {checkpointId: "c1", sessionId: "s1", status: "disabled"} as const;
-    const submitted = await session.submit({
+    const submitted = await session.send({
       content: "What does hello.txt say?",
       record: {contentParts: [{type: "text", text: "What does hello.txt say?"}], capture: false, before},
+      model: {provider: "anthropic", modelId: "m", thinkingLevel: "off"},
     });
     expect((await submitted.wait()).status).toBe("done");
-    const {session: snapshot} = await store.snapshot("s1");
+    const snapshot = await session.snapshot(record);
     const [user] = snapshot.entries;
     expect(snapshot.entries.map((entry) => entry.kind)).toEqual(["pi.user", "pi.assistant", "pi.tool-result", "pi.assistant"]);
     expect(user?.contentParts).toEqual([{type: "text", text: "What does hello.txt say?"}]);
     expect(snapshot).not.toHaveProperty("turns");
     expect(snapshot.entries[2]?.model?.[0]).toMatchObject({role: "toolResult", toolName: "read", content: [{type: "text", text: "hi there\n"}]});
     expect(systemPrompt).toContain("read: Read file contents");
-    expect((await session.state()).turns).toMatchObject({[String(user!.id)]: {before: {checkpointId: "c1"}}});
+    expect(await session.turnRecords()).toMatchObject({[String(user!.id)]: {before: {checkpointId: "c1"}}});
     await store.dispose();
     faux.unregister();
   });
