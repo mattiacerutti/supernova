@@ -17,6 +17,7 @@ All notable changes to Supernova are documented in this file.
 
 ### Fixed
 
+- Fixed desktop development failing with “Electron uninstall” because dependency installation did not download the Electron binary.
 - Fixed terminal tabs failing to start in packaged desktop builds because their native dependencies were missing.
 - Fixed project expansion animations in the sidebar during development.
 - Fixed sidebar and workspace widths animating during window resizing and growing back after being constrained by a narrower window.
