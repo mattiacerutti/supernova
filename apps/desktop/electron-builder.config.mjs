@@ -17,7 +17,9 @@ const config = {
   files: ["out/**", "package.json"],
   extraResources: [
     {from: "resources/icons", to: "icons"},
-    {from: "../server/dist", to: "server", filter: ["cli.js", "tools/**", "node_modules/**"]},
+    {from: "../server/dist", to: "server", filter: ["cli.js", "tools/**"]},
+    // electron-builder excludes a root node_modules directory, even when explicitly included in a filter.
+    {from: "../server/dist/node_modules", to: "server/node_modules"},
     {from: "../../packages/web/dist", to: "web"},
   ],
   win: {
