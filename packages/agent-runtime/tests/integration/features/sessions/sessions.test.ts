@@ -165,6 +165,7 @@ describe("forking a Pi session", () => {
     const fork = await pi.sessions.fork({sessionId, turnId: turnIds[0]!});
 
     expect(fork.id).not.toBe(sessionId);
+    expect(fork.parentSessionId).toBe(sessionId);
     expect(fork).toMatchObject({title: "Original title", undoneTurns: []});
     expect(fork.turns.map((turn) => turn.userMessage.contentParts)).toEqual([[{text: "First", type: "text"}]]);
     expect((await pi.sessions.get({sessionId})).turns).toHaveLength(2);

@@ -7,7 +7,7 @@ import type {PiModel} from "@supernova/agent-runtime/pi/sdk";
 import type {ResourceCache} from "@supernova/agent-runtime/pi/resource-cache";
 import type {PiSdk, PiSessionManager} from "@supernova/agent-runtime/pi/sdk";
 import {restoreModels} from "@supernova/agent-runtime/pi/lib/models/refresh-models";
-import {openSessionById} from "@supernova/agent-runtime/pi/lib/session/open-session";
+import {openSessionById, parentSessionId} from "@supernova/agent-runtime/pi/lib/session/open-session";
 import {sessionWorkspace} from "@supernova/agent-runtime/pi/lib/session/worktree-entry";
 import type {AgentSessionFactory} from "@supernova/agent-runtime/features/session-runtime/worker/agent-session-factory";
 import type {CheckpointStore} from "@supernova/agent-runtime/features/session-runtime/checkpoints/checkpoint-store";
@@ -457,10 +457,10 @@ export class SessionWorker {
       sessionId: this.sessionId,
       summary: {
         id: agentSession.sessionManager.getSessionId(),
-        forked: agentSession.sessionManager.getHeader()?.parentSession !== undefined,
+        parentSessionId: parentSessionId(agentSession.sessionManager),
         title: agentSession.sessionManager.getSessionName() ?? "Untitled session",
         updatedAt: new Date().toISOString(),
-        worktree: worktree !== undefined,
+        worktree,
       },
     });
   }

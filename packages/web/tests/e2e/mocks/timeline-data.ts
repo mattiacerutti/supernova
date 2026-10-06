@@ -56,7 +56,6 @@ function historySession(input: {readonly historyTurnCount: number; readonly id: 
 
   return {
     context: {contextWindow: 200_000, usedTokens: 20_000},
-    forked: false,
     id: input.id,
     modelReference: timelineModel,
     projectPath: TIMELINE_PROJECT_PATH,
@@ -80,7 +79,7 @@ export function createTimelineSessions(): Map<string, Session> {
 
 /** Builds a summary for the real project-session list UI. */
 export function timelineSessionSummary(session: Session): SessionSummary {
-  return {forked: false, id: session.id, title: session.title, updatedAt: session.updatedAt, worktree: false};
+  return {id: session.id, title: session.title, updatedAt: session.updatedAt};
 }
 
 /** Formats a unique full-height line emitted by the stress stream. */
