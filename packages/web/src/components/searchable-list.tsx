@@ -48,8 +48,12 @@ type SearchableListProps<TItem> = StaticSearchableListProps<TItem> | Virtualized
 /** Renders a keyboard and pointer navigable searchable list for command-style dialogs. */
 export default function SearchableList<TItem>(props: SearchableListProps<TItem>) {
   const {activeIndex, className, getItemKey, isItemSelectable = () => true, items, listStatus, onActiveIndexChange, onSelect, onSubmit, onTab, renderInput, renderItem} = props;
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  // A hover is remembered with the active index it set, so it only counts while that is still the active index. When
+  // the owner moves the highlight itself (a new query, entering a folder), the hover is stale and the keyboard wins.
+  const [hover, setHover] = useState<{readonly activeIndex: number; readonly index: number} | null>(null);
   const [selectionSource, setSelectionSource] = useState<"keyboard" | "mouse">("keyboard");
+  const hoveredIndex = hover !== null && hover.activeIndex === activeIndex ? hover.index : null;
+  const setHoveredIndex = (index: number | null): void => setHover(index === null ? null : {activeIndex: index, index});
   const scrollParentRef = useRef<HTMLDivElement>(null);
 
   const virtualized = props.virtualized === true;

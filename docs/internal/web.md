@@ -14,7 +14,7 @@ Feature-first, with a small set of typed shared folders. The layout follows [bul
 ```
 src/
   api/          app-wide server data (configuration); same rules as a feature api/ folder
-  app/          bootstrap and composition: app, providers, router, routes, layout/ (shell + sidebar)
+  app/          bootstrap and composition: app, command-palette/ (features composed into the palette), layout/ (shell + sidebar), providers/ (query, runtime client, session sync), routes/ (router + route components)
   components/   shared UI; layouts/ for page shells, ui/ for design-system primitives
   config/       runtime constants (app environment)
   features/     product areas: projects, sessions, settings, updates, workspace
@@ -103,14 +103,14 @@ See [Development](development.md#verification) for verification and the test wor
 - Derive values from store state when possible instead of duplicating derived state.
 - Store actions take data and change state. They do not take callbacks, navigate, show toasts, or otherwise reach into the UI; a component reads store state and reacts to it.
 - Live session state has one home, `stores/sessions-store`, and one way in, `api/sessions-sync`:
-  - `syncSessions` (started once in `app/providers.tsx`) keeps the runtime's report of every open session (activity, setup step, problem, summary) in the store.
+  - `syncSessions` (started once in `app/providers/providers.tsx`) keeps the runtime's report of every open session (activity, setup step, problem, summary) in the store.
   - `followSession` reads a session's document into the store, then keeps it live while anyone follows it. `useFollowSession` follows the session a page shows.
   - The store also holds optimism: what the user did that the runtime does not show yet (`message`, `navigation`, `stopping`, `title`, …). A command patches its field when the user acts and clears it when it settles.
   - `lib/session-view` decides what is shown from the store: `sessionView` for a page, `sessionStatus` for a row, `projectSessions` for a listing. It is the only place optimism is applied. Components read it through `useSession` and `useSessionStatus` (`hooks/use-session`) and `useListProjectSessions`.
   - A new optimistic command adds a field to `SessionOptimism`, patches it in its command, and reads it in `lib/session-view`.
 - React Query holds what is fetched on request: listings, models, suggestions, workspace data. Live session state is never written into it.
 - Session listings and search are paged on the server: `useListProjectSessions` and `useSearchSessions` are infinite queries over cursors, and nothing loads every session to filter or slice it. Rows already loaded stay current from the store; a pin is optimism (`pinned`) like a rename (`title`).
-- App-wide reactions to server state are in `app/providers.tsx`: everything is read again after a reconnect, and workspace data after any run ends.
+- App-wide reactions to server state are in `app/providers/providers.tsx`: everything is read again after a reconnect, and workspace data after any run ends.
 
 ## UI language and design style
 

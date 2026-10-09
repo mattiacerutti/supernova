@@ -196,6 +196,17 @@
   }
 }
 
+/* For loading text that should only appear when loading is slow: set the delay on the animation and use `both`. */
+@keyframes fade-in-delayed {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
 @keyframes session-stream-fade-in {
   0% {
     opacity: 0.18;

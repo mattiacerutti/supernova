@@ -1,5 +1,7 @@
+import {formatForDisplay, useHotkey} from "@tanstack/react-hotkeys";
 import {useCanGoBack, useParams, useRouter, useRouterState} from "@tanstack/react-router";
 import type {ReactNode} from "react";
+import AppCommandPalette from "@/app/command-palette/command-palette";
 import Sidebar from "@/app/layout/sidebar";
 import {useSidebarVisibility} from "@/app/layout/use-sidebar-visibility";
 import SidebarLayout, {SidebarLayoutContent, SidebarLayoutSidebar, SidebarLayoutTitlebar} from "@/components/layouts/sidebar-layout";
@@ -8,7 +10,7 @@ import IconButton from "@/components/ui/icon-button";
 import {isDesktopEnvironment} from "@/config/app-environment";
 import {EMPTY_LAYOUT, MIN_WORKSPACE_PANEL_WIDTH, useWorkspacePanelStore} from "@/features/workspace/stores/workspace-panel-store";
 import {maxPanelWidth} from "@/components/layouts/panel-layout";
-import {MIN_SIDEBAR_WIDTH, useSidebarStore} from "@/stores/sidebar-store";
+import {MIN_SIDEBAR_WIDTH, SIDEBAR_HOTKEY, useSidebarStore} from "@/stores/sidebar-store";
 
 /** Back/forward for the desktop shell, where navigation stays inside the window. */
 function HistoryNavigation() {
@@ -49,6 +51,8 @@ export default function AppLayout(props: AppLayoutProps) {
   const workspaceOpen = useWorkspacePanelStore((state) => (sessionId === undefined ? false : (state.layouts[sessionId] ?? EMPTY_LAYOUT).open));
   const reservedContentWidth = workspaceOpen ? MIN_WORKSPACE_PANEL_WIDTH : 0;
 
+  useHotkey(SIDEBAR_HOTKEY, toggleSidebar);
+
   const handleSidebarWidthChange = (width: number): void => {
     setSidebarWidth(width, maxPanelWidth(window.innerWidth, MIN_SIDEBAR_WIDTH, reservedContentWidth));
   };
@@ -56,7 +60,7 @@ export default function AppLayout(props: AppLayoutProps) {
   return (
     <SidebarLayout minSidebarWidth={MIN_SIDEBAR_WIDTH} reservedContentWidth={reservedContentWidth} sidebarWidth={sidebarWidth}>
       <SidebarLayoutTitlebar sidebarVisible={sidebarVisible}>
-        <IconButton className="size-7" label="Toggle sidebar" onClick={toggleSidebar}>
+        <IconButton className="size-7" label="Toggle sidebar" onClick={toggleSidebar} title={`Toggle sidebar (${formatForDisplay(SIDEBAR_HOTKEY)})`}>
           <Icon name="panel-left" size="sm" />
         </IconButton>
         {isDesktopEnvironment && <HistoryNavigation />}
@@ -65,6 +69,7 @@ export default function AppLayout(props: AppLayoutProps) {
         <Sidebar />
       </SidebarLayoutSidebar>
       <SidebarLayoutContent sidebarVisible={sidebarVisible}>{children}</SidebarLayoutContent>
+      <AppCommandPalette />
     </SidebarLayout>
   );
 }

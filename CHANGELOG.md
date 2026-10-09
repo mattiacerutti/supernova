@@ -8,6 +8,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Added
 
+- Added a command palette, opened with ⌘K (Ctrl+K on Windows and Linux) or the sidebar's Search button. It searches sessions and actions together, starts a new session in the current project or a chosen one, and opens projects without leaving the palette.
+- Added keyboard shortcuts to show and hide the sidebar (⌘B, Ctrl+B on Windows and Linux) and the workspace panel (⌥⌘B, Ctrl+Alt+B).
 - Added worktree sessions: two pickers under the composer choose whether a new session runs in the project's current checkout or in a new Git worktree branched off a chosen base branch. The worktree gets a random `supernova/<adjective>-<noun>` branch, a "Creating worktree" marker shows in the timeline while it is set up, worktree sessions carry a marker in the sidebar and their branch under the composer, and archiving one asks whether to remove its worktree and branch.
 - Added a Terminal tab to the workspace panel: a shell on the server in the session's worktree or project. Several can be open per session; a shell keeps running while you switch sessions and ends when its tab is closed, the session is archived, or the server stops.
 
@@ -18,11 +20,15 @@ All notable changes to Supernova are documented in this file.
 
 ### Fixed
 
+- Fixed desktop development failing with “Electron uninstall” because dependency installation did not download the Electron binary.
+- Fixed terminal tabs failing to start in packaged desktop builds because their native dependencies were missing.
 - Fixed project expansion animations in the sidebar during development.
 - Fixed sidebar and workspace widths animating during window resizing and growing back after being constrained by a narrower window.
 - Fixed the composer controls briefly disabling when returning to a project's new-session screen.
 
 ### Removed
+
+- Removed the separate session search and open project dialogs; the command palette replaces both.
 
 ## [0.5.0]
 

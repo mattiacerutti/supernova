@@ -5,6 +5,8 @@ const SIDEBAR_SECTIONS_STORAGE_KEY = "supernova-sidebar-sections";
 const EXPANDED_PROJECTS_STORAGE_VALUE_KEY = "expandedProjects";
 const DEFAULT_SIDEBAR_WIDTH = 288;
 export const MIN_SIDEBAR_WIDTH = 240;
+/** The shortcut that shows and hides the sidebar, as in VS Code. */
+export const SIDEBAR_HOTKEY = "Mod+B";
 const MAX_SIDEBAR_WIDTH = 480;
 
 interface SidebarState {
