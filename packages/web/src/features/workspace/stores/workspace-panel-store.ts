@@ -94,6 +94,9 @@ interface WorkspacePanelState {
   readonly updateTab: <TTab extends WorkspacePanelTab>(sessionId: string, tabId: string, update: (tab: TTab) => TTab) => void;
 }
 
+/** The shortcut that shows and hides the workspace panel, as VS Code does for its secondary sidebar. */
+export const WORKSPACE_PANEL_HOTKEY = "Mod+Alt+B";
+
 export const useWorkspacePanelStore = create<WorkspacePanelState>()(
   persist(
     (set) => {

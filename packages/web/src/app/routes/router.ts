@@ -1,5 +1,5 @@
 import {createRootRoute, createRoute, createRouter, redirect} from "@tanstack/react-router";
-import {HomeLayoutRoute, HomeRoute, RootRoute, SessionRoute, SettingsSectionRoute} from "@/app/routes";
+import {HomeLayoutRoute, HomeRoute, RootRoute, SessionRoute, SettingsSectionRoute} from "@/app/routes/routes";
 import {useProjectsStore} from "@/features/projects/stores/projects-store";
 import {useComposerDraftsStore} from "@/features/sessions/stores/composer/composer-drafts-store";
 import {defaultSettingsSectionId, settingsSections} from "@/features/settings/pages/settings-sections";

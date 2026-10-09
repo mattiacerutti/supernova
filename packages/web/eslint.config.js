@@ -10,7 +10,7 @@ import {fileURLToPath} from "node:url";
 
 const tsconfigRootDir = dirname(fileURLToPath(import.meta.url));
 
-const features = ["projects", "sessions", "settings", "updates", "workspace"];
+const features = ["command-palette", "projects", "sessions", "settings", "updates", "workspace"];
 
 /** Everything in a feature except the folders other features may consume. */
 const featurePrivateFolders = ["api", "hooks", "lib", "pages", "stores"];

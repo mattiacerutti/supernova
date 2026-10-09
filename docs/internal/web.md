@@ -14,7 +14,7 @@ Feature-first, with a small set of typed shared folders. The layout follows [bul
 ```
 src/
   api/          app-wide server data (configuration); same rules as a feature api/ folder
-  app/          bootstrap and composition: app, providers, router, routes, layout/ (shell + sidebar), session-events-provider
+  app/          bootstrap and composition: app, command-palette/ (features composed into the palette), layout/ (shell + sidebar), providers/ (query, RPC, session events), routes/ (router + route components)
   components/   shared UI; layouts/ for page shells, ui/ for design-system primitives
   config/       runtime constants (app environment)
   features/     product areas: projects, sessions, settings, updates, workspace

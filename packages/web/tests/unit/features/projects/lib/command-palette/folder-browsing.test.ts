@@ -1,12 +1,15 @@
 import {describe, expect, it} from "vitest";
 import {
+  buildFolderBrowserRows,
+  filterFolderSuggestions,
   formatSuggestionPath,
   getProjectBrowseDirectoryPath,
   getProjectBrowseLeafPath,
   getProjectBrowseParentPath,
+  resolveFolderPath,
   resolveProjectBrowsePath,
   withTrailingProjectPathSeparator,
-} from "@/features/projects/lib/folder-browsing";
+} from "@/features/projects/lib/command-palette/folder-browsing";
 
 describe("folder browsing helpers", () => {
   it.each([
@@ -47,5 +50,47 @@ describe("folder browsing helpers", () => {
 
   it("appends a slash-delimited trailing separator", () => {
     expect(withTrailingProjectPathSeparator(String.raw`C:\Users\person\repo`)).toBe("C:/Users/person/repo/");
+  });
+});
+
+describe("folder browser rows and resolution", () => {
+  const listing = {
+    homePath: "/home/person",
+    query: "/home/person/",
+    queryPath: "/home/person",
+    queryPathType: "directory" as const,
+    suggestions: [
+      {name: ".config", path: "/home/person/.config"},
+      {name: "repo", path: "/home/person/repo"},
+      {name: "repo-two", path: "/home/person/repo-two"},
+    ],
+  };
+
+  it("filters folders by the typed leaf and hides dot folders unless asked for", () => {
+    expect(filterFolderSuggestions(listing, "").map((folder) => folder.name)).toEqual(["repo", "repo-two"]);
+    expect(filterFolderSuggestions(listing, "RE").map((folder) => folder.name)).toEqual(["repo", "repo-two"]);
+    expect(filterFolderSuggestions(listing, ".").map((folder) => folder.name)).toEqual([".config"]);
+  });
+
+  it("resolves the typed path to the listed folder, an exact child, or a missing folder", () => {
+    expect(resolveFolderPath("/home/person/", listing)).toEqual({path: "/home/person", type: "directory"});
+    expect(resolveFolderPath("/home/person/repo", listing)).toEqual({path: "/home/person/repo", type: "directory"});
+    expect(resolveFolderPath("/home/person/new", listing)).toEqual({path: "/home/person/new", type: "missing"});
+  });
+
+  it("lists recent projects only while nothing is typed, then the parent and the folders", () => {
+    const folders = listing.suggestions.slice(1);
+    expect(buildFolderBrowserRows({folders, projectPath: "", recentProjectPaths: ["/work/app"]})).toEqual([
+      {id: "recent-projects", title: "Recent projects", type: "header"},
+      {kind: "recent", path: "/work/app", type: "folder"},
+      {id: "open-project", title: "Open project", type: "header"},
+      {kind: "folder", path: "/home/person/repo", type: "folder"},
+      {kind: "folder", path: "/home/person/repo-two", type: "folder"},
+    ]);
+    expect(buildFolderBrowserRows({folders, projectPath: "/home/person/re", recentProjectPaths: ["/work/app"]})).toEqual([
+      {kind: "parent", path: "/home/", type: "folder"},
+      {kind: "folder", path: "/home/person/repo", type: "folder"},
+      {kind: "folder", path: "/home/person/repo-two", type: "folder"},
+    ]);
   });
 });

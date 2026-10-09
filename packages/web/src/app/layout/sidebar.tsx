@@ -1,53 +1,65 @@
+import {useQueryClient} from "@tanstack/react-query";
 import {Link, useLocation} from "@tanstack/react-router";
+import type {ReactNode} from "react";
 import Button from "@/components/ui/button";
 import type {ButtonProps} from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import type {IconName} from "@/components/ui/icon";
 import IconButton from "@/components/ui/icon-button";
+import Kbd from "@/components/ui/kbd";
 import type {MouseEvent} from "react";
-import {useState} from "react";
 import UpdateButton from "@/features/updates/components/update-button";
-import OpenProjectDialog from "@/features/projects/components/open-project-dialog";
-import SortableProjectList from "@/features/projects/components/sortable-project-list";
-import SearchSessionsDialog from "@/features/sessions/components/sidebar/search-sessions-dialog";
+import {listFolderSuggestionsQueryOptions} from "@/features/projects/api/command-palette/list-folder-suggestions";
+import SortableProjectList from "@/features/projects/components/sidebar/sortable-project-list";
 import {useProjectsStore} from "@/features/projects/stores/projects-store";
 import {cn} from "@/lib/cn";
+import {COMMAND_PALETTE_HOTKEY, useCommandPaletteStore} from "@/features/command-palette/stores/command-palette-store";
+import type {CommandPalettePage} from "@/features/command-palette/types/command-palette";
 import {useSidebarStore} from "@/stores/sidebar-store";
 
 interface SidebarAction {
   readonly icon: IconName;
   readonly id: string;
   readonly label: string;
+  /** The palette page the action opens; absent opens the palette's root list. */
+  readonly page?: CommandPalettePage;
+  readonly trailing?: ReactNode;
 }
 
 const SIDEBAR_ACTIONS: readonly SidebarAction[] = [
-  {id: "new-project", icon: "folder", label: "New project"},
-  {id: "search", icon: "search", label: "Search"},
+  {id: "new-project", icon: "folder", label: "New project", page: "open-project"},
+  {id: "search", icon: "search", label: "Search", trailing: <Kbd className="opacity-0 transition-opacity group-hover:opacity-100" hotkeys={[COMMAND_PALETTE_HOTKEY]} />},
 ];
 
 interface SidebarActionButtonProps extends Omit<ButtonProps, "children" | "onClick"> {
   readonly action: SidebarAction;
-  readonly onClick: (actionId: string) => void;
 }
 
 function SidebarActionButton(props: SidebarActionButtonProps) {
-  const {action, className, onClick, ...buttonProps} = props;
+  const {action, className, ...buttonProps} = props;
+  const openPalette = useCommandPaletteStore((state) => state.openPalette);
+  const queryClient = useQueryClient();
 
   const handleClick = (): void => {
-    onClick(action.id);
+    openPalette(action.page);
+  };
+
+  // Hovering New project starts loading the home folder, so the page usually opens with its folders already there.
+  const handlePointerEnter = (): void => {
+    if (action.page === "open-project") void queryClient.prefetchQuery(listFolderSuggestionsQueryOptions(""));
   };
 
   return (
-    <Button className={cn("gap-2", className)} onClick={handleClick} size="sm" variant="primary" {...buttonProps}>
+    <Button className={cn("group gap-2", className)} onClick={handleClick} onPointerEnter={handlePointerEnter} size="sm" variant="primary" {...buttonProps}>
       <Icon className="text-ink-muted" name={action.icon} size="sm" />
       <span className="flex-1">{action.label}</span>
+      {action.trailing}
     </Button>
   );
 }
 
 export default function Sidebar() {
   const collapseAllProjects = useSidebarStore((state) => state.collapseAllProjects);
-  const expandProject = useSidebarStore((state) => state.expandProject);
   const expandedProjects = useSidebarStore((state) => state.expandedProjects);
   const isPinnedCollapsed = useSidebarStore((state) => state.isPinnedCollapsed);
   const isProjectsCollapsed = useSidebarStore((state) => state.isProjectsCollapsed);
@@ -62,55 +74,21 @@ export default function Sidebar() {
 
   const activeSessionId = location.pathname.startsWith("/session/") && location.pathname !== "/session/new" ? location.pathname.slice("/session/".length) : "";
 
-  const [openProjectDialogOpen, setOpenProjectDialogOpen] = useState(false);
-  const [searchSessionsDialogOpen, setSearchSessionsDialogOpen] = useState(false);
-
-  const addProject = useProjectsStore((state) => state.addProject);
+  const openPalette = useCommandPaletteStore((state) => state.openPalette);
 
   const handleProjectsActionClick = (event: MouseEvent<HTMLDivElement>): void => {
     event.stopPropagation();
   };
 
-  const handleOpenProjectDialog = (): void => {
-    setOpenProjectDialogOpen(true);
-  };
-
-  const handleCloseProjectDialog = (): void => {
-    setOpenProjectDialogOpen(false);
-  };
-
-  const handleOpenSearchSessionsDialog = (): void => {
-    setSearchSessionsDialogOpen(true);
-  };
-
-  const handleCloseSearchSessionsDialog = (): void => {
-    setSearchSessionsDialogOpen(false);
-  };
-
-  const handleSidebarActionClick = (actionId: string): void => {
-    if (actionId === "new-project") {
-      handleOpenProjectDialog();
-      return;
-    }
-
-    if (actionId === "search") {
-      handleOpenSearchSessionsDialog();
-    }
-  };
-
-  const handleOpenProject = (projectPath: string): void => {
-    const project = addProject(projectPath);
-    if (project) {
-      expandProject(project.id);
-    }
-    setOpenProjectDialogOpen(false);
+  const handleOpenProjectPage = (): void => {
+    openPalette("open-project");
   };
 
   return (
     <aside className="flex h-full w-full shrink-0 flex-col">
       <div className="space-y-0.5 px-3 pb-4 pt-1">
         {SIDEBAR_ACTIONS.map((action) => (
-          <SidebarActionButton action={action} key={action.id} onClick={handleSidebarActionClick} />
+          <SidebarActionButton action={action} key={action.id} />
         ))}
       </div>
 
@@ -162,7 +140,7 @@ export default function Sidebar() {
               <Icon name="filter" size="xs" />
             </IconButton>
             */}
-            <IconButton className="size-6" label="New project" onClick={handleOpenProjectDialog}>
+            <IconButton className="size-6" label="New project" onClick={handleOpenProjectPage}>
               <Icon name="folder-plus" size="xs" />
             </IconButton>
           </div>
@@ -197,8 +175,6 @@ export default function Sidebar() {
         </Link>
         <UpdateButton className="ml-auto shrink-0" />
       </div>
-      <OpenProjectDialog onClose={handleCloseProjectDialog} onOpenProject={handleOpenProject} open={openProjectDialogOpen} />
-      <SearchSessionsDialog onClose={handleCloseSearchSessionsDialog} open={searchSessionsDialogOpen} projects={projects} />
     </aside>
   );
 }

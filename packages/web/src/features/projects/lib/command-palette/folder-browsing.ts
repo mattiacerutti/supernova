@@ -1,9 +1,27 @@
+import type {FolderSuggestionsListResult} from "@supernova/contracts/folders/procedures";
+import type {CommandPaletteHeaderRow} from "@/features/command-palette/types/command-palette";
 import {normalizePathSeparators, normalizeProjectPath} from "@/lib/project-paths";
 
 export interface FormattedSuggestionPath {
   readonly name: string;
   readonly parent: string;
   readonly suffix: string;
+}
+
+/** A folder the browser lists, which can be entered or opened. */
+export interface FolderBrowserFolderRow {
+  readonly type: "folder";
+  readonly kind: "folder" | "parent" | "recent";
+  readonly path: string;
+}
+
+/** A row in the folder browser: a section heading or a folder. */
+export type FolderBrowserRow = CommandPaletteHeaderRow | FolderBrowserFolderRow;
+
+/** What the typed path points at, once the listing for its folder has loaded. */
+export interface ResolvedFolderPath {
+  readonly path: string;
+  readonly type: FolderSuggestionsListResult["queryPathType"];
 }
 
 function pathUsesCaseInsensitivePrefix(path: string): boolean {
@@ -62,7 +80,7 @@ export function withTrailingProjectPathSeparator(projectPath: string): string {
   return normalized.endsWith("/") ? normalized : `${normalized}/`;
 }
 
-/** Formats a folder suggestion into parent/name pieces for the open-project dialog. */
+/** Formats a folder suggestion into parent/name pieces for the folder browser. */
 export function formatSuggestionPath(displayPath: string, homePath: string | undefined): FormattedSuggestionPath {
   const trimmedPath = normalizeProjectPath(displayPath);
   const normalizedHomePath = homePath ? normalizeProjectPath(homePath) : undefined;
@@ -78,4 +96,51 @@ export function formatSuggestionPath(displayPath: string, homePath: string | und
     parent: displayTrimmedPath.slice(0, lastSlashIndex + 1),
     suffix: "/",
   };
+}
+
+/** The folders in `listing` that the typed leaf matches; hidden folders only when the leaf starts with a dot. */
+export function filterFolderSuggestions(listing: FolderSuggestionsListResult, leafPath: string): FolderSuggestionsListResult["suggestions"] {
+  const lowerLeafPath = leafPath.toLowerCase();
+  const showHidden = leafPath.startsWith(".");
+  return listing.suggestions.filter((folder) => folder.name.toLowerCase().startsWith(lowerLeafPath) && (showHidden || !folder.name.startsWith(".")));
+}
+
+/**
+ * What the typed path points at: the listed folder itself when the path ends in a separator, a matching child when the
+ * leaf names one exactly, and otherwise a folder that does not exist yet.
+ */
+export function resolveFolderPath(projectPath: string, listing: FolderSuggestionsListResult): ResolvedFolderPath {
+  if (hasTrailingProjectPathSeparator(projectPath)) return {path: listing.queryPath, type: listing.queryPathType};
+
+  const leafPath = getProjectBrowseLeafPath(projectPath);
+  const exactFolder = listing.suggestions.find((folder) => folder.name === leafPath);
+  if (exactFolder) return {path: exactFolder.path, type: "directory"};
+
+  return {path: resolveProjectBrowsePath(listing.queryPath, leafPath), type: "missing"};
+}
+
+interface BuildFolderBrowserRowsInput {
+  readonly folders: FolderSuggestionsListResult["suggestions"];
+  readonly projectPath: string;
+  readonly recentProjectPaths: readonly string[];
+}
+
+/** The folder browser's rows: recent projects while nothing is typed, then the parent folder and the matching folders. */
+export function buildFolderBrowserRows(input: BuildFolderBrowserRowsInput): FolderBrowserRow[] {
+  const {folders, projectPath, recentProjectPaths} = input;
+  const rows: FolderBrowserRow[] = [];
+
+  if (projectPath.trim().length === 0) {
+    if (recentProjectPaths.length > 0) {
+      rows.push({id: "recent-projects", title: "Recent projects", type: "header"});
+      rows.push(...recentProjectPaths.map((path): FolderBrowserRow => ({kind: "recent", path, type: "folder"})));
+    }
+    rows.push({id: "open-project", title: "Open project", type: "header"});
+  }
+
+  const parentPath = getProjectBrowseParentPath(getProjectBrowseDirectoryPath(projectPath));
+  if (parentPath) rows.push({kind: "parent", path: parentPath, type: "folder"});
+  rows.push(...folders.map((folder): FolderBrowserRow => ({kind: "folder", path: folder.path, type: "folder"})));
+
+  return rows;
 }

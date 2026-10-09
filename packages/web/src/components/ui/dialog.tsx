@@ -7,6 +7,8 @@ interface DialogProps {
   readonly children: ReactNode;
   readonly className?: string;
   readonly containerClassName?: string;
+  /** Keeps the title for assistive technology but hides the header row, for dialogs whose content leads with its own input. */
+  readonly hideHeader?: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly onOpenChangeComplete?: (open: boolean) => void;
   readonly open: boolean;
@@ -14,7 +16,7 @@ interface DialogProps {
 }
 
 export default function Dialog(props: DialogProps) {
-  const {children, className, containerClassName, onOpenChange, onOpenChangeComplete, open, title} = props;
+  const {children, className, containerClassName, hideHeader = false, onOpenChange, onOpenChangeComplete, open, title} = props;
 
   // The dialog is portaled, but React events still bubble through the tree that rendered it. A dialog opened from a
   // clickable row (a sidebar session) must not activate that row when the user clicks inside it.
@@ -42,14 +44,18 @@ export default function Dialog(props: DialogProps) {
               )}
               data-slot="dialog-content"
             >
-              <div className="flex shrink-0 items-center justify-between px-5 pb-1 pt-5" data-slot="dialog-header">
-                <BaseDialog.Title className="text-base font-medium text-ink" data-slot="dialog-title">
-                  {title}
-                </BaseDialog.Title>
-                <BaseDialog.Close aria-label="Close dialog" className="grid cursor-pointer place-items-center text-ink-muted hover:text-ink-strong">
-                  <Icon name="x" size="md" className="-mb-0.5" />
-                </BaseDialog.Close>
-              </div>
+              {hideHeader ? (
+                <BaseDialog.Title className="sr-only">{title}</BaseDialog.Title>
+              ) : (
+                <div className="flex shrink-0 items-center justify-between px-5 pb-1 pt-5" data-slot="dialog-header">
+                  <BaseDialog.Title className="text-base font-medium text-ink" data-slot="dialog-title">
+                    {title}
+                  </BaseDialog.Title>
+                  <BaseDialog.Close aria-label="Close dialog" className="grid cursor-pointer place-items-center text-ink-muted hover:text-ink-strong">
+                    <Icon name="x" size="md" className="-mb-0.5" />
+                  </BaseDialog.Close>
+                </div>
+              )}
 
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-5" data-slot="dialog-body">
                 {children}

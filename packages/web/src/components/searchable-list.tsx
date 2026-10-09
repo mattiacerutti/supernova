@@ -3,6 +3,9 @@ import {useRef, useState} from "react";
 import {useVirtualizer} from "@tanstack/react-virtual";
 import {cn} from "@/lib/cn";
 
+/** How close to the end, in pixels, a scroll asks a paged list for more. */
+const END_REACHED_DISTANCE = 200;
+
 interface SearchableListInputProps {
   readonly onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void;
 }
@@ -35,6 +38,8 @@ interface StaticSearchableListProps<TItem> extends SearchableListBaseProps<TItem
 
 interface VirtualizedSearchableListProps<TItem> extends SearchableListBaseProps<TItem> {
   readonly estimateSize: (index: number) => number;
+  /** Called when the list is scrolled near its end; for loading the next page of a paged list. */
+  readonly onEndReached?: () => void;
   readonly virtualized: true;
 }
 
@@ -43,8 +48,12 @@ type SearchableListProps<TItem> = StaticSearchableListProps<TItem> | Virtualized
 /** Renders a keyboard and pointer navigable searchable list for command-style dialogs. */
 export default function SearchableList<TItem>(props: SearchableListProps<TItem>) {
   const {activeIndex, className, getItemKey, isItemSelectable = () => true, items, listStatus, onActiveIndexChange, onSelect, onSubmit, onTab, renderInput, renderItem} = props;
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  // A hover is remembered with the active index it set, so it only counts while that is still the active index. When
+  // the owner moves the highlight itself (a new query, entering a folder), the hover is stale and the keyboard wins.
+  const [hover, setHover] = useState<{readonly activeIndex: number; readonly index: number} | null>(null);
   const [selectionSource, setSelectionSource] = useState<"keyboard" | "mouse">("keyboard");
+  const hoveredIndex = hover !== null && hover.activeIndex === activeIndex ? hover.index : null;
+  const setHoveredIndex = (index: number | null): void => setHover(index === null ? null : {activeIndex: index, index});
   const scrollParentRef = useRef<HTMLDivElement>(null);
 
   const virtualized = props.virtualized === true;
@@ -130,10 +139,16 @@ export default function SearchableList<TItem>(props: SearchableListProps<TItem>)
 
   const virtualItems = virtualizer.getVirtualItems();
 
+  const handleScroll = (): void => {
+    const scrollParent = scrollParentRef.current;
+    if (!virtualized || !props.onEndReached || !scrollParent) return;
+    if (scrollParent.scrollHeight - scrollParent.scrollTop - scrollParent.clientHeight < END_REACHED_DISTANCE) props.onEndReached();
+  };
+
   return (
     <>
       {renderInput({onKeyDown: handleKeyDown})}
-      <div className={cn("scroll-fade-y -ml-3 -mr-5 min-h-0 flex-1 overflow-y-auto pb-2 pr-2", className)} ref={scrollParentRef}>
+      <div className={cn("scroll-fade-y -ml-3 -mr-5 min-h-0 flex-1 overflow-y-auto pb-2 pr-2", className)} onScroll={handleScroll} ref={scrollParentRef}>
         {listStatus}
         {virtualized && (
           <div className="relative w-full" style={{height: `${virtualizer.getTotalSize()}px`}}>
