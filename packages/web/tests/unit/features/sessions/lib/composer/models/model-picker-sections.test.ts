@@ -1,4 +1,4 @@
-import type {ModelDetails} from "@supernova/contracts/sessions/schemas";
+import type {ModelDetails} from "@supernova/contracts/services/sessions/schemas";
 import {describe, expect, it} from "vitest";
 import {getModelPickerSections} from "@/features/sessions/lib/composer/models/model-picker-sections";
 import {modelKey} from "@/features/sessions/lib/composer/models/model-reference";

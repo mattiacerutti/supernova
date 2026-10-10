@@ -1,36 +1,35 @@
-import type {AssistantTurnEvent, CompactionTurnEvent, ReasoningTurnEvent, ToolTurnEvent, Turn} from "@supernova/contracts/sessions/schemas";
+import type {SessionAssistantEvent, SessionCompactionEvent, SessionReasoningEvent, SessionTurn, SessionWorkEvent} from "@/features/sessions/types/session-turn";
 import {describe, expect, it} from "vitest";
 import {buildSessionTimeline} from "@/features/sessions/lib/timeline/rows/build-session-timeline";
 import {formatDuration} from "@/features/sessions/lib/timeline/work/work-timeline-items";
-
-const model = {id: "claude-sonnet", providerId: "anthropic", thinkingLevel: "high"};
 
 function timestamp(second: number): string {
   return `2026-01-01T00:00:${second.toString().padStart(2, "0")}.000Z`;
 }
 
-function reasoningEvent(id: string, second: number): ReasoningTurnEvent {
+function reasoningEvent(id: string, second: number): SessionReasoningEvent {
   return {content: `reasoning ${id}`, id, timestamp: timestamp(second), type: "reasoning"};
 }
 
-function toolEvent(id: string, second: number, kind: "command" | "file-read" = "file-read"): ToolTurnEvent {
-  return {id, timestamp: timestamp(second), tool: {kind, status: "pending"}, type: "tool"};
+function toolEvent(id: string, second: number, kind: "command" | "file-read" = "file-read"): SessionWorkEvent {
+  const name = kind === "command" ? "bash" : "read";
+  return {id, timestamp: timestamp(second), tool: {arguments: undefined, callId: id, name, output: undefined, result: undefined, status: "pending"}, type: "tool"};
 }
 
-function assistantEvent(id: string, second: number): AssistantTurnEvent {
+function assistantEvent(id: string, second: number): SessionAssistantEvent {
   return {content: `assistant ${id}`, id, timestamp: timestamp(second), type: "assistant"};
 }
 
-function compactionEvent(id: string, second: number): CompactionTurnEvent {
+function compactionEvent(id: string, second: number): SessionCompactionEvent {
   return {id, status: "completed", summary: `summary ${id}`, timestamp: timestamp(second), type: "compaction"};
 }
 
-function turn(overrides: Partial<Turn>): Turn {
+function turn(overrides: Partial<SessionTurn>): SessionTurn {
   return {
     completedAt: timestamp(10),
     events: [],
     id: "turn-1",
-    modelReference: model,
+    startedAt: timestamp(0),
     status: "completed",
     userMessage: {contentParts: [{text: "Ship it", type: "text"}], id: "user-1", timestamp: timestamp(0)},
     ...overrides,
@@ -58,9 +57,9 @@ describe("buildSessionTimeline", () => {
         id: "turn-work:turn-1",
         items: [
           {event: {id: "reasoning-1"}, live: false, type: "reasoning"},
-          {events: [{tool: {kind: "command"}, type: "tool"}], id: "work:turn-1:0", live: false, type: "work"},
+          {events: [{tool: {name: "bash"}, type: "tool"}], id: "work:turn-1:0", live: false, type: "work"},
           {event: {id: "assistant-1"}, final: false, type: "assistant"},
-          {events: [{tool: {kind: "file-read"}, type: "tool"}], id: "work:turn-1:1", live: false, type: "work"},
+          {events: [{tool: {name: "read"}, type: "tool"}], id: "work:turn-1:1", live: false, type: "work"},
         ],
         type: "turn-work",
       },
@@ -89,7 +88,7 @@ describe("buildSessionTimeline", () => {
     expect(endsOnWork.committedItems).toMatchObject([
       {type: "user"},
       {event: {id: "assistant-1"}, final: false, spacing: "work", type: "assistant"},
-      {events: [{tool: {kind: "command"}}], final: true, spacing: "work", type: "work"},
+      {events: [{tool: {name: "bash"}}], final: true, spacing: "work", type: "work"},
     ]);
 
     const toolsOnly = buildSessionTimeline({live: false, liveTurn: null, turns: [turn({events: [reasoningEvent("reasoning-1", 1), toolEvent("tool-1", 3, "command")]})]});

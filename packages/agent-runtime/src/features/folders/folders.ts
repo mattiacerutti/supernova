@@ -7,7 +7,7 @@ import type {
   FolderFilesListResult,
   FolderSuggestionsListPayload,
   FolderSuggestionsListResult,
-} from "@supernova/contracts/folders/procedures";
+} from "@supernova/contracts/services/folders/procedures";
 import {searchProjectFiles} from "@supernova/agent-runtime/features/folders/lib/file-search";
 import {readFolderPathType, searchFolders} from "@supernova/agent-runtime/features/folders/lib/folder-search";
 import {normalizePathForDisplay, resolveFolderPath} from "@supernova/agent-runtime/features/folders/lib/paths";

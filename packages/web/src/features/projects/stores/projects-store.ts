@@ -66,7 +66,7 @@ export const useProjectsStore = create<ProjectsState>()(
     }),
     {
       name: PROJECTS_STORAGE_KEY,
-      // Earlier versions stored `pinned` as optional and kept session pins here; see session-pins-store for those.
+      // Earlier versions stored `pinned` as optional and kept session pins here; session pins now live on the server.
       merge: (persisted, current) => ({
         ...current,
         projects: ((persisted as Partial<ProjectsState> | undefined)?.projects ?? []).map((project) => ({

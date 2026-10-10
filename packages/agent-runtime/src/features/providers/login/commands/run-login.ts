@@ -1,6 +1,6 @@
 import type {AuthEvent, AuthPrompt} from "@earendil-works/pi-ai";
-import type {ProviderLoginAuthType} from "@supernova/contracts/providers/procedures";
-import type {ProviderLoginStep, ProviderLoginTextInput} from "@supernova/contracts/providers/schemas";
+import type {ProviderLoginAuthType} from "@supernova/contracts/services/providers/procedures";
+import type {ProviderLoginStep, ProviderLoginTextInput} from "@supernova/contracts/services/providers/schemas";
 import type {LoginSessions} from "@supernova/agent-runtime/features/providers/login/login-sessions";
 import {errorMessage} from "@supernova/agent-runtime/lib/errors";
 import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";

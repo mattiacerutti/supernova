@@ -1,4 +1,4 @@
-import type {WorkspaceChangeEntry} from "@supernova/contracts/workspace/schemas";
+import type {WorkspaceChangeEntry} from "@supernova/contracts/services/workspace/schemas";
 import {describe, expect, it} from "vitest";
 import {buildFlatList, buildTree} from "@/features/workspace/lib/file-tree";
 import type {FileTreeNode} from "@/features/workspace/lib/file-tree";

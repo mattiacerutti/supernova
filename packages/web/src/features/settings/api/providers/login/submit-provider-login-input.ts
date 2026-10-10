@@ -1,7 +1,7 @@
+import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import {useMutation} from "@tanstack/react-query";
-import {Effect} from "effect";
-import {eq} from "@/rpc/effect-query";
-import {RpcProtocolClientService} from "@/rpc/transport/client";
+import {unwrap} from "@/runtime/runtime-result";
+import {useRuntime} from "@/runtime/use-runtime";
 
 interface SubmitProviderLoginInputInput {
   readonly input: string;
@@ -9,9 +9,8 @@ interface SubmitProviderLoginInputInput {
 }
 
 export function useSubmitProviderLoginInput() {
-  return useMutation(
-    eq.mutationOptions({
-      mutationFn: (input: SubmitProviderLoginInputInput) => Effect.flatMap(Effect.service(RpcProtocolClientService), (rpc) => rpc.submitProviderLoginInput(input)),
-    })
-  );
+  const runtime = useRuntime();
+  return useMutation({
+    mutationFn: (input: SubmitProviderLoginInputInput) => unwrap(runtime.providers.submitLoginInput(input, BACKGROUND_CONTEXT)),
+  });
 }

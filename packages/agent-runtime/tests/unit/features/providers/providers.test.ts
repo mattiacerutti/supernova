@@ -1,6 +1,6 @@
 import type {AuthInteraction} from "@earendil-works/pi-ai";
 import {afterEach, describe, expect, it, vi} from "vitest";
-import type {ProviderLoginSession} from "@supernova/contracts/providers/schemas";
+import type {ProviderLoginSession} from "@supernova/contracts/services/providers/schemas";
 import {LoginSessions} from "@supernova/agent-runtime/features/providers/login/login-sessions";
 import {Providers} from "@supernova/agent-runtime/features/providers/providers";
 import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";
@@ -162,12 +162,22 @@ describe("managing Pi provider authentication", () => {
     const started = await providers.startLogin({authType: "oauth", providerId: "anthropic"});
     expect(started.step.type).toBe("info");
 
-    // Watching starts from the current state (the login has already reached the selector), then follows each change.
-    for await (const session of providers.watchLoginSession({loginSessionId: started.loginSessionId})) {
-      streamed.push(session);
-      if (session.step.type === "select") providers.submitLoginInput({input: "device", loginSessionId: started.loginSessionId});
-      if (session.step.type === "device_code") break;
-    }
+    // The logins' replicated state delivers the current step (the login has already reached the selector), then each change.
+    const reachedDeviceCode = new Promise<void>((resolve) => {
+      let last: ProviderLoginSession | undefined;
+      const stop = providers.logins.subscribe((state) => {
+        const session = state.logins[started.loginSessionId];
+        if (!session || session === last) return;
+        last = session;
+        streamed.push(session);
+        if (session.step.type === "select") providers.submitLoginInput({input: "device", loginSessionId: started.loginSessionId});
+        if (session.step.type === "device_code") {
+          stop();
+          resolve();
+        }
+      });
+    });
+    await reachedDeviceCode;
 
     expect(streamed.map((session) => session.step.type)).toEqual(["select", "authenticating", "device_code"]);
     expect(streamed[0]?.step).toMatchObject({message: "Select login method", type: "select"});

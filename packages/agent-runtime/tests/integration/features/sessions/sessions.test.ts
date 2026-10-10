@@ -1,72 +1,75 @@
 import {existsSync} from "node:fs";
-import {mkdtemp, readdir, readFile} from "node:fs/promises";
-import {tmpdir} from "node:os";
 import {join} from "node:path";
-import {SessionManager} from "@earendil-works/pi-coding-agent";
 import {afterEach, describe, expect, it} from "vitest";
-import {CHECKPOINT_CURSOR_CUSTOM_TYPE, CHECKPOINT_CUSTOM_TYPE} from "@supernova/agent-runtime/pi/lib/session/checkpoint-entries";
-import {createPiTestRuntime, fauxAssistantMessage, selectedModelReference} from "@tests/support/session-runtime";
-import {cleanupTempDirs} from "@tests/support/async";
+import {assistantTexts, createPiTestRuntime, fauxAssistantMessage, selectedModelReference, selectedPiModel, turnContents, turnIds} from "@tests/support/session-runtime";
 
-describe("Pi sessions service", () => {
-  const runtimes: Array<{unregister: () => void}> = [];
-  const tempDirs: string[] = [];
+describe("sessions", () => {
+  const runtimes: Array<{unregister: () => Promise<void>}> = [];
 
-  afterEach(() => {
-    while (runtimes.length > 0) runtimes.pop()?.unregister();
-    cleanupTempDirs(tempDirs);
+  afterEach(async () => {
+    while (runtimes.length > 0) await runtimes.pop()?.unregister();
   });
 
-  it("creates a persisted empty session", async () => {
-    const sessionDir = await mkdtemp(join(tmpdir(), "supernova-sessions-"));
-    tempDirs.push(sessionDir);
-    const pi = await createPiTestRuntime({sessionDir});
-    runtimes.push(pi);
-
-    const session = await pi.sessions.create({id: crypto.randomUUID(), projectPath: "/workspace"});
-    const created = pi.getSession(session.id);
-
-    expect(session).toMatchObject({id: session.id, projectPath: "/workspace", title: "Untitled session", turns: []});
-    const header = JSON.parse(await readFile(created?.info.path ?? "", "utf8"));
-    expect(header).toMatchObject({cwd: "/workspace", id: session.id, timestamp: session.updatedAt, type: "session"});
-  });
-
-  it("renames a persisted session", async () => {
+  it("creates a persisted empty session under the client's id and rejects a second one with it", async () => {
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const {info} = pi.createSession();
+
+    const session = await pi.sessions.create({id: "client-chosen-id", projectPath: "/workspace"});
+
+    expect(session).toMatchObject({id: "client-chosen-id", projectPath: "/workspace", title: "Untitled session", entries: []});
+    expect(existsSync(join(pi.sessionStorageRoot, "client-chosen-id", "session.sqlite"))).toBe(true);
+    expect(await pi.store.find("client-chosen-id")).toMatchObject({projectPath: "/workspace"});
+    await expect(pi.sessions.create({id: "client-chosen-id", projectPath: "/workspace"})).rejects.toMatchObject({
+      _tag: "CreateSessionError",
+      message: "A session with this id already exists.",
+    });
+  });
+
+  it("deletes the session file and its record", async () => {
+    const pi = await createPiTestRuntime();
+    runtimes.push(pi);
+    const session = await pi.sessions.create({id: crypto.randomUUID(), projectPath: "/workspace"});
+
+    await pi.sessions.delete({sessionId: session.id});
+
+    expect(existsSync(join(pi.sessionStorageRoot, session.id))).toBe(false);
+    expect(await pi.store.find(session.id)).toBeUndefined();
+  });
+
+  it("renames a session; the generated title never replaces a rename", async () => {
+    const pi = await createPiTestRuntime();
+    runtimes.push(pi);
+    const {info} = await pi.createSession();
 
     const session = await pi.sessions.rename({sessionId: info.id, title: "Investigate flaky tests"});
-
-    const renamed = await pi.sessions.get({sessionId: info.id});
+    await pi.appendConversation(info.id);
 
     expect(session).toMatchObject({id: info.id, title: "Investigate flaky tests"});
-    expect(renamed).toMatchObject({id: info.id, title: "Investigate flaky tests"});
+    expect(await pi.sessions.get({sessionId: info.id})).toMatchObject({title: "Investigate flaky tests"});
+    await expect(pi.sessions.rename({sessionId: info.id, title: "  "})).rejects.toMatchObject({_tag: "RenameSessionError"});
   });
 
-  it("loads turns from raw branch history instead of compacted context", async () => {
-    const pi = await createPiTestRuntime();
+  it("loads the full history, keeping compaction summaries where they happened", async () => {
+    const pi = await createPiTestRuntime({settings: {compaction: {enabled: false}}});
     runtimes.push(pi);
-    const {info, manager} = pi.createSession();
-    manager.appendModelChange(selectedModelReference.providerId, selectedModelReference.id);
-    manager.appendThinkingLevelChange("high");
-    pi.appendConversation(manager, {assistantText: "Original answer", requestText: "Before compaction"});
-    manager.appendCompaction("Summary that should not render", "recent-user", 1000);
-    pi.appendConversation(manager, {assistantText: "Recent answer", requestText: "After compaction"});
+    const {info} = await pi.createSession();
+    await pi.appendConversation(info.id, {assistantText: "Original answer", requestText: "Before compaction"});
+    await pi.appendConversation(info.id, {assistantText: "Large answer", requestText: "x".repeat(selectedPiModel.contextWindow * 4)});
+    pi.faux.setResponses([fauxAssistantMessage("Summary of the work")]);
+    await pi.sessionRuntime.compact({modelReference: selectedModelReference, sessionId: info.id});
+    await pi.appendConversation(info.id, {assistantText: "Recent answer", requestText: "After compaction"});
 
     const session = await pi.sessions.get({sessionId: info.id});
 
-    expect(session.title).toBe("Before compaction");
-    expect(session.turns).toMatchObject([
-      {
-        events: [
-          {content: "Original answer", type: "assistant"},
-          {status: "completed", summary: "Summary that should not render", type: "compaction"},
-        ],
-        userMessage: {contentParts: [{text: "Before compaction", type: "text"}]},
-      },
-      {events: [{content: "Recent answer", type: "assistant"}], userMessage: {contentParts: [{text: "After compaction", type: "text"}]}},
+    expect(session.title).toBe("Generated title");
+    expect(turnContents(session).map((parts) => parts[0])).toEqual([
+      {text: "Before compaction", type: "text"},
+      {text: "x".repeat(selectedPiModel.contextWindow * 4), type: "text"},
+      {text: "After compaction", type: "text"},
     ]);
+    expect(session.entries.map((entry) => entry.kind)).toEqual(["pi.user", "pi.assistant", "pi.user", "pi.assistant", "pi.compaction", "pi.user", "pi.assistant"]);
+    expect(JSON.stringify(session.entries[4])).toContain("Summary of the work");
+    expect(assistantTexts(session)).toEqual(["Original answer", "Large answer", "Recent answer"]);
   });
 
   it("refreshes credentials and model metadata before listing models", async () => {
@@ -80,105 +83,49 @@ describe("Pi sessions service", () => {
   });
 });
 
-describe("creating a session under a client id", () => {
-  const runtimes: Array<{unregister: () => void}> = [];
-  const tempDirs: string[] = [];
+describe("forking a session", () => {
+  const runtimes: Array<{unregister: () => Promise<void>}> = [];
 
-  afterEach(() => {
-    while (runtimes.length > 0) runtimes.pop()?.unregister();
-    cleanupTempDirs(tempDirs);
+  afterEach(async () => {
+    while (runtimes.length > 0) await runtimes.pop()?.unregister();
   });
 
-  async function sessionDir(): Promise<string> {
-    const dir = await mkdtemp(join(tmpdir(), "supernova-sessions-"));
-    tempDirs.push(dir);
-    return dir;
-  }
-
-  it("uses the client's id and rejects a second session with it", async () => {
-    const pi = await createPiTestRuntime({sessionDir: await sessionDir()});
-    runtimes.push(pi);
-
-    const session = await pi.sessions.create({id: "client-chosen-id", projectPath: "/workspace"});
-
-    expect(session.id).toBe("client-chosen-id");
-    await expect(pi.sessions.create({id: "client-chosen-id", projectPath: "/workspace"})).rejects.toMatchObject({
-      _tag: "CreateSessionError",
-      message: "A session with this id already exists.",
-    });
-  });
-
-  it("rejects an id Pi would not accept as a file name", async () => {
-    const pi = await createPiTestRuntime({sessionDir: await sessionDir()});
-    runtimes.push(pi);
-
-    await expect(pi.sessions.create({id: "../escape", projectPath: "/workspace"})).rejects.toThrow();
-    expect(pi.getSession("../escape")).toBeUndefined();
-  });
-
-  it("deletes the session file", async () => {
-    const pi = await createPiTestRuntime({sessionDir: await sessionDir()});
-    runtimes.push(pi);
-    const session = await pi.sessions.create({id: crypto.randomUUID(), projectPath: "/workspace"});
-    const path = pi.getSession(session.id)?.info.path ?? "";
-    expect(existsSync(path)).toBe(true);
-
-    await pi.sessions.delete({sessionId: session.id});
-
-    expect(existsSync(path)).toBe(false);
-  });
-});
-
-describe("forking a Pi session", () => {
-  const runtimes: Array<{unregister: () => void}> = [];
-  const tempDirs: string[] = [];
-
-  afterEach(() => {
-    while (runtimes.length > 0) runtimes.pop()?.unregister();
-    cleanupTempDirs(tempDirs);
-  });
-
-  /** A persisted session with two completed turns, each closed by an after-turn checkpoint and cursor. */
   async function sessionWithTwoTurns() {
-    const dir = await mkdtemp(join(tmpdir(), "supernova-sessions-"));
-    tempDirs.push(dir);
-    const pi = await createPiTestRuntime({reopenManagers: true, sessionDir: dir});
+    const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const manager = pi.sdk.SessionManager.create("/workspace", undefined);
-    manager.appendModelChange(selectedModelReference.providerId, selectedModelReference.id);
-    manager.appendSessionInfo("Original title");
-    const turnIds: string[] = [];
-    for (const text of ["First", "Second"]) {
-      manager.appendCustomEntry(CHECKPOINT_CUSTOM_TYPE, {checkpointId: `${text}-before`, phase: "before-turn"});
-      manager.appendCustomEntry("supernova.user-message-content-parts", {contentParts: [{text, type: "text"}]});
-      turnIds.push(manager.appendMessage({content: [{text, type: "text"}], role: "user", timestamp: 1}));
-      manager.appendMessage(fauxAssistantMessage(`${text} answer`, {timestamp: 2}));
-      manager.appendCustomEntry(CHECKPOINT_CUSTOM_TYPE, {checkpointId: `${text}-after`, phase: "after-turn"});
-      manager.appendCustomEntry(CHECKPOINT_CURSOR_CUSTOM_TYPE, {leafEntryId: manager.getLeafId()});
-    }
-    return {dir, pi, sessionId: manager.getSessionId(), turnIds};
+    const {info} = await pi.createSession();
+    await pi.sessions.rename({sessionId: info.id, title: "Original title"});
+    await pi.appendConversation(info.id, {requestText: "First", assistantText: "First answer"});
+    await pi.appendConversation(info.id, {requestText: "Second", assistantText: "Second answer"});
+    return {pi, sessionId: info.id, turnIds: turnIds(await pi.sessions.get({sessionId: info.id}))};
   }
 
   it("copies the conversation through the chosen turn into a new session and leaves the source intact", async () => {
-    const {dir, pi, sessionId, turnIds} = await sessionWithTwoTurns();
+    const {pi, sessionId, turnIds} = await sessionWithTwoTurns();
 
     const fork = await pi.sessions.fork({sessionId, turnId: turnIds[0]!});
 
     expect(fork.id).not.toBe(sessionId);
-    expect(fork).toMatchObject({title: "Original title", undoneTurns: []});
-    expect(fork.turns.map((turn) => turn.userMessage.contentParts)).toEqual([[{text: "First", type: "text"}]]);
-    expect((await pi.sessions.get({sessionId})).turns).toHaveLength(2);
+    expect(fork).toMatchObject({
+      forked: true,
+      title: "Original title",
+      undone: [],
+      agent: {model: {modelId: selectedModelReference.id, provider: selectedModelReference.providerId}, thinkingLevel: "high"},
+    });
+    expect(turnContents(fork)).toEqual([[{text: "First", type: "text"}]]);
+    expect(turnContents(await pi.sessions.get({sessionId}))).toHaveLength(2);
+    expect((await pi.projects.listSessions({projectPath: pi.defaultProjectRoot, limit: 10})).sessions.map((session) => session.id)).toContain(fork.id);
 
-    const forkFile = (await readdir(dir)).find((name) => name.endsWith(`_${fork.id}.jsonl`));
-    const reopened = SessionManager.open(join(dir, forkFile ?? ""));
-    expect(reopened.getHeader()?.parentSession).toBe(pi.getSession(sessionId)?.info.path);
-    // The cursor makes the fork point visible; the marker after it separates copied history from the fork's own turns.
-    expect(
-      reopened
-        .getBranch()
-        .slice(-2)
-        .map((entry) => (entry.type === "custom" ? entry.customType : entry.type))
-    ).toEqual([CHECKPOINT_CURSOR_CUSTOM_TYPE, "supernova.fork"]);
+    // The fork continues on its own with the copied history as context.
+    let providerTexts: string[] = [];
+    pi.faux.setResponses([
+      (context) => {
+        providerTexts = context.messages.flatMap((message) => (message.role === "user" && typeof message.content === "string" ? [message.content] : []));
+        return fauxAssistantMessage("Forked answer");
+      },
+    ]);
+    await pi.sendMessage({message: "Fork continues", modelReference: selectedModelReference, sessionId: fork.id});
+    expect(providerTexts).toEqual(["First", "Fork continues"]);
   });
 
   it("rejects a turn that is not in the session", async () => {

@@ -1,7 +1,7 @@
 import {realpath} from "node:fs/promises";
 import {homedir} from "node:os";
 import {basename, join, resolve} from "node:path";
-import type {SessionWorktree} from "@supernova/contracts/sessions/schemas";
+import type {SessionWorktree} from "@supernova/contracts/services/sessions/schemas";
 import {randomBranchName, uniqueBranchName} from "@supernova/agent-runtime/features/worktrees/lib/branch-name";
 import {optionalGit, runGit, runGitResult} from "@supernova/agent-runtime/lib/git-process";
 

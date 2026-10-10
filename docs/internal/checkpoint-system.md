@@ -6,19 +6,19 @@ Supernova checkpoints keep conversation navigation and workspace files at the sa
 
 The system coordinates two durable state models:
 
-- Pi's append-only session tree, which stores conversation turns and navigation cursors.
+- The session's durable engine file, whose conversations hold the turns and whose `supernova.session` document holds each turn's checkpoints and how much of the branch is shown.
 - App-owned shadow Git repositories, which store workspace file snapshots.
 
-A checkpoint navigation succeeds only when the workspace restore completes before the Pi branch and cursor move.
+A checkpoint navigation succeeds only when the workspace restore completes before the shown turns change.
 
 ## Architecture overview
 
 ```mermaid
 flowchart LR
   CLIENT[Web client] --> RPC[Agent RPC]
-  RPC --> POOL[SessionPool]
-  POOL --> RUNTIME[SessionWorker]
-  RUNTIME --> PI[Pi SessionManager]
+  RPC --> FEATURE[SessionRuntime]
+  FEATURE --> RUNTIME[SessionWorker]
+  RUNTIME --> PI[Session engine file]
   RUNTIME --> STORE[CheckpointStore]
   STORE --> MANIFESTS[Checkpoint manifests]
   STORE --> SHADOWS[Shadow Git repositories]
@@ -30,16 +30,16 @@ The architecture is divided into four responsibilities:
 
 | Subsystem              | Responsibility                                                                                                                                      |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Session orchestration  | Defines turn boundaries, resolves navigation targets, and commits Pi navigation only after workspace restoration.                                   |
+| Session orchestration  | Defines turn boundaries, resolves navigation targets, and commits conversation navigation only after workspace restoration.                         |
 | Workspace coordination | Discovers repositories, persists manifests, and coordinates multi-repository capture, restore, cleanup, and maintenance.                            |
 | Shadow Git storage     | Captures trees and performs comparison, conflict detection, selective restoration, verification, rollback, and garbage collection for one worktree. |
 | Lifecycle integration  | Releases active runtimes before archival and removes session-owned manifests and refs afterward.                                                    |
 
 ## Core invariants
 
-1. A Pi file-checkpoint entry claiming coverage is appended only after its workspace manifest is durable.
+1. A turn record claiming coverage is written only after its workspace manifest is durable.
 2. A checkpoint manifest is published only after every covered repository has a tree and private ref.
-3. Workspace restoration completes and verifies before the Pi branch or cursor moves.
+3. Workspace restoration completes and verifies before the shown turns change.
 4. Restore mutates only paths changed between the current and target checkpoint trees.
 5. The user's Git `HEAD`, branch, index, refs, and stash are never changed.
 6. A direct child repository owns its subtree; a parent repository snapshot excludes that subtree.
@@ -49,37 +49,48 @@ The architecture is divided into four responsibilities:
 
 ## Conversation checkpoint model
 
-Supernova stores two Pi custom-entry types.
+Each session file has one Session-scoped document, `supernova.session` (`pi/lib/session/session-state.ts`):
 
 ```ts
-interface CheckpointEntryData {
+interface CheckpointRef {
   readonly checkpointId: string;
-  readonly phase: "before-turn" | "after-turn";
-  readonly status?: "captured" | "disabled" | "failed";
+  /** The session that captured it; a fork inherits foreign ones. */
+  readonly sessionId: string;
+  readonly status: "captured" | "disabled" | "failed";
 }
 
-interface CheckpointCursorEntryData {
-  readonly leafEntryId: string;
+interface TurnRecord {
+  readonly contentParts: UserMessageContentPart[];
+  readonly capture: boolean;
+  readonly before: CheckpointRef;
+  readonly after?: CheckpointRef; // absent until the turn's run ends
 }
+
+type SessionState = {
+  branch: number; // conversation holding every turn, undone ones included
+  leaf?: number | null; // last shown entry of the branch; absent at its end, null when nothing is shown
+  current?: CheckpointRef; // checkpoint the workspace last matched
+  turns: Record<string, TurnRecord>; // keyed by the turn's user entry id
+};
 ```
 
-- `supernova.checkpoint` associates a Pi node with a workspace manifest.
-- `supernova.checkpoint-cursor` records the visible checkpoint and the redo leaf.
-- The cursor entry's parent is the currently visible checkpoint node.
-- `leafEntryId` is the end of the branch that remains available for redo.
+- A turn is a user entry with a turn record; its id is the user entry id.
+- Undo, redo, and revert only move `leaf`; the branch keeps every turn, so redo shows its later turns again.
+- Sending or compacting from an undone leaf first forks the branch at `leaf` (or starts an empty conversation when nothing is shown) and makes that the branch, which drops the redo path. The engine forks only when the agent acts again.
+- Checkpoint boundaries are per turn, not per entry, so they need no position in the transcript.
 
 ### Checkpoint coverage
 
 `status` records whether a boundary has a durable workspace manifest behind it.
 
-| Status               | Meaning                                                                 |
-| -------------------- | ----------------------------------------------------------------------- |
-| `captured` or absent | A manifest exists for `checkpointId`. Absent entries predate the field. |
-| `failed`             | Capture failed. No manifest was published.                              |
-| `disabled`           | Checkpointing was off for this turn. No capture was attempted.          |
+| Status     | Meaning                                                        |
+| ---------- | -------------------------------------------------------------- |
+| `captured` | A manifest exists for `checkpointId`.                          |
+| `failed`   | Capture failed. No manifest was published.                     |
+| `disabled` | Checkpointing was off for this turn. No capture was attempted. |
 
-Every turn appends both boundary entries and a cursor regardless of coverage, so turn
-boundaries and conversation navigation stay intact when no workspace state was captured.
+Every turn records both boundaries regardless of coverage, so turn boundaries and
+conversation navigation stay intact when no workspace state was captured.
 Workspace restoration requires both the current and target boundary to be captured;
 otherwise navigation moves the conversation alone and leaves files untouched.
 
@@ -105,18 +116,13 @@ its checkpoint. Neither is reported as an uncovered-boundary problem.
 
 ```mermaid
 flowchart LR
-  B1[Before turn 1] --> T1[Turn 1]
-  T1 --> A1[After turn 1]
-  A1 --> B2[Before turn 2]
-  B2 --> T2[Turn 2]
-  T2 --> A2[After turn 2]
-  A2 --> CUR[Cursor parent = A2, leaf = A2]
-
-  UNDO[Undo cursor] -. parent .-> A1
-  UNDO -. leafEntryId .-> A2
+  T1[Turn 1: before B1, after A1] --> T2[Turn 2: before B2, after A2]
+  BRANCH[Branch conversation] --- T1
+  BRANCH --- T2
+  UNDO[leaf after undo: end of turn 1] -. shows .-> T1
 ```
 
-Undo, redo, and revert-to-message resolve different target entries, but all use the same workspace restore operation.
+Undo returns the workspace to the first hidden turn's before-turn checkpoint (keeping manual changes made before that turn was sent); redo and forward revert return it to the last shown turn's after-turn checkpoint. Undo, redo, and revert-to-message resolve different target entries, but all use the same workspace restore operation.
 
 ## Turn lifecycle
 
@@ -125,45 +131,25 @@ A successful turn has a checkpoint on both sides of provider work.
 ```mermaid
 sequenceDiagram
   participant Client
-  participant Send as Session orchestration
+  participant Send as sendMessage
   participant Store as CheckpointStore
-  participant Pi
-  participant Session as Pi SessionManager
+  participant File as SessionFile
+  participant Worker as SessionWorker
 
   Client->>Send: send message
   Send->>Store: capture before-turn checkpoint
-  Store-->>Send: manifest durable
-  Send->>Session: queue before-turn checkpoint entry
-  Send->>Pi: prompt
-  Pi-->>Send: settled
-  Send->>Store: capture after-turn checkpoint
-  Store-->>Send: manifest durable
-  Send->>Session: append after-turn checkpoint entry
-  Send->>Session: append cursor entry
-  Send-->>Client: settled session snapshot
+  Send->>File: submit input
+  File->>File: record the turn under its user entry
+  File->>File: generation, tools (engine)
+  File-->>Worker: run ended (view)
+  Worker->>Store: capture after-turn checkpoint
+  Worker->>File: record after-turn checkpoint
+  Worker-->>Client: session.state (run ended)
 ```
 
-Before starting provider work, `sendMessage()`:
+`sendMessage()` captures the before-turn checkpoint, then submits the input; the engine places an idle session's input at once, and its turn record is written under the new user entry. When the run ends, the worker captures one after-turn checkpoint and records it on every turn that lacks one, including turns finished while the server was down.
 
-1. Opens the Pi session.
-2. Generates a checkpoint ID.
-3. Captures the before-turn workspace state and records the resulting status.
-4. Invalidates an old redo path if the user is branching from an undone checkpoint.
-5. Queues the before-turn checkpoint entry on the active turn.
-
-After Pi settles, it:
-
-1. Generates another checkpoint ID.
-2. Captures the after-turn workspace state and records the resulting status.
-3. Appends the after-turn checkpoint entry.
-4. Appends a cursor pointing to the new leaf.
-5. Publishes the settled session snapshot.
-
-Capture is best-effort. A failed capture marks that boundary `failed` and the turn continues:
-provider work still runs, the after-turn entry and cursor are still appended, and the settled
-snapshot is still published. The turn stays navigable, but navigation across that boundary
-does not restore files. Because the turn proceeds, a turn started from an undone checkpoint
-invalidates the redo path whether or not its capture succeeded.
+Capture is best-effort. A failed capture marks that boundary `failed` and the turn continues: provider work still runs, the after-turn checkpoint is still recorded, and the turn still settles. The turn stays navigable, but navigation across that boundary does not restore files. Because the turn proceeds, a turn started from an undone checkpoint invalidates the redo path whether or not its capture succeeded.
 
 A workspace with no discovered Git repositories still receives valid manifests with empty `repositories` arrays. Conversation undo, redo, and revert therefore continue to work without changing loose files.
 
@@ -428,13 +414,11 @@ sequenceDiagram
   end
   alt all plans succeed
     Store-->>Nav: success
-    Nav->>Pi: branch to target checkpoint
-    Nav->>Pi: append persisted cursor
-    Nav->>Pi: rebuild agent state from visible branch
+    Nav->>Pi: move the leaf to the target turn
   else a plan fails
     Store->>Shadow: best-effort rollback applied plans
     Store-->>Nav: failure
-    Note over Nav,Pi: Pi branch and cursor remain unchanged
+    Note over Nav,Pi: leaf unchanged
   end
 ```
 
@@ -459,14 +443,17 @@ Safety trees are not referenced after the restore call and are eventually eligib
 
 ### Conversation commit
 
-`navigateToCheckpoint()` calls `SessionWorker.restoreCheckpoint()` before mutating Pi state, and only when both the current and target boundaries are captured. Only after restore succeeds, or is skipped because a boundary is uncovered, does it:
+`navigateToTurn()` calls `SessionWorker.restoreCheckpoint()` before changing the conversation, and only when both the current and target boundaries are captured. Only after restore succeeds, or is skipped because a boundary is uncovered, does it:
 
-1. Branch the Pi `SessionManager` to the target checkpoint entry.
-2. Append a checkpoint cursor preserving the redo leaf.
-3. Rebuild the in-memory model, thinking level, and provider messages from the visible branch.
-4. Publish the restored session snapshot.
+1. Move `leaf` to the target turn's last entry.
+2. Record the restored checkpoint as `current`.
+3. Publish the change to the session's state.
 
-A restore failure is converted to `Failed to restore workspace checkpoint.` The Pi branch and cursor do not move.
+The model and thinking level come back with it: the session document reads the branch's `pi.agent` as of the leaf, and the fork a later send makes keeps that copy, so nothing is stored per turn.
+
+A restore failure is converted to `Failed to restore workspace checkpoint.` The leaf does not change.
+
+A forked session copies its source's turn records; their checkpoints keep the source's `sessionId`, so navigating to an inherited captured boundary rejects with `CheckpointInheritedError`.
 
 ## Git and filesystem preservation
 
@@ -490,29 +477,24 @@ A restore failure is converted to `Failed to restore workspace checkpoint.` The 
 
 ## Errors
 
-Checkpoint storage uses ordinary exceptions internally.
-
-At session boundaries:
+Checkpoint storage uses ordinary exceptions internally, except where the client must act on the failure: those are thrown as contract errors where they are detected.
 
 - Capture failures are absorbed and recorded as a `failed` checkpoint boundary instead of failing the turn.
-- Workspace conflicts become `CheckpointConflictError`, the one non-generic checkpoint failure, so clients can offer a forced retry. It carries a fixed message and no paths.
-- Every other restore failure becomes `CheckpointGenericError` with `Failed to restore workspace checkpoint.`
+- A workspace conflict is thrown by the shadow repository as `CheckpointConflictError`, so clients can offer a forced retry. It carries a fixed message and no paths.
+- Navigation throws `CheckpointUncapturedError` and `CheckpointInheritedError` itself when the target cannot be restored without `force`, or at all.
+- Every other restore failure is a plain `Error` with `Failed to restore workspace checkpoint.`, which clients receive as a `GenericError`.
 - Internal Git commands, paths, tree IDs, and manifest details are not sent to clients.
 - Checkpoint failures are not logged by the checkpoint system.
 
-`CheckpointNavigationError` is the union of those two and is the declared error for the undo,
-redo, and revert procedures. Navigation operations throw ordinary exceptions; the session-runtime
-feature's `undoCheckpoint`, `redoCheckpoint`, and `revertToMessage` catch them and classify
-whatever was thrown with `toCheckpointNavigationError()`. That is the single place a navigation
-failure becomes a client-facing error.
+`CheckpointNavigationError` is the union of those three contract errors and is the declared error for the undo, redo, and revert procedures.
 
-The store uses `Promise<void>` rather than booleans so callers cannot accidentally treat a failed capture as a valid checkpoint. `SessionWorker.createCheckpoint()` converts that rejection into a boundary status, which is the only place a capture failure is interpreted.
+The store uses `Promise<void>` rather than booleans so callers cannot accidentally treat a failed capture as a valid checkpoint. `SessionWorker.captureCheckpoint()` converts that rejection into a boundary status, which is the only place a capture failure is interpreted.
 
 ## Session archival and cleanup
 
 Archiving a session follows this order:
 
-1. `the RPC edge` releases and disposes the session runtime.
+1. The archive operation in `session-operations.ts` releases and disposes the session runtime.
 2. The Pi session file moves into the archive directory.
 3. `CheckpointStore.deleteSession()` runs as best-effort cleanup.
 
@@ -562,13 +544,10 @@ Objects available only through the source repository alternate remain dependent 
 
 ## Concurrency and lifecycle
 
-`SessionPool` retains one `SessionWorker` per active session. Runtime work tracking prevents disposal from tearing down a Pi session while accepted work is still settling:
+`SessionRuntime` keeps one `SessionWorker` per session in use. Navigation and compaction run one at a time per session and reject while a run is active, so a restore never races a turn's file changes.
 
-- `beginWork()` creates a completion boundary.
-- `endWork()` releases it.
-- `dispose()` aborts active work, including work still opening its Pi session, waits for completion, unsubscribes, and disposes the Pi session.
-- Session archival releases the runtime before moving the session file or deleting checkpoint refs.
-- Runtime shutdown disposes all retained runtimes.
+- Session archival aborts the session's work, closes its file, then deletes its checkpoint refs.
+- Runtime shutdown closes every session file without aborting work; an interrupted turn resumes, and gets its after-turn checkpoint, when its session next opens.
 
 The checkpoint store serializes capture and restore per canonical project root with an
 in-process keyed lock. Concurrent sessions in the same project queue instead of observing

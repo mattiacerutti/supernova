@@ -1,4 +1,4 @@
-import type {FolderSuggestionsListResult} from "@supernova/contracts/folders/procedures";
+import type {FolderSuggestionsListResult} from "@supernova/contracts/services/folders/procedures";
 import type {CommandPaletteHeaderRow} from "@/features/command-palette/types/command-palette";
 import {normalizePathSeparators, normalizeProjectPath} from "@/lib/project-paths";
 

@@ -1,6 +1,9 @@
-import {ProviderLoginError} from "@supernova/contracts/providers/procedures";
-import type {ProviderLoginSession, ProviderLoginStep} from "@supernova/contracts/providers/schemas";
-import {EventBus} from "@supernova/agent-runtime/lib/event-bus";
+import type {MutableReplicatedState} from "@earendil-works/chord";
+import {copyJson, replicatedState} from "@earendil-works/chord";
+import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
+import {ProviderLoginError} from "@supernova/contracts/services/providers/procedures";
+import type {ProviderLoginSession, ProviderLoginStep} from "@supernova/contracts/services/providers/schemas";
+import type {ProviderLoginsState} from "@supernova/contracts/services/providers/services";
 
 interface LoginWaiter {
   readonly cleanup: () => void;
@@ -22,14 +25,20 @@ interface WaitForInputOptions {
   readonly step: ProviderLoginStep;
 }
 
+/** The session as strict JSON: providers leave optional step fields undefined, which replicated state rejects. */
 function toLoginSession(state: LoginSessionState): ProviderLoginSession {
-  return {loginSessionId: state.loginSessionId, progress: state.progress, providerId: state.providerId, step: state.step};
+  return copyJson(
+    {loginSessionId: state.loginSessionId, progress: state.progress, providerId: state.providerId, step: state.step},
+    {omitUndefinedProperties: true}
+  ) as ProviderLoginSession;
 }
 
-/** In-flight provider logins. Each mutation publishes the new state to every watcher of that session. */
+/** In-flight provider logins. Each mutation publishes the session's new step as replicated state. */
 export class LoginSessions {
+  /** Every login's current step, for clients following one. */
+  public readonly logins: MutableReplicatedState<ProviderLoginsState> = replicatedState<ProviderLoginsState>({logins: {}});
   private readonly sessions = new Map<string, LoginSessionState>();
-  private readonly changes = new EventBus<ProviderLoginSession>();
+  private readonly listeners = new Set<(session: ProviderLoginSession) => void>();
 
   public create(input: {readonly loginSessionId: string; readonly providerId: string}): ProviderLoginSession {
     const state: LoginSessionState = {abortController: new AbortController(), loginSessionId: input.loginSessionId, providerId: input.providerId, step: {type: "starting"}};
@@ -115,31 +124,13 @@ export class LoginSessions {
     });
   }
 
-  /** The current state followed by every later change, until the consumer stops iterating. Subscribes immediately. */
-  public watch(loginSessionId: string): AsyncGenerator<ProviderLoginSession, void, undefined> {
-    const current = this.get(loginSessionId);
-    const changes = this.changes.subscribe();
-    let started = false;
-
-    const next = async (): Promise<IteratorResult<ProviderLoginSession, void>> => {
-      if (!started) {
-        started = true;
-        return {done: false, value: current};
-      }
-      for (let result = await changes.next(); !result.done; result = await changes.next()) {
-        if (result.value.loginSessionId === loginSessionId) return result;
-      }
-      return {done: true, value: undefined};
+  /** Calls `listener` with every later change of a login until the returned function is called. */
+  public onChange(loginSessionId: string, listener: (session: ProviderLoginSession) => void): () => void {
+    const filtered = (session: ProviderLoginSession) => {
+      if (session.loginSessionId === loginSessionId) listener(session);
     };
-
-    return {
-      next,
-      return: () => changes.return(),
-      throw: (error) => changes.throw(error),
-      [Symbol.asyncIterator]() {
-        return this;
-      },
-    };
+    this.listeners.add(filtered);
+    return () => this.listeners.delete(filtered);
   }
 
   private state(loginSessionId: string): LoginSessionState {
@@ -156,7 +147,10 @@ export class LoginSessions {
 
   private publish(state: LoginSessionState): ProviderLoginSession {
     const session = toLoginSession(state);
-    this.changes.publish(session);
+    this.logins.change(BACKGROUND_CONTEXT, (draft) => {
+      draft.logins[session.loginSessionId] = session as (typeof draft.logins)[string];
+    });
+    for (const listener of [...this.listeners]) listener(session);
     return session;
   }
 }

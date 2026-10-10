@@ -1,14 +1,14 @@
-import type {Turn} from "@supernova/contracts/sessions/schemas";
 import {workDuration} from "@/features/sessions/lib/timeline/work/work-timeline-items";
 import type {SessionTimelineItem, SessionTimelineItems, SessionWorkEvent} from "@/features/sessions/types/session-timeline-item";
+import type {SessionTurn} from "@/features/sessions/types/session-turn";
 
 interface BuildSessionTimelineInput {
   readonly live: boolean;
-  readonly liveTurn: Turn | null;
-  readonly turns: readonly Turn[];
+  readonly liveTurn: SessionTurn | null;
+  readonly turns: readonly SessionTurn[];
 }
 
-function turnToTimelineItems(turn: Turn, live: boolean): SessionTimelineItem[] {
+function turnToTimelineItems(turn: SessionTurn, live: boolean): SessionTimelineItem[] {
   const items: SessionTimelineItem[] = [];
 
   let workEvents: SessionWorkEvent[] = [];
@@ -78,8 +78,7 @@ function turnToTimelineItems(turn: Turn, live: boolean): SessionTimelineItem[] {
   items[items.length - 1] = {...last, final: !live, spacing: response ? "message" : "work"};
   if (live || !response || items.length <= 2) return items;
 
-  const startedAt = turn.startedAt ?? turn.userMessage.timestamp ?? turn.events[0]?.timestamp;
-  const durationMs = startedAt === undefined ? undefined : Math.max(0, Date.parse(last.event.timestamp) - Date.parse(startedAt));
+  const durationMs = Math.max(0, Date.parse(last.event.timestamp) - Date.parse(turn.startedAt));
   return [
     items[0]!,
     {durationMs, final: false, id: `turn-work:${turn.id}`, items: items.slice(1, -1), spacing: "work", turnId: turn.id, type: "turn-work"},
@@ -98,12 +97,12 @@ export function buildSessionTimeline(input: BuildSessionTimelineInput): SessionT
 }
 
 /** Builds timeline items for persisted turns. Callers can cache this by committed turn array identity. */
-export function buildCommittedTimelineItems(turns: readonly Turn[]): readonly SessionTimelineItem[] {
+export function buildCommittedTimelineItems(turns: readonly SessionTurn[]): readonly SessionTimelineItem[] {
   return turns.flatMap((turn) => turnToTimelineItems(turn, false));
 }
 
 /** Builds timeline items for the active turn only. */
-export function buildLiveTimelineItems(input: {readonly live: boolean; readonly liveTurn: Turn | null}): readonly SessionTimelineItem[] {
+export function buildLiveTimelineItems(input: {readonly live: boolean; readonly liveTurn: SessionTurn | null}): readonly SessionTimelineItem[] {
   const {live, liveTurn} = input;
   return liveTurn ? turnToTimelineItems(liveTurn, live) : [];
 }

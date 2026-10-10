@@ -4,9 +4,9 @@ Conventions for `packages/agent-runtime`. See [Coding standards](coding-standard
 
 ## Boundaries
 
-The package is plain TypeScript. Effect exists in `rpc/` only, because the wire protocol and contract schemas are Effect. Do not import `effect` anywhere else; `effect/Schema` is allowed for validating against contracts.
+The package is plain TypeScript. Chord (`@earendil-works/chord`) is used where state is published to clients (`lib/document-state.ts`, the session board, terminal output, provider logins); `@earendil-works/pi-server` appears only in `runtime-services.ts`. Contract schemas are Zod; features may parse with them.
 
-Dependencies flow one way: `lib/` ← `pi/` ← `features/` ← `runtime.ts` ← `rpc/`. A feature never depends on another feature, by import or by injection: it does not import one, and its `Deps` does not name one or declare an interface another feature's class happens to satisfy. `pi/` and `lib/` never import a feature. ESLint enforces the import half; the injection half is on you.
+Dependencies flow one way: `lib/` ← `pi/` ← `features/` ← root composition (`runtime.ts`, `runtime-services.ts`, `session-operations.ts`). A feature never depends on another feature, by import or by injection: it does not import one, and its `Deps` does not name one or declare an interface another feature's class happens to satisfy. `pi/` and `lib/` never import a feature. ESLint enforces the import half; the injection half is on you.
 
 Shared serializable contracts belong in `@supernova/contracts`. UI and HTTP routing belong outside this package.
 
@@ -14,11 +14,12 @@ Shared serializable contracts belong in `@supernova/contracts`. UI and HTTP rout
 
 ```
 src/
-  index.ts        public exports: createAgentRuntime, agentRpcLayer
-  runtime.ts      composition root: constructs every class once and owns dispose()
-  rpc/            agent-rpc.ts maps each procedure to a feature function; edge.ts adapts thrown errors
+  index.ts        public exports: createAgentRuntime, runtimeServiceHost
+  runtime.ts             composition root: constructs every class once and owns dispose()
+  runtime-services.ts    remote boundary: exposes the features as Chord services through pi-server
+  session-operations.ts  product operations: coordinates create and archive across features
   lib/            stateless helpers with no Pi or product knowledge
-  pi/             the Pi SDK wrapper
+  pi/             the Pi wrapper: the durable engine and Pi's file formats
   features/       configuration, extensions, folders, projects, providers, session-runtime, sessions, workspace, worktrees
 ```
 
@@ -28,7 +29,7 @@ Where a file goes:
 - Wraps or maps Pi, regardless of how many features use it → `pi/`.
 - Used by one feature → that feature, even if it looks generic.
 - Used by exactly one file → that file.
-- Orchestrates several features (archive a session across `session-runtime` and `projects`, create a session and send its first message) → `rpc/agent-rpc.ts`. It is the only file that sees every feature. If the sequence is not a transport concern but a product rule, the two features are one feature; merge them rather than wiring one into the other.
+- Orchestrates several features (archive a session across `session-runtime` and `projects`, create a session and send its first message) → `session-operations.ts`. These are product operations, independent of transport. Root composition files may coordinate features; features never depend on each other.
 
 There is no `shared/`. A stateful class two features need is either Pi (`pi/`) or has no product owner; the second case has not occurred, so there is no folder for it.
 
@@ -36,7 +37,7 @@ There is no `shared/`. A stateful class two features need is either Pi (`pi/`) o
 
 ```
 features/<name>/
-  <name>.ts     the feature class: one public method per RPC procedure
+  <name>.ts     the feature class: one public method per service member
   lib/          pure helpers used by several methods
   <region>/     a stateful class with everything that serves it
 ```
@@ -49,7 +50,7 @@ Nothing else sits at a feature root.
 
 **A region** exists only when the feature owns a second stateful class. Helpers alone go in `lib/`, not a region. Inside a region:
 
-- The class file(s) at the root, named for the thing (`session-pool.ts`, `login-sessions.ts`). A class that holds resources exposes `dispose()`.
+- The class file(s) at the root, named for the thing (`session-worker.ts`, `login-sessions.ts`). A class that holds resources exposes `dispose()`.
 - `commands/` for functions the class dispatches to.
 - `lib/` for helpers that serve the region.
 - When the region's surface is a function rather than a class, the file takes the region's name (`tools/tools.ts`).
@@ -60,43 +61,56 @@ Group a folder once it holds more than about five files, by what the files are f
 
 ## Errors
 
-Throw the tagged error classes from `@supernova/contracts`. They are the wire format; nothing else is needed inside a feature. `rpc/edge.ts` passes declared errors through and turns anything undeclared into the procedure's generic error with the cause attached. Use `lib/errors.ts` `errorMessage(cause, fallback)` to build messages from unknown causes.
+Throw the tagged error classes from `@supernova/contracts`; nothing else is needed inside a feature. Pi's service protocol carries only its own error codes, so the edge returns failures as data: a `ServiceResult` whose `code` is the contract error's tag. `run()` in `runtime-services.ts` parses the payload, passes errors matching the operation's `error` (the contract's class or `errorUnion` value) through, and turns everything else (an invalid payload, a plain `Error`, a bug) into a `GenericError` with the cause's message; the cause is logged on the server only. `error` also types the method's result: passing an error the contract does not declare fails to compile, but leaving one out does not, so match the contract. Use `lib/errors.ts` `errorMessage(cause, fallback)` to build messages from unknown causes.
 
-Checkpoint navigation is the one place errors are classified below the edge: `features/session-runtime/checkpoints/lib/checkpoint-error.ts` turns a workspace conflict into `CheckpointConflictError` so the client can offer a forced retry. See [Checkpoint system](checkpoint-system.md).
+Throw a contract error where the failure is detected, not by classifying causes later; a checkpoint conflict, for example, is thrown as `CheckpointConflictError` by the shadow repository. See [Checkpoint system](checkpoint-system.md).
 
 ## Streams
 
-Long-lived output is an `AsyncGenerator` built on `lib/event-bus.ts`. Subscribing registers immediately, so subscribe before triggering the work you want to observe. Consumers must `return()` or exit their `for await` to unsubscribe. The RPC edge converts with `Stream.fromAsyncIterable`.
+Anything clients follow over time is Chord replicated state, served as a service's state member: `lib/document-state.ts` publishes whole documents (a session's) as diffed revisions; `SessionBoard`, terminal output (`Terminals.state`, appended per chunk and capped from the front), and provider logins (`LoginSessions.logins`) are mutable replicated state changed in place. Subscribers receive the current value at once and every later revision. Values must be strict JSON: no `undefined` fields.
+
+`lib/event-bus.ts` remains for in-process fan-out.
 
 ## `pi/`
 
 ```
 pi/
-  sdk.ts              PiSdk interface and createPiSdk(); the one seam onto @earendil-works/pi-coding-agent
-  resource-cache.ts   per-project memo of loaded extensions, prompts, and skills
-  config/             resource-loader and settings policy
-  lib/                every Pi ↔ contracts mapping and behavior Pi lacks: turns, content parts, models, session snapshots
+  sdk.ts              PiSdk interface and createPiSdk(); the seam onto @earendil-works/pi-coding-agent, and Pi's HTTP setup
+  resource-cache.ts   per-project memo of loaded extensions, prompts, skills, and context files
+  session-store.ts    SessionStore: the collection of sessions (catalog records) and their open files
+  session-file.ts     SessionFile: one session's Harness, branch and leaf, document build, and actions; the seam onto @earendil-works/pi-durable
+  config/             resource-loader, settings policy, engine settings, and the system prompt
+  extensions/         loadExtensions(): every source of engine extensions a session installs; legacy/ bridges old-SDK extensions
+  lib/                every Pi ↔ contracts mapping and behavior Pi lacks: turns, content parts, models, sessions, tools
 ```
 
-Reach Pi through `Pick<PiSdk, …>`. An object over part of the SDK earns a file only when it holds state or behavior Pi lacks: `resource-cache.ts` does; `openSessionById` is a `lib/` function; a rename of `modelRuntime.getModel` is nothing.
+Reach Pi through `Pick<PiSdk, …>` or `Pick<SessionStore, …>`; only `pi/` imports `@earendil-works/pi-durable`. An object over part of Pi earns a root file only when it holds state or behavior Pi lacks: `resource-cache.ts`, `session-store.ts`, and `session-file.ts` do; `turnPositions` is a `lib/` function.
 
-Inside `pi/` names drop the `Pi` prefix. Outside it, values that hold Pi types keep it (`PiModel`, `PiSessionManager`, `buildPiTurns`) so the reader knows which side of the boundary they are on.
+Two Pi packages, two roles. `@earendil-works/pi-durable` runs agents. `@earendil-works/pi-coding-agent` is used only for what reads files and returns plain data: `ModelRuntime`, `SettingsManager`, skills, context files, prompt templates, extension loading, package management, and tool definitions for their prompt text.
+
+Code ported from Pi because it is not exported (the system prompt in `config/system-prompt.ts`, the HTTP setup in `sdk.ts`) names its upstream file path; replace it with the import if Pi exports it.
+
+`extensions/extensions.ts` is the one place extension sources meet; `SessionStore` installs what it returns and knows nothing else. Pi's durable extension format is not final, so the only source today is `extensions/legacy/`: extensions written for Pi's old SDK, loaded by Pi's loader and mapped onto the engine. `extension-events.ts` maps the old events onto engine hooks and lists which cannot be delivered; `extension-context.ts` is the old SDK's print-mode `ctx`, as Supernova has always bound it. What this means for extension authors is in [Pi compatibility](../pi-compatibility.md#extensions). Nothing outside `legacy/` knows the old shapes, so it is deleted whole when Pi's format lands.
+
+Inside `pi/` names drop the `Pi` prefix. Outside it, values that hold Pi types keep it (`PiModel`) so the reader knows which side of the boundary they are on.
 
 ## `features/session-runtime`
 
-Live execution: send, abort, compact, checkpoint navigation, the event stream. `sessions` is the durable record: create, load, rename. They are separate features because the Pi harness migration replaces this one and barely touches that one (see [Pi harness v2 migration](../pi-harness-v2-migration.md)). Do not reshape `worker/` internals ahead of the migration.
+Live execution: send, abort, compact, checkpoint navigation, and each session's state. `sessions` is the durable record: create, load, rename, fork. See [Session runtime](session-runtime.md).
 
-- `worker/session-pool.ts` keeps one `SessionWorker` per active session.
-- `worker/session-worker.ts` owns the Pi `AgentSession` subscription, revisions, and the live turn.
-- `worker/commands/` are what the pool dispatches to a worker.
-- `checkpoints/` is the store, shadow repositories, and git plumbing; it moves as one unit under the migration.
-- `tools/` are the Pi custom tools registered on every agent session.
+- `worker/session-worker.ts` watches the session's branch, publishes its document as replicated state, and captures after-turn checkpoints.
+- `worker/session-board.ts` is every open session's activity, summary, setup step, and last problem, for clients that have not attached the session.
+- `session-runtime.ts` keeps one `SessionWorker` per session in use and dispatches to it. A worker opens with its file and runs the commands in `worker/commands/`, which receive the worker and use its file, checkpoint, and publication steps.
+- `worker/commands/` are what the feature class dispatches to a worker; `worker/lib/navigate-to-turn.ts` is the one restore-then-show path undo, redo, and revert share.
+- `checkpoints/` is the store, shadow repositories, and git plumbing.
+- `tools/` are Supernova's own tools offered in every session (`web_fetch`).
 
 ## Testing
 
 See [Development](development.md#verification) for verification and the test workflow.
 
-- Tests mirror `src` file for file under `tests/unit` and `tests/integration` (`src/pi/lib/turns/build-turns.ts` → `tests/unit/pi/lib/turns/build-turns.test.ts`). Fixtures live in `tests/support`, named for what they build.
-- Construct the feature class with `Deps` built from Pi's in-memory pieces (`SessionManager.inMemory()`, `registerFauxProvider`) or a temp directory. `tests/support/session-runtime.ts` builds `SessionRuntime` and `Sessions` this way.
-- Assert with `await expect(feature.method(input)).rejects.toMatchObject({_tag: "…"})`. No Effect in tests below `rpc/`.
+- Tests mirror `src` file for file under `tests/unit` and `tests/integration` (`src/pi/lib/models/map-model.ts` → `tests/unit/pi/lib/models/map-model.test.ts`). Fixtures live in `tests/support`, named for what they build.
+- Construct the feature class with `Deps` built from real pieces: `tests/support/session-runtime.ts` builds `SessionRuntime`, `Sessions`, and `Projects` over a real engine with session files in a temp directory, Pi's `ModelRuntime` with `registerFauxProvider`, and in-memory settings. Seed history by running turns against the faux model, not by writing entries.
+- Assert with `await expect(feature.method(input)).rejects.toMatchObject({_tag: "…"})`.
+- Observe session state with `observe()` from `tests/support/session-runtime.ts`: the values a subscriber of the transcript and board received. `tests/support/runtime-server.ts` runs the real service protocol (`pi-server` and `pi-client`) over in-memory bytes for edge tests.
 - Cover runtime behavior, failure handling, stream and session lifecycle, persistence, emitted events, and cleanup. Prefer real in-memory dependencies over mocks.

@@ -5,6 +5,13 @@ import {CONFIG_DIR_NAME, createAgentSession, ModelRuntime, SessionManager, Setti
 import {InMemoryCredentialStore} from "@earendil-works/pi-ai";
 import {afterEach, describe, expect, it, vi} from "vitest";
 import {createPiSdk} from "@supernova/agent-runtime/pi/sdk";
+import type {Message} from "@earendil-works/pi-ai";
+import {getSystemMessageText} from "@earendil-works/pi-ai";
+import {createReadTool} from "@earendil-works/pi-durable/tools";
+import {createPiTestRuntime, fauxAssistantMessage, selectedModelReference} from "@tests/support/session-runtime";
+import type {TSchema} from "@earendil-works/pi-ai";
+import type {ToolDefinition} from "@earendil-works/pi-coding-agent";
+import {createWebFetchTool} from "@supernova/agent-runtime/features/session-runtime/tools/web-fetch-tool";
 import {CustomPiResourceLoader} from "@supernova/agent-runtime/pi/config/resource-loader";
 import {cleanupTempDirs} from "@tests/support/async";
 
@@ -61,10 +68,7 @@ describe("Supernova Pi SDK config", () => {
     await writeSkill(join(project, CONFIG_DIR_NAME, "skills", "pi-skill"), "pi-skill");
 
     const piSdk = await createPiSdk();
-    const loader = piSdk.createResourceLoader({projectPath: project});
-    await loader.reload();
-
-    expect(loader).toBeInstanceOf(CustomPiResourceLoader);
+    const loader = await piSdk.loadResourceLoader({projectPath: project});
     expect(
       loader
         .getSkills()
@@ -328,5 +332,73 @@ export default function(pi) {
     } finally {
       session.dispose();
     }
+  });
+
+  it("preserves the SDK's project prompt and tool set without advertising bash metadata or image reads", async () => {
+    const testProject = await createTestProject();
+    tempDirs.push(testProject.home, testProject.repo);
+    const {home, project} = testProject;
+    await mkdir(join(home, ".agents"), {recursive: true});
+    await writeFile(join(home, ".agents", "AGENTS.md"), "shared user instructions");
+    await writeFile(join(project, "AGENTS.md"), "project instructions");
+    await writeSkill(join(project, ".agents", "skills", "project-skill"), "project-skill");
+    const loader = new CustomPiResourceLoader(project);
+    await loader.reload();
+
+    // The old SDK, configured as Supernova's agent-session factory configured it: default tools plus web_fetch.
+    const oldRuntime = await ModelRuntime.create({credentials: new InMemoryCredentialStore(), modelsPath: null});
+    const {session} = await createAgentSession({
+      cwd: project,
+      customTools: [createWebFetchTool() as unknown as ToolDefinition<TSchema, unknown>],
+      modelRuntime: oldRuntime,
+      resourceLoader: loader,
+      sessionManager: SessionManager.inMemory(project),
+      settingsManager: SettingsManager.inMemory(),
+    });
+    session.setActiveToolsByName([...new Set([...session.getActiveToolNames(), "web_fetch"])]);
+    const oldPrompt = session.systemPrompt;
+    const oldTools = session.getActiveToolNames();
+    const oldDefinitions = new Map(session.getAllTools().map((tool) => [tool.name, tool]));
+    session.dispose();
+
+    // The engine, on the same resources.
+    let request: {messages: Message[]; tools: string[]} | undefined;
+    const pi = await createPiTestRuntime();
+    try {
+      Object.assign(pi.resourceCache, {
+        load: async () => ({
+          contextFiles: loader.getAgentsFiles().agentsFiles,
+          extensions: loader.getExtensions(),
+          promptTemplates: [],
+          skills: loader.getSkills().skills,
+        }),
+      });
+      const {info} = await pi.createSession(project);
+      pi.faux.setResponses([
+        (context) => {
+          const system = context.messages.find((message) => message.role === "system");
+          request = {messages: context.messages, tools: (system?.role === "system" ? (system.toolsAdded ?? []) : []).map((tool) => tool.name)};
+          return fauxAssistantMessage("ok");
+        },
+      ]);
+      await pi.sendMessage({message: "hi", modelReference: selectedModelReference, sessionId: info.id});
+    } finally {
+      await pi.unregister();
+    }
+
+    const system = request!.messages.find((message) => message.role === "system")!;
+    const newPrompt = getSystemMessageText(system);
+    // Bash no longer injects session metadata, so its guideline is deliberately omitted.
+    const expectedPrompt = oldPrompt.replace("- You can inspect PI_* environment variables for current model and session details.\n", "");
+    expect(request!.tools).toEqual(oldTools);
+    expect(oldTools).toEqual(["read", "bash", "edit", "write", "web_fetch"]);
+    // Read and bash use durable's descriptions; the other tools retain the SDK's wording.
+    const offered = new Map((system.role === "system" ? (system.toolsAdded ?? []) : []).map((tool) => [tool.name, tool]));
+    expect(offered.get("read")?.description).toBe(createReadTool().description);
+    for (const name of ["read", "write", "edit", "web_fetch"]) {
+      if (name !== "read") expect(offered.get(name)?.description).toBe(oldDefinitions.get(name)?.description);
+      expect(JSON.stringify(offered.get(name)?.parameters)).toBe(JSON.stringify(oldDefinitions.get(name)?.parameters));
+    }
+    expect(newPrompt.trim()).toBe(expectedPrompt.trim());
   });
 });

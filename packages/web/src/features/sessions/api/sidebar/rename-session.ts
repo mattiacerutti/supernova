@@ -1,42 +1,23 @@
-import {useMutation, useQueryClient} from "@tanstack/react-query";
-import type {Session} from "@supernova/contracts/sessions/schemas";
-import {Effect} from "effect";
-import {sessionKeys} from "@/features/sessions/api/query-keys";
-import {eq} from "@/rpc/effect-query";
-import {RpcProtocolClientService} from "@/rpc/transport/client";
+import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
+import {useMutation} from "@tanstack/react-query";
+import {useSessionsStore} from "@/features/sessions/stores/sessions-store";
+import {unwrap} from "@/runtime/runtime-result";
+import {useRuntime} from "@/runtime/use-runtime";
 
 interface RenameSessionInput {
   readonly sessionId: string;
   readonly title: string;
 }
 
-interface RenameSessionContext {
-  readonly previousSession?: Session;
-}
+const {patchOptimism} = useSessionsStore.getState();
 
+/** Renames a session, showing the new title at once; the runtime's directory reports it once applied. */
 export function useRenameSession() {
-  const queryClient = useQueryClient();
+  const runtime = useRuntime();
 
-  return useMutation(
-    eq.mutationOptions({
-      mutationFn: (input: RenameSessionInput) => Effect.flatMap(Effect.service(RpcProtocolClientService), (rpc) => rpc.renameSession(input)),
-      onMutate: (input): RenameSessionContext => {
-        const previousSession = queryClient.getQueryData<Session>(sessionKeys.detail(input.sessionId));
-        if (!previousSession) return {};
-
-        queryClient.setQueryData(sessionKeys.detail(input.sessionId), {...previousSession, title: input.title});
-        return {previousSession};
-      },
-      onError: (_error, _input, context) => {
-        const previousSession = (context as RenameSessionContext | undefined)?.previousSession;
-        if (!previousSession) return;
-
-        queryClient.setQueryData(sessionKeys.detail(previousSession.id), previousSession);
-      },
-      onSuccess: async (session: Session) => {
-        queryClient.setQueryData<Session>(sessionKeys.detail(session.id), (current) => (current ? {...current, title: session.title, updatedAt: session.updatedAt} : session));
-        await queryClient.invalidateQueries({queryKey: sessionKeys.list(session.projectPath)});
-      },
-    })
-  );
+  return useMutation({
+    mutationFn: (input: RenameSessionInput) => unwrap(runtime.sessions.rename(input, BACKGROUND_CONTEXT)),
+    onMutate: (input) => patchOptimism(input.sessionId, {title: input.title.trim()}),
+    onSettled: (_result, _error, input) => patchOptimism(input.sessionId, {title: undefined}),
+  });
 }

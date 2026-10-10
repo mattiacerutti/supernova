@@ -1,9 +1,9 @@
-import type {Session, SessionWorkspaceSelection, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {Session, SessionWorkspaceSelection, UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
 import {useNavigate} from "@tanstack/react-router";
 import {useState} from "react";
 import {useConfiguration} from "@/api/configuration";
-import {useSession} from "@/features/sessions/api/conversation/get-session";
-import {useSessionActions} from "@/features/sessions/api/conversation/session-actions";
+import {useSessionCommands} from "@/features/sessions/api/conversation/session-commands";
+
 import {useRenameSession} from "@/features/sessions/api/sidebar/rename-session";
 import ModelPicker from "@/features/sessions/components/composer/toolbar/model-picker";
 import SessionComposer from "@/features/sessions/components/composer/session-composer";
@@ -21,35 +21,38 @@ import SessionActionsMenu from "@/features/sessions/components/session-actions-m
 import SessionTitleText from "@/features/sessions/components/session-title-text";
 import SessionTimeline from "@/features/sessions/components/timeline/session-timeline";
 import {ComposerContext, useComposer} from "@/features/sessions/hooks/composer/use-composer";
-import {useCachedSessionTitle} from "@/features/sessions/hooks/conversation/use-cached-session-title";
-import {useSessionTimeline} from "@/features/sessions/hooks/conversation/use-session-timeline";
+import {useFollowSession} from "@/features/sessions/api/sessions-sync";
+import {useSession} from "@/features/sessions/hooks/use-session";
+import {buildCommittedTimelineItems, buildLiveTimelineItems} from "@/features/sessions/lib/timeline/rows/build-session-timeline";
 import {useComposerDraftsStore} from "@/features/sessions/stores/composer/composer-drafts-store";
-import {useSessionLiveStore} from "@/features/sessions/stores/conversation/session-live-store";
-import {useSessionVisitsStore} from "@/features/sessions/stores/sidebar/session-visits-store";
+import type {SessionTurn} from "@/features/sessions/types/session-turn";
 import WorkspacePanel from "@/features/workspace/components/workspace-panel";
 import WorkspacePanelToggle from "@/features/workspace/components/workspace-panel-toggle";
 import {useInlineRename} from "@/hooks/use-inline-rename";
-import {useMountEffect} from "@/hooks/use-mount-effect";
 import {projectIdFromPath} from "@/lib/project-paths";
 import {showToast} from "@/lib/toast";
 
 interface SessionTitleProps {
   readonly session: Session;
+  /** The title and pin as shown, with a rename or pin the runtime has not shown yet. */
+  readonly title: string;
+  readonly pinned: boolean;
 }
 
 function SessionTitle(props: SessionTitleProps) {
-  const {session} = props;
+  const {pinned, session, title} = props;
   const renameSession = useRenameSession();
-  const {inputProps, renaming, startRenaming} = useInlineRename({initialValue: session.title, onSave: (title) => renameSession.mutate({sessionId: session.id, title})});
+  const {inputProps, renaming, startRenaming} = useInlineRename({initialValue: title, onSave: (nextTitle) => renameSession.mutate({sessionId: session.id, title: nextTitle})});
 
   return (
     <SessionHeader
       actions={
         <SessionActionsMenu
           onRename={startRenaming}
+          pinned={pinned}
           projectPath={session.projectPath}
           sessionId={session.id}
-          sessionTitle={session.title}
+          sessionTitle={title}
           worktree={session.worktree !== undefined}
         />
       }
@@ -57,24 +60,24 @@ function SessionTitle(props: SessionTitleProps) {
       {renaming ? (
         <input {...inputProps} className="block h-5 min-w-0 w-64 truncate border-0 bg-transparent p-0 text-sm font-medium leading-5 text-ink outline-none" />
       ) : (
-        <SessionTitleText className="block truncate" title={session.title} />
+        <SessionTitleText className="block truncate" title={title} />
       )}
     </SessionHeader>
   );
 }
 
 interface LoadingTitleProps {
-  readonly sessionId: string;
+  readonly title: string | undefined;
 }
 
-/** Shows the title from the sidebar cache while the session loads. */
+/** Shows the title the sidebar already knows while the session loads. */
 function LoadingTitle(props: LoadingTitleProps) {
-  const cachedTitle = useCachedSessionTitle(props.sessionId);
+  const {title} = props;
 
   return (
     <SessionHeader>
-      {cachedTitle ? (
-        <span className="block truncate">{cachedTitle}</span>
+      {title ? (
+        <span className="block truncate">{title}</span>
       ) : (
         <span className="block h-4 w-36 animate-pulse rounded-full bg-overlay-pressed" aria-label="Loading session title" />
       )}
@@ -82,22 +85,13 @@ function LoadingTitle(props: LoadingTitleProps) {
   );
 }
 
-interface SessionActivityProps {
-  readonly session: Session;
+interface FollowSessionProps {
+  readonly sessionId: string;
 }
 
-/** Marks the shown session active and seen. */
-function SessionActivity(props: SessionActivityProps) {
-  const {session} = props;
-  const setActiveSession = useSessionLiveStore((state) => state.setActiveSession);
-  const markSessionVisited = useSessionVisitsStore((state) => state.markSessionVisited);
-
-  useMountEffect(() => {
-    setActiveSession(session.id);
-    markSessionVisited(session.id, session.updatedAt);
-    return () => setActiveSession(null);
-  });
-
+/** Keeps the shown session's document live while mounted. */
+function FollowSession(props: FollowSessionProps) {
+  useFollowSession(props.sessionId);
   return null;
 }
 
@@ -122,33 +116,35 @@ export default function SessionPage(props: SessionPageProps) {
   const {target} = props;
   const {sessionId} = target;
   const navigate = useNavigate();
-  const {startSession: startSessionAction} = useSessionActions();
   const setNewSessionId = useComposerDraftsStore((state) => state.setNewSessionId);
 
-  // Until the server has created the session it exists only in the cache; fetching it would race creation.
+  // Until the runtime has created the session it exists only in the store; reading it would race creation.
   // The workspace it was started with is kept here because the draft is cleared on submit.
   const [creatingWorkspace, setCreatingWorkspace] = useState<SessionWorkspaceSelection | null>(null);
   const creatingSession = creatingWorkspace !== null;
-  const {data: session, error} = useSession(sessionId, {enabled: target.kind === "session" && !creatingSession});
+  const view = useSession(sessionId);
+  const {session} = view;
   const newSessionProjectPath = target.kind === "new" ? target.projectPath : undefined;
   const configuration = useConfiguration(newSessionProjectPath);
   const projectPath = newSessionProjectPath ?? session?.projectPath ?? "";
 
   const composer = useComposer({
     disabled: target.kind === "new" && configuration.isPending,
-    initialModelReference: session?.modelReference,
+    initialModelReference: session?.agent.model && {id: session.agent.model.modelId, providerId: session.agent.model.provider, thinkingLevel: session.agent.thinkingLevel ?? "off"},
     modelDefaults: configuration.data?.modelDefaults,
     projectPath,
     sessionId,
   });
-  const stream = useSessionTimeline({modelReference: composer.models.modelReference, sessionId, sessionTurns: session?.turns ?? []});
+  const commands = useSessionCommands({modelReference: composer.models.modelReference, sessionId, view});
   const [undoneDrawerHeight, setUndoneDrawerHeight] = useState(0);
   const [forkTurnId, setForkTurnId] = useState<string | null>(null);
 
   const composerPending = composer.isPending || (target.kind === "new" && configuration.isPending);
 
-  const idle = stream.streamStatus === "idle";
-  const streaming = stream.streamStatus === "streaming" || stream.streamStatus === "compacting";
+  const idle = view.status === "idle";
+  const streaming = view.status === "streaming" || view.status === "compacting";
+  const committedItems = buildCommittedTimelineItems(view.turns);
+  const liveItems = buildLiveTimelineItems({live: streaming, liveTurn: view.liveTurn ?? null});
 
   const startSession = async (contentParts: readonly UserMessageContentPart[]): Promise<void> => {
     const modelReference = composer.models.modelReference;
@@ -157,7 +153,7 @@ export default function SessionPage(props: SessionPageProps) {
     const {workspace} = composer.draft;
     setCreatingWorkspace(workspace);
     setNewSessionId(target.projectPath, undefined);
-    const pending = startSessionAction({contentParts, modelReference, projectPath: target.projectPath, sessionId, workspace});
+    const pending = commands.startSession({contentParts, modelReference, projectPath: target.projectPath, workspace});
     void navigate({params: {sessionId}, replace: true, to: "/session/$sessionId"});
 
     const outcome = await pending;
@@ -172,33 +168,33 @@ export default function SessionPage(props: SessionPageProps) {
   };
 
   /** Puts a turn's prompt back into the composer before the checkpoint moves. */
-  const restoreDraftFrom = (turn: Session["turns"][number] | undefined): void => {
+  const restoreDraftFrom = (turn: SessionTurn | undefined): void => {
     composer.draft.replaceContentParts(turn?.userMessage.contentParts ?? []);
   };
 
   const handleUndo = (): void => {
     if (!session || !idle) return;
-    restoreDraftFrom(session.turns.at(-1));
-    stream.slashCommandActions.undo?.();
+    restoreDraftFrom(view.turns.at(-1));
+    commands.undo();
   };
 
   const handleRedo = (): void => {
     if (!session || !idle) return;
-    restoreDraftFrom(session.undoneTurns[1]);
-    stream.slashCommandActions.redo?.();
+    restoreDraftFrom(view.undoneTurns[1]);
+    commands.redo();
   };
 
   const handleRevertToMessage = (turnId: string): void => {
     if (!session || !idle) return;
-    restoreDraftFrom([...session.turns, ...session.undoneTurns].find((turn) => turn.id === turnId));
-    stream.revertToMessage(turnId);
+    restoreDraftFrom([...view.turns, ...view.undoneTurns].find((turn) => turn.id === turnId));
+    commands.revertToMessage(turnId);
   };
 
   const handleRestoreUndoneTurn = (turnId: string): void => {
     if (!session || !idle) return;
-    const restoredIndex = session.undoneTurns.findIndex((turn) => turn.id === turnId);
-    restoreDraftFrom(session.undoneTurns[restoredIndex + 1]);
-    stream.revertToMessage(turnId);
+    const restoredIndex = view.undoneTurns.findIndex((turn) => turn.id === turnId);
+    restoreDraftFrom(view.undoneTurns[restoredIndex + 1]);
+    commands.revertToMessage(turnId);
   };
 
   const handleForkFromTurn = (turnId: string): void => {
@@ -210,7 +206,7 @@ export default function SessionPage(props: SessionPageProps) {
     setUndoneDrawerHeight((current) => (Math.abs(current - height) < 0.5 ? current : height));
   };
 
-  if (target.kind === "session" && !session && error) {
+  if (target.kind === "session" && !session && view.loadError) {
     return (
       <div className="grid flex-1 place-items-center px-6 py-10">
         <p className="text-sm text-danger-ink">Unable to load this session.</p>
@@ -234,7 +230,13 @@ export default function SessionPage(props: SessionPageProps) {
           </>
         }
       >
-        {target.kind === "new" ? <SessionHeader /> : session ? <SessionTitle session={session} /> : <LoadingTitle sessionId={sessionId} />}
+        {target.kind === "new" ? (
+          <SessionHeader />
+        ) : session ? (
+          <SessionTitle pinned={view.pinned} session={session} title={view.title ?? session.title} />
+        ) : (
+          <LoadingTitle title={view.title} />
+        )}
 
         <SessionBody
           composer={
@@ -253,22 +255,22 @@ export default function SessionPage(props: SessionPageProps) {
                     creatingWorkspace?.mode === "worktree" && <WorkspacePickerSkeleton />
                   )
                 }
-                onInterrupt={stream.stopStreaming}
-                onSubmit={target.kind === "new" ? (contentParts) => void startSession(contentParts) : stream.submitMessage}
-                slashCommandActions={session && {...stream.slashCommandActions, redo: handleRedo, undo: handleUndo}}
-                streamStatus={stream.streamStatus}
+                onInterrupt={commands.stop}
+                onSubmit={target.kind === "new" ? (contentParts) => void startSession(contentParts) : commands.sendMessage}
+                slashCommandActions={session && {compact: commands.compact, redo: handleRedo, undo: handleUndo}}
+                streamStatus={view.status}
                 topExtension={
                   session && (
                     <UndoneTurnsDrawer
                       disabled={composer.disabled || !idle}
                       onHeightChange={handleUndoneDrawerHeightChange}
                       onRevertToMessage={handleRestoreUndoneTurn}
-                      turns={session.undoneTurns}
+                      turns={view.undoneTurns}
                     />
                   )
                 }
               >
-                {session && <SessionContextIndicator context={stream.liveContext ?? session.context} />}
+                {session && <SessionContextIndicator context={session.context} />}
                 <ModelPicker />
                 <ThinkingLevelPicker />
               </SessionComposer>
@@ -280,15 +282,15 @@ export default function SessionPage(props: SessionPageProps) {
               <SessionTimeline
                 key={session.id}
                 bottomOverlayHeight={undoneDrawerHeight}
-                compacting={stream.streamStatus === "compacting"}
+                compacting={view.status === "compacting"}
                 isStreaming={streaming}
-                items={stream.committedTimelineItems}
-                liveItems={stream.liveTimelineItems}
+                items={committedItems}
+                liveItems={liveItems}
                 onForkFromTurn={idle ? handleForkFromTurn : undefined}
                 onRevertToMessage={handleRevertToMessage}
                 sessionId={session.id}
-                setupStep={stream.setupStep}
-                streamError={stream.streamError}
+                setupStep={view.setupStep}
+                streamError={view.error}
               />
             ) : (
               <div className="min-h-0 flex-1" />
@@ -297,13 +299,13 @@ export default function SessionPage(props: SessionPageProps) {
         />
       </SessionLayout>
 
-      {session && <SessionActivity key={session.id} session={session} />}
+      {target.kind === "session" && !creatingSession && <FollowSession key={sessionId} sessionId={sessionId} />}
       {session && <ForkSessionDialog onClose={() => setForkTurnId(null)} sessionId={session.id} turnId={forkTurnId} />}
       <CheckpointConflictDialog
-        onCancel={stream.checkpointConflict.cancel}
-        onConfirm={stream.checkpointConflict.confirm}
-        open={stream.checkpointConflict.open}
-        reason={stream.checkpointConflict.reason}
+        onCancel={commands.checkpointConflict.cancel}
+        onConfirm={commands.checkpointConflict.confirm}
+        open={commands.checkpointConflict.open}
+        reason={commands.checkpointConflict.reason}
       />
     </ComposerContext>
   );

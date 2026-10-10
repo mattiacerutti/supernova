@@ -41,7 +41,7 @@ The boundary is deliberate. Supernova should reuse Pi wherever Pi already owns t
 Remote control is not a desktop feature added later. Supernova is client-server from the beginning:
 
 - the server owns Pi, sessions, credentials, filesystem access, subprocesses, and Git checkpoints
-- browser and Electron clients observe and control that server over typed WebSocket RPC
+- browser and Electron clients observe and control that server over typed WebSocket services
 - accepted work continues when a client changes routes, reloads, or disconnects
 - filesystem paths always refer to the machine running the server
 
@@ -94,7 +94,7 @@ Supernova adapts this state into one consistent interface; it does not implement
 
 ### Desktop and browser
 
-The standalone server exposes only the API and WebSocket RPC; the browser client is hosted separately. Electron packages the API and web assets separately, loads its own renderer at a stable app origin, and starts a local API child on an OS-assigned port. It adds native window chrome, persisted geometry, host-path opening, shell-environment import, icons, and managed server lifecycle. The client endpoint is independent of UI hosting; remote selection and authentication remain future work.
+The standalone server exposes only the health endpoint and the WebSocket; the browser client is hosted separately. Electron packages the API and web assets separately, loads its own renderer at a stable app origin, and starts a local API child on an OS-assigned port. It adds native window chrome, persisted geometry, host-path opening, shell-environment import, icons, and managed server lifecycle. The client endpoint is independent of UI hosting; remote selection and authentication remain future work.
 
 Electron is an operating-system shell, not a second agent runtime. Browser behavior remains independent of Electron-only capabilities.
 

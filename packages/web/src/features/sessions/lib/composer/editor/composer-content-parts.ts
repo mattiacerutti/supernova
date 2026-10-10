@@ -1,4 +1,4 @@
-import type {UserMessageAttachmentPart, UserMessageContentPart, UserMessageReferencePart} from "@supernova/contracts/sessions/schemas";
+import type {UserMessageAttachmentPart, UserMessageContentPart, UserMessageReferencePart} from "@supernova/contracts/services/sessions/schemas";
 import type {Editor, JSONContent} from "@tiptap/react";
 
 function contentPartValue(part: UserMessageContentPart): string {

@@ -5,95 +5,123 @@ import type {
   RevertToMessagePayload,
   SendMessagePayload,
   SessionSetupStep,
-  SessionStreamEvent,
   UndoCheckpointPayload,
-} from "@supernova/contracts/session-runtime/procedures";
-import type {GetSessionPayload} from "@supernova/contracts/sessions/procedures";
-import type {Session} from "@supernova/contracts/sessions/schemas";
-import {toCheckpointNavigationError} from "@supernova/agent-runtime/features/session-runtime/checkpoints/lib/checkpoint-error";
-import type {SessionPool} from "@supernova/agent-runtime/features/session-runtime/worker/session-pool";
-import type {EventBus} from "@supernova/agent-runtime/lib/event-bus";
+} from "@supernova/contracts/services/session-runtime/procedures";
+import type {Session} from "@supernova/contracts/services/sessions/schemas";
+import type {CheckpointStore} from "@supernova/agent-runtime/features/session-runtime/checkpoints/checkpoint-store";
+import {SessionBoard} from "@supernova/agent-runtime/features/session-runtime/worker/session-board";
+import {SessionWorker} from "@supernova/agent-runtime/features/session-runtime/worker/session-worker";
+import type {TitleGenerator} from "@supernova/agent-runtime/features/session-runtime/worker/title-generator";
+import type {DocumentState} from "@supernova/agent-runtime/lib/document-state";
+import type {ResourceCache} from "@supernova/agent-runtime/pi/resource-cache";
+import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";
+import type {SessionStore} from "@supernova/agent-runtime/pi/session-store";
 
 export interface SessionRuntimeDeps {
-  readonly events: EventBus<SessionStreamEvent>;
-  readonly pool: SessionPool;
+  readonly checkpointStore: CheckpointStore;
+  readonly resourceCache: ResourceCache;
+  readonly sdk: Pick<PiSdk, "modelRuntime">;
+  readonly store: SessionStore;
+  readonly titleGenerator: TitleGenerator;
 }
 
-/** `first`, then everything from `rest`. Returning the result closes `rest`. */
-function prepend<T>(first: T, rest: AsyncGenerator<T, void, undefined>): AsyncGenerator<T, void, undefined> {
-  let started = false;
-  return {
-    next: () => {
-      if (started) return rest.next();
-      started = true;
-      return Promise.resolve({done: false, value: first});
-    },
-    return: () => rest.return(),
-    throw: (error) => rest.throw(error),
-    [Symbol.asyncIterator]() {
-      return this;
-    },
-  };
-}
-
-/** Live session execution: sending, aborting, compacting, checkpoint navigation, and the event stream. */
+/**
+ * Live session execution: sending, aborting, compacting, checkpoint navigation, and each session's state. Keeps one
+ * `SessionWorker` per session in use; the engine owns execution, the workers publish it.
+ */
 export class SessionRuntime {
+  /** Activity, summaries, setup steps, and problems of every session in use, for clients that have not attached one. */
+  public readonly board = new SessionBoard();
+  private readonly workers = new Map<string, Promise<SessionWorker>>();
+
   public constructor(private readonly deps: SessionRuntimeDeps) {}
 
-  public sendMessage(input: SendMessagePayload): Promise<void> {
-    return this.deps.pool.sendMessage(input);
+  public async sendMessage(input: SendMessagePayload): Promise<void> {
+    await (await this.worker(input.sessionId)).sendMessage(input);
   }
 
-  public compact(input: CompactSessionPayload): Promise<void> {
-    return this.deps.pool.compactSession(input);
+  public async compact(input: CompactSessionPayload): Promise<void> {
+    await (await this.worker(input.sessionId)).compact(input);
   }
 
-  public abort(input: AbortSessionPayload): Promise<void> {
-    return this.deps.pool.abortSession(input.sessionId);
+  /** Aborts the session's work if it has any; the session stays open. */
+  public async abort(input: AbortSessionPayload): Promise<void> {
+    await (await this.workers.get(input.sessionId)?.catch(() => undefined))?.abort();
   }
 
-  /** Checkpoint navigation rejects with a `CheckpointNavigationError`; see `toCheckpointNavigationError`. */
-  public undoCheckpoint(input: UndoCheckpointPayload): Promise<void> {
-    return this.deps.pool.undoCheckpoint(input).catch((cause: unknown) => {
-      throw toCheckpointNavigationError(cause);
+  public async undoCheckpoint(input: UndoCheckpointPayload): Promise<void> {
+    await (await this.worker(input.sessionId)).undoCheckpoint(input);
+  }
+
+  public async redoCheckpoint(input: RedoCheckpointPayload): Promise<void> {
+    await (await this.worker(input.sessionId)).redoCheckpoint(input);
+  }
+
+  public async revertToMessage(input: RevertToMessagePayload): Promise<void> {
+    await (await this.worker(input.sessionId)).revertToMessage(input);
+  }
+
+  /** A durable session's document at its latest published revision. */
+  public async current(sessionId: string): Promise<Session> {
+    return (await this.worker(sessionId)).current();
+  }
+
+  /** A durable session's document as replicated state, for attached clients. */
+  public async transcript(sessionId: string): Promise<DocumentState<Session>> {
+    return (await this.worker(sessionId)).document;
+  }
+
+  /** Rebuilds a session's document after a change outside the engine (a rename) and publishes it. */
+  public async refresh(sessionId: string): Promise<Session> {
+    return (await this.worker(sessionId)).refresh();
+  }
+
+  /** Open sessions reinstall extensions from disk; an active turn finishes on the code it started with. */
+  public reloadExtensions(): Promise<void> {
+    return this.deps.store.reload();
+  }
+
+  /** Marks the setup step of a session being created under `projectPath`, or its end; see `SessionSetupStep`. */
+  public setSetupStep(input: {readonly projectPath: string; readonly sessionId: string; readonly step: SessionSetupStep | null}): void {
+    this.board.update(input.sessionId, input.projectPath, {setupStep: input.step});
+  }
+
+  /** Reports a problem that did not fail a command, such as an extension diagnostic; clients show it until the next run. */
+  public reportError(sessionId: string, error: string): void {
+    void this.deps.store.find(sessionId).then((record) => {
+      if (record) this.board.update(sessionId, record.projectPath, {error: {message: error, at: new Date().toISOString()}});
     });
   }
 
-  public redoCheckpoint(input: RedoCheckpointPayload): Promise<void> {
-    return this.deps.pool.redoCheckpoint(input).catch((cause: unknown) => {
-      throw toCheckpointNavigationError(cause);
-    });
-  }
-
-  public revertToMessage(input: RevertToMessagePayload): Promise<void> {
-    return this.deps.pool.revertToMessage(input).catch((cause: unknown) => {
-      throw toCheckpointNavigationError(cause);
-    });
-  }
-
-  /** The frozen committed view of a session whose Pi branch is mutating, or undefined when no runtime holds it. */
-  public getCommittedSession(input: GetSessionPayload): Session | undefined {
-    return this.deps.pool.getCommittedSession(input.sessionId);
-  }
-
-  /** Retained sessions reload extensions at their next command; an active turn finishes on the code it started with. */
-  public reloadExtensions(): void {
-    this.deps.pool.reloadExtensions();
-  }
-
-  /** Marks a setup step of a session being created; see `SessionSetupStep`. */
-  public publishSetup(input: {readonly phase: "started" | "ended"; readonly sessionId: string; readonly step: SessionSetupStep}): void {
-    this.deps.pool.publishSetup(input.sessionId, input.phase, input.step);
-  }
-
-  /** Drops the retained runtime and its checkpoints; used before a session is archived. `workspacePath` is where the agent ran. */
+  /** Stops the session's work, closes it, and drops its checkpoints; used before a session is archived. `workspacePath` is where the agent ran. */
   public async release(input: {readonly sessionId: string; readonly workspacePath: string}): Promise<void> {
-    await this.deps.pool.releaseSession(input.sessionId);
-    await this.deps.pool.deleteSessionCheckpoints(input.workspacePath, input.sessionId);
+    const pending = this.workers.get(input.sessionId);
+    this.workers.delete(input.sessionId);
+    const worker = await pending?.catch(() => undefined);
+    await worker?.abort();
+    await worker?.dispose();
+    this.board.remove(input.sessionId);
+    await this.deps.store.release(input.sessionId);
+    await this.deps.checkpointStore.deleteSession({projectRoot: input.workspacePath, sessionId: input.sessionId});
   }
 
-  /** A `connected` marker followed by every runtime event, until the consumer stops iterating. Subscribes immediately. */
-  public watchEvents(): AsyncGenerator<SessionStreamEvent, void, undefined> {
-    return prepend({type: "connected"}, this.deps.events.subscribe());
+  /** Stops every worker and closes every session file; interrupted work resumes at the next start. */
+  public async dispose(): Promise<void> {
+    const workers = await Promise.all([...this.workers.values()].map((pending) => pending.catch(() => undefined)));
+    this.workers.clear();
+    await Promise.all(workers.map((worker) => worker?.dispose()));
+    await this.deps.store.dispose();
+  }
+
+  /** The worker of a session, opened once; unknown ids fail. A failed open is retried by the next call. */
+  private worker(sessionId: string): Promise<SessionWorker> {
+    let pending = this.workers.get(sessionId);
+    if (!pending) {
+      const {checkpointStore, resourceCache, sdk, store, titleGenerator} = this.deps;
+      pending = SessionWorker.open({board: this.board, checkpointStore, resourceCache, sdk, sessionId, store, titleGenerator});
+      pending.catch(() => this.workers.delete(sessionId));
+      this.workers.set(sessionId, pending);
+    }
+    return pending;
   }
 }

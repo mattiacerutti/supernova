@@ -1,46 +1,15 @@
-import type {SessionEntry, SessionMessageEntry} from "@earendil-works/pi-coding-agent";
-import type {RevertToMessagePayload} from "@supernova/contracts/session-runtime/procedures";
-import {isCheckpointAfterTurnEntry, isCheckpointEntry, latestCheckpointCursor} from "@supernova/agent-runtime/pi/lib/session/checkpoint-entries";
-import type {CheckpointEntry} from "@supernova/agent-runtime/pi/lib/session/checkpoint-entries";
-import {SessionWorker} from "@supernova/agent-runtime/features/session-runtime/worker/session-worker";
+import type {RevertToMessagePayload} from "@supernova/contracts/services/session-runtime/procedures";
+import {navigateToTurn} from "@supernova/agent-runtime/features/session-runtime/worker/lib/navigate-to-turn";
+import type {SessionWorker} from "@supernova/agent-runtime/features/session-runtime/worker/session-worker";
 
-function isTargetUserEntry(entry: SessionEntry, turnId: string): entry is SessionMessageEntry {
-  return entry.id === turnId && entry.type === "message" && entry.message.role === "user";
-}
-
-function findCheckpointBefore(branch: readonly SessionEntry[], index: number): CheckpointEntry | undefined {
-  return branch.slice(0, index).toReversed().find(isCheckpointEntry);
-}
-
-function findCheckpointAfter(branch: readonly SessionEntry[], index: number): CheckpointEntry | undefined {
-  return branch.slice(index + 1).find(isCheckpointAfterTurnEntry);
-}
-
-/** Moves the session and workspace to the selected committed turn. */
+/** Moves the session and workspace to a turn: a visible turn is reverted inclusively, an undone one is restored. */
 export async function revertToMessage(runtime: SessionWorker, input: RevertToMessagePayload): Promise<void> {
-  runtime.beginWork();
-  try {
-    const sessionManager = await runtime.getSessionManager();
-    const cursor = latestCheckpointCursor(sessionManager.getEntries());
-    if (!cursor) throw new Error("Checkpoint cursor was not found.");
-
-    const branch = sessionManager.getBranch(cursor.leafEntryId);
-
-    // The cursor parent is the visible checkpoint. The leaf branch also includes
-    // redoable turns, so comparing indexes tells us whether the target is visible
-    // or currently undone.
-    const nodeIndex = branch.findIndex((entry) => entry.id === cursor.nodeEntryId);
-    const targetIndex = branch.findIndex((entry) => isTargetUserEntry(entry, input.turnId));
-
-    // Visible targets are reverted inclusively, so restore the checkpoint before
-    // the user message. Undone targets move forward, so restore the next checkpoint.
-    const target = targetIndex <= nodeIndex ? findCheckpointBefore(branch, targetIndex) : findCheckpointAfter(branch, targetIndex);
-    const current = branch[nodeIndex];
-
-    if (nodeIndex === -1 || targetIndex === -1 || !target || !current || !isCheckpointEntry(current)) throw new Error("Checkpoint target was not found.");
-
-    await runtime.navigateToCheckpoint({current, cursorLeafEntryId: cursor.leafEntryId, force: input.force ?? false, target});
-  } finally {
-    runtime.endWork();
-  }
+  await navigateToTurn(runtime, {
+    force: input.force ?? false,
+    target: ({turns, visibleCount}) => {
+      const index = turns.findIndex((turn) => turn.turnId === input.turnId);
+      if (index === -1) throw new Error("Checkpoint target was not found.");
+      return index < visibleCount ? index : index + 1;
+    },
+  });
 }

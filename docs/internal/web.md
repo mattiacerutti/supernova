@@ -14,13 +14,13 @@ Feature-first, with a small set of typed shared folders. The layout follows [bul
 ```
 src/
   api/          app-wide server data (configuration); same rules as a feature api/ folder
-  app/          bootstrap and composition: app, command-palette/ (features composed into the palette), layout/ (shell + sidebar), providers/ (query, RPC, session events), routes/ (router + route components)
+  app/          bootstrap and composition: app, command-palette/ (features composed into the palette), layout/ (shell + sidebar), providers/ (query, runtime client, session sync), routes/ (router + route components)
   components/   shared UI; layouts/ for page shells, ui/ for design-system primitives
   config/       runtime constants (app environment)
   features/     product areas: projects, sessions, settings, updates, workspace
   hooks/        shared hooks
   lib/          helpers used across features (cn, toast, project-paths) and preconfigured dependencies (diffs/, themes/)
-  rpc/          transport and Effect RPC client
+  runtime/      the runtime connection: Chord service bindings over pi-client (transport/runtime-client.ts)
   stores/       app-wide Zustand stores
 ```
 
@@ -30,15 +30,15 @@ Features keep route-level components in `pages/` and helpers in `lib/`. Single c
 
 A feature owns a screen or a panel a user would name. Layout regions (sidebar, titlebar) and app-wide state are not features; they live in `app/` and `stores/`. A feature has only the folders it needs, from this fixed list:
 
-| Folder        | Holds                                                                                                                                                                                                                                                                                                 |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `api/`        | Server access. One file per operation, named after it (`get-session.ts`, `rename-session.ts`), exporting the hook and, when other code needs it, `getXQueryOptions`. `query-keys.ts` holds one `xKeys` object per feature. Keep `@/rpc` imports here so components and hooks never see the transport. |
-| `components/` | Feature UI. Subfolders are UI regions (`composer/`, `timeline/`); a file is either inside a region folder or shared by several regions, never a sibling of a folder that describes it.                                                                                                                |
-| `hooks/`      | Feature hooks that are not server access.                                                                                                                                                                                                                                                             |
-| `lib/`        | Domain logic that is not UI or React-specific: parsers, builders, mappers. The test for `lib` is whether the output stands on its own. A helper that only shapes one component's render input belongs in that component file.                                                                         |
-| `pages/`      | Route-level components and anything only they compose (a settings section registry, for example).                                                                                                                                                                                                     |
-| `stores/`     | Feature-scoped Zustand stores. File `x-store.ts` exports `useXStore`. Stores hold client state; the one exception that takes the transport as a parameter is `session-live-store` (see [Session runtime](session-runtime.md)).                                                                        |
-| `types/`      | Nouns of the domain shared by several files in the feature (`Session`, `Project`, `TimelineItem`). A type that describes one component's props or one function's input lives with that component or function, however many files import it.                                                           |
+| Folder        | Holds                                                                                                                                                                                                                                                                                                     |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `api/`        | Server access. One file per operation, named after it (`get-session.ts`, `rename-session.ts`), exporting the hook and, when other code needs it, `getXQueryOptions`. `query-keys.ts` holds one `xKeys` object per feature. Keep `@/runtime` imports here so components and hooks never see the transport. |
+| `components/` | Feature UI. Subfolders are UI regions (`composer/`, `timeline/`); a file is either inside a region folder or shared by several regions, never a sibling of a folder that describes it.                                                                                                                    |
+| `hooks/`      | Feature hooks that are not server access.                                                                                                                                                                                                                                                                 |
+| `lib/`        | Domain logic that is not UI or React-specific: parsers, builders, mappers. The test for `lib` is whether the output stands on its own. A helper that only shapes one component's render input belongs in that component file.                                                                             |
+| `pages/`      | Route-level components and anything only they compose (a settings section registry, for example).                                                                                                                                                                                                         |
+| `stores/`     | Feature-scoped Zustand stores. File `x-store.ts` exports `useXStore`. Stores hold client state and do no I/O; commands that change one live in `api/`.                                                                                                                                                    |
+| `types/`      | Nouns of the domain shared by several files in the feature (`Session`, `Project`, `TimelineItem`). A type that describes one component's props or one function's input lives with that component or function, however many files import it.                                                               |
 
 Cross-feature imports are limited to another feature's `components/` and `types/`; its `api/`, `hooks/`, `lib/`, `pages/`, and `stores/` are private. Shared code under `api/`, `components/`, `config/`, `hooks/`, `lib/`, and `stores/` never imports from `features/`; composition happens in `app/`. ESLint enforces both rules and kebab-case filenames.
 
@@ -79,11 +79,12 @@ A helper earns a place in `lib/` when several features use it. Something used by
 - Use the shared `cn` helper from `@/lib/cn` for conditional class names so `clsx` handles conditions and `tailwind-merge` resolves conflicting Tailwind utilities.
 - For multi-step modal/dialog flows, prefer one shared dialog shell with swapped content instead of multiple dialogs that close/open between steps.
 
-### RPC hooks
+### Runtime hooks
 
-- Use `effect-query` for RPC-backed React Query hooks, inside the feature's `api/` folder.
-- Prefer `eq.queryOptions` and `eq.mutationOptions` over manually wrapping RPC calls with an imperative client runner.
-- Get the RPC client from `RpcProtocolClientService` so typed RPC failures are preserved.
+- Get the runtime connection with `useRuntime()` (or take a `RuntimeClient` parameter in an options builder, like `listProjectSessionsQueryOptions(runtime, projectPath)`). It has one member per runtime service (`runtime.sessions`, `runtime.sessionRuntime`, `runtime.workspace`, …), whose methods take Chord's `Context` last as the contracts declare.
+- Calls return `ServiceResult`s. In React Query functions, `unwrap()` from `@/runtime/runtime-result` turns a failure into a thrown `RuntimeError`. Branch on its code with `runtimeError<Service["method"]>(error)?.code`, which is typed as the method's declared error tags plus `"GenericError"`; a `Record<FailureCode<…>, string>` of messages fails to compile when the contract gains an error.
+- Follow replicated state (`runtime.workspace.terminals`, `runtime.providers.logins`, `runtime.sessions.directory`, `runtime.sessionRuntime.session`) with `subscribe`, which delivers the current value at once.
+- Sessions: `runtime.sessions` for lifecycle and reads; `runtime.sessionRuntime` for the commands and document of the session the connection attached. Attaching is the caller's: `sessions.attach(id)` routes the connection, then `runtime.bindSessionRuntime()` points `sessionRuntime` at it and waits for its state. `attachSession` (`api/sessions-sync`) does both, in order, and attaches again after a reconnect; use it rather than attaching by hand. Session state reaches components through the sessions store, never straight from the runtime; see State management.
 - Query keys come from the feature's `xKeys` object, shaped `[feature, ...scope]`, and are read from `queryOptions().queryKey` where an options object exists. Invalidate with the parent key (`sessionKeys.lists()`), never a literal array.
 
 ## Testing
@@ -101,7 +102,15 @@ See [Development](development.md#verification) for verification and the test wor
 - Keep Zustand stores feature-scoped under `src/features/<feature>/stores`; app-wide state (settings, sidebar) lives in `src/stores`.
 - Derive values from store state when possible instead of duplicating derived state.
 - Store actions take data and change state. They do not take callbacks, navigate, show toasts, or otherwise reach into the UI; a component reads store state and reacts to it.
-- `session-live-store` and `api/conversation/session-events` are bound to the transport and already do network I/O and optimistic updates. Add behavior around them, in a hook or at the page, not inside them.
+- Live session state has one home, `stores/sessions-store`, and one way in, `api/sessions-sync`:
+  - `syncSessions` (started once in `app/providers/providers.tsx`) keeps the runtime's report of every open session (activity, setup step, problem, summary) in the store.
+  - `followSession` reads a session's document into the store, then keeps it live while anyone follows it. `useFollowSession` follows the session a page shows.
+  - The store also holds optimism: what the user did that the runtime does not show yet (`message`, `navigation`, `stopping`, `title`, …). A command patches its field when the user acts and clears it when it settles.
+  - `lib/session-view` decides what is shown from the store: `sessionView` for a page, `sessionStatus` for a row, `projectSessions` for a listing. It is the only place optimism is applied. Components read it through `useSession` and `useSessionStatus` (`hooks/use-session`) and `useListProjectSessions`.
+  - A new optimistic command adds a field to `SessionOptimism`, patches it in its command, and reads it in `lib/session-view`.
+- React Query holds what is fetched on request: listings, models, suggestions, workspace data. Live session state is never written into it.
+- Session listings and search are paged on the server: `useListProjectSessions` and `useSearchSessions` are infinite queries over cursors, and nothing loads every session to filter or slice it. Rows already loaded stay current from the store; a pin is optimism (`pinned`) like a rename (`title`).
+- App-wide reactions to server state are in `app/providers/providers.tsx`: everything is read again after a reconnect, and workspace data after any run ends.
 
 ## UI language and design style
 

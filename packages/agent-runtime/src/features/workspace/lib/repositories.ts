@@ -1,6 +1,5 @@
 import {lstat, readdir, realpath} from "node:fs/promises";
 import {join} from "node:path";
-import {WorkspaceGenericError} from "@supernova/contracts/workspace/schemas";
 import {pathInProject} from "@supernova/agent-runtime/features/workspace/lib/paths";
 import {optionalGit} from "@supernova/agent-runtime/lib/git-process";
 
@@ -11,10 +10,10 @@ import {optionalGit} from "@supernova/agent-runtime/lib/git-process";
  */
 export async function repositoryPath(projectPath: string, repositoryRoot: string): Promise<string> {
   if (repositoryRoot !== "." && (repositoryRoot === ".." || repositoryRoot.length === 0 || /[/\\]/.test(repositoryRoot))) {
-    throw new WorkspaceGenericError({message: "Unknown repository."});
+    throw new Error("Unknown repository.");
   }
   const resolved = await pathInProject(projectPath, repositoryRoot);
-  if (resolved === undefined) throw new WorkspaceGenericError({message: "Unknown repository."});
+  if (resolved === undefined) throw new Error("Unknown repository.");
   return resolved;
 }
 
@@ -37,12 +36,12 @@ async function isWorktreeRoot(directory: string): Promise<boolean> {
  * Project-relative roots of the repositories at the project root and one level below it, sorted.
  * Same discovery rules as checkpoints: deeper repositories belong to whichever repository contains them.
  */
-export async function discoverWorkspaceRepositories(projectPath: string): Promise<readonly string[]> {
+export async function discoverWorkspaceRepositories(projectPath: string): Promise<string[]> {
   let children: string[];
   try {
     children = (await readdir(projectPath, {withFileTypes: true})).filter((entry) => entry.isDirectory()).map((entry) => entry.name);
   } catch (cause) {
-    throw new WorkspaceGenericError({cause, message: "Failed to inspect the project folder."});
+    throw new Error("Failed to inspect the project folder.", {cause});
   }
   const candidates = [".", ...children.toSorted()];
   const accepted = await Promise.all(

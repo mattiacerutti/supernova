@@ -1,5 +1,5 @@
-import type {ModelDetails, ModelReference} from "@supernova/contracts/sessions/schemas";
-import type {ModelDefaults} from "@supernova/contracts/configuration/schemas";
+import type {ModelDetails, ModelReference} from "@supernova/contracts/services/sessions/schemas";
+import type {ModelDefaults} from "@supernova/contracts/services/configuration/schemas";
 import {describe, expect, it} from "vitest";
 import {resolveComposerModelSelection} from "@/features/sessions/lib/composer/models/model-defaults";
 

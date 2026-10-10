@@ -1,25 +1,58 @@
 import {mkdtempSync, rmSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
-import type {AgentSession, PromptTemplate, SessionEntry, Skill} from "@earendil-works/pi-coding-agent";
-import {createAgentSession, ModelRuntime, SessionManager, SettingsManager} from "@earendil-works/pi-coding-agent";
+import type {PromptTemplate, Skill} from "@earendil-works/pi-coding-agent";
+import {discoverAndLoadExtensions, ModelRuntime, SettingsManager} from "@earendil-works/pi-coding-agent";
 import type {Api, FauxProviderRegistration} from "@earendil-works/pi-ai/compat";
-import {fauxAssistantMessage, fauxText, fauxThinking, registerFauxProvider} from "@earendil-works/pi-ai/compat";
+import {fauxAssistantMessage, fauxText, fauxThinking, fauxToolCall, registerFauxProvider} from "@earendil-works/pi-ai/compat";
 import type {ResourceCache} from "@supernova/agent-runtime/pi/resource-cache";
-import type {PiSdk, PiSessionManager} from "@supernova/agent-runtime/pi/sdk";
-import type {AgentSessionFactory} from "@supernova/agent-runtime/features/session-runtime/worker/agent-session-factory";
 import type {TitleGenerator} from "@supernova/agent-runtime/features/session-runtime/worker/title-generator";
 import {FileCheckpointStore} from "@supernova/agent-runtime/features/session-runtime/checkpoints/checkpoint-store";
 import type {CheckpointStore} from "@supernova/agent-runtime/features/session-runtime/checkpoints/checkpoint-store";
-import {SessionPool} from "@supernova/agent-runtime/features/session-runtime/worker/session-pool";
 import {SessionRuntime} from "@supernova/agent-runtime/features/session-runtime/session-runtime";
 import {Sessions} from "@supernova/agent-runtime/features/sessions/sessions";
-import {EventBus} from "@supernova/agent-runtime/lib/event-bus";
-import type {SendMessagePayload, SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
-import type {ModelReference, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import {Projects} from "@supernova/agent-runtime/features/projects/projects";
+import {SessionStore} from "@supernova/agent-runtime/pi/session-store";
+import {createSupernovaTools} from "@supernova/agent-runtime/features/session-runtime/tools/tools";
+import type {SendMessagePayload} from "@supernova/contracts/services/session-runtime/procedures";
+import type {AssistantMessage, ModelReference, Session} from "@supernova/contracts/services/sessions/schemas";
+import type {SessionDirectoryState} from "@supernova/contracts/services/sessions/services";
 import {waitUntil} from "@tests/support/async";
 
-export {fauxAssistantMessage, fauxText, fauxThinking, waitUntil};
+export {fauxAssistantMessage, fauxText, fauxThinking, fauxToolCall, waitUntil};
+
+/** What one observer of a session saw: every transcript value delivered to it, and every directory value. */
+export interface Observation {
+  /** Transcript values in delivery order, starting with its value when observing began. */
+  readonly versions: Session[];
+  /** Directory values in delivery order, starting with its value when observing began. */
+  readonly board: SessionDirectoryState[];
+  readonly stop: () => void;
+}
+
+/** The authored content of each turn, in order. */
+export function turnContents(session: Pick<Session, "entries">) {
+  return session.entries.flatMap((entry) => (entry.contentParts === undefined ? [] : [entry.contentParts]));
+}
+
+/** The authored content of each undone turn, in order. */
+export function undoneContents(session: Pick<Session, "undone">) {
+  return turnContents({entries: session.undone});
+}
+
+/** The id of each visible turn: its user entry's id. */
+export function turnIds(session: Pick<Session, "entries">): string[] {
+  return session.entries.flatMap((entry) => (entry.contentParts === undefined ? [] : [String(entry.id)]));
+}
+
+/** The text of every assistant entry, in order. */
+export function assistantTexts(session: Pick<Session, "entries">): string[] {
+  return session.entries.flatMap((entry) => {
+    const message = entry.model?.[0];
+    if (entry.kind !== "pi.assistant" || message?.role !== "assistant") return [];
+    return [(message as AssistantMessage).content.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("")];
+  });
+}
 export const selectedPiModel = {
   api: "faux:test" as Api,
   baseUrl: "https://faux.local",
@@ -35,7 +68,7 @@ export const selectedPiModel = {
 export const selectedModelReference: ModelReference = {id: "claude-sonnet", providerId: "anthropic", thinkingLevel: "high"};
 
 export const imageAttachment = {
-  contentBase64: "aW1hZ2UtYnl0ZXM=",
+  contentBase64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII=",
   id: "image-1",
   kind: "image" as const,
   mime: "image/png",
@@ -53,72 +86,6 @@ export const textAttachment = {
   size: 20,
   type: "attachment" as const,
 };
-
-export function piAgentMessage(input: unknown): AgentSession["messages"][number] {
-  return input as AgentSession["messages"][number];
-}
-
-export function userMessage(text: string, timestamp = 1): AgentSession["messages"][number] {
-  return piAgentMessage({content: [{text, type: "text"}], id: `user-${timestamp}`, role: "user", timestamp});
-}
-
-export function assistantMessage(text: string, timestamp = 2): AgentSession["messages"][number] {
-  return piAgentMessage({content: [{text, type: "text"}], id: `assistant-${timestamp}`, role: "assistant", timestamp});
-}
-
-export function contentPartsEntry(contentParts: readonly UserMessageContentPart[], input?: {id?: string; parentId?: string | null; timestamp?: string}): SessionEntry {
-  return {
-    customType: "supernova.user-message-content-parts",
-    data: {contentParts},
-    id: input?.id ?? "content-parts-1",
-    parentId: input?.parentId ?? null,
-    timestamp: input?.timestamp ?? "1970-01-01T00:00:00.001Z",
-    type: "custom",
-  };
-}
-
-export function messageEntry(message: AgentSession["messages"][number], input?: {id?: string; parentId?: string | null; timestamp?: string}): SessionEntry {
-  return {
-    id: input?.id ?? `${message.role}-entry`,
-    message,
-    parentId: input?.parentId ?? null,
-    timestamp: input?.timestamp ?? new Date(message.timestamp).toISOString(),
-    type: "message",
-  };
-}
-
-export function piEntries(messages: readonly AgentSession["messages"][number][]): SessionEntry[] {
-  let parentId: string | null = null;
-
-  return messages.flatMap((message, index) => {
-    const timestamp = new Date(message.timestamp).toISOString();
-    const entries: SessionEntry[] = [];
-
-    if (message.role === "user") {
-      const contentParts = Array.isArray(message.content)
-        ? message.content
-            .filter((part): part is {readonly text: string; readonly type: "text"} => part.type === "text" && "text" in part && part.text.length > 0)
-            .map((part) => ({text: part.text, type: "text" as const}))
-        : [{text: message.content, type: "text" as const}];
-      const metadataEntry = contentPartsEntry(contentParts, {id: `metadata-${index}`, parentId, timestamp});
-      entries.push(metadataEntry);
-      parentId = metadataEntry.id;
-    }
-
-    const entry = messageEntry(message, {id: `entry-${index}`, parentId, timestamp});
-    entries.push(entry);
-    parentId = entry.id;
-    return entries;
-  });
-}
-
-function appendConversation(manager: PiSessionManager, input?: {assistantText?: string; requestText?: string}): void {
-  const requestText = input?.requestText ?? "Existing request";
-  const assistantText = input?.assistantText ?? "Existing response";
-  manager.appendCustomEntry("supernova.user-message-content-parts", {contentParts: [{text: requestText, type: "text"}]});
-  manager.appendMessage({content: [{text: requestText, type: "text"}], role: "user", timestamp: 1});
-  manager.appendMessage(fauxAssistantMessage(assistantText, {timestamp: 2}));
-}
 
 async function registerFauxModel(input: {faux: FauxProviderRegistration; modelRuntime: ModelRuntime}): Promise<void> {
   const model = input.faux.getModel();
@@ -142,16 +109,24 @@ async function registerFauxModel(input: {faux: FauxProviderRegistration; modelRu
   await input.modelRuntime.refresh({allowNetwork: false});
 }
 
+/**
+ * Builds the session runtime over a real engine: session files in a temp directory, Pi's `ModelRuntime` with a faux
+ * provider, in-memory settings, and test resources. `createSession` makes an empty session under a project.
+ */
 export async function createPiTestRuntime(input?: {
   readonly checkpointStore?: CheckpointStore;
+  /** Streams responses at this rate, as the e2e server does; responses are instant by default. */
+  readonly tokensPerSecond?: number;
   readonly promptTemplates?: readonly PromptTemplate[];
-  readonly reopenManagers?: boolean;
-  readonly sessionDir?: string;
   readonly settings?: Parameters<typeof SettingsManager.inMemory>[0];
   readonly skillContentByPath?: Readonly<Record<string, string>>;
   readonly skills?: readonly Skill[];
+  readonly sessionStorageRoot?: string;
+  /** Old-SDK extension files to load into every session through Pi's loader, as a user's `extensions` setting would. */
+  readonly extensionPaths?: readonly string[];
 }) {
   const checkpointStorageRoot = mkdtempSync(join(tmpdir(), "supernova-checkpoint-storage-"));
+  const sessionStorageRoot = input?.sessionStorageRoot ?? mkdtempSync(join(tmpdir(), "supernova-session-storage-"));
   const defaultProjectRoot = mkdtempSync(join(tmpdir(), "supernova-test-project-"));
   const modelRuntime = await ModelRuntime.create({modelsPath: null});
   const faux = registerFauxProvider({
@@ -168,56 +143,12 @@ export async function createPiTestRuntime(input?: {
       },
     ],
     provider: selectedPiModel.provider,
+    ...(input?.tokensPerSecond ? {tokenSize: {max: 8, min: 4}, tokensPerSecond: input.tokensPerSecond} : {}),
   });
-  const sessions = new Map<string, PiSessionManager>();
-  let openCount = 0;
   let refreshCount = 0;
-
   await registerFauxModel({faux, modelRuntime});
 
-  const rememberSession = (manager: PiSessionManager) => {
-    sessions.set(manager.getSessionId(), manager);
-    return manager;
-  };
-  const sessionRecord = (manager: PiSessionManager) => ({
-    info: {cwd: manager.getCwd(), id: manager.getSessionId(), path: manager.getSessionFile() ?? `memory://${manager.getSessionId()}`},
-    manager,
-  });
-
-  const agentSessionFactory: AgentSessionFactory = {
-    createAgentSession: ({cwd, sessionManager}) =>
-      createAgentSession({
-        cwd,
-        modelRuntime,
-        noTools: "all",
-        sessionManager,
-        settingsManager: SettingsManager.inMemory(input?.settings),
-      }),
-  };
-  /** A `SessionManager` that keeps every created manager in memory so ids resolve without a sessions folder. */
-  const sessionManagers = {
-    create: (projectPath: string, _sessionDir: string | undefined, options?: {id?: string}) =>
-      rememberSession(input?.sessionDir ? SessionManager.create(projectPath, input.sessionDir, options) : SessionManager.inMemory(projectPath, options)),
-    listAll: async () => {
-      // Forks create their file directly, so a session dir is also listed from disk, as production does.
-      const created = [...sessions.values()].map((manager) => sessionRecord(manager).info);
-      if (!input?.sessionDir) return created;
-      const onDisk = await SessionManager.listAll(input.sessionDir);
-      return [...created, ...onDisk.filter((candidate) => !created.some((existing) => existing.id === candidate.id))];
-    },
-    open: (path: string) => {
-      openCount++;
-      const sessionManager = [...sessions.values()].find((manager) => sessionRecord(manager).info.path === path);
-      if (!sessionManager) {
-        if (input?.sessionDir) return rememberSession(SessionManager.open(path, input.sessionDir));
-        throw new Error("Session not found.");
-      }
-      const sessionFile = sessionManager.getSessionFile();
-      if (input?.reopenManagers && input.sessionDir && sessionFile) return SessionManager.open(sessionFile, input.sessionDir);
-      return sessionManager;
-    },
-  } as unknown as PiSdk["SessionManager"];
-  const sdk: Pick<PiSdk, "modelRuntime" | "SessionManager"> = {
+  const sdk = {
     // Tests never reach the network; the refresh that would is counted and downgraded.
     modelRuntime: new Proxy(modelRuntime, {
       get(target, property, receiver) {
@@ -228,14 +159,21 @@ export async function createPiTestRuntime(input?: {
         };
       },
     }),
-    SessionManager: sessionManagers,
   };
-  const titleGenerator: TitleGenerator = {
-    generateSessionTitle: async () => "Generated title",
-  };
+  const titleGenerator: TitleGenerator = {generateSessionTitle: async () => "Generated title"};
+  let loadCount = 0;
   const resourceCache: ResourceCache = {
     initialize: async () => undefined,
     invalidate: () => undefined,
+    load: async (cwd) => {
+      loadCount++;
+      // An agent dir with no extensions of its own, so only the configured paths load.
+      const extensions = input?.extensionPaths?.length
+        ? await discoverAndLoadExtensions([...input.extensionPaths], cwd, sessionStorageRoot)
+        : {errors: [], extensions: [], runtime: {} as never};
+      if (extensions.errors.length > 0) throw new Error(extensions.errors.map((error) => `${error.path}: ${error.error}`).join("\n"));
+      return {contextFiles: [], extensions, promptTemplates: input?.promptTemplates ?? [], skills: input?.skills ?? []};
+    },
     listPromptTemplates: async () => input?.promptTemplates ?? [],
     listSkills: async () => input?.skills ?? [],
     readSkillContent: async (skill) => {
@@ -245,93 +183,142 @@ export async function createPiTestRuntime(input?: {
     },
   };
 
-  const events = new EventBus<SessionStreamEvent>();
-  const pool = new SessionPool(
-    {
-      agentSessionFactory,
-      checkpointStore: input?.checkpointStore ?? new FileCheckpointStore(checkpointStorageRoot),
-      eventBus: events,
-      resourceCache,
-      sdk,
+  // One settings object for every session, so a test can change it between turns as a user edits settings.json.
+  const settings = SettingsManager.inMemory(input?.settings);
+  const checkpointStore = input?.checkpointStore ?? new FileCheckpointStore(checkpointStorageRoot);
+  const tools = createSupernovaTools(modelRuntime);
+  /** Every problem the store reported that did not fail a command, in order: extension diagnostics and engine reports. */
+  const reports: string[] = [];
+  const store = new SessionStore({
+    sdk,
+    resourceCache,
+    tools: () => tools,
+    root: sessionStorageRoot,
+    settings: () => settings,
+    onReport: (sessionId, message) => {
+      reports.push(message);
+      runtime.reportError(sessionId, message);
     },
-    titleGenerator
-  );
-  const runtime = new SessionRuntime({events, pool});
-  const sessionsFeature = new Sessions({resourceCache, sdk});
+  });
+  const runtime: SessionRuntime = new SessionRuntime({checkpointStore, resourceCache, sdk, store, titleGenerator});
+  const sessionsFeature = new Sessions({documents: runtime, resourceCache, sdk, store});
+  const projects = new Projects({store});
 
-  /** Subscribes to runtime events and resolves once the stream has connected. Call `stop()` when done. */
-  const watchEvents = async (): Promise<{readonly events: SessionStreamEvent[]; readonly stop: () => Promise<void>}> => {
-    const events: SessionStreamEvent[] = [];
-    const watcher = runtime.watchEvents();
-    const pump = (async () => {
-      for await (const event of watcher) events.push(event);
-    })();
-    await waitUntil(() => {
-      if (!events.some((event) => event.type === "connected")) throw new Error("Stream did not connect.");
-    });
+  /**
+   * Observes a session as an attached client does: its transcript's replicated state, whose subscribers receive each
+   * Chord delta as a new value, and the session board.
+   */
+  const observe = async (sessionId: string): Promise<Observation> => {
+    const versions: Session[] = [];
+    const board: SessionDirectoryState[] = [];
+    const transcript = await runtime.transcript(sessionId);
+    const stopTranscript = transcript.state.subscribe((value) => void versions.push(value));
+    const stopBoard = runtime.board.state.subscribe((value) => void board.push(value));
     return {
-      events,
-      stop: async () => {
-        await watcher.return(undefined);
-        await pump;
+      versions,
+      board,
+      stop: () => {
+        stopTranscript();
+        stopBoard();
       },
     };
   };
 
-  /** Records runtime events while `run` executes, then waits for `settled(events)` to stop throwing. */
-  const collectEvents = async (run: () => Promise<unknown>, settled: (events: readonly SessionStreamEvent[]) => void): Promise<SessionStreamEvent[]> => {
-    const {events, stop} = await watchEvents();
+  /** Runs `work` while observing a session, then waits for `settled` to stop throwing. */
+  const observeWhile = async (sessionId: string, work: () => Promise<unknown>, settled: (observation: Observation) => void | Promise<void> = () => undefined) => {
+    const observation = await observe(sessionId);
     try {
-      await run();
-      await waitUntil(() => settled(events));
-      return events;
+      await work();
+      await waitUntil(() => settled(observation));
+      return observation;
     } finally {
-      await stop();
+      observation.stop();
     }
   };
 
-  const sendMessage = (messageInput: Omit<SendMessagePayload, "contentParts"> & {readonly contentParts?: SendMessagePayload["contentParts"]; readonly message?: string}) =>
-    collectEvents(
-      () => {
-        const {message, ...payload} = messageInput;
-        return runtime.sendMessage({contentParts: message ? [{text: message, type: "text"}] : [], ...payload});
+  /** Waits until the session's run ended and every turn has its after-turn checkpoint. */
+  const settled = async (sessionId: string): Promise<void> => {
+    await waitUntil(async () => {
+      if ((await runtime.current(sessionId)).live.run !== undefined) throw new Error("Session is still running.");
+      const turns = await (await store.file(sessionId)).turnRecords();
+      if (Object.values(turns).some((record) => record.after === undefined)) throw new Error("A turn has no after-turn checkpoint yet.");
+    });
+  };
+
+  /** The board's last problem for a session, or null. */
+  const lastError = (sessionId: string) => runtime.board.state.value.sessions[sessionId]?.error?.message ?? null;
+
+  /**
+   * Sends a message and waits for its run to settle. Returns every transcript value an attached client received, and
+   * the final document.
+   */
+  const sendMessage = async (messageInput: Omit<SendMessagePayload, "contentParts"> & {readonly contentParts?: SendMessagePayload["contentParts"]; readonly message?: string}) => {
+    const {message, ...payload} = messageInput;
+    const observation = await observeWhile(
+      payload.sessionId,
+      async () => {
+        await runtime.sendMessage({contentParts: message ? [{text: message, type: "text"}] : [], ...payload});
+        await settled(payload.sessionId);
       },
-      (events) => {
-        const endedRevision = events.find((event) => event.type === "session.agent.ended")?.revision;
-        if (events.some((event) => event.type === "session.error")) return;
-        if (endedRevision === undefined) throw new Error("Session agent did not end.");
-        if (!events.some((event) => event.type === "session.snapshot" && event.revision > endedRevision)) throw new Error("Session did not publish a final snapshot.");
+      async (seen) => {
+        if (seen.versions.at(-1) !== (await runtime.current(payload.sessionId))) throw new Error("The final value was not delivered yet.");
       }
     );
+    return {versions: observation.versions, board: observation.board, session: observation.versions.at(-1)!, error: lastError(payload.sessionId)};
+  };
+
+  /** Creates an empty session under `projectPath`. */
+  const createSession = async (projectPath = defaultProjectRoot) => {
+    const session = await sessionsFeature.create({id: crypto.randomUUID(), projectPath});
+    return {info: {id: session.id, cwd: projectPath}};
+  };
+
+  /** Appends one completed turn by running it against the faux model. Call before setting the test's responses. */
+  const appendConversation = async (sessionId: string, options?: {readonly assistantText?: string; readonly requestText?: string}) => {
+    faux.setResponses([fauxAssistantMessage(options?.assistantText ?? "Existing response")]);
+    await sendMessage({message: options?.requestText ?? "Existing request", modelReference: selectedModelReference, sessionId, captureCheckpoints: false});
+  };
+
+  /** The session's turn records in turn order: authored content, checkpoints, and the model each was sent with. */
+  const turnRecords = async (sessionId: string) => {
+    return Object.entries(await (await store.file(sessionId)).turnRecords())
+      .toSorted(([left], [right]) => Number(left) - Number(right))
+      .map(([, record]) => record);
+  };
 
   return {
-    appendConversation: (manager: PiSessionManager, options?: {assistantText?: string; requestText?: string}) => appendConversation(manager, options),
-    createSession: (projectPath = defaultProjectRoot) => sessionRecord(rememberSession(SessionManager.inMemory(projectPath))),
+    reports,
+    appendConversation,
+    createSession,
+    lastError,
+    observe,
+    observeWhile,
+    defaultProjectRoot,
+    store,
     faux,
-    getSession: (sessionId: string) => {
-      const manager = sessions.get(sessionId);
-      return manager ? sessionRecord(manager) : undefined;
+    get loadCount() {
+      return loadCount;
     },
+    modelRuntime,
+    projects,
     get refreshCount() {
       return refreshCount;
     },
-    modelRuntime,
-    get openCount() {
-      return openCount;
-    },
-    agentSessionFactory,
-    collectEvents,
     resourceCache,
     sdk,
     sessionRuntime: runtime,
+    sessionStorageRoot,
     sendMessage,
+    settled,
+    settings,
     sessions: sessionsFeature,
     titleGenerator,
-    watchEvents,
+    turnRecords,
     unregister: async () => {
-      await pool.dispose();
+      await runtime.dispose();
       faux.unregister();
       rmSync(checkpointStorageRoot, {force: true, recursive: true});
+      if (!input?.sessionStorageRoot) rmSync(sessionStorageRoot, {force: true, recursive: true});
       rmSync(defaultProjectRoot, {force: true, recursive: true});
     },
   };

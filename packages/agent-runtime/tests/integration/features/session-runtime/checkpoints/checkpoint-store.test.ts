@@ -156,7 +156,10 @@ describe("checkpoint store", () => {
     await capture(storageRoot, repo, "after");
     await writeFile(join(repo, "tracked.txt"), "manual\n");
 
-    await expect(restore(storageRoot, repo, "after", "before")).rejects.toThrow("Workspace files changed after the current checkpoint.");
+    await expect(restore(storageRoot, repo, "after", "before")).rejects.toMatchObject({
+      _tag: "CheckpointConflictError",
+      message: "Restoring this checkpoint would discard changes made after it.",
+    });
     await expect(readFile(join(repo, "tracked.txt"), "utf8")).resolves.toBe("manual\n");
   });
 

@@ -1,4 +1,4 @@
-import type {SessionSetupStep} from "@supernova/contracts/session-runtime/procedures";
+import type {SessionSetupStep} from "@supernova/contracts/services/session-runtime/procedures";
 import type {Ref} from "react";
 import {Marker, MarkerContent} from "@/features/sessions/components/timeline/marker";
 import MatrixLoader from "@/features/sessions/components/timeline/viewport/matrix-loader";

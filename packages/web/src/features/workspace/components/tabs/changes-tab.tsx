@@ -16,7 +16,7 @@ import {useWorkspaceRepositories} from "@/features/workspace/api/files/list-work
 import {buildFlatList, buildTree} from "@/features/workspace/lib/file-tree";
 import {workspaceErrorMessage} from "@/features/workspace/lib/workspace-error-message";
 import {useWorkspacePanelStore} from "@/features/workspace/stores/workspace-panel-store";
-import type {WorkspaceChangeEntry} from "@supernova/contracts/workspace/schemas";
+import type {WorkspaceChangeEntry} from "@supernova/contracts/services/workspace/schemas";
 import type {WorkspaceChangesTab} from "@/features/workspace/types/workspace-panel";
 import {cn} from "@/lib/cn";
 

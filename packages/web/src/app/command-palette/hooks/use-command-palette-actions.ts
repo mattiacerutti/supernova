@@ -2,7 +2,7 @@ import {useNavigate, useParams} from "@tanstack/react-router";
 import type {CommandPaletteAction} from "@/features/command-palette/types/command-palette";
 import {useProjectsStore} from "@/features/projects/stores/projects-store";
 import type {Project} from "@/features/projects/types/project";
-import {useSession} from "@/features/sessions/api/conversation/get-session";
+import {useSessionsStore} from "@/features/sessions/stores/sessions-store";
 
 const GENERAL_SECTION = "Actions";
 
@@ -12,10 +12,10 @@ export type CommandPalettePageId = "new-session" | "open-project";
 /** The project of the open session, if a session is open. A new-session draft does not count: it is already new. */
 function useOpenSessionProject(projects: readonly Project[]): Project | undefined {
   const sessionId = useParams({select: (params) => params.sessionId, strict: false});
-  // Reads the open session from the cache only; its page already loaded it.
-  const {data: session} = useSession(sessionId ?? "", {enabled: false});
+  // The runtime's directory names every open session's project; the session page already follows the open one.
+  const projectPath = useSessionsStore((state) => (sessionId === undefined ? undefined : state.entries[sessionId]?.projectPath));
 
-  return sessionId === undefined ? undefined : projects.find((project) => project.path === session?.projectPath);
+  return projectPath === undefined ? undefined : projects.find((project) => project.path === projectPath);
 }
 
 /**

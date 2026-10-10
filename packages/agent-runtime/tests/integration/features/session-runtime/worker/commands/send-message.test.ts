@@ -1,14 +1,16 @@
 import {execFile} from "node:child_process";
 import {promisify} from "node:util";
-import type {AssistantMessage} from "@earendil-works/pi-ai";
 import {mkdtempSync, rmSync} from "node:fs";
 import {readFile, writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
+import {estimateTokens} from "@earendil-works/pi-coding-agent";
 import {afterEach, describe, expect, it, vi} from "vitest";
 import type {CheckpointStore} from "@supernova/agent-runtime/features/session-runtime/checkpoints/checkpoint-store";
-import type {SessionStreamEvent} from "@supernova/contracts/session-runtime/procedures";
+import type {Session} from "@supernova/contracts/services/sessions/schemas";
+import type {SessionDirectoryState} from "@supernova/contracts/services/sessions/services";
 import {
+  assistantTexts,
   createPiTestRuntime,
   fauxAssistantMessage,
   fauxText,
@@ -16,6 +18,7 @@ import {
   imageAttachment,
   selectedModelReference,
   selectedPiModel,
+  turnContents,
   waitUntil,
 } from "@tests/support/session-runtime";
 
@@ -36,82 +39,67 @@ async function createGitProject(): Promise<string> {
   return projectPath;
 }
 
-function isSnapshotEvent(event: SessionStreamEvent): event is Extract<SessionStreamEvent, {type: "session.snapshot"}> {
-  return event.type === "session.snapshot";
+/** Every tool call the session's live partials and entries showed, with the arguments shown. */
+function shownToolCalls(versions: readonly Session[]): Array<{readonly name: string; readonly arguments: Record<string, unknown>}> {
+  return versions.flatMap((session) => {
+    const partial = session.live.generation?.message;
+    const messages = [...session.entries.flatMap((entry) => entry.model ?? []), ...(partial ? [partial] : [])];
+    return messages.flatMap((message) => (message.role === "assistant" ? message.content.flatMap((part) => (part.type === "toolCall" ? [part] : [])) : []));
+  });
 }
 
-function snapshotEvents(events: readonly SessionStreamEvent[]): Array<Extract<SessionStreamEvent, {type: "session.snapshot"}>> {
-  return events.filter(isSnapshotEvent);
+/** Every activity the board showed for a session, in order, without repeats. */
+function activities(board: readonly SessionDirectoryState[], sessionId: string): string[] {
+  return board.flatMap((value) => value.sessions[sessionId]?.activity ?? []).filter((activity, index, all) => activity !== all[index - 1]);
 }
 
-function isTurnEvent(event: SessionStreamEvent): event is Extract<SessionStreamEvent, {type: "session.turn"}> {
-  return event.type === "session.turn";
-}
-
-function turnEvents(events: readonly SessionStreamEvent[]): Array<Extract<SessionStreamEvent, {type: "session.turn"}>> {
-  return events.filter(isTurnEvent);
-}
-
-function assistantWithUsage(text: string, totalTokens: number): AssistantMessage {
+/** The pending blocking compactions any version showed, and the summaries entries carried. */
+function compactionsSeen(versions: readonly Session[]) {
   return {
-    ...fauxAssistantMessage(text),
-    api: selectedPiModel.api,
-    model: selectedPiModel.id,
-    provider: selectedPiModel.provider,
-    usage: {cacheRead: 0, cacheWrite: 0, cost: {cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0}, input: totalTokens, output: 0, totalTokens},
+    pending: versions.some((session) => (session.live.compactions ?? []).some((compaction) => compaction.blocking)),
+    summaries: versions.at(-1)!.entries.filter((entry) => entry.kind === "pi.compaction"),
   };
 }
 
 describe("sending messages through Pi sessions", () => {
-  const runtimes: Array<{unregister: () => void}> = [];
+  const runtimes: Array<{unregister: () => Promise<void>}> = [];
   const tempDirs: string[] = [];
 
-  afterEach(() => {
-    while (runtimes.length > 0) runtimes.pop()?.unregister();
+  afterEach(async () => {
+    while (runtimes.length > 0) await runtimes.pop()?.unregister();
     while (tempDirs.length > 0) rmSync(tempDirs.pop()!, {force: true, recursive: true});
   });
 
-  it("publishes session lifecycle, live turn, and final session snapshots", async () => {
+  it("streams the run as replicated Pi state, ending idle with the answer in its entries", async () => {
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const {info, manager} = pi.createSession();
-    pi.appendConversation(manager);
+    const {info} = await pi.createSession();
+    await pi.appendConversation(info.id);
     pi.faux.setResponses([fauxAssistantMessage([fauxThinking("Checking the workspace"), fauxText("Done.")])]);
+    const before = await pi.sessions.get({sessionId: info.id});
 
-    const events = await pi.sendMessage({message: "Fix it", modelReference: selectedModelReference, sessionId: info.id});
+    const {board, session, versions} = await pi.sendMessage({message: "Fix it", modelReference: selectedModelReference, sessionId: info.id});
 
-    expect(manager.buildSessionContext()).toMatchObject({model: {modelId: "claude-sonnet", provider: "anthropic"}, thinkingLevel: "high"});
-    expect(events.find((event) => event.type === "session.agent.started")).toMatchObject({sessionId: info.id, type: "session.agent.started"});
-    expect(snapshotEvents(events).every((event) => event.session.turns.length === 2)).toBe(true);
-    expect(events.find((event) => event.type === "session.turn")).toMatchObject({
-      turn: {status: "streaming", userMessage: {contentParts: [{text: "Fix it", type: "text"}]}},
-      type: "session.turn",
-    });
-    const finalSnapshot = snapshotEvents(events).at(-1);
-    expect(finalSnapshot).toMatchObject({
-      session: {
-        turns: [
-          {events: [{content: "Existing response", type: "assistant"}], userMessage: {contentParts: [{text: "Existing request", type: "text"}]}},
-          {
-            events: [
-              {content: "Checking the workspace", type: "reasoning"},
-              {content: "Done.", type: "assistant"},
-            ],
-            userMessage: {contentParts: [{text: "Fix it", type: "text"}]},
-          },
-        ],
-      },
-      type: "session.snapshot",
-    });
-    const liveContexts = turnEvents(events).map((event) => event.context.usedTokens);
-    expect(liveContexts.at(-1)).toEqual(finalSnapshot?.session.context.usedTokens);
-    expect(liveContexts.at(-1)).toBeGreaterThan(liveContexts[0]!);
+    expect(session.agent).toMatchObject({model: {modelId: "claude-sonnet", provider: "anthropic"}, thinkingLevel: "high"});
+    expect(activities(board, info.id)).toEqual(["idle", "running", "idle"]);
+    expect(session).toEqual(await pi.sessions.get({sessionId: info.id}));
+    // The run's user entry and its turn record arrive in the same version.
+    const running = versions.find((version) => version.runStart !== undefined);
+    expect(running?.entries.find((entry) => entry.id === running.runStart)?.contentParts).toEqual([{text: "Fix it", type: "text"}]);
+    expect(turnContents(session)).toEqual([[{text: "Existing request", type: "text"}], [{text: "Fix it", type: "text"}]]);
+    expect(assistantTexts(session)).toEqual(["Existing response", "Done."]);
+    const answer = session.entries.at(-1)?.model?.[0];
+    expect(answer?.role === "assistant" && answer.content.map((part) => part.type)).toEqual(["thinking", "text"]);
+    expect(session.live.run).toBeUndefined();
+    expect(session.runStart).toBeUndefined();
+    // The first running version still measures the context before the answer: the earlier usage plus the new prompt.
+    expect(running?.context.usedTokens).toBeGreaterThan(before.context.usedTokens!);
   });
 
   it("reveals each tool's completed inputs while later calls are still streaming", async () => {
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const {info} = pi.createSession();
+    const {info} = await pi.createSession();
     pi.faux.setResponses([
       fauxAssistantMessage(
         [
@@ -123,38 +111,31 @@ describe("sending messages through Pi sessions", () => {
       fauxAssistantMessage("Done."),
     ]);
 
-    const events = await pi.sendMessage({message: "Read both files", modelReference: selectedModelReference, sessionId: info.id});
-    const toolsByUpdate = turnEvents(events).map((event) => event.turn.events.flatMap((part) => (part.type === "tool" && part.tool ? [part.tool] : [])));
+    const {session, versions} = await pi.sendMessage({message: "Read both files", modelReference: selectedModelReference, sessionId: info.id});
 
-    expect(toolsByUpdate).toContainEqual([{kind: "file-read", status: "pending"}]);
-    expect(toolsByUpdate).toContainEqual([{kind: "file-read", status: "pending", input: {path: "one.ts"}}]);
-    expect(toolsByUpdate).toContainEqual([
-      {kind: "file-read", status: "pending", input: {path: "one.ts"}},
-      {kind: "file-read", status: "pending"},
-    ]);
-    expect(toolsByUpdate).toContainEqual([
-      {kind: "file-read", status: "pending", input: {path: "one.ts"}},
-      {kind: "file-read", status: "pending", input: {path: "two.ts"}},
-    ]);
+    // Partials are coalesced by the engine; the client hides a streaming partial's last call, every other call is whole.
+    expect(shownToolCalls(versions).map((call) => call.name)).toContain("read");
+    expect(shownToolCalls([session]).map((call) => call.arguments)).toEqual([{path: "one.ts"}, {path: "two.ts"}]);
+    expect(session.entries.filter((entry) => entry.kind === "pi.tool-result")).toHaveLength(2);
   });
 
-  it("uses the first user message without persisting a fallback when title generation fails", async () => {
+  it("keeps the session untitled without persisting a fallback when title generation fails", async () => {
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const {info, manager} = pi.createSession();
+    const {info} = await pi.createSession();
     vi.spyOn(pi.titleGenerator, "generateSessionTitle").mockRejectedValue(new Error("Title generation failed"));
     pi.faux.setResponses([fauxAssistantMessage("Done.")]);
 
-    const events = await pi.sendMessage({message: "Fix the flaky tests", modelReference: selectedModelReference, sessionId: info.id});
+    const {session} = await pi.sendMessage({message: "Fix the flaky tests", modelReference: selectedModelReference, sessionId: info.id});
 
-    expect(manager.getSessionName()).toBeUndefined();
-    expect(snapshotEvents(events).at(-1)?.session.title).toBe("Fix the flaky tests");
+    expect((await pi.store.find(info.id))!.title).toBeUndefined();
+    expect(session.title).toBe("Untitled session");
   });
 
   it("sends authored text and images to the provider while displaying authored content parts", async () => {
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const {info} = pi.createSession();
+    const {info} = await pi.createSession();
     const contentParts = [
       {text: "Review ", type: "text" as const},
       {id: "ref-1", kind: "file" as const, name: "file.ts", type: "reference" as const, value: "@src/file.ts"},
@@ -168,115 +149,85 @@ describe("sending messages through Pi sessions", () => {
       },
     ]);
 
-    const events = await pi.sendMessage({contentParts, modelReference: selectedModelReference, sessionId: info.id});
+    const {session} = await pi.sendMessage({contentParts, modelReference: selectedModelReference, sessionId: info.id});
 
     expect(providerUserContent).toEqual([
       {text: "Review @src/file.ts", type: "text"},
-      {data: "aW1hZ2UtYnl0ZXM=", mimeType: "image/png", type: "image"},
+      {data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII=", mimeType: "image/png", type: "image"},
     ]);
-    expect(snapshotEvents(events).at(-1)).toMatchObject({
-      session: {
-        turns: [
-          {
-            events: [{content: "Reviewed.", type: "assistant"}],
-            userMessage: {
-              contentParts: [
-                {text: "Review ", type: "text"},
-                {id: "ref-1", kind: "file", value: "@src/file.ts"},
-                {contentBase64: "aW1hZ2UtYnl0ZXM=", id: "image-1"},
-              ],
-            },
-          },
-        ],
-      },
-      type: "session.snapshot",
-    });
+    // Authored parts are stored without the image payload; Pi's user entry carries the image.
+    expect(turnContents(session)).toMatchObject([
+      [
+        {text: "Review ", type: "text"},
+        {id: "ref-1", kind: "file", value: "@src/file.ts"},
+        {id: "image-1", type: "attachment"},
+      ],
+    ]);
+    expect(turnContents(session)[0]?.[2]).not.toHaveProperty("contentBase64");
+    expect(session.entries[0]?.model?.[0]).toMatchObject({role: "user", content: expect.arrayContaining([expect.objectContaining({type: "image", mimeType: "image/png"})])});
+    expect(assistantTexts(session)).toEqual(["Reviewed."]);
   });
 
-  it("streams pending and completed auto-compaction as part of the live and final turn snapshots", async () => {
+  it("streams a pending auto-compaction in pi.live and commits its summary entry", async () => {
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const {info, manager} = pi.createSession();
-    pi.appendConversation(manager, {requestText: "Older request", assistantText: "Older response."});
-    // Start below the pre-prompt threshold, then cross it with the response's actual faux usage.
-    pi.appendConversation(manager, {requestText: "x".repeat((selectedPiModel.contextWindow - 20_000) * 4), assistantText: "Old response."});
-    pi.faux.setResponses([fauxAssistantMessage("Done." + "x".repeat(24_000)), fauxAssistantMessage("Compacted summary.")]);
+    const {info} = await pi.createSession();
+    await pi.appendConversation(info.id, {requestText: "Older request", assistantText: "Older response."});
+    // Sized to cross the compaction threshold but stay under the window, so the engine compacts before the request
+    // rather than on overflow; the text's token estimate is the engine's (`estimateTokens`).
+    const request = "x".repeat(Math.floor((selectedPiModel.contextWindow - 20_000) * 3.5));
+    await pi.appendConversation(info.id, {requestText: request, assistantText: "Old response."});
+    expect(estimateTokens({role: "user", content: request, timestamp: 0})).toBeLessThan(selectedPiModel.contextWindow);
+    // The engine compacts before the request once the estimate crosses the threshold, so the summary comes first.
+    pi.faux.setResponses([fauxAssistantMessage("Compacted summary."), fauxAssistantMessage("Done.")]);
 
-    const events = await pi.sendMessage({message: "Continue", modelReference: selectedModelReference, sessionId: info.id});
-    const liveCompactionEvents = events.filter(isTurnEvent).flatMap((event) => event.turn.events.filter((turnEvent) => turnEvent.type === "compaction"));
+    const {board, versions} = await pi.sendMessage({message: "Continue", modelReference: selectedModelReference, sessionId: info.id});
+    const seen = compactionsSeen(versions);
 
-    expect(liveCompactionEvents.map((event) => event.status)).toEqual(expect.arrayContaining(["pending", "completed"]));
-    expect(liveCompactionEvents).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({status: "pending", type: "compaction"}),
-        expect.objectContaining({status: "completed", summary: expect.stringContaining("Compacted summary."), type: "compaction"}),
-      ])
-    );
-    expect(events.find((event) => event.type === "session.compaction.ended")).toMatchObject({type: "session.compaction.ended"});
+    expect(seen.pending).toBe(true);
+    expect(activities(board, info.id)).toContain("compacting");
+    expect(JSON.stringify(seen.summaries)).toContain("Compacted summary.");
+    expect(assistantTexts(versions.at(-1)!).at(-1)).toBe("Done.");
   });
 
   it("keeps pre-prompt compaction in the submitted turn", async () => {
-    const pi = await createPiTestRuntime({settings: {compaction: {enabled: true, reserveTokens: 1000}}});
+    const pi = await createPiTestRuntime({settings: {compaction: {enabled: false}}});
     runtimes.push(pi);
-    const {info, manager} = pi.createSession();
-    const largePreviousRequest = "x".repeat(selectedPiModel.contextWindow * 4);
-    pi.appendConversation(manager, {requestText: "Older request", assistantText: "Older response."});
-    manager.appendCustomEntry("supernova.user-message-content-parts", {contentParts: [{text: largePreviousRequest, type: "text"}]});
-    manager.appendMessage({content: [{text: largePreviousRequest, type: "text"}], role: "user", timestamp: 1});
-    manager.appendMessage(assistantWithUsage("Large previous response", selectedPiModel.contextWindow - 500));
+    const {info} = await pi.createSession();
+    await pi.appendConversation(info.id, {requestText: "Older request", assistantText: "Older response."});
+    await pi.appendConversation(info.id, {requestText: "x".repeat(selectedPiModel.contextWindow * 4), assistantText: "Large previous response"});
+    pi.settings.applyOverrides({compaction: {enabled: true, reserveTokens: 1000}});
     pi.faux.setResponses([fauxAssistantMessage("Pre-prompt compacted summary."), fauxAssistantMessage("Response after pre-prompt compaction.")]);
 
-    const events = await pi.sendMessage({message: "Continue after pre-prompt compaction", modelReference: selectedModelReference, sessionId: info.id});
-    const liveTurn = turnEvents(events)
-      .map((event) => event.turn)
-      .find((turn) => turn?.events.some((turnEvent) => turnEvent.type === "assistant" && turnEvent.content === "Response after pre-prompt compaction."));
-    const pendingCompactionTurn = turnEvents(events)
-      .map((event) => event.turn)
-      .find((turn) => turn?.events.some((turnEvent) => turnEvent.type === "compaction" && turnEvent.status === "pending"));
+    const {session, versions} = await pi.sendMessage({message: "Continue after pre-prompt compaction", modelReference: selectedModelReference, sessionId: info.id});
+    const seen = compactionsSeen(versions);
+    const userIndex = session.entries.findIndex((entry) => entry.contentParts?.some((part) => part.type === "text" && part.text === "Continue after pre-prompt compaction"));
+    const summaryIndex = session.entries.findIndex((entry, index) => index > userIndex && entry.kind === "pi.compaction");
 
-    expect(events.find((event) => event.type === "session.compaction.ended")).toMatchObject({type: "session.compaction.ended"});
-    expect(pendingCompactionTurn).toMatchObject({
-      userMessage: {contentParts: [{text: "Continue after pre-prompt compaction", type: "text"}]},
-      events: expect.arrayContaining([expect.objectContaining({status: "pending", type: "compaction"})]),
-    });
-    expect(liveTurn).toMatchObject({
-      userMessage: {contentParts: [{text: "Continue after pre-prompt compaction", type: "text"}]},
-      events: expect.arrayContaining([
-        expect.objectContaining({status: "completed", summary: expect.stringContaining("Pre-prompt compacted summary."), type: "compaction"}),
-        expect.objectContaining({content: "Response after pre-prompt compaction.", type: "assistant"}),
-      ]),
-    });
-    const finalSnapshot = snapshotEvents(events).at(-1);
-    const persistedTurn = finalSnapshot?.session.turns.find((turn) =>
-      turn.userMessage.contentParts.some((part) => part.type === "text" && part.text === "Continue after pre-prompt compaction")
-    );
-    expect(finalSnapshot).toMatchObject({type: "session.snapshot"});
-    expect(persistedTurn).toMatchObject({userMessage: {contentParts: [{text: "Continue after pre-prompt compaction", type: "text"}]}});
-    expect(persistedTurn?.events).toContainEqual(
-      expect.objectContaining({status: "completed", summary: expect.stringContaining("Pre-prompt compacted summary."), type: "compaction"})
-    );
-    expect(persistedTurn?.events).toContainEqual(expect.objectContaining({content: "Response after pre-prompt compaction.", type: "assistant"}));
+    expect(seen.pending).toBe(true);
+    // The summary follows the turn's user entry, so it renders inside the submitted turn.
+    expect(userIndex).toBeGreaterThanOrEqual(0);
+    expect(summaryIndex).toBeGreaterThan(userIndex);
+    expect(JSON.stringify(session.entries[summaryIndex])).toContain("Pre-prompt compacted summary.");
+    expect(assistantTexts(session).at(-1)).toBe("Response after pre-prompt compaction.");
   });
 
-  it("reuses the runtime session manager across commands", async () => {
-    const sessionDir = mkdtempSync(join(tmpdir(), "supernova-session-test-"));
-    tempDirs.push(sessionDir);
-    const pi = await createPiTestRuntime({reopenManagers: true, sessionDir});
+  it("keeps one open session across commands and reopens it from its file", async () => {
+    const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const {info} = pi.createSession();
+    const {info} = await pi.createSession();
     pi.faux.setResponses([fauxAssistantMessage("First response."), fauxAssistantMessage("Second response."), fauxAssistantMessage("Third response.")]);
 
     await pi.sendMessage({message: "first", modelReference: selectedModelReference, sessionId: info.id});
     await pi.sendMessage({message: "second", modelReference: selectedModelReference, sessionId: info.id});
-    const events = await pi.sendMessage({message: "third", modelReference: selectedModelReference, sessionId: info.id});
-    const finalSnapshot = snapshotEvents(events).at(-1);
+    const loadsBefore = pi.loadCount;
+    const {session} = await pi.sendMessage({message: "third", modelReference: selectedModelReference, sessionId: info.id});
+    expect(pi.loadCount).toBe(loadsBefore);
 
-    expect(finalSnapshot?.session.turns.map((turn) => turn.userMessage.contentParts)).toEqual([
-      [{text: "first", type: "text"}],
-      [{text: "second", type: "text"}],
-      [{text: "third", type: "text"}],
-    ]);
-    expect(pi.openCount).toBe(1);
+    await pi.sessionRuntime.dispose();
+    const reopened = await pi.sessions.get({sessionId: info.id});
+    expect(reopened.entries).toEqual(session.entries);
+    expect(turnContents(reopened)).toEqual([[{text: "first", type: "text"}], [{text: "second", type: "text"}], [{text: "third", type: "text"}]]);
   });
 
   it("persists stable checkpoint entries around git-backed turns", async () => {
@@ -284,7 +235,7 @@ describe("sending messages through Pi sessions", () => {
     tempDirs.push(projectPath);
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const {info, manager} = pi.createSession(projectPath);
+    const {info} = await pi.createSession(projectPath);
     pi.faux.setResponses([
       async () => {
         await writeFile(join(projectPath, "file.txt"), "after\n");
@@ -295,13 +246,10 @@ describe("sending messages through Pi sessions", () => {
 
     await pi.sendMessage({message: "change files", modelReference: selectedModelReference, sessionId: info.id});
 
-    const customEntries = manager.getBranch().filter((entry) => entry.type === "custom");
-    const checkpointEntries = customEntries.filter((entry) => entry.customType === "supernova.checkpoint");
-    const checkpointId = (checkpointEntries.at(-1)?.data as {checkpointId?: string} | undefined)?.checkpointId;
+    const [record] = await pi.turnRecords(info.id);
 
-    expect(checkpointEntries.map((entry) => (entry.data as {phase?: string}).phase)).toEqual(["before-turn", "after-turn"]);
-    expect(checkpointId).toEqual(expect.any(String));
-    expect(customEntries.some((entry) => entry.customType === "supernova.checkpoint-patch")).toBe(false);
+    expect(record).toMatchObject({before: {status: "captured", sessionId: info.id}, after: {status: "captured", sessionId: info.id}});
+    expect(record?.after?.checkpointId).not.toBe(record?.before?.checkpointId);
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("after\n");
   });
 
@@ -316,19 +264,14 @@ describe("sending messages through Pi sessions", () => {
     };
     const pi = await createPiTestRuntime({checkpointStore});
     runtimes.push(pi);
-    const {info, manager} = pi.createSession();
+    const {info} = await pi.createSession();
     pi.faux.setResponses([fauxAssistantMessage("Changed files.")]);
 
-    const events = await pi.sendMessage({captureCheckpoints: false, message: "change files", modelReference: selectedModelReference, sessionId: info.id});
-    const customEntries = manager.getBranch().filter((entry) => entry.type === "custom");
-    const checkpointEntries = customEntries.filter((entry) => entry.customType === "supernova.checkpoint");
+    const {error} = await pi.sendMessage({captureCheckpoints: false, message: "change files", modelReference: selectedModelReference, sessionId: info.id});
 
     expect(captureCount).toBe(0);
-    expect(events.filter((event) => event.type === "session.error")).toEqual([]);
-    expect(checkpointEntries.map((entry) => entry.data)).toEqual([
-      {checkpointId: expect.any(String), phase: "before-turn", status: "disabled"},
-      {checkpointId: expect.any(String), phase: "after-turn", status: "disabled"},
-    ]);
+    expect(error).toBeNull();
+    expect(await pi.turnRecords(info.id)).toMatchObject([{before: {status: "disabled"}, after: {status: "disabled"}}]);
   });
 
   it("runs the turn with an uncovered before-turn checkpoint when the initial capture fails", async () => {
@@ -343,19 +286,14 @@ describe("sending messages through Pi sessions", () => {
     };
     const pi = await createPiTestRuntime({checkpointStore});
     runtimes.push(pi);
-    const {info, manager} = pi.createSession();
+    const {info} = await pi.createSession();
     pi.faux.setResponses([fauxAssistantMessage("Changed files.")]);
 
-    const events = await pi.sendMessage({message: "change files", modelReference: selectedModelReference, sessionId: info.id});
-    const customEntries = manager.getBranch().filter((entry) => entry.type === "custom");
-    const checkpointEntries = customEntries.filter((entry) => entry.customType === "supernova.checkpoint");
+    const {error, session} = await pi.sendMessage({message: "change files", modelReference: selectedModelReference, sessionId: info.id});
 
-    expect(events.filter((event) => event.type === "session.error")).toEqual([]);
-    expect(checkpointEntries.map((entry) => entry.data)).toEqual([
-      {checkpointId: expect.any(String), phase: "before-turn", status: "failed"},
-      {checkpointId: expect.any(String), phase: "after-turn", status: "captured"},
-    ]);
-    expect(snapshotEvents(events).at(-1)?.session.turns.at(-1)?.userMessage.contentParts).toEqual([{text: "change files", type: "text"}]);
+    expect(error).toBeNull();
+    expect(await pi.turnRecords(info.id)).toMatchObject([{before: {status: "failed"}, after: {status: "captured"}}]);
+    expect(turnContents(session).at(-1)).toEqual([{text: "change files", type: "text"}]);
     expect(pi.faux.state.callCount).toBe(1);
   });
 
@@ -371,62 +309,45 @@ describe("sending messages through Pi sessions", () => {
     };
     const pi = await createPiTestRuntime({checkpointStore});
     runtimes.push(pi);
-    const {info, manager} = pi.createSession();
+    const {info} = await pi.createSession();
     pi.faux.setResponses([fauxAssistantMessage("Changed files.")]);
 
-    const events = await pi.sendMessage({message: "change files", modelReference: selectedModelReference, sessionId: info.id});
-    const customEntries = manager.getBranch().filter((entry) => entry.type === "custom");
+    const {error, session} = await pi.sendMessage({message: "change files", modelReference: selectedModelReference, sessionId: info.id});
 
-    expect(events.filter((event) => event.type === "session.error")).toEqual([]);
-    expect(customEntries.filter((entry) => entry.customType === "supernova.checkpoint").map((entry) => entry.data)).toEqual([
-      {checkpointId: expect.any(String), phase: "before-turn", status: "captured"},
-      {checkpointId: expect.any(String), phase: "after-turn", status: "failed"},
-    ]);
-    expect(customEntries.some((entry) => entry.customType === "supernova.checkpoint-cursor")).toBe(true);
-    expect(snapshotEvents(events).at(-1)?.session.turns.at(-1)?.userMessage.contentParts).toEqual([{text: "change files", type: "text"}]);
+    expect(error).toBeNull();
+    expect(await pi.turnRecords(info.id)).toMatchObject([{before: {status: "captured"}, after: {status: "failed"}}]);
+    expect(turnContents(session).at(-1)).toEqual([{text: "change files", type: "text"}]);
     expect(pi.faux.state.callCount).toBe(1);
   });
 
   it("keeps overflow compaction continuation in the same live turn", async () => {
     const pi = await createPiTestRuntime({settings: {compaction: {enabled: true, keepRecentTokens: 16}}});
     runtimes.push(pi);
-    const {info, manager} = pi.createSession();
-    pi.appendConversation(manager, {requestText: "Older request", assistantText: "Older response."});
+    const {info} = await pi.createSession();
+    await pi.appendConversation(info.id, {requestText: "Older request", assistantText: "Older response."});
     // Keep pre-prompt estimation below the threshold so the provider error triggers recovery.
-    pi.appendConversation(manager, {requestText: "Recent request ".repeat(20), assistantText: "Old response."});
+    await pi.appendConversation(info.id, {requestText: "Recent request ".repeat(20), assistantText: "Old response."});
     pi.faux.setResponses([
       fauxAssistantMessage("", {errorMessage: "prompt is too long", stopReason: "error"}),
       fauxAssistantMessage("Compacted overflow summary."),
       fauxAssistantMessage("Continued after compaction."),
     ]);
 
-    const events = await pi.sendMessage({message: "Fix overflow", modelReference: selectedModelReference, sessionId: info.id});
-    const liveTurns = turnEvents(events);
-    const compactionTurn = liveTurns.find((event) => event.turn.events.some((turnEvent) => turnEvent.type === "compaction" && turnEvent.status === "completed"));
-    const continuationTurn = liveTurns.find((event) => event.turn.events.some((turnEvent) => turnEvent.type === "assistant" && turnEvent.content.includes("Continued")));
+    const {session, versions} = await pi.sendMessage({message: "Fix overflow", modelReference: selectedModelReference, sessionId: info.id});
+    const userIndex = session.entries.findIndex((entry) => entry.contentParts?.some((part) => part.type === "text" && part.text === "Fix overflow"));
+    const after = session.entries.slice(userIndex + 1);
 
-    expect(events.find((event) => event.type === "session.compaction.ended")).toMatchObject({type: "session.compaction.ended"});
-    expect(compactionTurn).toMatchObject({
-      turn: {
-        userMessage: {contentParts: [{text: "Fix overflow", type: "text"}]},
-        events: expect.arrayContaining([expect.objectContaining({status: "completed", summary: expect.stringContaining("Compacted overflow summary."), type: "compaction"})]),
-      },
-    });
-    expect(continuationTurn).toMatchObject({
-      turn: {
-        userMessage: {contentParts: [{text: "Fix overflow", type: "text"}]},
-        events: expect.arrayContaining([
-          expect.objectContaining({status: "completed", summary: expect.stringContaining("Compacted overflow summary."), type: "compaction"}),
-          expect.objectContaining({content: "Continued after compaction.", type: "assistant"}),
-        ]),
-      },
-    });
+    expect(compactionsSeen(versions).pending).toBe(true);
+    // The summary and the continuation both follow the turn's user entry, with no other turn between.
+    expect(after.some((entry) => entry.kind === "pi.compaction" && JSON.stringify(entry).includes("Compacted overflow summary."))).toBe(true);
+    expect(assistantTexts({entries: after}).at(-1)).toBe("Continued after compaction.");
+    expect(after.some((entry) => entry.contentParts !== undefined)).toBe(false);
   });
 
   it("rejects an unavailable model without leaving the session locked", async () => {
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const {info} = pi.createSession();
+    const {info} = await pi.createSession();
 
     await expect(pi.sendMessage({message: "Fix it", modelReference: {...selectedModelReference, id: "missing-model"}, sessionId: info.id})).rejects.toThrow(
       "Selected model is not available."
@@ -440,7 +361,7 @@ describe("sending messages through Pi sessions", () => {
   it("rejects a registered model whose provider has no credentials with an auth error before any provider work", async () => {
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const {info} = pi.createSession();
+    const {info} = await pi.createSession();
     pi.modelRuntime.registerProvider("unauthenticated", {
       api: selectedPiModel.api,
       baseUrl: selectedPiModel.baseUrl,
@@ -483,7 +404,7 @@ describe("sending messages through Pi sessions", () => {
   it("does not prompt Pi when aborted during message preparation", async () => {
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const {info} = pi.createSession();
+    const {info} = await pi.createSession();
     let completeTitleGeneration: (() => void) | undefined;
     const titleGenerationStarted = new Promise<void>((resolveStarted) => {
       vi.spyOn(pi.titleGenerator, "generateSessionTitle").mockImplementation(
@@ -506,11 +427,11 @@ describe("sending messages through Pi sessions", () => {
     expect(pi.faux.state.callCount).toBe(0);
   });
 
-  it("keeps committed reads stable while aborting an active provider request", async () => {
+  it("shows the running turn in reads and settles idle after aborting an active provider request", async () => {
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
-    const {info, manager} = pi.createSession();
-    pi.appendConversation(manager);
+    const {info} = await pi.createSession();
+    await pi.appendConversation(info.id);
     let providerSignal: AbortSignal | undefined;
     let releaseProvider: (() => void) | undefined;
     const providerStarted = new Promise<void>((resolve) => {
@@ -525,25 +446,112 @@ describe("sending messages through Pi sessions", () => {
         },
       ]);
     });
-    const {events, stop} = await pi.watchEvents();
+    const observation = await pi.observe(info.id);
     try {
       const run = pi.sessionRuntime.sendMessage({contentParts: [{text: "Fix it", type: "text"}], modelReference: selectedModelReference, sessionId: info.id});
       await providerStarted;
-      const committedSession = await pi.sessionRuntime.getCommittedSession({sessionId: info.id});
-      expect(committedSession?.turns.map((turn) => turn.userMessage.contentParts)).toEqual([[{text: "Existing request", type: "text"}]]);
+      const running = await pi.sessions.get({sessionId: info.id});
+      expect(running.live.run).toBeDefined();
+      expect(turnContents(running)).toEqual([[{text: "Existing request", type: "text"}], [{text: "Fix it", type: "text"}]]);
 
       const abortRun = pi.sessionRuntime.abort({sessionId: info.id});
-      await waitUntil(() => expect(events.find((event) => event.type === "session.agent.started")).toBeDefined());
+      await waitUntil(() => expect(activities(observation.board, info.id)).toContain("running"));
       await waitUntil(() => expect(providerSignal?.aborted).toBe(true));
       releaseProvider?.();
       await abortRun;
       await run;
     } finally {
       releaseProvider?.();
-      await stop();
+      observation.stop();
     }
 
-    expect(events.find((event) => event.type === "session.agent.started")).toBeDefined();
     expect(providerSignal?.aborted).toBe(true);
+    await pi.settled(info.id);
+    expect((await pi.sessions.get({sessionId: info.id})).live.run).toBeUndefined();
+  });
+});
+
+describe("observing a run", () => {
+  it("lets an observer that subscribed mid-run follow the replicated state to the server's final document", async () => {
+    const pi = await createPiTestRuntime({tokensPerSecond: 1_000});
+    try {
+      const {info} = await pi.createSession();
+      pi.faux.setResponses([fauxAssistantMessage(`Streamed. ${"word ".repeat(150)}`)]);
+      await pi.sessionRuntime.sendMessage({contentParts: [{text: "Go", type: "text"}], modelReference: selectedModelReference, sessionId: info.id});
+      const observation = await pi.observe(info.id);
+      try {
+        await pi.settled(info.id);
+        const final: Session = await pi.sessions.get({sessionId: info.id});
+        await waitUntil(() => expect(observation.versions.at(-1)).toEqual(final));
+      } finally {
+        observation.stop();
+      }
+      expect(observation.versions[0]?.live.run).toBeDefined();
+      expect(observation.versions.length).toBeGreaterThan(1);
+    } finally {
+      await pi.unregister();
+    }
+  });
+});
+
+describe("recovering a session after the server stops mid-turn", () => {
+  it("resumes the interrupted turn from its file and settles it", async () => {
+    const sessionStorageRoot = mkdtempSync(join(tmpdir(), "supernova-restart-"));
+    const first = await createPiTestRuntime({sessionStorageRoot});
+    const {info} = await first.createSession();
+    const started = new Promise<void>((resolve) => {
+      first.faux.setResponses([
+        async (_context, options) => {
+          resolve();
+          // Never answers: the server stops while this request is in flight.
+          await new Promise((_resolve, reject) => options?.signal?.addEventListener("abort", () => reject(new Error("aborted"))));
+          return fauxAssistantMessage("never");
+        },
+      ]);
+    });
+    await first.sessionRuntime.sendMessage({contentParts: [{text: "Long task", type: "text"}], modelReference: selectedModelReference, sessionId: info.id});
+    await started;
+    await first.unregister();
+
+    const second = await createPiTestRuntime({sessionStorageRoot});
+    try {
+      second.faux.setResponses([fauxAssistantMessage("Recovered answer.")]);
+      await second.sessions.get({sessionId: info.id});
+      expect(second.lastError(info.id)).toBeNull();
+      await waitUntil(async () => {
+        const session = await second.sessions.get({sessionId: info.id});
+        expect(assistantTexts(session)).toContain("Recovered answer.");
+      });
+      expect(turnContents(await second.sessions.get({sessionId: info.id}))).toEqual([[{text: "Long task", type: "text"}]]);
+    } finally {
+      await second.unregister();
+      rmSync(sessionStorageRoot, {force: true, recursive: true});
+    }
+  });
+});
+
+describe("state under delayed frames", () => {
+  it("never shows a streamed answer and its final entry together", async () => {
+    const pi = await createPiTestRuntime({tokensPerSecond: 1_000});
+    try {
+      // Created through the store, so the delay below is installed before the session's worker subscribes.
+      const info = {id: crypto.randomUUID()};
+      await pi.store.create({id: info.id, projectPath: pi.defaultProjectRoot});
+      // A slow stream: partials are committed (every 100 ms) before the final answer.
+      pi.faux.setResponses([fauxAssistantMessage(`The one answer. ${"word ".repeat(200)}`)]);
+      // Delay every frame's handling past the next commit, as a busy server would.
+      const session = await pi.store.file(info.id);
+      const watch = session.watch.bind(session);
+      session.watch = (listener) => watch(() => setTimeout(listener, 150));
+      const {versions} = await pi.sendMessage({message: "Answer once", modelReference: selectedModelReference, sessionId: info.id});
+      for (const version of versions) {
+        const partial = version.live.generation?.message;
+        const shown = assistantTexts(version).filter((text) => text.includes("The one answer.")).length;
+        const streaming = partial?.content.some((part) => part.type === "text" && part.text.includes("The one answer.")) ? 1 : 0;
+        expect(shown + streaming).toBeLessThanOrEqual(1);
+      }
+    } finally {
+      await pi.unregister();
+    }
   });
 });

@@ -1,3 +1,4 @@
+import {toolView} from "@/features/sessions/lib/timeline/work/tool-details";
 import type {SessionWorkEvent} from "@/features/sessions/types/session-timeline-item";
 
 function plural(count: number, one: string, many: string): string {
@@ -19,16 +20,16 @@ export function summarizeWork(events: readonly SessionWorkEvent[]): string {
   const edited = new Set<string>();
 
   for (const event of events) {
-    const tool = event.tool;
-    if (tool?.status === "error") failed += 1;
+    if (event.tool.status === "error") failed += 1;
+    const view = toolView(event.tool);
 
-    switch (tool?.kind) {
+    switch (view.kind) {
       case "command":
         commands += 1;
         break;
       case "file-edit":
       case "file-write":
-        edited.add(tool.input?.path ?? `unknown:${event.id}`);
+        edited.add(view.path ?? `unknown:${event.id}`);
         break;
       case "file-read":
         reads += 1;

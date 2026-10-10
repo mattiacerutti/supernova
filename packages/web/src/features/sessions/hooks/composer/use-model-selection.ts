@@ -1,5 +1,5 @@
-import type {ModelDetails, ModelReference} from "@supernova/contracts/sessions/schemas";
-import type {ModelDefaults} from "@supernova/contracts/configuration/schemas";
+import type {ModelDetails, ModelReference} from "@supernova/contracts/services/sessions/schemas";
+import type {ModelDefaults} from "@supernova/contracts/services/configuration/schemas";
 import {resolveComposerModelSelection} from "@/features/sessions/lib/composer/models/model-defaults";
 import {useSessionModels} from "@/features/sessions/api/composer/list-session-models";
 import {modelKey, resolveThinkingLevel, createModelReference} from "@/features/sessions/lib/composer/models/model-reference";

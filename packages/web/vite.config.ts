@@ -45,8 +45,8 @@ export default defineConfig(({mode}) => ({
       ...(mode === "e2e"
         ? [
             {
-              find: /^@\/rpc\/transport\/client$/,
-              replacement: resolve(__dirname, "tests/e2e/mocks/timeline-rpc-client.ts"),
+              find: /^@\/runtime\/transport\/runtime-client$/,
+              replacement: resolve(__dirname, "tests/e2e/mocks/timeline-runtime-client.ts"),
             },
           ]
         : []),

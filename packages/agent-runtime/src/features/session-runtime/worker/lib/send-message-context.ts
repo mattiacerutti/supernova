@@ -1,38 +1,21 @@
 import type {ImageContent} from "@earendil-works/pi-ai";
-import type {SendMessagePayload} from "@supernova/contracts/session-runtime/procedures";
-import type {UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {SendMessagePayload} from "@supernova/contracts/services/session-runtime/procedures";
+import type {UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
 import type {ResourceCache} from "@supernova/agent-runtime/pi/resource-cache";
-import {USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE, imageContentFromParts} from "@supernova/agent-runtime/pi/lib/user-message/content-parts";
+import {imageContentFromParts} from "@supernova/agent-runtime/pi/lib/user-message/content-parts";
 import {buildPrompt} from "@supernova/agent-runtime/features/session-runtime/worker/lib/prompt-builder";
 
-export type SendMessageContextCustomEntry = {
-  readonly customType: typeof USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE;
-  readonly data: {readonly contentParts: readonly UserMessageContentPart[]};
-};
-
 export interface SendMessageContext {
+  /** The authored content as the timeline shows it; attachment payloads are stripped. */
   readonly contentParts: readonly UserMessageContentPart[];
-  readonly customEntries: readonly SendMessageContextCustomEntry[];
   readonly images: readonly ImageContent[];
   readonly prompt: string;
 }
 
-/** Prepares the Pi prompt, image content, and persisted metadata for a send-message request. */
+/** Prepares the model-facing prompt and images, and the authored content stored for display. */
 export async function prepareSendMessageContext(input: SendMessagePayload, options: {projectPath: string; resourceCache: ResourceCache}): Promise<SendMessageContext> {
-  // Strip base64 content from attachments since it's persisted separately for images and not needed for other attachments types.
+  // Strip base64 content: images are restored from the user message for display, other attachments are inlined.
   const contentParts = input.contentParts.map((part) => (part.type === "attachment" ? {...part, contentBase64: undefined} : part));
-
   const prompt = await buildPrompt({contentParts: input.contentParts, projectPath: options.projectPath, resourceCache: options.resourceCache});
-  const customEntries: SendMessageContextCustomEntry[] = [];
-
-  if (contentParts.length > 0) {
-    customEntries.push({customType: USER_MESSAGE_CONTENT_PARTS_CUSTOM_TYPE, data: {contentParts}});
-  }
-
-  return {
-    contentParts,
-    customEntries,
-    images: imageContentFromParts(input.contentParts),
-    prompt,
-  };
+  return {contentParts, images: imageContentFromParts(input.contentParts), prompt};
 }
