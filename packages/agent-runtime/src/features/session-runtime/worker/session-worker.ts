@@ -50,7 +50,6 @@ function activityOf(session: Session): SessionActivity {
 export class SessionWorker {
   /** The document clients mirror, current after every published change. */
   public readonly document: DocumentState<Session>;
-  // What the commands in `commands/` run with, besides the methods below.
   public readonly store: SessionStore;
   public readonly sdk: Pick<PiSdk, "modelRuntime">;
   public readonly resourceCache: ResourceCache;

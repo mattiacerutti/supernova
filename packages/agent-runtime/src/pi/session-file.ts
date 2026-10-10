@@ -145,7 +145,7 @@ export class SessionFile {
     }
   }
 
-  /** The session document, rebuilt from the branch's committed view split at the leaf. See `SessionSnapshot`. */
+  /** The session document, from the branch's committed view split at the leaf. */
   public async snapshot(record: SessionRecord): Promise<Session> {
     const state = await this.state();
     const view = await this.view(state.branch);

@@ -45,7 +45,7 @@ interface OpenSession {
  */
 export class SessionStore {
   private readonly root: string;
-  // Stores promises to prevent multiple opens of the same file
+  /** Pending opens, so two callers of one id share a single open. */
   private readonly open = new Map<string, Promise<OpenSession>>();
   private readonly settingsCache = new Map<string, SettingsManager>();
   private catalogOpening: Promise<SessionCatalog> | undefined;

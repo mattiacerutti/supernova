@@ -37,7 +37,7 @@ Not delivered, and reported in the session when an extension subscribes: streami
 - Configuration lives on the machine running the Supernova server. Global settings use `~/.supernova/userdata/agent/settings.json`, development settings use `~/.supernova/dev/agent/settings.json`, and project settings use `<project>/.supernova/settings.json`.
 - Custom model configuration uses `~/.supernova/userdata/agent/models.json`, or `~/.supernova/dev/agent/models.json` in development, on the server machine. Project-local `models.json` files are not loaded.
 - Supernova does not read Pi's default `~/.pi/agent/settings.json` or `.pi/settings.json`.
-- Resource reload is not yet integrated. Applying configuration/resource changes to active sessions requires restarting the app; browser users should also restart the server and refresh the page.
+- Settings → Extensions → Update reinstalls extensions in open sessions. Other configuration changes, and edits to a local extension file, apply after restarting the server.
 - Supernova's `/compact`, `/undo`, and `/redo` are its own actions. Other Pi terminal commands are not automatically available.
 - There is no sandbox or project trust prompt. Opening a project composer can load and execute extensions with full server permissions.
 

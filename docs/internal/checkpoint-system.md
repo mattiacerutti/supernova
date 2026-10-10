@@ -62,9 +62,8 @@ interface CheckpointRef {
 interface TurnRecord {
   readonly contentParts: UserMessageContentPart[];
   readonly capture: boolean;
-  readonly model: {provider: string; modelId: string; thinkingLevel: string};
-  readonly before?: CheckpointRef;
-  readonly after?: CheckpointRef;
+  readonly before: CheckpointRef;
+  readonly after?: CheckpointRef; // absent until the turn's run ends
 }
 
 type SessionState = {

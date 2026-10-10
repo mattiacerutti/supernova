@@ -76,8 +76,8 @@ export interface BridgedExtensions {
 }
 
 /**
- * Bridges every extension the resource loader collected into engine extensions. Pi's `ExtensionRunner` is wired to
- * the old engine, so this is ours; keep it the only module that knows the old extension shapes.
+ * Maps the extensions Pi's loader found onto engine extensions. Pi's own `ExtensionRunner` drives the old engine, so it
+ * cannot be reused here.
  */
 export function bridgeExtensions(input: {
   readonly cwd: string;

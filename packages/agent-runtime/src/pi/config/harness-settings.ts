@@ -51,10 +51,8 @@ function requestOptions(settings: SettingsManager): ModelsSimpleStreamOptions {
   const budgets = settings.getThinkingBudgets();
   const websocketConnectTimeoutMs = settings.getWebSocketConnectTimeoutMs();
   return {
-    // TODO(pi-durable): workaround. `thinkingBudgets` and `websocketConnectTimeoutMs` are not in pi-durable's curated
-    // `ConversationStreamOptions` (packages/durable/docs/pico-v5.md), and Pi's own durable agent does not forward them.
-    // Upstream gives no reason for the omission. Monitor upstream: if they add these options, move them to
-    // `HarnessSettings.stream` and delete this; if they explain the omission as deliberate, reconsider forwarding them.
+    // TODO(pi-durable): `thinkingBudgets` and `websocketConnectTimeoutMs` are not in `ConversationStreamOptions`. If the
+    // engine adds them, move them to `HarnessSettings.stream` and delete this.
     ...(budgets === undefined ? {} : {thinkingBudgets: budgets}),
     ...(websocketConnectTimeoutMs === undefined ? {} : {websocketConnectTimeoutMs}),
   };

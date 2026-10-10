@@ -40,14 +40,12 @@ Both stores live on users' machines across releases, so every change to what the
 - **Catalog.** `MIGRATIONS` in `session-catalog.ts` is the schema as the ordered SQL that builds it. SQLite's `user_version` records how many entries a catalog has run; `open` runs the rest, each in its own transaction, so a crash between two leaves a catalog a later open finishes. A schema change is a new entry at the end, never an edit to an existing one (`ALTER TABLE`, `DROP INDEX`/`CREATE INDEX`, or a copy-and-rename for what SQLite cannot alter), with a test that opens a catalog built by the previous entries and checks its records survive. A catalog whose `user_version` exceeds the list was written by a newer Supernova and is refused; downgrades are not supported.
 - **Session files.** The `supernova.session` document carries `version` in its `defineDoc`. A change to `SessionState` bumps it and extends `migrate(value, fromVersion)`, which the engine runs when a file written by an older version is next read (durable spec §3.6); it is pure and returns a complete current value. The engine refuses a document written by a newer version.
 
-Sessions written by the old SDK (`<agentDir>/sessions/`) are ignored: they are not listed, read, or changed, and their files stay where they are.
-
 ## Architecture
 
 ```mermaid
 flowchart BT
     subgraph server[Server]
-        edge["Session services<br/>pi-server on /pi"]
+        edge["Session services<br/>pi-server on /ws"]
         sessions["Sessions<br/>create, load, rename, fork"]
         runtimeService["SessionRuntime<br/>commands, board"]
         worker["SessionWorker per session<br/>document as replicated state"]
@@ -77,7 +75,7 @@ flowchart BT
     view --> timeline
 ```
 
-`pi/session-store.ts` is the seam onto the engine; features never import `pi-durable`. Contracts import Pi's types (type-only) so the browser sees Pi's shapes; `z.custom<PiType>()` carries those values unchecked.
+Contracts import Pi's types (type-only) so the browser sees Pi's shapes; `z.custom<PiType>()` carries those values unchecked.
 
 | State                                      | Owner                                     | Lifetime        |
 | ------------------------------------------ | ----------------------------------------- | --------------- |

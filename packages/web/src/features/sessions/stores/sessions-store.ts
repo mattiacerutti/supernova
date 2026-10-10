@@ -52,7 +52,7 @@ function without<T>(record: Readonly<Record<string, T>>, key: string): Record<st
 
 /**
  * Everything this client knows about sessions: what the runtime pushes, filled only by `api/sessions-sync`, and what
- * the user did that the runtime does not show yet. Hooks read it through `lib/conversation/session-view`.
+ * the user did that the runtime does not show yet. Hooks read it through `lib/session-view`.
  */
 export const useSessionsStore = create<SessionsStoreState>()((set) => ({
   entries: {},
