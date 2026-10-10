@@ -29,9 +29,16 @@ Each Supernova session is one SQLite file, `<agentDir>/sessions-v2/<sessionId>/s
 
 `<agentDir>/sessions-v2/catalog.sqlite` holds every session's record (project, worktree, title, fork source, pin, archive time), one row each (`pi/lib/session/session-catalog.ts`). Lookup by id, listing by project, and title search read only the catalog; no session file is opened for any. The engine cannot list by project, so the catalog is ours.
 
-Listings and searches are paged on the server. Two partial indexes over unarchived rows hold them in order: `(project_path, pinned DESC, updated_at DESC, id DESC)` for a project's listing, and `(updated_at DESC, id DESC)` for search, which filters titles with an escaped `LIKE` while it walks it. A page is a keyset query that continues after the last row's sort key, read from the index without sorting; its cursor is that key, opaque to clients. The id breaks ties, so a page boundary never skips or repeats a row. The schema version is SQLite's `user_version`; a catalog from any other version is refused.
+Listings and searches are paged on the server. Two partial indexes over unarchived rows hold them in order: `(project_path, pinned DESC, updated_at DESC, id DESC)` for a project's listing, and `(updated_at DESC, id DESC)` for search, which filters titles with an escaped `LIKE` while it walks it. A page is a keyset query that continues after the last row's sort key, read from the index without sorting; its cursor is that key, opaque to clients. The id breaks ties, so a page boundary never skips or repeats a row.
 
 Both use Node's `node:sqlite`: session files through pi-durable's `openNodeSqliteStorage`, the catalog directly.
+
+### Schema changes
+
+Both stores live on users' machines across releases, so every change to what they hold migrates in place; a release never asks a user to delete a file.
+
+- **Catalog.** `MIGRATIONS` in `session-catalog.ts` is the schema as the ordered SQL that builds it. SQLite's `user_version` records how many entries a catalog has run; `open` runs the rest, each in its own transaction, so a crash between two leaves a catalog a later open finishes. A schema change is a new entry at the end, never an edit to an existing one (`ALTER TABLE`, `DROP INDEX`/`CREATE INDEX`, or a copy-and-rename for what SQLite cannot alter), with a test that opens a catalog built by the previous entries and checks its records survive. A catalog whose `user_version` exceeds the list was written by a newer Supernova and is refused; downgrades are not supported.
+- **Session files.** The `supernova.session` document carries `version` in its `defineDoc`. A change to `SessionState` bumps it and extends `migrate(value, fromVersion)`, which the engine runs when a file written by an older version is next read (durable spec §3.6); it is pure and returns a complete current value. The engine refuses a document written by a newer version.
 
 Sessions written by the old SDK (`<agentDir>/sessions/`) are ignored: they are not listed, read, or changed, and their files stay where they are.
 

@@ -6,15 +6,17 @@ import type {SessionRecord} from "@supernova/agent-runtime/pi/lib/session/sessio
 /** Time SQLite waits for a competing lock, as pi-durable's session files do. */
 const BUSY_TIMEOUT_MS = 5_000;
 
-/** Bumped with every schema change; `open` refuses a catalog written by a different version. */
-const SCHEMA_VERSION = 2;
-
 /**
+ * The schema, as the migrations that build it. Every schema change is a new entry at the end, never an edit to an
+ * existing one: a catalog records how many it has run (SQLite's `user_version`), and `open` runs the rest. A catalog
+ * from a newer Supernova has run more than this list knows and is refused.
+ *
  * Both reads page through an index in its order, so a page reads only the rows it returns: a project's unarchived
  * sessions, pinned first then newest (`sessions_listing`), and every unarchived session newest first for title search
  * (`sessions_recent`). Pages continue after the last row with a row-value comparison on the same columns.
  */
-const SCHEMA = `
+const MIGRATIONS: readonly string[] = [
+  `
   CREATE TABLE sessions (
     id TEXT PRIMARY KEY,
     project_path TEXT NOT NULL,
@@ -29,7 +31,8 @@ const SCHEMA = `
   ) STRICT;
   CREATE INDEX sessions_listing ON sessions (project_path, pinned DESC, updated_at DESC, id DESC) WHERE archived_at IS NULL;
   CREATE INDEX sessions_recent ON sessions (updated_at DESC, id DESC) WHERE archived_at IS NULL;
-`;
+  `,
+];
 
 const COLUMNS = "id, project_path, worktree_branch, worktree_path, title, forked_from, pinned, archived_at, created_at, updated_at";
 
@@ -101,11 +104,12 @@ export class SessionCatalog {
       database.exec("PRAGMA journal_mode = WAL");
       database.exec("PRAGMA synchronous = NORMAL");
       const {user_version: version} = database.prepare("PRAGMA user_version").get() as {user_version: number};
-      if (version !== 0 && version !== SCHEMA_VERSION) throw new Error(`The session catalog at ${path} was written by another version of Supernova.`);
-      if (version === 0) {
+      if (version > MIGRATIONS.length) throw new Error(`The session catalog at ${path} was written by a newer version of Supernova.`);
+      // Each migration commits on its own, so a crash between two leaves a catalog a later open finishes.
+      for (let next = version; next < MIGRATIONS.length; next++) {
         database.exec("BEGIN IMMEDIATE");
-        database.exec(SCHEMA);
-        database.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
+        database.exec(MIGRATIONS[next]!);
+        database.exec(`PRAGMA user_version = ${next + 1}`);
         database.exec("COMMIT");
       }
     } catch (error) {

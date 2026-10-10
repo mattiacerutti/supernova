@@ -47,6 +47,11 @@ export type SessionState = {
   turns: Record<string, TurnRecord>;
 };
 
+/**
+ * Stored in every session file. A change to `SessionState` bumps `version` and extends `migrate`, which the engine runs
+ * on the next read of a file written by an older version; the engine refuses a file written by a newer one. `migrate`
+ * is pure and returns a complete current value.
+ */
 export const SessionStateDoc = defineDoc<SessionState & JsonObject>({
   kind: "supernova.session",
   version: 1,

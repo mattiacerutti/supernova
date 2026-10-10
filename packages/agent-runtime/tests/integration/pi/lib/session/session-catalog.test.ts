@@ -140,12 +140,34 @@ describe("session catalog", () => {
     }
   });
 
-  it("refuses a catalog written by another schema version", async () => {
+  it("migrates a catalog to the current schema and keeps its records, and refuses one from a newer Supernova", async () => {
     const at = path();
-    const database = new DatabaseSync(at);
-    database.exec("PRAGMA user_version = 99");
-    database.close();
+    const first = await open(at);
+    first.insert(record({id: "kept"}));
+    const version = () => {
+      const database = new DatabaseSync(at);
+      try {
+        return (database.prepare("PRAGMA user_version").get() as {user_version: number}).user_version;
+      } finally {
+        database.close();
+      }
+    };
+    const current = version();
+    expect(current).toBeGreaterThan(0);
+    first.close();
+    catalogs.pop();
 
-    await expect(SessionCatalog.open(at)).rejects.toThrow("written by another version of Supernova");
+    // Reopening a current catalog runs nothing and keeps its records.
+    const reopened = await open(at);
+    expect(version()).toBe(current);
+    expect(reopened.find("kept")?.id).toBe("kept");
+    reopened.close();
+    catalogs.pop();
+
+    // A catalog from a newer Supernova has run migrations this version does not know.
+    const database = new DatabaseSync(at);
+    database.exec(`PRAGMA user_version = ${current + 1}`);
+    database.close();
+    await expect(SessionCatalog.open(at)).rejects.toThrow("written by a newer version of Supernova");
   });
 });
