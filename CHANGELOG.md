@@ -6,6 +6,9 @@ All notable changes to Supernova are documented in this file.
 
 ### Breaking Changes
 
+- Sessions created by earlier versions of Supernova are no longer listed or opened. Sessions now run on Pi's durable engine and are stored as SQLite files under `sessions-v2` in the agent directory; the old `sessions/*.jsonl` files are left in place but Supernova does not read them.
+- Pi extensions now run against the durable engine through a compatibility layer, and some no longer work as before. Streaming events (`message_update`, `tool_execution_update`), `input`, `session_compact`, `model_select`, `thinking_level_select`, and the session tree, fork, switch, and info events are not delivered; `before_agent_start` runs but its result is not applied. Extensions that subscribe to an undelivered event are reported in the session. Tools, providers, and the remaining events work as they did. See [Pi compatibility](docs/pi-compatibility.md#extensions).
+
 ### Added
 
 - Added a command palette, opened with ⌘K (Ctrl+K on Windows and Linux) or the sidebar's Search button. It searches sessions and actions together, starts a new session in the current project or a chosen one, and opens projects without leaving the palette.
@@ -15,7 +18,12 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
-- The client now receives sessions in Pi's own shape (its entries and live run state) and builds the timeline from them. The runtime is now served entirely as Chord services over Pi's service protocol on the server's `/ws` WebSocket, replacing Effect RPC: a running session reaches the client as small deltas instead of the whole running turn on every update, and terminal output arrives as appended text. Clients of the old RPC protocol can no longer connect.
+- Sessions now run on Pi's durable engine (`pi-durable`). Every streamed partial, tool output, and turn is written to the session's file before it is shown, so a server restart or crash resumes an interrupted response from where it stopped instead of losing it, and a browser that opens a session mid-response sees everything produced so far.
+- Running sessions show their activity in the sidebar as soon as the app connects, including sessions started from another browser or before this one opened.
+- Pinned sessions are now stored on the server and shared across browsers and devices, instead of in each browser's local storage. Existing pins are not carried over.
+- The sidebar loads a project's sessions five at a time from the server instead of loading all of them and revealing more locally.
+- Renaming, pinning, and archiving a session now update the sidebar at once instead of after a server round trip and reload.
+- Settings → Extensions → Update now reinstalls extensions in open sessions; a restart is no longer needed for the update to take effect.
 - Session titles are now generated in the background: the first response starts immediately and the title appears when it is ready, instead of the first turn waiting for it.
 
 ### Fixed
