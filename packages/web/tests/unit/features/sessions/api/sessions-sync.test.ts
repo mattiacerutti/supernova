@@ -247,6 +247,15 @@ describe("session commands and views", () => {
     ]);
   });
 
+  it("leaves a session being archived out, whether loaded or only in the directory", () => {
+    const summary = (id: string, updatedAt: string) => ({forked: false, id, pinned: false, title: id, updatedAt, worktree: false});
+    const loaded = [summary("session-1", "t1"), summary("session-3", "t0")];
+    const entries = {"session-2": entry({summary: summary("session-2", "t2")})};
+    const optimism = {"session-1": {archived: true}, "session-2": {archived: true}};
+
+    expect(projectSessions({entries, loaded, optimism, projectPath: "/workspace"}).map((session) => session.id)).toEqual(["session-3"]);
+  });
+
   it("shows a sent message until the send resolves", async () => {
     const {actions, services} = setup();
     let accept!: () => void;

@@ -101,7 +101,10 @@ export function projectSessions(input: {
   const {entries, loaded, optimism, projectPath} = input;
   const loadedIds = new Set(loaded.map((session) => session.id));
   const added = Object.values(entries).flatMap((entry) => (entry.projectPath === projectPath && entry.summary && !loadedIds.has(entry.summary.id) ? [entry.summary] : []));
-  return [...added, ...loaded].map((summary) => sessionSummary(summary, entries[summary.id], optimism[summary.id])).toSorted(listingOrder);
+  return [...added, ...loaded]
+    .filter((summary) => !optimism[summary.id]?.archived)
+    .map((summary) => sessionSummary(summary, entries[summary.id], optimism[summary.id]))
+    .toSorted(listingOrder);
 }
 
 /** A session as its page shows it: its document and the runtime's report, with the user's optimism applied to both. */
