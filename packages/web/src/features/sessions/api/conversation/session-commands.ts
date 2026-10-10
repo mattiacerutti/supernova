@@ -88,8 +88,8 @@ function navigate(sessionRuntime: SessionRuntimeService, navigation: CheckpointN
  */
 export function sessionActions(runtime: RuntimeClient) {
   const status = (sessionId: string) => {
-    const {entries, optimism} = useSessionsStore.getState();
-    return sessionStatus(entries[sessionId], optimism[sessionId]).status;
+    const {documents, entries, optimism} = useSessionsStore.getState();
+    return sessionStatus(entries[sessionId], optimism[sessionId], documents[sessionId]).status;
   };
 
   /** Starting a command clears the last failure and moves past the problem the runtime shows. */

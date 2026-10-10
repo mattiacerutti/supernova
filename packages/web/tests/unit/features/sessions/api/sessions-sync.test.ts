@@ -24,12 +24,12 @@ const ok = {ok: true, value: null} as const;
 const NAVIGATION_METHODS = {redo: "redoCheckpoint", revert: "revertToMessage", undo: "undoCheckpoint"} as const;
 
 /**
- * How the page shows a session: its document (`document`, an empty session by default), with the store's directory
- * entry and optimism.
+ * How the page shows a session: its document (`document`, an empty session by default; `null` before it loaded),
+ * with the store's directory entry and optimism.
  */
-function live(sessionId = "session-1", document: Session = session({id: sessionId})) {
+function live(sessionId = "session-1", document: Session | null = session({id: sessionId})) {
   const {entries, optimism} = useSessionsStore.getState();
-  const view = sessionView({entry: entries[sessionId], optimism: optimism[sessionId], session: document});
+  const view = sessionView({entry: entries[sessionId], optimism: optimism[sessionId], session: document ?? undefined});
   return {...view, liveMessage: view.liveTurn?.userMessage?.contentParts, turnIds: view.turns.map((turn) => turn.id)};
 }
 
@@ -211,17 +211,22 @@ describe("session commands and views", () => {
     expect(document("session-1")?.title).toBe("Renamed");
   });
 
-  it("shows what the runtime's directory reports, with no optimism", () => {
+  it("shows what the runtime's directory reports, with no optimism, until the document says otherwise", () => {
     const {services} = setup();
 
     setDirectory(services, {"session-1": entry({activity: "running"}), "session-2": entry({setupStep: "worktree"})});
-    expect(live()).toMatchObject({status: "streaming"});
+    expect(live("session-1", null)).toMatchObject({status: "streaming"});
     expect(live("session-2")).toMatchObject({setupStep: "worktree", status: "idle"});
 
     setDirectory(services, {"session-1": entry({activity: "compacting"}), "session-2": entry({error: {at: "t1", message: "Worktree failed"}})});
-    expect(live()).toMatchObject({status: "compacting"});
+    expect(live("session-1", null)).toMatchObject({status: "compacting"});
     expect(live("session-2")).toMatchObject({error: "Worktree failed", setupStep: null, status: "idle"});
     expect(useSessionsStore.getState().optimism).toEqual({});
+
+    // The directory's activity replicates apart from the document; a known document is the source so status and
+    // content never disagree within one update.
+    expect(live()).toMatchObject({status: "idle"});
+    expect(live("session-2", session({id: "session-2", live: {run: {}} as Session["live"]}))).toMatchObject({status: "streaming"});
   });
 
   it("lists loaded sessions with the runtime's newest summaries, new ones, and renames and pins not yet applied, in the runtime's order", () => {
