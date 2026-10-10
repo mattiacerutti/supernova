@@ -2,7 +2,7 @@ import {mkdtempSync, rmSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import type {PromptTemplate, Skill} from "@earendil-works/pi-coding-agent";
-import {ModelRuntime, SettingsManager} from "@earendil-works/pi-coding-agent";
+import {discoverAndLoadExtensions, ModelRuntime, SettingsManager} from "@earendil-works/pi-coding-agent";
 import type {Api, FauxProviderRegistration} from "@earendil-works/pi-ai/compat";
 import {fauxAssistantMessage, fauxText, fauxThinking, fauxToolCall, registerFauxProvider} from "@earendil-works/pi-ai/compat";
 import type {ResourceCache} from "@supernova/agent-runtime/pi/resource-cache";
@@ -122,6 +122,8 @@ export async function createPiTestRuntime(input?: {
   readonly skillContentByPath?: Readonly<Record<string, string>>;
   readonly skills?: readonly Skill[];
   readonly sessionStorageRoot?: string;
+  /** Old-SDK extension files to load into every session through Pi's loader, as a user's `extensions` setting would. */
+  readonly extensionPaths?: readonly string[];
 }) {
   const checkpointStorageRoot = mkdtempSync(join(tmpdir(), "supernova-checkpoint-storage-"));
   const sessionStorageRoot = input?.sessionStorageRoot ?? mkdtempSync(join(tmpdir(), "supernova-session-storage-"));
@@ -163,9 +165,14 @@ export async function createPiTestRuntime(input?: {
   const resourceCache: ResourceCache = {
     initialize: async () => undefined,
     invalidate: () => undefined,
-    load: async () => {
+    load: async (cwd) => {
       loadCount++;
-      return {contextFiles: [], extensions: {errors: [], extensions: [], runtime: {} as never}, promptTemplates: input?.promptTemplates ?? [], skills: input?.skills ?? []};
+      // An agent dir with no extensions of its own, so only the configured paths load.
+      const extensions = input?.extensionPaths?.length
+        ? await discoverAndLoadExtensions([...input.extensionPaths], cwd, sessionStorageRoot)
+        : {errors: [], extensions: [], runtime: {} as never};
+      if (extensions.errors.length > 0) throw new Error(extensions.errors.map((error) => `${error.path}: ${error.error}`).join("\n"));
+      return {contextFiles: [], extensions, promptTemplates: input?.promptTemplates ?? [], skills: input?.skills ?? []};
     },
     listPromptTemplates: async () => input?.promptTemplates ?? [],
     listSkills: async () => input?.skills ?? [],
@@ -180,13 +187,18 @@ export async function createPiTestRuntime(input?: {
   const settings = SettingsManager.inMemory(input?.settings);
   const checkpointStore = input?.checkpointStore ?? new FileCheckpointStore(checkpointStorageRoot);
   const tools = createSupernovaTools(modelRuntime);
+  /** Every problem the store reported that did not fail a command, in order: extension diagnostics and engine reports. */
+  const reports: string[] = [];
   const store = new SessionStore({
     sdk,
     resourceCache,
     tools: () => tools,
     root: sessionStorageRoot,
     settings: () => settings,
-    onReport: (sessionId, message) => runtime.reportError(sessionId, message),
+    onReport: (sessionId, message) => {
+      reports.push(message);
+      runtime.reportError(sessionId, message);
+    },
   });
   const runtime: SessionRuntime = new SessionRuntime({checkpointStore, resourceCache, sdk, store, titleGenerator});
   const sessionsFeature = new Sessions({documents: runtime, resourceCache, sdk, store});
@@ -275,6 +287,7 @@ export async function createPiTestRuntime(input?: {
   };
 
   return {
+    reports,
     appendConversation,
     createSession,
     lastError,

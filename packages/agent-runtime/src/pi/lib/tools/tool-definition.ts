@@ -2,36 +2,20 @@ import type {ImageContent, Model, TextContent, TSchema} from "@earendil-works/pi
 import type {AgentToolResult, ExtensionToolContext, ModelRuntime, ToolDefinition} from "@earendil-works/pi-coding-agent";
 import type {JsonValue} from "@earendil-works/chord";
 import type {ToolExecutionApi, ToolRegistration} from "@earendil-works/pi-durable";
+import {extensionContext} from "@supernova/agent-runtime/pi/extensions/legacy/extension-context";
 
-/**
- * A context whose every unlisted property throws on access. Extensions written for the old SDK read `ctx` freely;
- * a capability Supernova lacks must fail loudly at the call that needs it, never silently no-op.
- */
-export function strictContext<T extends object>(name: string, known: Partial<T>): T {
-  return new Proxy(known as T, {
-    get(target, property, receiver) {
-      if (typeof property === "symbol" || property in target || property === "then") return Reflect.get(target, property, receiver);
-      throw new Error(`${name}.${String(property)} is not supported in Supernova.`);
-    },
-  });
-}
-
-/** `ctx.ui` with no UI: Supernova never bound one, so every call is an explicit failure instead of the old no-op. */
-const unsupportedUi = strictContext<ExtensionToolContext["ui"]>("ctx.ui", {});
-
-/** The old-SDK tool context, built from what the engine call knows. */
+/** The old-SDK tool context, built from what the engine call knows; `executeTool` and `tools` are not available. */
 async function toolContext(api: ToolExecutionApi, modelRuntime: ModelRuntime, signal: AbortSignal | undefined): Promise<ExtensionToolContext> {
   const agent = await api.agent({abortSignal: signal} as never);
-  const model: Model<never> | undefined = agent.model ? (modelRuntime.getModel(agent.model.provider, agent.model.modelId) as Model<never> | undefined) : undefined;
-  return strictContext<ExtensionToolContext>("ctx", {
-    cwd: api.env?.cwd ?? agent.cwd ?? process.cwd(),
-    hasUI: false,
-    mode: "print",
-    model,
-    signal,
-    thinkingLevel: agent.thinkingLevel,
-    ui: unsupportedUi,
-  } as Partial<ExtensionToolContext>);
+  const model = agent.model ? (modelRuntime.getModel(agent.model.provider, agent.model.modelId) as Model<never> | undefined) : undefined;
+  const ctx = extensionContext({cwd: api.env?.cwd ?? agent.cwd ?? process.cwd(), model, modelRuntime, signal, thinkingLevel: agent.thinkingLevel});
+  // Assigned rather than spread: a spread would read the members that throw when the engine has no equivalent.
+  return Object.assign(ctx, {
+    tools: [],
+    executeTool: () => {
+      throw new Error("ctx.executeTool is not available in Supernova.");
+    },
+  }) as ExtensionToolContext;
 }
 
 function toJson(value: unknown): JsonValue | undefined {

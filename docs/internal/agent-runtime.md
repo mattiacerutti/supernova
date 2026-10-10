@@ -80,6 +80,7 @@ pi/
   session-store.ts    SessionStore: the collection of sessions (catalog records) and their open files
   session-file.ts     SessionFile: one session's Harness, branch and leaf, document build, and actions; the seam onto @earendil-works/pi-durable
   config/             resource-loader, settings policy, engine settings, and the system prompt
+  extensions/         loadExtensions(): every source of engine extensions a session installs; legacy/ bridges old-SDK extensions
   lib/                every Pi ↔ contracts mapping and behavior Pi lacks: turns, content parts, models, sessions, tools
 ```
 
@@ -89,7 +90,7 @@ Two Pi packages, two roles. `@earendil-works/pi-durable` (vendored from source, 
 
 Code ported from Pi because it is not exported (the system prompt in `config/system-prompt.ts`, the HTTP setup in `sdk.ts`) names its upstream file path; replace it with the import if Pi exports it.
 
-`lib/tools/extension-bridge.ts` turns loaded extensions into engine extensions: registered tools become engine tools, `tool_call`/`tool_result`/`context` handlers become engine hooks, and `session_start`/`session_shutdown` are delivered on open and close. Other events, commands, shortcuts, flags, and renderers are reported as unsupported, and `ctx.ui` or unknown context members throw on access, so nothing silently no-ops.
+`extensions/extensions.ts` is the one place extension sources meet; `SessionStore` installs what it returns and knows nothing else. Pi's durable extension format is not final, so the only source today is `extensions/legacy/`: extensions written for Pi's old SDK, loaded by Pi's loader and bridged onto the engine. Registered tools become engine tools, and the old agent events are fired from engine hooks at the closest engine moment (`legacy/extension-events.ts` lists which, and what cannot be delivered): the run and turn lifecycle from the generation task, the tool events from the tool task, `session_before_compact` from the compaction task, and `session_start`/`session_shutdown` on open and close. Handlers get the old SDK's print-mode context (`legacy/extension-context.ts`), as the old Supernova bound it: `hasUI` is false and every `ctx.ui` call is a no-op whose dialogs answer "no", so an extension written for headless runs behaves as before. Members with no engine equivalent (`sessionManager`, `abort`, `compact`) throw when used. Events the bridge does not deliver and registrations only a terminal shows (commands, shortcuts, flags, renderers) are reported once, so an author knows why nothing happens. When old-SDK extensions go, `legacy/` goes with them; nothing outside it knows their shapes.
 
 Inside `pi/` names drop the `Pi` prefix. Outside it, values that hold Pi types keep it (`PiModel`) so the reader knows which side of the boundary they are on.
 

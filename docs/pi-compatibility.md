@@ -10,20 +10,27 @@ Supernova uses **Pi 1.0.3** as its coding engine, with its own interface and con
 | Custom models            | Supported     | Custom providers and models, such as local ones, configured through the global `models.json` file.                                                           | [Models](https://pi.dev/docs/latest/models.md)                     |
 | Skills                   | Supported     | Includes `.agents` skills, Supernova's skill directories, configured paths, and package-provided skills. Explicit selection uses Supernova's `$` references. | [Skills](https://pi.dev/docs/latest/skills.md)                     |
 | Packages                 | Supported     | npm, Git, and local packages are supported. Unsupported resource types remain disabled. No package-management UI or automatic package-update workflow.       | [Packages](https://pi.dev/docs/latest/packages.md)                 |
-| Extensions               | Partial       | Headless tools and hooks are supported. See limitations below.                                                                                               | [Extensions](https://pi.dev/docs/latest/extensions.md)             |
+| Extensions               | Partial       | Pi extensions run headless on the new engine: tools, providers, and most events. See [Extensions](#extensions) below.                                        | [Extensions](https://pi.dev/docs/latest/extensions.md)             |
 | Extension slash commands | Planned       | Not integrated into the composer.                                                                                                                            | [Extensions](https://pi.dev/docs/latest/extensions.md)             |
 | Shared instructions      | Supported     | Project/ancestor `AGENTS.md`, global agent instructions, and `~/.agents/AGENTS.md` are loaded.                                                               | [Pi overview](https://pi.dev/docs)                                 |
 | System prompt files      | Planned       | `SYSTEM.md` and `APPEND_SYSTEM.md` are not loaded. Pi's built-in system prompt remains active.                                                               | [Pi overview](https://pi.dev/docs)                                 |
 | Prompt templates         | Planned       | Not loaded, including templates distributed in packages.                                                                                                     | [Prompt templates](https://pi.dev/docs/latest/prompt-templates.md) |
 | Themes and terminal UI   | Not supported | Supernova uses its own interface and appearance settings.                                                                                                    | [Themes](https://pi.dev/docs/latest/themes.md)                     |
 
-### Extension limitations
+### Extensions
 
-**Extensions that render UI are currently not supported.** Supernova is waiting for Pi's upstream Harness v2 before integrating extension-provided UI. Current extension support is limited to headless tools and hooks.
+Supernova runs sessions on Pi's new engine, `pi-durable`. Pi's own coding agent has not moved to it yet, so every extension that exists today is written for Pi's current extension API, and the engine has no extension format of its own that extension authors can target. Until Pi defines one, Supernova loads existing Pi extensions and runs them against the new engine. When Pi settles its durable extension format, Supernova will load those directly; extensions written for it will not need a Supernova-specific version.
 
-- Custom tools display their names, arguments, text output, JSON details, and errors.
-- Custom image-result rendering is not supported.
-- Extension-driven session replacement and background-triggered agent runs are not supported.
+In the meantime, the goal is that an extension that worked in Supernova before the engine change keeps working. Supernova has always run extensions without a terminal, as Pi does in its print mode (`pi -p`), and that is unchanged:
+
+- `ctx.hasUI` is false. `ctx.ui` calls do nothing, and its dialogs answer "no" (`confirm` resolves false, `select` and `input` resolve undefined). Commands, shortcuts, flags, and message renderers are accepted but never shown. Supernova reports these in the session so you can tell why an extension's UI does not appear.
+- Providers registered by extensions (`pi.registerProvider`) work.
+- Custom tools work and display their names, arguments, text output, JSON details, and errors. Custom image-result rendering is not supported.
+- `tool_call` can block a call or change its arguments; `tool_result` can replace the result; `context` can edit the request; `session_before_compact` can cancel a compaction or supply the summary.
+
+The engine exposes requests, responses, tool calls, and compactions rather than Pi's agent loop, so events fire at the closest engine moment. Delivered: `session_start`, `session_shutdown`, `before_agent_start` (its result is not applied), `agent_start`, `agent_end`, `agent_settled`, `turn_start`, `turn_end`, `message_start`, `message_end`, `context`, `tool_call`, `tool_result`, `tool_execution_start`, `tool_execution_end`, `session_before_compact`.
+
+Not delivered, and reported in the session when an extension subscribes: streaming updates (`message_update`, `tool_execution_update`), `input`, `session_compact`, `model_select`, `thinking_level_select`, and the session tree, fork, switch, and info events. Extension-driven session replacement and background-triggered agent runs are not supported.
 
 ## Supernova-specific differences
 

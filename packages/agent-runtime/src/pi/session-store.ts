@@ -9,8 +9,8 @@ import {loadPiSettings} from "@supernova/agent-runtime/pi/config/settings";
 import {SessionCatalog} from "@supernova/agent-runtime/pi/lib/session/session-catalog";
 import type {SessionRecord} from "@supernova/agent-runtime/pi/lib/session/session-state";
 import type {PromptedTool} from "@supernova/agent-runtime/pi/lib/tools/coding-tools";
-import type {BridgedExtensions} from "@supernova/agent-runtime/pi/lib/tools/extension-bridge";
-import {bridgeExtensions} from "@supernova/agent-runtime/pi/lib/tools/extension-bridge";
+import type {LoadedExtensions} from "@supernova/agent-runtime/pi/extensions/extensions";
+import {loadExtensions} from "@supernova/agent-runtime/pi/extensions/extensions";
 import type {ResourceCache} from "@supernova/agent-runtime/pi/resource-cache";
 import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";
 import type {SessionFileSetup} from "@supernova/agent-runtime/pi/session-file";
@@ -34,7 +34,7 @@ export interface SessionStoreDeps {
 
 interface OpenSession {
   readonly file: SessionFile;
-  readonly extensions: BridgedExtensions;
+  readonly extensions: LoadedExtensions;
 }
 
 /**
@@ -211,16 +211,10 @@ export class SessionStore {
     return pending;
   }
 
-  /** Loads a working directory's resources and bridges its extensions into what a session file installs. */
-  private async prepare(sessionId: string, cwd: string): Promise<{readonly extensions: BridgedExtensions; readonly setup: SessionFileSetup}> {
+  /** Loads a working directory's resources and extensions into what a session file installs. */
+  private async prepare(sessionId: string, cwd: string): Promise<{readonly extensions: LoadedExtensions; readonly setup: SessionFileSetup}> {
     const resources = await this.deps.resourceCache.load(cwd);
-
-    const extensions = bridgeExtensions({
-      cwd,
-      loaded: resources.extensions,
-      modelRuntime: this.deps.sdk.modelRuntime,
-      report: ({extensionPath, message}) => this.deps.onReport?.(sessionId, `Extension ${extensionPath} ${message}`),
-    });
+    const extensions = loadExtensions({cwd, resources, modelRuntime: this.deps.sdk.modelRuntime, report: (message) => this.deps.onReport?.(sessionId, message)});
 
     return {
       extensions,
