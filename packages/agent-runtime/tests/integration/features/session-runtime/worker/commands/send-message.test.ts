@@ -4,6 +4,7 @@ import {mkdtempSync, rmSync} from "node:fs";
 import {readFile, writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
+import {estimateTokens} from "@earendil-works/pi-coding-agent";
 import {afterEach, describe, expect, it, vi} from "vitest";
 import type {CheckpointStore} from "@supernova/agent-runtime/features/session-runtime/checkpoints/checkpoint-store";
 import type {Session} from "@supernova/contracts/services/sessions/schemas";
@@ -172,7 +173,11 @@ describe("sending messages through Pi sessions", () => {
     runtimes.push(pi);
     const {info} = await pi.createSession();
     await pi.appendConversation(info.id, {requestText: "Older request", assistantText: "Older response."});
-    await pi.appendConversation(info.id, {requestText: "x".repeat((selectedPiModel.contextWindow - 20_000) * 4), assistantText: "Old response."});
+    // Sized to cross the compaction threshold but stay under the window, so the engine compacts before the request
+    // rather than on overflow; the text's token estimate is the engine's (`estimateTokens`).
+    const request = "x".repeat(Math.floor((selectedPiModel.contextWindow - 20_000) * 3.5));
+    await pi.appendConversation(info.id, {requestText: request, assistantText: "Old response."});
+    expect(estimateTokens({role: "user", content: request, timestamp: 0})).toBeLessThan(selectedPiModel.contextWindow);
     // The engine compacts before the request once the estimate crosses the threshold, so the summary comes first.
     pi.faux.setResponses([fauxAssistantMessage("Compacted summary."), fauxAssistantMessage("Done.")]);
 

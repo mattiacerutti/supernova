@@ -389,7 +389,7 @@ export class SessionFile {
     const model = agent?.model ? this.modelRuntime.getModel(agent.model.provider, agent.model.modelId) : undefined;
     const contextWindow = model?.contextWindow ?? 0;
     if (state.leaf === null) return {contextWindow, usedTokens: 0};
-    const {entries, messages} = await (await this.conversation(state.branch)).context(context, state.leaf as EntryId | undefined);
+    const {entries, messages} = await (await this.conversation(state.branch)).context(context, {at: state.leaf as EntryId});
     if (entries.length === 0) return {contextWindow, usedTokens: 0};
     return contextUsageOf({contextWindow, entries, messages});
   }

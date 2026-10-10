@@ -47,8 +47,5 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
-  "patchedDependencies": {
-    "@earendil-works/pi-durable@1.0.3": "patches/@earendil-works%2Fpi-durable@1.0.3.patch"
-  }
+  "license": "ISC"
 }
