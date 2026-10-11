@@ -10,6 +10,7 @@ import {followSession, markSeenAsItChanges, syncSessions} from "@/features/sessi
 import {projectSessions, sessionView} from "@/features/sessions/lib/session-view";
 import {useSessionsStore} from "@/features/sessions/stores/sessions-store";
 import {hasUnseenActivity, useSessionVisitsStore} from "@/features/sessions/stores/sidebar/session-visits-store";
+import {toastManager} from "@/lib/toast";
 import type {RuntimeClient} from "@/runtime/transport/runtime-client";
 
 const model = {
@@ -73,7 +74,7 @@ function undoneLast(document: Session): Session {
 }
 
 function entry(input?: Partial<SessionDirectoryEntry>): SessionDirectoryEntry {
-  return {activity: "idle", error: null, projectPath: "/workspace", setupStep: null, summary: null, ...input};
+  return {activity: "idle", notices: [], projectPath: "/workspace", setupStep: null, summary: null, ...input};
 }
 
 /** A failed result with any code; each fake returns one its method declares. */
@@ -218,9 +219,9 @@ describe("session commands and views", () => {
     expect(live("session-1", null)).toMatchObject({status: "streaming"});
     expect(live("session-2")).toMatchObject({setupStep: "worktree", status: "idle"});
 
-    setDirectory(services, {"session-1": entry({activity: "compacting"}), "session-2": entry({error: {at: "t1", message: "Worktree failed"}})});
+    setDirectory(services, {"session-1": entry({activity: "compacting"}), "session-2": entry()});
     expect(live("session-1", null)).toMatchObject({status: "compacting"});
-    expect(live("session-2")).toMatchObject({error: "Worktree failed", setupStep: null, status: "idle"});
+    expect(live("session-2")).toMatchObject({setupStep: null, status: "idle"});
     expect(useSessionsStore.getState().optimism).toEqual({});
 
     // The directory's activity replicates apart from the document; a known document is the source so status and
@@ -301,16 +302,31 @@ describe("session commands and views", () => {
     await waitUntil(() => expect(live()).toMatchObject({error: "Model unavailable", liveMessage: undefined, status: "idle"}));
   });
 
-  it("moves past the server's problem when the user starts a command, and shows a later one", () => {
-    const {actions, services} = setup();
-    setDirectory(services, {"session-1": entry({error: {at: "t1", message: "Extension failed"}})});
-    expect(live().error).toBe("Extension failed");
+  it("shows the runtime's notices as toasts scoped to their session: one for all extension notices, one per other notice", () => {
+    const {services} = setup();
+    const add = vi.spyOn(toastManager, "add").mockReturnValue("toast-1");
+    const notice = (id: string, message: string, extensionPath?: string) => ({id, at: "t1", level: "warning" as const, message, ...(extensionPath ? {extensionPath} : {})});
+    const failure = {id: "n3", at: "t2", level: "error" as const, message: "The message was not answered (no_model)."};
 
-    actions.sendMessage({contentParts, modelReference: model, sessionId: "session-1"});
-    expect(live().error).toBeNull();
+    setDirectory(services, {"session-1": entry({notices: [notice("n1", 'subscribes to "message_update", which Supernova does not deliver.', "/ext/fixture.ts")]})});
+    expect(add).toHaveBeenCalledTimes(1);
+    expect(add.mock.calls[0]?.[0]).toMatchObject({title: "Some extensions are limited", timeout: 0, type: "warning", data: {sessionId: "session-1"}});
 
-    setDirectory(services, {"session-1": entry({error: {at: "t2", message: "Unanswered input"}})});
-    expect(live().error).toBe("Unanswered input");
+    // More extension notices, and a repeated directory value, add no toast; its Details opens the dialog listing them.
+    const both = [
+      notice("n1", 'subscribes to "message_update", which Supernova does not deliver.', "/ext/fixture.ts"),
+      notice("n2", "registers commands (fixture), which Supernova does not support.", "/ext/other.ts"),
+    ];
+    setDirectory(services, {"session-1": entry({notices: both})});
+    setDirectory(services, {"session-1": entry({notices: both})});
+    expect(add).toHaveBeenCalledTimes(1);
+    expect(add.mock.calls[0]?.[0].actionProps).toMatchObject({children: "Details"});
+
+    // A failure of the session's own work is its own, fading toast.
+    setDirectory(services, {"session-1": entry({notices: [...both, failure]})});
+    expect(add).toHaveBeenCalledTimes(2);
+    expect(add.mock.calls[1]?.[0]).toMatchObject({title: "Something went wrong", description: failure.message, type: "error", data: {sessionId: "session-1"}});
+    expect(add.mock.calls[1]?.[0]).not.toHaveProperty("timeout");
   });
 
   it.each(

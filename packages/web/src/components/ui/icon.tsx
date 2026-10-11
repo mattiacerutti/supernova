@@ -16,6 +16,8 @@ import {getIconData} from "@iconify/utils";
 import {cn} from "@/lib/cn";
 
 export type IconName =
+  | "alert-triangle"
+  | "circle-alert"
   | "archive"
   | "arrow-down"
   | "arrow-left"
@@ -95,6 +97,8 @@ function getStaticIcon(collection: Parameters<typeof getIconData>[0], name: stri
 }
 
 const icons = {
+  "alert-triangle": getStaticIcon(lucideIcons, "triangle-alert"),
+  "circle-alert": getStaticIcon(lucideIcons, "circle-alert"),
   archive: getStaticIcon(lucideIcons, "archive"),
   "arrow-down": getStaticIcon(lucideIcons, "arrow-down"),
   "arrow-left": getStaticIcon(lucideIcons, "arrow-left"),

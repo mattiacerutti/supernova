@@ -3,14 +3,22 @@ import {useId, type ReactNode} from "react";
 import Icon from "@/components/ui/icon";
 import Button from "@/components/ui/button";
 import {cn} from "@/lib/cn";
+import type {ToastData} from "@/lib/toast";
 import {toastManager} from "@/lib/toast";
 
-type ToastObject = ReturnType<typeof Toast.useToastManager>["toasts"][number];
+type ToastObject = ReturnType<typeof Toast.useToastManager<ToastData>>["toasts"][number];
 
-function ToastList() {
-  const {toasts} = Toast.useToastManager();
+interface ToastListProps {
+  /** The session whose page is open; its toasts show, other sessions' wait. */
+  readonly openSessionId: string | undefined;
+}
 
-  return toasts.map((toast) => <ToastItem key={toast.id} toast={toast} />);
+/** Toasts for the page on screen: a toast scoped to a session shows only while that session is open; the rest always. */
+function ToastList(props: ToastListProps) {
+  const {openSessionId} = props;
+  const {toasts} = Toast.useToastManager<ToastData>();
+
+  return toasts.filter((toast) => toast.data?.sessionId === undefined || toast.data.sessionId === openSessionId).map((toast) => <ToastItem key={toast.id} toast={toast} />);
 }
 
 interface ToastItemProps {
@@ -26,7 +34,7 @@ function ToastItem(props: ToastItemProps) {
     <Toast.Root
       className={cn(
         "absolute right-2 -bottom-1 z-[calc(1000-var(--toast-index))]",
-        "w-full rounded-2xl border border-border bg-surface-popover/95 p-3 backdrop-blur-3xl",
+        "w-full rounded-2xl corner-superellipse/1.3 border border-border bg-surface-drawer p-3 shadow-2xl shadow-black/35",
         "select-text",
 
         // Stack tuning
@@ -62,8 +70,10 @@ function ToastItem(props: ToastItemProps) {
       <div className="grid grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_auto] gap-x-3 overflow-hidden" data-base-ui-swipe-ignore>
         <div className="col-start-1 row-start-1 min-w-0">
           {toast.title && (
-            <h2 className="m-0 wrap-break-word text-sm leading-6 text-ink" id={titleId}>
-              {toast.title}
+            <h2 className="m-0 flex items-start gap-1.5 wrap-break-word text-sm leading-6 text-ink" id={titleId}>
+              {toast.type === "warning" && <Icon aria-label="Warning" className="mt-1.25 shrink-0 text-warning-ink" name="alert-triangle" role="img" size="xs" />}
+              {toast.type === "error" && <Icon aria-label="Error" className="mt-1.25 shrink-0 text-danger-ink" name="circle-alert" role="img" size="xs" />}
+              <span className="min-w-0">{toast.title}</span>
             </h2>
           )}
         </div>
@@ -85,7 +95,7 @@ function ToastItem(props: ToastItemProps) {
             <Toast.Action
               {...toast.actionProps}
               render={
-                <Button variant="ghost" size="sm" className="mt-1">
+                <Button className="mt-2.5 w-auto px-2.5 py-1 text-xs" variant="filled">
                   {toast.actionProps.children}
                 </Button>
               }
@@ -103,17 +113,24 @@ interface ToastProviderProps {
   readonly children: ReactNode;
 }
 
+/** Holds the toast queue. Render `ToastViewport` where the open session is known, inside the router. */
 export default function ToastProvider(props: ToastProviderProps) {
   const {children} = props;
+  return <Toast.Provider toastManager={toastManager}>{children}</Toast.Provider>;
+}
 
+interface ToastViewportProps {
+  readonly openSessionId: string | undefined;
+}
+
+/** Where toasts appear; a hidden session-scoped toast's timer keeps running. */
+export function ToastViewport(props: ToastViewportProps) {
+  const {openSessionId} = props;
   return (
-    <Toast.Provider toastManager={toastManager}>
-      {children}
-      <Toast.Portal>
-        <Toast.Viewport className="fixed top-auto right-4 bottom-4 z-80 mx-auto flex w-62.5 sm:right-8 sm:bottom-8 sm:w-75">
-          <ToastList />
-        </Toast.Viewport>
-      </Toast.Portal>
-    </Toast.Provider>
+    <Toast.Portal>
+      <Toast.Viewport className="fixed top-auto right-4 bottom-4 z-45 mx-auto flex w-62.5 sm:right-8 sm:bottom-8 sm:w-75">
+        <ToastList openSessionId={openSessionId} />
+      </Toast.Viewport>
+    </Toast.Portal>
   );
 }

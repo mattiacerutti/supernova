@@ -57,7 +57,7 @@ export async function createAgentRuntime(options: CreateAgentRuntimeOptions = {}
     tools: () => supernovaTools,
     root: options.sessionStorageRoot,
     // Reports do not fail the command that hit them; they reach clients through the session board.
-    onReport: (sessionId, message) => sessionRuntime.reportError(sessionId, message),
+    onReport: (sessionId, notice) => sessionRuntime.notify(sessionId, notice),
   });
   const sessionRuntime: SessionRuntime = new SessionRuntime({checkpointStore, resourceCache, sdk, store, titleGenerator: createTitleGenerator(sdk)});
 

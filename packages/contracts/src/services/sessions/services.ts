@@ -1,6 +1,6 @@
 import type {Context, ReplicatedState} from "@earendil-works/chord";
 import {defineService} from "@earendil-works/chord";
-import type {SessionActivity, SessionSetupStep} from "@supernova/contracts/services/session-runtime/procedures";
+import type {SessionActivity, SessionNotice, SessionSetupStep} from "@supernova/contracts/services/session-runtime/procedures";
 import type {ServiceResult} from "@supernova/contracts/lib/protocol";
 import type {
   CreateSessionError,
@@ -25,8 +25,8 @@ export interface SessionDirectoryEntry {
   readonly activity: SessionActivity;
   /** Setup step running before a new session's first turn. */
   readonly setupStep: SessionSetupStep | null;
-  /** The last problem that did not fail a command (an unanswered input, an extension diagnostic), cleared by the next run. */
-  readonly error: {readonly message: string; readonly at: string} | null;
+  /** Problems that did not fail a command, newest last; capped, never cleared by a run. */
+  readonly notices: SessionNotice[];
 }
 
 export interface SessionDirectoryState {

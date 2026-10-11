@@ -13,6 +13,12 @@ import type {PromptedTool} from "@supernova/agent-runtime/pi/lib/tools/coding-to
  * reported so an author knows why nothing appears.
  */
 const UNSUPPORTED_REGISTRATIONS = ["commands", "shortcuts", "flags", "messageRenderers"] as const;
+const REGISTRATION_LABELS: Record<(typeof UNSUPPORTED_REGISTRATIONS)[number], string> = {
+  commands: "Commands",
+  shortcuts: "Shortcuts",
+  flags: "Flags",
+  messageRenderers: "Renderers",
+};
 
 interface BridgeInput {
   readonly cwd: string;
@@ -50,12 +56,11 @@ function bridgeExtension(source: PiExtension, input: BridgeInput, report: (diagn
   const {modelRuntime} = input;
   const handlers = source.handlers as Map<string, Handler[]>;
   for (const event of handlers.keys()) {
-    if (!DELIVERED_EVENTS.has(event)) report({extensionPath: source.path, message: `subscribes to "${event}", which Supernova does not deliver.`});
+    if (!DELIVERED_EVENTS.has(event)) report({extensionPath: source.path, message: `Event not delivered: ${event}`});
   }
   for (const registration of UNSUPPORTED_REGISTRATIONS) {
     const registered = source[registration] as Map<string, unknown> | undefined;
-    if (registered && registered.size > 0)
-      report({extensionPath: source.path, message: `registers ${registration} (${[...registered.keys()].join(", ")}), which Supernova does not support.`});
+    if (registered && registered.size > 0) report({extensionPath: source.path, message: `${REGISTRATION_LABELS[registration]} not shown: ${[...registered.keys()].join(", ")}`});
   }
 
   const tools = [...source.tools.values()].map(({definition}) => ({
@@ -91,7 +96,7 @@ export function bridgeExtensions(input: {
       try {
         await emitter(extension.handlers as Map<string, Handler[]>, input)(event, fields);
       } catch (error) {
-        input.report({extensionPath: extension.path, message: `${event} failed: ${error instanceof Error ? error.message : String(error)}`});
+        input.report({extensionPath: extension.path, message: `${event} failed: ${(error instanceof Error ? error.message : String(error)).replace(/ in Supernova\.?$/, "")}`});
       }
     }
   };

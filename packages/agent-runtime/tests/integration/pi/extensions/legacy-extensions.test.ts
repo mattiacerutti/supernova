@@ -119,8 +119,8 @@ describe("old-SDK extensions", () => {
       expect((await pi.sessionRuntime.current(info.id)).entries.at(-1)?.kind).toBe("pi.compaction");
 
       // What Supernova cannot deliver is reported once, not silently dropped.
-      expect(pi.reports.some((message) => message.includes("fixture.ts") && message.includes('subscribes to "message_update"'))).toBe(true);
-      expect(pi.reports.some((message) => message.includes("fixture.ts") && message.includes("registers commands (fixture)"))).toBe(true);
+      expect(pi.reports.some((message) => message.includes("fixture.ts") && message.includes("Event not delivered: message_update"))).toBe(true);
+      expect(pi.reports.some((message) => message.includes("fixture.ts") && message.includes("Commands not shown: fixture"))).toBe(true);
     } finally {
       await pi.unregister();
     }

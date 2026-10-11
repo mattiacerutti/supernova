@@ -92,9 +92,8 @@ export function sessionActions(runtime: RuntimeClient) {
     return sessionStatus(entries[sessionId], optimism[sessionId], documents[sessionId]).status;
   };
 
-  /** Starting a command clears the last failure and moves past the problem the runtime shows. */
-  const begin = (sessionId: string, optimism: SessionOptimism): void =>
-    patch(sessionId, {error: undefined, seenErrorAt: useSessionsStore.getState().entries[sessionId]?.error?.at, ...optimism});
+  /** Starting a command clears the last failure. */
+  const begin = (sessionId: string, optimism: SessionOptimism): void => patch(sessionId, {error: undefined, ...optimism});
 
   const fail = (sessionId: string, cause: unknown, fallback: string): void => patch(sessionId, {error: errorMessage(cause, fallback)});
 
@@ -228,8 +227,10 @@ export function useSessionCommands(options: UseSessionCommandsOptions) {
     if (outcome.status === "applied") return;
     if (outcome.status === "failed") {
       if (outcome.code === "CheckpointInheritedError") {
-        showToast("Nothing to undo in this fork", "This message came from the session this one was forked from. Only messages sent in this session can be undone.");
-      } else showToast(NAVIGATION_FAILURE_TITLES[navigation.action], outcome.message);
+        showToast("Nothing to undo in this fork", "This message came from the session this one was forked from. Only messages sent in this session can be undone.", {
+          data: {sessionId},
+        });
+      } else showToast(NAVIGATION_FAILURE_TITLES[navigation.action], outcome.message, {data: {sessionId}, type: "error"});
       return;
     }
     refused.current = navigation;

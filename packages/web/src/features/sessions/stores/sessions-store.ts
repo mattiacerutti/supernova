@@ -24,10 +24,8 @@ export interface SessionOptimism {
   readonly pinned?: boolean;
   readonly archived?: boolean;
   readonly setupStep?: SessionSetupStep;
-  /** The last command that failed. */
+  /** The last command that failed before reaching the runtime; the runtime's own problems arrive as notices. */
   readonly error?: string;
-  /** When the server's last problem was raised, once a command moved past it. */
-  readonly seenErrorAt?: string;
 }
 
 interface SessionsStoreState {

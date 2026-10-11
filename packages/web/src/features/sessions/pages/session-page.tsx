@@ -160,7 +160,8 @@ export default function SessionPage(props: SessionPageProps) {
     setCreatingWorkspace(null);
     if (outcome.status === "started") return;
 
-    showToast("Unable to start the session", outcome.message);
+    // Not scoped to the session: it no longer exists, and the user is back on the new-session screen.
+    showToast("Unable to start the session", outcome.message, {type: "error"});
     setNewSessionId(target.projectPath, sessionId);
     composer.draft.replaceContentParts(contentParts);
     composer.draft.setWorkspace(workspace);

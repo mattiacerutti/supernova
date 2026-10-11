@@ -11,6 +11,7 @@ const dark = {
     semanticColors: {
       diffAdded: "#00a240",
       diffRemoved: "#e02e2a",
+      warning: "#e0a526",
     },
     surface: "#111111",
   },
@@ -28,6 +29,7 @@ const light = {
     semanticColors: {
       diffAdded: "#00a240",
       diffRemoved: "#e02e2a",
+      warning: "#e0a526",
     },
     surface: "#ffffff",
   },

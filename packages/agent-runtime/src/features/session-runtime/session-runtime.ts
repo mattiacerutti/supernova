@@ -4,6 +4,7 @@ import type {
   RedoCheckpointPayload,
   RevertToMessagePayload,
   SendMessagePayload,
+  SessionNotice,
   SessionSetupStep,
   UndoCheckpointPayload,
 } from "@supernova/contracts/services/session-runtime/procedures";
@@ -86,10 +87,10 @@ export class SessionRuntime {
     this.board.update(input.sessionId, input.projectPath, {setupStep: input.step});
   }
 
-  /** Reports a problem that did not fail a command, such as an extension diagnostic; clients show it until the next run. */
-  public reportError(sessionId: string, error: string): void {
+  /** Adds a notice to a session: an extension's diagnostic (a warning, with its path) or an engine report. */
+  public notify(sessionId: string, notice: Pick<SessionNotice, "message" | "extensionPath">): void {
     void this.deps.store.find(sessionId).then((record) => {
-      if (record) this.board.update(sessionId, record.projectPath, {error: {message: error, at: new Date().toISOString()}});
+      if (record) this.board.notify(sessionId, record.projectPath, {level: "warning", ...notice});
     });
   }
 

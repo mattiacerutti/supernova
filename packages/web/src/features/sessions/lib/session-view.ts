@@ -78,12 +78,11 @@ function listingOrder(left: SessionSummary, right: SessionSummary): number {
  */
 export function sessionStatus(entry: SessionDirectoryEntry | undefined, optimism: SessionOptimism = {}, session?: Pick<Session, "live">): SessionStatus {
   const activity = session ? activityOf(session.live) : (entry?.activity ?? "idle");
-  const serverError = entry?.error && entry.error.at !== optimism.seenErrorAt ? entry.error.message : null;
   return {
     status: statusOf(activity, optimism),
     // The step the client knows of shows until the runtime reports one or the run starts.
     setupStep: entry?.setupStep ?? (activity === "idle" ? (optimism.setupStep ?? null) : null),
-    error: optimism.error ?? serverError,
+    error: optimism.error ?? null,
   };
 }
 

@@ -14,6 +14,7 @@ export interface ThemeVariant {
     readonly semanticColors: {
       readonly diffAdded: string;
       readonly diffRemoved: string;
+      readonly warning: string;
     };
     readonly surface: string;
   };
@@ -65,6 +66,7 @@ export function resolveTheme(variant: ThemeVariant) {
   const accentControl = dark ? adjustColor(accent, 0.09 + strength * 0.02) : accent;
   const accentInk = dark ? adjustColor(accent, 0.17 + strength * 0.05, 0.92) : adjustColor(accent, -0.03);
   const dangerInk = dark ? adjustColor(semanticColors.diffRemoved, 0.11 + strength * 0.05, 0.85) : adjustColor(semanticColors.diffRemoved, -0.08, 0.92);
+  const warningInk = dark ? adjustColor(semanticColors.warning, 0.08 + strength * 0.04, 0.9) : adjustColor(semanticColors.warning, -0.12, 0.95);
   const textSecondaryOpacity = 0.65 + strength * 0.1;
   const textTertiaryOpacity = dark ? 0.42 + strength * 0.13 : 0.45 + strength * 0.1;
   const borderOpacity = dark ? 0.1 + strength * 0.04 : 0.09 + strength * 0.04;
@@ -104,6 +106,7 @@ export function resolveTheme(variant: ThemeVariant) {
     "diff-removed": semanticColors.diffRemoved,
     "diff-removed-surface": alpha(semanticColors.diffRemoved, dark ? 0.23 : 0.15),
     "danger-ink": dangerInk,
+    "warning-ink": warningInk,
   } as const;
 }
 

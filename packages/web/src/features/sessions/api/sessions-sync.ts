@@ -2,6 +2,7 @@ import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import {useSessionsStore} from "@/features/sessions/stores/sessions-store";
 import {useSessionVisitsStore} from "@/features/sessions/stores/sidebar/session-visits-store";
 import {useMountEffect} from "@/hooks/use-mount-effect";
+import {NoticeToasts} from "@/features/sessions/lib/session-notices";
 import {unwrap} from "@/runtime/runtime-result";
 import type {RuntimeClient} from "@/runtime/transport/runtime-client";
 import {useRuntime} from "@/runtime/use-runtime";
@@ -89,11 +90,16 @@ function followDocument(runtime: RuntimeClient, sessionId: string): () => void {
 }
 
 /**
- * Keeps the store's view of every session the runtime has open current, and attaches the followed session again
- * after a reconnect, since a dropped connection loses its attachment. Returns the stop. Called once, at app start.
+ * Keeps the store's view of every session the runtime has open current, shows its notices, and attaches the followed
+ * session again after a reconnect, since a dropped connection loses its attachment. Returns the stop. Called once, at
+ * app start.
  */
 export function syncSessions(runtime: RuntimeClient): () => void {
-  const stopDirectory = runtime.sessions.directory.subscribe((directory) => setEntries(directory.sessions));
+  const notices = new NoticeToasts();
+  const stopDirectory = runtime.sessions.directory.subscribe((directory) => {
+    setEntries(directory.sessions);
+    notices.show(directory.sessions);
+  });
   const connection = connectionOf(runtime);
   let lost: string | undefined;
   const stopConnection = runtime.onConnectionChange((state) => {

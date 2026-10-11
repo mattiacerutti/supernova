@@ -195,9 +195,9 @@ export async function createPiTestRuntime(input?: {
     tools: () => tools,
     root: sessionStorageRoot,
     settings: () => settings,
-    onReport: (sessionId, message) => {
-      reports.push(message);
-      runtime.reportError(sessionId, message);
+    onReport: (sessionId, notice) => {
+      reports.push(notice.extensionPath ? `Extension ${notice.extensionPath} ${notice.message}` : notice.message);
+      runtime.notify(sessionId, notice);
     },
   });
   const runtime: SessionRuntime = new SessionRuntime({checkpointStore, resourceCache, sdk, store, titleGenerator});
@@ -245,8 +245,8 @@ export async function createPiTestRuntime(input?: {
     });
   };
 
-  /** The board's last problem for a session, or null. */
-  const lastError = (sessionId: string) => runtime.board.state.value.sessions[sessionId]?.error?.message ?? null;
+  /** The board's newest error notice for a session, or null. */
+  const lastError = (sessionId: string) => runtime.board.state.value.sessions[sessionId]?.notices.findLast((notice) => notice.level === "error")?.message ?? null;
 
   /**
    * Sends a message and waits for its run to settle. Returns every transcript value an attached client received, and

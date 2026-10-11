@@ -108,11 +108,10 @@ async function observeCommand(pi: TestRuntime, sessionId: string, run: () => Pro
   } finally {
     observation.stop();
   }
-  const errors = observation.board
-    .map((value) => value.sessions[sessionId]?.error?.message)
-    .filter((message, index, all): message is string => message !== undefined && message !== all[index - 1]);
-  const initial = observation.board[0]?.sessions[sessionId]?.error?.message;
-  return {cause, published: observation.versions.slice(1), errors: errors.filter((message, index) => index > 0 || message !== initial)};
+  // Notices the command raised: those on the board at the end that were not there when it started.
+  const before = new Set((observation.board[0]?.sessions[sessionId]?.notices ?? []).map((notice) => notice.id));
+  const errors = (observation.board.at(-1)?.sessions[sessionId]?.notices ?? []).filter((notice) => !before.has(notice.id)).map((notice) => notice.message);
+  return {cause, published: observation.versions.slice(1), errors};
 }
 
 /** Runs a command, waits for any run it started to settle, and returns what it published and the document after it. */

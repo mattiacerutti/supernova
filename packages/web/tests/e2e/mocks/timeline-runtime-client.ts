@@ -199,7 +199,7 @@ class TimelineServer {
     this.sessions.set(session.id, session);
     this.document(session.id).replace(BACKGROUND_CONTEXT, session);
     this.directory.change(BACKGROUND_CONTEXT, (draft) => {
-      draft.sessions[session.id] = {activity, error: null, projectPath: session.projectPath, setupStep: null, summary: timelineSessionSummary(session)};
+      draft.sessions[session.id] = {activity, notices: [], projectPath: session.projectPath, setupStep: null, summary: timelineSessionSummary(session)};
     });
   }
 

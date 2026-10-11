@@ -1,4 +1,5 @@
 import type {ModelRuntime} from "@earendil-works/pi-coding-agent";
+import type {SessionNotice} from "@supernova/contracts/services/session-runtime/procedures";
 import type {Extension} from "@earendil-works/pi-durable";
 import {bridgeExtensions} from "@supernova/agent-runtime/pi/extensions/legacy/extension-bridge";
 import type {PromptedTool} from "@supernova/agent-runtime/pi/lib/tools/coding-tools";
@@ -19,7 +20,7 @@ export interface LoadExtensionsInput {
   readonly resources: ProjectResources;
   readonly modelRuntime: ModelRuntime;
   /** A problem that does not fail the load: a capability an extension asked for that Supernova lacks. */
-  readonly report: (message: string) => void;
+  readonly report: (notice: Pick<SessionNotice, "message" | "extensionPath">) => void;
 }
 
 /**
@@ -32,6 +33,6 @@ export function loadExtensions(input: LoadExtensionsInput): LoadedExtensions {
     cwd: input.cwd,
     loaded: input.resources.extensions,
     modelRuntime: input.modelRuntime,
-    report: ({extensionPath, message}) => input.report(`Extension ${extensionPath} ${message}`),
+    report: ({extensionPath, message}) => input.report({extensionPath, message}),
   });
 }

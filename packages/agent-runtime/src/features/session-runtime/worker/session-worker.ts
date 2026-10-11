@@ -132,10 +132,10 @@ export class SessionWorker {
     return this.enqueue(() => this.publish());
   }
 
-  /** Reports a problem that did not fail a command; clients show it until the next run. */
+  /** Reports a failure of the session's own work that did not fail a command: an unanswered input, a failed compaction. */
   public reportError(message: string): void {
     void SessionWorker.record(this.input).then(
-      (record) => this.input.board.update(this.input.sessionId, record.projectPath, {error: {message, at: new Date().toISOString()}}),
+      (record) => this.input.board.notify(this.input.sessionId, record.projectPath, {level: "error", message}),
       () => undefined
     );
   }
@@ -233,10 +233,7 @@ export class SessionWorker {
     if (session.live.run === undefined) await this.settleTurns();
   }
 
-  /**
-   * Rebuilds the document and publishes the change from the last one; the board follows its activity and summary. A
-   * new run clears the last reported problem.
-   */
+  /** Rebuilds the document and publishes the change from the last one; the board follows its activity and summary. */
   private async publish(): Promise<Session> {
     const session = await this.file.snapshot(await SessionWorker.record(this.input));
     this.document.publish(session, BACKGROUND_CONTEXT);
@@ -249,7 +246,7 @@ export class SessionWorker {
       updatedAt: session.updatedAt,
       worktree: session.worktree !== undefined,
     };
-    this.input.board.update(this.input.sessionId, session.projectPath, {activity, summary, ...(activity === "running" ? {error: null, setupStep: null} : {})});
+    this.input.board.update(this.input.sessionId, session.projectPath, {activity, summary, ...(activity === "running" ? {setupStep: null} : {})});
     return session;
   }
 

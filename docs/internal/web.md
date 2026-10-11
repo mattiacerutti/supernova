@@ -110,7 +110,8 @@ See [Development](development.md#verification) for verification and the test wor
   - A new optimistic command adds a field to `SessionOptimism`, patches it in its command, and reads it in `lib/session-view`.
 - React Query holds what is fetched on request: listings, models, suggestions, workspace data. Live session state is never written into it.
 - Session listings and search are paged on the server: `useListProjectSessions` and `useSearchSessions` are infinite queries over cursors, and nothing loads every session to filter or slice it. Rows already loaded stay current from the store; a pin is optimism (`pinned`) like a rename (`title`).
-- App-wide reactions to server state are in `app/providers/providers.tsx`: everything is read again after a reconnect, and workspace data after any run ends.
+- App-wide reactions to server state are in `app/providers/providers.tsx`: everything is read again after a reconnect, and workspace data after any run ends. `lib/session-notices` shows the runtime's notices as toasts as they arrive in the directory.
+- A toast is app-wide unless it carries `data.sessionId`; then it shows only while that session's page is open and waits otherwise (`ToastViewport` filters by the route). Scope a toast to a session when it is about that session's work: a failed navigation, a notice. Composer and project failures stay app-wide.
 
 ## UI language and design style
 

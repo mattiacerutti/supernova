@@ -99,7 +99,7 @@ Inside `pi/` names drop the `Pi` prefix. Outside it, values that hold Pi types k
 Live execution: send, abort, compact, checkpoint navigation, and each session's state. `sessions` is the durable record: create, load, rename, fork. See [Session runtime](session-runtime.md).
 
 - `worker/session-worker.ts` watches the session's branch, publishes its document as replicated state, and captures after-turn checkpoints.
-- `worker/session-board.ts` is every open session's activity, summary, setup step, and last problem, for clients that have not attached the session.
+- `worker/session-board.ts` is every open session's activity, summary, setup step, and notices, for clients that have not attached the session.
 - `session-runtime.ts` keeps one `SessionWorker` per session in use and dispatches to it. A worker opens with its file and runs the commands in `worker/commands/`, which receive the worker and use its file, checkpoint, and publication steps.
 - `worker/commands/` are what the feature class dispatches to a worker; `worker/lib/navigate-to-turn.ts` is the one restore-then-show path undo, redo, and revert share.
 - `checkpoints/` is the store, shadow repositories, and git plumbing.

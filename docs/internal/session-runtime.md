@@ -83,21 +83,23 @@ Contracts import Pi's types (type-only) so the browser sees Pi's shapes; `z.cust
 | Turn records, navigation                   | `supernova.session` document in that file | Durable         |
 | Session records                            | `catalog.sqlite`                          | Durable         |
 | Session document                           | `SessionWorker`                           | Server process  |
-| Activity, summaries, problems              | `SessionBoard`                            | Server process  |
+| Activity, summaries, notices               | `SessionBoard`                            | Server process  |
 | Mirrored directory and documents, optimism | Zustand sessions store                    | Browser process |
 
 ## Services
 
 Two services carry sessions, one per feature: `SessionsService` (`contracts/src/services/sessions/services.ts`) and `SessionRuntimeService` (`contracts/src/services/session-runtime/services.ts`). The host is `agent-runtime/src/runtime-services.ts`, served by `pi-server` with every other runtime service on the HTTP server's `/ws` WebSocket (`apps/server/src/runtime-socket.ts`).
 
-| Scope            | Service                 | Members                                                                                                            |
-| ---------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Connection       | `SessionsService`       | `directory` (every open session's activity, summary, setup step, last problem), `create`, `fork`, `rename`, `get`, |
-|                  |                         | `listModels`, `listComposerSuggestions`, `attach`, `detach`                                                        |
-| Attached session | `SessionRuntimeService` | `session` (the session document), `sendMessage`, `compact`, `abort`, `undoCheckpoint`, `redoCheckpoint`,           |
-|                  |                         | `revertToMessage`                                                                                                  |
+| Scope            | Service                 | Members                                                                                                       |
+| ---------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Connection       | `SessionsService`       | `directory` (every open session's activity, summary, setup step, notices), `create`, `fork`, `rename`, `get`, |
+|                  |                         | `listModels`, `listComposerSuggestions`, `attach`, `detach`                                                   |
+| Attached session | `SessionRuntimeService` | `session` (the session document), `sendMessage`, `compact`, `abort`, `undoCheckpoint`, `redoCheckpoint`,      |
+|                  |                         | `revertToMessage`                                                                                             |
 
 `directory` is written by session runtime (`SessionBoard`) but served on `SessionsService`, because a client reads it before attaching anything; `attach` and `detach` are pi-server's routing, there for the same reason.
+
+A session's **notices** are problems that did not fail a command: a failure of the session's own work (an unanswered input, a failed compaction) is an `error`; something an installed extension cannot do here is a `warning` carrying the extension's path. The board keeps the last twenty per session and never clears them for a run, since a notice may be raised by the run that is starting. The browser shows new notices as toasts scoped to their session: one toast for all of a session's extension notices (they arrive as a batch; it stays until dismissed and opens a dialog listing them by extension), and each other notice on its own.
 
 A connection attaches one session at a time, as Pi's protocol routes it: the server validates the attachment of every session runtime call, so a delayed frame of a previous attachment cannot reach the new one. The browser attaches the session it shows and reads others (a sidebar prefetch) with `get`.
 
@@ -140,7 +142,7 @@ Different sessions run independently. Within a session the engine runs one input
 ## Failure and recovery
 
 - **Command rejection.** Failures while selecting the model, preparing, or admitting the input fail the command with a `GenericError` result. The browser drops its pending message.
-- **Run failure.** A model error is an assistant error entry, shown in the turn. An input that ends unanswered for another reason sets the session's problem on the board.
+- **Run failure.** A model error is an assistant error entry, shown in the turn. An input that ends unanswered for another reason adds an error notice to the session.
 - **User abort.** `abortSession` aborts the branch's work; the run ends through the normal path and the document shows what was produced.
 - **Browser disconnect.** Releases that connection's attachment only. On reconnect the browser rebinds its services, attaches the shown session again, and refetches every cached session.
 - **Server shutdown or crash.** Closing the server closes every session file without aborting work. On the next open the engine resumes the run from its last commit: an interrupted tool call that is not replay-safe gets an interrupted result, and the turn finishes. Turns that finished without an after-turn checkpoint get one when their session is next watched.
