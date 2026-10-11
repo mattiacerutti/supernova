@@ -1,6 +1,6 @@
 import {Outlet, useParams, useSearch} from "@tanstack/react-router";
 import AppLayout from "@/app/layout/app-layout";
-import {ToastViewport} from "@/components/ui/toast";
+import ToastViewport from "@/components/ui/toast";
 import ExtensionNoticesDialog from "@/features/sessions/components/conversation/extension-notices-dialog";
 import {useProjectsStore} from "@/features/projects/stores/projects-store";
 import SettingsPage from "@/features/settings/pages/settings-page";

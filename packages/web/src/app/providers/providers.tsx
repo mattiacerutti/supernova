@@ -1,6 +1,5 @@
 import {QueryClient, QueryClientProvider} from "@tanstack/react-query";
 import {useState} from "react";
-import ToastProvider from "@/components/ui/toast";
 import {syncSessions} from "@/features/sessions/api/sessions-sync";
 import {useSessionsStore} from "@/features/sessions/stores/sessions-store";
 import {workspaceKeys} from "@/features/workspace/api/query-keys";
@@ -46,9 +45,7 @@ export default function AppProviders(props: AppProvidersProps) {
 
   return (
     <RuntimeProvider runtime={runtime}>
-      <QueryClientProvider client={queryClient}>
-        <ToastProvider>{children}</ToastProvider>
-      </QueryClientProvider>
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     </RuntimeProvider>
   );
 }

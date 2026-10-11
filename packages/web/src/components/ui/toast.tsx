@@ -1,24 +1,16 @@
 import {Toast} from "@base-ui/react/toast";
-import {useId, type ReactNode} from "react";
+import {useId} from "react";
 import Icon from "@/components/ui/icon";
 import Button from "@/components/ui/button";
 import {cn} from "@/lib/cn";
-import type {ToastData} from "@/lib/toast";
-import {toastManager} from "@/lib/toast";
+import type {ToastManager} from "@/lib/toast";
+import {toastManager, useSessionToastManagers} from "@/lib/toast";
 
-type ToastObject = ReturnType<typeof Toast.useToastManager<ToastData>>["toasts"][number];
+type ToastObject = ReturnType<typeof Toast.useToastManager>["toasts"][number];
 
-interface ToastListProps {
-  /** The session whose page is open; its toasts show, other sessions' wait. */
-  readonly openSessionId: string | undefined;
-}
-
-/** Toasts for the page on screen: a toast scoped to a session shows only while that session is open; the rest always. */
-function ToastList(props: ToastListProps) {
-  const {openSessionId} = props;
-  const {toasts} = Toast.useToastManager<ToastData>();
-
-  return toasts.filter((toast) => toast.data?.sessionId === undefined || toast.data.sessionId === openSessionId).map((toast) => <ToastItem key={toast.id} toast={toast} />);
+function ToastList() {
+  const {toasts} = Toast.useToastManager();
+  return toasts.map((toast) => <ToastItem key={toast.id} toast={toast} />);
 }
 
 interface ToastItemProps {
@@ -109,28 +101,41 @@ function ToastItem(props: ToastItemProps) {
   );
 }
 
-interface ToastProviderProps {
-  readonly children: ReactNode;
+interface ToastQueueProps {
+  readonly manager: ToastManager;
+  /** A hidden queue keeps its toasts (and their timers) but shows nothing; a queue's toasts live in its provider. */
+  readonly hidden?: boolean;
 }
 
-/** Holds the toast queue. Render `ToastViewport` where the open session is known, inside the router. */
-export default function ToastProvider(props: ToastProviderProps) {
-  const {children} = props;
-  return <Toast.Provider toastManager={toastManager}>{children}</Toast.Provider>;
+/** One queue's toasts, stacked at the bottom-right corner. Below dialogs and menus (z-50), so a dialog covers toasts. */
+function ToastQueue(props: ToastQueueProps) {
+  const {hidden = false, manager} = props;
+  return (
+    <Toast.Provider toastManager={manager}>
+      <Toast.Portal>
+        <Toast.Viewport className={cn("fixed top-auto right-4 bottom-4 z-45 mx-auto flex w-62.5 sm:right-8 sm:bottom-8 sm:w-75", hidden && "hidden")}>
+          <ToastList />
+        </Toast.Viewport>
+      </Toast.Portal>
+    </Toast.Provider>
+  );
 }
 
 interface ToastViewportProps {
+  /** The session whose page is open; its toasts show beside the app-wide ones. Other sessions' toasts wait, timers running. */
   readonly openSessionId: string | undefined;
 }
 
-/** Where toasts appear; a hidden session-scoped toast's timer keeps running. */
-export function ToastViewport(props: ToastViewportProps) {
+/** Where toasts appear: the app-wide queue, and every session's own, only the open session's shown. Render once. */
+export default function ToastViewport(props: ToastViewportProps) {
   const {openSessionId} = props;
+  const sessions = useSessionToastManagers();
   return (
-    <Toast.Portal>
-      <Toast.Viewport className="fixed top-auto right-4 bottom-4 z-45 mx-auto flex w-62.5 sm:right-8 sm:bottom-8 sm:w-75">
-        <ToastList openSessionId={openSessionId} />
-      </Toast.Viewport>
-    </Toast.Portal>
+    <>
+      <ToastQueue manager={toastManager} />
+      {sessions.map(([sessionId, manager]) => (
+        <ToastQueue hidden={sessionId !== openSessionId} key={sessionId} manager={manager} />
+      ))}
+    </>
   );
 }

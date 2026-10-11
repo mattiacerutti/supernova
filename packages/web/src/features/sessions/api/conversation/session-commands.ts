@@ -227,10 +227,8 @@ export function useSessionCommands(options: UseSessionCommandsOptions) {
     if (outcome.status === "applied") return;
     if (outcome.status === "failed") {
       if (outcome.code === "CheckpointInheritedError") {
-        showToast("Nothing to undo in this fork", "This message came from the session this one was forked from. Only messages sent in this session can be undone.", {
-          data: {sessionId},
-        });
-      } else showToast(NAVIGATION_FAILURE_TITLES[navigation.action], outcome.message, {data: {sessionId}, type: "error"});
+        showToast("Nothing to undo in this fork", "This message came from the session this one was forked from. Only messages sent in this session can be undone.", {sessionId});
+      } else showToast(NAVIGATION_FAILURE_TITLES[navigation.action], outcome.message, {sessionId, type: "error"});
       return;
     }
     refused.current = navigation;

@@ -1,5 +1,5 @@
 import type {SessionDirectoryEntry} from "@supernova/contracts/services/sessions/services";
-import {toastManager} from "@/lib/toast";
+import {sessionToastManager} from "@/lib/toast";
 
 const openListeners = new Set<(sessionId: string) => void>();
 
@@ -14,7 +14,7 @@ function openExtensionNotices(sessionId: string): void {
 }
 
 /**
- * Shows the runtime's notices as toasts scoped to their session, so they appear only on its page. Extension notices
+ * Shows the runtime's notices as toasts in their session's queue, so they appear only on its page. Extension notices
  * arrive in a batch when a session opens, so a session gets one toast for all of them, which stays until dismissed and
  * opens the dialog that lists them. Every other notice is its own toast that fades.
  */
@@ -28,15 +28,15 @@ export class NoticeToasts {
       for (const notice of entry.notices) {
         if (this.shown.has(notice.id)) continue;
         this.shown.add(notice.id);
+        const toasts = sessionToastManager(sessionId);
         if (notice.extensionPath === undefined) {
-          toastManager.add({title: notice.level === "error" ? "Something went wrong" : "Notice", description: notice.message, type: notice.level, data: {sessionId}});
+          toasts.add({title: notice.level === "error" ? "Something went wrong" : "Notice", description: notice.message, type: notice.level});
         } else if (!this.extensionToasts.has(sessionId)) {
-          const toastId = toastManager.add({
+          const toastId = toasts.add({
             title: "Some extensions are limited",
             description: "Some of what your extensions do isn't supported in Supernova yet.",
             type: "warning",
             timeout: 0,
-            data: {sessionId},
             actionProps: {children: "Details", onClick: () => openExtensionNotices(sessionId)},
             onClose: () => this.extensionToasts.delete(sessionId),
           });

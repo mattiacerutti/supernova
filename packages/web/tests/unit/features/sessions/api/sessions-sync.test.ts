@@ -10,7 +10,7 @@ import {followSession, markSeenAsItChanges, syncSessions} from "@/features/sessi
 import {projectSessions, sessionView} from "@/features/sessions/lib/session-view";
 import {useSessionsStore} from "@/features/sessions/stores/sessions-store";
 import {hasUnseenActivity, useSessionVisitsStore} from "@/features/sessions/stores/sidebar/session-visits-store";
-import {toastManager} from "@/lib/toast";
+import {sessionToastManager} from "@/lib/toast";
 import type {RuntimeClient} from "@/runtime/transport/runtime-client";
 
 const model = {
@@ -302,15 +302,15 @@ describe("session commands and views", () => {
     await waitUntil(() => expect(live()).toMatchObject({error: "Model unavailable", liveMessage: undefined, status: "idle"}));
   });
 
-  it("shows the runtime's notices as toasts scoped to their session: one for all extension notices, one per other notice", () => {
+  it("shows the runtime's notices as toasts in their session's queue: one for all extension notices, one per other notice", () => {
     const {services} = setup();
-    const add = vi.spyOn(toastManager, "add").mockReturnValue("toast-1");
+    const add = vi.spyOn(sessionToastManager("session-1"), "add").mockReturnValue("toast-1");
     const notice = (id: string, message: string, extensionPath?: string) => ({id, at: "t1", level: "warning" as const, message, ...(extensionPath ? {extensionPath} : {})});
     const failure = {id: "n3", at: "t2", level: "error" as const, message: "The message was not answered (no_model)."};
 
     setDirectory(services, {"session-1": entry({notices: [notice("n1", 'subscribes to "message_update", which Supernova does not deliver.', "/ext/fixture.ts")]})});
     expect(add).toHaveBeenCalledTimes(1);
-    expect(add.mock.calls[0]?.[0]).toMatchObject({title: "Some extensions are limited", timeout: 0, type: "warning", data: {sessionId: "session-1"}});
+    expect(add.mock.calls[0]?.[0]).toMatchObject({title: "Some extensions are limited", timeout: 0, type: "warning"});
 
     // More extension notices, and a repeated directory value, add no toast; its Details opens the dialog listing them.
     const both = [
@@ -325,7 +325,7 @@ describe("session commands and views", () => {
     // A failure of the session's own work is its own, fading toast.
     setDirectory(services, {"session-1": entry({notices: [...both, failure]})});
     expect(add).toHaveBeenCalledTimes(2);
-    expect(add.mock.calls[1]?.[0]).toMatchObject({title: "Something went wrong", description: failure.message, type: "error", data: {sessionId: "session-1"}});
+    expect(add.mock.calls[1]?.[0]).toMatchObject({title: "Something went wrong", description: failure.message, type: "error"});
     expect(add.mock.calls[1]?.[0]).not.toHaveProperty("timeout");
   });
 
