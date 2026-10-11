@@ -1,20 +1,26 @@
 import type {SettingsManager} from "@earendil-works/pi-coding-agent";
 import {createBashToolDefinition, createEditToolDefinition, createReadToolDefinition, createWriteToolDefinition} from "@earendil-works/pi-coding-agent";
 import type {ToolDefinition} from "@earendil-works/pi-coding-agent";
-import type {ToolRegistration} from "@earendil-works/pi-durable";
+import type {Extension, ToolRegistration} from "@earendil-works/pi-durable";
 import {createBashTool, createEditTool, createReadTool, createWriteTool} from "@earendil-works/pi-durable/tools";
 
-/** Prompt snippet and guideline bullets of one tool, as the old SDK's prompt listed them. */
-export interface ToolPromptContribution {
+/** How the system prompt lists a tool: one line under `<tools>` and bullets under `<rules>`, as the old SDK's prompt did. */
+interface ToolPrompt {
   readonly snippet?: string;
   readonly guidelines: readonly string[];
 }
 
-/** A tool and the prompt text the old SDK showed for it. */
-export interface PromptedTool {
-  readonly tool: ToolRegistration;
-  readonly prompt: ToolPromptContribution;
-}
+/**
+ * An engine tool with its prompt text. The engine has no field for how the system prompt should describe a tool, only
+ * `description` for the model's tool schema, so the text rides on the tool: the engine passes tools through unchanged,
+ * and the prompt section reads it from the request's tools. Every tool a session installs is one, so the prompt never
+ * meets a tool it cannot describe; a tool with nothing to say has an empty `guidelines` and no `snippet`. If the engine
+ * adds such a field, use it instead.
+ */
+export type PromptedTool = ToolRegistration & {readonly prompt: ToolPrompt};
+
+/** An engine extension whose tools carry their prompt text; the only kind a session installs. */
+export type SessionExtension = Extension<PromptedTool>;
 
 /** Durable coding tools with Pi's prompt contributions and the configured shell command prefix. */
 export function createCodingTools(input: {readonly cwd: string; readonly settings: SettingsManager}): PromptedTool[] {
@@ -27,14 +33,14 @@ export function createCodingTools(input: {readonly cwd: string; readonly setting
 
   const commandPrefix = settings.getShellCommandPrefix();
 
-  const promptOf = (definition: Pick<ToolDefinition, "promptGuidelines" | "promptSnippet">): ToolPromptContribution => {
+  const promptOf = (definition: Pick<ToolDefinition, "promptGuidelines" | "promptSnippet">): ToolPrompt => {
     return {snippet: definition.promptSnippet, guidelines: definition.promptGuidelines ?? []};
   };
 
   return [
-    {tool: createReadTool(), prompt: promptOf(read)},
-    {tool: createBashTool({commandPrefix}), prompt: promptOf(bash)},
-    {tool: createEditTool(), prompt: promptOf(edit)},
-    {tool: createWriteTool(), prompt: promptOf(write)},
+    {...createReadTool(), prompt: promptOf(read)},
+    {...createBashTool({commandPrefix}), prompt: promptOf(bash)},
+    {...createEditTool(), prompt: promptOf(edit)},
+    {...createWriteTool(), prompt: promptOf(write)},
   ];
 }

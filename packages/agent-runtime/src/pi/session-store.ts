@@ -8,8 +8,8 @@ import type {SessionNotice} from "@supernova/contracts/services/session-runtime/
 import type {SessionWorktree} from "@supernova/contracts/services/sessions/schemas";
 import {loadPiSettings} from "@supernova/agent-runtime/pi/config/settings";
 import {SessionCatalog} from "@supernova/agent-runtime/pi/lib/session/session-catalog";
+import type {SessionExtension} from "@supernova/agent-runtime/pi/lib/tools/coding-tools";
 import type {SessionRecord} from "@supernova/agent-runtime/pi/lib/session/session-state";
-import type {PromptedTool} from "@supernova/agent-runtime/pi/lib/tools/coding-tools";
 import type {LoadedExtensions} from "@supernova/agent-runtime/pi/extensions/extensions";
 import {loadExtensions} from "@supernova/agent-runtime/pi/extensions/extensions";
 import type {ResourceCache} from "@supernova/agent-runtime/pi/resource-cache";
@@ -23,8 +23,8 @@ const SESSIONS_DIR = "sessions-v2";
 export interface SessionStoreDeps {
   readonly sdk: Pick<PiSdk, "modelRuntime">;
   readonly resourceCache: Pick<ResourceCache, "load">;
-  /** Tools every session offers besides the coding tools; Supernova's own, such as `web_fetch`. */
-  readonly tools: () => readonly PromptedTool[];
+  /** Extensions every session installs besides the coding tools: Supernova's own tools. */
+  readonly extensions: readonly SessionExtension[];
   /** Defaults to `<agentDir>/sessions-v2`. */
   readonly root?: string;
   /** Defaults to Pi's file settings for the session's working directory. */
@@ -224,8 +224,7 @@ export class SessionStore {
         modelRuntime: this.deps.sdk.modelRuntime,
         settings: () => this.settings(cwd),
         resources: () => ({contextFiles: resources.contextFiles, skills: resources.skills}),
-        extraTools: () => [...this.deps.tools(), ...extensions.tools],
-        extensions: () => extensions.extensions,
+        extensions: () => [...this.deps.extensions, ...extensions.extensions],
       },
     };
   }

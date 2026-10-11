@@ -1,12 +1,11 @@
 import type {TSchema} from "@earendil-works/pi-ai";
 import type {Extension as PiExtension, LoadExtensionsResult, ModelRuntime, ToolDefinition} from "@earendil-works/pi-coding-agent";
-import type {Extension} from "@earendil-works/pi-durable";
 import {defineExtension} from "@earendil-works/pi-durable";
 import {extensionContext} from "@supernova/agent-runtime/pi/extensions/legacy/extension-context";
 import type {Emit, Handler} from "@supernova/agent-runtime/pi/extensions/legacy/extension-events";
 import {DELIVERED_EVENTS, eventHooks} from "@supernova/agent-runtime/pi/extensions/legacy/extension-events";
+import type {SessionExtension} from "@supernova/agent-runtime/pi/lib/tools/coding-tools";
 import {fromToolDefinition} from "@supernova/agent-runtime/pi/lib/tools/tool-definition";
-import type {PromptedTool} from "@supernova/agent-runtime/pi/lib/tools/coding-tools";
 
 /**
  * Old-SDK registrations that only a terminal UI shows. The old Supernova accepted them and never showed them; they are
@@ -45,14 +44,8 @@ export interface ExtensionDiagnostic {
   readonly message: string;
 }
 
-/** What one loaded old-format extension becomes. */
-export interface BridgedExtension {
-  readonly extension: Extension;
-  readonly tools: readonly PromptedTool[];
-}
-
 /** Converts one loaded extension: its tools to engine tools, its supported events to engine hooks. */
-function bridgeExtension(source: PiExtension, input: BridgeInput, report: (diagnostic: ExtensionDiagnostic) => void): BridgedExtension {
+function bridgeExtension(source: PiExtension, input: BridgeInput, report: (diagnostic: ExtensionDiagnostic) => void): SessionExtension {
   const {modelRuntime} = input;
   const handlers = source.handlers as Map<string, Handler[]>;
   for (const event of handlers.keys()) {
@@ -63,19 +56,15 @@ function bridgeExtension(source: PiExtension, input: BridgeInput, report: (diagn
     if (registered && registered.size > 0) report({extensionPath: source.path, message: `${REGISTRATION_LABELS[registration]} not shown: ${[...registered.keys()].join(", ")}`});
   }
 
-  const tools = [...source.tools.values()].map(({definition}) => ({
-    tool: fromToolDefinition(definition as ToolDefinition<TSchema, unknown>, modelRuntime),
-    prompt: {snippet: definition.promptSnippet, guidelines: definition.promptGuidelines ?? []},
-  }));
+  const tools = [...source.tools.values()].map(({definition}) => fromToolDefinition(definition as ToolDefinition<TSchema, unknown>, modelRuntime));
 
   const hooks = eventHooks(new Set(handlers.keys()), emitter(handlers, input));
-  return {extension: defineExtension({name: `extension:${source.path}`, hooks}), tools};
+  return defineExtension({name: `extension:${source.path}`, hooks, tools});
 }
 
 /** The extensions of one project, bridged; `start()`/`stop()` deliver `session_start` and `session_shutdown`. */
 export interface BridgedExtensions {
-  readonly extensions: readonly Extension[];
-  readonly tools: readonly PromptedTool[];
+  readonly extensions: readonly SessionExtension[];
   readonly start: () => Promise<void>;
   readonly stop: (reason: "quit" | "reload") => Promise<void>;
 }
@@ -90,7 +79,7 @@ export function bridgeExtensions(input: {
   readonly modelRuntime: ModelRuntime;
   readonly report: (diagnostic: ExtensionDiagnostic) => void;
 }): BridgedExtensions {
-  const bridged = input.loaded.extensions.map((extension) => bridgeExtension(extension, input, input.report));
+  const extensions = input.loaded.extensions.map((extension) => bridgeExtension(extension, input, input.report));
   const lifecycle = (event: "session_start" | "session_shutdown", fields: Record<string, unknown>) => async () => {
     for (const extension of input.loaded.extensions) {
       try {
@@ -101,8 +90,7 @@ export function bridgeExtensions(input: {
     }
   };
   return {
-    extensions: bridged.map(({extension}) => extension),
-    tools: bridged.flatMap(({tools}) => tools),
+    extensions,
     start: lifecycle("session_start", {reason: "startup"}),
     stop: (reason) => lifecycle("session_shutdown", {reason})(),
   };

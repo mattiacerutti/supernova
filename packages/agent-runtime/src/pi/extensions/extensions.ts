@@ -1,15 +1,12 @@
 import type {ModelRuntime} from "@earendil-works/pi-coding-agent";
 import type {SessionNotice} from "@supernova/contracts/services/session-runtime/procedures";
-import type {Extension} from "@earendil-works/pi-durable";
 import {bridgeExtensions} from "@supernova/agent-runtime/pi/extensions/legacy/extension-bridge";
-import type {PromptedTool} from "@supernova/agent-runtime/pi/lib/tools/coding-tools";
+import type {SessionExtension} from "@supernova/agent-runtime/pi/lib/tools/coding-tools";
 import type {ProjectResources} from "@supernova/agent-runtime/pi/resource-cache";
 
 /** The extensions a session installs, from every source Supernova loads them from, as engine extensions. */
 export interface LoadedExtensions {
-  readonly extensions: readonly Extension[];
-  /** Tools the extensions register, with their prompt text; installed beside the coding tools. */
-  readonly tools: readonly PromptedTool[];
+  readonly extensions: readonly SessionExtension[];
   /** Delivers the session lifecycle to extensions that observe it; `start` after the file opens, `stop` before it closes. */
   readonly start: () => Promise<void>;
   readonly stop: (reason: "quit" | "reload") => Promise<void>;

@@ -6,7 +6,7 @@ import {LoginSessions} from "@supernova/agent-runtime/features/providers/login/l
 import {Providers} from "@supernova/agent-runtime/features/providers/providers";
 import {FileCheckpointStore} from "@supernova/agent-runtime/features/session-runtime/checkpoints/checkpoint-store";
 import {SessionRuntime} from "@supernova/agent-runtime/features/session-runtime/session-runtime";
-import {createSupernovaTools} from "@supernova/agent-runtime/features/session-runtime/tools/tools";
+import {SupernovaTools} from "@supernova/agent-runtime/features/session-runtime/tools/web-fetch";
 import {createTitleGenerator} from "@supernova/agent-runtime/features/session-runtime/worker/title-generator";
 import {Sessions} from "@supernova/agent-runtime/features/sessions/sessions";
 import {spawnPty} from "@supernova/agent-runtime/features/workspace/terminals/pty";
@@ -49,12 +49,11 @@ export async function createAgentRuntime(options: CreateAgentRuntimeOptions = {}
 
   const resourceCache = createResourceCache(sdk);
   const checkpointStore = new FileCheckpointStore(options.checkpointStorageRoot);
-  const supernovaTools = createSupernovaTools(sdk.modelRuntime);
 
   const store = new SessionStore({
     sdk,
     resourceCache,
-    tools: () => supernovaTools,
+    extensions: [SupernovaTools],
     root: options.sessionStorageRoot,
     // Reports do not fail the command that hit them; they reach clients through the session board.
     onReport: (sessionId, notice) => sessionRuntime.notify(sessionId, notice),

@@ -29,7 +29,7 @@ describe("listing, searching, pinning, and archiving project sessions", () => {
     const catalog = await SessionCatalog.open(join(root, "catalog.sqlite"));
     for (const item of records) catalog.insert(item);
     catalog.close();
-    const store = new SessionStore({root, sdk: {} as never, resourceCache: {} as never, tools: () => []});
+    const store = new SessionStore({root, sdk: {} as never, resourceCache: {} as never, extensions: []});
     stores.push(store);
     return {projects: new Projects({store}), store};
   }

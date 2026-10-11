@@ -53,7 +53,7 @@ Nothing else sits at a feature root.
 - The class file(s) at the root, named for the thing (`session-worker.ts`, `login-sessions.ts`). A class that holds resources exposes `dispose()`.
 - `commands/` for functions the class dispatches to.
 - `lib/` for helpers that serve the region.
-- When the region's surface is a function rather than a class, the file takes the region's name (`tools/tools.ts`).
+- When the region's surface is a value rather than a class, the file is named for what it exports (`tools/web-fetch.ts`).
 
 Group a folder once it holds more than about five files, by what the files are for. `session-runtime/worker/commands/` holds six because a session can do six things.
 
@@ -103,7 +103,7 @@ Live execution: send, abort, compact, checkpoint navigation, and each session's 
 - `session-runtime.ts` keeps one `SessionWorker` per session in use and dispatches to it. A worker opens with its file and runs the commands in `worker/commands/`, which receive the worker and use its file, checkpoint, and publication steps.
 - `worker/commands/` are what the feature class dispatches to a worker; `worker/lib/navigate-to-turn.ts` is the one restore-then-show path undo, redo, and revert share.
 - `checkpoints/` is the store, shadow repositories, and git plumbing.
-- `tools/` are Supernova's own tools offered in every session (`web_fetch`).
+- `tools/` are Supernova's own tools, written as engine tools and installed in every session as one engine extension (`SupernovaTools`: `web_fetch`); they do not go through the old-SDK bridge.
 
 ## Testing
 

@@ -11,7 +11,7 @@ import {createReadTool} from "@earendil-works/pi-durable/tools";
 import {createPiTestRuntime, fauxAssistantMessage, selectedModelReference} from "@tests/support/session-runtime";
 import type {TSchema} from "@earendil-works/pi-ai";
 import type {ToolDefinition} from "@earendil-works/pi-coding-agent";
-import {createWebFetchTool} from "@supernova/agent-runtime/features/session-runtime/tools/web-fetch-tool";
+import {webFetchTool} from "@supernova/agent-runtime/features/session-runtime/tools/web-fetch";
 import {CustomPiResourceLoader} from "@supernova/agent-runtime/pi/config/resource-loader";
 import {cleanupTempDirs} from "@tests/support/async";
 
@@ -349,7 +349,18 @@ export default function(pi) {
     const oldRuntime = await ModelRuntime.create({credentials: new InMemoryCredentialStore(), modelsPath: null});
     const {session} = await createAgentSession({
       cwd: project,
-      customTools: [createWebFetchTool() as unknown as ToolDefinition<TSchema, unknown>],
+      // The old SDK's shape of our tool, so its prompt lists `web_fetch` as ours does.
+      customTools: [
+        {
+          name: webFetchTool.name,
+          label: "Web Fetch",
+          description: webFetchTool.description,
+          parameters: webFetchTool.parameters,
+          promptSnippet: webFetchTool.prompt?.snippet,
+          promptGuidelines: [...(webFetchTool.prompt?.guidelines ?? [])],
+          execute: async () => ({content: [], details: {}}),
+        } as unknown as ToolDefinition<TSchema, unknown>,
+      ],
       modelRuntime: oldRuntime,
       resourceLoader: loader,
       sessionManager: SessionManager.inMemory(project),

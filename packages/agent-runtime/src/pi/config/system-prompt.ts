@@ -1,9 +1,9 @@
 // Ported from Pi's packages/coding-agent/src/core/system-prompt.ts.
 import type {Skill} from "@earendil-works/pi-coding-agent";
 import {formatSkillsForPrompt, getDocsPath, getExamplesPath, getReadmePath} from "@earendil-works/pi-coding-agent";
-import type {PromptInput, PromptSection, ToolRegistration} from "@earendil-works/pi-durable";
+import type {PromptInput, PromptSection} from "@earendil-works/pi-durable";
 import {section} from "@earendil-works/pi-durable";
-import type {ToolPromptContribution} from "@supernova/agent-runtime/pi/lib/tools/coding-tools";
+import type {PromptedTool} from "@supernova/agent-runtime/pi/lib/tools/coding-tools";
 
 function renderPreamble(): string {
   return "You are an expert coding assistant operating inside pi, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.";
@@ -17,15 +17,12 @@ function renderProjectContext(contextFiles: PromptResources["contextFiles"]): st
   ].join("\n\n");
 }
 
-function renderTools(tools: readonly ToolRegistration[], prompts: ReadonlyMap<string, ToolPromptContribution>): string {
-  const lines = tools.flatMap(({name}) => {
-    const snippet = prompts.get(name)?.snippet;
-    return snippet ? [`- ${name}: ${snippet}`] : [];
-  });
+function renderTools(tools: readonly PromptedTool[]): string {
+  const lines = tools.flatMap(({name, prompt}) => (prompt.snippet ? [`- ${name}: ${prompt.snippet}`] : []));
   return `${lines.length > 0 ? lines.join("\n") : "(none)"}\n\nIn addition to the tools above, you may have access to other custom tools depending on the project.`;
 }
 
-function renderRules(tools: readonly ToolRegistration[], prompts: ReadonlyMap<string, ToolPromptContribution>): string {
+function renderRules(tools: readonly PromptedTool[]): string {
   const selectedTools = tools.map((tool) => tool.name);
   const rules: string[] = [];
   const seen = new Set<string>();
@@ -48,8 +45,8 @@ function renderRules(tools: readonly ToolRegistration[], prompts: ReadonlyMap<st
     else addRule("Use bash for file operations like ls, rg, find");
   }
 
-  for (const name of selectedTools) {
-    for (const rule of prompts.get(name)?.guidelines ?? []) addRule(rule);
+  for (const tool of tools) {
+    for (const rule of tool.prompt.guidelines) addRule(rule);
   }
   addRule("Be concise in your responses");
   addRule("Show file paths clearly when working with files");
@@ -67,7 +64,7 @@ function renderDocs(): string {
 - Always read pi .md files completely and follow links to related docs (e.g., tui.md for TUI API details)`;
 }
 
-function renderSkills(tools: readonly ToolRegistration[], resources: () => PromptResources): string | undefined {
+function renderSkills(tools: readonly PromptedTool[], resources: () => PromptResources): string | undefined {
   const readTool = (["read", "bash"] as const).find((name) => tools.some((tool) => tool.name === name));
   if (!readTool) return undefined;
   const {skills} = resources();
@@ -86,19 +83,15 @@ export interface PromptResources {
 }
 
 /** Pi's system-prompt sections, rendered independently from the request's tools and current project resources. */
-export function createPromptSections(input: {
-  readonly cwd: string;
-  readonly resources: () => PromptResources;
-  readonly toolPrompts: ReadonlyMap<string, ToolPromptContribution>;
-}): PromptSection[] {
-  const {cwd, resources, toolPrompts} = input;
+export function createPromptSections(input: {readonly cwd: string; readonly resources: () => PromptResources}): PromptSection<PromptedTool>[] {
+  const {cwd, resources} = input;
   return [
-    section("preamble", renderPreamble, {tag: false}),
-    section("tools", ({agent}) => renderTools(agent.tools, toolPrompts)),
-    section("rules", ({agent}) => renderRules(agent.tools, toolPrompts)),
-    section("docs", renderDocs),
-    section("project_context", () => renderProjectContext(resources().contextFiles)),
-    section("skills", ({agent}) => renderSkills(agent.tools, resources)),
-    section("cwd", (prompt) => renderCwd(prompt, cwd)),
+    section<PromptedTool>("preamble", renderPreamble, {tag: false}),
+    section<PromptedTool>("tools", ({agent}) => renderTools(agent.tools)),
+    section<PromptedTool>("rules", ({agent}) => renderRules(agent.tools)),
+    section<PromptedTool>("docs", renderDocs),
+    section<PromptedTool>("project_context", () => renderProjectContext(resources().contextFiles)),
+    section<PromptedTool>("skills", ({agent}) => renderSkills(agent.tools, resources)),
+    section<PromptedTool>("cwd", (prompt) => renderCwd(prompt, cwd)),
   ];
 }

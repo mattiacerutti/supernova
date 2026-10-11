@@ -13,7 +13,7 @@ import {SessionRuntime} from "@supernova/agent-runtime/features/session-runtime/
 import {Sessions} from "@supernova/agent-runtime/features/sessions/sessions";
 import {Projects} from "@supernova/agent-runtime/features/projects/projects";
 import {SessionStore} from "@supernova/agent-runtime/pi/session-store";
-import {createSupernovaTools} from "@supernova/agent-runtime/features/session-runtime/tools/tools";
+import {SupernovaTools} from "@supernova/agent-runtime/features/session-runtime/tools/web-fetch";
 import type {SendMessagePayload} from "@supernova/contracts/services/session-runtime/procedures";
 import type {AssistantMessage, ModelReference, Session} from "@supernova/contracts/services/sessions/schemas";
 import type {SessionDirectoryState} from "@supernova/contracts/services/sessions/services";
@@ -186,13 +186,12 @@ export async function createPiTestRuntime(input?: {
   // One settings object for every session, so a test can change it between turns as a user edits settings.json.
   const settings = SettingsManager.inMemory(input?.settings);
   const checkpointStore = input?.checkpointStore ?? new FileCheckpointStore(checkpointStorageRoot);
-  const tools = createSupernovaTools(modelRuntime);
   /** Every problem the store reported that did not fail a command, in order: extension diagnostics and engine reports. */
   const reports: string[] = [];
   const store = new SessionStore({
     sdk,
     resourceCache,
-    tools: () => tools,
+    extensions: [SupernovaTools],
     root: sessionStorageRoot,
     settings: () => settings,
     onReport: (sessionId, notice) => {

@@ -1,7 +1,8 @@
 import type {ImageContent, Model, TextContent, TSchema} from "@earendil-works/pi-ai";
 import type {AgentToolResult, ExtensionToolContext, ModelRuntime, ToolDefinition} from "@earendil-works/pi-coding-agent";
 import type {JsonValue} from "@earendil-works/chord";
-import type {ToolExecutionApi, ToolRegistration} from "@earendil-works/pi-durable";
+import type {ToolExecutionApi} from "@earendil-works/pi-durable";
+import type {PromptedTool} from "@supernova/agent-runtime/pi/lib/tools/coding-tools";
 import {extensionContext} from "@supernova/agent-runtime/pi/extensions/legacy/extension-context";
 
 /** The old-SDK tool context, built from what the engine call knows; `executeTool` and `tools` are not available. */
@@ -27,11 +28,12 @@ function toJson(value: unknown): JsonValue | undefined {
  * Runs an old-SDK `ToolDefinition` as an engine tool: the same name, description, and schema; streamed partial
  * results become running output and details. Used for Supernova's own tools and extension-registered ones.
  */
-export function fromToolDefinition(definition: ToolDefinition<TSchema, unknown>, modelRuntime: ModelRuntime): ToolRegistration {
+export function fromToolDefinition(definition: ToolDefinition<TSchema, unknown>, modelRuntime: ModelRuntime): PromptedTool {
   return {
     name: definition.name,
     description: definition.description,
     parameters: definition.parameters,
+    prompt: {snippet: definition.promptSnippet, guidelines: definition.promptGuidelines ?? []},
     ...(definition.executionMode ? {executionMode: definition.executionMode} : {}),
     ...(definition.prepareArguments ? {prepareArguments: definition.prepareArguments} : {}),
     async execute(args, api, context) {

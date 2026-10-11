@@ -103,7 +103,7 @@ describe("session store", () => {
       root,
       sdk: {modelRuntime},
       resourceCache: {load: async () => ({contextFiles: [], skills: [], promptTemplates: [], extensions: {extensions: [], errors: [], runtime: {} as never}})},
-      tools: () => [],
+      extensions: [],
       settings: () => SettingsManager.inMemory(),
     });
     const record = await store.create({id: "s1", projectPath: project});

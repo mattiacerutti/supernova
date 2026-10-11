@@ -9,7 +9,6 @@ import type {
   ConversationView,
   EntryId,
   EntryRecord,
-  Extension,
   Harness,
   LiveState,
   Registry,
@@ -25,7 +24,7 @@ import {createPromptSections} from "@supernova/agent-runtime/pi/config/system-pr
 import {buildSession, contextUsageOf, timelineEntries} from "@supernova/agent-runtime/pi/lib/session/session-snapshot";
 import type {CheckpointRef, SessionRecord, SessionState, TurnPosition, TurnRecord} from "@supernova/agent-runtime/pi/lib/session/session-state";
 import {SessionStateDoc, turnPositions} from "@supernova/agent-runtime/pi/lib/session/session-state";
-import type {PromptedTool} from "@supernova/agent-runtime/pi/lib/tools/coding-tools";
+import type {SessionExtension} from "@supernova/agent-runtime/pi/lib/tools/coding-tools";
 import {createCodingTools} from "@supernova/agent-runtime/pi/lib/tools/coding-tools";
 
 const context = BACKGROUND_CONTEXT;
@@ -37,10 +36,8 @@ export interface SessionFileSetup {
   readonly modelRuntime: ModelRuntime;
   readonly settings: () => SettingsManager;
   readonly resources: () => PromptResources;
-  /** Tools beyond the coding tools: Supernova's own and the extensions'. */
-  readonly extraTools: () => readonly PromptedTool[];
-  /** Engine extensions bridged from Pi extension packages. */
-  readonly extensions: () => readonly Extension[];
+  /** Extensions installed beside the coding tools: Supernova's own and the project's. */
+  readonly extensions: () => readonly SessionExtension[];
 }
 
 /** The model and thinking level a send or compaction runs with. */
@@ -127,13 +124,9 @@ export class SessionFile {
    * path: running work finishes on the code it took.
    */
   public install(setup: SessionFileSetup): void {
-    const codingTools = createCodingTools({cwd: setup.cwd, settings: setup.settings()});
-    const tools = [...codingTools, ...setup.extraTools()];
-    const prompts = new Map(tools.map(({tool, prompt}) => [tool.name, prompt]));
-
-    const extensions = [
-      defineExtension({name: "tools", tools: tools.map(({tool}) => tool)}),
-      defineExtension({name: "prompt", sections: createPromptSections({cwd: setup.cwd, resources: setup.resources, toolPrompts: prompts})}),
+    const extensions: SessionExtension[] = [
+      defineExtension({name: "coding-tools", tools: createCodingTools({cwd: setup.cwd, settings: setup.settings()})}),
+      defineExtension({name: "prompt", sections: createPromptSections({cwd: setup.cwd, resources: setup.resources})}),
       ...setup.extensions(),
     ];
 
