@@ -8,6 +8,16 @@ All notable changes to Supernova are documented in this file.
 
 ### Added
 
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.6.0]
+
+### Added
+
 - Added a command palette, opened with ⌘K (Ctrl+K on Windows and Linux) or the sidebar's Search button. It searches sessions and actions together, starts a new session in the current project or a chosen one, and opens projects without leaving the palette.
 - Added keyboard shortcuts to show and hide the sidebar (⌘B, Ctrl+B on Windows and Linux) and the workspace panel (⌥⌘B, Ctrl+Alt+B).
 - Added worktree sessions: two pickers under the composer choose whether a new session runs in the project's current checkout or in a new Git worktree branched off a chosen base branch. The worktree gets a random `supernova/<adjective>-<noun>` branch, a "Creating worktree" marker shows in the timeline while it is set up, worktree sessions carry a marker in the sidebar and their branch under the composer, and archiving one asks whether to remove its worktree and branch.
