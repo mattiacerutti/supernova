@@ -11,11 +11,6 @@ All notable changes to Supernova are documented in this file.
 
 ### Added
 
-- Added a command palette, opened with ⌘K (Ctrl+K on Windows and Linux) or the sidebar's Search button. It searches sessions and actions together, starts a new session in the current project or a chosen one, and opens projects without leaving the palette.
-- Added keyboard shortcuts to show and hide the sidebar (⌘B, Ctrl+B on Windows and Linux) and the workspace panel (⌥⌘B, Ctrl+Alt+B).
-- Added worktree sessions: two pickers under the composer choose whether a new session runs in the project's current checkout or in a new Git worktree branched off a chosen base branch. The worktree gets a random `supernova/<adjective>-<noun>` branch, a "Creating worktree" marker shows in the timeline while it is set up, worktree sessions carry a marker in the sidebar and their branch under the composer, and archiving one asks whether to remove its worktree and branch.
-- Added a Terminal tab to the workspace panel: a shell on the server in the session's worktree or project. Several can be open per session; a shell keeps running while you switch sessions and ends when its tab is closed, the session is archived, or the server stops.
-
 ### Changed
 
 - Sessions now run on Pi's durable engine (`pi-durable`). Every streamed partial, tool output, and turn is written to the session's file before it is shown, so a server restart or crash resumes an interrupted response from where it stopped instead of losing it, and a browser that opens a session mid-response sees everything produced so far.
@@ -24,6 +19,22 @@ All notable changes to Supernova are documented in this file.
 - The sidebar loads a project's sessions five at a time from the server instead of loading all of them and revealing more locally.
 - Renaming, pinning, and archiving a session now update the sidebar at once instead of after a server round trip and reload.
 - Settings → Extensions → Update now reinstalls extensions in open sessions; a restart is no longer needed for the update to take effect.
+
+### Fixed
+
+### Removed
+
+## [0.6.0]
+
+### Added
+
+- Added a command palette, opened with ⌘K (Ctrl+K on Windows and Linux) or the sidebar's Search button. It searches sessions and actions together, starts a new session in the current project or a chosen one, and opens projects without leaving the palette.
+- Added keyboard shortcuts to show and hide the sidebar (⌘B, Ctrl+B on Windows and Linux) and the workspace panel (⌥⌘B, Ctrl+Alt+B).
+- Added worktree sessions: two pickers under the composer choose whether a new session runs in the project's current checkout or in a new Git worktree branched off a chosen base branch. The worktree gets a random `supernova/<adjective>-<noun>` branch, a "Creating worktree" marker shows in the timeline while it is set up, worktree sessions carry a marker in the sidebar and their branch under the composer, and archiving one asks whether to remove its worktree and branch.
+- Added a Terminal tab to the workspace panel: a shell on the server in the session's worktree or project. Several can be open per session; a shell keeps running while you switch sessions and ends when its tab is closed, the session is archived, or the server stops.
+
+### Changed
+
 - Session titles are now generated in the background: the first response starts immediately and the title appears when it is ready, instead of the first turn waiting for it.
 
 ### Fixed
