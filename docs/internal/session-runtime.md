@@ -25,13 +25,21 @@ This document explains the design, its guarantees, and the reasoning behind its 
 
 ## Storage
 
-Each Supernova session is one SQLite file, `<agentDir>/sessions-v2/<sessionId>/session.sqlite`, opened by one Harness. The session's chat starts as the file's root conversation; undo moves a pointer into it, and the next send forks there inside the same file (see [Checkpoint system](checkpoint-system.md)). One file per session follows Pi's own durable coding agent: a storage failure is fatal only to its own file, sessions never contend on one commit line, and idle sessions can close.
+Each Supernova session is one SQLite file, `<agentDir>/sessions/<sessionId>/session.sqlite`, opened by one Harness. The session's chat starts as the file's root conversation; undo moves a pointer into it, and the next send forks there inside the same file (see [Checkpoint system](checkpoint-system.md)). One file per session follows Pi's own durable coding agent: a storage failure is fatal only to its own file, sessions never contend on one commit line, and idle sessions can close.
 
-`<agentDir>/sessions-v2/catalog.sqlite` holds every session's record (project, worktree, title, fork source, pin, archive time), one row each (`pi/lib/session/session-catalog.ts`). Lookup by id, listing by project, and title search read only the catalog; no session file is opened for any. The engine cannot list by project, so the catalog is ours.
+`<agentDir>/sessions/catalog.sqlite` holds every session's record (project, worktree, title, fork source, pin, archive time), one row each (`pi/lib/session/session-catalog.ts`). Lookup by id, listing by project, and title search read only the catalog; no session file is opened for any. The engine cannot list by project, so the catalog is ours.
 
 Listings and searches are paged on the server. Two partial indexes over unarchived rows hold them in order: `(project_path, pinned DESC, updated_at DESC, id DESC)` for a project's listing, and `(updated_at DESC, id DESC)` for search, which filters titles with an escaped `LIKE` while it walks it. A page is a keyset query that continues after the last row's sort key, read from the index without sorting; its cursor is that key, opaque to clients. The id breaks ties, so a page boundary never skips or repeats a row.
 
 Both use Node's `node:sqlite`: session files through pi-durable's `openNodeSqliteStorage`, the catalog directly.
+
+### Sessions from the old SDK
+
+Releases before the durable engine stored sessions as Pi's JSONL files in the same directory, one `--<project path>--/` folder per project, with archived ones in its `archive/`. All code that reads them lives in `pi/lib/session/legacy/`, so it can be removed as one folder once no install still has them.
+
+The first time the catalog opens, it imports every non-archived file and then moves each project folder, `archive/` included, into `sessions/legacy/`. Old files are never written or deleted. An import keeps the conversation the user last saw: the path from the file's last entry, where the old checkpoint cursor left it, so undone turns and abandoned branches are dropped. Pi's own context projection turns messages and compaction summaries into engine entries, so the model gets the same context it got before. Each composer message becomes a turn with disabled checkpoints, so undo moves the conversation and leaves files alone. A tool call that a crash left without a result gets an aborted result, as the engine records for calls that never ran. Archived sessions are moved but never imported or listed.
+
+The catalog record is written last, so after a crash the next start sees a session file with no record and writes it again. A file that fails to import is reported in the server log and moves with its folder. Folders whose name is a cataloged session id are left alone, because session ids are chosen by the client.
 
 ### Schema changes
 

@@ -8,6 +8,7 @@ import type {SessionNotice} from "@supernova/contracts/services/session-runtime/
 import type {SessionWorktree} from "@supernova/contracts/services/sessions/schemas";
 import {loadPiSettings} from "@supernova/agent-runtime/pi/config/settings";
 import {SessionCatalog} from "@supernova/agent-runtime/pi/lib/session/session-catalog";
+import {importLegacySessions} from "@supernova/agent-runtime/pi/lib/session/legacy/legacy-sessions";
 import type {SessionExtension} from "@supernova/agent-runtime/pi/lib/tools/coding-tools";
 import type {SessionRecord} from "@supernova/agent-runtime/pi/lib/session/session-state";
 import type {LoadedExtensions} from "@supernova/agent-runtime/pi/extensions/extensions";
@@ -17,15 +18,15 @@ import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";
 import type {SessionFileSetup} from "@supernova/agent-runtime/pi/session-file";
 import {SessionFile} from "@supernova/agent-runtime/pi/session-file";
 
-/** Directory of the durable sessions, beside the old SDK's `sessions/`. */
-const SESSIONS_DIR = "sessions-v2";
+/** Directory of the sessions: the old SDK's, which hold its project folders until they are imported (see `legacy/`). */
+const SESSIONS_DIR = "sessions";
 
 export interface SessionStoreDeps {
   readonly sdk: Pick<PiSdk, "modelRuntime">;
   readonly resourceCache: Pick<ResourceCache, "load">;
   /** Extensions every session installs besides the coding tools: Supernova's own tools. */
   readonly extensions: readonly SessionExtension[];
-  /** Defaults to `<agentDir>/sessions-v2`. */
+  /** Defaults to `<agentDir>/sessions`. */
   readonly root?: string;
   /** Defaults to Pi's file settings for the session's working directory. */
   readonly settings?: (cwd: string) => SettingsManager;
@@ -58,7 +59,8 @@ export class SessionStore {
   /** Records and creates a new session file. */
   public async create(input: {readonly id: string; readonly projectPath: string; readonly worktree?: SessionWorktree; readonly forkedFrom?: string}): Promise<SessionRecord> {
     const catalog = await this.catalog();
-    if (catalog.find(input.id) || existsSync(this.databasePath(input.id))) throw new Error("A session with this id already exists.");
+    // Any entry under the root is taken: an existing session, the catalog, or the imported old sessions' folder.
+    if (catalog.find(input.id) || existsSync(join(this.root, input.id))) throw new Error("A session with this id already exists.");
 
     const now = new Date().toISOString();
     const record: SessionRecord = {
@@ -231,7 +233,16 @@ export class SessionStore {
 
   /** The catalog, opened on first use; a failed open is retried by the next call. */
   private catalog(): Promise<SessionCatalog> {
-    this.catalogOpening ??= SessionCatalog.open(join(this.root, "catalog.sqlite")).catch((error: unknown) => {
+    this.catalogOpening ??= (async () => {
+      const catalog = await SessionCatalog.open(join(this.root, "catalog.sqlite"));
+      try {
+        await importLegacySessions({root: this.root, catalog, report: (message) => console.warn(`[sessions] ${message}`)});
+      } catch (error) {
+        catalog.close();
+        throw error;
+      }
+      return catalog;
+    })().catch((error: unknown) => {
       this.catalogOpening = undefined;
       throw error;
     });

@@ -35,7 +35,7 @@ export interface AgentRuntime {
 interface CreateAgentRuntimeOptions {
   /** Defaults to the real Pi SDK; tests pass an in-memory one. */
   readonly sdk?: PiSdk;
-  /** Where durable session files and their index live; defaults to `<agentDir>/sessions-v2`. */
+  /** Where durable session files and their index live; defaults to `<agentDir>/sessions`. */
   readonly sessionStorageRoot?: string;
   /** Where checkpoint manifests and shadow repositories live. */
   readonly checkpointStorageRoot?: string;
