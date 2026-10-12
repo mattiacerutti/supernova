@@ -82,6 +82,7 @@
   --color-diff-removed: var(--theme-diff-removed);
   --color-diff-removed-surface: var(--theme-diff-removed-surface);
   --color-danger-ink: var(--theme-danger-ink);
+  --color-warning-ink: var(--theme-warning-ink);
   --font-sans: -apple-system, BlinkMacSystemFont, Inter, sans-serif;
   --font-mono: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
   --text-sm: 0.85rem;

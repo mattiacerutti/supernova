@@ -1,4 +1,4 @@
-import type {Provider} from "@supernova/contracts/providers/schemas";
+import type {Provider} from "@supernova/contracts/services/providers/schemas";
 import {SettingsGroup} from "@/features/settings/components/settings-group";
 import ProviderRow from "@/features/settings/components/providers/provider-row";
 

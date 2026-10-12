@@ -1,4 +1,4 @@
-import type {ModelReference} from "@supernova/contracts/sessions/schemas";
+import type {ModelReference} from "@supernova/contracts/services/sessions/schemas";
 import {create} from "zustand";
 import {persist} from "zustand/middleware";
 

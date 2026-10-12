@@ -1,4 +1,3 @@
-import {useQueryClient} from "@tanstack/react-query";
 import {Link, useLocation} from "@tanstack/react-router";
 import type {ReactNode} from "react";
 import Button from "@/components/ui/button";
@@ -9,7 +8,7 @@ import IconButton from "@/components/ui/icon-button";
 import Kbd from "@/components/ui/kbd";
 import type {MouseEvent} from "react";
 import UpdateButton from "@/features/updates/components/update-button";
-import {listFolderSuggestionsQueryOptions} from "@/features/projects/api/command-palette/list-folder-suggestions";
+import {usePrefetchFolderSuggestions} from "@/features/projects/api/command-palette/list-folder-suggestions";
 import SortableProjectList from "@/features/projects/components/sidebar/sortable-project-list";
 import {useProjectsStore} from "@/features/projects/stores/projects-store";
 import {cn} from "@/lib/cn";
@@ -38,7 +37,7 @@ interface SidebarActionButtonProps extends Omit<ButtonProps, "children" | "onCli
 function SidebarActionButton(props: SidebarActionButtonProps) {
   const {action, className, ...buttonProps} = props;
   const openPalette = useCommandPaletteStore((state) => state.openPalette);
-  const queryClient = useQueryClient();
+  const prefetchFolderSuggestions = usePrefetchFolderSuggestions();
 
   const handleClick = (): void => {
     openPalette(action.page);
@@ -46,7 +45,7 @@ function SidebarActionButton(props: SidebarActionButtonProps) {
 
   // Hovering New project starts loading the home folder, so the page usually opens with its folders already there.
   const handlePointerEnter = (): void => {
-    if (action.page === "open-project") void queryClient.prefetchQuery(listFolderSuggestionsQueryOptions(""));
+    if (action.page === "open-project") void prefetchFolderSuggestions("");
   };
 
   return (

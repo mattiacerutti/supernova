@@ -1,12 +1,11 @@
+import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import {useMutation} from "@tanstack/react-query";
-import {Effect} from "effect";
-import {eq} from "@/rpc/effect-query";
-import {RpcProtocolClientService} from "@/rpc/transport/client";
+import {unwrap} from "@/runtime/runtime-result";
+import {useRuntime} from "@/runtime/use-runtime";
 
 export function useUpdateExtensions() {
-  return useMutation(
-    eq.mutationOptions({
-      mutationFn: () => Effect.flatMap(Effect.service(RpcProtocolClientService), (rpc) => rpc.updateExtensions()),
-    })
-  );
+  const runtime = useRuntime();
+  return useMutation({
+    mutationFn: () => unwrap(runtime.extensions.update(BACKGROUND_CONTEXT)),
+  });
 }

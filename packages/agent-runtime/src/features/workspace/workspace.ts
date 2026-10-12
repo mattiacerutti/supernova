@@ -1,6 +1,13 @@
 import {readFile} from "node:fs/promises";
 import {join} from "node:path";
 import type {
+  TerminalClosePayload,
+  TerminalOpenPayload,
+  TerminalOpenResult,
+  TerminalResizePayload,
+  TerminalsListPayload,
+  TerminalsListResult,
+  TerminalWritePayload,
   WorkspaceBranch,
   WorkspaceBranchesListPayload,
   WorkspaceBranchesListResult,
@@ -14,25 +21,14 @@ import type {
   WorkspaceFilesListResult,
   WorkspaceRepositoriesListPayload,
   WorkspaceRepositoriesListResult,
-} from "@supernova/contracts/workspace/procedures";
-import type {WorkspaceChangeEntry} from "@supernova/contracts/workspace/schemas";
-import {WorkspaceFileNotFoundError, WorkspaceNotARepositoryError} from "@supernova/contracts/workspace/schemas";
+} from "@supernova/contracts/services/workspace/procedures";
+import type {WorkspaceChangeEntry} from "@supernova/contracts/services/workspace/schemas";
+import {WorkspaceFileNotFoundError, WorkspaceNotARepositoryError} from "@supernova/contracts/services/workspace/schemas";
 import {parseNameStatus, parseNumstat} from "@supernova/agent-runtime/features/workspace/lib/diff-output";
 import {decodeWorkspaceFile, workspaceGit} from "@supernova/agent-runtime/features/workspace/lib/git";
 import {pathInProject} from "@supernova/agent-runtime/features/workspace/lib/paths";
 import {discoverWorkspaceRepositories, repositoryPath} from "@supernova/agent-runtime/features/workspace/lib/repositories";
 import {runGitResult} from "@supernova/agent-runtime/lib/git-process";
-import type {
-  TerminalClosePayload,
-  TerminalOpenPayload,
-  TerminalOpenResult,
-  TerminalResizePayload,
-  TerminalsListPayload,
-  TerminalsListResult,
-  TerminalWatchPayload,
-  TerminalWritePayload,
-} from "@supernova/contracts/terminals/procedures";
-import type {TerminalEvent} from "@supernova/contracts/terminals/schemas";
 import type {Terminals} from "@supernova/agent-runtime/features/workspace/terminals/terminals";
 
 export interface WorkspaceDeps {
@@ -110,8 +106,9 @@ export class Workspace {
     return this.deps.terminals.list(input);
   }
 
-  public watchTerminal(input: TerminalWatchPayload): Promise<AsyncGenerator<TerminalEvent, void, undefined>> {
-    return this.deps.terminals.watch(input);
+  /** Every terminal's output as replicated state. */
+  public get terminals() {
+    return this.deps.terminals.state;
   }
 
   /** Kills a session's shells; runs before the session is archived and its worktree removed. */

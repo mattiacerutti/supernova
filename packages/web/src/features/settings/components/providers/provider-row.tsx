@@ -1,4 +1,4 @@
-import type {Provider} from "@supernova/contracts/providers/schemas";
+import type {Provider} from "@supernova/contracts/services/providers/schemas";
 import Button from "@/components/ui/button";
 import {useState} from "react";
 

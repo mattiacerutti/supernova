@@ -1,37 +1,17 @@
 import {createServer} from "node:http";
-import type {Socket} from "node:net";
-import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
-import {AgentRpcGroup} from "@supernova/contracts";
-import {agentRpcLayer, createAgentRuntime} from "@supernova/agent-runtime";
-import {Context, Effect, Exit, Layer, Scope} from "effect";
-import {HttpRouter, HttpServer, HttpServerResponse} from "effect/unstable/http";
-import {RpcSerialization, RpcServer} from "effect/unstable/rpc";
+import type {ServerResponse} from "node:http";
+import type {AddressInfo, Socket} from "node:net";
+import {Server as RuntimeServer} from "@earendil-works/pi-server";
+import {RUNTIME_SERVER_ID, RUNTIME_SOCKET_PATH} from "@supernova/contracts/lib/protocol";
+import {createAgentRuntime, runtimeServiceHost} from "@supernova/agent-runtime";
+import {createWebSocketListener} from "@/runtime-socket";
 
 export const DEFAULT_HOST = "127.0.0.1";
 export const DEFAULT_PORT = 4317;
 
-/** The runtime is created once per server and disposed with the server's scope. */
-const routes = Layer.unwrap(
-  Effect.gen(function* () {
-    const runtime = yield* Effect.acquireRelease(
-      Effect.promise(() => createAgentRuntime()),
-      (created) => Effect.promise(() => created.dispose())
-    );
-    const rpc = RpcServer.layerHttp({
-      group: AgentRpcGroup,
-      path: "/ws",
-      protocol: "websocket",
-      spanAttributes: {"rpc.system": "effect-rpc", "rpc.transport": "websocket"},
-      spanPrefix: "pi.ws.rpc",
-    }).pipe(Layer.provide(agentRpcLayer(runtime)), Layer.provide(RpcSerialization.layerJson));
-
-    return Layer.mergeAll(
-      rpc,
-      HttpRouter.add("GET", "/health", Effect.succeed(HttpServerResponse.jsonUnsafe({ok: true}))),
-      HttpRouter.add("*", "*", Effect.succeed(HttpServerResponse.jsonUnsafe({error: "Not found"}, {status: 404})))
-    );
-  })
-);
+function json(response: ServerResponse, status: number, body: unknown): void {
+  response.writeHead(status, {"content-type": "application/json"}).end(JSON.stringify(body));
+}
 
 /** Parses a TCP port; zero asks the OS to allocate an available port. */
 export function parsePort(value: string): number {
@@ -52,13 +32,19 @@ export interface StartServerOptions {
   readonly port: number;
 }
 
-/** Starts the API only. Readiness includes RPC initialization; one scope owns HTTP, WebSockets, and runtime resources. */
+/**
+ * Starts the API only: `/health` over HTTP and the runtime's Chord services over the `/ws` WebSocket. Readiness
+ * includes runtime initialization; closing stops the services, then disposes the runtime.
+ */
 export async function startServer({host, port}: StartServerOptions): Promise<RunningServer> {
   parsePort(String(port));
   if (!host.trim()) throw new Error("A server host is required.");
 
   let closing: Promise<void> | undefined;
-  const listener = createServer();
+  const listener = createServer((request, response) => {
+    if (request.method === "GET" && request.url === "/health") json(response, 200, {ok: true});
+    else json(response, 404, {error: "Not found"});
+  });
   const sockets = new Set<Socket>();
 
   listener.on("connection", (socket) => {
@@ -71,28 +57,39 @@ export async function startServer({host, port}: StartServerOptions): Promise<Run
     socket.once("close", () => sockets.delete(socket));
   });
 
-  const transport = NodeHttpServer.layer(() => listener, {host, port, disablePreemptiveShutdown: true});
-  const server = HttpRouter.serve(routes, {disableLogger: true, disableListenLog: true}).pipe(Layer.provideMerge(transport));
-  const scope = Effect.runSync(Scope.make());
+  let runtime: Awaited<ReturnType<typeof createAgentRuntime>> | undefined;
+  let services: RuntimeServer | undefined;
 
   const close = (): Promise<void> => {
     for (const socket of sockets) socket.destroy();
 
-    closing ??= Effect.runPromise(Scope.close(scope, Exit.void));
+    closing ??= (async () => {
+      await services?.close().catch((error: unknown) => console.error("[runtime-services]", error));
+      await new Promise<void>((resolve) => listener.close(() => resolve()));
+      await runtime?.dispose();
+    })();
     return closing;
   };
 
   try {
-    const context = await Effect.runPromise(
-      Layer.buildWithScope(server, scope).pipe(
-        Effect.mapError((error) => error.cause),
-        Effect.timeout("10 seconds")
-      )
-    );
+    await new Promise<void>((resolve, reject) => {
+      listener.once("error", reject);
+      listener.listen(port, host, () => {
+        listener.off("error", reject);
+        resolve();
+      });
+    });
 
-    const address = Context.get(context, HttpServer.HttpServer).address;
-    if (address._tag !== "TcpAddress") throw new Error("Server did not bind a TCP port.");
+    runtime = await createAgentRuntime();
 
+    services = new RuntimeServer(runtimeServiceHost(runtime), {
+      serverId: RUNTIME_SERVER_ID,
+      listeners: [createWebSocketListener(listener, RUNTIME_SOCKET_PATH)],
+      onError: (error) => console.error("[runtime-services]", error),
+    });
+    await services.start();
+
+    const address = listener.address() as AddressInfo;
     const hostname = host.includes(":") ? `[${host}]` : host;
     return {url: `http://${hostname}:${address.port}`, close};
   } catch (error) {

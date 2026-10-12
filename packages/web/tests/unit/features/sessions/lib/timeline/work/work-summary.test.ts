@@ -1,18 +1,36 @@
-import type {SessionWorkEvent} from "@/features/sessions/types/session-timeline-item";
+import type {ToolResultMessage} from "@supernova/contracts/services/sessions/schemas";
 import {describe, expect, it} from "vitest";
 import {hasToolDetails, readLineRange} from "@/features/sessions/lib/timeline/work/tool-details";
 import {summarizeWork} from "@/features/sessions/lib/timeline/work/work-summary";
+import type {SessionToolCall, SessionWorkEvent} from "@/features/sessions/types/session-turn";
 
-function command(id: string, status: "completed" | "error" = "completed"): SessionWorkEvent {
-  const tool =
-    status === "error"
-      ? {error: "boom", input: {command: "ls"}, kind: "command" as const, status}
-      : {input: {command: "ls"}, kind: "command" as const, result: {output: "", truncated: false}, status};
+function result(name: string, input: {readonly details?: ToolResultMessage["details"]; readonly isError?: boolean; readonly text?: string} = {}): ToolResultMessage {
+  return {
+    content: [{text: input.text ?? "", type: "text"}],
+    details: input.details,
+    isError: input.isError ?? false,
+    role: "toolResult",
+    timestamp: 0,
+    toolCallId: "call",
+    toolName: name,
+  };
+}
+
+function call(name: string, args: Record<string, unknown>, status: SessionToolCall["status"], details?: ToolResultMessage["details"]): SessionToolCall {
+  const finished = status === "pending" ? undefined : result(name, {details, isError: status === "error", text: status === "error" ? "boom" : ""});
+  return {arguments: args, callId: "call", name, output: undefined, result: finished, status};
+}
+
+function event(id: string, tool: SessionToolCall): SessionWorkEvent {
   return {id, timestamp: "2026-01-01T00:00:00.000Z", tool, type: "tool"};
 }
 
+function command(id: string, status: "completed" | "error" = "completed"): SessionWorkEvent {
+  return event(id, call("bash", {command: "ls"}, status));
+}
+
 function edit(id: string, path: string): SessionWorkEvent {
-  return {id, timestamp: "2026-01-01T00:00:00.000Z", tool: {input: {path, replacements: []}, kind: "file-edit", result: {patch: ""}, status: "completed"}, type: "tool"};
+  return event(id, call("edit", {edits: [], path}, "completed", {patch: ""}));
 }
 
 describe("summarizeWork", () => {
@@ -28,11 +46,11 @@ describe("summarizeWork", () => {
 
 describe("file read rows", () => {
   it("only expands a read for truncation or errors", () => {
-    const ranged = {input: {limit: 50, offset: 120, path: "src/a.ts"}, kind: "file-read" as const, result: {}, status: "completed" as const};
-    expect(hasToolDetails(ranged)).toBe(false);
-    expect(hasToolDetails({input: {path: "src/a.ts"}, kind: "file-read", status: "pending"})).toBe(false);
-    expect(hasToolDetails({...ranged, result: {truncated: true}})).toBe(true);
-    expect(hasToolDetails({error: "missing", input: {path: "src/a.ts"}, kind: "file-read", status: "error"})).toBe(true);
+    const ranged = {limit: 50, offset: 120, path: "src/a.ts"};
+    expect(hasToolDetails(call("read", ranged, "completed"))).toBe(false);
+    expect(hasToolDetails(call("read", {path: "src/a.ts"}, "pending"))).toBe(false);
+    expect(hasToolDetails(call("read", ranged, "completed", {truncation: {truncated: true}}))).toBe(true);
+    expect(hasToolDetails(call("read", {path: "src/a.ts"}, "error"))).toBe(true);
   });
 
   it("formats a partial read's line range", () => {

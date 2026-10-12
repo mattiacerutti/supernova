@@ -8,6 +8,9 @@ function resourceCache(input?: {skillContent?: string}): ResourceCache {
   return {
     initialize: async () => undefined,
     invalidate: () => undefined,
+    load: async () => {
+      throw new Error("Not used.");
+    },
     listPromptTemplates: async () => [],
     listSkills: async () =>
       input?.skillContent

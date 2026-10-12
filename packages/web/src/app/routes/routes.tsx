@@ -1,5 +1,7 @@
 import {Outlet, useParams, useSearch} from "@tanstack/react-router";
 import AppLayout from "@/app/layout/app-layout";
+import ToastViewport from "@/components/ui/toast";
+import ExtensionNoticesDialog from "@/features/sessions/components/conversation/extension-notices-dialog";
 import {useProjectsStore} from "@/features/projects/stores/projects-store";
 import SettingsPage from "@/features/settings/pages/settings-page";
 import SessionPage from "@/features/sessions/pages/session-page";
@@ -14,13 +16,22 @@ function EmptySessionState() {
 }
 
 export function RootRoute() {
-  return <Outlet />;
+  // Toasts scoped to a session show only on that session's page, so the viewport reads the open session from the route.
+  const sessionId = useParams({select: (params) => params.sessionId, strict: false});
+  return (
+    <>
+      <Outlet />
+      <ToastViewport openSessionId={sessionId} />
+    </>
+  );
 }
 
 export function HomeLayoutRoute() {
   return (
     <AppLayout>
       <Outlet />
+      {/* Opened from a session's extension notice toast, on whichever session page it shows. */}
+      <ExtensionNoticesDialog />
     </AppLayout>
   );
 }

@@ -6,6 +6,9 @@ import {imageAttachment, textAttachment} from "@tests/support/session-runtime";
 const resourceCache: ResourceCache = {
   initialize: async () => undefined,
   invalidate: () => undefined,
+  load: async () => {
+    throw new Error("Not used.");
+  },
   listPromptTemplates: async () => [],
   listSkills: async () => [],
   readSkillContent: async () => "",
@@ -23,28 +26,21 @@ describe("preparing Pi send-message context", () => {
     );
 
     expect(context.prompt).toContain("Review @src/file.ts");
-    expect(context.images).toEqual([{data: "aW1hZ2UtYnl0ZXM=", mimeType: "image/png", type: "image"}]);
-    expect(context.customEntries).toEqual([
-      {
-        customType: "supernova.user-message-content-parts",
-        data: {
-          contentParts: [
-            {text: "Review ", type: "text"},
-            {id: "file", kind: "file", name: "file.ts", type: "reference", value: "@src/file.ts"},
-            {id: "image-1", kind: "image", mime: "image/png", name: "diagram.png", size: 12, type: "attachment"},
-            {id: "text-1", kind: "text", mime: "text/plain", name: "notes.txt", size: 20, type: "attachment"},
-          ],
-        },
-      },
+    expect(context.images).toEqual([{data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII=", mimeType: "image/png", type: "image"}]);
+    expect(context.contentParts).toEqual([
+      {text: "Review ", type: "text"},
+      {id: "file", kind: "file", name: "file.ts", type: "reference", value: "@src/file.ts"},
+      {contentBase64: undefined, id: "image-1", kind: "image", mime: "image/png", name: "diagram.png", size: 12, type: "attachment"},
+      {contentBase64: undefined, id: "text-1", kind: "text", mime: "text/plain", name: "notes.txt", size: 20, type: "attachment"},
     ]);
   });
 
-  it("does not persist empty content-part metadata", async () => {
+  it("prepares an empty message", async () => {
     const context = await prepareSendMessageContext(
       {contentParts: [], modelReference: {id: "claude-sonnet", providerId: "anthropic"}, sessionId: "session-1"},
       {projectPath: process.cwd(), resourceCache}
     );
 
-    expect(context).toMatchObject({contentParts: [], customEntries: [], images: [], prompt: ""});
+    expect(context).toEqual({contentParts: [], images: [], prompt: ""});
   });
 });

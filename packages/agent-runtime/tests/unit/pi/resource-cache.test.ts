@@ -1,7 +1,6 @@
 import type {PromptTemplate, ResourceLoader, Skill} from "@earendil-works/pi-coding-agent";
 import {describe, expect, it, vi} from "vitest";
 import {createResourceCache} from "@supernova/agent-runtime/pi/resource-cache";
-import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";
 
 const skill = {
   baseDir: "/workspace/.agents/skills/example",
@@ -23,6 +22,7 @@ describe("Pi resource cache", () => {
     const error = new Error("Broken resource configuration");
     let repaired = false;
     const resourceLoader = {
+      getAgentsFiles: () => ({agentsFiles: []}),
       getExtensions: () => ({errors: !repaired && failure === "extensions" ? [{path: "extension.ts", error: error.message}] : []}),
       getPrompts: () => ({diagnostics: [], prompts: [promptTemplate]}),
       getSkills: () => ({diagnostics: [], skills: [skill]}),
@@ -34,7 +34,7 @@ describe("Pi resource cache", () => {
       if (!repaired && failure === "construction") throw error;
       return resourceLoader;
     });
-    const catalog = await runCatalog({createResourceLoader} as unknown as PiSdk);
+    const catalog = await runCatalog({createResourceLoader} as unknown as LoaderFactory);
 
     const failures = await Promise.allSettled([catalog.listSkills("/workspace"), catalog.listPromptTemplates("/workspace")]);
     for (const result of failures) {
@@ -50,6 +50,7 @@ describe("Pi resource cache", () => {
 
   it("loads skills and prompt templates through the SDK resource loader abstraction", async () => {
     const resourceLoader = {
+      getAgentsFiles: () => ({agentsFiles: []}),
       getExtensions: vi.fn(() => ({errors: []})),
       getPrompts: vi.fn(() => ({diagnostics: [], prompts: [promptTemplate]})),
       getSkills: vi.fn(() => ({diagnostics: [], skills: [skill]})),
@@ -57,7 +58,7 @@ describe("Pi resource cache", () => {
     } as unknown as ResourceLoader;
     const piSdk = {
       createResourceLoader: vi.fn(() => resourceLoader),
-    } as unknown as PiSdk;
+    } as unknown as LoaderFactory;
     const catalog = await runCatalog(piSdk);
 
     const [skills, prompts] = await Promise.all([catalog.listSkills("/workspace"), catalog.listPromptTemplates("/workspace")]);
@@ -70,12 +71,13 @@ describe("Pi resource cache", () => {
 
   it("reloads every project after invalidation", async () => {
     const resourceLoader = {
+      getAgentsFiles: () => ({agentsFiles: []}),
       getExtensions: () => ({errors: []}),
       getPrompts: () => ({diagnostics: [], prompts: []}),
       getSkills: () => ({diagnostics: [], skills: [skill]}),
       reload: async () => undefined,
     } as unknown as ResourceLoader;
-    const piSdk = {createResourceLoader: vi.fn(() => resourceLoader)} as unknown as PiSdk;
+    const piSdk = {createResourceLoader: vi.fn(() => resourceLoader)} as unknown as LoaderFactory;
     const catalog = await runCatalog(piSdk);
 
     await Promise.all([catalog.listSkills("/a"), catalog.listSkills("/b")]);
@@ -85,14 +87,15 @@ describe("Pi resource cache", () => {
   });
 });
 
-function runCatalog(piSdk: PiSdk) {
-  const testSdk = {
-    ...piSdk,
-    loadResourceLoader: async (input: {readonly projectPath: string}) => {
+type LoaderFactory = {readonly createResourceLoader: (input: {readonly projectPath: string}) => ResourceLoader};
+
+/** A resource cache over a loader factory, loading as `PiSdk.loadResourceLoader` does: construct, then reload. */
+function runCatalog(piSdk: LoaderFactory) {
+  return createResourceCache({
+    loadResourceLoader: async (input) => {
       const loader = piSdk.createResourceLoader(input);
       await loader.reload();
       return loader;
     },
-  };
-  return createResourceCache(testSdk);
+  });
 }

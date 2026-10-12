@@ -1,4 +1,4 @@
-import {WorkspaceBinaryFileError, WorkspaceFileTooLargeError, WorkspaceGenericError, WorkspaceNotARepositoryError} from "@supernova/contracts/workspace/schemas";
+import {WorkspaceBinaryFileError, WorkspaceFileTooLargeError, WorkspaceNotARepositoryError} from "@supernova/contracts/services/workspace/schemas";
 import {runGitResult} from "@supernova/agent-runtime/lib/git-process";
 
 /** Previews stay under this so a future editor never has to save a truncated file. */
@@ -22,11 +22,11 @@ export async function workspaceGit(repositoryPath: string, args: readonly string
   try {
     probe = await runGitResult(["rev-parse", "--is-inside-work-tree"], {cwd: repositoryPath});
   } catch (cause) {
-    throw new WorkspaceGenericError({cause, message: "Git is not available."});
+    throw new Error("Git is not available.", {cause});
   }
   if (probe.code !== 0) throw new WorkspaceNotARepositoryError({message: "Not a Git repository."});
 
   const output = await runGitResult(args, {cwd: repositoryPath});
   if (okCodes.includes(output.code)) return output.stdout;
-  throw new WorkspaceGenericError({message: output.stderr.trim()});
+  throw new Error(output.stderr.trim());
 }

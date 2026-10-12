@@ -2,7 +2,7 @@ import {existsSync} from "node:fs";
 import {join} from "node:path";
 import {app} from "electron";
 import {autoUpdater} from "electron-updater";
-import type {DesktopUpdateState} from "@supernova/contracts/desktop/api";
+import type {DesktopUpdateState} from "@supernova/contracts/lib/desktop";
 import type {UpdaterEvent} from "@/updates/state";
 import {INITIAL_UPDATE_STATE, reduceUpdateState} from "@/updates/state";
 

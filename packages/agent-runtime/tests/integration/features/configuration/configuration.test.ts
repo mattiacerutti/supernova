@@ -87,7 +87,7 @@ describe("client-safe configuration", () => {
     {name: "invalid reasoning level", content: JSON.stringify({defaultThinkingLevel: "private"})},
     {name: "invalid per-model reasoning level", content: JSON.stringify({modelThinkingLevels: {"a/model": "private"}})},
     {name: "invalid per-model reasoning value type", content: JSON.stringify({modelThinkingLevels: {"a/model": 123}})},
-  ])("returns a sanitized typed error for $name", async ({content}) => {
+  ])("fails with a sanitized message for $name", async ({content}) => {
     await writeFile(projectFile, content);
     let error: unknown;
     try {
@@ -96,7 +96,8 @@ describe("client-safe configuration", () => {
       error = caught;
     }
 
-    expect(error).toMatchObject({_tag: "GetConfigurationError", message: "Unable to load configuration. Check the global and project settings.json files and model defaults."});
+    expect(error).toMatchObject({message: "Unable to load configuration. Check the global and project settings.json files and model defaults."});
+    expect(error).not.toHaveProperty("cause");
     expect(JSON.stringify(error)).not.toContain("private");
   });
 

@@ -1,5 +1,5 @@
-import type {ModelDefaults} from "@supernova/contracts/configuration/schemas";
-import type {ModelReference} from "@supernova/contracts/sessions/schemas";
+import type {ModelDefaults} from "@supernova/contracts/services/configuration/schemas";
+import type {ModelReference} from "@supernova/contracts/services/sessions/schemas";
 import {createContext, use} from "react";
 import type {ComposerAttachments} from "@/features/sessions/hooks/composer/use-composer-attachments";
 import {useComposerAttachments} from "@/features/sessions/hooks/composer/use-composer-attachments";

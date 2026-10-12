@@ -7,27 +7,33 @@ import {resolve, join} from "node:path";
 import {startServerProcess} from "@/process";
 
 const entry = resolve(import.meta.dir, "../src/cli.ts");
+// The server runs on Node; `bun test` is only the test runner. The source runs as `dev` runs it, through tsx.
+const runtime = {execPath: "node", execArgv: ["--import", "tsx"]};
 
-test.each(["", "abc", "1.5", "-1", "65536"])("rejects invalid port %j before startup", async (port) => {
-  const home = await mkdtemp(join(tmpdir(), "supernova-invalid-port-"));
-  const child = fork(entry, ["--port", port], {
-    execPath: process.execPath,
-    execArgv: [],
-    silent: true,
-    env: {...process.env, SUPERNOVA_HOME: home, PI_OFFLINE: "1"},
-  });
-  try {
-    const [code] = await once(child, "exit");
-    expect(code).toBe(1);
-  } finally {
-    child.kill("SIGKILL");
-    await rm(home, {recursive: true, force: true});
-  }
-});
+// Each child starts Node and tsx before it parses its arguments, which takes seconds under a loaded full-suite run.
+test.each(["", "abc", "1.5", "-1", "65536"])(
+  "rejects invalid port %j before startup",
+  async (port) => {
+    const home = await mkdtemp(join(tmpdir(), "supernova-invalid-port-"));
+    const child = fork(entry, ["--port", port], {
+      ...runtime,
+      silent: true,
+      env: {...process.env, SUPERNOVA_HOME: home, PI_OFFLINE: "1"},
+    });
+    try {
+      const [code] = await once(child, "exit");
+      expect(code).toBe(1);
+    } finally {
+      child.kill("SIGKILL");
+      await rm(home, {recursive: true, force: true});
+    }
+  },
+  30_000
+);
 
-test("owned APIs bind distinct ports, report RPC readiness, serve no UI, and release live sockets on close", async () => {
+test("owned APIs bind distinct ports, report readiness, serve no UI, and release live sockets on close", async () => {
   const home = await mkdtemp(join(tmpdir(), "supernova-server-test-"));
-  const options = {entry, execPath: process.execPath, env: {SUPERNOVA_HOME: home, PI_OFFLINE: "1"}};
+  const options = {entry, ...runtime, env: {SUPERNOVA_HOME: home, PI_OFFLINE: "1"}};
   const first = await startServerProcess(options);
   let second: Awaited<ReturnType<typeof startServerProcess>> | undefined;
   try {
@@ -36,6 +42,18 @@ test("owned APIs bind distinct ports, report RPC readiness, serve no UI, and rel
     expect(await (await fetch(`${first.url}/health`)).json()).toEqual({ok: true});
     expect((await fetch(first.url)).status).toBe(404);
     expect((await fetch(`${first.url}/assets/missing.js`)).status).toBe(404);
+    // The runtime protocol answers on /ws: a frame that is not its hello is rejected and the socket closes.
+    const probe = new WebSocket(first.url.replace("http:", "ws:") + "/ws");
+    probe.binaryType = "arraybuffer";
+    await new Promise<void>((resolve, reject) => {
+      probe.onopen = () => resolve();
+      probe.onerror = reject;
+    });
+    const probeClosed = new Promise<void>((resolve) => {
+      probe.onclose = () => resolve();
+    });
+    probe.send(new Uint8Array([0, 0, 0, 1, 0]));
+    await probeClosed;
     const socket = new WebSocket(first.url.replace("http:", "ws:") + "/ws");
     await new Promise<void>((resolve, reject) => {
       socket.onopen = () => resolve();
@@ -55,8 +73,7 @@ test("owned APIs bind distinct ports, report RPC readiness, serve no UI, and rel
 test("a local API exits when its parent's IPC channel disappears", async () => {
   const home = await mkdtemp(join(tmpdir(), "supernova-parent-test-"));
   const child = fork(entry, ["--host", "127.0.0.1", "--port", "0"], {
-    execPath: process.execPath,
-    execArgv: [],
+    ...runtime,
     silent: true,
     env: {...process.env, SUPERNOVA_HOME: home, PI_OFFLINE: "1"},
   });
@@ -84,9 +101,9 @@ test("a local API exits when its parent's IPC channel disappears", async () => {
 test("an occupied explicit port fails without disturbing its owner", async () => {
   const home = await mkdtemp(join(tmpdir(), "supernova-port-test-"));
   const env = {...process.env, SUPERNOVA_HOME: home, PI_OFFLINE: "1"};
-  const owner = await startServerProcess({entry, execPath: process.execPath, env});
+  const owner = await startServerProcess({entry, ...runtime, env});
   try {
-    const child = fork(entry, ["--host", "127.0.0.1", "--port", new URL(owner.url).port], {execPath: process.execPath, execArgv: [], env, silent: true});
+    const child = fork(entry, ["--host", "127.0.0.1", "--port", new URL(owner.url).port], {...runtime, env, silent: true});
     let stderr = "";
     child.stderr?.on("data", (chunk) => {
       stderr += String(chunk);

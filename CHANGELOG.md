@@ -6,9 +6,19 @@ All notable changes to Supernova are documented in this file.
 
 ### Breaking Changes
 
+- Sessions are now stored as SQLite files under `sessions` in the agent directory. Sessions from earlier versions are imported on first start: each keeps its visible conversation (messages, tool calls, and compactions) and can be continued, but undo on its imported turns no longer restores files, and turns it had undone or branched away from are not kept. Archived sessions are not imported. The old session files move to `sessions/legacy` and are not deleted.
+- Pi extensions now run against the durable engine through a compatibility layer, and some no longer work as before. Streaming events (`message_update`, `tool_execution_update`), `input`, `session_compact`, `model_select`, `thinking_level_select`, and the session tree, fork, switch, and info events are not delivered; `before_agent_start` runs but its result is not applied. Extensions that subscribe to an undelivered event are reported in the session. Tools, providers, and the remaining events work as they did. See [Pi compatibility](docs/pi-compatibility.md#extensions).
+
 ### Added
 
 ### Changed
+
+- Sessions now run on Pi's durable engine (`pi-durable`). Every streamed partial, tool output, and turn is written to the session's file before it is shown, so a server restart or crash resumes an interrupted response from where it stopped instead of losing it, and a browser that opens a session mid-response sees everything produced so far.
+- Running sessions show their activity in the sidebar as soon as the app connects, including sessions started from another browser or before this one opened.
+- Pinned sessions are now stored on the server and shared across browsers and devices, instead of in each browser's local storage. Existing pins are not carried over.
+- The sidebar loads a project's sessions five at a time from the server instead of loading all of them and revealing more locally.
+- Renaming, pinning, and archiving a session now update the sidebar at once instead of after a server round trip and reload.
+- Settings → Extensions → Update now reinstalls extensions in open sessions; a restart is no longer needed for the update to take effect.
 
 ### Fixed
 

@@ -1,4 +1,4 @@
-import type {WorkspaceChangeEntry} from "@supernova/contracts/workspace/schemas";
+import type {WorkspaceChangeEntry} from "@supernova/contracts/services/workspace/schemas";
 import {directoryOf, fileNameOf} from "@/features/workspace/lib/file-info";
 
 export interface FileTreeNode {

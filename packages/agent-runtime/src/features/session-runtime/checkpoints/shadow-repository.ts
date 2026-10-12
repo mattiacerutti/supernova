@@ -1,6 +1,7 @@
 import {copyFile, lstat, mkdir, mkdtemp, readdir, realpath, rm, stat, writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {basename, dirname, join, relative, resolve} from "node:path";
+import {CheckpointConflictError} from "@supernova/contracts/services/session-runtime/procedures";
 import {
   addPaths,
   clearIndexFlags,
@@ -58,14 +59,6 @@ export interface RepositoryRestorePlan {
   readonly restorePaths: readonly string[];
   readonly safetyTreeId: string;
   readonly targetTreeId: string;
-}
-
-/** Raised when the worktree no longer matches the current checkpoint on a path the restore would change. */
-export class CheckpointConflictError extends Error {
-  public constructor() {
-    super("Workspace files changed after the current checkpoint.");
-    this.name = "CheckpointConflictError";
-  }
 }
 
 function shadowTarget(repository: DiscoveredRepository): GitTarget {
@@ -295,7 +288,7 @@ export async function buildRestorePlan(
   const restorePaths = changes.filter((change) => !change.deleted).map((change) => change.path);
   const affectedPaths = [...new Set([...deletePaths, ...restorePaths])].sort();
   const safetyTreeId = await replaceTreePathsWithWorktree(repository, current.treeId, affectedPaths);
-  if (safetyTreeId !== current.treeId && !force) throw new CheckpointConflictError();
+  if (safetyTreeId !== current.treeId && !force) throw new CheckpointConflictError({message: "Restoring this checkpoint would discard changes made after it."});
 
   return {affectedPaths, deletePaths, repository, restorePaths, safetyTreeId, targetTreeId: target.treeId};
 }

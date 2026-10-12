@@ -1,12 +1,10 @@
-import type {AgentSession} from "@earendil-works/pi-coding-agent";
+import type {ModelThinkingLevel} from "@earendil-works/pi-ai";
 
-type PiAgentThinkingLevel = Parameters<AgentSession["setThinkingLevel"]>[0];
-
-const piThinkingLevels = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+const piThinkingLevels = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const satisfies readonly ModelThinkingLevel[];
 
 const piThinkingLevelSet = new Set<string>(piThinkingLevels);
 
-/** Converts an optional UI thinking-level value into a Pi SDK thinking level. */
-export function toPiThinkingLevel(value: string | undefined): PiAgentThinkingLevel {
-  return value && piThinkingLevelSet.has(value) ? (value as PiAgentThinkingLevel) : "off";
+/** Converts an optional UI thinking-level value into a Pi thinking level. */
+export function toPiThinkingLevel(value: string | undefined): ModelThinkingLevel {
+  return value && piThinkingLevelSet.has(value) ? (value as ModelThinkingLevel) : "off";
 }

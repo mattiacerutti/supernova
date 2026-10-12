@@ -1,4 +1,4 @@
-import {UpdateExtensionsError} from "@supernova/contracts/extensions/procedures";
+import {UpdateExtensionsError} from "@supernova/contracts/services/extensions/procedures";
 import {errorMessage} from "@supernova/agent-runtime/lib/errors";
 import type {ResourceCache} from "@supernova/agent-runtime/pi/resource-cache";
 import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";

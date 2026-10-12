@@ -1,6 +1,5 @@
 import {useRef, useState} from "react";
-import {useQueryClient} from "@tanstack/react-query";
-import {listFolderSuggestionsQueryOptions, useListFolderSuggestions} from "@/features/projects/api/command-palette/list-folder-suggestions";
+import {useListFolderSuggestions, usePrefetchFolderSuggestions} from "@/features/projects/api/command-palette/list-folder-suggestions";
 import {
   buildFolderBrowserRows,
   filterFolderSuggestions,
@@ -27,7 +26,6 @@ export function useFolderBrowser(options: UseFolderBrowserOptions) {
   const [path, setPath] = useState("");
   // Counts folder navigations so a listing that finishes loading after the user moved on does not take them back.
   const navigation = useRef(0);
-  const queryClient = useQueryClient();
   const listingQuery = useListFolderSuggestions(getProjectBrowseDirectoryPath(path));
   const listing = listingQuery.data;
   // Until the new folder's listing arrives, the list keeps showing the previous one; it is not this folder's contents.
@@ -36,7 +34,7 @@ export function useFolderBrowser(options: UseFolderBrowserOptions) {
   const rows: FolderBrowserRow[] = buildFolderBrowserRows({folders, projectPath: path, recentProjectPaths: recentProjectPaths.slice(0, RECENT_PROJECT_LIMIT)});
   const resolved: ResolvedFolderPath | undefined = listing && folderLoaded && path.trim().length > 0 ? resolveFolderPath(path, listing) : undefined;
 
-  const prefetch = (folderPath: string): Promise<unknown> => queryClient.prefetchQuery(listFolderSuggestionsQueryOptions(folderPath));
+  const prefetch = usePrefetchFolderSuggestions();
 
   // A highlighted folder is probably about to be entered.
   const preload = (folderPath: string): void => {

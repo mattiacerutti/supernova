@@ -1,7 +1,8 @@
-import type {TerminalEvent} from "@supernova/contracts/terminals/schemas";
-import {Effect, Stream} from "effect";
-import type {RpcClient} from "@/rpc/transport/protocol";
-import {useRpcClient} from "@/rpc/use-rpc-client";
+import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
+import type {TerminalOutput} from "@supernova/contracts/services/workspace/schemas";
+import {unwrap} from "@/runtime/runtime-result";
+import type {RuntimeClient} from "@/runtime/transport/runtime-client";
+import {useRuntime} from "@/runtime/use-runtime";
 
 export interface OpenTerminalInput {
   readonly cols: number;
@@ -11,68 +12,99 @@ export interface OpenTerminalInput {
   readonly sessionId: string;
 }
 
-/** A connection to one server terminal: open or reattach, stream its events, send input, resize, close. */
+/** What changed in one terminal since the attached client last saw it. */
+export type TerminalChange =
+  /** Everything kept so far, on attach or when the client fell behind the scrollback cap. */
+  | {readonly type: "terminal.history"; readonly data: string}
+  | {readonly type: "terminal.output"; readonly data: string}
+  | {readonly type: "terminal.exited"; readonly exitCode: number}
+  /** The terminal was closed and no longer exists. */
+  | {readonly type: "terminal.closed"};
+
+/** A connection to one server terminal: open or reattach, follow its output, send input, resize, close. */
 export interface TerminalSession {
   readonly close: () => void;
   readonly resize: (cols: number, rows: number) => void;
   readonly write: (data: string) => void;
-  /** Stops receiving events without ending the shell. */
+  /** Stops following output without ending the shell. */
   readonly detach: () => void;
 }
 
 interface AttachTerminalInput extends OpenTerminalInput {
   readonly onError: (message: string) => void;
-  readonly onEvent: (event: TerminalEvent) => void;
+  readonly onEvent: (event: TerminalChange) => void;
 }
 
-function attachTerminal(rpcClient: RpcClient, input: AttachTerminalInput): TerminalSession {
+/**
+ * Turns one terminal's successive replicated values into what to draw. Output is the terminal's capped history plus
+ * a count of what the cap dropped, so the client knows the absolute position it has drawn up to and appends only what
+ * follows; if the cap dropped past it, it redraws from the history.
+ */
+function follow(onEvent: (event: TerminalChange) => void): (entry: TerminalOutput | undefined) => void {
+  let drawnTo: number | undefined;
+  let exited = false;
+  let closed = false;
+  return (entry) => {
+    if (!entry) {
+      if (drawnTo !== undefined && !closed) {
+        closed = true;
+        onEvent({type: "terminal.closed"});
+      }
+      return;
+    }
+    const end = entry.dropped + entry.output.length;
+    if (drawnTo === undefined || drawnTo < entry.dropped) onEvent({type: "terminal.history", data: entry.output});
+    else if (end > drawnTo) onEvent({type: "terminal.output", data: entry.output.slice(drawnTo - entry.dropped)});
+    drawnTo = end;
+    if (entry.terminal.exitCode !== undefined && !exited) {
+      exited = true;
+      onEvent({type: "terminal.exited", exitCode: entry.terminal.exitCode});
+    }
+  };
+}
+
+function attachTerminal(runtime: RuntimeClient, input: AttachTerminalInput): TerminalSession {
   const {id, onError, onEvent} = input;
   let detached = false;
-  let interrupt: (() => Promise<void>) | undefined;
+  let stop: (() => void) | undefined;
+  const report = (cause: unknown, fallback: string) => {
+    if (!detached) onError(cause instanceof Error && cause.message ? cause.message : fallback);
+  };
 
-  void rpcClient
-    .run((rpc) => rpc.openTerminal({cols: input.cols, cwd: input.cwd, id, rows: input.rows, sessionId: input.sessionId}))
-    .then(() =>
-      rpcClient.fork((rpc) =>
-        rpc.watchTerminal({id}).pipe(
-          Stream.runForEach((event) => Effect.sync(() => !detached && onEvent(event))),
-          Effect.catch((cause) => Effect.sync(() => !detached && onError(cause instanceof Error && cause.message ? cause.message : "The terminal connection was lost.")))
-        )
-      )
-    )
-    .then((fiber) => {
-      if (detached) void fiber.interrupt();
-      else interrupt = fiber.interrupt;
-    })
-    .catch((cause: unknown) => {
-      if (!detached) onError(cause instanceof Error && cause.message ? cause.message : "Failed to start the terminal.");
-    });
+  void unwrap(runtime.workspace.openTerminal({cols: input.cols, cwd: input.cwd, id, rows: input.rows, sessionId: input.sessionId}, BACKGROUND_CONTEXT)).then(
+    () => {
+      if (detached) return;
+      const apply = follow((event) => !detached && onEvent(event));
+      stop = runtime.workspace.terminals.subscribe((state) => apply(state.terminals[id]));
+    },
+    (cause: unknown) => report(cause, "Failed to start the terminal.")
+  );
 
   return {
-    close: () => void rpcClient.run((rpc) => rpc.closeTerminal({id})).catch(() => undefined),
+    close: () => void runtime.workspace.closeTerminal({id}, BACKGROUND_CONTEXT).catch(() => undefined),
     detach: () => {
       detached = true;
-      void interrupt?.();
+      stop?.();
     },
-    resize: (cols, rows) => void rpcClient.run((rpc) => rpc.resizeTerminal({cols, id, rows})).catch(() => undefined),
-    write: (data) => void rpcClient.run((rpc) => rpc.writeTerminal({data, id})).catch(() => undefined),
+    resize: (cols, rows) => void runtime.workspace.resizeTerminal({cols, id, rows}, BACKGROUND_CONTEXT).catch(() => undefined),
+    write: (data) => void runtime.workspace.writeTerminal({data, id}, BACKGROUND_CONTEXT).catch(() => undefined),
   };
 }
 
 /** Attaches to a server terminal. Call the returned function from a mount effect and `detach` on cleanup. */
 export function useAttachTerminal(): (input: AttachTerminalInput) => TerminalSession {
-  const rpcClient = useRpcClient();
-  return (input) => attachTerminal(rpcClient, input);
+  const runtime = useRuntime();
+  return (input) => attachTerminal(runtime, input);
 }
 
 /** Ids of the shells the server still runs for a session; a reloaded client reattaches tabs to them. */
 export function useListTerminalIds(): (sessionId: string) => Promise<readonly string[]> {
-  const rpcClient = useRpcClient();
-  return async (sessionId) => (await rpcClient.run((rpc) => rpc.listTerminals({sessionId}))).terminals.map((terminal) => terminal.id);
+  const runtime = useRuntime();
+  return async (sessionId) => (await unwrap(runtime.workspace.listTerminals({sessionId}, BACKGROUND_CONTEXT))).terminals.map((terminal) => terminal.id);
 }
 
 /** Kills a terminal by id; for closing a tab, where no component is attached anymore. */
 export function useCloseTerminal(): (id: string) => void {
-  const rpcClient = useRpcClient();
-  return (id) => void rpcClient.run((rpc) => rpc.closeTerminal({id})).catch(() => undefined);
+  const runtime = useRuntime();
+  return (id) => void runtime.workspace.closeTerminal({id}, BACKGROUND_CONTEXT).catch(() => undefined);
 }

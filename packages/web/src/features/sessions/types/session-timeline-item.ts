@@ -1,9 +1,6 @@
-import type {CompactionTurnEvent, TurnEvent, UserMessage} from "@supernova/contracts/sessions/schemas";
+import type {SessionAssistantEvent, SessionCompactionEvent, SessionReasoningEvent, SessionUserMessage, SessionWorkEvent} from "@/features/sessions/types/session-turn";
 
-export type SessionAssistantEvent = Extract<TurnEvent, {type: "assistant"}>;
-export type SessionReasoningEvent = Extract<TurnEvent, {type: "reasoning"}>;
-export type SessionWorkEvent = Extract<TurnEvent, {type: "tool"}>;
-export type SessionCompactionEvent = CompactionTurnEvent;
+export type {SessionAssistantEvent, SessionCompactionEvent, SessionReasoningEvent, SessionWorkEvent} from "@/features/sessions/types/session-turn";
 
 interface SessionTimelineItemBase {
   /** The turn's last item once settled; it carries the timestamp actions. */
@@ -26,7 +23,7 @@ export interface ReasoningSessionTimelineItem extends SessionTimelineItemBase {
 }
 
 export interface UserSessionTimelineItem extends SessionTimelineItemBase {
-  readonly message: UserMessage;
+  readonly message: SessionUserMessage;
   readonly spacing: "message";
   readonly type: "user";
 }

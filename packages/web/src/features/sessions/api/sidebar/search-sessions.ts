@@ -1,30 +1,34 @@
-import {useQueries} from "@tanstack/react-query";
-import {listProjectSessionsQueryOptions} from "@/features/sessions/api/sidebar/list-project-sessions";
+import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
+import {infiniteQueryOptions, keepPreviousData, useInfiniteQuery} from "@tanstack/react-query";
+import {sessionKeys} from "@/features/sessions/api/query-keys";
+import {unwrap} from "@/runtime/runtime-result";
+import type {RuntimeClient} from "@/runtime/transport/runtime-client";
+import {useRuntime} from "@/runtime/use-runtime";
 
-/**
- * Sessions across `projectPaths` whose title contains `query`, newest first, a page at a time.
- *
- * TODO(harness-v2): waiting for the Pi durable refactor to wire this to the server's paged `projects.searchSessions`.
- * Until then every project's session list is read and filtered here, so there is a single page and `loadMore` does
- * nothing. The result shape already matches the paged search, so callers stay as they are; when it lands, debounce the
- * query before it reaches the server (the old search dialog waited 150 ms) and keep the previous results while the
- * next query loads.
- */
+/** Matching sessions read per page. */
+const SEARCH_PAGE_SIZE = 30;
+
+function searchSessionsQueryOptions(runtime: RuntimeClient, query: string, projectPaths: readonly string[]) {
+  return infiniteQueryOptions({
+    queryKey: sessionKeys.search(query, projectPaths),
+    queryFn: ({pageParam}) =>
+      unwrap(runtime.projects.searchSessions({query, projectPaths: [...projectPaths], limit: SEARCH_PAGE_SIZE, ...(pageParam ? {cursor: pageParam} : {})}, BACKGROUND_CONTEXT)),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (page) => page.nextCursor ?? undefined,
+    // The previous query's results stay while the next one loads, so typing does not flash an empty list.
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** Sessions across `projectPaths` whose title contains `query`, newest first, a page at a time. */
 export function useSearchSessions(query: string, projectPaths: readonly string[]) {
-  const projectSessionQueries = useQueries({queries: projectPaths.map((projectPath) => listProjectSessionsQueryOptions(projectPath))});
-  const normalizedQuery = query.trim().toLocaleLowerCase();
-  const sessions = projectSessionQueries
-    .flatMap((projectSessionsQuery) => {
-      const result = projectSessionsQuery.data;
-      return result ? result.sessions.map((session) => ({...session, projectPath: result.projectPath})) : [];
-    })
-    .filter((session) => session.title.toLocaleLowerCase().includes(normalizedQuery))
-    .toSorted((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
-
+  const search = useInfiniteQuery(searchSessionsQueryOptions(useRuntime(), query, projectPaths));
   return {
-    sessions,
-    isPending: projectSessionQueries.some((projectSessionsQuery) => projectSessionsQuery.isPending),
-    hasMore: false,
-    loadMore: () => {},
+    sessions: search.data?.pages.flatMap((page) => page.sessions) ?? [],
+    isPending: search.isPending,
+    hasMore: search.hasNextPage,
+    loadMore: () => {
+      if (search.hasNextPage && !search.isFetchingNextPage) void search.fetchNextPage();
+    },
   };
 }

@@ -1,4 +1,5 @@
-import type {Turn, UserMessageContentPart} from "@supernova/contracts/sessions/schemas";
+import type {UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
+import type {SessionTurn} from "@/features/sessions/types/session-turn";
 import {AnimatePresence, motion} from "framer-motion";
 import {useLayoutEffect, useRef, useState} from "react";
 import Button from "@/components/ui/button";
@@ -44,7 +45,7 @@ interface UndoneTurnsDrawerProps {
   readonly disabled?: boolean;
   readonly onHeightChange?: (height: number) => void;
   readonly onRevertToMessage: (turnId: string) => void;
-  readonly turns: readonly Turn[];
+  readonly turns: readonly SessionTurn[];
 }
 
 export default function UndoneTurnsDrawer(props: UndoneTurnsDrawerProps) {

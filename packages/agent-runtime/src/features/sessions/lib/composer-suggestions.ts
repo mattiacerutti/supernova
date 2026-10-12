@@ -1,6 +1,6 @@
 import {basename} from "node:path";
 import type {PromptTemplate, Skill} from "@earendil-works/pi-coding-agent";
-import type {ComposerSuggestionItem} from "@supernova/contracts/sessions/procedures";
+import type {ComposerSuggestionItem} from "@supernova/contracts/services/sessions/procedures";
 import {generateStableId} from "@supernova/agent-runtime/lib/id-generator";
 
 function titleCase(kebab: string): string {

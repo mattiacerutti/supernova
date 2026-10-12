@@ -1,4 +1,4 @@
-import type {SessionContextUsage} from "@supernova/contracts/sessions/schemas";
+import type {SessionContextUsage} from "@supernova/contracts/services/sessions/schemas";
 import Button from "@/components/ui/button";
 import Menu, {MenuLabel} from "@/components/ui/menu";
 

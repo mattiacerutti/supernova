@@ -4,14 +4,19 @@ import {mkdtemp, rm} from "node:fs/promises";
 import {createRequire} from "node:module";
 import {tmpdir} from "node:os";
 import {join, resolve} from "node:path";
+import {Client} from "@earendil-works/pi-client";
+import {RUNTIME_SERVER_ID} from "@supernova/contracts/lib/protocol";
 import {startServerProcess} from "@supernova/server/process";
 
 test("Electron's Node mode starts and stops the bundled headless API", async () => {
   const home = await mkdtemp(join(tmpdir(), "supernova-electron-api-"));
-  const entry = join(home, "cli.mjs");
+  const serverDir = resolve(import.meta.dir, "../../server");
+  // As the release build does: node-pty stays external, and the bundle sits where Node resolves it, the server's
+  // node_modules (a release copies it next to cli.js instead).
+  const entry = join(serverDir, `cli-electron-test-${process.pid}.mjs`);
   try {
-    const build = spawnSync("bun", ["build", "src/cli.ts", "--target", "node", "--outfile", entry], {
-      cwd: resolve(import.meta.dir, "../../server"),
+    const build = spawnSync("bun", ["build", "src/cli.ts", "--target", "node", "--external", "@lydell/node-pty", "--outfile", entry], {
+      cwd: serverDir,
       encoding: "utf8",
     });
     expect(build.status, build.stderr).toBe(0);
@@ -23,23 +28,34 @@ test("Electron's Node mode starts and stops the bundled headless API", async () 
     try {
       expect((await fetch(`${server.url}/health`)).status).toBe(200);
       expect((await fetch(server.url)).status).toBe(404);
+      // A runtime protocol hello over the WebSocket proves the bundled runtime serves its services.
       const socket = new WebSocket(`${server.url.replace("http:", "ws:")}/ws`);
-      const pong = new Promise<unknown>((resolve, reject) => {
-        socket.onopen = () => socket.send(JSON.stringify({_tag: "Ping"}));
-        socket.onmessage = (event) => resolve(JSON.parse(String(event.data)));
+      socket.binaryType = "arraybuffer";
+      await new Promise<void>((resolve, reject) => {
+        socket.onopen = () => resolve();
         socket.onerror = reject;
       });
-      expect(await pong).toEqual({_tag: "Pong"});
       const closed = new Promise<void>((resolve) => {
         socket.onclose = () => resolve();
       });
+      const client = await Client.connect({
+        serverId: RUNTIME_SERVER_ID,
+        transportFactory: (handlers) => {
+          socket.onmessage = (event) => handlers.onData(new Uint8Array(event.data as ArrayBuffer));
+          socket.addEventListener("close", () => handlers.onClose());
+          return {send: async (chunk) => socket.send(chunk.slice()), close: () => socket.close()};
+        },
+      });
+      expect(client.hello?.serverId).toBe(RUNTIME_SERVER_ID);
       await server.close();
       await closed;
+      await client.dispose();
     } finally {
       await server.close();
     }
     await expect(fetch(`${server.url}/health`)).rejects.toThrow();
   } finally {
     await rm(home, {recursive: true, force: true});
+    await rm(entry, {force: true});
   }
 }, 30_000);

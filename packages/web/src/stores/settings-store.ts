@@ -1,4 +1,4 @@
-import type {DesktopTheme} from "@supernova/contracts/desktop/api";
+import type {DesktopTheme} from "@supernova/contracts/lib/desktop";
 import {create} from "zustand";
 import {persist} from "zustand/middleware";
 import type {ThemeId} from "@/lib/themes/theme";

@@ -82,7 +82,7 @@ describe("workspace git operations", () => {
     // A symlinked child is never discovered, so following one would read a repository outside the project.
     {name: "refuses a symlinked repository root", root: "linked"},
   ])("$name", async ({root}) => {
-    await expect(workspace.getChanges({projectPath: repo, repositoryRoot: root})).rejects.toMatchObject({_tag: "WorkspaceGenericError"});
+    await expect(workspace.getChanges({projectPath: repo, repositoryRoot: root})).rejects.toThrow("Unknown repository.");
   });
 
   it("does not read files outside the repository through a relative path", async () => {

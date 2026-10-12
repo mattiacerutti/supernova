@@ -2,7 +2,7 @@ import {execFile} from "node:child_process";
 import {stat} from "node:fs/promises";
 import {join, posix} from "node:path";
 import {promisify} from "node:util";
-import type {FolderFile} from "@supernova/contracts/folders/schemas";
+import type {FolderFile} from "@supernova/contracts/services/folders/schemas";
 import {normalizePathForDisplay} from "@supernova/agent-runtime/features/folders/lib/paths";
 
 const execFilePromise = promisify(execFile);

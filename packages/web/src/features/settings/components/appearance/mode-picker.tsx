@@ -1,4 +1,4 @@
-import type {DesktopTheme} from "@supernova/contracts/desktop/api";
+import type {DesktopTheme} from "@supernova/contracts/lib/desktop";
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import type {IconName} from "@/components/ui/icon";

@@ -1,5 +1,5 @@
 import {useRef, useState} from "react";
-import type {DesktopUpdateState} from "@supernova/contracts/desktop/api";
+import type {DesktopUpdateState} from "@supernova/contracts/lib/desktop";
 import {showToast} from "@/lib/toast";
 import {useMountEffect} from "@/hooks/use-mount-effect";
 

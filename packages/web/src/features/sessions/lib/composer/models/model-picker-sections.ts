@@ -1,4 +1,4 @@
-import type {ModelDetails} from "@supernova/contracts/sessions/schemas";
+import type {ModelDetails} from "@supernova/contracts/services/sessions/schemas";
 import {matchSorter} from "match-sorter";
 import {modelKey} from "@/features/sessions/lib/composer/models/model-reference";
 

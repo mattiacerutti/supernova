@@ -1,4 +1,4 @@
-import {useState} from "react";
+import {useRef, useState} from "react";
 import Icon from "@/components/ui/icon";
 import CommandPaletteItem from "@/features/command-palette/components/command-palette-item";
 import CommandPaletteList from "@/features/command-palette/components/command-palette-list";
@@ -11,10 +11,13 @@ import {formatRelativeTime} from "@/lib/format-relative-time";
 
 type RootRow = Exclude<CommandPaletteRow, {type: "header"}>;
 
+/** How long typing pauses before sessions are searched again; actions filter on every keystroke. */
+const SESSION_SEARCH_DELAY_MS = 150;
+
 interface CommandPaletteRootPageProps {
   readonly actions: readonly CommandPaletteAction[];
   readonly onOpenSession: (session: CommandPaletteSession) => void;
-  /** The sessions matching `query`, newest first. */
+  /** The sessions matching `query`, newest first. Called with the query once typing pauses. */
   readonly useSessionSearch: (query: string) => CommandPaletteSessionSearch;
 }
 
@@ -22,9 +25,19 @@ interface CommandPaletteRootPageProps {
 export default function CommandPaletteRootPage(props: CommandPaletteRootPageProps) {
   const {actions, onOpenSession, useSessionSearch} = props;
   const [query, setQuery] = useState("");
+  const [sessionQuery, setSessionQuery] = useState("");
+  const sessionQueryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const closePalette = useCommandPaletteStore((state) => state.closePalette);
   const pushPage = useCommandPaletteStore((state) => state.pushPage);
-  const search = useSessionSearch(query);
+  const search = useSessionSearch(sessionQuery);
+
+  const handleQueryChange = (value: string): void => {
+    setQuery(value);
+    clearTimeout(sessionQueryTimer.current);
+    // Clearing the query shows recent sessions at once; anything else waits for typing to pause.
+    if (value.trim().length === 0) setSessionQuery("");
+    else sessionQueryTimer.current = setTimeout(() => setSessionQuery(value.trim()), SESSION_SEARCH_DELAY_MS);
+  };
   const rows = buildCommandPaletteRows({actions, query, sessions: search.sessions});
 
   const handleSelect = (row: RootRow): void => {
@@ -49,7 +62,7 @@ export default function CommandPaletteRootPage(props: CommandPaletteRootPageProp
       getRowKey={(row: RootRow) => (row.type === "action" ? `action-${row.action.id}` : `session-${row.session.id}`)}
       hints={[{hotkeys: ["Enter"], label: "Select"}]}
       onEndReached={search.loadMore}
-      onQueryChange={setQuery}
+      onQueryChange={handleQueryChange}
       onSelect={handleSelect}
       placeholder="Search sessions and actions"
       query={query}

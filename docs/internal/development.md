@@ -2,7 +2,7 @@
 
 ## Setup and commands
 
-Use Bun 1.3.13 and Git. Run commands from the repository root; Turborepo owns workspace orchestration. Don't mix npm, Yarn, or pnpm into the workflow unless external tooling requires it.
+Use Bun 1.3.13, Node 22.19 or newer (`mise.toml`), and Git. Bun installs packages, runs scripts, and bundles; the server itself always runs on Node. Run commands from the repository root; Turborepo owns workspace orchestration. Don't mix npm, Yarn, or pnpm into the workflow unless external tooling requires it.
 
 ```sh
 bun install

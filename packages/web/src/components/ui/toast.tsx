@@ -1,15 +1,15 @@
 import {Toast} from "@base-ui/react/toast";
-import {useId, type ReactNode} from "react";
+import {useId} from "react";
 import Icon from "@/components/ui/icon";
 import Button from "@/components/ui/button";
 import {cn} from "@/lib/cn";
-import {toastManager} from "@/lib/toast";
+import type {ToastManager} from "@/lib/toast";
+import {toastManager, useSessionToastManagers} from "@/lib/toast";
 
 type ToastObject = ReturnType<typeof Toast.useToastManager>["toasts"][number];
 
 function ToastList() {
   const {toasts} = Toast.useToastManager();
-
   return toasts.map((toast) => <ToastItem key={toast.id} toast={toast} />);
 }
 
@@ -26,7 +26,7 @@ function ToastItem(props: ToastItemProps) {
     <Toast.Root
       className={cn(
         "absolute right-2 -bottom-1 z-[calc(1000-var(--toast-index))]",
-        "w-full rounded-2xl border border-border bg-surface-popover/95 p-3 backdrop-blur-3xl",
+        "w-full rounded-2xl corner-superellipse/1.3 border border-border bg-surface-drawer p-3 shadow-2xl shadow-black/35",
         "select-text",
 
         // Stack tuning
@@ -62,8 +62,10 @@ function ToastItem(props: ToastItemProps) {
       <div className="grid grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_auto] gap-x-3 overflow-hidden" data-base-ui-swipe-ignore>
         <div className="col-start-1 row-start-1 min-w-0">
           {toast.title && (
-            <h2 className="m-0 wrap-break-word text-sm leading-6 text-ink" id={titleId}>
-              {toast.title}
+            <h2 className="m-0 flex items-start gap-1.5 wrap-break-word text-sm leading-6 text-ink" id={titleId}>
+              {toast.type === "warning" && <Icon aria-label="Warning" className="mt-1.25 shrink-0 text-warning-ink" name="alert-triangle" role="img" size="xs" />}
+              {toast.type === "error" && <Icon aria-label="Error" className="mt-1.25 shrink-0 text-danger-ink" name="circle-alert" role="img" size="xs" />}
+              <span className="min-w-0">{toast.title}</span>
             </h2>
           )}
         </div>
@@ -85,7 +87,7 @@ function ToastItem(props: ToastItemProps) {
             <Toast.Action
               {...toast.actionProps}
               render={
-                <Button variant="ghost" size="sm" className="mt-1">
+                <Button className="mt-2.5 w-auto px-2.5 py-1 text-xs" variant="filled">
                   {toast.actionProps.children}
                 </Button>
               }
@@ -99,21 +101,41 @@ function ToastItem(props: ToastItemProps) {
   );
 }
 
-interface ToastProviderProps {
-  readonly children: ReactNode;
+interface ToastQueueProps {
+  readonly manager: ToastManager;
+  /** A hidden queue keeps its toasts (and their timers) but shows nothing; a queue's toasts live in its provider. */
+  readonly hidden?: boolean;
 }
 
-export default function ToastProvider(props: ToastProviderProps) {
-  const {children} = props;
-
+/** One queue's toasts, stacked at the bottom-right corner. Below dialogs and menus (z-50), so a dialog covers toasts. */
+function ToastQueue(props: ToastQueueProps) {
+  const {hidden = false, manager} = props;
   return (
-    <Toast.Provider toastManager={toastManager}>
-      {children}
+    <Toast.Provider toastManager={manager}>
       <Toast.Portal>
-        <Toast.Viewport className="fixed top-auto right-4 bottom-4 z-80 mx-auto flex w-62.5 sm:right-8 sm:bottom-8 sm:w-75">
+        <Toast.Viewport className={cn("fixed top-auto right-4 bottom-4 z-45 mx-auto flex w-62.5 sm:right-8 sm:bottom-8 sm:w-75", hidden && "hidden")}>
           <ToastList />
         </Toast.Viewport>
       </Toast.Portal>
     </Toast.Provider>
+  );
+}
+
+interface ToastViewportProps {
+  /** The session whose page is open; its toasts show beside the app-wide ones. Other sessions' toasts wait, timers running. */
+  readonly openSessionId: string | undefined;
+}
+
+/** Where toasts appear: the app-wide queue, and every session's own, only the open session's shown. Render once. */
+export default function ToastViewport(props: ToastViewportProps) {
+  const {openSessionId} = props;
+  const sessions = useSessionToastManagers();
+  return (
+    <>
+      <ToastQueue manager={toastManager} />
+      {sessions.map(([sessionId, manager]) => (
+        <ToastQueue hidden={sessionId !== openSessionId} key={sessionId} manager={manager} />
+      ))}
+    </>
   );
 }

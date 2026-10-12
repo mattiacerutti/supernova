@@ -1,5 +1,5 @@
 import {useState} from "react";
-import type {Provider} from "@supernova/contracts/providers/schemas";
+import type {Provider} from "@supernova/contracts/services/providers/schemas";
 import Dialog from "@/components/ui/dialog";
 import SearchField from "@/components/ui/search-field";
 import ProviderConnectMethodContent from "@/features/settings/components/providers/login/provider-connect-method-content";
