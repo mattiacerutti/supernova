@@ -11,6 +11,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Added
 
+- Themes can override individual generated colors instead of only the seed values.
+
 ### Changed
 
 - Sessions now run on Pi's durable engine (`pi-durable`). Every streamed partial, tool output, and turn is written to the session's file before it is shown, so a server restart or crash resumes an interrupted response from where it stopped instead of losing it, and a browser that opens a session mid-response sees everything produced so far.

@@ -1,7 +1,10 @@
 import {supernovaTheme} from "@/lib/themes/supernova";
 
+export type ResolvedTheme = ReturnType<typeof generateTheme>;
+
 export interface ThemeVariant {
   readonly codeThemeId: string;
+  readonly overrides?: Partial<ResolvedTheme>;
   readonly theme: {
     readonly accent: string;
     readonly contrast: number;
@@ -45,7 +48,7 @@ function normalizeContrastStrength(contrast: number, variant: ThemeVariant["vari
 }
 
 /** Resolves compact theme seeds into the runtime colors consumed by the UI. */
-export function resolveTheme(variant: ThemeVariant) {
+function generateTheme(variant: ThemeVariant) {
   const {accent, contrast, ink, semanticColors, surface} = variant.theme;
 
   const mode = variant.variant;
@@ -107,7 +110,11 @@ export function resolveTheme(variant: ThemeVariant) {
     "diff-removed-surface": alpha(semanticColors.diffRemoved, dark ? 0.23 : 0.15),
     "danger-ink": dangerInk,
     "warning-ink": warningInk,
-  } as const;
+  };
+}
+
+export function resolveTheme(variant: ThemeVariant): ResolvedTheme {
+  return {...generateTheme(variant), ...variant.overrides};
 }
 
 export const appThemes = [supernovaTheme] as const;
