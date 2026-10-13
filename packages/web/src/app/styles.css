@@ -197,6 +197,25 @@
   }
 }
 
+/*
+ * xterm.js draws its own scrollbar, so the native rules above do not reach it. This matches their thin, rounded thumb.
+ * It sits outside the layer and carries the extra `.vertical`, so it beats the colors xterm injects in a <style> tag.
+ * The transparent border keeps the full 14px track clickable while showing a 4px pill.
+ */
+.xterm .xterm-scrollable-element > .scrollbar.vertical > .slider {
+  background: color-mix(in srgb, var(--theme-ink-muted) 65%, transparent);
+  background-clip: content-box;
+  border: 5px solid transparent;
+  border-radius: 9999px;
+  box-sizing: border-box;
+}
+
+.xterm .xterm-scrollable-element > .scrollbar.vertical > .slider:hover,
+.xterm .xterm-scrollable-element > .scrollbar.vertical > .slider.active {
+  background: color-mix(in srgb, var(--theme-ink-muted) 75%, transparent);
+  background-clip: content-box;
+}
+
 /* For loading text that should only appear when loading is slow: set the delay on the animation and use `both`. */
 @keyframes fade-in-delayed {
   from {

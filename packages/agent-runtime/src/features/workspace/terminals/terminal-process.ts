@@ -6,6 +6,12 @@ import type {Terminal} from "@supernova/contracts/services/workspace/schemas";
 const HISTORY_LIMIT_CHARS = 256 * 1024;
 /** How long a shell gets to exit on hangup before it is killed outright. */
 const KILL_GRACE_MS = 1_000;
+/**
+ * A busy PTY delivers hundreds of small reads per second; each one published alone is a state revision, a socket
+ * frame, and a client redraw. Reads are gathered for this long, or until this many characters, before publishing.
+ */
+const OUTPUT_COALESCE_MS = 8;
+const OUTPUT_COALESCE_CHARS = 32 * 1024;
 
 export interface TerminalProcessInput {
   readonly cols: number;
@@ -38,13 +44,29 @@ export class TerminalProcess {
   /** Spawns the user's shell in `cwd`. */
   public static async spawn(input: TerminalProcessInput): Promise<TerminalProcess> {
     const process = new TerminalProcess(input);
+    let pending = "";
+    let flushTimer: NodeJS.Timeout | undefined;
+    const flush = (): void => {
+      clearTimeout(flushTimer);
+      flushTimer = undefined;
+      if (pending.length === 0) return;
+      const data = pending;
+      pending = "";
+      input.onOutput(data);
+    };
     process.pty = await input.spawnPty({
       cols: input.cols,
       cwd: input.cwd,
       env: {...userProcessEnv(), SUPERNOVA_SESSION_ID: input.sessionId, TERM: "xterm-256color"},
-      onData: (data) => input.onOutput(data),
+      onData: (data) => {
+        pending += data;
+        if (pending.length >= OUTPUT_COALESCE_CHARS) flush();
+        else flushTimer ??= setTimeout(flush, OUTPUT_COALESCE_MS);
+      },
       onExit: (exitCode) => {
         if (process.exitCode !== undefined) return;
+        // The last output must land before the exit code, or the client draws the exit notice above it.
+        flush();
         process.exitCode = exitCode;
         input.onExit(exitCode);
       },

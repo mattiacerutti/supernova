@@ -20,6 +20,7 @@ All notable changes to Supernova are documented in this file.
 - Pinned sessions are now stored on the server and shared across browsers and devices, instead of in each browser's local storage. Existing pins are not carried over.
 - The sidebar loads a project's sessions five at a time from the server instead of loading all of them and revealing more locally.
 - Renaming, pinning, and archiving a session now update the sidebar at once instead of after a server round trip and reload. Archiving the open session also leaves it for the new-session screen at once.
+- The workspace terminal now renders with xterm.js and its WebGL renderer instead of `ghostty-web`, and the shell is resized together with the grid instead of 150 ms later. Heavy output is batched on the server before it is sent, so a build log no longer stalls input; resizing the panel no longer leaves wrapped output or overlapping rows.
 - Settings → Extensions → Update now reinstalls extensions in open sessions; a restart is no longer needed for the update to take effect.
 - A session's place in the sidebar is set when it is sent a message, not by each response update, so sessions running at the same time no longer swap positions while they answer.
 
