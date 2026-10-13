@@ -6,6 +6,7 @@ import {electronApp, optimizer} from "@electron-toolkit/utils";
 import installExtension, {REACT_DEVELOPER_TOOLS} from "electron-devtools-installer";
 import {startServerProcess} from "@supernova/server/process";
 import type {ServerProcess} from "@supernova/server/process";
+import {listEditors, openInEditor} from "@/editors";
 import {DESKTOP_IPC_CHANNELS} from "@/ipc";
 import {resolveRendererFile} from "@/protocol";
 import {syncShellEnvironment} from "@/shell";
@@ -48,6 +49,9 @@ function registerDesktopIpc(): void {
     const error = await shell.openPath(path);
     if (error) throw new Error(error);
   });
+
+  ipcMain.handle(DESKTOP_IPC_CHANNELS.listEditors, () => listEditors());
+  ipcMain.handle(DESKTOP_IPC_CHANNELS.openInEditor, (_, editor: unknown, path: unknown) => openInEditor(editor, path));
 
   ipcMain.handle(DESKTOP_IPC_CHANNELS.getUpdateState, () => updater.getState());
   ipcMain.handle(DESKTOP_IPC_CHANNELS.checkForUpdates, () => updater.check());

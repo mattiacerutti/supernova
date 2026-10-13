@@ -7,7 +7,7 @@ import {useSessionsStore} from "@/features/sessions/stores/sessions-store";
 const GENERAL_SECTION = "Actions";
 
 /** The pages the actions open; the palette renders each by name. */
-export type CommandPalettePageId = "new-session" | "open-project";
+export type CommandPalettePageId = "new-session" | "open-project" | "open-session-in";
 
 /** The project of the open session, if a session is open. A new-session draft does not count: it is already new. */
 function useOpenSessionProject(projects: readonly Project[]): Project | undefined {
@@ -18,6 +18,16 @@ function useOpenSessionProject(projects: readonly Project[]): Project | undefine
   return projectPath === undefined ? undefined : projects.find((project) => project.path === projectPath);
 }
 
+/** Where the open session's agent works: its worktree, or its project's checkout. Undefined until its document loads. */
+export function useOpenSessionWorkspacePath(): string | undefined {
+  const sessionId = useParams({select: (params) => params.sessionId, strict: false});
+
+  return useSessionsStore((state) => {
+    const session = sessionId === undefined ? undefined : state.documents[sessionId];
+    return session && (session.worktree?.path ?? session.projectPath);
+  });
+}
+
 /**
  * The actions the palette's root list offers, in display order. Add an action here; one that needs its own list or
  * input opens a page by `CommandPalettePageId` instead of running.
@@ -26,6 +36,7 @@ export function useCommandPaletteActions(): readonly CommandPaletteAction[] {
   const navigate = useNavigate();
   const projects = useProjectsStore((state) => state.projects);
   const openSessionProject = useOpenSessionProject(projects);
+  const workspacePath = useOpenSessionWorkspacePath();
   const actions: CommandPaletteAction[] = [];
 
   // Inside a session, a new one starts in the same project; elsewhere there is no project to assume, so it is picked.
@@ -50,6 +61,19 @@ export function useCommandPaletteActions(): readonly CommandPaletteAction[] {
       page: "new-session" satisfies CommandPalettePageId,
       section: GENERAL_SECTION,
       title: "New session in…",
+    });
+  }
+
+  // Desktop only: the path is on the server, which is this machine only when the desktop app runs its own API.
+  if (window.desktopApi && workspacePath !== undefined) {
+    actions.push({
+      icon: "code",
+      id: "open-session-in",
+      keywords: ["editor", "vs code", "cursor", "zed", "finder", "explorer", "worktree"],
+      kind: "page",
+      page: "open-session-in" satisfies CommandPalettePageId,
+      section: GENERAL_SECTION,
+      title: "Open session in…",
     });
   }
 

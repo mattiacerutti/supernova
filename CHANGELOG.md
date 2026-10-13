@@ -12,6 +12,7 @@ All notable changes to Supernova are documented in this file.
 ### Added
 
 - Themes can override individual generated colors instead of only the seed values.
+- In the desktop app, the command palette can open the current session's worktree (or its project, for sessions without one) in VS Code, Cursor, or Zed, whichever are installed, or in Finder or File Explorer.
 
 ### Changed
 

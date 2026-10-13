@@ -14,6 +14,8 @@ const desktopApi = {
   nightly: process.argv.includes("--supernova-nightly"),
 
   openDirectory: (path) => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.openDirectory, path),
+  listEditors: () => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.listEditors),
+  openInEditor: (editor, path) => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.openInEditor, editor, path),
   setNativeTheme: (theme) => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.setNativeTheme, theme),
 
   getUpdateState: () => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.getUpdateState),
