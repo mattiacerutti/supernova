@@ -120,10 +120,14 @@ export function buildSession(input: {
   readonly turns: Readonly<Record<string, TurnRecord>>;
   readonly context: Session["context"];
 }): Session {
-  const {context, record, turns} = input;
+  const {context, record, runStart, turns} = input;
   const entries = entriesPage({side: "entries", entries: input.history, turns});
   const undone = entriesPage({side: "undone", entries: input.undone, turns});
-  const lastTimestamp = entries.items.findLast((entry) => entry.model?.[0]?.timestamp !== undefined)?.model?.[0]?.timestamp;
+  // Activity stops at the live turn's user message: entries its run adds would move the session past others that are
+  // running too, so sidebar order stays put until the turn ends.
+  const liveStart = runStart === undefined ? -1 : entries.items.findIndex((entry) => entry.id >= runStart);
+  const settled = liveStart === -1 ? entries.items : entries.items.slice(0, liveStart + 1);
+  const lastTimestamp = settled.findLast((entry) => entry.model?.[0]?.timestamp !== undefined)?.model?.[0]?.timestamp;
   return {
     id: record.id,
     title: record.title ?? "Untitled session",
@@ -137,7 +141,7 @@ export function buildSession(input: {
     agent: input.agent ?? {},
     live: input.live ?? {},
     usage: input.usage ?? {models: {}, tools: {}},
-    ...(input.runStart === undefined ? {} : {runStart: input.runStart}),
+    ...(runStart === undefined ? {} : {runStart}),
     context,
   };
 }

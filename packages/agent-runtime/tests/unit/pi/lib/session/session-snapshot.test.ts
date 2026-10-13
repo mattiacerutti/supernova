@@ -61,6 +61,36 @@ describe("session entries", () => {
   });
 });
 
+describe("session activity", () => {
+  const entry = (id: number, kind: string, timestamp: number): EntryRecord =>
+    ({id, conversationId: 1, kind, model: [{role: kind === "pi.user" ? "user" : "assistant", content: "", timestamp}]}) as unknown as EntryRecord;
+  const turns: Record<string, TurnRecord> = {
+    "1": {contentParts: [], capture: false, before: {checkpointId: "c", sessionId: "s", status: "disabled"}},
+    "3": {contentParts: [], capture: false, before: {checkpointId: "c", sessionId: "s", status: "disabled"}},
+  };
+  const history = [entry(1, "pi.user", 1_000), entry(2, "pi.assistant", 2_000), entry(3, "pi.user", 3_000), entry(4, "pi.assistant", 4_000)];
+  const session = (runStart: number | undefined) =>
+    buildSession({
+      record: {id: "s", projectPath: "/project", pinned: false, createdAt: new Date(0).toISOString(), updatedAt: new Date(0).toISOString()},
+      history,
+      undone: [],
+      agent: undefined,
+      live: undefined,
+      usage: undefined,
+      runStart,
+      turns,
+      context: {contextWindow: 0, usedTokens: 0},
+    });
+
+  it("is the newest entry once every turn has settled", () => {
+    expect(session(undefined).updatedAt).toBe(new Date(4_000).toISOString());
+  });
+
+  it("stops at the live turn's user message while its run answers it", () => {
+    expect(session(3).updatedAt).toBe(new Date(3_000).toISOString());
+  });
+});
+
 describe("history pages", () => {
   const record = (): TurnRecord => ({contentParts: [], capture: false, before: {checkpointId: "c", sessionId: "s", status: "disabled"}});
   const entry = (id: number, kind: string, text = ""): EntryRecord =>
