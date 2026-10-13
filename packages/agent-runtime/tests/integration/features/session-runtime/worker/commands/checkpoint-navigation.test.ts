@@ -336,7 +336,7 @@ describe("checkpoint navigation", () => {
       {text: "one", type: "text"},
       {text: "two", type: "text"},
     ]);
-    expect(redoEvents.session.undone).toEqual([]);
+    expect(redoEvents.session.undone.items).toEqual([]);
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("two\n");
   });
 
@@ -533,7 +533,7 @@ describe("checkpoint navigation", () => {
       {text: "one", type: "text"},
       {text: "two", type: "text"},
     ]);
-    expect(loaded.undone).toEqual([]);
+    expect(loaded.undone.items).toEqual([]);
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("root two\n");
     await expect(readFile(join(childPath, "child.txt"), "utf8")).resolves.toBe("manual conflict\n");
   });
@@ -681,7 +681,7 @@ describe("checkpoint navigation", () => {
       expect(errors).toEqual([]);
       expect(published).toEqual([]);
       expect(turnContents(loaded)).toHaveLength(2);
-      expect(loaded.undone).toEqual([]);
+      expect(loaded.undone.items).toEqual([]);
       await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("root two\n");
       if (expectedContents === undefined) await expect(readFile(join(childPath, "child.txt"), "utf8")).rejects.toThrow();
       else await expect(readFile(join(childPath, "child.txt"), "utf8")).resolves.toBe(expectedContents);
@@ -772,7 +772,7 @@ describe("checkpoint navigation", () => {
       {text: "two", type: "text"},
       {text: "three", type: "text"},
     ]);
-    expect(restoreThirdEvents.session.undone).toEqual([]);
+    expect(restoreThirdEvents.session.undone.items).toEqual([]);
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("three\n");
   });
 
@@ -896,7 +896,7 @@ describe("checkpoint navigation", () => {
     try {
       const loadedWhileStreaming = await pi.sessions.get({sessionId: info.id});
 
-      expect(loadedWhileStreaming.undone).toEqual([]);
+      expect(loadedWhileStreaming.undone.items).toEqual([]);
     } finally {
       releaseProvider?.();
     }
@@ -907,7 +907,7 @@ describe("checkpoint navigation", () => {
         {text: "one", type: "text"},
         {text: "branch", type: "text"},
       ]);
-      expect(loaded.undone).toEqual([]);
+      expect(loaded.undone.items).toEqual([]);
     });
   });
 
@@ -941,7 +941,7 @@ describe("checkpoint navigation", () => {
       {text: "one", type: "text"},
       {text: "replacement", type: "text"},
     ]);
-    expect(loadedAfterFailure.undone).toEqual([]);
+    expect(loadedAfterFailure.undone.items).toEqual([]);
     expect(replacement).toMatchObject({before: {status: "failed"}, after: {status: "failed"}});
     expect(pi.faux.state.callCount).toBe(3);
   });

@@ -3,6 +3,8 @@ import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import {CheckpointConflictError} from "@supernova/contracts/services/session-runtime/procedures";
 import type {
   CompactSessionPayload,
+  LoadHistoryPayload,
+  LoadHistoryResult,
   RedoCheckpointPayload,
   RevertToMessagePayload,
   SendMessagePayload,
@@ -113,6 +115,11 @@ export class SessionWorker {
 
   public revertToMessage(input: RevertToMessagePayload): Promise<void> {
     return this.command(() => revertToMessage(this, input));
+  }
+
+  /** A page of the branch beyond the document's window; a read, so it runs beside commands and runs. */
+  public loadHistory(input: Omit<LoadHistoryPayload, "sessionId">): Promise<LoadHistoryResult> {
+    return this.file.historyPage(input);
   }
 
   /** Stops the session's user-facing work: a send's preparation, the run, and queued inputs. */

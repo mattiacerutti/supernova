@@ -1,7 +1,7 @@
 import {replicatedState} from "@earendil-works/chord";
 import type {MutableReplicatedState} from "@earendil-works/chord";
 import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
-import type {ModelReference, Session, UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
+import type {ModelReference, Session, SessionEntries, SessionEntry, UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
 import type {SessionRuntimeService} from "@supernova/contracts/services/session-runtime/services";
 import type {SessionDirectoryEntry, SessionDirectoryState, SessionsService} from "@supernova/contracts/services/sessions/services";
 import {afterEach, beforeEach, describe, expect, it, vi} from "vitest";
@@ -42,8 +42,8 @@ function session(input?: Partial<Session>): Session {
     pinned: false,
     projectPath: "/workspace",
     updatedAt: "2026-01-01T00:00:00.000Z",
-    entries: [],
-    undone: [],
+    entries: {items: [], remaining: 0},
+    undone: {items: [], remaining: 0},
     agent: {},
     live: {},
     usage: {models: {}, tools: {}},
@@ -53,24 +53,29 @@ function session(input?: Partial<Session>): Session {
 }
 
 /** A Pi user entry enriched with authored content, the start of a turn. */
-function userEntry(id: number): Session["entries"][number] {
+function userEntry(id: number): SessionEntry {
   return {
     conversationId: 1,
     id,
     kind: "pi.user",
     contentParts: [{text: `Turn ${id}`, type: "text"}],
     model: [{content: `Turn ${id}`, role: "user", timestamp: id}],
-  } as unknown as Session["entries"][number];
+  } as unknown as SessionEntry;
+}
+
+/** Entries with nothing beyond them. */
+function all(items: readonly SessionEntry[]): SessionEntries {
+  return {items, remaining: 0};
 }
 
 /** A session with two turns, starting at entries 1 and 3. */
 function twoTurns(): Session {
-  return session({entries: [userEntry(1), userEntry(3)]});
+  return session({entries: all([userEntry(1), userEntry(3)])});
 }
 
 /** The same session with its last turn undone. */
 function undoneLast(document: Session): Session {
-  return {...document, entries: document.entries.slice(0, 1), undone: document.entries.slice(1)};
+  return {...document, entries: all(document.entries.items.slice(0, 1)), undone: all(document.entries.items.slice(1))};
 }
 
 function entry(input?: Partial<SessionDirectoryEntry>): SessionDirectoryEntry {
@@ -129,6 +134,7 @@ function fakeServices(): FakeServices {
   const sessionRuntime = {
     abort: vi.fn(async () => ok),
     compact: vi.fn(async () => ok),
+    loadHistory: vi.fn(async () => ({ok: true, value: {items: [], remaining: 0}}) as const),
     redoCheckpoint: vi.fn(async () => ok),
     revertToMessage: vi.fn(async () => ok),
     sendMessage: vi.fn(async () => ok),
@@ -212,6 +218,45 @@ describe("session commands and views", () => {
     expect(document("session-1")?.title).toBe("Renamed");
   });
 
+  it("keeps the branch it has seen as the document's window moves, and drops it when history restarts", () => {
+    const {setDocument, addHistoryPage} = useSessionsStore.getState();
+    const document = () => useSessionsStore.getState().documents["session-1"]!;
+    const shown = () => document().entries.items.map((item) => item.id);
+    const undone = () => document().undone.items.map((item) => item.id);
+    setDocument(session({entries: {items: [userEntry(5), userEntry(7)], remaining: 2}}));
+
+    // A page that no longer ends at the first entry is dropped.
+    addHistoryPage("session-1", "entries", 3, all([userEntry(1)]));
+    expect(shown()).toEqual([5, 7]);
+    addHistoryPage("session-1", "entries", 5, all([userEntry(1), userEntry(3)]));
+    expect(shown()).toEqual([1, 3, 5, 7]);
+
+    // A new turn slides the window past turn 5; what came before stays.
+    setDocument(session({entries: {items: [userEntry(7), userEntry(9)], remaining: 3}}));
+    expect(shown()).toEqual([1, 3, 5, 7, 9]);
+    expect(document().entries.remaining).toBe(0);
+
+    // Undoing turn 9 keeps it as the first undone turn; the client then has it in full.
+    setDocument(session({entries: {items: [userEntry(7)], remaining: 3}, undone: all([userEntry(9)])}));
+    expect(shown()).toEqual([1, 3, 5, 7]);
+    expect(undone()).toEqual([9]);
+
+    // Undone turns beyond the window stay too, so what the client undid itself is there to redo.
+    setDocument(session({entries: all([userEntry(1), userEntry(3)]), undone: {items: [userEntry(5), userEntry(7), userEntry(9)], remaining: 1}}));
+    setDocument(session({entries: all([userEntry(1)]), undone: {items: [userEntry(3), userEntry(5)], remaining: 3}}));
+    expect(shown()).toEqual([1]);
+    expect(undone()).toEqual([3, 5, 7, 9]);
+    expect(document().undone.remaining).toBe(1);
+    // A page of later undone turns extends the back the same way.
+    addHistoryPage("session-1", "undone", 9, all([userEntry(11)]));
+    expect(undone()).toEqual([3, 5, 7, 9, 11]);
+    expect(document().undone.remaining).toBe(0);
+
+    // A window starting the history (a send after undoing every turn) replaces it.
+    setDocument(session({entries: all([userEntry(20)])}));
+    expect(shown()).toEqual([20]);
+  });
+
   it("shows what the runtime's directory reports, with no optimism, until the document says otherwise", () => {
     const {services} = setup();
 
@@ -272,7 +317,7 @@ describe("session commands and views", () => {
 
   it("shows a new authored turn after undo without splitting extension continuations", async () => {
     const {actions, document, open, services} = setup();
-    const initial = session({entries: [userEntry(1)], undone: [userEntry(3), userEntry(5)]});
+    const initial = session({entries: all([userEntry(1)]), undone: all([userEntry(3), userEntry(5)])});
     services.documents.set("session-1", replicatedState(initial));
     open("session-1");
     await waitUntil(() => expect(document("session-1")).toEqual(initial));
@@ -282,12 +327,12 @@ describe("session commands and views", () => {
     actions.sendMessage({contentParts, modelReference: model, sessionId: "session-1"});
     await waitUntil(() => expect(services.sessionRuntime.sendMessage).toHaveBeenCalledOnce());
     const transcript = services.documents.get("session-1")!;
-    const continuation = {conversationId: 1, id: 6, kind: "pi.user", model: [{content: "Continuation", role: "user", timestamp: 6}]} as unknown as Session["entries"][number];
-    transcript.replace(BACKGROUND_CONTEXT, {...initial, entries: [...initial.entries, continuation]});
+    const continuation = {conversationId: 1, id: 6, kind: "pi.user", model: [{content: "Continuation", role: "user", timestamp: 6}]} as unknown as SessionEntry;
+    transcript.replace(BACKGROUND_CONTEXT, {...initial, entries: all([...initial.entries.items, continuation])});
     expect(live("session-1", document("session-1"))).toMatchObject({liveMessage: contentParts, turnIds: ["1"]});
     expect(useSessionsStore.getState().optimism["session-1"]?.message).toBeDefined();
 
-    transcript.replace(BACKGROUND_CONTEXT, session({entries: [...transcript.value!.entries, {...userEntry(7), contentParts}], runStart: 7}));
+    transcript.replace(BACKGROUND_CONTEXT, session({entries: all([...transcript.value!.entries.items, {...userEntry(7), contentParts}]), runStart: 7}));
     expect(live("session-1", document("session-1"))).toMatchObject({liveMessage: contentParts, liveTurn: {id: "7"}, turnIds: ["1"], undoneTurns: []});
     accept();
     await waitUntil(() => expect(useSessionsStore.getState().optimism["session-1"]?.message).toBeUndefined());
@@ -406,7 +451,7 @@ describe("session commands and views", () => {
     services.sessions.create = vi.fn(
       (payload: Parameters<FakeServices["sessions"]["create"]>[0]) =>
         new Promise<{readonly ok: true; readonly value: Session}>((resolve) => {
-          resolveCreate = () => resolve({ok: true, value: session({id: payload.id, entries: [{...userEntry(1), contentParts}]})});
+          resolveCreate = () => resolve({ok: true, value: session({id: payload.id, entries: all([{...userEntry(1), contentParts}])})});
         })
     );
 
@@ -418,7 +463,7 @@ describe("session commands and views", () => {
       workspace: {baseRef: "main", mode: "worktree"},
     });
 
-    expect(document("new-session")).toMatchObject({id: "new-session", entries: [], projectPath: "/workspace"});
+    expect(document("new-session")).toMatchObject({id: "new-session", entries: {items: []}, projectPath: "/workspace"});
     expect(live("new-session")).toMatchObject({liveMessage: contentParts, setupStep: "worktree", status: "streaming"});
     resolveCreate();
     await expect(pending).resolves.toEqual({status: "started"});

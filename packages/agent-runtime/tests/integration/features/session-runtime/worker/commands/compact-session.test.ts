@@ -28,7 +28,7 @@ describe("manual Pi session compaction", () => {
 
     expect(final).toEqual(await pi.sessions.get({sessionId: info.id}));
     expect(final.context).toEqual({contextWindow: selectedPiModel.contextWindow, usedTokens: null});
-    expect(final.entries.at(-1)).toMatchObject({kind: "pi.compaction"});
-    expect(JSON.stringify(final.entries.at(-1))).toContain("Manual compacted summary.");
+    expect(final.entries.items.at(-1)).toMatchObject({kind: "pi.compaction"});
+    expect(JSON.stringify(final.entries.items.at(-1))).toContain("Manual compacted summary.");
   });
 });

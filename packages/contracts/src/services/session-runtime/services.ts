@@ -4,6 +4,8 @@ import type {ServiceResult} from "@supernova/contracts/lib/protocol";
 import type {
   CheckpointNavigationError,
   CompactSessionPayload,
+  LoadHistoryPayload,
+  LoadHistoryResult,
   RedoCheckpointPayload,
   RevertToMessagePayload,
   SendMessagePayload,
@@ -18,6 +20,11 @@ import type {Session} from "@supernova/contracts/services/sessions/schemas";
 export interface SessionRuntimeService {
   /** The session's document: Pi's entries and documents plus what Supernova adds. */
   readonly session: ReplicatedState<Session>;
+  /**
+   * A page of the branch beyond the document's window, on the side named: shown turns before `edge`, or undone turns
+   * after it. Fails when `edge` is no longer on that side of the leaf.
+   */
+  loadHistory(payload: Omit<LoadHistoryPayload, "sessionId">, context: Context): Promise<ServiceResult<LoadHistoryResult>>;
   /** Starts a turn; resolves once the engine placed the input. */
   sendMessage(payload: Omit<SendMessagePayload, "sessionId">, context: Context): Promise<ServiceResult<null>>;
   compact(payload: Omit<CompactSessionPayload, "sessionId">, context: Context): Promise<ServiceResult<null>>;

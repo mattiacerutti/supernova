@@ -38,6 +38,7 @@ import type {ServiceResult} from "@supernova/contracts/lib/protocol";
 import {
   CheckpointNavigationError,
   CompactSessionPayload,
+  LoadHistoryPayload,
   RevertToMessagePayload,
   SendMessagePayload,
   UndoCheckpointPayload,
@@ -253,11 +254,13 @@ async function sessionHandle(runtime: AgentRuntime, sessionId: string): Promise<
   const compact = CompactSessionPayload.omit({sessionId: true});
   const step = UndoCheckpointPayload.omit({sessionId: true});
   const revert = RevertToMessagePayload.omit({sessionId: true});
+  const history = LoadHistoryPayload.omit({sessionId: true});
   return {
     attachClient() {
       const provider = new RemoteServiceProvider([SessionRuntimeService]);
       provider.provide(SessionRuntimeService, {
         session: document.state,
+        loadHistory: method({payload: history, run: (input) => sessionRuntime.loadHistory({...input, sessionId})}),
         sendMessage: method({payload: send, run: (input) => sessionRuntime.sendMessage({...input, sessionId}).then(() => null)}),
         compact: method({payload: compact, run: (input) => sessionRuntime.compact({...input, sessionId}).then(() => null)}),
         undoCheckpoint: method({payload: step, error: CheckpointNavigationError, run: (input) => sessionRuntime.undoCheckpoint({...input, sessionId}).then(() => null)}),

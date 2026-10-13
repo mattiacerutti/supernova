@@ -121,7 +121,7 @@ describe("splitting a running session into committed and live turns", () => {
     } as unknown as LiveState;
     const entries = [user(1, "First"), assistant(2, [{text: "Old", type: "text"}]), user(5, "Second")];
 
-    const {liveTurn, turns: committed} = buildSessionTurns({entries, live, runStart: 5});
+    const {liveTurn, turns: committed} = buildSessionTurns({entries: {items: entries, remaining: 0}, live, runStart: 5});
 
     expect(committed.map((turn) => turn.id)).toEqual(["1"]);
     expect(liveTurn).toMatchObject({
@@ -137,7 +137,7 @@ describe("splitting a running session into committed and live turns", () => {
   });
 
   it("has no live turn while idle", () => {
-    const {liveTurn, turns: committed} = buildSessionTurns({entries: [user(1, "First")], live: {}});
+    const {liveTurn, turns: committed} = buildSessionTurns({entries: {items: [user(1, "First")], remaining: 0}, live: {}});
 
     expect(liveTurn).toBeUndefined();
     expect(committed).toHaveLength(1);

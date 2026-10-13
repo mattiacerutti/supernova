@@ -1,6 +1,8 @@
 import type {
   AbortSessionPayload,
   CompactSessionPayload,
+  LoadHistoryPayload,
+  LoadHistoryResult,
   RedoCheckpointPayload,
   RevertToMessagePayload,
   SendMessagePayload,
@@ -60,6 +62,11 @@ export class SessionRuntime {
 
   public async revertToMessage(input: RevertToMessagePayload): Promise<void> {
     await (await this.worker(input.sessionId)).revertToMessage(input);
+  }
+
+  /** A page of a session's branch beyond its document's window. */
+  public async loadHistory(input: LoadHistoryPayload): Promise<LoadHistoryResult> {
+    return (await this.worker(input.sessionId)).loadHistory(input);
   }
 
   /** A durable session's document at its latest published revision. */

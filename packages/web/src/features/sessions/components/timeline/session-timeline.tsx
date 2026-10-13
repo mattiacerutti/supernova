@@ -7,6 +7,7 @@ import type {MotionValue} from "framer-motion";
 import {useCallback, useLayoutEffect, useRef, useState} from "react";
 import type {KeyboardEvent, PointerEvent, UIEvent} from "react";
 import {MessageScroller, MessageScrollerContent, MessageScrollerProvider, MessageScrollerViewport} from "@/features/sessions/components/timeline/viewport/message-scroller";
+import EarlierHistoryStatus from "@/features/sessions/components/timeline/viewport/earlier-history-status";
 import ScrollToEndButton from "@/features/sessions/components/timeline/viewport/scroll-to-end-button";
 import SessionTimelineVirtualRow from "@/features/sessions/components/timeline/rows/session-timeline-virtual-row";
 import StreamingStatus from "@/features/sessions/components/timeline/viewport/streaming-status";
@@ -17,6 +18,7 @@ import type {SessionTimelineItem} from "@/features/sessions/types/session-timeli
 const TIMELINE_ANCHOR_SCROLL_DURATION_MS = 700;
 const TIMELINE_ANCHOR_TOP_MARGIN_PX = 24;
 const TIMELINE_BOTTOM_PADDING_PX = 16;
+const TIMELINE_EARLIER_HISTORY_HEIGHT_PX = 48;
 // Bounds retained measurement snapshots used when switching between sessions.
 const TIMELINE_CACHE_LIMIT = 16;
 const TIMELINE_SCROLL_BUTTON_THRESHOLD_PX = 50;
@@ -43,8 +45,17 @@ function animateCatchUp(element: HTMLElement, offset: number, current: Animation
   });
 }
 
+/** Turns before the first loaded one, and loading them. */
+export interface TimelineEarlierHistory {
+  readonly count: number;
+  readonly failed: boolean;
+  readonly load: () => void;
+  readonly retry: () => void;
+}
+
 interface SessionTimelineProps {
   readonly bottomOverlayHeight?: number;
+  readonly earlierHistory: TimelineEarlierHistory;
   readonly compacting: boolean;
   readonly isStreaming: boolean;
   readonly items: readonly SessionTimelineItem[];
@@ -61,7 +72,20 @@ interface SessionTimelineViewportProps extends SessionTimelineProps {
 }
 
 function SessionTimelineViewport(props: SessionTimelineViewportProps) {
-  const {bottomOverlayHeight = 0, compacting, isStreaming, items, liveItems, onAnchorScrollingChange, onForkFromTurn, onRevertToMessage, sessionId, setupStep, streamError} = props;
+  const {
+    bottomOverlayHeight = 0,
+    compacting,
+    earlierHistory,
+    isStreaming,
+    items,
+    liveItems,
+    onAnchorScrollingChange,
+    onForkFromTurn,
+    onRevertToMessage,
+    sessionId,
+    setupStep,
+    streamError,
+  } = props;
   const {scrollToEnd} = useMessageScroller();
   const {end: canScrollToEnd} = useMessageScrollerScrollable();
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -83,7 +107,10 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
   if (!hasLiveOutput) streamAnimationReadyRef.current = false;
 
   const pullStatusIntoLastMessage = hasLiveOutput && liveItems.at(-1)?.spacing === "message";
-  const virtualRowKeys = buildTimelineRowKeys(timelineRows);
+  const virtualRowKeys = buildTimelineRowKeys(timelineRows, earlierHistory.count);
+  const hasEarlierHistory = earlierHistory.count > 0;
+  // The status sits in the canvas's top padding rather than in a row, so loaded turns go in below it.
+  const paddingStart = TIMELINE_ANCHOR_TOP_MARGIN_PX + (hasEarlierHistory ? TIMELINE_EARLIER_HISTORY_HEIGHT_PX : 0);
   const [scrollButtonVisible, setScrollButtonVisible] = useState(false);
   const shouldReduceMotion = useReducedMotion();
 
@@ -112,7 +139,7 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
     initialMeasurementsCache: timelineCache.get(sessionId),
     overscan: 3,
     paddingEnd: TIMELINE_BOTTOM_PADDING_PX,
-    paddingStart: TIMELINE_ANCHOR_TOP_MARGIN_PX,
+    paddingStart,
     // Measure even a detached, tall prompt before pinning; do not wait for
     // its estimated position to enter the viewport.
     rangeExtractor: (range) => {
@@ -127,6 +154,8 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
       const virtualContent = virtualContentRef.current;
       if (virtualContent) virtualContent.style.height = `${instance.getTotalSize()}px`;
       elementScroll(offset, options, instance);
+      // The offset already includes a pending prepend shift, so the DOM now carries it.
+      if (prependRef.current) prependRef.current = {...prependRef.current, shift: 0};
     },
   });
 
@@ -231,10 +260,33 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
   // Compare against the DOM offset: TanStack's own offset only updates on the
   // next scroll event, while scrollToFn above applies each adjustment in this
   // measurement batch synchronously and without clamping.
-  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item) =>
-    anchorScrollRef.current === null && anchorSpaceHeightRef.current === 0 && item.end <= (viewportRef.current?.scrollTop ?? 0);
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item) => {
+    if (prependRef.current && item.index < prependRef.current.beforeIndex) return true;
+    return anchorScrollRef.current === null && anchorSpaceHeightRef.current === 0 && item.end <= (viewportRef.current?.scrollTop ?? 0);
+  };
+
+  // Earlier turns loaded above move the previous first row down; the scroll position moves with it in this render,
+  // before the range is computed, so the rows on screen stay rendered and in place. The new rows are laid out from
+  // estimates; `shift` is what the DOM still has to scroll, and `beforeIndex` marks them so their measurement
+  // corrects the scroll position as for rows above the viewport, which they are once the shift lands.
+  const firstRowRef = useRef<{readonly key: string; readonly start: number} | null>(null);
+  const prependRef = useRef<{readonly shift: number; readonly beforeIndex: number} | null>(null);
+  const previousFirstRow = firstRowRef.current;
+  const prependedIndex = previousFirstRow ? virtualRowKeys.indexOf(previousFirstRow.key) : -1;
+  virtualizer.getTotalSize();
+  if (previousFirstRow && prependedIndex > 0) {
+    const shift = (virtualizer.measurementsCache[prependedIndex]?.start ?? previousFirstRow.start) - previousFirstRow.start;
+    virtualizer.scrollOffset = (virtualizer.scrollOffset ?? 0) + shift;
+    prependRef.current = {shift: (prependRef.current?.shift ?? 0) + shift, beforeIndex: prependedIndex};
+  }
+  firstRowRef.current = virtualRowKeys[0] === undefined ? null : {key: virtualRowKeys[0], start: virtualizer.measurementsCache[0]?.start ?? paddingStart};
 
   const virtualItems = virtualizer.getVirtualItems();
+
+  /** Loads earlier turns once the viewport is within a screen of the top. */
+  const loadEarlierNearTop = (viewport: HTMLDivElement): void => {
+    if (hasEarlierHistory && viewport.scrollTop < viewport.clientHeight) earlierHistory.load();
+  };
 
   // Anchors a freshly sent message near the viewport top. Space below it makes
   // that position the scroll end and is consumed as the response grows.
@@ -304,6 +356,16 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
     scrollToEnd({behavior: "auto"});
   }, [releaseAnchorScroll, scrollToEnd, setAnchorSpaceHeight, turnCount]);
 
+  useLayoutEffect(() => {
+    const viewport = viewportRef.current;
+    const shift = prependRef.current?.shift ?? 0;
+    prependRef.current = null;
+    if (!viewport) return;
+    if (shift !== 0) viewport.scrollTop += shift;
+    // Without enough content to scroll, no scroll event would ever ask for more.
+    if (viewport.scrollHeight - viewport.clientHeight < viewport.clientHeight) loadEarlierNearTop(viewport);
+  });
+
   useLayoutEffect(syncViewport);
 
   // Virtualized rows share no per-turn ancestor, so the hovered turn is flagged
@@ -333,6 +395,7 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
     const isAnchorScrolling = anchorScrollRef.current !== null;
     syncAnchorSpace(viewport);
     measureStreamEnd();
+    loadEarlierNearTop(viewport);
     setScrollButtonVisible(!isAnchorScrolling && viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop >= TIMELINE_SCROLL_BUTTON_THRESHOLD_PX);
   };
 
@@ -383,6 +446,14 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
                   virtualizer.containerRef(element);
                 }}
               >
+                {hasEarlierHistory && (
+                  <EarlierHistoryStatus
+                    failed={earlierHistory.failed}
+                    height={TIMELINE_EARLIER_HISTORY_HEIGHT_PX}
+                    onRetry={earlierHistory.retry}
+                    top={TIMELINE_ANCHOR_TOP_MARGIN_PX}
+                  />
+                )}
                 <div className="absolute inset-0" data-timeline-stream-content ref={streamContentRef}>
                   {virtualItems.map((virtualItem) => {
                     const item = timelineRows[virtualItem.index];

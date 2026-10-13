@@ -27,10 +27,13 @@ export function buildTimelineRows(input: BuildTimelineRowsInput): readonly Timel
   return rows;
 }
 
-/** Keeps virtual row identity stable when live event ids change on settlement. */
-export function buildTimelineRowKeys(rows: readonly TimelineRow[]): readonly string[] {
+/**
+ * Keeps virtual row identity stable when live event ids change on settlement, and when earlier turns load above: a
+ * row is keyed by its turn's position in the whole history, after the `earlierTurns` not loaded yet.
+ */
+export function buildTimelineRowKeys(rows: readonly TimelineRow[], earlierTurns: number): readonly string[] {
   const typeCounts = new Map<string, number>();
-  let turnIndex = -1;
+  let turnIndex = earlierTurns - 1;
 
   return rows.map((item) => {
     if (item.type === "user") {

@@ -1,10 +1,32 @@
 import type {AgentState, EntryRecord, LiveState, UsageState} from "@earendil-works/pi-durable";
 import type {AssistantMessage, Message} from "@earendil-works/pi-ai";
 import {calculateContextTokens, estimateTokens} from "@earendil-works/pi-coding-agent";
-import type {Session, SessionContextUsage, SessionEntry} from "@supernova/contracts/services/sessions/schemas";
+import type {HistorySide} from "@supernova/contracts/services/session-runtime/procedures";
+import type {Session, SessionContextUsage, SessionEntries, SessionEntry} from "@supernova/contracts/services/sessions/schemas";
 import type {SessionRecord, TurnRecord} from "@supernova/agent-runtime/pi/lib/session/session-state";
 
 type ContextMessage = Parameters<typeof estimateTokens>[0];
+
+/** The most turns one page holds: either side of the session document's window, or one `loadHistory` read. */
+const PAGE_TURNS = 20;
+/**
+ * The most characters of JSON a page holds, unless its one turn is larger: a page always holds a whole turn. A
+ * protocol frame holds 16 MiB, so a single turn larger than that still cannot be sent; revisit if turns that large
+ * appear.
+ */
+const PAGE_SIZE = 2 * 1024 * 1024;
+
+const entrySizes = new WeakMap<EntryRecord, number>();
+
+/** An entry's JSON length, measured once: history entries are cached and never change. */
+function entrySize(entry: EntryRecord): number {
+  let size = entrySizes.get(entry);
+  if (size === undefined) {
+    size = JSON.stringify(entry).length;
+    entrySizes.set(entry, size);
+  }
+  return size;
+}
 
 /** Whether an assistant message carries provider usage that measured its request's context. */
 function hasValidAssistantUsage(message: Message): message is AssistantMessage {
@@ -48,18 +70,48 @@ export function contextUsageOf(input: {readonly entries: readonly EntryRecord[];
   return buildSessionContextUsage({contextWindow, messages, unknown: startsAtCompaction && !respondedAfter});
 }
 
+/**
+ * One page of `entries`, a stretch of the branch on one side of the leaf, read from the leaf outwards: for `entries`
+ * the newest whole turns (its end), for `undone` the oldest (its start). `remaining` counts the turns left beyond the
+ * page. The page that reaches the far end also holds what lies there before the first turn (a leading compaction, an
+ * extension's continuation of the turn before).
+ */
+export function entriesPage(input: {readonly side: HistorySide; readonly entries: readonly EntryRecord[]; readonly turns: Readonly<Record<string, TurnRecord>>}): SessionEntries {
+  const {side, entries, turns} = input;
+
+  const starts = entries.flatMap((entry, index) => (entry.kind === "pi.user" && turns[String(entry.id)] ? [index] : []));
+  const bounds = [...starts, entries.length];
+  const sizes = starts.map((turnStart, index) => entries.slice(turnStart, bounds[index + 1]).reduce((total, entry) => total + entrySize(entry), 0));
+
+  const pageTurnCount = (sizes: readonly number[]) => {
+    let count = 0;
+    let size = 0;
+    for (const turnSize of sizes) {
+      if (count > 0 && (count === PAGE_TURNS || size + turnSize > PAGE_SIZE)) break;
+      size += turnSize;
+      count += 1;
+    }
+    return count;
+  };
+
+  const count = pageTurnCount(side === "entries" ? sizes.toReversed() : sizes);
+  const remaining = starts.length - count;
+  const items = remaining === 0 ? entries : side === "entries" ? entries.slice(starts[remaining]) : entries.slice(0, starts[count]);
+  return {items: authoredEntries(items, turns), remaining};
+}
+
 /** The timeline's entries of a history: system prompt entries are model bookkeeping, not something to show. */
 export function timelineEntries(history: readonly EntryRecord[]): EntryRecord[] {
   return history.filter((entry) => entry.kind !== "pi.system");
 }
 
 /**
- * Builds the contract `Session`. Every value must be strict JSON: the session is diffed into Chord deltas, so optional
- * fields are left out rather than set to undefined.
+ * Builds the contract `Session`, with the newest page of the shown `history` as its entries. Every value must be strict
+ * JSON: the session is diffed into Chord deltas, so optional fields are left out rather than set to undefined.
  */
 export function buildSession(input: {
   readonly record: SessionRecord;
-  readonly entries: readonly EntryRecord[];
+  readonly history: readonly EntryRecord[];
   readonly undone: readonly EntryRecord[];
   readonly agent: AgentState | undefined;
   readonly live: LiveState | undefined;
@@ -69,9 +121,9 @@ export function buildSession(input: {
   readonly context: Session["context"];
 }): Session {
   const {context, record, turns} = input;
-  const entries = authoredEntries(input.entries, turns);
-  const undone = authoredEntries(input.undone, turns);
-  const lastTimestamp = entries.findLast((entry) => entry.model?.[0]?.timestamp !== undefined)?.model?.[0]?.timestamp;
+  const entries = entriesPage({side: "entries", entries: input.history, turns});
+  const undone = entriesPage({side: "undone", entries: input.undone, turns});
+  const lastTimestamp = entries.items.findLast((entry) => entry.model?.[0]?.timestamp !== undefined)?.model?.[0]?.timestamp;
   return {
     id: record.id,
     title: record.title ?? "Untitled session",

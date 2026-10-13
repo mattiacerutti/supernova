@@ -32,7 +32,7 @@ export interface Observation {
 
 /** The authored content of each turn, in order. */
 export function turnContents(session: Pick<Session, "entries">) {
-  return session.entries.flatMap((entry) => (entry.contentParts === undefined ? [] : [entry.contentParts]));
+  return session.entries.items.flatMap((entry) => (entry.contentParts === undefined ? [] : [entry.contentParts]));
 }
 
 /** The authored content of each undone turn, in order. */
@@ -42,12 +42,12 @@ export function undoneContents(session: Pick<Session, "undone">) {
 
 /** The id of each visible turn: its user entry's id. */
 export function turnIds(session: Pick<Session, "entries">): string[] {
-  return session.entries.flatMap((entry) => (entry.contentParts === undefined ? [] : [String(entry.id)]));
+  return session.entries.items.flatMap((entry) => (entry.contentParts === undefined ? [] : [String(entry.id)]));
 }
 
 /** The text of every assistant entry, in order. */
 export function assistantTexts(session: Pick<Session, "entries">): string[] {
-  return session.entries.flatMap((entry) => {
+  return session.entries.items.flatMap((entry) => {
     const message = entry.model?.[0];
     if (entry.kind !== "pi.assistant" || message?.role !== "assistant") return [];
     return [(message as AssistantMessage).content.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("")];

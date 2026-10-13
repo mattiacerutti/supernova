@@ -4,7 +4,7 @@ import type {EntryRecord} from "@earendil-works/pi-durable";
 import type {TurnRecord} from "@supernova/agent-runtime/pi/lib/session/session-state";
 import {Session} from "@supernova/contracts/services/sessions/schemas";
 import {describe, expect, it} from "vitest";
-import {buildSession, buildSessionContextUsage} from "@supernova/agent-runtime/pi/lib/session/session-snapshot";
+import {buildSession, buildSessionContextUsage, entriesPage} from "@supernova/agent-runtime/pi/lib/session/session-snapshot";
 
 function usage(totalTokens: number): Usage {
   return {cacheRead: 0, cacheWrite: 0, cost: {cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0}, input: totalTokens, output: 0, totalTokens};
@@ -38,7 +38,7 @@ describe("session entries", () => {
     };
     const session = buildSession({
       record: {id: "s", projectPath: "/project", pinned: false, createdAt: new Date(0).toISOString(), updatedAt: new Date(0).toISOString()},
-      entries: [authored, continuation],
+      history: [authored, continuation],
       undone: [undone],
       agent: undefined,
       live: undefined,
@@ -48,16 +48,86 @@ describe("session entries", () => {
       context: {contextWindow: 0, usedTokens: 0},
     });
 
-    expect(session.entries[0]).toMatchObject({contentParts: [{type: "text", text: "Original input"}], model: authored.model});
-    expect(session.entries[1]).toBe(continuation);
-    expect(session.undone[0]).toMatchObject({contentParts: []});
+    expect(session.entries.items[0]).toMatchObject({contentParts: [{type: "text", text: "Original input"}], model: authored.model});
+    expect(session.entries.items[1]).toBe(continuation);
+    expect(session.undone.items[0]).toMatchObject({contentParts: []});
     expect(session).not.toHaveProperty("turns");
-    expect(session.entries[0]).not.toHaveProperty("before");
+    expect(session.entries.items[0]).not.toHaveProperty("before");
     expect(authored).not.toHaveProperty("contentParts");
     expect(undone).not.toHaveProperty("contentParts");
     expect(session.title).toBe("Untitled session");
     expect(Session.parse(session)).toEqual(session);
-    expect(Session.safeParse({...session, entries: [{...authored, contentParts: [{type: "text", text: 1}]}]}).success).toBe(false);
+    expect(Session.safeParse({...session, entries: {items: [{...authored, contentParts: [{type: "text", text: 1}]}], remaining: 0}}).success).toBe(false);
+  });
+});
+
+describe("history pages", () => {
+  const record = (): TurnRecord => ({contentParts: [], capture: false, before: {checkpointId: "c", sessionId: "s", status: "disabled"}});
+  const entry = (id: number, kind: string, text = ""): EntryRecord =>
+    ({id, conversationId: 1, kind, model: [{role: kind === "pi.user" ? "user" : "assistant", content: text, timestamp: id}]}) as unknown as EntryRecord;
+  /** A history of `count` turns: a user entry with a turn record and an answer each, after a leading compaction. */
+  const history = (count: number, answer = "") => {
+    const entries = [entry(1, "pi.compaction")];
+    const turns: Record<string, TurnRecord> = {};
+    for (let turn = 0; turn < count; turn++) {
+      const id = 2 + turn * 3;
+      turns[String(id)] = record();
+      // An extension's continuation has no record, so it belongs to the turn before it.
+      entries.push(entry(id, "pi.user"), entry(id + 1, "pi.assistant", answer), entry(id + 2, "pi.user"));
+    }
+    return {history: entries, turns};
+  };
+  const turnStarts = (entries: readonly EntryRecord[], turns: Record<string, TurnRecord>) => entries.filter((entry) => turns[String(entry.id)]).map((entry) => entry.id);
+
+  it("holds the newest twenty whole turns, and the start of history once it reaches the first", () => {
+    const {history: entries, turns} = history(45);
+
+    const shown = (end: number) => entriesPage({side: "entries", entries: entries.slice(0, end), turns});
+    const newest = shown(entries.length);
+    expect(newest.remaining).toBe(25);
+    expect(turnStarts(newest.items, turns)).toHaveLength(20);
+    expect(newest.items[0]?.id).toBe(2 + 25 * 3);
+    expect(newest.items.at(-1)).toBe(entries.at(-1));
+
+    const middle = shown(entries.findIndex((candidate) => candidate.id === newest.items[0]!.id));
+    expect(middle.remaining).toBe(5);
+    expect(middle.items.at(-1)?.id).toBe(newest.items[0]!.id - 1);
+
+    const first = shown(entries.findIndex((candidate) => candidate.id === middle.items[0]!.id));
+    expect(first.remaining).toBe(0);
+    // The leading compaction comes with the first turn.
+    expect(first.items[0]).toBe(entries[0]);
+    expect(turnStarts(first.items, turns)).toHaveLength(5);
+  });
+
+  it("stops at two megabytes, but always holds one whole turn", () => {
+    const {history: entries, turns} = history(4, "x".repeat(900_000));
+
+    expect(entriesPage({side: "entries", entries, turns}).remaining).toBe(2);
+    const huge = history(3, "x".repeat(5_000_000));
+    const page = entriesPage({side: "entries", entries: huge.history, turns: huge.turns});
+    expect(page.remaining).toBe(2);
+    expect(turnStarts(page.items, huge.turns)).toHaveLength(1);
+  });
+
+  it("pages undone turns from the leaf forward, with the continuation before the first", () => {
+    const {history: entries, turns} = history(25);
+    // Undone from the second turn on; the first turn's trailing continuation (no record) leads the undone entries.
+    const undone = entries.slice(3);
+    expect(turns[String(undone[0]!.id)]).toBeUndefined();
+
+    const page = entriesPage({side: "undone", entries: undone, turns});
+    expect(page.remaining).toBe(4);
+    expect(page.items[0]?.id).toBe(undone[0]!.id);
+    expect(turnStarts(page.items, turns)).toHaveLength(20);
+    expect(entriesPage({side: "undone", entries: entries.slice(-6), turns})).toMatchObject({remaining: 0});
+    expect(entriesPage({side: "undone", entries: entries.slice(-6), turns}).items).toHaveLength(6);
+    expect(entriesPage({side: "undone", entries: [], turns})).toEqual({items: [], remaining: 0});
+  });
+
+  it("is the whole history when it has no turns", () => {
+    const entries = [entry(1, "pi.compaction"), entry(2, "pi.user")];
+    expect(entriesPage({side: "entries", entries, turns: {}})).toEqual({items: entries, remaining: 0});
   });
 });
 

@@ -175,7 +175,8 @@ export function buildTurns(input: BuildTurnsInput): SessionTurn[] {
 
 /** The session's committed turns, and the turn its active run is answering: entries from the run's first user entry on. */
 export function buildSessionTurns(session: Pick<Session, "entries" | "live" | "runStart">): {readonly turns: SessionTurn[]; readonly liveTurn: SessionTurn | undefined} {
-  const {entries, live, runStart} = session;
+  const {live, runStart} = session;
+  const entries = session.entries.items;
   const start = runStart === undefined ? -1 : entries.findIndex((entry) => entry.id >= runStart);
   if (start === -1) return {turns: buildTurns({entries}), liveTurn: undefined};
   return {turns: buildTurns({entries: entries.slice(0, start)}), liveTurn: buildTurns({entries: entries.slice(start), live}).at(-1)};

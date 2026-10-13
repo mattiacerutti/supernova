@@ -95,9 +95,9 @@ describe("importing the old SDK's sessions", () => {
       expect(page.sessions.map((session) => [session.id, session.title])).toEqual([["old-1", "Read the readme"]]);
 
       const session = await pi.sessionRuntime.current("old-1");
-      expect(session.entries.map((entry) => entry.kind)).toEqual(["pi.user", "pi.assistant", "pi.tool-result", "pi.assistant"]);
+      expect(session.entries.items.map((entry) => entry.kind)).toEqual(["pi.user", "pi.assistant", "pi.tool-result", "pi.assistant"]);
       expect(turnContents(session)).toEqual([[{type: "text", text: "What does the readme say?"}]]);
-      expect(session.undone).toEqual([]);
+      expect(session.undone.items).toEqual([]);
       expect(session.agent.model).toEqual({provider: "anthropic", modelId: "claude-sonnet"});
       expect(session.agent.thinkingLevel).toBe("high");
 
@@ -146,7 +146,7 @@ describe("importing the old SDK's sessions", () => {
         {type: "text", text: "Kept question"},
         {type: "text", text: "Run a tool"},
       ]);
-      const aborted = session.entries.at(-1)?.model?.[0];
+      const aborted = session.entries.items.at(-1)?.model?.[0];
       expect(aborted).toMatchObject({role: "toolResult", toolCallId: "call-2", isError: true});
 
       let seen: readonly Message[] = [];

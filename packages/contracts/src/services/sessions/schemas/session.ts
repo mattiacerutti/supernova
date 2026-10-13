@@ -19,6 +19,12 @@ export const SessionEntry = z.custom<EntryRecord>().and(
   })
 );
 
+/** A loaded stretch of the visible branch, and how many whole turns lie beyond it, away from the leaf. */
+export const SessionEntries = z.object({
+  items: z.array(SessionEntry).readonly(),
+  remaining: z.number().int().nonnegative(),
+});
+
 /**
  * A session as Pi holds it, plus what Supernova adds. The server keeps one such document per session as Chord
  * replicated state (`SessionRuntimeService.session`), which reaches attached clients as deltas.
@@ -38,10 +44,13 @@ export const Session = z.object({
   worktree: SessionWorktree.optional(),
   /** ISO timestamp for the last session update. */
   updatedAt: z.string(),
-  /** The visible conversation's history in append order, compacted entries included; system prompt entries left out. */
-  entries: z.array(SessionEntry).readonly(),
-  /** Entries hidden behind undo, in append order, available for redo. */
-  undone: z.array(SessionEntry).readonly(),
+  /**
+   * Shown history in append order, compacted entries included, system prompt entries left out: its newest whole turns,
+   * with `remaining` counting the earlier ones, read with `SessionRuntimeService.loadHistory`.
+   */
+  entries: SessionEntries,
+  /** Turns hidden behind undo, in append order: the oldest ones, which redo restores first; `remaining` counts the later ones. */
+  undone: SessionEntries,
   /** The visible conversation's `pi.agent`: model, thinking level, working directory. */
   agent: z.custom<AgentState>(),
   /** The visible conversation's `pi.live`: the active run, its streaming partial, running tools, and compactions. */
@@ -77,3 +86,4 @@ export type Session = z.infer<typeof Session>;
 export type SessionContextUsage = z.infer<typeof SessionContextUsage>;
 export type SessionSummary = z.infer<typeof SessionSummary>;
 export type SessionEntry = z.infer<typeof SessionEntry>;
+export type SessionEntries = z.infer<typeof SessionEntries>;

@@ -43,7 +43,7 @@ async function createGitProject(): Promise<string> {
 function shownToolCalls(versions: readonly Session[]): Array<{readonly name: string; readonly arguments: Record<string, unknown>}> {
   return versions.flatMap((session) => {
     const partial = session.live.generation?.message;
-    const messages = [...session.entries.flatMap((entry) => entry.model ?? []), ...(partial ? [partial] : [])];
+    const messages = [...session.entries.items.flatMap((entry) => entry.model ?? []), ...(partial ? [partial] : [])];
     return messages.flatMap((message) => (message.role === "assistant" ? message.content.flatMap((part) => (part.type === "toolCall" ? [part] : [])) : []));
   });
 }
@@ -57,7 +57,7 @@ function activities(board: readonly SessionDirectoryState[], sessionId: string):
 function compactionsSeen(versions: readonly Session[]) {
   return {
     pending: versions.some((session) => (session.live.compactions ?? []).some((compaction) => compaction.blocking)),
-    summaries: versions.at(-1)!.entries.filter((entry) => entry.kind === "pi.compaction"),
+    summaries: versions.at(-1)!.entries.items.filter((entry) => entry.kind === "pi.compaction"),
   };
 }
 
@@ -85,10 +85,10 @@ describe("sending messages through Pi sessions", () => {
     expect(session).toEqual(await pi.sessions.get({sessionId: info.id}));
     // The run's user entry and its turn record arrive in the same version.
     const running = versions.find((version) => version.runStart !== undefined);
-    expect(running?.entries.find((entry) => entry.id === running.runStart)?.contentParts).toEqual([{text: "Fix it", type: "text"}]);
+    expect(running?.entries.items.find((entry) => entry.id === running.runStart)?.contentParts).toEqual([{text: "Fix it", type: "text"}]);
     expect(turnContents(session)).toEqual([[{text: "Existing request", type: "text"}], [{text: "Fix it", type: "text"}]]);
     expect(assistantTexts(session)).toEqual(["Existing response", "Done."]);
-    const answer = session.entries.at(-1)?.model?.[0];
+    const answer = session.entries.items.at(-1)?.model?.[0];
     expect(answer?.role === "assistant" && answer.content.map((part) => part.type)).toEqual(["thinking", "text"]);
     expect(session.live.run).toBeUndefined();
     expect(session.runStart).toBeUndefined();
@@ -116,7 +116,7 @@ describe("sending messages through Pi sessions", () => {
     // Partials are coalesced by the engine; the client hides a streaming partial's last call, every other call is whole.
     expect(shownToolCalls(versions).map((call) => call.name)).toContain("read");
     expect(shownToolCalls([session]).map((call) => call.arguments)).toEqual([{path: "one.ts"}, {path: "two.ts"}]);
-    expect(session.entries.filter((entry) => entry.kind === "pi.tool-result")).toHaveLength(2);
+    expect(session.entries.items.filter((entry) => entry.kind === "pi.tool-result")).toHaveLength(2);
   });
 
   it("keeps the session untitled without persisting a fallback when title generation fails", async () => {
@@ -164,7 +164,7 @@ describe("sending messages through Pi sessions", () => {
       ],
     ]);
     expect(turnContents(session)[0]?.[2]).not.toHaveProperty("contentBase64");
-    expect(session.entries[0]?.model?.[0]).toMatchObject({role: "user", content: expect.arrayContaining([expect.objectContaining({type: "image", mimeType: "image/png"})])});
+    expect(session.entries.items[0]?.model?.[0]).toMatchObject({role: "user", content: expect.arrayContaining([expect.objectContaining({type: "image", mimeType: "image/png"})])});
     expect(assistantTexts(session)).toEqual(["Reviewed."]);
   });
 
@@ -201,14 +201,14 @@ describe("sending messages through Pi sessions", () => {
 
     const {session, versions} = await pi.sendMessage({message: "Continue after pre-prompt compaction", modelReference: selectedModelReference, sessionId: info.id});
     const seen = compactionsSeen(versions);
-    const userIndex = session.entries.findIndex((entry) => entry.contentParts?.some((part) => part.type === "text" && part.text === "Continue after pre-prompt compaction"));
-    const summaryIndex = session.entries.findIndex((entry, index) => index > userIndex && entry.kind === "pi.compaction");
+    const userIndex = session.entries.items.findIndex((entry) => entry.contentParts?.some((part) => part.type === "text" && part.text === "Continue after pre-prompt compaction"));
+    const summaryIndex = session.entries.items.findIndex((entry, index) => index > userIndex && entry.kind === "pi.compaction");
 
     expect(seen.pending).toBe(true);
     // The summary follows the turn's user entry, so it renders inside the submitted turn.
     expect(userIndex).toBeGreaterThanOrEqual(0);
     expect(summaryIndex).toBeGreaterThan(userIndex);
-    expect(JSON.stringify(session.entries[summaryIndex])).toContain("Pre-prompt compacted summary.");
+    expect(JSON.stringify(session.entries.items[summaryIndex])).toContain("Pre-prompt compacted summary.");
     expect(assistantTexts(session).at(-1)).toBe("Response after pre-prompt compaction.");
   });
 
@@ -334,13 +334,13 @@ describe("sending messages through Pi sessions", () => {
     ]);
 
     const {session, versions} = await pi.sendMessage({message: "Fix overflow", modelReference: selectedModelReference, sessionId: info.id});
-    const userIndex = session.entries.findIndex((entry) => entry.contentParts?.some((part) => part.type === "text" && part.text === "Fix overflow"));
-    const after = session.entries.slice(userIndex + 1);
+    const userIndex = session.entries.items.findIndex((entry) => entry.contentParts?.some((part) => part.type === "text" && part.text === "Fix overflow"));
+    const after = session.entries.items.slice(userIndex + 1);
 
     expect(compactionsSeen(versions).pending).toBe(true);
     // The summary and the continuation both follow the turn's user entry, with no other turn between.
     expect(after.some((entry) => entry.kind === "pi.compaction" && JSON.stringify(entry).includes("Compacted overflow summary."))).toBe(true);
-    expect(assistantTexts({entries: after}).at(-1)).toBe("Continued after compaction.");
+    expect(assistantTexts({entries: {items: after, remaining: 0}}).at(-1)).toBe("Continued after compaction.");
     expect(after.some((entry) => entry.contentParts !== undefined)).toBe(false);
   });
 

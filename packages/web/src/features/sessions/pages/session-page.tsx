@@ -2,6 +2,7 @@ import type {Session, SessionWorkspaceSelection, UserMessageContentPart} from "@
 import {useNavigate} from "@tanstack/react-router";
 import {useState} from "react";
 import {useConfiguration} from "@/api/configuration";
+import {useLoadHistory} from "@/features/sessions/api/conversation/load-history";
 import {useSessionCommands} from "@/features/sessions/api/conversation/session-commands";
 
 import {useRenameSession} from "@/features/sessions/api/sidebar/rename-session";
@@ -136,6 +137,8 @@ export default function SessionPage(props: SessionPageProps) {
     sessionId,
   });
   const commands = useSessionCommands({modelReference: composer.models.modelReference, sessionId, view});
+  const earlierHistory = useLoadHistory(sessionId, "entries");
+  const laterUndone = useLoadHistory(sessionId, "undone");
   const [undoneDrawerHeight, setUndoneDrawerHeight] = useState(0);
   const [forkTurnId, setForkTurnId] = useState<string | null>(null);
 
@@ -264,6 +267,7 @@ export default function SessionPage(props: SessionPageProps) {
                   session && (
                     <UndoneTurnsDrawer
                       disabled={composer.disabled || !idle}
+                      later={{count: session.undone.remaining, ...laterUndone}}
                       onHeightChange={handleUndoneDrawerHeightChange}
                       onRevertToMessage={handleRestoreUndoneTurn}
                       turns={view.undoneTurns}
@@ -284,6 +288,7 @@ export default function SessionPage(props: SessionPageProps) {
                 key={session.id}
                 bottomOverlayHeight={undoneDrawerHeight}
                 compacting={view.status === "compacting"}
+                earlierHistory={{count: session.entries.remaining, ...earlierHistory}}
                 isStreaming={streaming}
                 items={committedItems}
                 liveItems={liveItems}

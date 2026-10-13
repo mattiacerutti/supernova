@@ -117,6 +117,43 @@ describe("runtime services over the wire", () => {
     expect(sessions.directory.value?.sessions["wire-session"]).toMatchObject({activity: "idle", projectPath: pi.defaultProjectRoot, summary: {id: "wire-session"}});
   });
 
+  it("attaches a session larger than a protocol frame and pages its history", async () => {
+    const {attach, pi} = await connect();
+    const {info} = await pi.createSession();
+    // Three turns of 6 MB each: more than a 16 MiB frame together, each one well within it.
+    for (const index of [0, 1, 2]) await pi.appendConversation(info.id, {assistantText: String(index).repeat(6_000_000), requestText: `Turn ${index}`});
+
+    const {sessionRuntime} = await attach(info.id);
+    await waitUntil(() => expect(sessionRuntime.session.value).toBeDefined());
+    const document = sessionRuntime.session.value!;
+    expect(document.entries.remaining).toBe(2);
+    expect(turnContents(document)).toEqual([[{text: "Turn 2", type: "text"}]]);
+
+    // One turn per page: each is larger than the window's two megabytes.
+    const pages = [];
+    let edge = document.entries.items[0]!.id;
+    for (let page = 0; page < 2; page++) {
+      const result = await sessionRuntime.loadHistory({side: "entries", edge}, BACKGROUND_CONTEXT);
+      if (!result.ok) throw new Error(result.error.message);
+      pages.unshift(result.value);
+      edge = result.value.items[0]!.id;
+    }
+    expect(pages.map((page) => [page.remaining, turnContents({entries: page})])).toEqual([
+      [0, [[{text: "Turn 0", type: "text"}]]],
+      [1, [[{text: "Turn 1", type: "text"}]]],
+    ]);
+    // An entry the visible history does not have is refused, rather than answered with the wrong turns.
+    expect(await sessionRuntime.loadHistory({side: "entries", edge: 999_999}, BACKGROUND_CONTEXT)).toMatchObject({ok: false, error: {code: "GenericError"}});
+
+    // Undo twice: the window holds the first undone turn; the page after it is the other.
+    for (let step = 0; step < 2; step++) expect(await sessionRuntime.undoCheckpoint({}, BACKGROUND_CONTEXT)).toEqual({ok: true, value: null});
+    await waitUntil(() => expect(sessionRuntime.session.value).toMatchObject({undone: {remaining: 1}}));
+    const undone = sessionRuntime.session.value!.undone;
+    expect(turnContents({entries: undone})).toEqual([[{text: "Turn 1", type: "text"}]]);
+    const later = await sessionRuntime.loadHistory({side: "undone", edge: undone.items.at(-1)!.id}, BACKGROUND_CONTEXT);
+    expect(later.ok && [later.value.remaining, turnContents({entries: later.value})]).toEqual([0, [[{text: "Turn 2", type: "text"}]]]);
+  });
+
   it("pages and searches a project's sessions, and pins one for every client", async () => {
     const {pi, projects, sessions} = await connect();
     for (const id of ["first", "second", "third"]) await sessions.create({id, projectPath: pi.defaultProjectRoot}, BACKGROUND_CONTEXT);

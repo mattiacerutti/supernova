@@ -16,7 +16,7 @@ describe("sessions", () => {
 
     const session = await pi.sessions.create({id: "client-chosen-id", projectPath: "/workspace"});
 
-    expect(session).toMatchObject({id: "client-chosen-id", projectPath: "/workspace", title: "Untitled session", entries: []});
+    expect(session).toMatchObject({id: "client-chosen-id", projectPath: "/workspace", title: "Untitled session", entries: {items: []}});
     expect(existsSync(join(pi.sessionStorageRoot, "client-chosen-id", "session.sqlite"))).toBe(true);
     expect(await pi.store.find("client-chosen-id")).toMatchObject({projectPath: "/workspace"});
     await expect(pi.sessions.create({id: "client-chosen-id", projectPath: "/workspace"})).rejects.toMatchObject({
@@ -67,8 +67,8 @@ describe("sessions", () => {
       {text: "x".repeat(selectedPiModel.contextWindow * 4), type: "text"},
       {text: "After compaction", type: "text"},
     ]);
-    expect(session.entries.map((entry) => entry.kind)).toEqual(["pi.user", "pi.assistant", "pi.user", "pi.assistant", "pi.compaction", "pi.user", "pi.assistant"]);
-    expect(JSON.stringify(session.entries[4])).toContain("Summary of the work");
+    expect(session.entries.items.map((entry) => entry.kind)).toEqual(["pi.user", "pi.assistant", "pi.user", "pi.assistant", "pi.compaction", "pi.user", "pi.assistant"]);
+    expect(JSON.stringify(session.entries.items[4])).toContain("Summary of the work");
     expect(assistantTexts(session)).toEqual(["Original answer", "Large answer", "Recent answer"]);
   });
 
@@ -109,7 +109,7 @@ describe("forking a session", () => {
     expect(fork).toMatchObject({
       forked: true,
       title: "Original title",
-      undone: [],
+      undone: {items: []},
       agent: {model: {modelId: selectedModelReference.id, provider: selectedModelReference.providerId}, thinkingLevel: "high"},
     });
     expect(turnContents(fork)).toEqual([[{text: "First", type: "text"}]]);

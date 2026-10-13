@@ -48,9 +48,9 @@ describe("session store", () => {
       };
 
       const undone = await snapshotAt(1);
-      expect(userTexts(undone.entries)).toEqual(["First"]);
-      expect(userTexts(undone.undone)).toEqual(["Second"]);
-      expect((await snapshotAt(0)).entries).toEqual([]);
+      expect(userTexts(undone.entries.items)).toEqual(["First"]);
+      expect(userTexts(undone.undone.items)).toEqual(["Second"]);
+      expect((await snapshotAt(0)).entries.items).toEqual([]);
       expect((await snapshotAt(2)).entries).toEqual(full.entries);
 
       // Sending from an undone leaf forks once; the new branch reuses the cache through the fork point.
@@ -59,13 +59,13 @@ describe("session store", () => {
       read.mockClear();
       const branched = await file.snapshot(record);
       expect(read).not.toHaveBeenCalled();
-      expect(userTexts(branched.entries)).toEqual(["First", "Branch"]);
-      expect(branched.undone).toEqual([]);
+      expect(userTexts(branched.entries.items)).toEqual(["First", "Branch"]);
+      expect(branched.undone.items).toEqual([]);
       expect((await pi.store.file(id)) === file).toBe(true);
 
       pi.faux.setResponses([fauxAssistantMessage("Compacted summary")]);
       await file.compact(model);
-      expect((await file.snapshot(record)).entries.at(-1)?.kind).toBe("pi.compaction");
+      expect((await file.snapshot(record)).entries.items.at(-1)?.kind).toBe("pi.compaction");
     } finally {
       await pi.unregister();
     }
@@ -116,11 +116,11 @@ describe("session store", () => {
     });
     expect((await submitted.wait()).status).toBe("done");
     const snapshot = await session.snapshot(record);
-    const [user] = snapshot.entries;
-    expect(snapshot.entries.map((entry) => entry.kind)).toEqual(["pi.user", "pi.assistant", "pi.tool-result", "pi.assistant"]);
+    const [user] = snapshot.entries.items;
+    expect(snapshot.entries.items.map((entry) => entry.kind)).toEqual(["pi.user", "pi.assistant", "pi.tool-result", "pi.assistant"]);
     expect(user?.contentParts).toEqual([{type: "text", text: "What does hello.txt say?"}]);
     expect(snapshot).not.toHaveProperty("turns");
-    expect(snapshot.entries[2]?.model?.[0]).toMatchObject({role: "toolResult", toolName: "read", content: [{type: "text", text: "hi there\n"}]});
+    expect(snapshot.entries.items[2]?.model?.[0]).toMatchObject({role: "toolResult", toolName: "read", content: [{type: "text", text: "hi there\n"}]});
     expect(systemPrompt).toContain("read: Read file contents");
     expect(await session.turnRecords()).toMatchObject({[String(user!.id)]: {before: {checkpointId: "c1"}}});
     await store.dispose();

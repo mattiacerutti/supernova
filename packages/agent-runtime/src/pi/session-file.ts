@@ -15,13 +15,14 @@ import type {
   UsageState,
 } from "@earendil-works/pi-durable";
 import {AgentDoc, ConversationBusy, createRegistry, defineExtension, Harness as HarnessFactory, ROOT_CONVERSATION_ID} from "@earendil-works/pi-durable";
-import type {Session, SessionContextUsage} from "@supernova/contracts/services/sessions/schemas";
+import type {HistorySide} from "@supernova/contracts/services/session-runtime/procedures";
+import type {Session, SessionContextUsage, SessionEntries} from "@supernova/contracts/services/sessions/schemas";
 import {NodeExecutionEnv} from "@earendil-works/pi-durable/env/node";
 import {openNodeSqliteStorage} from "@earendil-works/pi-durable/storage/sqlite/node";
 import {harnessModels, harnessSettings} from "@supernova/agent-runtime/pi/config/harness-settings";
 import type {PromptResources} from "@supernova/agent-runtime/pi/config/system-prompt";
 import {createPromptSections} from "@supernova/agent-runtime/pi/config/system-prompt";
-import {buildSession, contextUsageOf, timelineEntries} from "@supernova/agent-runtime/pi/lib/session/session-snapshot";
+import {buildSession, contextUsageOf, entriesPage, timelineEntries} from "@supernova/agent-runtime/pi/lib/session/session-snapshot";
 import type {CheckpointRef, SessionRecord, SessionState, TurnPosition, TurnRecord} from "@supernova/agent-runtime/pi/lib/session/session-state";
 import {SessionStateDoc, turnPositions} from "@supernova/agent-runtime/pi/lib/session/session-state";
 import type {SessionExtension} from "@supernova/agent-runtime/pi/lib/tools/coding-tools";
@@ -66,6 +67,11 @@ export class SessionBusyError extends Error {
 /** Document values are strict JSON; records may carry undefined optional fields, which this drops. */
 function strictJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
+}
+
+/** The part of a branch's history the leaf shows; the rest is undone. */
+function shownHistory(history: readonly EntryRecord[], leaf: number | null | undefined): readonly EntryRecord[] {
+  return leaf === undefined ? history : history.filter((entry) => leaf !== null && entry.id <= leaf);
 }
 
 /**
@@ -138,18 +144,17 @@ export class SessionFile {
     }
   }
 
-  /** The session document, from the branch's committed view split at the leaf. */
+  /** The session document, from the branch's committed view split at the leaf; its entries are the newest page. */
   public async snapshot(record: SessionRecord): Promise<Session> {
     const state = await this.state();
     const view = await this.view(state.branch);
     const history = await this.branchHistory(state.branch, view);
-    const {leaf} = state;
-    const shown = leaf === undefined ? history : history.filter((entry) => leaf !== null && entry.id <= leaf);
+    const shown = shownHistory(history, state.leaf);
     const live = view.docs["pi.live"] as LiveState | undefined;
     const agent = await this.agentAt(state, history);
     return buildSession({
       record,
-      entries: shown,
+      history: shown,
       undone: history.slice(shown.length),
       agent,
       live,
@@ -158,6 +163,21 @@ export class SessionFile {
       turns: state.turns,
       context: await this.contextUsage(state, agent),
     });
+  }
+
+  /**
+   * A page of the branch beyond the document's window: the shown turns right before `edge`, or the undone turns right
+   * after it. Fails once `edge` is no longer on that side of the leaf (navigation moved past it): the client's branch
+   * no longer continues there.
+   */
+  public async historyPage(input: {readonly side: HistorySide; readonly edge: number}): Promise<SessionEntries> {
+    const state = await this.state();
+    const history = await this.branchHistory(state.branch);
+    const shown = shownHistory(history, state.leaf);
+    const side = input.side === "entries" ? shown : history.slice(shown.length);
+    const at = side.findIndex((entry) => entry.id === input.edge);
+    if (at === -1) throw new Error(`This part of the conversation is no longer ${input.side === "entries" ? "shown" : "undone"}.`);
+    return entriesPage({side: input.side, entries: input.side === "entries" ? side.slice(0, at) : side.slice(at + 1), turns: state.turns});
   }
 
   /** Whether the branch has a run in progress. */

@@ -82,7 +82,7 @@ describe("old-SDK extensions", () => {
       const {session} = await pi.sendMessage({message: "Echo hi", modelReference: selectedModelReference, sessionId: info.id});
 
       // The tool ran with the `tool_call` rewrite, and its result was replaced by `tool_result`.
-      const toolResult = session.entries.find((entry) => entry.kind === "pi.tool-result");
+      const toolResult = session.entries.items.find((entry) => entry.kind === "pi.tool-result");
       expect(toolResult?.model?.[0]).toMatchObject({role: "toolResult", toolName: "fixture_echo", content: [{type: "text", text: "rewritten"}]});
 
       const lines = (await readFile(logPath, "utf8")).trim().split("\n");
@@ -116,7 +116,7 @@ describe("old-SDK extensions", () => {
       pi.faux.setResponses([fauxAssistantMessage("Summary")]);
       await pi.sessionRuntime.compact({modelReference: selectedModelReference, sessionId: info.id});
       expect((await readFile(logPath, "utf8")).trim()).toBe("session_before_compact:manual");
-      expect((await pi.sessionRuntime.current(info.id)).entries.at(-1)?.kind).toBe("pi.compaction");
+      expect((await pi.sessionRuntime.current(info.id)).entries.items.at(-1)?.kind).toBe("pi.compaction");
 
       // What Supernova cannot deliver is reported once, not silently dropped.
       expect(pi.reports.some((message) => message.includes("fixture.ts") && message.includes("Event not delivered: message_update"))).toBe(true);

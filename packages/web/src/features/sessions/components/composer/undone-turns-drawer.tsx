@@ -2,11 +2,14 @@ import type {UserMessageContentPart} from "@supernova/contracts/services/session
 import type {SessionTurn} from "@/features/sessions/types/session-turn";
 import {AnimatePresence, motion} from "framer-motion";
 import {useLayoutEffect, useRef, useState} from "react";
+import type {UIEvent} from "react";
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import {cn} from "@/lib/cn";
 
 const DRAWER_TRANSITION = {duration: 0.2, ease: "easeOut"} as const;
+/** Skeleton rows shown for turns still loading; title widths vary so they read as a list. */
+const SKELETON_TITLE_WIDTHS = ["w-3/5", "w-2/5", "w-1/2"];
 
 function contentPartKey(part: UserMessageContentPart, index: number): string {
   if (part.type === "reference") return part.id;
@@ -41,19 +44,28 @@ function UndoneTurnTitle(props: UndoneTurnTitleProps) {
   );
 }
 
+/** Undone turns after the loaded ones, and loading them as the list scrolls to its end. */
+interface LaterUndoneTurns {
+  readonly count: number;
+  readonly failed: boolean;
+  readonly load: () => void;
+  readonly retry: () => void;
+}
+
 interface UndoneTurnsDrawerProps {
   readonly disabled?: boolean;
+  readonly later: LaterUndoneTurns;
   readonly onHeightChange?: (height: number) => void;
   readonly onRevertToMessage: (turnId: string) => void;
   readonly turns: readonly SessionTurn[];
 }
 
 export default function UndoneTurnsDrawer(props: UndoneTurnsDrawerProps) {
-  const {disabled = false, onHeightChange, onRevertToMessage, turns} = props;
+  const {disabled = false, later, onHeightChange, onRevertToMessage, turns} = props;
   const [expanded, setExpanded] = useState(false);
   const drawerRef = useRef<HTMLDivElement | null>(null);
   const visible = turns.length > 0;
-  const count = turns.length;
+  const count = turns.length + later.count;
   const previewTurn = turns[0];
 
   useLayoutEffect(() => {
@@ -79,6 +91,11 @@ export default function UndoneTurnsDrawer(props: UndoneTurnsDrawerProps) {
 
   const handleToggle = (): void => {
     setExpanded((current) => !current);
+  };
+
+  const handleListScroll = (event: UIEvent<HTMLDivElement>): void => {
+    const list = event.currentTarget;
+    if (later.count > 0 && list.scrollHeight - list.scrollTop - list.clientHeight < list.clientHeight) later.load();
   };
 
   const handleExitComplete = (): void => {
@@ -132,6 +149,7 @@ export default function UndoneTurnsDrawer(props: UndoneTurnsDrawerProps) {
                         animate={{opacity: 1, y: 0}}
                         className="scroll-fade-y max-h-40 space-y-1 overflow-x-hidden overflow-y-auto pr-1 pb-0.5"
                         initial={{opacity: 0, y: 4}}
+                        onScroll={handleListScroll}
                         transition={DRAWER_TRANSITION}
                       >
                         {turns.map((turn) => {
@@ -158,6 +176,24 @@ export default function UndoneTurnsDrawer(props: UndoneTurnsDrawerProps) {
                             </div>
                           );
                         })}
+                        {later.count > 0 &&
+                          (later.failed ? (
+                            <p className="flex items-center gap-2 px-1 text-sm text-ink-faint" role="alert">
+                              Unable to load more messages.
+                              <Button className="text-ink-muted underline-offset-2 hover:underline" onClick={later.retry} variant="ghost">
+                                Retry
+                              </Button>
+                            </p>
+                          ) : (
+                            <div aria-label="Loading more rolled back messages" className="space-y-1" role="status">
+                              {SKELETON_TITLE_WIDTHS.slice(0, later.count).map((width) => (
+                                <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-1 py-1" key={width}>
+                                  <span className={cn("block h-4 animate-pulse rounded-full bg-overlay-pressed", width)} />
+                                  <span className="h-4 w-28 animate-pulse rounded-full bg-overlay-pressed" />
+                                </div>
+                              ))}
+                            </div>
+                          ))}
                       </motion.div>
                     </div>
                   </motion.div>
