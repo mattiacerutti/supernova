@@ -25,6 +25,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Fixed
 
+- Terminals and agent commands in the desktop app no longer inherit `ELECTRON_RUN_AS_NODE`, so Electron apps started from them (such as `bun dev:desktop`) open normally instead of running as Node. They also no longer inherit Supernova's Pi directory settings, so running `pi` inside Supernova uses your own Pi configuration.
+
 ### Removed
 
 ## [0.6.0]

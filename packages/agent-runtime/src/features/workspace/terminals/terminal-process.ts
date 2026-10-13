@@ -1,4 +1,5 @@
 import type {Pty, SpawnPty} from "@supernova/agent-runtime/features/workspace/terminals/pty";
+import {userProcessEnv} from "@supernova/agent-runtime/lib/user-process-env";
 import type {Terminal} from "@supernova/contracts/services/workspace/schemas";
 
 /** Output kept for clients that attach later. Enough for a few screens of scrollback without holding a build log forever. */
@@ -40,7 +41,7 @@ export class TerminalProcess {
     process.pty = await input.spawnPty({
       cols: input.cols,
       cwd: input.cwd,
-      env: {...globalThis.process.env, SUPERNOVA_SESSION_ID: input.sessionId, TERM: "xterm-256color"},
+      env: {...userProcessEnv(), SUPERNOVA_SESSION_ID: input.sessionId, TERM: "xterm-256color"},
       onData: (data) => input.onOutput(data),
       onExit: (exitCode) => {
         if (process.exitCode !== undefined) return;

@@ -3,6 +3,7 @@ import {createBashToolDefinition, createEditToolDefinition, createReadToolDefini
 import type {ToolDefinition} from "@earendil-works/pi-coding-agent";
 import type {Extension, ToolRegistration} from "@earendil-works/pi-durable";
 import {createBashTool, createEditTool, createReadTool, createWriteTool} from "@earendil-works/pi-durable/tools";
+import {userProcessEnv} from "@supernova/agent-runtime/lib/user-process-env";
 
 /** How the system prompt lists a tool: one line under `<tools>` and bullets under `<rules>`, as the old SDK's prompt did. */
 interface ToolPrompt {
@@ -39,7 +40,17 @@ export function createCodingTools(input: {readonly cwd: string; readonly setting
 
   return [
     {...createReadTool(), prompt: promptOf(read)},
-    {...createBashTool({commandPrefix}), prompt: promptOf(bash)},
+    {
+      ...createBashTool({
+        commandPrefix,
+        // The engine's default inherits all of process.env; pass the filtered environment instead.
+        prepare: (execution) => {
+          execution.env = {...userProcessEnv(), ...execution.env};
+          execution.inheritEnv = false;
+        },
+      }),
+      prompt: promptOf(bash),
+    },
     {...createEditTool(), prompt: promptOf(edit)},
     {...createWriteTool(), prompt: promptOf(write)},
   ];
