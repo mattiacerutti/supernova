@@ -38,16 +38,10 @@ export default function SessionActionsMenu(props: SessionActionsMenuProps) {
 
   const archiveSession = (removeWorktree: boolean): void => {
     setArchiveDialogOpen(false);
-    archiveSessionMutation.mutate(
-      {projectPath, removeWorktree, sessionId},
-      {
-        onSuccess: () => {
-          if (location.pathname === `/session/${sessionId}`) {
-            void navigate({replace: true, search: {projectId: projectIdFromPath(projectPath)}, to: "/session/new"});
-          }
-        },
-      }
-    );
+    if (location.pathname === `/session/${sessionId}`) {
+      void navigate({replace: true, search: {projectId: projectIdFromPath(projectPath)}, to: "/session/new"});
+    }
+    archiveSessionMutation.mutate({projectPath, removeWorktree, sessionId});
   };
 
   const handleArchiveSession = (): void => {

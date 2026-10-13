@@ -17,7 +17,7 @@ All notable changes to Supernova are documented in this file.
 - Running sessions show their activity in the sidebar as soon as the app connects, including sessions started from another browser or before this one opened.
 - Pinned sessions are now stored on the server and shared across browsers and devices, instead of in each browser's local storage. Existing pins are not carried over.
 - The sidebar loads a project's sessions five at a time from the server instead of loading all of them and revealing more locally.
-- Renaming, pinning, and archiving a session now update the sidebar at once instead of after a server round trip and reload.
+- Renaming, pinning, and archiving a session now update the sidebar at once instead of after a server round trip and reload. Archiving the open session also leaves it for the new-session screen at once.
 - Settings → Extensions → Update now reinstalls extensions in open sessions; a restart is no longer needed for the update to take effect.
 
 ### Fixed
