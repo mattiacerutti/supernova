@@ -1,4 +1,3 @@
-import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import {infiniteQueryOptions, useInfiniteQuery, useQueryClient} from "@tanstack/react-query";
 import {sessionKeys} from "@/features/sessions/api/query-keys";
 import {projectSessions} from "@/features/sessions/lib/session-view";
@@ -14,7 +13,7 @@ function listProjectSessionsQueryOptions(runtime: RuntimeClient, projectPath: st
   return infiniteQueryOptions({
     enabled: projectPath.length > 0,
     queryKey: sessionKeys.list(projectPath),
-    queryFn: ({pageParam}) => unwrap(runtime.projects.listSessions({projectPath, limit: SESSION_PAGE_SIZE, ...(pageParam ? {cursor: pageParam} : {})}, BACKGROUND_CONTEXT)),
+    queryFn: ({pageParam}) => unwrap(runtime.projects.listSessions({projectPath, limit: SESSION_PAGE_SIZE, ...(pageParam ? {cursor: pageParam} : {})})),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page) => page.nextCursor ?? undefined,
   });

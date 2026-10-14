@@ -30,7 +30,7 @@ export const webFetchTool: PromptedTool = {
     executionMode: "parallel",
     async execute(args, _api, context) {
       const result = await fetchWebContent({format: args.format, signal: context.abortSignal, timeoutSeconds: args.timeout, url: args.url});
-      return {content: [{text: result.output, type: "text"}], details: {...result}};
+      return {output: [{text: result.output, type: "text"}], details: {...result}};
     },
   }),
   prompt: {

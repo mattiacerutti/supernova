@@ -1,7 +1,7 @@
-import type {Context, ReplicatedState} from "@earendil-works/chord";
-import {defineService} from "@earendil-works/chord";
+import type {MembersOf} from "@earendil-works/chord";
+import {method, remote} from "@earendil-works/chord";
 import type {SessionActivity, SessionNotice, SessionSetupStep} from "@supernova/contracts/services/session-runtime/procedures";
-import type {ServiceResult} from "@supernova/contracts/lib/protocol";
+import {json, result, SERVER_WIDE} from "@supernova/contracts/lib/protocol";
 import type {
   CreateSessionError,
   CreateSessionPayload,
@@ -17,7 +17,7 @@ import type {
 } from "@supernova/contracts/services/sessions/procedures";
 import type {Session, SessionSummary} from "@supernova/contracts/services/sessions/schemas";
 
-/** What clients see of a session the server has open, whether or not they attached it. */
+/** What clients see of a session the server has open, whether or not they follow it. */
 export interface SessionDirectoryEntry {
   readonly projectPath: string;
   /** Its listing summary, once the session has a record; it changes with the title and activity time. */
@@ -35,28 +35,35 @@ export interface SessionDirectoryState {
 }
 
 /**
- * Sessions: their lifecycle, reads, what a project offers the composer, and every open session's activity. `attach`
- * routes this connection's `SessionRuntimeService` to one running session.
+ * Sessions: their lifecycle, reads, what a project offers the composer, and every open session's activity. A running
+ * session's own commands and document are `SessionRuntimeService`.
  */
-export interface SessionsService {
-  /**
-   * Every session the server has open, for sessions the client has not attached. Session runtime writes it (activity,
-   * setup, problems); it is served here because a client reads it before attaching anything.
-   */
-  readonly directory: ReplicatedState<SessionDirectoryState>;
-  /** Creates a session under the client's id and starts its first turn; the session is removed again if it cannot start. */
-  create(payload: CreateSessionPayload, context: Context): Promise<ServiceResult<Session, CreateSessionError>>;
-  /** Copies the conversation through a turn into a new session. */
-  fork(payload: ForkSessionPayload, context: Context): Promise<ServiceResult<Session, ForkSessionError>>;
-  rename(payload: RenameSessionPayload, context: Context): Promise<ServiceResult<Session, RenameSessionError>>;
-  /** One read of a session, for a session the connection has not attached (a prefetch). */
-  get(payload: GetSessionPayload, context: Context): Promise<ServiceResult<Session>>;
-  listModels(payload: ListModelsPayload, context: Context): Promise<ServiceResult<ListModelsResult>>;
-  /** The skills and prompt templates a project's composer can reference. */
-  listComposerSuggestions(payload: ListComposerSuggestionsPayload, context: Context): Promise<ServiceResult<ListComposerSuggestionsResult>>;
-  /** Binds this connection's `SessionRuntimeService` to a session, replacing the previous one. */
-  attach(sessionId: string, context: Context): Promise<ServiceResult<null>>;
-  detach(context: Context): Promise<ServiceResult<null>>;
-}
+export const SessionsService = remote("supernova.sessions", {
+  version: 1,
+  input: SERVER_WIDE,
+  variants: {
+    default: {
+      state: {
+        /**
+         * Every session the server has open, for sessions the client does not follow. Session runtime writes it
+         * (activity, setup, problems); it is served here because a client reads it before following any session.
+         */
+        directory: json<SessionDirectoryState>(),
+      },
+      methods: {
+        /** Creates a session under the client's id and starts its first turn; the session is removed again if it cannot start. */
+        create: method(json<CreateSessionPayload>(), result<Session, CreateSessionError>()),
+        /** Copies the conversation through a turn into a new session. */
+        fork: method(json<ForkSessionPayload>(), result<Session, ForkSessionError>()),
+        rename: method(json<RenameSessionPayload>(), result<Session, RenameSessionError>()),
+        /** One read of a session, for a session the client does not follow (a prefetch). */
+        get: method(json<GetSessionPayload>(), result<Session>()),
+        listModels: method(json<ListModelsPayload>(), result<ListModelsResult>()),
+        /** The skills and prompt templates a project's composer can reference. */
+        listComposerSuggestions: method(json<ListComposerSuggestionsPayload>(), result<ListComposerSuggestionsResult>()),
+      },
+    },
+  },
+});
 
-export const SessionsService = defineService<SessionsService>("supernova.sessions");
+export type SessionsService = MembersOf<typeof SessionsService>;

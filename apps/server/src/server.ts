@@ -1,10 +1,11 @@
 import {createServer} from "node:http";
 import type {ServerResponse} from "node:http";
 import type {AddressInfo, Socket} from "node:net";
-import {Server as RuntimeServer} from "@earendil-works/pi-server";
-import {RUNTIME_SERVER_ID, RUNTIME_SOCKET_PATH} from "@supernova/contracts/lib/protocol";
-import {createAgentRuntime, runtimeServiceHost} from "@supernova/agent-runtime";
-import {createWebSocketListener} from "@/runtime-socket";
+import type {Host} from "@earendil-works/chord";
+import {createHost} from "@earendil-works/chord";
+import {RUNTIME_HOST, RUNTIME_SOCKET_PATH} from "@supernova/contracts/lib/protocol";
+import {createAgentRuntime, serveRuntime} from "@supernova/agent-runtime";
+import {acceptRuntimeSockets} from "@/runtime-socket";
 
 export const DEFAULT_HOST = "127.0.0.1";
 export const DEFAULT_PORT = 4317;
@@ -58,13 +59,15 @@ export async function startServer({host, port}: StartServerOptions): Promise<Run
   });
 
   let runtime: Awaited<ReturnType<typeof createAgentRuntime>> | undefined;
-  let services: RuntimeServer | undefined;
+  let services: Host | undefined;
+  let closeSockets: (() => Promise<void>) | undefined;
 
   const close = (): Promise<void> => {
     for (const socket of sockets) socket.destroy();
 
     closing ??= (async () => {
-      await services?.close().catch((error: unknown) => console.error("[runtime-services]", error));
+      await closeSockets?.();
+      await services?.close().catch((error: unknown) => console.error("[runtime]", error));
       await new Promise<void>((resolve) => listener.close(() => resolve()));
       await runtime?.dispose();
     })();
@@ -82,12 +85,9 @@ export async function startServer({host, port}: StartServerOptions): Promise<Run
 
     runtime = await createAgentRuntime();
 
-    services = new RuntimeServer(runtimeServiceHost(runtime), {
-      serverId: RUNTIME_SERVER_ID,
-      listeners: [createWebSocketListener(listener, RUNTIME_SOCKET_PATH)],
-      onError: (error) => console.error("[runtime-services]", error),
-    });
-    await services.start();
+    services = createHost({name: RUNTIME_HOST, onError: (error) => console.error("[runtime]", error)});
+    serveRuntime(services, runtime);
+    closeSockets = acceptRuntimeSockets(listener, RUNTIME_SOCKET_PATH, services);
 
     const address = listener.address() as AddressInfo;
     const hostname = host.includes(":") ? `[${host}]` : host;

@@ -23,6 +23,7 @@ All notable changes to Supernova are documented in this file.
 - Renaming, pinning, and archiving a session now update the sidebar at once instead of after a server round trip and reload. Archiving the open session also leaves it for the new-session screen at once.
 - The workspace terminal now renders with xterm.js and its WebGL renderer instead of `ghostty-web`, and the shell is resized together with the grid instead of 150 ms later. Heavy output is batched on the server before it is sent, so a build log no longer stalls input; resizing the panel no longer leaves wrapped output or overlapping rows.
 - Settings → Extensions → Update now reinstalls extensions in open sessions; a restart is no longer needed for the update to take effect.
+- Updated Pi to 1.2.0. The agent's `read` tool can now show image files (PNG, JPEG, GIF, WebP) to the model instead of failing.
 - A session's place in the sidebar is set when it is sent a message, not by each response update, so sessions running at the same time no longer swap positions while they answer.
 
 ### Fixed

@@ -1,12 +1,20 @@
-import type {Context} from "@earendil-works/chord";
-import {defineService} from "@earendil-works/chord";
+import type {MembersOf} from "@earendil-works/chord";
+import {method, remote} from "@earendil-works/chord";
 import type {UpdateExtensionsError} from "@supernova/contracts/services/extensions/procedures";
-import type {ServiceResult} from "@supernova/contracts/lib/protocol";
+import {NO_PAYLOAD, result, SERVER_WIDE} from "@supernova/contracts/lib/protocol";
 
 /** Installed Pi extension packages. */
-export interface ExtensionsService {
-  /** Updates every package and reloads them in open sessions; a running call finishes on the code it took. */
-  update(context: Context): Promise<ServiceResult<null, UpdateExtensionsError>>;
-}
+export const ExtensionsService = remote("supernova.extensions", {
+  version: 1,
+  input: SERVER_WIDE,
+  variants: {
+    default: {
+      methods: {
+        /** Updates every package and reloads them in open sessions; a running call finishes on the code it took. */
+        update: method(NO_PAYLOAD, result<null, UpdateExtensionsError>()),
+      },
+    },
+  },
+});
 
-export const ExtensionsService = defineService<ExtensionsService>("supernova.extensions");
+export type ExtensionsService = MembersOf<typeof ExtensionsService>;

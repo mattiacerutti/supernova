@@ -20,7 +20,7 @@ src/
   features/     product areas: projects, sessions, settings, updates, workspace
   hooks/        shared hooks
   lib/          helpers used across features (cn, toast, project-paths) and preconfigured dependencies (diffs/, themes/)
-  runtime/      the runtime connection: Chord service bindings over pi-client (transport/runtime-client.ts)
+  runtime/      the runtime connection: Chord handles to the server's services (transport/runtime-client.ts)
   stores/       app-wide Zustand stores
 ```
 
@@ -81,10 +81,10 @@ A helper earns a place in `lib/` when several features use it. Something used by
 
 ### Runtime hooks
 
-- Get the runtime connection with `useRuntime()` (or take a `RuntimeClient` parameter in an options builder, like `listProjectSessionsQueryOptions(runtime, projectPath)`). It has one member per runtime service (`runtime.sessions`, `runtime.sessionRuntime`, `runtime.workspace`, …), whose methods take Chord's `Context` last as the contracts declare.
+- Get the runtime connection with `useRuntime()` (or take a `RuntimeClient` parameter in an options builder, like `listProjectSessionsQueryOptions(runtime, projectPath)`). It has one Chord handle per server-wide service (`runtime.sessions`, `runtime.workspace`, …), whose methods take the procedure payload (`null` for none). A call made while the connection is down waits for it.
 - Calls return `ServiceResult`s. In React Query functions, `unwrap()` from `@/runtime/runtime-result` turns a failure into a thrown `RuntimeError`. Branch on its code with `runtimeError<Service["method"]>(error)?.code`, which is typed as the method's declared error tags plus `"GenericError"`; a `Record<FailureCode<…>, string>` of messages fails to compile when the contract gains an error.
-- Follow replicated state (`runtime.workspace.terminals`, `runtime.providers.logins`, `runtime.sessions.directory`, `runtime.sessionRuntime.session`) with `subscribe`, which delivers the current value at once.
-- Sessions: `runtime.sessions` for lifecycle and reads; `runtime.sessionRuntime` for the commands and document of the session the connection attached. Attaching is the caller's: `sessions.attach(id)` routes the connection, then `runtime.bindSessionRuntime()` points `sessionRuntime` at it and waits for its state. `attachSession` (`api/sessions-sync`) does both, in order, and attaches again after a reconnect; use it rather than attaching by hand. Session state reaches components through the sessions store, never straight from the runtime; see State management.
+- Follow state members (`runtime.workspace.terminals`, `runtime.providers.logins`, `runtime.sessions.directory`, a session's `session`) with `subscribe`. It delivers `undefined` until the server's value arrives, then every value; after a reconnect Chord holds the services again and the value arrives anew.
+- Sessions: `runtime.sessions` for lifecycle and reads; a session's commands and document are its `SessionRuntimeService`, held by id. Use `followSession` and `withSessionRuntime` (`api/sessions-sync`) rather than `runtime.holdSession`: they share one hold per session and release it when the last user is done. Session state reaches components through the sessions store, never straight from the runtime; see State management.
 - Query keys come from the feature's `xKeys` object, shaped `[feature, ...scope]`, and are read from `queryOptions().queryKey` where an options object exists. Invalidate with the parent key (`sessionKeys.lists()`), never a literal array.
 
 ## Testing

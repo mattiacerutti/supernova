@@ -1,8 +1,7 @@
-import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import {useRef, useState} from "react";
 import type {SessionRuntimeService} from "@supernova/contracts/services/session-runtime/services";
 import type {ModelReference, Session, SessionWorkspaceSelection, UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
-import {attachSession, forgetSession} from "@/features/sessions/api/sessions-sync";
+import {forgetSession, withSessionRuntime} from "@/features/sessions/api/sessions-sync";
 import type {SessionView} from "@/features/sessions/lib/session-view";
 import {sessionStatus} from "@/features/sessions/lib/session-view";
 import type {SessionOptimism} from "@/features/sessions/stores/sessions-store";
@@ -77,9 +76,9 @@ function whenNotRunning(sessionId: string, run: () => void): void {
 }
 
 function navigate(sessionRuntime: SessionRuntimeService, navigation: CheckpointNavigation, force: boolean) {
-  if (navigation.action === "revert") return sessionRuntime.revertToMessage({force, turnId: navigation.turnId}, BACKGROUND_CONTEXT);
-  if (navigation.action === "redo") return sessionRuntime.redoCheckpoint({force}, BACKGROUND_CONTEXT);
-  return sessionRuntime.undoCheckpoint({force}, BACKGROUND_CONTEXT);
+  if (navigation.action === "revert") return sessionRuntime.revertToMessage({force, turnId: navigation.turnId});
+  if (navigation.action === "redo") return sessionRuntime.redoCheckpoint({force});
+  return sessionRuntime.undoCheckpoint({force});
 }
 
 /**
@@ -111,8 +110,7 @@ export function sessionActions(runtime: RuntimeClient) {
       const {sessionId} = input;
       if (status(sessionId) !== "idle") return;
       begin(sessionId, {message: pendingMessage(input)});
-      void attachSession(runtime, sessionId)
-        .then(() => unwrap(runtime.sessionRuntime.sendMessage(outgoingMessage(input), BACKGROUND_CONTEXT)))
+      void withSessionRuntime(runtime, sessionId, (service) => unwrap(service.sendMessage(outgoingMessage(input))))
         .catch((cause: unknown) => fail(sessionId, cause, "Failed to send message."))
         .finally(() => patch(sessionId, {message: undefined}));
     },
@@ -125,7 +123,7 @@ export function sessionActions(runtime: RuntimeClient) {
       begin(sessionId, {message: pendingMessage(input), setupStep: workspace.mode === "worktree" ? "worktree" : undefined});
       try {
         // The page follows the session from here on; the reply is its document until the first live value arrives.
-        setDocument(await unwrap(runtime.sessions.create({id: sessionId, message: outgoingMessage(input), projectPath, workspace}, BACKGROUND_CONTEXT)));
+        setDocument(await unwrap(runtime.sessions.create({id: sessionId, message: outgoingMessage(input), projectPath, workspace})));
         patch(sessionId, {message: undefined, setupStep: undefined});
         return {status: "started"};
       } catch (cause) {
@@ -140,9 +138,7 @@ export function sessionActions(runtime: RuntimeClient) {
       if (status(sessionId) !== "streaming") return;
       patch(sessionId, {stopping: true});
       const settle = () => patch(sessionId, {stopping: undefined});
-      void attachSession(runtime, sessionId)
-        .then(() => runtime.sessionRuntime.abort(BACKGROUND_CONTEXT))
-        .then((result) => (result.ok ? whenNotRunning(sessionId, settle) : settle()), settle);
+      void withSessionRuntime(runtime, sessionId, (service) => service.abort(null)).then((result) => (result.ok ? whenNotRunning(sessionId, settle) : settle()), settle);
     },
 
     /** Shows the compaction from the request on; once running, the runtime reports it as the session's activity. */
@@ -150,8 +146,7 @@ export function sessionActions(runtime: RuntimeClient) {
       const {modelReference, sessionId} = input;
       if (status(sessionId) !== "idle") return;
       begin(sessionId, {compacting: true});
-      void attachSession(runtime, sessionId)
-        .then(() => unwrap(runtime.sessionRuntime.compact({modelReference}, BACKGROUND_CONTEXT)))
+      void withSessionRuntime(runtime, sessionId, (service) => unwrap(service.compact({modelReference})))
         .catch((cause: unknown) => fail(sessionId, cause, "Failed to compact session."))
         .finally(() => patch(sessionId, {compacting: undefined}));
     },
@@ -164,8 +159,7 @@ export function sessionActions(runtime: RuntimeClient) {
       if (current !== "idle" && !(force && current === "checkpoint-navigating")) return {status: "failed", code: undefined, message: "The session is busy."};
       begin(sessionId, {navigation: {lastTurnId: input.lastTurnId}});
       try {
-        await attachSession(runtime, sessionId);
-        await unwrap(navigate(runtime.sessionRuntime, input, force));
+        await withSessionRuntime(runtime, sessionId, (service) => unwrap(navigate(service, input, force)));
         patch(sessionId, {navigation: undefined});
         return {status: "applied"};
       } catch (cause) {

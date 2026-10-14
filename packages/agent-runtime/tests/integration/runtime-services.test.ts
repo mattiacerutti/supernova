@@ -1,10 +1,7 @@
-import {createRemoteServiceBinding} from "@earendil-works/chord";
-import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
-import {Client, createClientServiceTransport} from "@earendil-works/pi-client";
 import type {Session} from "@supernova/contracts/services/sessions/schemas";
 import {FoldersService} from "@supernova/contracts/services/folders/services";
 import {ProjectsService} from "@supernova/contracts/services/projects/services";
-import {RUNTIME_SERVER_ID} from "@supernova/contracts/lib/protocol";
+import {RUNTIME_HOST} from "@supernova/contracts/lib/protocol";
 import {SessionRuntimeService} from "@supernova/contracts/services/session-runtime/services";
 import {SessionsService} from "@supernova/contracts/services/sessions/services";
 import {WorkspaceService} from "@supernova/contracts/services/workspace/services";
@@ -30,7 +27,7 @@ describe("runtime services over the wire", () => {
     while (cleanups.length > 0) await cleanups.pop()!();
   });
 
-  /** A real `pi-server` over the runtime's services and a `pi-client` connected to it, with both service bindings. */
+  /** The runtime's services on a Chord host, and a client host connected to it over a link. */
   async function connect() {
     const pi = await createPiTestRuntime();
     cleanups.push(() => pi.unregister());
@@ -48,52 +45,41 @@ describe("runtime services over the wire", () => {
       workspace: new Workspace({terminals}),
       worktrees: new Worktrees(),
     } as AgentRuntime;
-    const server = await startRuntimeServer(runtime);
+    const server = startRuntimeServer(runtime);
     cleanups.push(server.close);
-    const client = await Client.connect({serverId: RUNTIME_SERVER_ID, transportFactory: server.transport});
-    cleanups.push(() => client.dispose());
-    const serverServices = createRemoteServiceBinding({
-      services: [FoldersService, ProjectsService, SessionsService, WorkspaceService],
-      transport: createClientServiceTransport(client, () => ({serverId: RUNTIME_SERVER_ID})),
-    });
-    const sessionServices = createRemoteServiceBinding({
-      services: [SessionRuntimeService],
-      transport: createClientServiceTransport(client, () => client.attachment),
-      bound: false,
-    });
-    cleanups.push(async () => {
-      await sessionServices.dispose(BACKGROUND_CONTEXT);
-      await serverServices.dispose(BACKGROUND_CONTEXT);
-    });
-    const sessions = serverServices.use(SessionsService);
-    await serverServices.ready(BACKGROUND_CONTEXT);
-    const attach = async (sessionId: string) => {
-      expect(await sessions.attach(sessionId, BACKGROUND_CONTEXT)).toEqual({ok: true, value: null});
-      await sessionServices.rebind(true, BACKGROUND_CONTEXT);
-      await sessionServices.ready(BACKGROUND_CONTEXT);
-      // In a record: a Chord facade answers `then` too, so awaiting one directly would call a remote `then`.
-      return {sessionRuntime: sessionServices.use(SessionRuntimeService)};
+    const at = {at: RUNTIME_HOST};
+    const sessions = server.client.get(SessionsService, {}, at);
+    const workspace = server.client.get(WorkspaceService, {}, at);
+    // A remote state member holds a value only while subscribed, as the app's views are.
+    for (const stop of [sessions.directory.subscribe(() => undefined), workspace.terminals.subscribe(() => undefined)]) cleanups.push(async () => stop());
+    await sessions.ready;
+    /** Holds a session's runtime service, as a page following it does. */
+    const hold = async (sessionId: string) => {
+      const sessionRuntime = server.client.get(SessionRuntimeService, {sessionId}, at);
+      await sessionRuntime.ready;
+      // In a record: a handle answers members by name, so awaiting one directly would look for its `then`.
+      return {sessionRuntime};
     };
     return {
-      attach,
-      folders: serverServices.use(FoldersService),
+      hold,
+      folders: server.client.get(FoldersService, {}, at),
       pi,
-      projects: serverServices.use(ProjectsService),
+      projects: server.client.get(ProjectsService, {}, at),
       sessions,
-      workspace: serverServices.use(WorkspaceService),
+      workspace,
     };
   }
 
-  it("creates a session, runs its turn, and replicates its transcript to the attached client", async () => {
-    const {attach, pi, sessions} = await connect();
+  it("creates a session, runs its turn, and replicates its transcript to a client holding it", async () => {
+    const {hold, pi, sessions} = await connect();
     pi.faux.setResponses([fauxAssistantMessage("Hello!"), fauxAssistantMessage("Again.")]);
 
-    const created = await sessions.create({id: "wire-session", message: firstMessage, projectPath: pi.defaultProjectRoot}, BACKGROUND_CONTEXT);
+    const created = await sessions.create({id: "wire-session", message: firstMessage, projectPath: pi.defaultProjectRoot});
     expect(created.ok && turnContents(created.value)).toEqual([firstMessage.contentParts]);
 
-    const {sessionRuntime} = await attach("wire-session");
+    const {sessionRuntime} = await hold("wire-session");
     const seen: Session[] = [];
-    const stop = sessionRuntime.session.subscribe((value) => void seen.push(value));
+    const stop = sessionRuntime.session.subscribe((value) => void (value && seen.push(value)));
     try {
       await pi.settled("wire-session");
       await waitUntil(async () => expect(sessionRuntime.session.value).toEqual(await pi.sessions.get({sessionId: "wire-session"})));
@@ -101,7 +87,7 @@ describe("runtime services over the wire", () => {
 
       // A command streams back through the same replicated state, and its turn arrives before the send resolves: the
       // client shows a sent message until then.
-      expect(await sessionRuntime.sendMessage({contentParts: [{text: "More", type: "text"}], modelReference: selectedModelReference}, BACKGROUND_CONTEXT)).toEqual({
+      expect(await sessionRuntime.sendMessage({contentParts: [{text: "More", type: "text"}], modelReference: selectedModelReference})).toEqual({
         ok: true,
         value: null,
       });
@@ -114,84 +100,107 @@ describe("runtime services over the wire", () => {
       stop();
     }
 
-    expect(sessions.directory.value?.sessions["wire-session"]).toMatchObject({activity: "idle", projectPath: pi.defaultProjectRoot, summary: {id: "wire-session"}});
+    await waitUntil(() =>
+      expect(sessions.directory.value?.sessions["wire-session"]).toMatchObject({activity: "idle", projectPath: pi.defaultProjectRoot, summary: {id: "wire-session"}})
+    );
+  });
+
+  it("serves a session again after every client released it, from its current document", async () => {
+    const {hold, pi, sessions} = await connect();
+    pi.faux.setResponses([fauxAssistantMessage("First."), fauxAssistantMessage("Second.")]);
+    await sessions.create({id: "released", message: firstMessage, projectPath: pi.defaultProjectRoot});
+
+    await pi.settled("released");
+    const first = await hold("released");
+    expect(await first.sessionRuntime.sendMessage({contentParts: [{text: "More", type: "text"}], modelReference: selectedModelReference})).toEqual({ok: true, value: null});
+    first.sessionRuntime.release();
+    // The session's work runs on without a client.
+    await pi.settled("released");
+
+    const {sessionRuntime} = await hold("released");
+    const stop = sessionRuntime.session.subscribe(() => undefined);
+    try {
+      await waitUntil(async () => expect(sessionRuntime.session.value).toEqual(await pi.sessions.get({sessionId: "released"})));
+      expect(assistantTexts(sessionRuntime.session.value!)).toEqual(["First.", "Second."]);
+    } finally {
+      stop();
+    }
   });
 
   it("pages and searches a project's sessions, and pins one for every client", async () => {
     const {pi, projects, sessions} = await connect();
-    for (const id of ["first", "second", "third"]) await sessions.create({id, projectPath: pi.defaultProjectRoot}, BACKGROUND_CONTEXT);
-    await sessions.rename({sessionId: "second", title: "Fix the login"}, BACKGROUND_CONTEXT);
+    for (const id of ["first", "second", "third"]) await sessions.create({id, projectPath: pi.defaultProjectRoot});
+    await sessions.rename({sessionId: "second", title: "Fix the login"});
 
-    const firstPage = await projects.listSessions({projectPath: pi.defaultProjectRoot, limit: 2}, BACKGROUND_CONTEXT);
+    const firstPage = await projects.listSessions({projectPath: pi.defaultProjectRoot, limit: 2});
     expect(firstPage.ok && firstPage.value.sessions).toHaveLength(2);
     const nextCursor = firstPage.ok ? firstPage.value.nextCursor : null;
     expect(nextCursor).not.toBeNull();
-    const lastPage = await projects.listSessions({projectPath: pi.defaultProjectRoot, limit: 2, cursor: nextCursor!}, BACKGROUND_CONTEXT);
+    const lastPage = await projects.listSessions({projectPath: pi.defaultProjectRoot, limit: 2, cursor: nextCursor!});
     expect(lastPage).toMatchObject({ok: true, value: {nextCursor: null}});
 
-    expect(await projects.searchSessions({query: "LOGIN", projectPaths: [pi.defaultProjectRoot], limit: 10}, BACKGROUND_CONTEXT)).toMatchObject({
+    expect(await projects.searchSessions({query: "LOGIN", projectPaths: [pi.defaultProjectRoot], limit: 10})).toMatchObject({
       ok: true,
       value: {sessions: [{id: "second", projectPath: pi.defaultProjectRoot, title: "Fix the login"}], nextCursor: null},
     });
 
-    expect(await projects.pinSession({sessionId: "first", pinned: true}, BACKGROUND_CONTEXT)).toEqual({ok: true, value: null});
+    expect(await projects.pinSession({sessionId: "first", pinned: true})).toEqual({ok: true, value: null});
     // The pin reaches every client through the directory, and the listing puts the session first.
     await waitUntil(() => expect(sessions.directory.value?.sessions.first?.summary).toMatchObject({pinned: true}));
-    expect(await projects.listSessions({projectPath: pi.defaultProjectRoot, limit: 1}, BACKGROUND_CONTEXT)).toMatchObject({
+    expect(await projects.listSessions({projectPath: pi.defaultProjectRoot, limit: 1})).toMatchObject({
       ok: true,
       value: {sessions: [{id: "first", pinned: true}]},
     });
     // An invalid limit is refused at the boundary.
-    expect(await projects.listSessions({projectPath: pi.defaultProjectRoot, limit: 0}, BACKGROUND_CONTEXT)).toMatchObject({ok: false, error: {code: "GenericError"}});
+    expect(await projects.listSessions({projectPath: pi.defaultProjectRoot, limit: 0})).toMatchObject({ok: false, error: {code: "GenericError"}});
   });
 
   it("returns declared contract errors by tag, and every other failure as a GenericError", async () => {
-    const {attach, pi, sessions} = await connect();
+    const {hold, pi, sessions} = await connect();
     pi.faux.setResponses([fauxAssistantMessage("one")]);
-    await sessions.create({id: "errors", message: firstMessage, projectPath: pi.defaultProjectRoot}, BACKGROUND_CONTEXT);
+    await sessions.create({id: "errors", message: firstMessage, projectPath: pi.defaultProjectRoot});
     await pi.settled("errors");
-    const {sessionRuntime} = await attach("errors");
+    const {sessionRuntime} = await hold("errors");
 
     // A plain error thrown by a checkpoint method is undeclared, so it is a GenericError, never a declared one such as
     // CheckpointConflictError (which would offer to discard changes).
-    expect(await sessionRuntime.redoCheckpoint({}, BACKGROUND_CONTEXT)).toEqual({ok: false, error: {code: "GenericError", message: "No checkpoint is available to redo."}});
-    expect(
-      await sessionRuntime.sendMessage({contentParts: [{text: "x", type: "text"}], modelReference: {...selectedModelReference, id: "missing-model"}}, BACKGROUND_CONTEXT)
-    ).toEqual({
+    expect(await sessionRuntime.redoCheckpoint({})).toEqual({ok: false, error: {code: "GenericError", message: "No checkpoint is available to redo."}});
+    expect(await sessionRuntime.sendMessage({contentParts: [{text: "x", type: "text"}], modelReference: {...selectedModelReference, id: "missing-model"}})).toEqual({
       ok: false,
       error: {code: "GenericError", message: "Selected model is not available."},
     });
     // A declared error keeps its own tag and message.
-    expect(await sessions.rename({sessionId: "errors", title: " "}, BACKGROUND_CONTEXT)).toEqual({
+    expect(await sessions.rename({sessionId: "errors", title: " "})).toEqual({
       ok: false,
       error: {code: "RenameSessionError", message: "Session title cannot be empty."},
     });
-    expect(await sessions.attach("unknown", BACKGROUND_CONTEXT)).toMatchObject({ok: false, error: {code: "GenericError"}});
-    expect(await sessionRuntime.abort(BACKGROUND_CONTEXT)).toEqual({ok: true, value: null});
+    // Holding an unknown session fails.
+    await expect(hold("unknown")).rejects.toThrow("Session not found.");
+    expect(await sessionRuntime.abort(null)).toEqual({ok: true, value: null});
   });
 
   it("serves the non-session services: calls return results or tagged errors, terminal output replicates", async () => {
     const {folders, pi, workspace} = await connect();
 
-    const created = await folders.create({path: `${pi.defaultProjectRoot}/made-over-the-wire`}, BACKGROUND_CONTEXT);
+    const created = await folders.create({path: `${pi.defaultProjectRoot}/made-over-the-wire`});
     expect(created).toEqual({ok: true, value: {path: `${pi.defaultProjectRoot}/made-over-the-wire`}});
     // The default project is a plain folder, not a Git repository.
-    expect(await workspace.listBranches({projectPath: pi.defaultProjectRoot}, BACKGROUND_CONTEXT)).toMatchObject({ok: false, error: {code: "WorkspaceNotARepositoryError"}});
+    expect(await workspace.listBranches({projectPath: pi.defaultProjectRoot})).toMatchObject({ok: false, error: {code: "WorkspaceNotARepositoryError"}});
     // A member of an error union (`WorkspaceFileError`) keeps its own tag.
-    expect(await workspace.readFile({path: "../outside", projectPath: pi.defaultProjectRoot}, BACKGROUND_CONTEXT)).toMatchObject({
+    expect(await workspace.readFile({path: "../outside", projectPath: pi.defaultProjectRoot})).toMatchObject({
       ok: false,
       error: {code: "WorkspaceFileNotFoundError"},
     });
     // Payloads are validated at the boundary.
-    expect(await workspace.readFile({path: 1} as never, BACKGROUND_CONTEXT)).toMatchObject({ok: false, error: {code: "GenericError", message: "The request is invalid."}});
+    expect(await workspace.readFile({path: 1} as never)).toMatchObject({ok: false, error: {code: "GenericError", message: "The request is invalid."}});
 
     const shell = process.env.SHELL;
     process.env.SHELL = "/bin/sh";
     try {
-      expect(await workspace.openTerminal({cols: 80, cwd: pi.defaultProjectRoot, id: "wire-terminal", rows: 24, sessionId: "s"}, BACKGROUND_CONTEXT)).toMatchObject({ok: true});
-      await workspace.writeTerminal({data: "echo WIRE_$((20+1))\n", id: "wire-terminal"}, BACKGROUND_CONTEXT);
+      expect(await workspace.openTerminal({cols: 80, cwd: pi.defaultProjectRoot, id: "wire-terminal", rows: 24, sessionId: "s"})).toMatchObject({ok: true});
+      await workspace.writeTerminal({data: "echo WIRE_$((20+1))\n", id: "wire-terminal"});
       await waitUntil(() => expect(workspace.terminals.value?.terminals["wire-terminal"]?.output).toContain("WIRE_21"), {timeoutMs: 5_000});
-      expect(await workspace.writeTerminal({data: "x", id: "missing"}, BACKGROUND_CONTEXT)).toMatchObject({ok: false, error: {code: "TerminalNotFoundError"}});
+      expect(await workspace.writeTerminal({data: "x", id: "missing"})).toMatchObject({ok: false, error: {code: "TerminalNotFoundError"}});
     } finally {
       process.env.SHELL = shell;
     }

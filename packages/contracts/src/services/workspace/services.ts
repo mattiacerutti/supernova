@@ -1,6 +1,6 @@
-import type {Context, ReplicatedState} from "@earendil-works/chord";
-import {defineService} from "@earendil-works/chord";
-import type {ServiceResult} from "@supernova/contracts/lib/protocol";
+import type {MembersOf} from "@earendil-works/chord";
+import {method, remote} from "@earendil-works/chord";
+import {json, result, SERVER_WIDE} from "@supernova/contracts/lib/protocol";
 import type {
   TerminalClosePayload,
   TerminalOpenPayload,
@@ -31,23 +31,33 @@ export interface TerminalsState {
 
 /**
  * A session's folder: its files, uncommitted Git changes, branches, and the shells running in it. Terminal output is
- * replicated state: new output reaches clients as string appends, and the capped scrollback drops from the front.
+ * state: new output reaches clients as string appends, and the capped scrollback drops from the front.
  */
-export interface WorkspaceService {
-  readonly terminals: ReplicatedState<TerminalsState>;
-  /** Starts a shell, or returns the existing terminal with that id so a reopened tab reattaches. */
-  openTerminal(payload: TerminalOpenPayload, context: Context): Promise<ServiceResult<TerminalOpenResult, TerminalError>>;
-  writeTerminal(payload: TerminalWritePayload, context: Context): Promise<ServiceResult<null, TerminalNotFoundError>>;
-  resizeTerminal(payload: TerminalResizePayload, context: Context): Promise<ServiceResult<null, TerminalNotFoundError>>;
-  /** Kills the shell; closing an unknown terminal is not an error. */
-  closeTerminal(payload: TerminalClosePayload, context: Context): Promise<ServiceResult<null>>;
-  listTerminals(payload: TerminalsListPayload, context: Context): Promise<ServiceResult<TerminalsListResult>>;
-  listBranches(payload: WorkspaceBranchesListPayload, context: Context): Promise<ServiceResult<WorkspaceBranchesListResult, WorkspaceGitError>>;
-  getChanges(payload: WorkspaceChangesGetPayload, context: Context): Promise<ServiceResult<WorkspaceChangesGetResult, WorkspaceGitError>>;
-  getDiffContents(payload: WorkspaceDiffContentsGetPayload, context: Context): Promise<ServiceResult<WorkspaceDiffContentsGetResult, WorkspaceFileError>>;
-  listRepositories(payload: WorkspaceRepositoriesListPayload, context: Context): Promise<ServiceResult<WorkspaceRepositoriesListResult>>;
-  listFiles(payload: WorkspaceFilesListPayload, context: Context): Promise<ServiceResult<WorkspaceFilesListResult, WorkspaceGitError>>;
-  readFile(payload: WorkspaceFileReadPayload, context: Context): Promise<ServiceResult<WorkspaceFileReadResult, WorkspaceFileError>>;
-}
+export const WorkspaceService = remote("supernova.workspace", {
+  version: 1,
+  input: SERVER_WIDE,
+  variants: {
+    default: {
+      state: {
+        terminals: json<TerminalsState>(),
+      },
+      methods: {
+        /** Starts a shell, or returns the existing terminal with that id so a reopened tab reattaches. */
+        openTerminal: method(json<TerminalOpenPayload>(), result<TerminalOpenResult, TerminalError>()),
+        writeTerminal: method(json<TerminalWritePayload>(), result<null, TerminalNotFoundError>()),
+        resizeTerminal: method(json<TerminalResizePayload>(), result<null, TerminalNotFoundError>()),
+        /** Kills the shell; closing an unknown terminal is not an error. */
+        closeTerminal: method(json<TerminalClosePayload>(), result<null>()),
+        listTerminals: method(json<TerminalsListPayload>(), result<TerminalsListResult>()),
+        listBranches: method(json<WorkspaceBranchesListPayload>(), result<WorkspaceBranchesListResult, WorkspaceGitError>()),
+        getChanges: method(json<WorkspaceChangesGetPayload>(), result<WorkspaceChangesGetResult, WorkspaceGitError>()),
+        getDiffContents: method(json<WorkspaceDiffContentsGetPayload>(), result<WorkspaceDiffContentsGetResult, WorkspaceFileError>()),
+        listRepositories: method(json<WorkspaceRepositoriesListPayload>(), result<WorkspaceRepositoriesListResult>()),
+        listFiles: method(json<WorkspaceFilesListPayload>(), result<WorkspaceFilesListResult, WorkspaceGitError>()),
+        readFile: method(json<WorkspaceFileReadPayload>(), result<WorkspaceFileReadResult, WorkspaceFileError>()),
+      },
+    },
+  },
+});
 
-export const WorkspaceService = defineService<WorkspaceService>("supernova.workspace");
+export type WorkspaceService = MembersOf<typeof WorkspaceService>;

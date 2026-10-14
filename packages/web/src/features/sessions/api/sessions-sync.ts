@@ -1,31 +1,69 @@
-import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
+import type {SessionRuntimeService} from "@supernova/contracts/services/session-runtime/services";
 import {useSessionsStore} from "@/features/sessions/stores/sessions-store";
 import {useSessionVisitsStore} from "@/features/sessions/stores/sidebar/session-visits-store";
 import {useMountEffect} from "@/hooks/use-mount-effect";
 import {NoticeToasts} from "@/features/sessions/lib/session-notices";
-import {unwrap} from "@/runtime/runtime-result";
-import type {RuntimeClient} from "@/runtime/transport/runtime-client";
+import type {RuntimeClient, SessionRuntimeHold} from "@/runtime/transport/runtime-client";
 import {useRuntime} from "@/runtime/use-runtime";
 
 const {forget, setDocument, setEntries, setLoadError} = useSessionsStore.getState();
 
-/** What this client is doing with one runtime connection's session routing. */
-interface Connection {
-  /** The session the connection is attaching or attached to; attaches run one at a time, in order. */
-  attachment: {readonly sessionId: string; readonly done: Promise<void>} | undefined;
-  /** How many components follow each session's document; the session stays attached while any does. */
-  readonly followers: Map<string, {count: number; readonly stop: () => void}>;
+interface SessionHold {
+  readonly hold: SessionRuntimeHold;
+  count: number;
 }
 
-const connections = new WeakMap<RuntimeClient, Connection>();
+/** Each runtime connection's held sessions; a session is held once, however many places use it. */
+const holds = new WeakMap<RuntimeClient, Map<string, SessionHold>>();
 
-function connectionOf(runtime: RuntimeClient): Connection {
-  let connection = connections.get(runtime);
-  if (!connection) {
-    connection = {attachment: undefined, followers: new Map()};
-    connections.set(runtime, connection);
+function holdsOf(runtime: RuntimeClient): Map<string, SessionHold> {
+  let held = holds.get(runtime);
+  if (!held) {
+    held = new Map();
+    holds.set(runtime, held);
   }
-  return connection;
+  return held;
+}
+
+/**
+ * Holds a session's runtime service until the returned release. Holds of one session share one Chord handle. A hold
+ * that failed (an unknown session, or one still being created) is dropped, so the next acquire tries again.
+ */
+function acquireSession(runtime: RuntimeClient, sessionId: string): SessionRuntimeHold {
+  const held = holdsOf(runtime);
+  let entry = held.get(sessionId);
+  if (!entry) {
+    const created: SessionHold = {hold: runtime.holdSession(sessionId), count: 0};
+    entry = created;
+    held.set(sessionId, created);
+    created.hold.ready.catch(() => {
+      if (held.get(sessionId) === created) held.delete(sessionId);
+    });
+  }
+  const current = entry;
+  current.count += 1;
+  let released = false;
+  return {
+    service: current.hold.service,
+    ready: current.hold.ready,
+    release: () => {
+      if (released) return;
+      released = true;
+      if (--current.count > 0) return;
+      if (held.get(sessionId) === current) held.delete(sessionId);
+      current.hold.release();
+    },
+  };
+}
+
+/** Runs `call` on a session's runtime service, holding it for the call. */
+export async function withSessionRuntime<T>(runtime: RuntimeClient, sessionId: string, call: (service: SessionRuntimeService) => Promise<T>): Promise<T> {
+  const {release, service} = acquireSession(runtime, sessionId);
+  try {
+    return await call(service);
+  } finally {
+    release();
+  }
 }
 
 const isKnown = (sessionId: string): boolean => useSessionsStore.getState().documents[sessionId] !== undefined;
@@ -36,7 +74,7 @@ const isKnown = (sessionId: string): boolean => useSessionsStore.getState().docu
  */
 function readDocument(runtime: RuntimeClient, sessionId: string): void {
   if (isKnown(sessionId)) return;
-  void runtime.sessions.get({sessionId}, BACKGROUND_CONTEXT).then(
+  void runtime.sessions.get({sessionId}).then(
     (result) => {
       if (isKnown(sessionId)) return;
       if (result.ok) setDocument(result.value);
@@ -47,94 +85,32 @@ function readDocument(runtime: RuntimeClient, sessionId: string): void {
 }
 
 /**
- * Attaches the connection to a session, unless it already is, and binds `runtime.sessionRuntime` to it. Attaches run
- * in order, so the latest wins. Resolves once the session's state arrived. The server checks every session call
- * against the attachment, so a command attaches the session it is for before it calls.
- */
-export function attachSession(runtime: RuntimeClient, sessionId: string): Promise<void> {
-  const connection = connectionOf(runtime);
-  if (connection.attachment?.sessionId === sessionId) return connection.attachment.done;
-  const previous = connection.attachment?.done.catch(() => undefined) ?? Promise.resolve();
-  const done = previous.then(async () => {
-    await unwrap(runtime.sessions.attach(sessionId, BACKGROUND_CONTEXT));
-    await runtime.bindSessionRuntime();
-  });
-  connection.attachment = {sessionId, done};
-  // A failed attach is tried again by the next caller.
-  done.catch(() => {
-    if (connection.attachment?.done === done) connection.attachment = undefined;
-  });
-  return done;
-}
-
-/**
- * Puts every value of the attached session's replicated document in the store. Returns the stop. A session that
- * cannot attach yet (still being created) keeps the document it was read with.
- */
-function followDocument(runtime: RuntimeClient, sessionId: string): () => void {
-  let stopped = false;
-  let unsubscribe: (() => void) | undefined;
-  void attachSession(runtime, sessionId).then(
-    () => {
-      if (stopped) return;
-      unsubscribe = runtime.sessionRuntime.session.subscribe((session) => {
-        if (session.id === sessionId) setDocument(session);
-      });
-    },
-    () => undefined
-  );
-  return () => {
-    stopped = true;
-    unsubscribe?.();
-  };
-}
-
-/**
- * Keeps the store's view of every session the runtime has open current, shows its notices, and attaches the followed
- * session again after a reconnect, since a dropped connection loses its attachment. Returns the stop. Called once, at
- * app start.
+ * Keeps the store's view of every session the runtime has open current and shows its notices. Returns the stop.
+ * Called once, at app start. After a reconnect Chord holds the services again and their state arrives anew.
  */
 export function syncSessions(runtime: RuntimeClient): () => void {
   const notices = new NoticeToasts();
-  const stopDirectory = runtime.sessions.directory.subscribe((directory) => {
+  return runtime.sessions.directory.subscribe((directory) => {
+    if (!directory) return;
     setEntries(directory.sessions);
     notices.show(directory.sessions);
   });
-  const connection = connectionOf(runtime);
-  let lost: string | undefined;
-  const stopConnection = runtime.onConnectionChange((state) => {
-    if (state === "disconnected" && connection.attachment) {
-      lost = connection.attachment.sessionId;
-      connection.attachment = undefined;
-    }
-    if (state !== "connected" || !lost) return;
-    const sessionId = lost;
-    lost = undefined;
-    void runtime.ready().then(() => attachSession(runtime, sessionId).catch(() => undefined));
-  });
-  return () => {
-    stopDirectory();
-    stopConnection();
-  };
 }
 
 /**
  * Keeps a session's document in the store, read at once and then live, until the returned stop is called. Following
- * the same session from several places attaches it once.
+ * the same session from several places holds it once. A session that cannot be held yet (still being created) keeps
+ * the document it was read with.
  */
 export function followSession(runtime: RuntimeClient, sessionId: string): () => void {
-  const {followers} = connectionOf(runtime);
-  const follower = followers.get(sessionId);
-  if (follower) follower.count += 1;
-  else {
-    readDocument(runtime, sessionId);
-    followers.set(sessionId, {count: 1, stop: followDocument(runtime, sessionId)});
-  }
+  readDocument(runtime, sessionId);
+  const {release, service} = acquireSession(runtime, sessionId);
+  const unsubscribe = service.session.subscribe((session) => {
+    if (session?.id === sessionId) setDocument(session);
+  });
   return () => {
-    const current = followers.get(sessionId);
-    if (!current || --current.count > 0) return;
-    followers.delete(sessionId);
-    current.stop();
+    unsubscribe();
+    release();
   };
 }
 

@@ -55,7 +55,7 @@ export function fromToolDefinition(definition: ToolDefinition<TSchema, unknown>,
       );
       const details = toJson(result.details);
       return {
-        content: result.content as (TextContent | ImageContent)[],
+        output: result.content as (TextContent | ImageContent)[],
         ...(details === undefined ? {} : {details}),
         ...(result.isError ? {isError: true} : {}),
         ...(result.usage ? {usage: result.usage} : {}),

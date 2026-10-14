@@ -1,4 +1,3 @@
-import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import {queryOptions, useQuery} from "@tanstack/react-query";
 import {sessionKeys} from "@/features/sessions/api/query-keys";
 import {unwrap} from "@/runtime/runtime-result";
@@ -10,7 +9,7 @@ export function useWorkspaceBranches(projectPath: string, options: {readonly ena
   return useQuery(
     queryOptions({
       enabled: options.enabled !== false && projectPath.length > 0,
-      queryFn: () => unwrap(runtime.workspace.listBranches({projectPath}, BACKGROUND_CONTEXT)),
+      queryFn: () => unwrap(runtime.workspace.listBranches({projectPath})),
       queryKey: sessionKeys.branches(projectPath),
       refetchOnWindowFocus: false,
       // Not a repository is deterministic; retrying only delays hiding the pickers.

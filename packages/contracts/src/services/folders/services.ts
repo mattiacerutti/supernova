@@ -1,5 +1,5 @@
-import type {Context} from "@earendil-works/chord";
-import {defineService} from "@earendil-works/chord";
+import type {MembersOf} from "@earendil-works/chord";
+import {method, remote} from "@earendil-works/chord";
 import type {
   FolderCreatePayload,
   FolderCreateResult,
@@ -8,13 +8,21 @@ import type {
   FolderSuggestionsListPayload,
   FolderSuggestionsListResult,
 } from "@supernova/contracts/services/folders/procedures";
-import type {ServiceResult} from "@supernova/contracts/lib/protocol";
+import {json, result, SERVER_WIDE} from "@supernova/contracts/lib/protocol";
 
 /** Folders on the server's machine: browsing for projects and mentioning files. */
-export interface FoldersService {
-  create(payload: FolderCreatePayload, context: Context): Promise<ServiceResult<FolderCreateResult>>;
-  listSuggestions(payload: FolderSuggestionsListPayload, context: Context): Promise<ServiceResult<FolderSuggestionsListResult>>;
-  listFiles(payload: FolderFilesListPayload, context: Context): Promise<ServiceResult<FolderFilesListResult>>;
-}
+export const FoldersService = remote("supernova.folders", {
+  version: 1,
+  input: SERVER_WIDE,
+  variants: {
+    default: {
+      methods: {
+        create: method(json<FolderCreatePayload>(), result<FolderCreateResult>()),
+        listSuggestions: method(json<FolderSuggestionsListPayload>(), result<FolderSuggestionsListResult>()),
+        listFiles: method(json<FolderFilesListPayload>(), result<FolderFilesListResult>()),
+      },
+    },
+  },
+});
 
-export const FoldersService = defineService<FoldersService>("supernova.folders");
+export type FoldersService = MembersOf<typeof FoldersService>;

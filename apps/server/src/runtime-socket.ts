@@ -1,75 +1,41 @@
 import type {IncomingMessage, Server as HttpServer} from "node:http";
-import type {Duplex} from "node:stream";
-import type {ServerListener} from "@earendil-works/pi-server";
-import type {RawData, WebSocket} from "ws";
+import type {Host, WebSocketLike} from "@earendil-works/chord";
+import {acceptWebSockets} from "@earendil-works/chord";
+import type {WebSocket} from "ws";
 import {WebSocketServer} from "ws";
-
-type ByteConnectionAcceptor = Parameters<ServerListener["start"]>[0];
-type ByteConnection = Parameters<ByteConnectionAcceptor>[0];
 
 /** Bytes a connection may queue before it is closed as too slow; generous, a long transcript's snapshot fits. */
 const MAX_BUFFERED_BYTES = 64 * 1024 * 1024;
 
-function toBytes(data: RawData): Uint8Array {
-  if (Array.isArray(data)) return new Uint8Array(Buffer.concat(data));
-  if (data instanceof ArrayBuffer) return new Uint8Array(data);
-  return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
-}
-
-/** One WebSocket as a `pi-server` byte connection: binary messages in order, closed once. */
-function byteConnection(socket: WebSocket): ByteConnection {
+/** A client that stops reading is dropped rather than buffered without bound; it reconnects and starts over. */
+function boundedSocket(socket: WebSocket): WebSocketLike {
   return {
-    get closed() {
-      return socket.readyState === socket.CLOSING || socket.readyState === socket.CLOSED;
+    get readyState() {
+      return socket.readyState;
     },
-    send(chunk) {
-      if (socket.readyState !== socket.OPEN) return Promise.reject(new Error("The session socket is closed."));
-      if (socket.bufferedAmount + chunk.byteLength > MAX_BUFFERED_BYTES) return Promise.reject(new Error("The session socket fell too far behind."));
-      return new Promise<void>((resolve, reject) => socket.send(chunk, {binary: true}, (error) => (error ? reject(error) : resolve())));
+    send(data) {
+      if (socket.bufferedAmount + data.length > MAX_BUFFERED_BYTES) socket.terminate();
+      else socket.send(data);
     },
-    close(finalChunk) {
-      if (finalChunk && socket.readyState === socket.OPEN) socket.send(finalChunk, {binary: true});
-      socket.close();
-    },
+    close: (code, reason) => socket.close(code, reason),
+    addEventListener: socket.addEventListener.bind(socket) as WebSocketLike["addEventListener"],
   };
-}
-
-function pathOf(request: IncomingMessage): string {
-  return new URL(request.url ?? "/", "http://localhost").pathname;
 }
 
 /**
- * Accepts the runtime protocol as WebSockets on `path` of an HTTP server; other upgrades are refused. Each WebSocket
- * carries the protocol's framed bytes as binary messages.
+ * Accepts Chord client links as WebSockets on `path` of an HTTP server; other upgrades are refused. There is no
+ * authentication: every client acts as the same principal, so the server must only be reachable by its owner.
+ * Returns the close.
  */
-export function createWebSocketListener(server: HttpServer, path: string): ServerListener {
-  const sockets = new WebSocketServer({noServer: true});
-  let accept: ByteConnectionAcceptor | undefined;
-
-  const onUpgrade = (request: IncomingMessage, socket: Duplex, head: Buffer): void => {
-    if (pathOf(request) !== path || !accept) {
-      socket.destroy();
-      return;
-    }
-    const acceptConnection = accept;
-    sockets.handleUpgrade(request, socket, head, (webSocket) => {
-      const handler = acceptConnection(byteConnection(webSocket));
-      webSocket.on("message", (data) => handler.onData(toBytes(data)));
-      webSocket.on("error", (error) => handler.onError(error));
-      webSocket.once("close", () => handler.onClose());
-    });
+export function acceptRuntimeSockets(server: HttpServer, path: string, host: Host): () => Promise<void> {
+  const sockets = new WebSocketServer({server, path});
+  const connections = {
+    on: (_event: "connection", listener: (socket: WebSocketLike, request: IncomingMessage) => void) =>
+      sockets.on("connection", (socket: WebSocket, request: IncomingMessage) => listener(boundedSocket(socket), request)),
   };
-
-  return {
-    async start(acceptConnection: ByteConnectionAcceptor) {
-      accept = acceptConnection;
-      server.on("upgrade", onUpgrade);
-    },
-    async close() {
-      accept = undefined;
-      server.off("upgrade", onUpgrade);
-      for (const client of sockets.clients) client.terminate();
-      await new Promise<void>((resolve) => sockets.close(() => resolve()));
-    },
+  acceptWebSockets(connections, host, {principal: () => ({kind: "owner"})});
+  return async () => {
+    for (const client of sockets.clients) client.terminate();
+    await new Promise<void>((resolve) => sockets.close(() => resolve()));
   };
 }

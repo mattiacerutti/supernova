@@ -1,4 +1,3 @@
-import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import {useMutation, useQueryClient} from "@tanstack/react-query";
 import {sessionKeys} from "@/features/sessions/api/query-keys";
 import {useSessionsStore} from "@/features/sessions/stores/sessions-store";
@@ -15,7 +14,7 @@ export function useForkSession() {
   const services = useRuntime();
 
   return useMutation({
-    mutationFn: (input: ForkSessionInput) => unwrap(services.sessions.fork(input, BACKGROUND_CONTEXT)),
+    mutationFn: (input: ForkSessionInput) => unwrap(services.sessions.fork(input)),
     onSuccess: async (session) => {
       // The fork opens next; its document is already known.
       useSessionsStore.getState().setDocument(session);

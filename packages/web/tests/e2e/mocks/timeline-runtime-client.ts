@@ -1,6 +1,3 @@
-import type {MutableReplicatedState} from "@earendil-works/chord";
-import {replicatedState} from "@earendil-works/chord";
-import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import type {SessionActivity} from "@supernova/contracts/services/session-runtime/procedures";
 import type {CreateSessionPayload} from "@supernova/contracts/services/sessions/procedures";
 import type {LiveState, Session, UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
@@ -10,6 +7,8 @@ import type {SessionRuntimeService} from "@supernova/contracts/services/session-
 import type {SessionDirectoryState, SessionsService} from "@supernova/contracts/services/sessions/services";
 import type {TerminalsState} from "@supernova/contracts/services/workspace/services";
 import type {RuntimeClient} from "@/runtime/transport/runtime-client";
+import type {FakeState} from "@e2e/mocks/fake-state";
+import {fakeState} from "@e2e/mocks/fake-state";
 import {
   assistantEntry,
   createTimelineSessions,
@@ -32,16 +31,14 @@ const ok = {ok: true, value: null} as const;
 const value = async <T>(result: T): Promise<ServiceResult<T>> => ({ok: true, value: result});
 
 /**
- * The server side of the timeline tests, in the browser: sessions as Chord replicated state, read through the same
+ * The server side of the timeline tests, in the browser: sessions as local state, read through the same
  * runtime client interface the app uses with the real server.
  */
 class TimelineServer {
   private readonly sessions = createTimelineSessions();
-  private readonly documents = new Map<string, MutableReplicatedState<Session>>();
-  private readonly directory = replicatedState<SessionDirectoryState>({sessions: {}});
+  private readonly documents = new Map<string, FakeState<Session>>();
+  private readonly directory = fakeState<SessionDirectoryState>({sessions: {}});
   private activeSessionId = TIMELINE_SESSION_ID;
-  /** The session `sessions.attach` routed this client to. */
-  private attachedSessionId = TIMELINE_SESSION_ID;
   private createSessionFailure: string | null = null;
   private lineCount = 0;
   private reasoningBreaks: number[] = [];
@@ -67,27 +64,22 @@ class TimelineServer {
 
   /** The runtime client the app uses, over this server's state. */
   public client(): RuntimeClient {
-    // As on the server, the session runtime service is the attached session's.
-    const document = (): MutableReplicatedState<Session> => this.document(this.attachedSessionId);
-    const sessionRuntime: SessionRuntimeService = {
-      get session() {
-        return document();
-      },
+    // As on the server, a session runtime service is one session's, and holding an unknown one fails: its `ready`
+    // rejects and its document never arrives.
+    const missing = {value: undefined, subscribe: () => () => undefined, events: () => () => undefined};
+    const sessionRuntime = (sessionId: string): SessionRuntimeService => ({
+      session: this.sessions.has(sessionId) ? this.document(sessionId) : missing,
       abort: async () => (this.settleStream("aborted"), ok),
       compact: async () => ok,
       // Timeline sessions are one page; paging is the server's and covered by its tests.
       loadHistory: async () => ({ok: true, value: {items: [], remaining: 0}}),
-      redoCheckpoint: async () => (this.redoCheckpoint(this.attachedSessionId), ok),
-      revertToMessage: async ({turnId}) => (this.revertToMessage(this.attachedSessionId, turnId), ok),
-      sendMessage: async ({contentParts}) => (this.startStream(this.attachedSessionId, contentParts), ok),
-      undoCheckpoint: async () => (this.undoCheckpoint(this.attachedSessionId), ok),
-    };
+      redoCheckpoint: async () => (this.redoCheckpoint(sessionId), ok),
+      revertToMessage: async ({turnId}) => (this.revertToMessage(sessionId, turnId), ok),
+      sendMessage: async ({contentParts}) => (this.startStream(sessionId, contentParts), ok),
+      undoCheckpoint: async () => (this.undoCheckpoint(sessionId), ok),
+    });
     const sessions: SessionsService = {
       directory: this.directory,
-      attach: async (sessionId) => {
-        this.attachedSessionId = sessionId;
-        return ok;
-      },
       create: async (payload) => {
         const failure = this.createSessionFailure;
         this.createSessionFailure = null;
@@ -96,7 +88,6 @@ class TimelineServer {
         await new Promise((resolve) => setTimeout(resolve, CREATE_SESSION_FAILURE_DELAY_MS));
         return {ok: false, error: {code: "CreateSessionError", message: failure}};
       },
-      detach: async () => ok,
       fork: async ({sessionId}) => ({ok: true, value: this.session(sessionId)}),
       get: async ({sessionId}) => ({ok: true, value: this.session(sessionId)}),
       listComposerSuggestions: () => value({items: []}),
@@ -105,8 +96,11 @@ class TimelineServer {
     };
     return {
       sessions,
-      sessionRuntime,
-      bindSessionRuntime: async () => undefined,
+      holdSession: (sessionId) => ({
+        service: sessionRuntime(sessionId),
+        ready: this.sessions.has(sessionId) ? Promise.resolve() : Promise.reject(new Error("Session not found.")),
+        release: () => undefined,
+      }),
       configuration: {get: () => value({modelDefaults: {}})},
       extensions: {update: () => value(null)},
       folders: {
@@ -131,7 +125,7 @@ class TimelineServer {
         },
       },
       providers: {
-        logins: replicatedState<ProviderLoginsState>({logins: {}}),
+        logins: fakeState<ProviderLoginsState>({logins: {}}),
         cancelLogin: async () => ({ok: false, error: {code: "ProviderLoginError", message: "No login."}}),
         list: () => value([]),
         logout: ({providerId}) => value({providerId}),
@@ -139,7 +133,7 @@ class TimelineServer {
         submitLoginInput: async () => ({ok: false, error: {code: "ProviderLoginError", message: "No login."}}),
       },
       workspace: {
-        terminals: replicatedState<TerminalsState>({terminals: {}}),
+        terminals: fakeState<TerminalsState>({terminals: {}}),
         closeTerminal: () => value(null),
         listTerminals: () => value({terminals: []}),
         openTerminal: async () => ({ok: false, error: {code: "TerminalError", message: "Terminals are not available in timeline tests."}}),
@@ -158,11 +152,11 @@ class TimelineServer {
     };
   }
 
-  /** The replicated state of a session, created from its current value on first use. */
-  private document(sessionId: string): MutableReplicatedState<Session> {
+  /** The state of a session, created from its current value on first use. */
+  private document(sessionId: string): FakeState<Session> {
     let document = this.documents.get(sessionId);
     if (!document) {
-      document = replicatedState(this.session(sessionId));
+      document = fakeState(this.session(sessionId));
       this.documents.set(sessionId, document);
     }
     return document;
@@ -196,11 +190,11 @@ class TimelineServer {
     return this.session(session.id);
   }
 
-  /** Replaces a session and publishes it to its replicated state and the directory, as the server does. */
+  /** Replaces a session and publishes it to its state and the directory, as the server does. */
   private commit(session: Session, activity: SessionActivity): void {
     this.sessions.set(session.id, session);
-    this.document(session.id).replace(BACKGROUND_CONTEXT, session);
-    this.directory.change(BACKGROUND_CONTEXT, (draft) => {
+    this.document(session.id).replace(session);
+    this.directory.change((draft) => {
       draft.sessions[session.id] = {activity, notices: [], projectPath: session.projectPath, setupStep: null, summary: timelineSessionSummary(session)};
     });
   }

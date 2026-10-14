@@ -1,11 +1,19 @@
-import type {Context} from "@earendil-works/chord";
-import {defineService} from "@earendil-works/chord";
+import type {MembersOf} from "@earendil-works/chord";
+import {method, remote} from "@earendil-works/chord";
 import type {GetConfigurationPayload, GetConfigurationResult} from "@supernova/contracts/services/configuration/procedures";
-import type {ServiceResult} from "@supernova/contracts/lib/protocol";
+import {json, result, SERVER_WIDE} from "@supernova/contracts/lib/protocol";
 
 /** Effective configuration safe to expose to clients. */
-export interface ConfigurationService {
-  get(payload: GetConfigurationPayload, context: Context): Promise<ServiceResult<GetConfigurationResult>>;
-}
+export const ConfigurationService = remote("supernova.configuration", {
+  version: 1,
+  input: SERVER_WIDE,
+  variants: {
+    default: {
+      methods: {
+        get: method(json<GetConfigurationPayload>(), result<GetConfigurationResult>()),
+      },
+    },
+  },
+});
 
-export const ConfigurationService = defineService<ConfigurationService>("supernova.configuration");
+export type ConfigurationService = MembersOf<typeof ConfigurationService>;

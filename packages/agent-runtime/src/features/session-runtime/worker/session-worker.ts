@@ -1,4 +1,6 @@
 import {randomUUID} from "node:crypto";
+import type {MutableReplicatedState} from "@earendil-works/chord";
+import {replicatedState} from "@earendil-works/chord";
 import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import {CheckpointConflictError} from "@supernova/contracts/services/session-runtime/procedures";
 import type {
@@ -26,7 +28,6 @@ import {sendMessage} from "@supernova/agent-runtime/features/session-runtime/wor
 import {undoCheckpoint} from "@supernova/agent-runtime/features/session-runtime/worker/commands/undo-checkpoint";
 import type {SessionBoard} from "@supernova/agent-runtime/features/session-runtime/worker/session-board";
 import type {TitleGenerator} from "@supernova/agent-runtime/features/session-runtime/worker/title-generator";
-import {DocumentState} from "@supernova/agent-runtime/lib/document-state";
 
 export interface SessionWorkerInput {
   readonly board: SessionBoard;
@@ -46,12 +47,12 @@ function activityOf(session: Session): SessionActivity {
 
 /**
  * The live runtime of one open session: runs its commands one at a time, publishes its document as Chord replicated
- * state (subscribers receive each change as a delta), captures after-turn checkpoints, and reports activity and
+ * state (subscribers receive each new revision), captures after-turn checkpoints, and reports activity and
  * problems to the session board. The engine owns execution; the worker follows it.
  */
 export class SessionWorker {
   /** The document clients mirror, current after every published change. */
-  public readonly document: DocumentState<Session>;
+  public readonly document: MutableReplicatedState<Session>;
   public readonly store: SessionStore;
   public readonly sdk: Pick<PiSdk, "modelRuntime">;
   public readonly resourceCache: ResourceCache;
@@ -67,7 +68,7 @@ export class SessionWorker {
     private readonly input: SessionWorkerInput,
     /** The open session file. */
     public readonly file: SessionFile,
-    document: DocumentState<Session>
+    document: MutableReplicatedState<Session>
   ) {
     this.document = document;
     this.store = input.store;
@@ -84,7 +85,7 @@ export class SessionWorker {
   public static async open(input: SessionWorkerInput): Promise<SessionWorker> {
     const file = await input.store.file(input.sessionId);
     const session = await file.snapshot(await SessionWorker.record(input));
-    return new SessionWorker(input, file, new DocumentState(session));
+    return new SessionWorker(input, file, replicatedState(session));
   }
 
   public async sendMessage(input: SendMessagePayload): Promise<void> {
@@ -206,7 +207,6 @@ export class SessionWorker {
   public async dispose(): Promise<void> {
     this.stopWatching();
     await Promise.all([...this.background, this.publishing]);
-    this.document.dispose();
   }
 
   private static async record(input: SessionWorkerInput) {
@@ -240,10 +240,10 @@ export class SessionWorker {
     if (session.live.run === undefined) await this.settleTurns();
   }
 
-  /** Rebuilds the document and publishes the change from the last one; the board follows its activity and summary. */
+  /** Rebuilds the document and publishes it unless unchanged; the board follows its activity and summary. */
   private async publish(): Promise<Session> {
     const session = await this.file.snapshot(await SessionWorker.record(this.input));
-    this.document.publish(session, BACKGROUND_CONTEXT);
+    this.document.replace(BACKGROUND_CONTEXT, session);
     const activity = activityOf(session);
     const summary = {
       id: session.id,

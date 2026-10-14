@@ -1,4 +1,3 @@
-import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import {queryOptions, useQuery, useQueryClient} from "@tanstack/react-query";
 import {projectKeys} from "@/features/projects/api/query-keys";
 import {unwrap} from "@/runtime/runtime-result";
@@ -10,7 +9,7 @@ export function listFolderSuggestionsQueryOptions(runtime: RuntimeClient, query:
     // Moving to another folder keeps the previous folder's listing on screen until the new one arrives, instead of
     // emptying the list for a frame. Check `isPlaceholderData` before treating the listing as the current folder's.
     placeholderData: (previousData) => previousData,
-    queryFn: () => unwrap(runtime.folders.listSuggestions({query}, BACKGROUND_CONTEXT)),
+    queryFn: () => unwrap(runtime.folders.listSuggestions({query})),
     queryKey: projectKeys.folderSuggestion(query),
     staleTime: 30_000,
   });

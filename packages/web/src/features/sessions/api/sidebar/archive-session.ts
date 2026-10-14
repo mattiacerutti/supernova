@@ -1,4 +1,3 @@
-import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import {useMutation, useQueryClient} from "@tanstack/react-query";
 import type {InfiniteData} from "@tanstack/react-query";
 import type {ProjectSessionsListResult} from "@supernova/contracts/services/projects/procedures";
@@ -23,7 +22,7 @@ export function useArchiveSession() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (input: ArchiveSessionInput) => unwrap(runtime.projects.archiveSession(input, BACKGROUND_CONTEXT)),
+    mutationFn: (input: ArchiveSessionInput) => unwrap(runtime.projects.archiveSession(input)),
     onMutate: (input) => patchOptimism(input.sessionId, {archived: true}),
     onError: (_error, input) => patchOptimism(input.sessionId, {archived: undefined}),
     onSuccess: async (result) => {

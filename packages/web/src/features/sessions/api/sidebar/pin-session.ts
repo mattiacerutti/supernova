@@ -1,4 +1,3 @@
-import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import {useMutation} from "@tanstack/react-query";
 import {useSessionsStore} from "@/features/sessions/stores/sessions-store";
 import {unwrap} from "@/runtime/runtime-result";
@@ -16,7 +15,7 @@ export function usePinSession() {
   const runtime = useRuntime();
 
   return useMutation({
-    mutationFn: (input: PinSessionInput) => unwrap(runtime.projects.pinSession(input, BACKGROUND_CONTEXT)),
+    mutationFn: (input: PinSessionInput) => unwrap(runtime.projects.pinSession(input)),
     onMutate: (input) => patchOptimism(input.sessionId, {pinned: input.pinned}),
     onSettled: (_result, _error, input) => patchOptimism(input.sessionId, {pinned: undefined}),
   });

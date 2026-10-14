@@ -1,7 +1,6 @@
-import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import {useMutation} from "@tanstack/react-query";
 import type {HistorySide} from "@supernova/contracts/services/session-runtime/procedures";
-import {attachSession} from "@/features/sessions/api/sessions-sync";
+import {withSessionRuntime} from "@/features/sessions/api/sessions-sync";
 import {useSessionsStore} from "@/features/sessions/stores/sessions-store";
 import {unwrap} from "@/runtime/runtime-result";
 import type {RuntimeClient} from "@/runtime/transport/runtime-client";
@@ -13,8 +12,7 @@ async function loadPage(runtime: RuntimeClient, sessionId: string, side: History
   const session = useSessionsStore.getState().documents[sessionId];
   const edge = side === "entries" ? session?.entries.items[0]?.id : session?.undone.items.at(-1)?.id;
   if (edge === undefined) return;
-  await attachSession(runtime, sessionId);
-  const page = await unwrap(runtime.sessionRuntime.loadHistory({side, edge}, BACKGROUND_CONTEXT));
+  const page = await withSessionRuntime(runtime, sessionId, (service) => unwrap(service.loadHistory({side, edge})));
   addHistoryPage(sessionId, side, edge, page);
 }
 

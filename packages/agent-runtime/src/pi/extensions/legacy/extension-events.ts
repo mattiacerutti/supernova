@@ -110,7 +110,7 @@ export function eventHooks(subscribed: ReadonlySet<string>, emit: Emit): HookReg
           await emit("tool_execution_end", {
             toolCallId: call.id,
             toolName: call.name,
-            result: {content: result.content ?? [], details: result.details},
+            result: {content: result.output ?? [], details: result.details},
             isError: result.isError ?? false,
           });
           let current = result;
@@ -118,14 +118,14 @@ export function eventHooks(subscribed: ReadonlySet<string>, emit: Emit): HookReg
             toolCallId: call.id,
             toolName: call.name,
             input: call.arguments,
-            content: current.content ?? [],
+            content: current.output ?? [],
             details: current.details,
             isError: current.isError ?? false,
           })) as ToolReplacement[]) {
             if (!replaced) continue;
             current = {
               ...current,
-              ...(replaced.content ? {content: replaced.content} : {}),
+              ...(replaced.content ? {output: replaced.content} : {}),
               ...(replaced.isError === undefined ? {} : {isError: replaced.isError}),
               ...(replaced.details === undefined ? {} : {details: replaced.details as never}),
             };

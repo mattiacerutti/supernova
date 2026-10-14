@@ -1,6 +1,3 @@
-import {replicatedState} from "@earendil-works/chord";
-import type {MutableReplicatedState} from "@earendil-works/chord";
-import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import type {ModelReference, Session, SessionEntries, SessionEntry, UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
 import type {SessionRuntimeService} from "@supernova/contracts/services/session-runtime/services";
 import type {SessionDirectoryEntry, SessionDirectoryState, SessionsService} from "@supernova/contracts/services/sessions/services";
@@ -12,6 +9,8 @@ import {useSessionsStore} from "@/features/sessions/stores/sessions-store";
 import {hasUnseenActivity, useSessionVisitsStore} from "@/features/sessions/stores/sidebar/session-visits-store";
 import {sessionToastManager} from "@/lib/toast";
 import type {RuntimeClient} from "@/runtime/transport/runtime-client";
+import type {FakeState} from "@e2e/mocks/fake-state";
+import {fakeState} from "@e2e/mocks/fake-state";
 
 const model = {
   id: "claude-sonnet",
@@ -105,28 +104,24 @@ async function waitUntil(assertion: () => void | Promise<void>): Promise<void> {
 /** Server-side state the fake services publish, and the calls the client made to them. */
 interface FakeServices {
   readonly client: RuntimeClient;
-  readonly directory: MutableReplicatedState<SessionDirectoryState>;
-  /** Each attached session's document. */
-  readonly documents: Map<string, MutableReplicatedState<Session>>;
+  readonly directory: FakeState<SessionDirectoryState>;
+  /** Each session's document. */
+  readonly documents: Map<string, FakeState<Session>>;
   readonly sessionRuntime: {-readonly [K in keyof Omit<SessionRuntimeService, "session">]: SessionRuntimeService[K]};
   readonly sessions: {-readonly [K in keyof Omit<SessionsService, "directory">]: SessionsService[K]};
-  readonly attached: string[];
+  /** The sessions the client held, in order. */
+  readonly held: string[];
 }
 
-/**
- * A runtime client backed by local replicated state, as Chord's bindings expose the server's: `sessions.attach` routes
- * the connection to a session, and `bindSessionRuntime` points `sessionRuntime` at it.
- */
+/** A runtime client backed by local state, as Chord's handles expose the server's: each session is held by id. */
 function fakeServices(): FakeServices {
-  const directory = replicatedState<SessionDirectoryState>({sessions: {}});
-  const documents = new Map<string, MutableReplicatedState<Session>>();
-  const attached: string[] = [];
-  let routed: string | undefined;
-  let bound: MutableReplicatedState<Session> | undefined;
+  const directory = fakeState<SessionDirectoryState>({sessions: {}});
+  const documents = new Map<string, FakeState<Session>>();
+  const held: string[] = [];
   const documentOf = (sessionId: string) => {
     let document = documents.get(sessionId);
     if (!document) {
-      document = replicatedState(session({id: sessionId}));
+      document = fakeState(session({id: sessionId}));
       documents.set(sessionId, document);
     }
     return document;
@@ -141,13 +136,7 @@ function fakeServices(): FakeServices {
     undoCheckpoint: vi.fn(async () => ok),
   } as FakeServices["sessionRuntime"];
   const sessions = {
-    attach: vi.fn(async (sessionId: string) => {
-      attached.push(sessionId);
-      routed = sessionId;
-      return ok;
-    }),
     create: vi.fn(async (payload) => ({ok: true, value: session({id: payload.id})}) as const),
-    detach: vi.fn(async () => ok),
     fork: vi.fn(async () => ({ok: true, value: session()}) as const),
     get: vi.fn(async ({sessionId}) => ({ok: true, value: documents.get(sessionId)?.value ?? session({id: sessionId})}) as const),
     listComposerSuggestions: vi.fn(async () => ({ok: true as const, value: {items: []}})),
@@ -157,22 +146,23 @@ function fakeServices(): FakeServices {
   // Only what the sessions feature uses; the other services are never reached.
   const client = {
     sessions: Object.assign(sessions, {directory}),
-    // Looked up per call, so tests can replace a method after creating the client.
-    sessionRuntime: new Proxy(sessionRuntime, {
-      get: (target, member) => (member === "session" ? bound : target[member as keyof typeof target]),
-    }),
-    bindSessionRuntime: async () => {
-      bound = routed === undefined ? undefined : documentOf(routed);
+    holdSession: (sessionId: string) => {
+      held.push(sessionId);
+      // Methods are looked up per call, so tests can replace one after creating the client.
+      const service = new Proxy(sessionRuntime, {
+        get: (target, member) => (member === "session" ? documentOf(sessionId) : target[member as keyof typeof target]),
+      });
+      return {service, ready: Promise.resolve(), release: () => undefined};
     },
     ready: async () => undefined,
     onConnectionChange: () => () => undefined,
     dispose: async () => undefined,
   } as unknown as RuntimeClient;
-  return {attached, client, directory, documents, sessionRuntime, sessions};
+  return {client, directory, documents, held, sessionRuntime, sessions};
 }
 
 function setDirectory(services: FakeServices, sessions: Record<string, SessionDirectoryEntry>): void {
-  services.directory.replace(BACKGROUND_CONTEXT, {sessions});
+  services.directory.replace({sessions});
 }
 
 describe("session commands and views", () => {
@@ -206,13 +196,13 @@ describe("session commands and views", () => {
 
   it("keeps every value of a followed session's replicated document in the store", async () => {
     const {document, open, services} = setup();
-    services.documents.set("session-1", replicatedState(session()));
+    services.documents.set("session-1", fakeState(session()));
 
     open("session-1");
-    await waitUntil(() => expect(services.attached).toEqual(["session-1"]));
+    await waitUntil(() => expect(services.held).toEqual(["session-1"]));
     await waitUntil(() => expect(document("session-1")).toEqual(session()));
 
-    services.documents.get("session-1")!.change(BACKGROUND_CONTEXT, (draft) => {
+    services.documents.get("session-1")!.change((draft) => {
       draft.title = "Renamed";
     });
     expect(document("session-1")?.title).toBe("Renamed");
@@ -310,7 +300,7 @@ describe("session commands and views", () => {
     actions.sendMessage({contentParts, modelReference: model, sessionId: "session-1"});
 
     expect(live()).toMatchObject({liveMessage: contentParts, status: "streaming"});
-    await waitUntil(() => expect(services.sessionRuntime.sendMessage).toHaveBeenCalledWith({captureCheckpoints: true, contentParts, modelReference: model}, BACKGROUND_CONTEXT));
+    await waitUntil(() => expect(services.sessionRuntime.sendMessage).toHaveBeenCalledWith({captureCheckpoints: true, contentParts, modelReference: model}));
     accept();
     await waitUntil(() => expect(live()).toMatchObject({liveMessage: undefined, status: "idle"}));
   });
@@ -318,7 +308,7 @@ describe("session commands and views", () => {
   it("shows a new authored turn after undo without splitting extension continuations", async () => {
     const {actions, document, open, services} = setup();
     const initial = session({entries: all([userEntry(1)]), undone: all([userEntry(3), userEntry(5)])});
-    services.documents.set("session-1", replicatedState(initial));
+    services.documents.set("session-1", fakeState(initial));
     open("session-1");
     await waitUntil(() => expect(document("session-1")).toEqual(initial));
     let accept!: () => void;
@@ -328,11 +318,11 @@ describe("session commands and views", () => {
     await waitUntil(() => expect(services.sessionRuntime.sendMessage).toHaveBeenCalledOnce());
     const transcript = services.documents.get("session-1")!;
     const continuation = {conversationId: 1, id: 6, kind: "pi.user", model: [{content: "Continuation", role: "user", timestamp: 6}]} as unknown as SessionEntry;
-    transcript.replace(BACKGROUND_CONTEXT, {...initial, entries: all([...initial.entries.items, continuation])});
+    transcript.replace({...initial, entries: all([...initial.entries.items, continuation])});
     expect(live("session-1", document("session-1"))).toMatchObject({liveMessage: contentParts, turnIds: ["1"]});
     expect(useSessionsStore.getState().optimism["session-1"]?.message).toBeDefined();
 
-    transcript.replace(BACKGROUND_CONTEXT, session({entries: all([...transcript.value!.entries.items, {...userEntry(7), contentParts}]), runStart: 7}));
+    transcript.replace(session({entries: all([...transcript.value!.entries.items, {...userEntry(7), contentParts}]), runStart: 7}));
     expect(live("session-1", document("session-1"))).toMatchObject({liveMessage: contentParts, liveTurn: {id: "7"}, turnIds: ["1"], undoneTurns: []});
     accept();
     await waitUntil(() => expect(useSessionsStore.getState().optimism["session-1"]?.message).toBeUndefined());
@@ -417,7 +407,7 @@ describe("session commands and views", () => {
     {action: "revert", before: twoTurns(), after: undoneLast(twoTurns()), navigation: {action: "revert", lastTurnId: "1", turnId: "3"}, shown: ["1"]},
   ] as const)("keeps $action shown when the runtime's document applies it before the command's reply", async ({after, before, navigation, shown}) => {
     const {actions, document, open, services} = setup();
-    services.documents.set("session-1", replicatedState(before));
+    services.documents.set("session-1", fakeState(before));
     open("session-1");
     await waitUntil(() => expect(document("session-1")).toEqual(before));
     let reply!: () => void;
@@ -428,7 +418,7 @@ describe("session commands and views", () => {
 
     // The runtime publishes the navigated document first; the reply follows.
     await waitUntil(() => expect(services.sessionRuntime[NAVIGATION_METHODS[navigation.action]]).toHaveBeenCalledOnce());
-    services.documents.get("session-1")!.replace(BACKGROUND_CONTEXT, after);
+    services.documents.get("session-1")!.replace(after);
     expect(live("session-1", document("session-1"))).toMatchObject({turnIds: shown});
     reply();
     await expect(outcome).resolves.toEqual({status: "applied"});
@@ -522,12 +512,12 @@ describe("session commands and views", () => {
 
   it("stamps a followed session as visited at its activity time, so later activity elsewhere stays unseen", async () => {
     const {document, open, services} = setup();
-    services.documents.set("session-1", replicatedState(session()));
+    services.documents.set("session-1", fakeState(session()));
     open("session-1");
     const stopMarking = markSeenAsItChanges("session-1");
     await waitUntil(() => expect(document("session-1")).toBeDefined());
 
-    services.documents.get("session-1")!.change(BACKGROUND_CONTEXT, (draft) => {
+    services.documents.get("session-1")!.change((draft) => {
       draft.updatedAt = "2026-01-01T00:05:00.000Z";
     });
 

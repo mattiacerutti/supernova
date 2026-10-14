@@ -1,3 +1,4 @@
+import type {MutableReplicatedState} from "@earendil-works/chord";
 import type {
   AbortSessionPayload,
   CompactSessionPayload,
@@ -15,7 +16,6 @@ import type {CheckpointStore} from "@supernova/agent-runtime/features/session-ru
 import {SessionBoard} from "@supernova/agent-runtime/features/session-runtime/worker/session-board";
 import {SessionWorker} from "@supernova/agent-runtime/features/session-runtime/worker/session-worker";
 import type {TitleGenerator} from "@supernova/agent-runtime/features/session-runtime/worker/title-generator";
-import type {DocumentState} from "@supernova/agent-runtime/lib/document-state";
 import type {ResourceCache} from "@supernova/agent-runtime/pi/resource-cache";
 import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";
 import type {SessionStore} from "@supernova/agent-runtime/pi/session-store";
@@ -74,8 +74,8 @@ export class SessionRuntime {
     return (await this.worker(sessionId)).current();
   }
 
-  /** A durable session's document as replicated state, for attached clients. */
-  public async transcript(sessionId: string): Promise<DocumentState<Session>> {
+  /** A durable session's document as replicated state, for the clients following it. */
+  public async transcript(sessionId: string): Promise<MutableReplicatedState<Session>> {
     return (await this.worker(sessionId)).document;
   }
 

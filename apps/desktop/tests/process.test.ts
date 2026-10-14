@@ -4,8 +4,10 @@ import {mkdtemp, rm} from "node:fs/promises";
 import {createRequire} from "node:module";
 import {tmpdir} from "node:os";
 import {join, resolve} from "node:path";
-import {Client} from "@earendil-works/pi-client";
-import {RUNTIME_SERVER_ID} from "@supernova/contracts/lib/protocol";
+import type {WebSocketLike} from "@earendil-works/chord";
+import {createHost, webSocketLink} from "@earendil-works/chord";
+import {RUNTIME_HOST} from "@supernova/contracts/lib/protocol";
+import {ConfigurationService} from "@supernova/contracts/services/configuration/services";
 import {startServerProcess} from "@supernova/server/process";
 
 test("Electron's Node mode starts and stops the bundled headless API", async () => {
@@ -28,28 +30,15 @@ test("Electron's Node mode starts and stops the bundled headless API", async () 
     try {
       expect((await fetch(`${server.url}/health`)).status).toBe(200);
       expect((await fetch(server.url)).status).toBe(404);
-      // A runtime protocol hello over the WebSocket proves the bundled runtime serves its services.
+      // A call over Chord's WebSocket link proves the bundled runtime serves its services.
       const socket = new WebSocket(`${server.url.replace("http:", "ws:")}/ws`);
-      socket.binaryType = "arraybuffer";
-      await new Promise<void>((resolve, reject) => {
-        socket.onopen = () => resolve();
-        socket.onerror = reject;
-      });
-      const closed = new Promise<void>((resolve) => {
-        socket.onclose = () => resolve();
-      });
-      const client = await Client.connect({
-        serverId: RUNTIME_SERVER_ID,
-        transportFactory: (handlers) => {
-          socket.onmessage = (event) => handlers.onData(new Uint8Array(event.data as ArrayBuffer));
-          socket.addEventListener("close", () => handlers.onClose());
-          return {send: async (chunk) => socket.send(chunk.slice()), close: () => socket.close()};
-        },
-      });
-      expect(client.hello?.serverId).toBe(RUNTIME_SERVER_ID);
+      const closed = new Promise<void>((resolve) => socket.addEventListener("close", () => resolve()));
+      const client = createHost({name: "browser", kind: "client", upstream: webSocketLink(socket as unknown as WebSocketLike), onError: () => undefined});
+      const configuration = client.get(ConfigurationService, {}, {at: RUNTIME_HOST});
+      expect(await configuration.get({})).toMatchObject({ok: true});
       await server.close();
       await closed;
-      await client.dispose();
+      await client.close();
     } finally {
       await server.close();
     }

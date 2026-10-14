@@ -204,14 +204,14 @@ export async function createPiTestRuntime(input?: {
   const projects = new Projects({store});
 
   /**
-   * Observes a session as an attached client does: its transcript's replicated state, whose subscribers receive each
-   * Chord delta as a new value, and the session board.
+   * Observes a session as a client following it does: its transcript's replicated state, whose subscribers receive
+   * each revision, and the session board.
    */
   const observe = async (sessionId: string): Promise<Observation> => {
     const versions: Session[] = [];
     const board: SessionDirectoryState[] = [];
     const transcript = await runtime.transcript(sessionId);
-    const stopTranscript = transcript.state.subscribe((value) => void versions.push(value));
+    const stopTranscript = transcript.subscribe((value) => void versions.push(value));
     const stopBoard = runtime.board.state.subscribe((value) => void board.push(value));
     return {
       versions,

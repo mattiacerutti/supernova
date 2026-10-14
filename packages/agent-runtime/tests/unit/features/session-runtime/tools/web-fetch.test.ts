@@ -42,7 +42,7 @@ describe("web fetch tool", () => {
     const result = await webFetchTool.execute({format: "text", url}, {} as never, BACKGROUND_CONTEXT);
 
     expect(result).toEqual({
-      content: [{text: "hello", type: "text"}],
+      output: [{text: "hello", type: "text"}],
       details: {contentType: "text/plain", format: "text", output: "hello", url},
     });
   });
