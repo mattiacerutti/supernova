@@ -1,14 +1,23 @@
-import type {TerminalOutput} from "@supernova/contracts/services/workspace/schemas";
+import type {Readable} from "@earendil-works/chord";
+import type {Terminal, TerminalOutput} from "@supernova/contracts/services/workspace/schemas";
+import type {TerminalsState} from "@supernova/contracts/services/workspace/services";
+import {useSyncExternalStore} from "react";
 import {unwrap} from "@/runtime/runtime-result";
 import type {RuntimeClient} from "@/runtime/transport/runtime-client";
 import {useRuntime} from "@/runtime/use-runtime";
 
-export interface OpenTerminalInput {
+export interface AttachTerminalInput {
   readonly cols: number;
+  /** Where a new shell starts: the session's worktree or project. */
   readonly cwd: string;
   readonly id: string;
   readonly rows: number;
   readonly sessionId: string;
+  /** Start the shell first; false for a terminal the server already runs, which then only reattaches. */
+  readonly start: boolean;
+  readonly onChange: (change: TerminalChange) => void;
+  /** Called once the server runs the shell, with its listing; only for a start. */
+  readonly onStarted?: (terminal: Terminal) => void;
 }
 
 /** What changed in one terminal since the attached client last saw it. */
@@ -17,77 +26,99 @@ export type TerminalChange =
   | {readonly type: "terminal.history"; readonly data: string}
   | {readonly type: "terminal.output"; readonly data: string}
   | {readonly type: "terminal.exited"; readonly exitCode: number}
-  /** The terminal was closed and no longer exists. */
-  | {readonly type: "terminal.closed"};
+  /** The terminal was closed, or no longer exists (another client killed it, the server restarted). Nothing follows. */
+  | {readonly type: "terminal.closed"}
+  | {readonly type: "terminal.error"; readonly message: string};
 
-/** A connection to one server terminal: open or reattach, follow its output, send input, resize, close. */
+/** A tab's connection to one server terminal: send input, claim its size, and detach without ending the shell. */
 export interface TerminalSession {
-  readonly close: () => void;
   readonly resize: (cols: number, rows: number) => void;
   readonly write: (data: string) => void;
-  /** Stops following output without ending the shell. */
   readonly detach: () => void;
 }
 
-interface AttachTerminalInput extends OpenTerminalInput {
-  readonly onError: (message: string) => void;
-  readonly onEvent: (event: TerminalChange) => void;
-}
-
 /**
- * Turns one terminal's successive replicated values into what to draw. Output is the terminal's capped history plus
- * a count of what the cap dropped, so the client knows the absolute position it has drawn up to and appends only what
+ * Turns one terminal's successive output values into what to draw. Output is the terminal's capped history plus a
+ * count of what the cap dropped, so the client knows the absolute position it has drawn up to and appends only what
  * follows; if the cap dropped past it, it redraws from the history.
  */
-function follow(onEvent: (event: TerminalChange) => void): (entry: TerminalOutput | undefined) => void {
+function follow(onChange: (change: TerminalChange) => void): (output: TerminalOutput | undefined) => void {
   let drawnTo: number | undefined;
   let exited = false;
   let closed = false;
-  return (entry) => {
-    if (!entry) {
-      if (drawnTo !== undefined && !closed) {
-        closed = true;
-        onEvent({type: "terminal.closed"});
-      }
-      return;
-    }
-    const end = entry.dropped + entry.output.length;
-    if (drawnTo === undefined || drawnTo < entry.dropped) onEvent({type: "terminal.history", data: entry.output});
-    else if (end > drawnTo) onEvent({type: "terminal.output", data: entry.output.slice(drawnTo - entry.dropped)});
+  return (output) => {
+    // Nothing until the value arrives; closed is final.
+    if (!output || closed) return;
+    const end = output.dropped + output.output.length;
+    if (drawnTo === undefined || drawnTo < output.dropped) onChange({type: "terminal.history", data: output.output});
+    else if (end > drawnTo) onChange({type: "terminal.output", data: output.output.slice(drawnTo - output.dropped)});
     drawnTo = end;
-    if (entry.terminal.exitCode !== undefined && !exited) {
+    if (output.exitCode !== undefined && !exited) {
       exited = true;
-      onEvent({type: "terminal.exited", exitCode: entry.terminal.exitCode});
+      onChange({type: "terminal.exited", exitCode: output.exitCode});
+    }
+    if (output.closed) {
+      closed = true;
+      onChange({type: "terminal.closed"});
     }
   };
 }
 
+const errorMessage = (cause: unknown, fallback: string): string => (cause instanceof Error && cause.message ? cause.message : fallback);
+
+/**
+ * Starts or reattaches a terminal, then holds it for as long as the tab shows it: only a held, subscribed terminal's
+ * output reaches this client. Attaching claims the shell's size; whoever resizes last sets it.
+ */
 function attachTerminal(runtime: RuntimeClient, input: AttachTerminalInput): TerminalSession {
-  const {id, onError, onEvent} = input;
+  const {id, onChange} = input;
   let detached = false;
-  let stop: (() => void) | undefined;
-  const report = (cause: unknown, fallback: string) => {
-    if (!detached) onError(cause instanceof Error && cause.message ? cause.message : fallback);
+  let size = {cols: input.cols, rows: input.rows};
+  let hold: ReturnType<RuntimeClient["holdTerminal"]> | undefined;
+  const cleanups: Array<() => void> = [];
+  const emit = (change: TerminalChange): void => {
+    if (!detached) onChange(change);
   };
 
-  void unwrap(runtime.workspace.openTerminal({cols: input.cols, cwd: input.cwd, id, rows: input.rows, sessionId: input.sessionId})).then(
-    () => {
-      if (detached) return;
-      const apply = follow((event) => !detached && onEvent(event));
-      // Nothing until the state arrives; an absent entry afterwards means the terminal closed.
-      stop = runtime.workspace.terminals.subscribe((state) => state && apply(state.terminals[id]));
-    },
-    (cause: unknown) => report(cause, "Failed to start the terminal.")
-  );
+  const holdOutput = (): void => {
+    const held = runtime.holdTerminal(id);
+    hold = held;
+    cleanups.push(held.onGone(() => emit({type: "terminal.closed"})));
+    held.ready.then(
+      () => {
+        if (detached) return;
+        cleanups.push(held.service.output.subscribe(follow(emit)));
+        void held.service.resize(size).catch(() => undefined);
+      },
+      // An unknown terminal fails the hold: closed while this client was away.
+      () => emit({type: "terminal.closed"})
+    );
+  };
+
+  if (input.start) {
+    void unwrap(runtime.workspace.openTerminal({cols: input.cols, cwd: input.cwd, id, rows: input.rows, sessionId: input.sessionId})).then(
+      (terminal) => {
+        if (detached) return;
+        input.onStarted?.(terminal);
+        holdOutput();
+      },
+      (cause: unknown) => emit({type: "terminal.error", message: errorMessage(cause, "Failed to start the terminal.")})
+    );
+  } else {
+    holdOutput();
+  }
 
   return {
-    close: () => void runtime.workspace.closeTerminal({id}).catch(() => undefined),
     detach: () => {
       detached = true;
-      stop?.();
+      for (const cleanup of cleanups.splice(0)) cleanup();
+      hold?.release();
     },
-    resize: (cols, rows) => void runtime.workspace.resizeTerminal({cols, id, rows}).catch(() => undefined),
-    write: (data) => void runtime.workspace.writeTerminal({data, id}).catch(() => undefined),
+    resize: (cols, rows) => {
+      size = {cols, rows};
+      void hold?.service.resize({cols, rows}).catch(() => undefined);
+    },
+    write: (data) => void hold?.service.write({data}).catch(() => undefined),
   };
 }
 
@@ -97,14 +128,28 @@ export function useAttachTerminal(): (input: AttachTerminalInput) => TerminalSes
   return (input) => attachTerminal(runtime, input);
 }
 
-/** Ids of the shells the server still runs for a session; a reloaded client reattaches tabs to them. */
-export function useListTerminalIds(): (sessionId: string) => Promise<readonly string[]> {
-  const runtime = useRuntime();
-  return async (sessionId) => (await unwrap(runtime.workspace.listTerminals({sessionId}))).terminals.map((terminal) => terminal.id);
-}
-
-/** Kills a terminal by id; for closing a tab, where no component is attached anymore. */
+/** Kills a terminal by id; closing an unknown one is not an error. */
 export function useCloseTerminal(): (id: string) => void {
   const runtime = useRuntime();
   return (id) => void runtime.workspace.closeTerminal({id}).catch(() => undefined);
+}
+
+/** One subscribe function per readable, so `useSyncExternalStore` keeps its subscription across renders. */
+const subscribers = new WeakMap<Readable<unknown>, (onChange: () => void) => () => void>();
+function subscriberOf(readable: Readable<unknown>): (onChange: () => void) => () => void {
+  let subscribe = subscribers.get(readable);
+  if (!subscribe) {
+    subscribe = (onChange) => readable.subscribe(onChange);
+    subscribers.set(readable, subscribe);
+  }
+  return subscribe;
+}
+
+/**
+ * The server's terminals, without output, for as long as the calling component is mounted: the list reaches this
+ * client only while something subscribes. `undefined` until it arrives.
+ */
+export function useServerTerminals(): TerminalsState | undefined {
+  const {terminals} = useRuntime().workspace;
+  return useSyncExternalStore(subscriberOf(terminals), () => terminals.value);
 }

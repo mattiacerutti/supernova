@@ -4,6 +4,7 @@ import {Terminal} from "@xterm/xterm";
 import {useRef, useState} from "react";
 import {useAttachTerminal} from "@/features/workspace/api/terminal/terminal-session";
 import {fitTerminal} from "@/features/workspace/lib/terminal/fit-terminal";
+import {useWorkspacePanelStore} from "@/features/workspace/stores/workspace-panel-store";
 import type {WorkspaceTerminalTab} from "@/features/workspace/types/workspace-panel";
 import {useMountEffect} from "@/hooks/use-mount-effect";
 import {useSettingsStore} from "@/stores/settings-store";
@@ -28,8 +29,16 @@ function terminalTheme(host: HTMLElement): ITheme {
   };
 }
 
+/** The line under the terminal once its shell is no longer running, or failed to start. */
+function statusMessage(tab: WorkspaceTerminalTab, error: string | undefined): string | undefined {
+  if (error) return error;
+  if (tab.closed) return "This terminal was closed. Close the tab and open a new terminal to start another.";
+  if (tab.exitCode !== undefined) return `Shell exited with code ${tab.exitCode}. Close this tab and open a new terminal to start another.`;
+  return undefined;
+}
+
 interface TerminalTabProps {
-  /** Where the shell runs: the session's worktree or project. */
+  /** Where a new shell starts: the session's worktree or project. */
   readonly cwd: string;
   readonly sessionId: string;
   readonly tab: WorkspaceTerminalTab;
@@ -38,16 +47,17 @@ interface TerminalTabProps {
 /**
  * A shell on the server, rendered with xterm.js and its WebGL renderer.
  *
- * The shell belongs to the tab: it keeps running while the tab is hidden or the session is not open, and dies
- * when the tab is closed. Reopening the app reattaches by tab id.
+ * The shell belongs to the session, not to the tab: it keeps running while the tab is hidden, after a reload, and
+ * after the tab detaches; only killing it, archiving the session, or a server restart ends it. A tab that has not
+ * started its shell yet (no `number`) starts it; any other tab reattaches by id. The terminal's output reaches this
+ * client only from the first time the tab is shown until it unmounts.
  */
 export default function TerminalTab(props: TerminalTabProps) {
   const {cwd, sessionId, tab} = props;
   const hostRef = useRef<HTMLDivElement>(null);
   const attachTerminal = useAttachTerminal();
-  const [status, setStatus] = useState<{readonly kind: "running"} | {readonly kind: "exited"; readonly exitCode: number} | {readonly kind: "error"; readonly message: string}>({
-    kind: "running",
-  });
+  const updateTab = useWorkspacePanelStore((state) => state.updateTab);
+  const [error, setError] = useState<string>();
 
   // The tab lives inside React's <Activity>, which runs effect cleanups when hidden and effects again when shown.
   // The terminal must outlive that, or every tab switch would rebuild it and replay history. It is created once and
@@ -77,35 +87,44 @@ export default function TerminalTab(props: TerminalTabProps) {
     // Focused from the start so the cursor shows while the shell reads its rc files, like a native terminal window.
     terminal.focus();
 
+    const update = (change: Partial<WorkspaceTerminalTab>): void => updateTab<WorkspaceTerminalTab>(sessionId, tab.id, (current) => ({...current, ...change}));
     const session = attachTerminal({
       cols: terminal.cols,
       cwd,
       id: tab.id,
-      onError: (message) => setStatus({kind: "error", message}),
-      onEvent: (event) => {
-        switch (event.type) {
+      onChange: (change) => {
+        switch (change.type) {
           case "terminal.history":
             terminal.reset();
-            terminal.write(event.data);
+            terminal.write(change.data);
             break;
           case "terminal.output":
-            terminal.write(event.data);
+            terminal.write(change.data);
             break;
           case "terminal.exited":
-            setStatus({kind: "exited", exitCode: event.exitCode});
+            update({exitCode: change.exitCode});
             break;
           case "terminal.closed":
+            update({closed: true});
+            break;
+          case "terminal.error":
+            setError(change.message);
             break;
         }
       },
+      onStarted: (started) => update({number: started.number}),
       rows: terminal.rows,
       sessionId,
+      start: tab.number === undefined,
     });
 
     const input = terminal.onData((data) => session.write(data));
     // The grid and the shell change size in the same frame, so neither ever wraps output for a width the other
     // does not have. `onResize` fires only when the dimensions actually changed.
     const resize = terminal.onResize(({cols, rows}) => session.resize(cols, rows));
+    // Several clients can show one shell, and the last to resize sets its size. Focusing this one takes it back.
+    const claimSize = (): void => session.resize(terminal.cols, terminal.rows);
+    terminal.textarea?.addEventListener("focus", claimSize);
     // ResizeObserver already delivers one callback per frame, so no further batching is needed. A hidden tab reports
     // a 0×0 host; fitting then would collapse the grid, so it waits for the hidden→visible transition instead.
     const refit = (): void => {
@@ -129,6 +148,7 @@ export default function TerminalTab(props: TerminalTabProps) {
         document.fonts.removeEventListener("loadingdone", refit);
         unsubscribeTheme();
         observer.disconnect();
+        terminal.textarea?.removeEventListener("focus", claimSize);
         input.dispose();
         resize.dispose();
         session.detach();
@@ -142,14 +162,16 @@ export default function TerminalTab(props: TerminalTabProps) {
     };
   });
 
+  const message = statusMessage(tab, error);
+
   return (
     <div className="relative flex min-h-0 flex-1 flex-col bg-surface">
       <div className="relative min-h-0 flex-1 pl-2 pt-2">
         <div className="h-full w-full" ref={hostRef} />
       </div>
-      {status.kind !== "running" && (
+      {message && (
         <p className="shrink-0 border-t border-border-muted px-3 py-2 text-xs text-ink-muted" role="status">
-          {status.kind === "exited" ? `Shell exited with code ${status.exitCode}. Close this tab and open a new terminal to start another.` : status.message}
+          {message}
         </p>
       )}
     </div>

@@ -8,7 +8,7 @@ import {ProvidersService} from "@supernova/contracts/services/providers/services
 import {RUNTIME_HOST, RUNTIME_SOCKET_PATH} from "@supernova/contracts/lib/protocol";
 import {SessionRuntimeService} from "@supernova/contracts/services/session-runtime/services";
 import {SessionsService} from "@supernova/contracts/services/sessions/services";
-import {WorkspaceService} from "@supernova/contracts/services/workspace/services";
+import {TerminalService, WorkspaceService} from "@supernova/contracts/services/workspace/services";
 import {resolveSocketUrl} from "@/runtime/transport/endpoint";
 
 const RECONNECT_DELAY_MS = 1_000;
@@ -19,6 +19,17 @@ export type ConnectionState = "connected" | "disconnected";
 export interface SessionRuntimeHold {
   readonly service: SessionRuntimeService;
   readonly ready: Promise<void>;
+  readonly release: () => void;
+}
+
+/**
+ * A held terminal: its service, until `release`. `ready` rejects for an unknown or closed terminal; `onGone` reports
+ * a terminal that went away while held, such as after a server restart.
+ */
+export interface TerminalHold {
+  readonly service: TerminalService;
+  readonly ready: Promise<void>;
+  readonly onGone: (listener: () => void) => () => void;
   readonly release: () => void;
 }
 
@@ -37,6 +48,8 @@ export interface RuntimeClient {
   readonly workspace: WorkspaceService;
   /** Holds a session's runtime service; see `SessionRuntimeHold`. */
   holdSession(sessionId: string): SessionRuntimeHold;
+  /** Holds a terminal's service; see `TerminalHold`. */
+  holdTerminal(terminalId: string): TerminalHold;
   /** Resolves once the server's services are live. */
   ready(): Promise<void>;
   /** Calls `listener` on every connection change; a reconnect means state was missed and must be read again. */
@@ -117,6 +130,15 @@ export function createRuntimeClient(endpoint: string): RuntimeClient {
     holdSession(sessionId) {
       const handle = host.get(SessionRuntimeService, {sessionId}, at);
       return {service: strictJsonMembers(handle, "sessionRuntime"), ready: handle.ready, release: () => handle.release()};
+    },
+    holdTerminal(terminalId) {
+      const handle = host.get(TerminalService, {terminalId}, at);
+      return {
+        service: strictJsonMembers(handle, "terminal"),
+        ready: handle.ready,
+        onGone: (listener) => handle.onStatus((status) => status === "gone" && listener()),
+        release: () => handle.release(),
+      };
     },
     ready: () => ready,
     onConnectionChange(listener) {

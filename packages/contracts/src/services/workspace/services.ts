@@ -1,13 +1,12 @@
 import type {MembersOf} from "@earendil-works/chord";
 import {method, remote} from "@earendil-works/chord";
+import {Type} from "typebox";
 import {json, result, SERVER_WIDE} from "@supernova/contracts/lib/protocol";
 import type {
   TerminalClosePayload,
   TerminalOpenPayload,
   TerminalOpenResult,
   TerminalResizePayload,
-  TerminalsListPayload,
-  TerminalsListResult,
   TerminalWritePayload,
   WorkspaceBranchesListPayload,
   WorkspaceBranchesListResult,
@@ -22,16 +21,16 @@ import type {
   WorkspaceRepositoriesListPayload,
   WorkspaceRepositoriesListResult,
 } from "@supernova/contracts/services/workspace/procedures";
-import type {TerminalError, TerminalNotFoundError, TerminalOutput, WorkspaceFileError, WorkspaceGitError} from "@supernova/contracts/services/workspace/schemas";
+import type {Terminal, TerminalError, TerminalNotFoundError, TerminalOutput, WorkspaceFileError, WorkspaceGitError} from "@supernova/contracts/services/workspace/schemas";
 
 export interface TerminalsState {
-  /** Every running or exited shell, keyed by terminal id; a closed one leaves. */
-  readonly terminals: Readonly<Record<string, TerminalOutput>>;
+  /** Every running or exited shell, keyed by terminal id; a closed one leaves. No output: that is each terminal's own. */
+  readonly terminals: Readonly<Record<string, Terminal>>;
 }
 
 /**
- * A session's folder: its files, uncommitted Git changes, branches, and the shells running in it. Terminal output is
- * state: new output reaches clients as string appends, and the capped scrollback drops from the front.
+ * A session's folder: its files, uncommitted Git changes, branches, and the shells running in it. The shells are
+ * listed here without their output, which is the state of each terminal's `TerminalService`.
  */
 export const WorkspaceService = remote("supernova.workspace", {
   version: 1,
@@ -44,11 +43,8 @@ export const WorkspaceService = remote("supernova.workspace", {
       methods: {
         /** Starts a shell, or returns the existing terminal with that id so a reopened tab reattaches. */
         openTerminal: method(json<TerminalOpenPayload>(), result<TerminalOpenResult, TerminalError>()),
-        writeTerminal: method(json<TerminalWritePayload>(), result<null, TerminalNotFoundError>()),
-        resizeTerminal: method(json<TerminalResizePayload>(), result<null, TerminalNotFoundError>()),
         /** Kills the shell; closing an unknown terminal is not an error. */
         closeTerminal: method(json<TerminalClosePayload>(), result<null>()),
-        listTerminals: method(json<TerminalsListPayload>(), result<TerminalsListResult>()),
         listBranches: method(json<WorkspaceBranchesListPayload>(), result<WorkspaceBranchesListResult, WorkspaceGitError>()),
         getChanges: method(json<WorkspaceChangesGetPayload>(), result<WorkspaceChangesGetResult, WorkspaceGitError>()),
         getDiffContents: method(json<WorkspaceDiffContentsGetPayload>(), result<WorkspaceDiffContentsGetResult, WorkspaceFileError>()),
@@ -61,3 +57,28 @@ export const WorkspaceService = remote("supernova.workspace", {
 });
 
 export type WorkspaceService = MembersOf<typeof WorkspaceService>;
+
+/**
+ * One shell, addressed by its terminal id: a client holds it while a tab shows the terminal, and only subscribers of
+ * `output` receive it. Holding an unknown or closed terminal fails. The input names the terminal, so payloads leave
+ * out `id`. Every client shares one object per terminal; whoever resizes last sets the shell's size.
+ */
+export const TerminalService = remote("supernova.terminal", {
+  version: 1,
+  input: Type.Object({terminalId: Type.String()}),
+  variants: {
+    default: {
+      state: {
+        /** Capped output; new output is appended, the cap drops from the front. */
+        output: json<TerminalOutput>(),
+      },
+      methods: {
+        /** Sends input to the shell; dropped once it has exited. Fails once the terminal is closed. */
+        write: method(json<Omit<TerminalWritePayload, "id">>(), result<null, TerminalNotFoundError>()),
+        resize: method(json<Omit<TerminalResizePayload, "id">>(), result<null, TerminalNotFoundError>()),
+      },
+    },
+  },
+});
+
+export type TerminalService = MembersOf<typeof TerminalService>;

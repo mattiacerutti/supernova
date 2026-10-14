@@ -1,6 +1,5 @@
 import type {Pty, SpawnPty} from "@supernova/agent-runtime/features/workspace/terminals/pty";
 import {userProcessEnv} from "@supernova/agent-runtime/lib/user-process-env";
-import type {Terminal} from "@supernova/contracts/services/workspace/schemas";
 
 /** Output kept for clients that attach later. Enough for a few screens of scrollback without holding a build log forever. */
 const HISTORY_LIMIT_CHARS = 256 * 1024;
@@ -25,25 +24,15 @@ export interface TerminalProcessInput {
   readonly onExit: (exitCode: number) => void;
 }
 
-/** One shell for a session: its PTY and the capped output history attached clients see. */
+/** One shell for a session: its PTY. Its owner keeps the output it reports. */
 export class TerminalProcess {
-  public readonly cwd: string;
-  public readonly id: string;
-  public readonly sessionId: string;
-
   private exitCode: number | undefined;
   private pty: Pty | undefined;
   private closed = false;
 
-  private constructor(input: Pick<TerminalProcessInput, "cwd" | "id" | "sessionId">) {
-    this.cwd = input.cwd;
-    this.id = input.id;
-    this.sessionId = input.sessionId;
-  }
-
   /** Spawns the user's shell in `cwd`. */
   public static async spawn(input: TerminalProcessInput): Promise<TerminalProcess> {
-    const process = new TerminalProcess(input);
+    const process = new TerminalProcess();
     let pending = "";
     let flushTimer: NodeJS.Timeout | undefined;
     const flush = (): void => {
@@ -74,10 +63,6 @@ export class TerminalProcess {
       shell: globalThis.process.env.SHELL || (globalThis.process.platform === "win32" ? "powershell.exe" : "/bin/sh"),
     });
     return process;
-  }
-
-  public snapshot(): Terminal {
-    return {cwd: this.cwd, id: this.id, sessionId: this.sessionId, ...(this.exitCode === undefined ? {} : {exitCode: this.exitCode})};
   }
 
   public write(data: string): void {

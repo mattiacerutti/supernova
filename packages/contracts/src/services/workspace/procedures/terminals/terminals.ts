@@ -18,20 +18,13 @@ export const TerminalWritePayload = z.object({
 });
 
 export const TerminalResizePayload = z.object({
-  cols: z.number(),
+  cols: z.number().int().positive(),
   id: z.string(),
-  rows: z.number(),
+  rows: z.number().int().positive(),
 });
 
 export const TerminalClosePayload = z.object({
   id: z.string(),
-});
-
-export const TerminalsListPayload = z.object({
-  sessionId: z.string(),
-});
-export const TerminalsListResult = z.object({
-  terminals: z.array(Terminal),
 });
 
 export type TerminalOpenPayload = z.infer<typeof TerminalOpenPayload>;
@@ -39,5 +32,3 @@ export type TerminalOpenResult = z.infer<typeof TerminalOpenResult>;
 export type TerminalWritePayload = z.infer<typeof TerminalWritePayload>;
 export type TerminalResizePayload = z.infer<typeof TerminalResizePayload>;
 export type TerminalClosePayload = z.infer<typeof TerminalClosePayload>;
-export type TerminalsListPayload = z.infer<typeof TerminalsListPayload>;
-export type TerminalsListResult = z.infer<typeof TerminalsListResult>;

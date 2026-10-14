@@ -4,7 +4,7 @@ import {ProjectsService} from "@supernova/contracts/services/projects/services";
 import {RUNTIME_HOST} from "@supernova/contracts/lib/protocol";
 import {SessionRuntimeService} from "@supernova/contracts/services/session-runtime/services";
 import {SessionsService} from "@supernova/contracts/services/sessions/services";
-import {WorkspaceService} from "@supernova/contracts/services/workspace/services";
+import {TerminalService, WorkspaceService} from "@supernova/contracts/services/workspace/services";
 import {Configuration} from "@supernova/agent-runtime/features/configuration/configuration";
 import {Folders} from "@supernova/agent-runtime/features/folders/folders";
 import {LoginSessions} from "@supernova/agent-runtime/features/providers/login/login-sessions";
@@ -12,13 +12,14 @@ import {Providers} from "@supernova/agent-runtime/features/providers/providers";
 import {spawnPty} from "@supernova/agent-runtime/features/workspace/terminals/pty";
 import {Terminals} from "@supernova/agent-runtime/features/workspace/terminals/terminals";
 import {Workspace} from "@supernova/agent-runtime/features/workspace/workspace";
-import {afterEach, describe, expect, it} from "vitest";
+import {afterEach, beforeEach, describe, expect, it} from "vitest";
 import {Worktrees} from "@supernova/agent-runtime/features/worktrees/worktrees";
 import type {AgentRuntime} from "@supernova/agent-runtime/runtime";
 import {assistantTexts, createPiTestRuntime, fauxAssistantMessage, selectedModelReference, turnContents, waitUntil} from "@tests/support/session-runtime";
 import {startRuntimeServer} from "@tests/support/runtime-server";
 
 const firstMessage = {contentParts: [{text: "Hi", type: "text" as const}], modelReference: selectedModelReference};
+const at = {at: RUNTIME_HOST};
 
 describe("runtime services over the wire", () => {
   const cleanups: Array<() => Promise<void>> = [];
@@ -47,7 +48,6 @@ describe("runtime services over the wire", () => {
     } as AgentRuntime;
     const server = startRuntimeServer(runtime);
     cleanups.push(server.close);
-    const at = {at: RUNTIME_HOST};
     const sessions = server.client.get(SessionsService, {}, at);
     const workspace = server.client.get(WorkspaceService, {}, at);
     // A remote state member holds a value only while subscribed, as the app's views are.
@@ -65,6 +65,7 @@ describe("runtime services over the wire", () => {
       folders: server.client.get(FoldersService, {}, at),
       pi,
       projects: server.client.get(ProjectsService, {}, at),
+      server,
       sessions,
       workspace,
     };
@@ -179,7 +180,7 @@ describe("runtime services over the wire", () => {
     expect(await sessionRuntime.abort(null)).toEqual({ok: true, value: null});
   });
 
-  it("serves the non-session services: calls return results or tagged errors, terminal output replicates", async () => {
+  it("serves the non-session services: calls return results or tagged errors", async () => {
     const {folders, pi, workspace} = await connect();
 
     const created = await folders.create({path: `${pi.defaultProjectRoot}/made-over-the-wire`});
@@ -193,16 +194,72 @@ describe("runtime services over the wire", () => {
     });
     // Payloads are validated at the boundary.
     expect(await workspace.readFile({path: 1} as never)).toMatchObject({ok: false, error: {code: "GenericError", message: "The request is invalid."}});
+  });
 
-    const shell = process.env.SHELL;
-    process.env.SHELL = "/bin/sh";
-    try {
-      expect(await workspace.openTerminal({cols: 80, cwd: pi.defaultProjectRoot, id: "wire-terminal", rows: 24, sessionId: "s"})).toMatchObject({ok: true});
-      await workspace.writeTerminal({data: "echo WIRE_$((20+1))\n", id: "wire-terminal"});
-      await waitUntil(() => expect(workspace.terminals.value?.terminals["wire-terminal"]?.output).toContain("WIRE_21"), {timeoutMs: 5_000});
-      expect(await workspace.writeTerminal({data: "x", id: "missing"})).toMatchObject({ok: false, error: {code: "TerminalNotFoundError"}});
-    } finally {
-      process.env.SHELL = shell;
-    }
+  describe("terminals", () => {
+    const originalShell = process.env.SHELL;
+    // A plain sh starts instantly and has no rc files, unlike the developer's login shell.
+    beforeEach(() => {
+      process.env.SHELL = "/bin/sh";
+    });
+    afterEach(() => {
+      process.env.SHELL = originalShell;
+    });
+
+    it("sends a terminal's output only to clients subscribed to it, and its listing to every client", async () => {
+      const {pi, server, workspace} = await connect();
+      // A second window: it follows the list of terminals but never shows this one.
+      const other = server.connectClient();
+      const otherWorkspace = other.host.get(WorkspaceService, {}, at);
+      const stopOtherList = otherWorkspace.terminals.subscribe(() => undefined);
+      cleanups.push(async () => stopOtherList());
+
+      expect(await workspace.openTerminal({cols: 80, cwd: pi.defaultProjectRoot, id: "wire-terminal", rows: 24, sessionId: "s"})).toMatchObject({
+        ok: true,
+        value: {id: "wire-terminal", number: 1},
+      });
+      await waitUntil(() => expect(otherWorkspace.terminals.value?.terminals["wire-terminal"]).toMatchObject({sessionId: "s"}));
+
+      const terminal = server.client.get(TerminalService, {terminalId: "wire-terminal"}, at);
+      const stopOutput = terminal.output.subscribe(() => undefined);
+      cleanups.push(async () => stopOutput());
+      await terminal.ready;
+      await terminal.write({data: "echo WIRE_$((20+1))\n"});
+      await waitUntil(() => expect(terminal.output.value?.output).toContain("WIRE_21"), {timeoutMs: 5_000});
+      // The listing carries no output, and the window that never subscribed received none.
+      expect(JSON.stringify(otherWorkspace.terminals.value)).not.toContain("WIRE_21");
+      expect(other.received.join("\n")).not.toContain("WIRE_21");
+    });
+
+    it("replays history to a client that attaches later, applies the last resize, and ends the output on close", async () => {
+      const {pi, server, workspace} = await connect();
+      await workspace.openTerminal({cols: 80, cwd: pi.defaultProjectRoot, id: "shared", rows: 24, sessionId: "s"});
+      const first = server.client.get(TerminalService, {terminalId: "shared"}, at);
+      const stopFirst = first.output.subscribe(() => undefined);
+      cleanups.push(async () => stopFirst());
+      await first.write({data: "echo EARLY_$((1+1))\n"});
+      await waitUntil(() => expect(first.output.value?.output).toContain("EARLY_2"), {timeoutMs: 5_000});
+
+      const other = server.connectClient().host.get(TerminalService, {terminalId: "shared"}, at);
+      const stopOther = other.output.subscribe(() => undefined);
+      cleanups.push(async () => stopOther());
+      await waitUntil(() => expect(other.output.value?.output).toContain("EARLY_2"));
+
+      // Whoever resizes last sets the shell's size.
+      await first.resize({cols: 100, rows: 30});
+      await other.resize({cols: 90, rows: 20});
+      await other.write({data: "stty size\n"});
+      await waitUntil(() => expect(first.output.value?.output).toContain("20 90"), {timeoutMs: 5_000});
+
+      expect(await workspace.closeTerminal({id: "shared"})).toEqual({ok: true, value: null});
+      await waitUntil(() => expect(other.output.value?.closed).toBe(true));
+      expect(await other.write({data: "x"})).toMatchObject({ok: false, error: {code: "TerminalNotFoundError"}});
+    });
+
+    it("fails to hold an unknown terminal", async () => {
+      const {server} = await connect();
+      const missing = server.client.get(TerminalService, {terminalId: "missing"}, at);
+      await expect(missing.ready).rejects.toThrow("Terminal not found.");
+    });
   });
 });

@@ -1,5 +1,5 @@
 import {AnimatePresence, motion} from "framer-motion";
-import {Activity, useRef} from "react";
+import {Activity, useRef, useState} from "react";
 import type {CSSProperties, ReactNode} from "react";
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
@@ -8,12 +8,13 @@ import Menu, {MenuItem} from "@/components/ui/menu";
 import FileIcon from "@/features/workspace/components/file-tree/file-icon";
 import ChangesTab from "@/features/workspace/components/tabs/changes-tab";
 import FilesTab from "@/features/workspace/components/tabs/files-tab";
+import AttachTerminalItems from "@/features/workspace/components/terminal/attach-terminal-items";
+import CloseTerminalDialog from "@/features/workspace/components/terminal/close-terminal-dialog";
 import TerminalTab from "@/features/workspace/components/terminal/terminal-tab";
-import {useCloseTerminal, useListTerminalIds} from "@/features/workspace/api/terminal/terminal-session";
-import {EMPTY_LAYOUT, MIN_WORKSPACE_PANEL_WIDTH, tabKind, useWorkspacePanelStore, WORKSPACE_TAB_KINDS} from "@/features/workspace/stores/workspace-panel-store";
-import type {WorkspacePanelTab, WorkspacePanelTabKind} from "@/features/workspace/types/workspace-panel";
+import {useCloseTerminal} from "@/features/workspace/api/terminal/terminal-session";
+import {EMPTY_LAYOUT, MIN_WORKSPACE_PANEL_WIDTH, tabKind, terminalLabel, useWorkspacePanelStore, WORKSPACE_TAB_KINDS} from "@/features/workspace/stores/workspace-panel-store";
+import type {WorkspacePanelTab, WorkspacePanelTabKind, WorkspaceTerminalTab} from "@/features/workspace/types/workspace-panel";
 import {useDragResize} from "@/hooks/use-drag-resize";
-import {useMountEffect} from "@/hooks/use-mount-effect";
 import {cn} from "@/lib/cn";
 import {clampedPanelWidth, maxPanelWidth, observePanelWidth, PANEL_TRANSITION} from "@/components/layouts/panel-layout";
 
@@ -76,28 +77,9 @@ function PanelTab(props: PanelTabProps) {
   );
 }
 
-interface AdoptServerTerminalsProps {
-  readonly sessionId: string;
-}
-
-/** Shells outlive the client's layout (which lives in memory), so a mounting panel adds tabs for the ones still running. */
-function AdoptServerTerminals(props: AdoptServerTerminalsProps) {
-  const {sessionId} = props;
-  const adoptTerminals = useWorkspacePanelStore((state) => state.adoptTerminals);
-  const listTerminalIds = useListTerminalIds();
-
-  useMountEffect(() => {
-    let cancelled = false;
-    void listTerminalIds(sessionId)
-      .then((ids) => {
-        if (!cancelled) adoptTerminals(sessionId, ids);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  });
-  return null;
+/** Whether a terminal's shell may still run: closing its tab then asks whether to detach or kill. */
+function mayBeRunning(tab: WorkspaceTerminalTab): boolean {
+  return tab.number !== undefined && tab.exitCode === undefined && !tab.closed;
 }
 
 interface WorkspacePanelContentProps {
@@ -113,12 +95,36 @@ function WorkspacePanelContent(props: WorkspacePanelContentProps) {
   const openTab = useWorkspacePanelStore((state) => state.openTab);
   const pinTab = useWorkspacePanelStore((state) => state.pinTab);
   const setActiveTab = useWorkspacePanelStore((state) => state.setActiveTab);
+  const [closing, setClosing] = useState<WorkspaceTerminalTab>();
+  // Kept apart from `closing` so the dialog keeps its title while it animates out.
+  const [closeDialogOpen, setCloseDialogOpen] = useState(false);
 
   const addableKinds = WORKSPACE_TAB_KIND_NAMES.filter((kind) => !(WORKSPACE_TAB_KINDS[kind].singleton && tabs.some((tab) => tab.kind === kind)));
 
+  const handleClose = (tab: WorkspacePanelTab): void => {
+    if (tab.kind === "terminal" && mayBeRunning(tab)) {
+      setClosing(tab);
+      setCloseDialogOpen(true);
+      return;
+    }
+    // A shell that exited or never started has nothing to keep; one already closed elsewhere has nothing to end.
+    if (tab.kind === "terminal" && !tab.closed) closeTerminal(tab.id);
+    closeTab(sessionId, tab.id);
+  };
+  // Detaching only closes the tab: its unmount releases the terminal, and the shell keeps running on the server.
+  const handleDetach = (): void => {
+    setCloseDialogOpen(false);
+    if (closing) closeTab(sessionId, closing.id);
+  };
+  const handleKill = (): void => {
+    setCloseDialogOpen(false);
+    if (!closing) return;
+    closeTerminal(closing.id);
+    closeTab(sessionId, closing.id);
+  };
+
   return (
     <section aria-label="Project workspace" className="flex h-full min-h-0 w-full flex-col bg-surface">
-      <AdoptServerTerminals sessionId={sessionId} />
       {/* Right padding clears the floating workspace toggle. */}
       <header className="relative z-20 flex h-12 shrink-0 items-center gap-1 pl-2 pr-[calc(--spacing(11)+var(--window-controls-right-inset))]">
         {/* Outside the titlebar drag region, or the gaps between tabs swallow wheel events. */}
@@ -136,11 +142,7 @@ function WorkspacePanelContent(props: WorkspacePanelContentProps) {
                 <PanelTab
                   active={tab.id === activeTabId}
                   onActivate={() => setActiveTab(sessionId, tab.id)}
-                  onClose={() => {
-                    // Closing a terminal tab is the one way to end its shell.
-                    if (tab.kind === "terminal") closeTerminal(tab.id);
-                    closeTab(sessionId, tab.id);
-                  }}
+                  onClose={() => handleClose(tab)}
                   onPin={() => pinTab(sessionId, tab.id)}
                   tab={tab}
                 />
@@ -162,9 +164,12 @@ function WorkspacePanelContent(props: WorkspacePanelContentProps) {
                 {WORKSPACE_TAB_KINDS[kind].label}
               </MenuItem>
             ))}
+            <AttachTerminalItems sessionId={sessionId} tabs={tabs} />
           </Menu>
         </div>
       </header>
+
+      <CloseTerminalDialog label={terminalLabel(closing?.number)} onCancel={() => setCloseDialogOpen(false)} onDetach={handleDetach} onKill={handleKill} open={closeDialogOpen} />
 
       {tabs.length === 0 && (
         <div className="flex min-h-0 flex-1 items-center justify-center">

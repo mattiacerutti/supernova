@@ -5,8 +5,6 @@ import type {
   TerminalOpenPayload,
   TerminalOpenResult,
   TerminalResizePayload,
-  TerminalsListPayload,
-  TerminalsListResult,
   TerminalWritePayload,
   WorkspaceBranch,
   WorkspaceBranchesListPayload,
@@ -102,13 +100,14 @@ export class Workspace {
     return this.deps.terminals.close(input);
   }
 
-  public listTerminals(input: TerminalsListPayload): Promise<TerminalsListResult> {
-    return this.deps.terminals.list(input);
-  }
-
-  /** Every terminal's output as replicated state. */
+  /** Every terminal, without output, as replicated state. */
   public get terminals() {
     return this.deps.terminals.state;
+  }
+
+  /** One terminal's output as replicated state; throws `TerminalNotFoundError` for an unknown or closed terminal. */
+  public terminalOutput(id: string) {
+    return this.deps.terminals.output(id);
   }
 
   /** Kills a session's shells; runs before the session is archived and its worktree removed. */

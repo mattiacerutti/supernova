@@ -54,7 +54,6 @@ import {
   TerminalClosePayload,
   TerminalOpenPayload,
   TerminalResizePayload,
-  TerminalsListPayload,
   TerminalWritePayload,
   WorkspaceBranchesListPayload,
   WorkspaceChangesGetPayload,
@@ -63,9 +62,10 @@ import {
   WorkspaceFilesListPayload,
   WorkspaceRepositoriesListPayload,
 } from "@supernova/contracts/services/workspace/procedures";
+import type {TerminalOutput} from "@supernova/contracts/services/workspace/schemas";
 import {TerminalError, TerminalNotFoundError, WorkspaceFileError, WorkspaceGitError} from "@supernova/contracts/services/workspace/schemas";
 import type {TerminalsState} from "@supernova/contracts/services/workspace/services";
-import {WorkspaceService} from "@supernova/contracts/services/workspace/services";
+import {TerminalService, WorkspaceService} from "@supernova/contracts/services/workspace/services";
 import type {z} from "zod";
 import {errorMessage} from "@supernova/agent-runtime/lib/errors";
 import type {AgentRuntime} from "@supernova/agent-runtime/runtime";
@@ -119,8 +119,9 @@ function action<R, E extends ErrorValue = never>(operation: Omit<Operation<z.Zod
 
 /**
  * Serves the runtime's features on a Chord host, one remote object per service (`ConfigurationService`, …), so
- * clients reach them over a link. Every service but session runtime is one object all clients share;
- * `SessionRuntimeService` is one per session, and holding an unknown session fails. The features own their state,
+ * clients reach them over a link. Every service but session runtime and terminal is one object all clients share;
+ * `SessionRuntimeService` is one per session and `TerminalService` one per terminal, and holding an unknown session
+ * or terminal fails. The features own their state,
  * which outlives every client: a service copies it into a cell with a listener and serves the cell.
  */
 export function serveRuntime(host: Pick<Host, "serve">, runtime: AgentRuntime): void {
@@ -178,24 +179,51 @@ export function serveRuntime(host: Pick<Host, "serve">, runtime: AgentRuntime): 
   });
 
   host.serve(WorkspaceService, (_input, _principal, self) => {
-    // The terminals feature owns every shell and its output, so a shell outlives its client; this cell follows it.
-    // Output is appended, so each chunk reaches clients as a string append.
+    // The terminals feature owns every shell, so a shell outlives its client; this cell follows the list of them.
+    // Output is not here: each terminal's is its own `TerminalService`, sent only to clients showing it.
     const state = self.state({terminals: cell(json<TerminalsState>(), workspace.terminals.value)});
     self.listen({terminals: listener(workspace.terminals, (terminals, ctx) => state.terminals.replace(ctx, terminals, {diff: true}))});
     return {
       kind: "default",
       terminals: state.terminals,
       openTerminal: method({payload: TerminalOpenPayload, run: (input) => workspace.openTerminal(input), error: TerminalError}),
-      writeTerminal: method({payload: TerminalWritePayload, run: (input) => workspace.writeTerminal(input).then(() => null), error: TerminalNotFoundError}),
-      resizeTerminal: method({payload: TerminalResizePayload, run: (input) => workspace.resizeTerminal(input).then(() => null), error: TerminalNotFoundError}),
       closeTerminal: method({payload: TerminalClosePayload, run: (input) => workspace.closeTerminal(input).then(() => null)}),
-      listTerminals: method({payload: TerminalsListPayload, run: (input) => workspace.listTerminals(input)}),
       listBranches: method({payload: WorkspaceBranchesListPayload, run: (input) => workspace.listBranches(input), error: WorkspaceGitError}),
       getChanges: method({payload: WorkspaceChangesGetPayload, run: (input) => workspace.getChanges(input), error: WorkspaceGitError}),
       getDiffContents: method({payload: WorkspaceDiffContentsGetPayload, run: (input) => workspace.getDiffContents(input), error: WorkspaceFileError}),
       listRepositories: method({payload: WorkspaceRepositoriesListPayload, run: (input) => workspace.listRepositories(input)}),
       listFiles: method({payload: WorkspaceFilesListPayload, run: (input) => workspace.listFiles(input), error: WorkspaceGitError}),
       readFile: method({payload: WorkspaceFileReadPayload, run: (input) => workspace.readFile(input), error: WorkspaceFileError}),
+    };
+  });
+
+  host.serve(TerminalService, ({terminalId}, _principal, self) => {
+    // The terminal's output activates the object; an unknown or closed terminal fails the hold. The shell outlives
+    // the object, which only follows its output: releasing it never ends the shell. The input names the terminal, so
+    // payloads leave out its id.
+    const res = self.resources({output: resource({rev: 1, open: () => workspace.terminalOutput(terminalId)})});
+    // A placeholder until the terminal's first value, delivered as the object goes live and before any call.
+    const state = self.state({output: cell(json<TerminalOutput>(), {output: "", dropped: 0})});
+    self.listen({
+      output: listener(
+        res.output,
+        (output) => output,
+        (output, ctx) => state.output.replace(ctx, output, {diff: true})
+      ),
+    });
+    return {
+      kind: "default",
+      output: state.output,
+      write: method({
+        payload: TerminalWritePayload.omit({id: true}),
+        run: (input) => workspace.writeTerminal({...input, id: terminalId}).then(() => null),
+        error: TerminalNotFoundError,
+      }),
+      resize: method({
+        payload: TerminalResizePayload.omit({id: true}),
+        run: (input) => workspace.resizeTerminal({...input, id: terminalId}).then(() => null),
+        error: TerminalNotFoundError,
+      }),
     };
   });
 
@@ -216,15 +244,10 @@ export function serveRuntime(host: Pick<Host, "serve">, runtime: AgentRuntime): 
     };
   });
 
-  // The input names the session; payloads carry the rest.
-  const send = SendMessagePayload.omit({sessionId: true});
-  const compact = CompactSessionPayload.omit({sessionId: true});
-  const step = UndoCheckpointPayload.omit({sessionId: true});
-  const revert = RevertToMessagePayload.omit({sessionId: true});
-  const history = LoadHistoryPayload.omit({sessionId: true});
   host.serve(SessionRuntimeService, ({sessionId}, _principal, self) => {
     // Opening the session's worker activates the object; an unknown session fails the hold. The worker outlives the
-    // object, which follows its document: releasing it never stops the session's work.
+    // object, which follows its document: releasing it never stops the session's work. The input names the session,
+    // so payloads leave out its id.
     const res = self.resources({
       document: resource({
         rev: 1,
@@ -246,12 +269,24 @@ export function serveRuntime(host: Pick<Host, "serve">, runtime: AgentRuntime): 
     return {
       kind: "default",
       session: state.session,
-      loadHistory: method({payload: history, run: (input) => sessionRuntime.loadHistory({...input, sessionId})}),
-      sendMessage: method({payload: send, run: (input) => sessionRuntime.sendMessage({...input, sessionId}).then(() => null)}),
-      compact: method({payload: compact, run: (input) => sessionRuntime.compact({...input, sessionId}).then(() => null)}),
-      undoCheckpoint: method({payload: step, error: CheckpointNavigationError, run: (input) => sessionRuntime.undoCheckpoint({...input, sessionId}).then(() => null)}),
-      redoCheckpoint: method({payload: step, error: CheckpointNavigationError, run: (input) => sessionRuntime.redoCheckpoint({...input, sessionId}).then(() => null)}),
-      revertToMessage: method({payload: revert, error: CheckpointNavigationError, run: (input) => sessionRuntime.revertToMessage({...input, sessionId}).then(() => null)}),
+      loadHistory: method({payload: LoadHistoryPayload.omit({sessionId: true}), run: (input) => sessionRuntime.loadHistory({...input, sessionId})}),
+      sendMessage: method({payload: SendMessagePayload.omit({sessionId: true}), run: (input) => sessionRuntime.sendMessage({...input, sessionId}).then(() => null)}),
+      compact: method({payload: CompactSessionPayload.omit({sessionId: true}), run: (input) => sessionRuntime.compact({...input, sessionId}).then(() => null)}),
+      undoCheckpoint: method({
+        payload: UndoCheckpointPayload.omit({sessionId: true}),
+        error: CheckpointNavigationError,
+        run: (input) => sessionRuntime.undoCheckpoint({...input, sessionId}).then(() => null),
+      }),
+      redoCheckpoint: method({
+        payload: UndoCheckpointPayload.omit({sessionId: true}),
+        error: CheckpointNavigationError,
+        run: (input) => sessionRuntime.redoCheckpoint({...input, sessionId}).then(() => null),
+      }),
+      revertToMessage: method({
+        payload: RevertToMessagePayload.omit({sessionId: true}),
+        error: CheckpointNavigationError,
+        run: (input) => sessionRuntime.revertToMessage({...input, sessionId}).then(() => null),
+      }),
       abort: action({run: () => sessionRuntime.abort({sessionId}).then(() => null)}),
     };
   });

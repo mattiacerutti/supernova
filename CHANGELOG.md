@@ -13,9 +13,12 @@ All notable changes to Supernova are documented in this file.
 
 - Themes can override individual generated colors instead of only the seed values.
 - In the desktop app, the command palette can open the current session's worktree (or its project, for sessions without one) in VS Code, Cursor, or Zed, whichever are installed, or in Finder or File Explorer.
+- Terminal tabs can be detached: closing a running terminal asks whether to keep its shell running on the server or kill it. The + menu lists the session's terminals this window does not show, from other windows or detached here, to attach to.
 
 ### Changed
 
+- A window keeps its workspace tabs across reloads, and only its own: a new window or browser tab no longer opens every terminal the session has. Terminals are numbered ("Terminal 2"), and a terminal closed in another window shows as closed instead of freezing.
+- A terminal's output is sent only to windows showing it, instead of every terminal's output to every window with a terminal open. Whoever resizes or focuses a shared terminal last sets its size.
 - Sessions now run on Pi's durable engine (`pi-durable`). Every streamed partial, tool output, and turn is written to the session's file before it is shown, so a server restart or crash resumes an interrupted response from where it stopped instead of losing it, and a browser that opens a session mid-response sees everything produced so far.
 - Running sessions show their activity in the sidebar as soon as the app connects, including sessions started from another browser or before this one opened.
 - Pinned sessions are now stored on the server and shared across browsers and devices, instead of in each browser's local storage. Existing pins are not carried over.

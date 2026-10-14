@@ -6,6 +6,7 @@ import type {ServiceResult} from "@supernova/contracts/lib/protocol";
 import type {SessionRuntimeService} from "@supernova/contracts/services/session-runtime/services";
 import type {SessionDirectoryState, SessionsService} from "@supernova/contracts/services/sessions/services";
 import type {TerminalsState} from "@supernova/contracts/services/workspace/services";
+import type {TerminalOutput} from "@supernova/contracts/services/workspace/schemas";
 import type {RuntimeClient} from "@/runtime/transport/runtime-client";
 import type {FakeState} from "@e2e/mocks/fake-state";
 import {fakeState} from "@e2e/mocks/fake-state";
@@ -101,6 +102,16 @@ class TimelineServer {
         ready: this.sessions.has(sessionId) ? Promise.resolve() : Promise.reject(new Error("Session not found.")),
         release: () => undefined,
       }),
+      holdTerminal: () => ({
+        service: {
+          output: fakeState<TerminalOutput>({output: "", dropped: 0, closed: true}),
+          resize: () => value(null),
+          write: () => value(null),
+        },
+        ready: Promise.reject(new Error("Terminals are not available in timeline tests.")),
+        onGone: () => () => undefined,
+        release: () => undefined,
+      }),
       configuration: {get: () => value({modelDefaults: {}})},
       extensions: {update: () => value(null)},
       folders: {
@@ -135,10 +146,7 @@ class TimelineServer {
       workspace: {
         terminals: fakeState<TerminalsState>({terminals: {}}),
         closeTerminal: () => value(null),
-        listTerminals: () => value({terminals: []}),
         openTerminal: async () => ({ok: false, error: {code: "TerminalError", message: "Terminals are not available in timeline tests."}}),
-        resizeTerminal: () => value(null),
-        writeTerminal: () => value(null),
         getChanges: () => value({uncommitted: []}),
         getDiffContents: () => value({newContents: "", oldContents: ""}),
         listBranches: async () => ({ok: false, error: {code: "WorkspaceNotARepositoryError", message: "Not a repository."}}),

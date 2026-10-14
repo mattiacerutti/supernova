@@ -1,9 +1,10 @@
 import {create} from "zustand";
-import {createJSONStorage, persist} from "zustand/middleware";
+import type {PersistStorage} from "zustand/middleware";
+import {persist} from "zustand/middleware";
 import type {IconName} from "@/components/ui/icon";
 import {isWindowsEnvironment} from "@/config/app-environment";
 import {fileNameOf} from "@/features/workspace/lib/file-info";
-import type {WorkspacePanelTab, WorkspacePanelTabKind} from "@/features/workspace/types/workspace-panel";
+import type {WorkspacePanelTab, WorkspacePanelTabKind, WorkspaceTerminalTab} from "@/features/workspace/types/workspace-panel";
 
 const DEFAULT_WORKSPACE_PANEL_WIDTH = 348;
 const BASE_MIN_WORKSPACE_PANEL_WIDTH = 280;
@@ -51,10 +52,15 @@ export const WORKSPACE_TAB_KINDS = {
     create: () => ({id: `terminal:${crypto.randomUUID()}`, kind: "terminal"}),
     icon: "terminal",
     label: "Terminal",
-    present: () => ({icon: "terminal", label: "Terminal", preview: false}),
+    present: (tab) => ({icon: "terminal", label: terminalLabel(tab.number), preview: false}),
     singleton: false,
   },
 } satisfies {readonly [K in WorkspacePanelTabKind]: WorkspaceTabKind<Extract<WorkspacePanelTab, {kind: K}>>};
+
+/** "Terminal 2", or "Terminal" before the server has numbered it. */
+export function terminalLabel(number: number | undefined): string {
+  return number === undefined ? "Terminal" : `Terminal ${number}`;
+}
 
 export function tabKind<TTab extends WorkspacePanelTab>(tab: TTab): WorkspaceTabKind<TTab> {
   return WORKSPACE_TAB_KINDS[tab.kind] as unknown as WorkspaceTabKind<TTab>;
@@ -83,8 +89,8 @@ interface WorkspacePanelState {
   readonly closeTab: (sessionId: string, tabId: string) => void;
   /** Opens a new tab of the kind, or activates the existing one for singleton kinds. */
   readonly openTab: (sessionId: string, kind: WorkspacePanelTabKind) => void;
-  /** Adds tabs for server terminals this layout does not know about, such as after a reload. Activates one only when no tab is active. */
-  readonly adoptTerminals: (sessionId: string, terminalIds: readonly string[]) => void;
+  /** Adds a tab for a terminal the server already runs and activates it; activates the tab instead if there is one. */
+  readonly attachTerminal: (sessionId: string, terminal: Pick<WorkspaceTerminalTab, "exitCode" | "id" | "number">) => void;
   readonly pinTab: (sessionId: string, tabId: string) => void;
   readonly setActiveTab: (sessionId: string, tabId: string) => void;
   /** Replaces a session's layout; used by tab-specific behavior such as opening a file. */
@@ -96,6 +102,40 @@ interface WorkspacePanelState {
 
 /** The shortcut that shows and hides the workspace panel, as VS Code does for its secondary sidebar. */
 export const WORKSPACE_PANEL_HOTKEY = "Mod+Alt+B";
+
+type PersistedPanel = Pick<WorkspacePanelState, "layouts" | "width">;
+
+/**
+ * The width is the app's, in `localStorage`; layouts are this window's, in `sessionStorage`. A window's tabs (and the
+ * terminals they reattach to by id) survive its reloads, but a new window starts without them: a client shows only
+ * the shells it opened or attached itself. Layouts of archived sessions stay until the window closes; they are small
+ * and never shown again.
+ */
+const panelStorage: PersistStorage<PersistedPanel> = {
+  getItem: (name) => {
+    const width = readState<Pick<PersistedPanel, "width">>(localStorage, name)?.width;
+    const layouts = readState<Pick<PersistedPanel, "layouts">>(sessionStorage, name)?.layouts;
+    return {state: {layouts: layouts ?? {}, width: width ?? DEFAULT_WORKSPACE_PANEL_WIDTH}};
+  },
+  setItem: (name, {state, version}) => {
+    localStorage.setItem(name, JSON.stringify({state: {width: state.width}, version}));
+    sessionStorage.setItem(name, JSON.stringify({state: {layouts: state.layouts}, version}));
+  },
+  removeItem: (name) => {
+    localStorage.removeItem(name);
+    sessionStorage.removeItem(name);
+  },
+};
+
+/** The `state` a persisted entry holds, or undefined when it is missing or unreadable. */
+function readState<T>(storage: Storage, name: string): Partial<T> | undefined {
+  try {
+    const raw = storage.getItem(name);
+    return raw ? (JSON.parse(raw) as {state?: Partial<T>}).state : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 export const useWorkspacePanelStore = create<WorkspacePanelState>()(
   persist(
@@ -121,11 +161,11 @@ export const useWorkspacePanelStore = create<WorkspacePanelState>()(
             const created = definition.create();
             return {...layout, activeTabId: created.id, tabs: [...layout.tabs, created]};
           }),
-        adoptTerminals: (sessionId, terminalIds) =>
+        attachTerminal: (sessionId, terminal) =>
           updateLayout(sessionId, (layout) => {
-            const missing = terminalIds.filter((id) => !layout.tabs.some((tab) => tab.id === id));
-            if (missing.length === 0) return layout;
-            return {...layout, activeTabId: layout.activeTabId ?? missing[0]!, tabs: [...layout.tabs, ...missing.map((id) => ({id, kind: "terminal" as const}))]};
+            if (layout.tabs.some((tab) => tab.id === terminal.id)) return {...layout, activeTabId: terminal.id};
+            const tab: WorkspaceTerminalTab = {kind: "terminal", ...terminal};
+            return {...layout, activeTabId: tab.id, tabs: [...layout.tabs, tab]};
           }),
         pinTab: (sessionId, tabId) =>
           updateLayout(sessionId, (layout) => ({...layout, tabs: layout.tabs.map((tab) => (tab.id === tabId ? (tabKind(tab).pin?.(tab) ?? tab) : tab))})),
@@ -139,8 +179,8 @@ export const useWorkspacePanelStore = create<WorkspacePanelState>()(
     },
     {
       name: "supernova-workspace-panel",
-      storage: createJSONStorage(() => localStorage),
-      partialize: ({width}) => ({width}),
+      storage: panelStorage,
+      partialize: ({layouts, width}) => ({layouts, width}),
     }
   )
 );
