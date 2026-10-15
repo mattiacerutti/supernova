@@ -150,5 +150,16 @@ async function preparePty(): Promise<void> {
   }
 }
 
+/** Photon loads a sibling WASM file, so ship the complete package rather than bundling its JavaScript. */
+async function preparePhoton(): Promise<void> {
+  const require = createRequire(import.meta.url);
+  const source = dirname(require.resolve("@silvia-odwyer/photon-node/package.json"));
+  const target = join(distNodeModulesDir, "@silvia-odwyer", "photon-node");
+  await rm(target, {force: true, recursive: true});
+  await mkdir(dirname(target), {recursive: true});
+  await cp(source, target, {dereference: true, recursive: true});
+}
+
 await prepareFd();
 await preparePty();
+await preparePhoton();
