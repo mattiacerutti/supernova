@@ -16,6 +16,7 @@ export const SessionNotice = z.object({
   message: z.string(),
   at: z.string(),
   extensionPath: z.string().optional(),
+  extensionName: z.string().optional(),
 });
 
 export type SessionNotice = z.infer<typeof SessionNotice>;

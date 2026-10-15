@@ -31,7 +31,7 @@ export interface SessionStoreDeps {
   /** Defaults to Pi's file settings for the session's working directory. */
   readonly settings?: (cwd: string) => SettingsManager;
   /** Problems that do not fail a command: an extension's diagnostic (with its path) or an engine report. */
-  readonly onReport?: (sessionId: string, notice: Pick<SessionNotice, "message" | "extensionPath">) => void;
+  readonly onReport?: (sessionId: string, notice: Pick<SessionNotice, "message" | "extensionPath" | "extensionName">) => void;
 }
 
 interface OpenSession {

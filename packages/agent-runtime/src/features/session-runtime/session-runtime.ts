@@ -95,7 +95,7 @@ export class SessionRuntime {
   }
 
   /** Adds a notice to a session: an extension's diagnostic (a warning, with its path) or an engine report. */
-  public notify(sessionId: string, notice: Pick<SessionNotice, "message" | "extensionPath">): void {
+  public notify(sessionId: string, notice: Pick<SessionNotice, "message" | "extensionPath" | "extensionName">): void {
     void this.deps.store.find(sessionId).then((record) => {
       if (record) this.board.notify(sessionId, record.projectPath, {level: "warning", ...notice});
     });

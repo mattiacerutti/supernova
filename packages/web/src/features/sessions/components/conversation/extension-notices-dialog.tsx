@@ -26,19 +26,21 @@ export default function ExtensionNoticesDialog() {
     })
   );
 
-  const byExtension = new Map<string, string[]>();
+  const byExtension = new Map<string, {name: string; messages: string[]}>();
   for (const notice of notices ?? []) {
     if (notice.extensionPath === undefined) continue;
-    byExtension.set(notice.extensionPath, [...(byExtension.get(notice.extensionPath) ?? []), notice.message]);
+    const group = byExtension.get(notice.extensionPath);
+    if (group) group.messages.push(notice.message);
+    else byExtension.set(notice.extensionPath, {name: notice.extensionName ?? extensionName(notice.extensionPath), messages: [notice.message]});
   }
 
   return (
     <Dialog className="h-auto" containerClassName="h-auto w-[min(calc(100vw-1rem),24rem)]" onOpenChange={setOpen} open={open} title="Extension limitations">
       <div className="-mx-1 flex max-h-[60svh] flex-col gap-5 overflow-y-auto px-1 pb-5 pt-2">
-        {[...byExtension].map(([path, messages]) => (
+        {[...byExtension].map(([path, {name, messages}]) => (
           <section className="space-y-1.5" key={path}>
             <h3 className="truncate text-sm text-ink" title={path}>
-              {extensionName(path)}
+              {name}
             </h3>
             <ul className="space-y-1 border-l border-border-muted pl-3">
               {messages.map((message, index) => (

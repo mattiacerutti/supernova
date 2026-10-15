@@ -1,7 +1,9 @@
-import {mkdtemp, readFile, rm, writeFile} from "node:fs/promises";
+import {mkdir, mkdtemp, readFile, rm, writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {fauxAssistantMessage, fauxToolCall} from "@earendil-works/pi-ai/compat";
+import {DefaultResourceLoader, ModelRuntime, SettingsManager} from "@earendil-works/pi-coding-agent";
+import {bridgeExtensions} from "@supernova/agent-runtime/pi/extensions/legacy/extension-bridge";
 import {afterEach, describe, expect, it} from "vitest";
 import {createPiTestRuntime, selectedModelReference} from "@tests/support/session-runtime";
 
@@ -64,6 +66,45 @@ describe("old-SDK extensions", () => {
     delete process.env.SUPERNOVA_FIXTURE_LOG;
     await Promise.all(dirs.map((dir) => rm(dir, {recursive: true, force: true})));
     dirs.length = 0;
+  });
+
+  it.each([
+    {entry: "src/index.ts", name: "@example/web-search"},
+    {entry: "dist/lib/index.js", name: "web-search"},
+    {entry: "index.ts", name: "web-access"},
+    {entry: "src/index.ts", name: undefined},
+    {entry: "src/index.ts", name: 123},
+    {entry: "src/index.ts", name: ""},
+  ])("uses package metadata for $entry with name $name", async ({entry, name}) => {
+    const dir = await mkdtemp(join(tmpdir(), "supernova-extension-name-"));
+    dirs.push(dir);
+    const packageDir = join(dir, "installed-package");
+    const extensionPath = join(packageDir, entry);
+    await mkdir(join(extensionPath, ".."), {recursive: true});
+    await writeFile(join(packageDir, "package.json"), JSON.stringify({name, type: "module", pi: {extensions: [entry]}}));
+    await writeFile(
+      extensionPath,
+      `export default function(pi) {
+      pi.registerCommand("search", {handler: async () => {}});
+      pi.on("session_start", () => { throw new Error("startup failed"); });
+    }`
+    );
+    const loader = new DefaultResourceLoader({cwd: dir, agentDir: join(dir, "agent"), settingsManager: SettingsManager.inMemory({packages: [packageDir]})});
+    await loader.reload();
+    expect(loader.getExtensions().errors).toEqual([]);
+    const notices: unknown[] = [];
+    const extensions = bridgeExtensions({
+      cwd: dir,
+      loaded: loader.getExtensions(),
+      modelRuntime: await ModelRuntime.create({modelsPath: null}),
+      report: (notice) => notices.push(notice),
+    });
+    await extensions.start();
+    const identity = {extensionPath, ...(typeof name === "string" && name ? {extensionName: name} : {})};
+    expect(notices).toEqual([
+      {...identity, message: "Commands not shown: search"},
+      {...identity, message: "session_start failed: startup failed"},
+    ]);
   });
 
   it("runs headless as the old Supernova did: tools, hook events, no-op UI, and reports what it cannot deliver", async () => {

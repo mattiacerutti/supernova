@@ -1,3 +1,5 @@
+import {readFileSync} from "node:fs";
+import {join} from "node:path";
 import type {TSchema} from "@earendil-works/pi-ai";
 import type {Extension as PiExtension, LoadExtensionsResult, ModelRuntime, ToolDefinition} from "@earendil-works/pi-coding-agent";
 import {defineExtension} from "@earendil-works/pi-durable";
@@ -41,7 +43,20 @@ function emitter(handlers: ReadonlyMap<string, readonly Handler[]>, input: Bridg
 /** An extension's problems, reported once when it loads. */
 export interface ExtensionDiagnostic {
   readonly extensionPath: string;
+  readonly extensionName?: string;
   readonly message: string;
+}
+
+function packageName(extension: PiExtension): string | undefined {
+  const {origin, baseDir} = extension.sourceInfo;
+  if (origin !== "package" || !baseDir) return undefined;
+  try {
+    const manifest = JSON.parse(readFileSync(join(baseDir, "package.json"), "utf8"));
+    return typeof manifest?.name === "string" && manifest.name.trim() ? manifest.name : undefined;
+  } catch {
+    // Display metadata must not prevent an otherwise usable extension from loading.
+    return undefined;
+  }
 }
 
 /** Converts one loaded extension: its tools to engine tools, its supported events to engine hooks. */
@@ -79,13 +94,18 @@ export function bridgeExtensions(input: {
   readonly modelRuntime: ModelRuntime;
   readonly report: (diagnostic: ExtensionDiagnostic) => void;
 }): BridgedExtensions {
-  const extensions = input.loaded.extensions.map((extension) => bridgeExtension(extension, input, input.report));
+  const names = new Map(input.loaded.extensions.map((extension) => [extension.path, packageName(extension)]));
+  const report = (notice: ExtensionDiagnostic) => {
+    const extensionName = names.get(notice.extensionPath);
+    input.report(extensionName ? {...notice, extensionName} : notice);
+  };
+  const extensions = input.loaded.extensions.map((extension) => bridgeExtension(extension, input, report));
   const lifecycle = (event: "session_start" | "session_shutdown", fields: Record<string, unknown>) => async () => {
     for (const extension of input.loaded.extensions) {
       try {
         await emitter(extension.handlers as Map<string, Handler[]>, input)(event, fields);
       } catch (error) {
-        input.report({extensionPath: extension.path, message: `${event} failed: ${(error instanceof Error ? error.message : String(error)).replace(/ in Supernova\.?$/, "")}`});
+        report({extensionPath: extension.path, message: `${event} failed: ${(error instanceof Error ? error.message : String(error)).replace(/ in Supernova\.?$/, "")}`});
       }
     }
   };
