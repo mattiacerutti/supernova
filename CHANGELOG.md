@@ -17,6 +17,7 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+- Changed the file viewer to scroll long lines horizontally instead of wrapping them.
 - A window keeps its workspace tabs across reloads, and only its own: a new window or browser tab no longer opens every terminal the session has. Terminals are numbered ("Terminal 2"), and a terminal closed in another window shows as closed instead of freezing.
 - A terminal's output is sent only to windows showing it, instead of every terminal's output to every window with a terminal open. Whoever resizes or focuses a shared terminal last sets its size.
 - Sessions now run on Pi's durable engine (`pi-durable`). Every streamed partial, tool output, and turn is written to the session's file before it is shown, so a server restart or crash resumes an interrupted response from where it stopped instead of losing it, and a browser that opens a session mid-response sees everything produced so far.

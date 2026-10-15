@@ -96,7 +96,7 @@ const SHARED_OPTIONS = {
 
 /** Pierre options for plain file rendering, styled to match the active appearance. */
 export function generateFileOptions<T>(mode: "dark" | "light"): FileOptions<T> {
-  return {...SHARED_OPTIONS, theme: CODE_HIGHLIGHT_THEMES[mode], themeType: mode};
+  return {...SHARED_OPTIONS, overflow: "scroll", theme: CODE_HIGHLIGHT_THEMES[mode], themeType: mode};
 }
 
 /** Pierre options for diff rendering, styled to match the active appearance. */
