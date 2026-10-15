@@ -1,6 +1,6 @@
 export const MIN_CONTENT_WIDTH = 480;
 
-// Animate visibility, never the fitted width: container changes must apply immediately.
+/** Animate visibility, never the fitted width: container changes must apply immediately. */
 export const PANEL_TRANSITION = "transition-[--panel-open] duration-250 ease-in-out motion-reduce:transition-none";
 
 /** Floored at the panel minimum: when nothing fits the content yields, and `max < min` would overwrite the stored width. */

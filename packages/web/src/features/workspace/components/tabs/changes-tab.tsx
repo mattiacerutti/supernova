@@ -52,7 +52,6 @@ function repositoryLabel(projectPath: string, root: string): string {
   return root === "." ? projectNameFromPath(projectPath) : root;
 }
 
-/** Plain text for the usual single repository; a menu when the project folder holds several. */
 function RepositoryPicker(props: RepositoryPickerProps) {
   const {onSelect, projectPath, repositories, repositoryRoot} = props;
   const label = repositoryLabel(projectPath, repositoryRoot);

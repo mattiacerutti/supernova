@@ -12,19 +12,17 @@ const packageJsonPaths = [
   "packages/web/package.json",
 ];
 
-export interface UnreleasedSection {
+interface UnreleasedSection {
   readonly start: number;
   readonly bodyStart: number;
   readonly end: number;
   readonly body: string;
 }
 
-/** Reads the desktop app version, the source of truth for release versioning. */
 export function readDesktopVersion(): string {
   return JSON.parse(readFileSync(desktopPackageJsonPath, "utf8")).version;
 }
 
-/** Reads the release version release workflows pass through the environment. */
 export function readReleaseVersion(): string {
   const releaseVersion = process.env.RELEASE_VERSION;
   if (!releaseVersion) {
@@ -34,7 +32,6 @@ export function readReleaseVersion(): string {
   return releaseVersion;
 }
 
-/** Aligns every released workspace package to the given version. */
 export function updatePackageVersions(version: string): void {
   for (const path of packageJsonPaths) {
     const packageJson = JSON.parse(readFileSync(path, "utf8"));
@@ -43,7 +40,6 @@ export function updatePackageVersions(version: string): void {
   }
 }
 
-/** Locates the ## [Unreleased] section and its body boundaries within the changelog. */
 export function locateUnreleasedSection(changelog: string): UnreleasedSection {
   const unreleasedMatch = changelog.match(/^## \[Unreleased\]\s*$/m);
   if (!unreleasedMatch || unreleasedMatch.index === undefined) {
@@ -58,7 +54,6 @@ export function locateUnreleasedSection(changelog: string): UnreleasedSection {
   return {start, bodyStart, end, body: changelog.slice(bodyStart, end).trim()};
 }
 
-/** Compacts an unreleased changelog body into release notes, dropping empty subsections. */
 export function formatReleaseNotes(unreleasedBody: string): string {
   const sections: Array<string> = [];
   const preface: Array<string> = [];
@@ -74,8 +69,7 @@ export function formatReleaseNotes(unreleasedBody: string): string {
     }
   }
 
-  // Keep release notes compact while preserving any prose before the first
-  // subsection. A fresh Unreleased template still includes all headings.
+  // Prose before the first subsection is kept; a fresh Unreleased template still has every heading.
   for (const line of unreleasedBody.split("\n")) {
     if (line.startsWith("### ")) {
       flushCurrentSection();

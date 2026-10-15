@@ -14,10 +14,6 @@ export function modelKey(provider: string, id: string): string {
   return `${provider}|${id}`;
 }
 
-export function selectionKey(selection: ModelReference | undefined): string {
-  return selection ? modelKey(selection.providerId, selection.id) : "";
-}
-
 export function createModelReference(model: ModelDetails, thinkingLevel: string | undefined): ModelReference {
   return {
     id: model.id,
@@ -26,7 +22,6 @@ export function createModelReference(model: ModelDetails, thinkingLevel: string 
   };
 }
 
-/** Chooses the preferred thinking level when supported, otherwise the closest ranked fallback. */
 export function resolveThinkingLevel(model: ModelDetails, preferredThinkingLevel: string | undefined): string | undefined {
   const [first, ...rest] = model.thinkingLevels;
   if (first === undefined) return undefined;

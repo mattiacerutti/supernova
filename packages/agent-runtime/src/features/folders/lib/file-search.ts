@@ -14,12 +14,10 @@ interface ProjectPathEntry {
   readonly path: string;
 }
 
-/** Escapes regex metacharacters before passing user input to fd. */
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/** Converts a slash-delimited query into an fd path pattern. */
 function buildFdPathQuery(query: string): string {
   const normalized = normalizePathForDisplay(query);
   if (!normalized.includes("/")) return normalized;
@@ -37,7 +35,6 @@ function buildFdPathQuery(query: string): string {
   return hasTrailingSeparator ? `${pattern}[\\\\/]` : pattern;
 }
 
-/** Narrows a file query to the deepest existing directory prefix. */
 async function scopedQuery(projectPath: string, query: string): Promise<{baseDir: string; displayBase: string; query: string}> {
   const normalizedQuery = normalizePathForDisplay(query);
   const slashIndex = normalizedQuery.lastIndexOf("/");
@@ -55,7 +52,6 @@ async function scopedQuery(projectPath: string, query: string): Promise<{baseDir
   };
 }
 
-/** Runs fd inside the project and annotates matching paths with directory status. */
 async function runFd(projectPath: string, query: string): Promise<ProjectPathEntry[]> {
   const scope = await scopedQuery(projectPath, query);
   const args = [
@@ -95,7 +91,6 @@ async function runFd(projectPath: string, query: string): Promise<ProjectPathEnt
   );
 }
 
-/** Scores a path match for composer file suggestions. */
 function scoreEntry(entry: ProjectPathEntry, query: string): number {
   if (!query) return 1;
 
@@ -117,7 +112,6 @@ function toFolderFile(entry: ProjectPathEntry): FolderFile {
   };
 }
 
-/** Finds project files and folders matching an @-mention query, best matches first. */
 export async function searchProjectFiles(projectPath: string, query: string): Promise<FolderFile[]> {
   const normalizedQuery = query.trim().replace(/^@/, "");
   const entries = await runFd(projectPath, normalizedQuery).catch(() => []);

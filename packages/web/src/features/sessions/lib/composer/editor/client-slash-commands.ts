@@ -40,7 +40,6 @@ function matchesQuery(command: ClientSlashCommandDefinition, query: string): boo
   return command.id.includes(normalizedQuery) || command.title.toLowerCase().includes(normalizedQuery) || command.subtitle?.toLowerCase().includes(normalizedQuery) === true;
 }
 
-/** Builds client-owned slash command suggestions from the registered command actions. */
 export function clientSlashCommandSuggestions(input: {readonly actions: ClientSlashCommandActions; readonly query: string}): readonly ComposerSlashCommandSuggestionItem[] {
   const {actions, query} = input;
 

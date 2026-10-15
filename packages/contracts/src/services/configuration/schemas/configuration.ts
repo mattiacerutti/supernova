@@ -10,7 +10,6 @@ export const ModelDefaults = z.object({
   modelThinkingLevels: z.record(z.string(), thinkingLevel).optional(),
 });
 
-/** Effective configuration safe to expose to clients. Backend-only settings never cross this boundary. */
 export const Configuration = z.object({
   modelDefaults: ModelDefaults,
 });

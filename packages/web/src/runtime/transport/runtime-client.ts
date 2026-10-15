@@ -15,17 +15,13 @@ const RECONNECT_DELAY_MS = 1_000;
 
 export type ConnectionState = "connected" | "disconnected";
 
-/** A held session: its runtime service, until `release`. `ready` rejects for an unknown session. */
 export interface SessionRuntimeHold {
   readonly service: SessionRuntimeService;
   readonly ready: Promise<void>;
   readonly release: () => void;
 }
 
-/**
- * A held terminal: its service, until `release`. `ready` rejects for an unknown or closed terminal; `onGone` reports
- * a terminal that went away while held, such as after a server restart.
- */
+/** `ready` rejects for an unknown or closed terminal; `onGone` reports one that went away while held. */
 export interface TerminalHold {
   readonly service: TerminalService;
   readonly ready: Promise<void>;
@@ -33,11 +29,7 @@ export interface TerminalHold {
   readonly release: () => void;
 }
 
-/**
- * The browser's connection to the runtime: one Chord handle per runtime service. A call made while the connection is
- * down waits for it to come back. The client reconnects after a drop and Chord holds every service again; state
- * members then deliver a fresh value.
- */
+/** A call made while disconnected waits for the reconnect, after which state members deliver fresh values. */
 export interface RuntimeClient {
   readonly configuration: ConfigurationService;
   readonly extensions: ExtensionsService;
@@ -46,22 +38,14 @@ export interface RuntimeClient {
   readonly providers: ProvidersService;
   readonly sessions: SessionsService;
   readonly workspace: WorkspaceService;
-  /** Holds a session's runtime service; see `SessionRuntimeHold`. */
   holdSession(sessionId: string): SessionRuntimeHold;
-  /** Holds a terminal's service; see `TerminalHold`. */
   holdTerminal(terminalId: string): TerminalHold;
-  /** Resolves once the server's services are live. */
   ready(): Promise<void>;
-  /** Calls `listener` on every connection change; a reconnect means state was missed and must be read again. */
   onConnectionChange(listener: (state: ConnectionState) => void): () => void;
   dispose(): Promise<void>;
 }
 
-/**
- * A handle whose methods send payloads as strict JSON. Chord's frames are JSON, which drops `undefined` fields
- * silently, but the contracts' optional fields are commonly set to `undefined` (`{projectPath: undefined}`), so they are
- * dropped here, once, explicitly. Failures are logged with the service and member that failed.
- */
+/** Chord's JSON frames drop `undefined` silently; dropping it here once makes that explicit. */
 export function strictJsonMembers<T extends object>(handle: T, name: string): T {
   return new Proxy(handle, {
     get(target, member) {
@@ -79,7 +63,6 @@ export function strictJsonMembers<T extends object>(handle: T, name: string): T 
   });
 }
 
-/** Opens the runtime connection of the server at `endpoint`. */
 export function createRuntimeClient(endpoint: string): RuntimeClient {
   const url = resolveSocketUrl(endpoint, RUNTIME_SOCKET_PATH);
   const host: Host = createHost({name: "browser", kind: "client", onError: (error) => console.error("[runtime]", error)});
@@ -94,7 +77,6 @@ export function createRuntimeClient(endpoint: string): RuntimeClient {
     for (const listener of [...listeners]) listener(next);
   };
 
-  // A dropped socket is replaced; Chord re-holds every handle over the new link.
   const connect = (): void => {
     if (disposed) return;
     const socket = new WebSocket(url);
@@ -155,10 +137,6 @@ export function createRuntimeClient(endpoint: string): RuntimeClient {
 
 let sharedClient: RuntimeClient | undefined;
 
-/**
- * The app's runtime connection to its local endpoint, once it is up; connection selection can supply a different
- * endpoint here. Rendering waits for it, so the first calls never race the connection.
- */
 export async function getRuntimeClient(): Promise<RuntimeClient> {
   sharedClient ??= createRuntimeClient(window.desktopApi?.serverUrl ?? window.location.origin);
   await sharedClient.ready();

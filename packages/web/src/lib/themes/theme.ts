@@ -47,7 +47,6 @@ function normalizeContrastStrength(contrast: number, variant: ThemeVariant["vari
   return contrast <= baseline ? curvedStrength : baseline / 100 + (curvedStrength - baseline / 100) * 2;
 }
 
-/** Resolves compact theme seeds into the runtime colors consumed by the UI. */
 function generateTheme(variant: ThemeVariant) {
   const {accent, contrast, ink, semanticColors, surface} = variant.theme;
 
@@ -121,7 +120,6 @@ export const appThemes = [supernovaTheme] as const;
 export const defaultTheme = supernovaTheme;
 export type ThemeId = (typeof appThemes)[number]["id"];
 
-/** Returns the selected bundled theme or the default theme. */
 export function getAppTheme(themeId: string) {
   return appThemes.find((theme) => theme.id === themeId) ?? defaultTheme;
 }

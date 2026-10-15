@@ -7,7 +7,6 @@ interface ArchiveWorktreeSessionDialogProps {
   readonly open: boolean;
 }
 
-/** Asks whether archiving a worktree session should also delete its worktree and branch. */
 export default function ArchiveWorktreeSessionDialog(props: ArchiveWorktreeSessionDialogProps) {
   const {onArchive, onCancel, open} = props;
 

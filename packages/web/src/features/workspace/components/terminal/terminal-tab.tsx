@@ -10,7 +10,6 @@ import {useMountEffect} from "@/hooks/use-mount-effect";
 import {useSettingsStore} from "@/stores/settings-store";
 import "@xterm/xterm/css/xterm.css";
 
-/** Resolves a CSS color expression (the theme uses `color-mix` and relative colors) to a plain `rgb()` string. */
 function resolveColor(host: HTMLElement, expression: string): string {
   const probe = document.createElement("span");
   probe.style.color = expression;
@@ -29,7 +28,6 @@ function terminalTheme(host: HTMLElement): ITheme {
   };
 }
 
-/** The line under the terminal once its shell is no longer running, or failed to start. */
 function statusMessage(tab: WorkspaceTerminalTab, error: string | undefined): string | undefined {
   if (error) return error;
   if (tab.closed) return "This terminal was closed. Close the tab and open a new terminal to start another.";
@@ -38,20 +36,12 @@ function statusMessage(tab: WorkspaceTerminalTab, error: string | undefined): st
 }
 
 interface TerminalTabProps {
-  /** Where a new shell starts: the session's worktree or project. */
   readonly cwd: string;
   readonly sessionId: string;
   readonly tab: WorkspaceTerminalTab;
 }
 
-/**
- * A shell on the server, rendered with xterm.js and its WebGL renderer.
- *
- * The shell belongs to the session, not to the tab: it keeps running while the tab is hidden, after a reload, and
- * after the tab detaches; only killing it, archiving the session, or a server restart ends it. A tab that has not
- * started its shell yet (no `number`) starts it; any other tab reattaches by id. The terminal's output reaches this
- * client only from the first time the tab is shown until it unmounts.
- */
+/** The shell belongs to the session, not the tab. A tab without a `number` starts its shell; any other reattaches. */
 export default function TerminalTab(props: TerminalTabProps) {
   const {cwd, sessionId, tab} = props;
   const hostRef = useRef<HTMLDivElement>(null);
@@ -59,9 +49,7 @@ export default function TerminalTab(props: TerminalTabProps) {
   const updateTab = useWorkspacePanelStore((state) => state.updateTab);
   const [error, setError] = useState<string>();
 
-  // The tab lives inside React's <Activity>, which runs effect cleanups when hidden and effects again when shown.
-  // The terminal must outlive that, or every tab switch would rebuild it and replay history. It is created once and
-  // torn down only when the component actually unmounts, which is when its host has left the document.
+  // <Activity> re-runs effects on every show; the terminal must outlive that or each switch would replay history.
   const instance = useRef<{readonly dispose: () => void} | null>(null);
 
   useMountEffect(() => {
@@ -78,13 +66,11 @@ export default function TerminalTab(props: TerminalTabProps) {
       theme: terminalTheme(host),
     });
     terminal.open(host);
-    // WebGL draws in the same frame the grid changes, so a drag never shows a half-painted terminal. Losing the
-    // context (GPU reset, too many contexts) falls back to the DOM renderer, which keeps working.
+    // WebGL paints in the same frame the grid changes; losing the context falls back to the DOM renderer.
     const webgl = new WebglAddon();
     webgl.onContextLoss(() => webgl.dispose());
     terminal.loadAddon(webgl);
     fitTerminal(terminal, host);
-    // Focused from the start so the cursor shows while the shell reads its rc files, like a native terminal window.
     terminal.focus();
 
     const update = (change: Partial<WorkspaceTerminalTab>): void => updateTab<WorkspaceTerminalTab>(sessionId, tab.id, (current) => ({...current, ...change}));
@@ -119,14 +105,12 @@ export default function TerminalTab(props: TerminalTabProps) {
     });
 
     const input = terminal.onData((data) => session.write(data));
-    // The grid and the shell change size in the same frame, so neither ever wraps output for a width the other
-    // does not have. `onResize` fires only when the dimensions actually changed.
+    // Grid and shell resize in the same frame, so neither wraps for a width the other lacks.
     const resize = terminal.onResize(({cols, rows}) => session.resize(cols, rows));
     // Several clients can show one shell, and the last to resize sets its size. Focusing this one takes it back.
     const claimSize = (): void => session.resize(terminal.cols, terminal.rows);
     terminal.textarea?.addEventListener("focus", claimSize);
-    // ResizeObserver already delivers one callback per frame, so no further batching is needed. A hidden tab reports
-    // a 0×0 host; fitting then would collapse the grid, so it waits for the hidden→visible transition instead.
+    // A hidden tab reports 0×0; fitting then would collapse the grid, so it waits for the show.
     const refit = (): void => {
       if (host.clientWidth > 0 && host.clientHeight > 0) fitTerminal(terminal, host);
     };

@@ -152,7 +152,6 @@ async function fetchResponse(input: {readonly fetch: typeof fetch; readonly form
   return response;
 }
 
-/** Fetches textual web content and converts HTML responses to the requested format. */
 export async function fetchWebContent(input: FetchWebContentInput): Promise<FetchWebContentResult> {
   const parsedUrl = parseHttpUrl(input.url);
   const format = resolveFormat(input.format);

@@ -3,17 +3,11 @@ import {dirname} from "node:path";
 import {DatabaseSync} from "node:sqlite";
 import type {SessionRecord} from "@supernova/agent-runtime/pi/lib/session/session-state";
 
-/** Time SQLite waits for a competing lock, as pi-durable's session files do. */
 const BUSY_TIMEOUT_MS = 5_000;
 
 /**
- * The schema, as the migrations that build it. Every schema change is a new entry at the end, never an edit to an
- * existing one: a catalog records how many it has run (SQLite's `user_version`), and `open` runs the rest. A catalog
- * from a newer Supernova has run more than this list knows and is refused.
- *
- * Both reads page through an index in its order, so a page reads only the rows it returns: a project's unarchived
- * sessions, pinned first then newest (`sessions_listing`), and every unarchived session newest first for title search
- * (`sessions_recent`). Pages continue after the last row with a row-value comparison on the same columns.
+ * Append-only: a schema change is a new entry, never an edit. `user_version` records how many ran; a newer catalog is
+ * refused.
  */
 const MIGRATIONS: readonly string[] = [
   `
@@ -49,15 +43,12 @@ interface SessionRow {
   readonly updated_at: string;
 }
 
-/** The row a page continues after, by the columns pages are ordered on. */
 type PageKey = Pick<SessionRecord, "id" | "pinned" | "updatedAt">;
 
-/** `value` as a literal inside a `LIKE` pattern escaped with `\`. */
 function escapeLike(value: string): string {
   return value.replace(/[\\%_]/g, (character) => `\\${character}`);
 }
 
-/** A row as a record; absent optional fields stay absent, as callers test them with `!== undefined`. */
 function toRecord(row: SessionRow): SessionRecord {
   return {
     id: row.id,
@@ -72,7 +63,6 @@ function toRecord(row: SessionRow): SessionRecord {
   };
 }
 
-/** A record's column values, in `COLUMNS` order. */
 function toValues(record: SessionRecord): (string | number | null)[] {
   return [
     record.id,
@@ -88,15 +78,10 @@ function toValues(record: SessionRecord): (string | number | null)[] {
   ];
 }
 
-/**
- * The record of every durable session, in one SQLite file beside the session files: what listing by project and
- * lookup by id read, so no session file is opened for either. The engine cannot list by project, so the catalog is
- * ours. Calls are synchronous, so a read-modify-write within one call cannot interleave with another.
- */
+/** Calls are synchronous, so a read-modify-write cannot interleave. */
 export class SessionCatalog {
   private constructor(private readonly database: DatabaseSync) {}
 
-  /** Opens the catalog at `path`, creating it and its schema on first use. */
   public static async open(path: string): Promise<SessionCatalog> {
     await mkdir(dirname(path), {recursive: true});
     const database = new DatabaseSync(path, {timeout: BUSY_TIMEOUT_MS});
@@ -124,7 +109,6 @@ export class SessionCatalog {
     return row ? toRecord(row) : undefined;
   }
 
-  /** One page of a project's unarchived sessions, pinned first, then newest; `after` is the last row of the page before. */
   public list(input: {readonly projectPath: string; readonly limit: number; readonly after?: PageKey}): SessionRecord[] {
     const {after, limit, projectPath} = input;
     const continued = after ? "AND (pinned, updated_at, id) < (?, ?, ?)" : "";
@@ -134,10 +118,6 @@ export class SessionCatalog {
     return rows.map(toRecord);
   }
 
-  /**
-   * One page of unarchived sessions whose title contains `query` (case-insensitive), newest first, in `projectPaths`
-   * when given; `after` is the last row of the page before.
-   */
   public search(input: {readonly query: string; readonly projectPaths?: readonly string[]; readonly limit: number; readonly after?: PageKey}): SessionRecord[] {
     const {after, limit, projectPaths, query} = input;
     const inProjects = projectPaths ? `AND project_path IN (${projectPaths.map(() => "?").join(", ")})` : "";
@@ -150,7 +130,6 @@ export class SessionCatalog {
     return rows.map(toRecord);
   }
 
-  /** Adds a record; fails if its id exists. */
   public insert(record: SessionRecord): void {
     this.database
       .prepare(
@@ -161,7 +140,6 @@ export class SessionCatalog {
       .run(...toValues(record));
   }
 
-  /** Applies `change` to an existing record and returns the result; throws for unknown ids. */
   public update(sessionId: string, change: (record: SessionRecord) => SessionRecord): SessionRecord {
     const current = this.find(sessionId);
     if (!current) throw new Error("Session not found.");
@@ -176,7 +154,6 @@ export class SessionCatalog {
     return next;
   }
 
-  /** Removes a record; whether it existed. */
   public delete(sessionId: string): boolean {
     const existed = this.find(sessionId) !== undefined;
     if (existed) this.database.prepare("DELETE FROM sessions WHERE id = ?").run(sessionId);

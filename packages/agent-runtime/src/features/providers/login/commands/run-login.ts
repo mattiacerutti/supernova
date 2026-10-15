@@ -13,7 +13,6 @@ function textInput(prompt: Exclude<AuthPrompt, {type: "select"}>): ProviderLogin
   };
 }
 
-/** Runs provider-owned authentication while publishing structured login-session updates. */
 export async function runProviderLogin(
   sdk: Pick<PiSdk, "modelRuntime">,
   sessions: LoginSessions,

@@ -11,7 +11,6 @@ import {modelKey} from "@/features/sessions/lib/composer/models/model-reference"
 import {useModelPickerStore} from "@/features/sessions/stores/composer/model-picker-store";
 import {cn} from "@/lib/cn";
 
-/** Picks the composer's model. Reads and writes the selection through `ComposerContext`. */
 export default function ModelPicker() {
   const {disabled, models: modelSelection, selectModel} = useComposerContext();
   const {availableModels: models, selectedModelDetails: selectedModel} = modelSelection;

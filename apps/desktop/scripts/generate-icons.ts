@@ -23,7 +23,7 @@ if (!isIconVariant(requestedVariant)) {
 
 const sourceIcons = `./icons/${requestedVariant}`;
 const sourceMacIcon = join(sourceIcons, "macos.icon");
-// Keep Icon Composer exports scoped to macOS; the shimmer is not appropriate for Windows/Linux.
+/** Keep Icon Composer exports scoped to macOS; the shimmer is not appropriate for Windows/Linux. */
 const sourceMacPng = join(sourceIcons, "macos.png");
 const sourcePng = join(sourceIcons, "icon.png");
 const resourcesIcons = "./resources/icons";
@@ -83,7 +83,6 @@ async function renderIconPng(size: number, output: string): Promise<void> {
   await sharp(await renderIconBuffer(size)).toFile(output);
 }
 
-/** Applies the cross-platform rounded shape */
 async function renderIconBuffer(size: number): Promise<Buffer> {
   const radius = Math.round(size * iconBorderRadiusRatio);
   const foreground = await sharp(sourcePng).resize(size, size).ensureAlpha().png().toBuffer();
@@ -97,7 +96,6 @@ async function renderIconBuffer(size: number): Promise<Buffer> {
     .toBuffer();
 }
 
-/** Adds dock padding around the already-rendered Icon Composer PNG (so that it renders the correct size). */
 async function resizeMacPngWithPadding(canvasSize: number, contentSize: number, output: string): Promise<void> {
   const image = await sharp(sourceMacPng).resize(contentSize, contentSize).png().toBuffer();
   const offset = Math.round((canvasSize - contentSize) / 2);

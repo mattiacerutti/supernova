@@ -10,7 +10,6 @@ interface CheckpointConflictDialogProps {
   readonly reason: "conflict" | "uncaptured";
 }
 
-/** Confirms discarding manual workspace changes before retrying checkpoint navigation with force. */
 export default function CheckpointConflictDialog(props: CheckpointConflictDialogProps) {
   const {onCancel, onConfirm, open, reason} = props;
   const [dontAskAgain, setDontAskAgain] = useState(false);

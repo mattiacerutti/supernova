@@ -1,4 +1,3 @@
-/** Formats an ISO timestamp as a compact relative age label. */
 export function formatRelativeTime(value: string): string {
   const timestamp = new Date(value).getTime();
   if (Number.isNaN(timestamp)) return "";

@@ -5,7 +5,6 @@ import GitStatusBadge from "@/features/workspace/components/changes/git-status-b
 import type {FileTreeNode} from "@/features/workspace/lib/file-tree";
 import {cn} from "@/lib/cn";
 
-/** Virtualizer slot; the 28px row inside leaves a 2px gap. */
 export const FILE_TREE_ROW_HEIGHT_PX = 30;
 
 export const FILE_TREE_ROW_INDENT_PX = 12;

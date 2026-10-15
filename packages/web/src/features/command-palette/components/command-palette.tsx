@@ -14,15 +14,10 @@ import type {
 interface CommandPaletteProps {
   readonly actions: readonly CommandPaletteAction[];
   readonly onOpenSession: (session: CommandPaletteSession) => void;
-  /** Renders each page an action can open, by name. */
   readonly pages: Readonly<Record<CommandPalettePage, CommandPalettePageRenderer>>;
   readonly useSessionSearch: (query: string) => CommandPaletteSessionSearch;
 }
 
-/**
- * The command palette: one headerless dialog, toggled with `COMMAND_PALETTE_HOTKEY` or `useCommandPaletteStore`, whose
- * root page searches the given actions and sessions and whose other pages stack on top of it.
- */
 export default function CommandPalette(props: CommandPaletteProps) {
   const {actions, onOpenSession, pages, useSessionSearch} = props;
 
@@ -34,8 +29,7 @@ export default function CommandPalette(props: CommandPaletteProps) {
 
   const page = pageStack.at(-1);
 
-  // Meta and Ctrl shortcuts fire from text inputs too, so the palette opens from the composer and closes from its own
-  // input. A focused terminal keeps the keys: the terminal stops their propagation and sends them to the shell.
+  // Fires from text inputs too, so the palette toggles from the composer; a focused terminal keeps the keys.
   useHotkey(COMMAND_PALETTE_HOTKEY, togglePalette);
 
   const handleOpenChange = (nextOpen: boolean): void => {

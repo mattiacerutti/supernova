@@ -25,7 +25,6 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return globalThis.btoa(binary);
 }
 
-/** Formats an attachment type label from its extension or MIME subtype. */
 export function formatAttachmentType(attachment: {mime: string; name: string}): string {
   const extension = fileExtension(attachment.name);
   if (extension) return extension.toUpperCase();
@@ -54,7 +53,6 @@ export function formatAttachmentSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-/** Converts a browser File into the serializable attachment content part sent with user messages. */
 export async function fileToSessionAttachmentPart(file: File): Promise<UserMessageAttachmentPart> {
   const buffer = await file.arrayBuffer();
   const mime = attachmentMime(file, buffer);

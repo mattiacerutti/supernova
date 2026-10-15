@@ -6,7 +6,6 @@ import {unwrap} from "@/runtime/runtime-result";
 import type {RuntimeClient} from "@/runtime/transport/runtime-client";
 import {useRuntime} from "@/runtime/use-runtime";
 
-/** Sessions the sidebar reads per page of a project; each "Show more" reveals one more page. */
 const SESSION_PAGE_SIZE = 5;
 
 function listProjectSessionsQueryOptions(runtime: RuntimeClient, projectPath: string) {
@@ -19,10 +18,6 @@ function listProjectSessionsQueryOptions(runtime: RuntimeClient, projectPath: st
   });
 }
 
-/**
- * A project's sessions as the sidebar lists them, a page at a time: `loadMore` reads the next page, `showFirstPage`
- * goes back to the first. What the runtime reports and the user's pins and renames keep the loaded rows current.
- */
 export function useListProjectSessions(projectPath: string) {
   const queryClient = useQueryClient();
   const options = listProjectSessionsQueryOptions(useRuntime(), projectPath);

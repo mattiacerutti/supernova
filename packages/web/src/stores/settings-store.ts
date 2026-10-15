@@ -24,7 +24,6 @@ interface AppearanceSettings {
   readonly codeFont: string | undefined;
   readonly fontSmoothing: boolean;
   readonly mode: DesktopTheme;
-  /** Derived from `mode` and the operating system by `initializeAppearance`; not persisted. */
   readonly resolvedMode: ResolvedAppearanceMode;
   readonly themeId: ThemeId;
   readonly translucentSidebar: boolean;
@@ -39,7 +38,6 @@ interface AppearanceSettings {
 
 type SettingsState = GeneralSettings & AppearanceSettings;
 
-/** State keys that are computed at runtime rather than saved. Functions are already dropped by JSON. */
 const TRANSIENT_KEYS = ["resolvedMode"] as const satisfies readonly (keyof SettingsState)[];
 
 type PersistedSettings = Partial<Omit<SettingsState, (typeof TRANSIENT_KEYS)[number]>>;
@@ -74,7 +72,6 @@ function applyAppearance(mode: DesktopTheme, themeId: ThemeId): ResolvedAppearan
   return resolvedMode;
 }
 
-/** Settings used to persist as two stores, one per settings section. Read them once so existing users keep theirs. */
 function legacySettings(): PersistedSettings {
   let merged: PersistedSettings = {};
   for (const key of LEGACY_STORAGE_KEYS) {
@@ -82,7 +79,7 @@ function legacySettings(): PersistedSettings {
       const raw = localStorage.getItem(key);
       if (raw) merged = {...merged, ...(JSON.parse(raw).state as PersistedSettings)};
     } catch {
-      // Ignore unreadable legacy state; defaults apply.
+      // Unreadable legacy state falls back to defaults.
     }
   }
   return merged;
@@ -124,7 +121,6 @@ const appearanceSettings: SettingsSlice<AppearanceSettings> = (set) => ({
   },
 });
 
-/** User preferences, persisted per browser. Edited on the settings page, read across the app. */
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
@@ -140,7 +136,6 @@ export const useSettingsStore = create<SettingsState>()(
   )
 );
 
-/** Applies the saved appearance and tracks operating-system appearance changes. */
 export function initializeAppearance(): void {
   const state = useSettingsStore.getState();
   applyFont("--font-sans", state.uiFont);

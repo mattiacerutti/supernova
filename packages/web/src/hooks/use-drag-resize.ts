@@ -1,6 +1,5 @@
 import type {PointerEvent} from "react";
 
-/** `onDrag` receives the pointer x and its delta from pointer down. */
 export function useDragResize(onDrag: (clientX: number, deltaX: number) => void): (event: PointerEvent<HTMLElement>) => void {
   return (event) => {
     event.preventDefault();

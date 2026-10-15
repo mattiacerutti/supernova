@@ -4,12 +4,10 @@ import {cn} from "@/lib/cn";
 
 interface SearchFieldProps extends Omit<ComponentProps<"input">, "className"> {
   readonly className?: string;
-  /** Replaces the search icon, for example with a back button on a nested page. */
   readonly leading?: ReactNode;
   readonly trailing?: ReactNode;
 }
 
-/** Renders the search row used by menus and dialogs, separated by a hairline rule. */
 export default function SearchField(props: SearchFieldProps) {
   const {className, leading, trailing, ...inputProps} = props;
 

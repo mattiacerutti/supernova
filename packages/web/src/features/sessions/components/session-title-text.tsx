@@ -4,7 +4,6 @@ import type {AnimationEvent, PointerEvent} from "react";
 import {useRef, useState} from "react";
 import {cn} from "@/lib/cn";
 
-/** Reading pace for revealing a hidden title, slow enough to follow the words. */
 const REVEAL_SPEED_PX_PER_SECOND = 22;
 const REVEAL_DELAY_SECONDS = 0.55;
 
@@ -19,7 +18,6 @@ interface SessionTitleRevealState {
 
 interface SessionTitleTextProps {
   readonly className?: string;
-  /** Scrolls an overflowing title to its end while the pointer rests on it. Leaving snaps it back. */
   readonly revealOnHover?: boolean;
   readonly title: string;
 }
@@ -42,8 +40,7 @@ export default function SessionTitleText(props: SessionTitleTextProps) {
     setRevealState((state) => (state.revealingTitle === title ? {...state, revealingTitle: null} : state));
   };
 
-  // Animating scrollLeft keeps the shared scroll fade in sync with the position, which a transform
-  // would not. Its pace comes from how much is hidden, so every title reads at the same speed.
+  // scrollLeft, not a transform, keeps the scroll fade in sync. Pace is per hidden pixel.
   const handlePointerEnter = (event: PointerEvent<HTMLSpanElement>): void => {
     const element = event.currentTarget;
     const hidden = element.scrollWidth - element.clientWidth;

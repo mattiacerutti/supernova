@@ -124,12 +124,8 @@ async function prepareFd(): Promise<void> {
 }
 
 /**
- * `@lydell/node-pty` is a native module, so the bundle leaves it external and it is copied next to `cli.js` for
- * Node's resolution to find. Every architecture's `@lydell/node-pty-<platform>-<arch>` package for the current
- * platform is copied too, because a release may be built on a machine of a different architecture than the one it
- * targets (macOS x64 on an arm64 runner); the wrapper picks the right binary at runtime. Other platforms are left
- * out since the desktop app is packaged per platform and the Windows packages are ~12 MB each. A release install
- * uses `--os='*' --cpu='*'` so the other architectures are present to copy.
+ * Every arch of the current platform is copied, since a release may build on a different arch than it targets
+ * (releases install with `--os='*' --cpu='*'`); other platforms are skipped, Windows packages are ~12 MB each.
  */
 async function preparePty(): Promise<void> {
   const require = createRequire(import.meta.url);

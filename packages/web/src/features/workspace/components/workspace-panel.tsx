@@ -77,7 +77,6 @@ function PanelTab(props: PanelTabProps) {
   );
 }
 
-/** Whether a terminal's shell may still run: closing its tab then asks whether to detach or kill. */
 function mayBeRunning(tab: WorkspaceTerminalTab): boolean {
   return tab.number !== undefined && tab.exitCode === undefined && !tab.closed;
 }
@@ -111,7 +110,6 @@ function WorkspacePanelContent(props: WorkspacePanelContentProps) {
     if (tab.kind === "terminal" && !tab.closed) closeTerminal(tab.id);
     closeTab(sessionId, tab.id);
   };
-  // Detaching only closes the tab: its unmount releases the terminal, and the shell keeps running on the server.
   const handleDetach = (): void => {
     setCloseDialogOpen(false);
     if (closing) closeTab(sessionId, closing.id);

@@ -5,23 +5,17 @@ import type {EntryDraft} from "@earendil-works/pi-durable";
 import type {SessionWorktree, UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
 import type {SessionRecord} from "@supernova/agent-runtime/pi/lib/session/session-state";
 
-/** Custom entries the old Supernova wrote beside Pi's own. */
 const CONTENT_PARTS_TYPE = "supernova.user-message-content-parts";
 const WORKTREE_TYPE = "supernova.worktree";
 const FORK_TYPE = "supernova.fork";
 
-/** One durable entry to append, in branch order. */
 export interface LegacyItem {
-  /** Position of the old entry it came from in the branch, for resolving compaction heads. */
   readonly index: number;
   readonly draft: EntryDraft;
-  /** For a compaction: branch position of its first kept entry; the head is the first item appended from there. */
   readonly headIndex?: number;
-  /** For a user message the composer sent: its authored content, which makes it a turn. */
   readonly contentParts?: readonly UserMessageContentPart[];
 }
 
-/** What an old session file becomes: its catalog record, its agent, and the entries of its visible branch. */
 export interface LegacySession {
   readonly record: SessionRecord;
   readonly cwd: string;
@@ -40,7 +34,6 @@ function textOf(message: Message): string {
   return message.content.map((part) => (part.type === "text" ? part.text : "")).join(" ");
 }
 
-/** The result the engine records for a call that never ran, so the timeline does not show it running forever. */
 function abortedResult(call: {readonly id: string; readonly name: string}, timestamp: number): LegacyItem["draft"] {
   const message: Message = {
     role: "toolResult",
@@ -53,7 +46,6 @@ function abortedResult(call: {readonly id: string; readonly name: string}, times
   return {kind: "pi.tool-result", model: [message], data: {diagnostics: []}};
 }
 
-/** The durable kind of a model message; system messages are left out, since the engine writes its own prompt. */
 function kindOf(message: Message): string | undefined {
   if (message.role === "user") return "pi.user";
   if (message.role === "assistant") return "pi.assistant";
@@ -61,12 +53,7 @@ function kindOf(message: Message): string | undefined {
   return undefined;
 }
 
-/**
- * Reads an old session file's visible branch: the path from its last entry, which is where the old checkpoint cursor
- * left the conversation. Undone turns and abandoned branches are dropped. Messages map to the engine's entries through
- * Pi's own context projection, so extension messages and compaction summaries reach the model as they did. Returns
- * undefined for a file that is not a Pi session.
- */
+/** The path from the last entry, where the old checkpoint cursor left it; undone turns are dropped. */
 export function readLegacySession(content: string): LegacySession | undefined {
   const fileEntries = parseSessionEntries(content);
   const header = fileEntries.find((entry): entry is SessionHeader => entry.type === "session");

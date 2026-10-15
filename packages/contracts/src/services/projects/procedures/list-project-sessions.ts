@@ -9,7 +9,6 @@ export const ProjectSessionsListPayload = z.object({
   cursor: z.string().optional(),
 });
 
-/** One page of a project's sessions, pinned first, then newest. */
 export const ProjectSessionsListResult = z.object({
   projectPath: z.string(),
   sessions: z.array(SessionSummary),

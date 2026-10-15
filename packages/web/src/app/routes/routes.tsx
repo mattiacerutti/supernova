@@ -40,10 +40,7 @@ export function HomeRoute() {
   return <EmptySessionState />;
 }
 
-/**
- * Serves `/session/new` and `/session/$sessionId` with one page keyed by session id. A draft already carries the id
- * its session will get, so sending the first message changes the URL without remounting the page.
- */
+/** A draft already carries its future session id, so the first message changes the URL without a remount. */
 export function SessionRoute() {
   const {sessionId} = useParams({strict: false});
   const search = useSearch({strict: false}) as {draft?: string; projectId?: string};

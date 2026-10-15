@@ -6,7 +6,6 @@ import {defaultSettingsSectionId, settingsSections} from "@/features/settings/pa
 
 interface NewSessionSearch {
   readonly projectId?: string;
-  /** The id the session will be created under. Added by `beforeLoad`, so the draft's identity is in the URL. */
   readonly draft?: string;
 }
 

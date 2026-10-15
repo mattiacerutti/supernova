@@ -2,7 +2,6 @@ import {randomUUID} from "node:crypto";
 import type {MutableReplicatedState} from "@earendil-works/chord";
 import {replicatedState} from "@earendil-works/chord";
 import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
-import {CheckpointConflictError} from "@supernova/contracts/services/session-runtime/procedures";
 import type {
   CompactSessionPayload,
   LoadHistoryPayload,
@@ -10,9 +9,9 @@ import type {
   RedoCheckpointPayload,
   RevertToMessagePayload,
   SendMessagePayload,
-  SessionActivity,
   UndoCheckpointPayload,
 } from "@supernova/contracts/services/session-runtime/procedures";
+import {CheckpointConflictError, sessionActivityOf} from "@supernova/contracts/services/session-runtime/procedures";
 import type {Session} from "@supernova/contracts/services/sessions/schemas";
 import type {CheckpointRef, CheckpointStatus} from "@supernova/agent-runtime/pi/lib/session/session-state";
 import {findSelectedModel} from "@supernova/agent-runtime/pi/lib/models/selected-model";
@@ -39,19 +38,7 @@ export interface SessionWorkerInput {
   readonly titleGenerator: TitleGenerator;
 }
 
-/** What a session is doing, from its `pi.live`. A manual compaction runs without a run, so it is listed on its own. */
-function activityOf(session: Session): SessionActivity {
-  if ((session.live.compactions ?? []).some((compaction) => compaction.blocking || compaction.reason === "manual")) return "compacting";
-  return session.live.run === undefined ? "idle" : "running";
-}
-
-/**
- * The live runtime of one open session: runs its commands one at a time, publishes its document as Chord replicated
- * state (subscribers receive each new revision), captures after-turn checkpoints, and reports activity and
- * problems to the session board. The engine owns execution; the worker follows it.
- */
 export class SessionWorker {
-  /** The document clients mirror, current after every published change. */
   public readonly document: MutableReplicatedState<Session>;
   public readonly store: SessionStore;
   public readonly sdk: Pick<PiSdk, "modelRuntime">;
@@ -66,7 +53,6 @@ export class SessionWorker {
 
   private constructor(
     private readonly input: SessionWorkerInput,
-    /** The open session file. */
     public readonly file: SessionFile,
     document: MutableReplicatedState<Session>
   ) {
@@ -81,7 +67,6 @@ export class SessionWorker {
     void this.enqueue(() => this.onFrame()).catch(() => undefined);
   }
 
-  /** Opens the session's file and builds its first document. */
   public static async open(input: SessionWorkerInput): Promise<SessionWorker> {
     const file = await input.store.file(input.sessionId);
     const session = await file.snapshot(await SessionWorker.record(input));
@@ -94,7 +79,6 @@ export class SessionWorker {
     await sendMessage(this, input);
   }
 
-  /** Manually compacts the context without a user turn; its progress reaches clients through `pi.live.compactions`. */
   public compact(input: CompactSessionPayload): Promise<void> {
     return this.command(async () => {
       try {
@@ -118,29 +102,24 @@ export class SessionWorker {
     return this.command(() => revertToMessage(this, input));
   }
 
-  /** A page of the branch beyond the document's window; a read, so it runs beside commands and runs. */
   public loadHistory(input: Omit<LoadHistoryPayload, "sessionId">): Promise<LoadHistoryResult> {
     return this.file.historyPage(input);
   }
 
-  /** Stops the session's user-facing work: a send's preparation, the run, and queued inputs. */
   public async abort(): Promise<void> {
     this.cancelled = true;
     await this.file.abort();
   }
 
-  /** The document after every change already queued has been published. */
   public async current(): Promise<Session> {
     await this.enqueue(async () => undefined);
     return this.document.value;
   }
 
-  /** Rebuilds the document from the session file and publishes the change, for changes no engine frame shows. */
   public refresh(): Promise<Session> {
     return this.enqueue(() => this.publish());
   }
 
-  /** Reports a failure of the session's own work that did not fail a command: an unanswered input, a failed compaction. */
   public reportError(message: string): void {
     void SessionWorker.record(this.input).then(
       (record) => this.input.board.notify(this.input.sessionId, record.projectPath, {level: "error", message}),
@@ -148,11 +127,7 @@ export class SessionWorker {
     );
   }
 
-  /**
-   * Captures a workspace checkpoint of the session's working directory, or records a disabled one when `capture` is
-   * false. Best-effort: a failure leaves the boundary uncovered instead of failing the turn, so provider work is never
-   * blocked by checkpoint storage.
-   */
+  /** Best-effort: a failed capture leaves the boundary uncovered rather than failing the turn. */
   public async captureCheckpoint(capture: boolean): Promise<CheckpointRef> {
     const checkpointId = randomUUID();
     const {sessionId} = this.input;
@@ -165,7 +140,6 @@ export class SessionWorker {
     return {checkpointId, sessionId, status};
   }
 
-  /** Restores only files changed between checkpoints, leaving Git HEAD and staged state untouched. */
   public async restoreCheckpoint(input: {readonly checkpointId: string; readonly force: boolean; readonly fromCheckpointId: string | undefined}): Promise<void> {
     try {
       await this.input.checkpointStore.restore({...input, projectRoot: this.file.cwd, sessionId: this.input.sessionId});
@@ -175,15 +149,11 @@ export class SessionWorker {
     }
   }
 
-  /** Whether an abort arrived since the current command started; a send checks it before submitting. */
   public isCancelled(): boolean {
     return this.cancelled;
   }
 
-  /**
-   * Runs `work` in the publication queue and publishes after it: the engine places an input in one commit and its turn
-   * record follows in another, and no state may be published between them.
-   */
+  /** The engine places an input and its turn record in separate commits; nothing may publish between them. */
   public async publishAfter<T>(work: () => Promise<T>): Promise<T> {
     const outcome = await this.enqueue(async () => {
       const result = await work().then(
@@ -197,13 +167,11 @@ export class SessionWorker {
     return outcome.value;
   }
 
-  /** Runs background work owned by the session (title generation) so disposal waits for it. */
   public track(work: Promise<unknown>): void {
     const tracked = work.catch(() => undefined).finally(() => this.background.delete(tracked));
     this.background.add(tracked);
   }
 
-  /** Stops following the session and waits for its background work; the engine keeps the session's run going. */
   public async dispose(): Promise<void> {
     this.stopWatching();
     await Promise.all([...this.background, this.publishing]);
@@ -215,10 +183,7 @@ export class SessionWorker {
     return record;
   }
 
-  /**
-   * Runs a navigation or compaction command alone: rejects when another command or a run is active, so navigation never
-   * races a turn. Sends are gated by the engine instead, which rejects one while a run is active.
-   */
+  /** Navigation never races a turn. Sends are gated by the engine itself. */
   private async command(run: () => Promise<void>): Promise<void> {
     if (this.commandRunning) throw new Error("Session already has active work.");
     this.commandRunning = true;
@@ -231,20 +196,16 @@ export class SessionWorker {
     }
   }
 
-  /**
-   * Publishes the current state; when no run is active, captures the after-turn checkpoint of turns that lack one. A
-   * run may start and end between two frames, so settlement follows idle state rather than a seen transition.
-   */
+  /** A run may start and end between two frames, so settlement follows idle state, not a seen transition. */
   private async onFrame(): Promise<void> {
     const session = await this.publish();
     if (session.live.run === undefined) await this.settleTurns();
   }
 
-  /** Rebuilds the document and publishes it unless unchanged; the board follows its activity and summary. */
   private async publish(): Promise<Session> {
     const session = await this.file.snapshot(await SessionWorker.record(this.input));
     this.document.replace(BACKGROUND_CONTEXT, session);
-    const activity = activityOf(session);
+    const activity = sessionActivityOf(session.live);
     const summary = {
       id: session.id,
       forked: session.forked,
@@ -257,17 +218,13 @@ export class SessionWorker {
     return session;
   }
 
-  /**
-   * Captures the after-turn checkpoint of every turn whose run ended without one: one capture serves all inputs a run
-   * answered. Also catches up on runs that finished after a restart, before anything watched them.
-   */
+  /** One capture serves every input a run answered, including runs that finished while nothing watched. */
   private async settleTurns(): Promise<void> {
     const {turnIds, capture} = await this.file.unsettledTurns();
     if (turnIds.length === 0) return;
     await this.file.settleTurns(turnIds, await this.captureCheckpoint(capture));
   }
 
-  /** Runs publications in order; a failed one never blocks later ones and is reported. */
   private enqueue<T>(work: () => Promise<T>): Promise<T> {
     const run = this.publishing.then(work);
     this.publishing = run.catch((error) => this.reportError(error instanceof Error ? error.message : "Failed to publish session state."));

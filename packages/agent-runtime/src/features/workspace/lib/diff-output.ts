@@ -1,6 +1,5 @@
 import type {WorkspaceChangeEntry, WorkspaceChangeStatus} from "@supernova/contracts/services/workspace/schemas";
 
-/** Parses `git diff --numstat -z` output into per-path line counts. Binary files report `-` and count as zero. */
 export function parseNumstat(output: string): Map<string, {additions: number; deletions: number}> {
   const counts = new Map<string, {additions: number; deletions: number}>();
   const fields = output.split("\0");
@@ -15,7 +14,6 @@ export function parseNumstat(output: string): Map<string, {additions: number; de
   return counts;
 }
 
-/** Parses `git diff --name-status -z` output into ordered entries, joined with line counts from numstat. */
 export function parseNameStatus(output: string, counts: ReadonlyMap<string, {additions: number; deletions: number}>): WorkspaceChangeEntry[] {
   const fields = output.split("\0").filter((field) => field.length > 0);
   const entries: WorkspaceChangeEntry[] = [];

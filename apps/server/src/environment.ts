@@ -5,14 +5,13 @@ import {registerBunOAuthFlows} from "@earendil-works/pi-ai/bun-oauth";
 
 const PI_RUNTIME_PACKAGE_DIR = join(tmpdir(), "pi-runtime-package");
 const PI_RUNTIME_PACKAGE_JSON = {
-  // Keep in sync with @earendil-works/pi-coding-agent in packages/agent-runtime/package.json.
-  version: "0.99.2",
+  // Must match @earendil-works/pi-coding-agent in agent-runtime: the remote model catalog rejects unknown versions.
+  version: "1.2.0",
   piConfig: {
     configDir: ".supernova",
   },
 };
 
-/** Expands the configured home and keeps development state separate from normal runs. */
 function resolveAgentDirectory(): string {
   let home = process.env.SUPERNOVA_HOME?.trim() || join(homedir(), ".supernova");
 
@@ -26,9 +25,7 @@ function resolveAgentDirectory(): string {
   return join(resolve(home), mode, "agent");
 }
 
-// Pi reads package.json during module initialization to derive runtime metadata
-// such as CONFIG_DIR_NAME. The bundled server is not a real package directory,
-// so generate the minimal package metadata in tmp and point Pi at it.
+/** Pi reads its package.json at init (CONFIG_DIR_NAME, version); the bundle has none, so one is written to tmp. */
 mkdirSync(PI_RUNTIME_PACKAGE_DIR, {recursive: true});
 writeFileSync(join(PI_RUNTIME_PACKAGE_DIR, "package.json"), `${JSON.stringify(PI_RUNTIME_PACKAGE_JSON, null, 2)}\n`);
 
@@ -36,6 +33,5 @@ process.env["PI_PACKAGE_DIR"] = PI_RUNTIME_PACKAGE_DIR;
 process.env["PI_CODING_AGENT_DIR"] = resolveAgentDirectory();
 process.env["PI_CODING_AGENT"] = "true";
 
-// Pi keeps OAuth implementations behind bundler-opaque dynamic imports. The
-// packaged server is a standalone bundle, so register Pi's static loaders.
+/** Pi loads OAuth flows through dynamic imports a bundler cannot follow; the static loaders must be registered. */
 registerBunOAuthFlows();

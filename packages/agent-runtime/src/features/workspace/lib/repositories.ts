@@ -3,11 +3,7 @@ import {join} from "node:path";
 import {pathInProject} from "@supernova/agent-runtime/features/workspace/lib/paths";
 import {optionalGit} from "@supernova/agent-runtime/lib/git-process";
 
-/**
- * Resolves a client-supplied repository root. It must be `"."` or the plain name of an immediate child
- * directory, and must still be inside the project once symlinks are followed: a symlinked child is never
- * discovered, so accepting one would let a request read a repository outside the project.
- */
+/** A symlinked child is never discovered, so accepting one would let a request read outside the project. */
 export async function repositoryPath(projectPath: string, repositoryRoot: string): Promise<string> {
   if (repositoryRoot !== "." && (repositoryRoot === ".." || repositoryRoot.length === 0 || /[/\\]/.test(repositoryRoot))) {
     throw new Error("Unknown repository.");
@@ -24,7 +20,6 @@ async function hasGitEntry(directory: string): Promise<boolean> {
   );
 }
 
-/** A candidate counts only when it is itself a worktree root, not a directory inside some other repository. */
 async function isWorktreeRoot(directory: string): Promise<boolean> {
   const topLevel = await optionalGit(["-C", directory, "rev-parse", "--show-toplevel"]);
   if (!topLevel) return false;
@@ -32,10 +27,6 @@ async function isWorktreeRoot(directory: string): Promise<boolean> {
   return canonicalTopLevel === canonicalDirectory;
 }
 
-/**
- * Project-relative roots of the repositories at the project root and one level below it, sorted.
- * Same discovery rules as checkpoints: deeper repositories belong to whichever repository contains them.
- */
 export async function discoverWorkspaceRepositories(projectPath: string): Promise<string[]> {
   let children: string[];
   try {

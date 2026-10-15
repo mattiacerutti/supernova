@@ -5,11 +5,7 @@ import type {HarnessSettings} from "@earendil-works/pi-durable";
 /** The SDKs treat a timeout of 0 as "time out at once"; Pi's settings mean "disabled". */
 const DISABLED_TIMEOUT_MS = 2_147_483_647;
 
-/**
- * Harness run policy from Pi's file settings. Getters read `settings()` at every use, so a settings change applies to
- * the next request without reopening the session. Every setting the old SDK applied is mapped here or in
- * `harnessModels` below (thinking budgets, websocket timeout) and `lib/tools/coding-tools.ts` (shell prefix, image resizing).
- */
+/** Getters read `settings()` on every use, so a settings change applies to the next request. */
 export function harnessSettings(settings: () => SettingsManager): HarnessSettings {
   return {
     get stream() {
@@ -32,8 +28,7 @@ export function harnessSettings(settings: () => SettingsManager): HarnessSetting
         enabled: source.getCompactionEnabled(),
         reserveTokens: source.getCompactionReserveTokens(),
         keepRecentTokens: source.getCompactionKeepRecentTokens(),
-        // TODO(pi-durable): the engine can summarize in the background before the blocking threshold. The old SDK
-        // never did, and the timeline has no design for a compaction that overlaps a streaming answer. Off until then.
+        // TODO(pi-durable): off until the timeline can show a compaction overlapping a streaming answer.
         backgroundTokens: 0,
       };
     },
@@ -46,22 +41,16 @@ export function harnessSettings(settings: () => SettingsManager): HarnessSetting
   };
 }
 
-/** What the old SDK added to every request from settings; the engine forwards only `ConversationStreamOptions`. */
 function requestOptions(settings: SettingsManager): ModelsSimpleStreamOptions {
   const budgets = settings.getThinkingBudgets();
   const websocketConnectTimeoutMs = settings.getWebSocketConnectTimeoutMs();
   return {
-    // TODO(pi-durable): `thinkingBudgets` and `websocketConnectTimeoutMs` are not in `ConversationStreamOptions`. If the
-    // engine adds them, move them to `HarnessSettings.stream` and delete this.
+    // TODO(pi-durable): move to `HarnessSettings.stream` once `ConversationStreamOptions` carries these.
     ...(budgets === undefined ? {} : {thinkingBudgets: budgets}),
     ...(websocketConnectTimeoutMs === undefined ? {} : {websocketConnectTimeoutMs}),
   };
 }
 
-/**
- * Wraps `ModelRuntime` for one session's Harness. Calls the engine makes go through unchanged except streaming, which
- * gets the session's settings-derived request options underneath the engine's own.
- */
 export function harnessModels(input: {readonly modelRuntime: ModelRuntime; readonly settings: () => SettingsManager}): Models {
   const {modelRuntime, settings} = input;
   return new Proxy(modelRuntime as unknown as Models, {

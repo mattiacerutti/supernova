@@ -22,11 +22,7 @@ function boundedSocket(socket: WebSocket): WebSocketLike {
   };
 }
 
-/**
- * Accepts Chord client links as WebSockets on `path` of an HTTP server; other upgrades are refused. There is no
- * authentication: every client acts as the same principal, so the server must only be reachable by its owner.
- * Returns the close.
- */
+/** No authentication: every client is the owner, so the server must only be reachable by its owner. */
 export function acceptRuntimeSockets(server: HttpServer, path: string, host: Host): () => Promise<void> {
   const sockets = new WebSocketServer({server, path});
   const connections = {

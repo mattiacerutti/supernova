@@ -8,8 +8,7 @@ import {hasToolDetails, toolIcon} from "@/features/sessions/lib/timeline/work/to
 import type {SessionWorkEvent} from "@/features/sessions/types/session-timeline-item";
 import {cn} from "@/lib/cn";
 
-// Row geometry (px). The rail is drawn from these so the trunk, elbow, and
-// icon line up regardless of how tall an expanded row becomes.
+/** Row geometry (px); the rail is drawn from these so trunk, elbow, and icon line up at any row height. */
 const ROW_HEIGHT = 32;
 const TRUNK_X = 10.5;
 const BEND_RADIUS = 6;
@@ -17,20 +16,17 @@ const BRANCH_END_X = 26;
 const ICON_LEFT = 30;
 const ICON_SIZE = 14;
 const GUTTER_WIDTH = 54;
-// Half-pixel so the 1px horizontal leg lands on one pixel row, like the trunk.
+/** Half-pixel so the 1px horizontal leg lands on one pixel row, like the trunk. */
 const BEND_Y = ROW_HEIGHT / 2 - BEND_RADIUS + 0.5;
 const BRANCH_LENGTH = (Math.PI / 2) * BEND_RADIUS + (BRANCH_END_X - TRUNK_X - BEND_RADIUS);
 
-// Arrival timing (ms), split from one 480ms ease-out-quint connector reveal:
-// the previous row's continuation grows first, then this row's trunk, then
-// the elbow and content. Rows without a predecessor start drawing immediately.
+/** Arrival timing (ms): one 480ms ease-out-quint reveal split into continuation, trunk, then elbow and content. */
 const CONNECTOR_TIMING = {
   first: {incoming: [0, 84], branch: [77, 403]},
   next: {incoming: [55, 52], branch: [97, 383]},
 } as const;
 const CONTINUATION_DURATION = 55;
 
-/** Inline timing for one `animate-work-*` utility; undefined when the row was already present. */
 function phase(delay: number | undefined, [offset, duration]: readonly [number, number]): CSSProperties | undefined {
   if (delay === undefined) return undefined;
   return {animationDelay: `${delay + offset}ms`, animationDuration: `${duration}ms`};
@@ -38,12 +34,10 @@ function phase(delay: number | undefined, [offset, duration]: readonly [number, 
 
 interface RailProps {
   readonly continues: boolean;
-  /** Arrival delay of the row after this one, when it is still arriving. */
   readonly continuationDelay: number | undefined;
   readonly error: boolean;
   readonly hasPredecessor: boolean;
   readonly icon: IconName;
-  /** Arrival delay of this row, or undefined when it was already present. */
   readonly revealDelay: number | undefined;
 }
 
@@ -52,9 +46,7 @@ function Rail(props: RailProps) {
   const timing = hasPredecessor ? CONNECTOR_TIMING.next : CONNECTOR_TIMING.first;
   const animate = revealDelay !== undefined;
 
-  // One SVG per row, stroked in solid ink with the border's translucency applied
-  // to the SVG as a whole. Where the elbow leaves the trunk the strokes overlap,
-  // and group opacity keeps that from summing into a brighter joint.
+  // Translucency on the SVG as a whole, so overlapping strokes at the elbow do not sum brighter.
   return (
     <div aria-hidden="true" className="relative shrink-0 self-stretch" style={{width: GUTTER_WIDTH}}>
       <svg
@@ -112,8 +104,7 @@ export default function WorkRow(props: WorkRowProps) {
   const error = tool?.status === "error";
   const expandable = hasToolDetails(tool);
   const [expanded, setExpanded] = useState(false);
-  // Details such as diffs are expensive, so they mount on first request and
-  // then stay mounted so collapsing can animate them away.
+  // Details are expensive: mounted on first request, then kept so collapsing can animate.
   const [detailsRequested, setDetailsRequested] = useState(false);
   const open = expandable && expanded;
 

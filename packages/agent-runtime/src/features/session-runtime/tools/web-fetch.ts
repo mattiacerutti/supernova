@@ -21,7 +21,6 @@ const parameters = Type.Object({
   url: Type.String({description: "The HTTP or HTTPS URL to fetch content from."}),
 });
 
-/** Fetches textual web content for the session; Supernova's own, offered in every session after the coding tools. */
 export const webFetchTool: PromptedTool = {
   ...defineTool<typeof parameters, FetchWebContentResult & Record<string, string>>({
     name: "web_fetch",
@@ -39,5 +38,4 @@ export const webFetchTool: PromptedTool = {
   },
 };
 
-/** Supernova's own tools as one engine extension, installed in every session from memory. */
 export const SupernovaTools: SessionExtension = defineExtension({name: "supernova.tools", tools: [webFetchTool]});

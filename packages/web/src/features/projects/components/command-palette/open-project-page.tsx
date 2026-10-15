@@ -15,7 +15,6 @@ interface FolderPathProps {
   readonly row: FolderBrowserFolderRow;
 }
 
-/** A folder's path with its parent and trailing slash dimmed, and `~` for the home folder. */
 function FolderPath(props: FolderPathProps) {
   const {homePath, row} = props;
   if (row.kind === "parent") return <>..</>;
@@ -32,12 +31,10 @@ function FolderPath(props: FolderPathProps) {
 
 interface OpenProjectPageProps {
   readonly onBack: () => void;
-  /** Called once a folder is chosen, before `onOpenProject`. */
   readonly onClose: () => void;
   readonly onOpenProject: (projectPath: string) => void;
 }
 
-/** The command palette page that browses the server's folders and opens one as a project. */
 export default function OpenProjectPage(props: OpenProjectPageProps) {
   const {onBack, onClose, onOpenProject} = props;
   const [folderToCreate, setFolderToCreate] = useState<string>();
@@ -60,8 +57,7 @@ export default function OpenProjectPage(props: OpenProjectPageProps) {
     void browser.enter(row.path);
   };
 
-  // Only a loaded listing can say nothing matched. Before the first one arrives the list says it is loading, after a
-  // pause so a fast server shows the folders without a loading line in between.
+  // Only a loaded listing can say nothing matched; the loading line is delayed so a fast server never flashes it.
   const status = browser.error ? (
     <p className="px-3 py-2 text-sm text-danger-ink">Unable to search folders.</p>
   ) : browser.loading ? (

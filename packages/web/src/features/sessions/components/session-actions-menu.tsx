@@ -16,11 +16,9 @@ interface SessionActionsMenuProps {
   readonly projectPath: string;
   readonly sessionId: string;
   readonly sessionTitle: string;
-  /** Whether the session runs in its own worktree; archiving then asks about removing it. */
   readonly worktree: boolean;
 }
 
-/** Shares session actions between the header and sidebar. */
 export default function SessionActionsMenu(props: SessionActionsMenuProps) {
   const {onRename, pinned, projectPath, sessionId, sessionTitle, triggerClassName, worktree} = props;
 

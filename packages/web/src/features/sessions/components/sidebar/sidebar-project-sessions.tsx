@@ -7,13 +7,11 @@ import {cn} from "@/lib/cn";
 
 interface SidebarProjectSessionsProps {
   readonly activeSessionId: string;
-  /** Collapsed lists hide everything, including the active session. */
   readonly collapsed: boolean;
   readonly expanded: boolean;
   readonly projectPath: string;
 }
 
-/** The sessions of one project in the sidebar, a page at a time. Collapsed projects still show the session that is open. */
 export default function SidebarProjectSessions(props: SidebarProjectSessionsProps) {
   const {activeSessionId, collapsed, expanded, projectPath} = props;
   const listing = useListProjectSessions(projectPath);

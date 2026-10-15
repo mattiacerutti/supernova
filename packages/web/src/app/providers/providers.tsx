@@ -12,11 +12,7 @@ interface AppProvidersProps {
   readonly runtime: RuntimeClient;
 }
 
-/**
- * Connects the app to the runtime for as long as it runs: the sessions store follows what the runtime reports, cached
- * server data is read again after a reconnect (updates may have been missed), and workspace data (files, Git changes)
- * after any run ends, since the agent may have edited files.
- */
+/** Refetch everything after a reconnect, and workspace data after any run ends. */
 function connectApp(runtime: RuntimeClient, queryClient: QueryClient): () => void {
   const stopSessions = syncSessions(runtime);
   let disconnected = false;

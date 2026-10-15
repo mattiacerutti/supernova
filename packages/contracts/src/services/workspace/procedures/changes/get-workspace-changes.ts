@@ -3,7 +3,6 @@ import {WorkspaceChangeEntry} from "@supernova/contracts/services/workspace/sche
 
 export const WorkspaceChangesGetPayload = z.object({
   projectPath: z.string(),
-  /** One of the roots from `listWorkspaceRepositories`. */
   repositoryRoot: z.string(),
 });
 

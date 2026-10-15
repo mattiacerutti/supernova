@@ -3,7 +3,6 @@ import {method, remote} from "@earendil-works/chord";
 import type {UpdateExtensionsError} from "@supernova/contracts/services/extensions/procedures";
 import {NO_PAYLOAD, result, SERVER_WIDE} from "@supernova/contracts/lib/protocol";
 
-/** Installed Pi extension packages. */
 export const ExtensionsService = remote("supernova.extensions", {
   version: 1,
   input: SERVER_WIDE,

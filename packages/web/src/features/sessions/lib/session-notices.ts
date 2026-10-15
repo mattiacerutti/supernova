@@ -3,7 +3,6 @@ import {sessionToastManager} from "@/lib/toast";
 
 const openListeners = new Set<(sessionId: string) => void>();
 
-/** Calls `listener` when a session's extension notice toast asks for its details. Returns the unsubscribe. */
 export function onOpenExtensionNotices(listener: (sessionId: string) => void): () => void {
   openListeners.add(listener);
   return () => openListeners.delete(listener);
@@ -14,15 +13,13 @@ function openExtensionNotices(sessionId: string): void {
 }
 
 /**
- * Shows the runtime's notices as toasts in their session's queue, so they appear only on its page. Extension notices
- * arrive in a batch when a session opens, so a session gets one toast for all of them, which stays until dismissed and
- * opens the dialog that lists them. Every other notice is its own toast that fades.
+ * Extension notices arrive in a batch when a session opens, so they share one persistent toast that opens the dialog;
+ * every other notice is its own fading toast.
  */
 export class NoticeToasts {
   private readonly shown = new Set<string>();
   private readonly extensionToasts = new Map<string, string>();
 
-  /** Shows the notices of `entries` not shown before. Call with every directory value. */
   public show(entries: Readonly<Record<string, SessionDirectoryEntry>>): void {
     for (const [sessionId, entry] of Object.entries(entries)) {
       for (const notice of entry.notices) {

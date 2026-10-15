@@ -4,19 +4,14 @@ import type {NavigationState} from "@supernova/agent-runtime/pi/session-file";
 import type {SessionWorker} from "@supernova/agent-runtime/features/session-runtime/worker/session-worker";
 
 /**
- * The boundary the workspace returns to when `count` turns are shown. Going back, it is the before-turn checkpoint of
- * the first hidden turn, which keeps manual changes made before it was sent. Going forward, it is the after-turn
- * checkpoint of the last shown turn.
+ * Back: the first hidden turn's before-checkpoint, which keeps manual edits made before it. Forward: the last shown
+ * turn's after-checkpoint.
  */
 function boundaryAt(navigation: NavigationState, count: number): CheckpointRef | undefined {
   return count < navigation.visibleCount ? navigation.turns[count]?.record.before : navigation.turns[count - 1]?.record.after;
 }
 
-/**
- * Restores the workspace for the first `target(navigation)` turns and shows them. An uncovered target moves the
- * conversation alone. A captured target with an uncovered current boundary requires `force`, which also discards
- * conflicting manual changes; it bypasses no other check.
- */
+/** An uncovered target moves the conversation alone. `force` bypasses the uncovered-current check and conflicts only. */
 export async function navigateToTurn(runtime: SessionWorker, input: {readonly target: (navigation: NavigationState) => number; readonly force: boolean}): Promise<void> {
   const {file} = runtime;
   const navigation = await file.navigation();

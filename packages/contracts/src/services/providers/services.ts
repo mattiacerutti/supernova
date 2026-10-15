@@ -18,20 +18,17 @@ export interface ProviderLoginsState {
   readonly logins: Readonly<Record<string, ProviderLoginSession>>;
 }
 
-/** Model providers, their credentials, and interactive logins. */
 export const ProvidersService = remote("supernova.providers", {
   version: 1,
   input: SERVER_WIDE,
   variants: {
     default: {
       state: {
-        /** Every login's current step; a login's client follows its own entry. */
         logins: json<ProviderLoginsState>(),
       },
       methods: {
         list: method(NO_PAYLOAD, result<ProvidersListResult>()),
         logout: method(json<ProviderLogoutPayload>(), result<ProviderLogoutResult>()),
-        /** Starts a provider-owned login and returns once it shows its first step. */
         startLogin: method(json<ProviderLoginStartPayload>(), result<ProviderLoginResult, ProviderLoginError>()),
         submitLoginInput: method(json<ProviderLoginInputSubmitPayload>(), result<ProviderLoginResult, ProviderLoginError>()),
         cancelLogin: method(json<ProviderLoginCancelPayload>(), result<ProviderLoginResult, ProviderLoginError>()),

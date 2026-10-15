@@ -30,31 +30,23 @@ import {createCodingTools} from "@supernova/agent-runtime/pi/lib/tools/coding-to
 
 const context = BACKGROUND_CONTEXT;
 
-/** What a session file installs: its tools, prompt, and extensions, read again on reload. */
 export interface SessionFileSetup {
-  /** The agent's working directory: the project, or the session's worktree. */
   readonly cwd: string;
   readonly modelRuntime: ModelRuntime;
   readonly settings: () => SettingsManager;
   readonly resources: () => PromptResources;
-  /** Extensions installed beside the coding tools: Supernova's own and the project's. */
   readonly extensions: () => readonly SessionExtension[];
 }
 
-/** The model and thinking level a send or compaction runs with. */
 export interface SessionModel {
   readonly provider: string;
   readonly modelId: string;
   readonly thinkingLevel: string;
 }
 
-/** Where a session's history stands for checkpoint navigation. */
 export interface NavigationState {
-  /** Every turn of the branch, undone ones included, in order. */
   readonly turns: readonly TurnPosition[];
-  /** How many of `turns` are visible; the rest are undone. */
   readonly visibleCount: number;
-  /** The checkpoint the workspace was last captured at or restored to. */
   readonly current: CheckpointRef | undefined;
 }
 
@@ -69,34 +61,29 @@ function strictJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
-/** The part of a branch's history the leaf shows; the rest is undone. */
 function shownHistory(history: readonly EntryRecord[], leaf: number | null | undefined): readonly EntryRecord[] {
   return leaf === undefined ? history : history.filter((entry) => leaf !== null && entry.id <= leaf);
 }
 
 /**
- * One open session: a Harness over its SQLite file, the extensions installed in it, and its `supernova.session` state.
- * The chat starts as the root conversation, the first branch. Undo, redo, and revert only move the state's `leaf`; the
- * next send or compaction from an undone leaf forks the branch there, which becomes the new branch.
+ * Undo, redo, and revert only move `leaf`; the next send or compaction from an undone leaf forks there, and that fork
+ * becomes the branch.
  */
 export class SessionFile {
   private readonly listeners = new Set<() => void>();
   private followed: {readonly branch: number; readonly stop: () => void} | undefined;
-  /** The branch's timeline entries, read once and extended; see `branchHistory`. */
   private cache: {readonly branch: number; readonly entries: readonly EntryRecord[]} | undefined;
 
   private constructor(
     public readonly sessionId: string,
     public readonly cwd: string,
     private readonly modelRuntime: ModelRuntime,
-    /** Pi's file settings for the session's working directory. */
     public readonly settings: () => SettingsManager,
     private readonly harness: Harness,
     private readonly registry: Registry,
     private readonly env: NodeExecutionEnv
   ) {}
 
-  /** Opens (creating when absent) a session file and resumes work the last process left unfinished. */
   public static async open(input: SessionFileSetup & {readonly sessionId: string; readonly path: string; readonly onReport: (error: unknown) => void}): Promise<SessionFile> {
     const shellPath = input.settings().getShellPath();
     const env = new NodeExecutionEnv({cwd: input.cwd, shellPath});
@@ -125,10 +112,7 @@ export class SessionFile {
     return file;
   }
 
-  /**
-   * Installs the tools, prompt, and extensions. A same-named install replaces in place, so this is also the reload
-   * path: running work finishes on the code it took.
-   */
+  /** A same-named install replaces in place, so this is also the reload path; running work finishes on the code it took. */
   public install(setup: SessionFileSetup): void {
     const extensions: SessionExtension[] = [
       defineExtension({name: "coding-tools", tools: createCodingTools({cwd: setup.cwd, settings: setup.settings()})}),
@@ -144,7 +128,6 @@ export class SessionFile {
     }
   }
 
-  /** The session document, from the branch's committed view split at the leaf; its entries are the newest page. */
   public async snapshot(record: SessionRecord): Promise<Session> {
     const state = await this.state();
     const view = await this.view(state.branch);
@@ -165,11 +148,7 @@ export class SessionFile {
     });
   }
 
-  /**
-   * A page of the branch beyond the document's window: the shown turns right before `edge`, or the undone turns right
-   * after it. Fails once `edge` is no longer on that side of the leaf (navigation moved past it): the client's branch
-   * no longer continues there.
-   */
+  /** Fails once `edge` is no longer on that side of the leaf: the client's branch no longer continues there. */
   public async historyPage(input: {readonly side: HistorySide; readonly edge: number}): Promise<SessionEntries> {
     const state = await this.state();
     const history = await this.branchHistory(state.branch);
@@ -180,12 +159,10 @@ export class SessionFile {
     return entriesPage({side: input.side, entries: input.side === "entries" ? side.slice(0, at) : side.slice(at + 1), turns: state.turns});
   }
 
-  /** Whether the branch has a run in progress. */
   public async isRunning(): Promise<boolean> {
     return (await this.view((await this.state()).branch)).docs["pi.live"]?.run !== undefined;
   }
 
-  /** The branch's turns, undone ones included, and how many are shown, for undo, redo, and revert. */
   public async navigation(): Promise<NavigationState> {
     const state = await this.state();
     const turns = turnPositions(await this.branchHistory(state.branch), state.turns);
@@ -194,10 +171,7 @@ export class SessionFile {
     return {turns, visibleCount, current: state.current};
   }
 
-  /**
-   * Shows the first `count` of `turns` (from `navigation()`) by moving the leaf; nothing forks until the agent acts
-   * again. `current` records the checkpoint the workspace now matches.
-   */
+  /** Nothing forks until the agent acts again. */
   public async show(turns: readonly TurnPosition[], count: number, current: CheckpointRef | undefined): Promise<void> {
     await this.updateState((state) => {
       if (count >= turns.length) delete state.leaf;
@@ -207,12 +181,8 @@ export class SessionFile {
   }
 
   /**
-   * Submits a user input with the given model and records its turn under the placed user entry. From an undone leaf,
-   * forks there first, which drops the undone turns. Rejects with `SessionBusyError` while a run is active. Resolves
-   * with a wait for the input's settlement.
-   *
-   * TODO(queue): with `whenBusy: "steer" | "followUp"` the engine places the input later, at a turn boundary; its
-   * turn record (and before-turn checkpoint) must then be written when it is placed, not here.
+   * TODO(queue): with `whenBusy: "steer" | "followUp"` the engine places the input later; its turn record and
+   * before-turn checkpoint must then be written when it is placed, not here.
    */
   public async send(input: {readonly content: string | (TextContent | ImageContent)[]; readonly record: TurnRecord; readonly model: SessionModel}) {
     const branch = await this.prepareBranch(input.model);
@@ -232,7 +202,6 @@ export class SessionFile {
     return {wait: async (): Promise<{readonly status: string; readonly reason?: string; readonly detail?: unknown}> => submission.wait(context)};
   }
 
-  /** Compacts with the given model; from an undone leaf, forks there first. Resolves once the summary is placed. */
   public async compact(model: SessionModel): Promise<void> {
     const taskId = await (await this.prepareBranch(model)).compact(undefined, context);
     const {outcome} = (await this.harness.waitForTask(taskId, context)).state;
@@ -242,23 +211,19 @@ export class SessionFile {
     if (submissionId !== undefined) await (await this.harness.submission(submissionId, context))?.wait(context);
   }
 
-  /** Aborts the branch's work and resolves once it is idle. */
   public async abort(): Promise<void> {
     await (await this.conversation((await this.state()).branch)).abort(context);
   }
 
-  /** Every turn record, keyed by its user entry id: authored content and checkpoints. */
   public async turnRecords(): Promise<Readonly<Record<string, TurnRecord>>> {
     return (await this.state()).turns;
   }
 
-  /** Turns whose run ended but that have no after-turn checkpoint yet, and whether any of them captures. */
   public async unsettledTurns(): Promise<{readonly turnIds: readonly string[]; readonly capture: boolean}> {
     const open = Object.entries((await this.state()).turns).filter(([, record]) => record.after === undefined);
     return {turnIds: open.map(([turnId]) => turnId), capture: open.some(([, record]) => record.capture)};
   }
 
-  /** Records `after` as the after-turn checkpoint of `turnIds` (disabled for turns that do not capture). */
   public async settleTurns(turnIds: readonly string[], after: CheckpointRef): Promise<void> {
     await this.updateState((state) => {
       for (const turnId of turnIds) {
@@ -269,11 +234,7 @@ export class SessionFile {
     });
   }
 
-  /**
-   * Copies `source`'s shown history through turn `turnId` into this empty session, for forking across session files:
-   * entries go to the root conversation in one commit with their kind, model messages, data, and head; turn records
-   * follow their remapped user entries; the source's model and thinking level carry over.
-   */
+  /** One commit: entries with their kind, model messages, data, and remapped head; turn records under their new ids. */
   public async copyFrom(source: SessionFile, turnId: string): Promise<void> {
     const state = await source.state();
     const {leaf} = state;
@@ -304,16 +265,12 @@ export class SessionFile {
     if (agent?.model) await this.configure(root, {provider: agent.model.provider, modelId: agent.model.modelId, thinkingLevel: agent.thinkingLevel ?? "off"});
   }
 
-  /**
-   * Calls `listener` on every committed change of the branch, following the branch when a send or compaction forks a
-   * new one. Returns the unsubscribe.
-   */
+  /** Follows the branch when a send or compaction forks a new one. */
   public watch(listener: () => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
 
-  /** Closes the Harness. Running work is not aborted; it resumes when the session opens again. */
   public async close(): Promise<void> {
     this.followed?.stop();
     this.followed = undefined;
@@ -321,13 +278,11 @@ export class SessionFile {
     await this.env.cleanup(context);
   }
 
-  /** The `supernova.session` state; its initial value until the first write. */
   private async state(): Promise<SessionState> {
     const state = (await this.harness.snapshot(SessionStateDoc, context)) as SessionState | undefined;
     return state ?? (SessionStateDoc.definition.initial() as SessionState);
   }
 
-  /** Changes the `supernova.session` state in one commit. */
   private async updateState(change: (state: SessionState) => void): Promise<void> {
     await this.harness.commit(async (tx) => {
       change((await tx.doc(SessionStateDoc)) as unknown as SessionState);
@@ -343,10 +298,6 @@ export class SessionFile {
     }
   }
 
-  /**
-   * A conversation's history in append order, inherited fork history and compacted entries included. `after` and
-   * `through` bound the entry ids, for reading only what the cache lacks.
-   */
   private async history(conversationId: number, range: {readonly after?: number; readonly through?: number} = {}): Promise<EntryRecord[]> {
     const conversation = await this.conversation(conversationId);
     const query = {
@@ -364,9 +315,8 @@ export class SessionFile {
   }
 
   /**
-   * The branch's timeline entries (no `pi.system`), through `view`'s newest one when given. Cached: entries are
-   * append-only, so a later call reads only entries after the cached ones, and a branch forked from the cached one
-   * reuses its entries through the fork point. Navigation reads nothing.
+   * Entries are append-only, so only entries after the cached ones are read; a fork of the cached branch reuses its
+   * entries through the fork point.
    */
   private async branchHistory(branch: number, view?: ConversationView): Promise<readonly EntryRecord[]> {
     const cached = this.cache?.branch === branch ? this.cache.entries : undefined;
@@ -389,7 +339,6 @@ export class SessionFile {
     return entries;
   }
 
-  /** The agent (model, thinking level) the next send starts from: the branch's as of the leaf. */
   private async agentAt(state: SessionState, history: readonly EntryRecord[]): Promise<AgentState | undefined> {
     const {branch, leaf} = state;
     if (leaf === undefined) return (await this.view(branch)).docs["pi.agent"] as AgentState | undefined;
@@ -397,7 +346,6 @@ export class SessionFile {
     return at === undefined ? undefined : this.harness.snapshotAsOf(AgentDoc, branch as ConversationId, at as EntryId, context);
   }
 
-  /** Context usage of the next request from the leaf. */
   private async contextUsage(state: SessionState, agent: AgentState | undefined): Promise<SessionContextUsage> {
     const model = agent?.model ? this.modelRuntime.getModel(agent.model.provider, agent.model.modelId) : undefined;
     const contextWindow = model?.contextWindow ?? 0;
@@ -407,7 +355,6 @@ export class SessionFile {
     return contextUsageOf({contextWindow, entries, messages});
   }
 
-  /** The first user entry of the active run, or undefined when idle. */
   private async runStart(live: LiveState | undefined): Promise<number | undefined> {
     const entries: number[] = [];
     for (const id of live?.run?.inputs ?? []) {
@@ -418,8 +365,8 @@ export class SessionFile {
   }
 
   /**
-   * The branch the agent acts on next, configured with `model`. From an undone leaf it is a new fork of the branch
-   * there (or an empty conversation when nothing is shown), which drops the undone turns; the watch follows it.
+   * From an undone leaf: a new fork there (or an empty conversation when nothing is shown), which drops the undone
+   * turns.
    */
   private async prepareBranch(model: SessionModel): Promise<Conversation> {
     const {branch, leaf} = await this.state();
@@ -446,7 +393,6 @@ export class SessionFile {
     );
   }
 
-  /** Moves the engine watch to `branch`; listeners are notified of its frames. */
   private async follow(branch: number): Promise<void> {
     if (this.followed?.branch === branch) return;
     const state = await (await this.conversation(branch)).viewState(context);

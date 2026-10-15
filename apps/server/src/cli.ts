@@ -1,11 +1,9 @@
 #!/usr/bin/env node
-// Configure Pi before importing the runtime.
 import "@/environment";
 import {Command, Option} from "commander";
 import {DEFAULT_HOST, DEFAULT_PORT, parsePort, startServer} from "@/server";
 import {registerBundledToolsPath} from "@/tools";
 
-/** Runs the headless API and owns its signal/parent-disconnect lifecycle. */
 async function main(): Promise<void> {
   registerBundledToolsPath();
 

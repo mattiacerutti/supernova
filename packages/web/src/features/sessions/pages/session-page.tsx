@@ -35,7 +35,6 @@ import {showToast} from "@/lib/toast";
 
 interface SessionTitleProps {
   readonly session: Session;
-  /** The title and pin as shown, with a rename or pin the runtime has not shown yet. */
   readonly title: string;
   readonly pinned: boolean;
 }
@@ -71,7 +70,6 @@ interface LoadingTitleProps {
   readonly title: string | undefined;
 }
 
-/** Shows the title the sidebar already knows while the session loads. */
 function LoadingTitle(props: LoadingTitleProps) {
   const {title} = props;
 
@@ -90,16 +88,12 @@ interface FollowSessionProps {
   readonly sessionId: string;
 }
 
-/** Keeps the shown session's document live while mounted. */
 function FollowSession(props: FollowSessionProps) {
   useFollowSession(props.sessionId);
   return null;
 }
 
-/**
- * What the page shows. A new session already has the id it will be created under, so the draft, model choice,
- * and page identity carry over unchanged when its first message turns it into a session.
- */
+/** A new session already has its future id, so draft and model choice carry over when its first message creates it. */
 export type SessionPageTarget =
   | {readonly kind: "new"; readonly projectName: string; readonly projectPath: string; readonly sessionId: string}
   | {readonly kind: "session"; readonly sessionId: string};
@@ -108,19 +102,14 @@ interface SessionPageProps {
   readonly target: SessionPageTarget;
 }
 
-/**
- * One page for a project's new-session screen and an existing session. Sending the first
- * message turns the first into the second without remounting: the composer stays the same
- * element and docks from the centered hero to the bottom while the URL changes underneath.
- */
+/** The first message turns the new-session screen into a session without remounting; the composer docks in place. */
 export default function SessionPage(props: SessionPageProps) {
   const {target} = props;
   const {sessionId} = target;
   const navigate = useNavigate();
   const setNewSessionId = useComposerDraftsStore((state) => state.setNewSessionId);
 
-  // Until the runtime has created the session it exists only in the store; reading it would race creation.
-  // The workspace it was started with is kept here because the draft is cleared on submit.
+  // Kept here because the draft is cleared on submit, before the runtime has the session.
   const [creatingWorkspace, setCreatingWorkspace] = useState<SessionWorkspaceSelection | null>(null);
   const creatingSession = creatingWorkspace !== null;
   const view = useSession(sessionId);
@@ -171,7 +160,6 @@ export default function SessionPage(props: SessionPageProps) {
     void navigate({replace: true, search: {draft: sessionId, projectId: projectIdFromPath(target.projectPath)}, to: "/session/new"});
   };
 
-  /** Puts a turn's prompt back into the composer before the checkpoint moves. */
   const restoreDraftFrom = (turn: SessionTurn | undefined): void => {
     composer.draft.replaceContentParts(turn?.userMessage.contentParts ?? []);
   };

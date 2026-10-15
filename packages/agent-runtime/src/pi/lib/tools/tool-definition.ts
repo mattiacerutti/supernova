@@ -5,7 +5,6 @@ import type {ToolExecutionApi} from "@earendil-works/pi-durable";
 import type {PromptedTool} from "@supernova/agent-runtime/pi/lib/tools/coding-tools";
 import {extensionContext} from "@supernova/agent-runtime/pi/extensions/legacy/extension-context";
 
-/** The old-SDK tool context, built from what the engine call knows; `executeTool` and `tools` are not available. */
 async function toolContext(api: ToolExecutionApi, modelRuntime: ModelRuntime, signal: AbortSignal | undefined): Promise<ExtensionToolContext> {
   const agent = await api.agent({abortSignal: signal} as never);
   const model = agent.model ? (modelRuntime.getModel(agent.model.provider, agent.model.modelId) as Model<never> | undefined) : undefined;
@@ -24,10 +23,6 @@ function toJson(value: unknown): JsonValue | undefined {
   return json === undefined ? undefined : (JSON.parse(json) as JsonValue);
 }
 
-/**
- * Runs an old-SDK `ToolDefinition` as an engine tool: the same name, description, and schema; streamed partial
- * results become running output and details. Used for Supernova's own tools and extension-registered ones.
- */
 export function fromToolDefinition(definition: ToolDefinition<TSchema, unknown>, modelRuntime: ModelRuntime): PromptedTool {
   return {
     name: definition.name,

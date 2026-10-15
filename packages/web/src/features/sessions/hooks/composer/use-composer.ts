@@ -9,19 +9,15 @@ import type {ModelSelection} from "@/features/sessions/hooks/composer/use-model-
 import {useModelSelection} from "@/features/sessions/hooks/composer/use-model-selection";
 
 interface UseComposerOptions {
-  /** Disables input for reasons outside the composer, such as a pending create. */
   readonly disabled?: boolean;
-  /** Project defaults for a session that has not been sent yet. */
   readonly modelDefaults?: ModelDefaults;
   readonly initialModelReference?: ModelReference;
   readonly projectPath: string;
-  /** The session the draft and model choice belong to. For a new session this is the id the client minted for it. */
   readonly sessionId: string;
 }
 
-export interface Composer {
+interface Composer {
   readonly attachments: ComposerAttachments;
-  /** True while models are loading or nothing is selectable; the composer renders its skeleton. */
   readonly isPending: boolean;
   readonly disabled: boolean;
   readonly draft: ComposerDraft;
@@ -30,7 +26,6 @@ export interface Composer {
   readonly selectModel: (key: string) => void;
 }
 
-/** Composes draft, attachments, and model selection for one composer instance. Share it through `ComposerContext`. */
 export function useComposer(options: UseComposerOptions): Composer {
   const {disabled: externallyDisabled = false, initialModelReference, modelDefaults, projectPath, sessionId} = options;
 
@@ -57,7 +52,6 @@ export function useComposer(options: UseComposerOptions): Composer {
 
 export const ComposerContext = createContext<Composer | null>(null);
 
-/** Reads the composer built by `useComposer`; requires `ComposerContext` above the caller. */
 export function useComposerContext(): Composer {
   const composer = use(ComposerContext);
   if (!composer) throw new Error("ComposerContext is not available.");

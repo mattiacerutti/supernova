@@ -2,21 +2,11 @@ import type {AssistantMessage, Message, TextContent, ImageContent} from "@earend
 import type {HookRegistration, LiveState} from "@earendil-works/pi-durable";
 import {CompactionTask, GenerationTask, hook, LiveDoc, ToolTask} from "@earendil-works/pi-durable";
 
-/** One old-SDK handler, as Pi's loader collected it. */
 export type Handler = (event: Record<string, unknown>, ctx: unknown) => unknown;
 
-/** Delivers one old-SDK event to its handlers in registration order and collects what they return. */
 export type Emit = (event: string, fields: Record<string, unknown>) => Promise<unknown[]>;
 
-/**
- * Old-SDK events this bridge delivers, and what delivers them (see `eventHooks`). Any other subscribed event is reported
- * once as not delivered, so an extension never believes it is hooked into something that never fires.
- *
- * Not deliverable from engine hooks: `message_update` and `tool_execution_update` (streaming deltas), `input` (the TUI's
- * editor), `session_compact` (the engine offers no hook after a summary is placed), `agent_before_settle` and the
- * `turn_end` result (the old loop's follow-up queue), and the session tree, fork, and info events (old-SDK session
- * objects). `before_agent_start` is delivered but its result (a prompt or system prompt rewrite) is not applied.
- */
+/** Any other subscribed event is reported once as not delivered. `before_agent_start` fires but its result is not applied. */
 export const DELIVERED_EVENTS = new Set([
   "session_start",
   "session_shutdown",
@@ -38,23 +28,13 @@ export const DELIVERED_EVENTS = new Set([
 
 type ToolReplacement = {content?: (TextContent | ImageContent)[]; details?: unknown; isError?: boolean} | undefined;
 
-/**
- * Engine hooks that fire the old SDK's agent events. The old loop fired them around one agent run; the engine exposes
- * requests, responses, tool calls, and compactions, so each old event is placed at the closest engine moment:
- *
- * - a run's first request → `before_agent_start`, `agent_start`; every request → `context`
- * - every model response → `turn_start`, `message_start`, `message_end`, `turn_end`
- * - a final answer → `agent_end`, `agent_settled`
- * - every tool call → `tool_call`, `tool_execution_start`, (execute), `tool_execution_end`, `tool_result`
- * - a compaction → `session_before_compact`, which may cancel it or supply the summary
- */
+/** Each old event is placed at the closest engine moment. */
 export function eventHooks(subscribed: ReadonlySet<string>, emit: Emit): HookRegistration[] {
   const has = (...events: string[]) => events.some((event) => subscribed.has(event));
   const hooks: HookRegistration[] = [];
 
   if (has("context", "before_agent_start", "agent_start", "turn_start", "turn_end", "message_start", "message_end", "agent_end", "agent_settled")) {
-    // Turn numbering is per conversation. A run is identified by the inputs it answers (`pi.live.run.inputs`); its first
-    // request is the one that first sees them.
+    // A run is identified by the inputs it answers; its first request is the one that first sees them.
     const turns = new Map<number, number>();
     const runs = new Set<string>();
     hooks.push(

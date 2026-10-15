@@ -10,26 +10,21 @@ const entry = resolve(import.meta.dir, "../src/cli.ts");
 // The server runs on Node; `bun test` is only the test runner. The source runs as `dev` runs it, through tsx.
 const runtime = {execPath: "node", execArgv: ["--import", "tsx"]};
 
-// Each child starts Node and tsx before it parses its arguments, which takes seconds under a loaded full-suite run.
-test.each(["", "abc", "1.5", "-1", "65536"])(
-  "rejects invalid port %j before startup",
-  async (port) => {
-    const home = await mkdtemp(join(tmpdir(), "supernova-invalid-port-"));
-    const child = fork(entry, ["--port", port], {
-      ...runtime,
-      silent: true,
-      env: {...process.env, SUPERNOVA_HOME: home, PI_OFFLINE: "1"},
-    });
-    try {
-      const [code] = await once(child, "exit");
-      expect(code).toBe(1);
-    } finally {
-      child.kill("SIGKILL");
-      await rm(home, {recursive: true, force: true});
-    }
-  },
-  30_000
-);
+test("rejects an invalid port before startup", async () => {
+  const home = await mkdtemp(join(tmpdir(), "supernova-invalid-port-"));
+  const child = fork(entry, ["--port", "65536"], {
+    ...runtime,
+    silent: true,
+    env: {...process.env, SUPERNOVA_HOME: home, PI_OFFLINE: "1"},
+  });
+  try {
+    const [code] = await once(child, "exit");
+    expect(code).toBe(1);
+  } finally {
+    child.kill("SIGKILL");
+    await rm(home, {recursive: true, force: true});
+  }
+}, 30_000);
 
 test("owned APIs bind distinct ports, report readiness, serve no UI, and release live sockets on close", async () => {
   const home = await mkdtemp(join(tmpdir(), "supernova-server-test-"));

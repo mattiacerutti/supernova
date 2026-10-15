@@ -1,14 +1,22 @@
 import {z} from "zod";
+import type {LiveState} from "@supernova/contracts/services/sessions/schemas";
 
-/** A step of new-session setup long enough to show progress for. */
 export const SessionSetupStep = z.enum(["worktree"]);
 
-/** What a session is doing, derived from its `pi.live`. */
 export const SessionActivity = z.enum(["idle", "running", "compacting"]);
 
 /**
- * A problem that did not fail a command, reported to the session's clients: an input that ended unanswered, a failed
- * compaction (`error`), or an extension that could not do something here (`warning`, with its path).
+ * Shared by server (directory) and client (from a held document) so status and content never disagree. A manual
+ * compaction runs without a run.
+ */
+export function sessionActivityOf(live: LiveState): SessionActivity {
+  if ((live.compactions ?? []).some((compaction) => compaction.blocking || compaction.reason === "manual")) return "compacting";
+  return live.run === undefined ? "idle" : "running";
+}
+
+/**
+ * A problem that failed no command: an unanswered input or failed compaction (`error`), or something an extension
+ * cannot do here (`warning`, with its path).
  */
 export const SessionNotice = z.object({
   id: z.string(),

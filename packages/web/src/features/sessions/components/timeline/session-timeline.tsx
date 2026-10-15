@@ -19,21 +19,14 @@ const TIMELINE_ANCHOR_SCROLL_DURATION_MS = 700;
 const TIMELINE_ANCHOR_TOP_MARGIN_PX = 24;
 const TIMELINE_BOTTOM_PADDING_PX = 16;
 const TIMELINE_EARLIER_HISTORY_HEIGHT_PX = 48;
-// Bounds retained measurement snapshots used when switching between sessions.
 const TIMELINE_CACHE_LIMIT = 16;
 const TIMELINE_SCROLL_BUTTON_THRESHOLD_PX = 50;
-// Lets streamed rows (or the status footer) visually catch up after content
-// growth instantly moves them.
 const TIMELINE_STREAM_SCROLL_ANIMATION_MS = 160;
 const TIMELINE_STREAM_SCROLL_MAX_OFFSET_PX = 56;
 
 const timelineCache = new Map<string, VirtualItem[]>();
 
-/**
- * Starts `element` displaced by `offset` px and eases it to its layout position,
- * stacking onto any displacement still in flight. Transform-only, so it runs on
- * the compositor and never triggers layout while the stream renders.
- */
+/** Transform-only, so it runs on the compositor and never triggers layout while streaming. */
 function animateCatchUp(element: HTMLElement, offset: number, current: Animation | null, maxOffset = TIMELINE_STREAM_SCROLL_MAX_OFFSET_PX): Animation {
   const transform = window.getComputedStyle(element).transform;
   const inFlight = transform === "none" ? 0 : new DOMMatrixReadOnly(transform).m42;
@@ -45,8 +38,7 @@ function animateCatchUp(element: HTMLElement, offset: number, current: Animation
   });
 }
 
-/** Turns before the first loaded one, and loading them. */
-export interface TimelineEarlierHistory {
+interface TimelineEarlierHistory {
   readonly count: number;
   readonly failed: boolean;
   readonly load: () => void;
@@ -118,8 +110,7 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
   const liveUserRowIndex = hasLiveUserRow ? items.length : -1;
   const previousHasLiveUserRowRef = useRef(hasLiveUserRow);
 
-  // Distinct so a settling turn rendered by both projections counts once. The
-  // count only decreases when checkpoint navigation reverts turns away.
+  // Distinct, so a settling turn rendered by both projections counts once.
   const turnCount = new Set([...items, ...liveItems].map((item) => item.turnId)).size;
   const previousTurnCountRef = useRef(turnCount);
 
@@ -129,8 +120,6 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
     directDomUpdates: true,
     directDomUpdatesMode: "position",
     estimateSize: () => 86,
-    // Only Message Scroller follows the bottom. TanStack preserves detached
-    // content when measurements above the viewport change.
     onChange: (_instance, scrolling) => {
       if (!scrolling) syncViewport();
     },
@@ -140,16 +129,13 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
     overscan: 3,
     paddingEnd: TIMELINE_BOTTOM_PADDING_PX,
     paddingStart,
-    // Measure even a detached, tall prompt before pinning; do not wait for
-    // its estimated position to enter the viewport.
+    // Measure a detached, tall prompt before pinning instead of waiting for it to enter the viewport.
     rangeExtractor: (range) => {
       const indexes = defaultRangeExtractor(range);
       if (liveUserRowIndex < 0 || indexes.includes(liveUserRowIndex)) return indexes;
       return [...indexes, liveUserRowIndex].toSorted((left, right) => left - right);
     },
-    // TanStack adjusts scrollTop before notifying React about a measured size.
-    // Publish the new virtual height first so the browser does not clamp that
-    // adjustment against the previous height and visibly correct a frame later.
+    // Publish the new height before TanStack adjusts scrollTop, or the browser clamps against the old height.
     scrollToFn: (offset, options, instance) => {
       const virtualContent = virtualContentRef.current;
       if (virtualContent) virtualContent.style.height = `${instance.getTotalSize()}px`;
@@ -164,7 +150,6 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
     if (anchorSpaceRef.current) anchorSpaceRef.current.style.height = `${height}px`;
   }, []);
 
-  // Clearing ownership first makes the animation's final sample a no-op.
   const stopAnchorScroll = (): void => {
     const anchor = anchorScrollRef.current;
     anchorScrollRef.current = null;
@@ -176,8 +161,7 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
     onAnchorScrollingChange(false);
   }, [onAnchorScrollingChange]);
 
-  // Pinning tracks current geometry. Afterwards, space is lossy: growth and
-  // upward scrolling consume it, while shrinkage is replaced to avoid clamping.
+  // While pinning, space tracks geometry. Afterwards it is lossy: growth and scrolling up consume it.
   const syncAnchorSpace = useCallback(
     (viewport: HTMLDivElement): void => {
       const currentHeight = anchorSpaceHeightRef.current;
@@ -193,13 +177,11 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
       realContentHeightRef.current = realContentHeight;
 
       if (anchor) {
-        // The canvas starts at the scroll origin, so row.start is its scroll
-        // offset. Retain the last measurement if settlement virtualizes it away.
+        // Retain the last measurement if settlement virtualizes the row away.
         anchor.row = virtualizer.getVirtualItems().find((row) => row.key === anchor.row.key) ?? anchor.row;
         const requiredHeight = Math.max(0, anchor.row.start - TIMELINE_ANCHOR_TOP_MARGIN_PX + viewport.clientHeight - realContentHeight);
         if (requiredHeight !== currentHeight) setAnchorSpaceHeight(requiredHeight);
-        // ResizeObserver and stream commits can change the destination between
-        // animation frames. Apply the current progress before those changes paint.
+        // The destination can move between frames; apply the current progress before those changes paint.
         const end = Math.max(0, realContentHeight + requiredHeight - viewport.clientHeight);
         // The initial screen position is fixed even when history above is remeasured.
         const start = anchor.row.start - anchor.initialTop;
@@ -221,9 +203,7 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
     [setAnchorSpaceHeight, virtualizer]
   );
 
-  // Growth is detected by comparing the footer's layout position and scrollTop
-  // against the previous commit, not from the virtualizer's scroll delta: the
-  // message scroller's own auto-follow may have already scrolled.
+  // Measured against the previous commit, not the virtualizer's scroll delta: auto-follow may already have scrolled.
   const streamEndRef = useRef<{footerTop: number; scrollTop: number} | null>(null);
   const measureStreamEnd = (): void => {
     const viewport = viewportRef.current;
@@ -247,7 +227,6 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
     }
   };
 
-  // One commit boundary for React updates and virtualizer measurements.
   // Consume anchor space before following, then animate the resulting movement.
   const syncViewport = (): void => {
     const viewport = viewportRef.current;
@@ -257,18 +236,14 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
     easeStreamGrowth();
   };
 
-  // Compare against the DOM offset: TanStack's own offset only updates on the
-  // next scroll event, while scrollToFn above applies each adjustment in this
-  // measurement batch synchronously and without clamping.
+  // DOM offset, not TanStack's, which lags to the next scroll event.
   virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item) => {
     if (prependRef.current && item.index < prependRef.current.beforeIndex) return true;
     return anchorScrollRef.current === null && anchorSpaceHeightRef.current === 0 && item.end <= (viewportRef.current?.scrollTop ?? 0);
   };
 
-  // Earlier turns loaded above move the previous first row down; the scroll position moves with it in this render,
-  // before the range is computed, so the rows on screen stay rendered and in place. The new rows are laid out from
-  // estimates; `shift` is what the DOM still has to scroll, and `beforeIndex` marks them so their measurement
-  // corrects the scroll position as for rows above the viewport, which they are once the shift lands.
+  // Prepended turns shift the scroll position in this render so rows on screen stay put; `shift` is what the DOM still
+  // owes, `beforeIndex` marks the new rows so their measurement corrects it.
   const firstRowRef = useRef<{readonly key: string; readonly start: number} | null>(null);
   const prependRef = useRef<{readonly shift: number; readonly beforeIndex: number} | null>(null);
   const previousFirstRow = firstRowRef.current;
@@ -283,13 +258,11 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
 
   const virtualItems = virtualizer.getVirtualItems();
 
-  /** Loads earlier turns once the viewport is within a screen of the top. */
   const loadEarlierNearTop = (viewport: HTMLDivElement): void => {
     if (hasEarlierHistory && viewport.scrollTop < viewport.clientHeight) earlierHistory.load();
   };
 
-  // Anchors a freshly sent message near the viewport top. Space below it makes
-  // that position the scroll end and is consumed as the response grows.
+  // Anchors a sent message near the top; space below it is consumed as the response grows.
   useLayoutEffect(() => {
     const hadLiveUserRow = previousHasLiveUserRowRef.current;
     previousHasLiveUserRowRef.current = hasLiveUserRow;
@@ -299,8 +272,7 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
     const row = virtualizer.getVirtualItems().find((item) => item.index === liveUserRowIndex);
     if (!viewport || !row) return;
 
-    // A followed timeline shows the message at the bottom first, like any
-    // appended row, so the scroll eases up from where the message appeared.
+    // Show the message at the bottom first so the scroll eases up from where it appeared.
     stopAnchorScroll();
     streamScrollAnimationRef.current?.cancel();
     if (!canScrollToEnd) scrollToEnd({behavior: "auto"});
@@ -316,21 +288,14 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
       return;
     }
 
-    // The message scroller's auto-follow reacts to the new anchor space one
-    // frame later and would jump straight to the anchored position, so it hands
-    // the viewport to this transition until the scroll settles or the user
-    // takes over. Claiming here, during commit, lands before that frame.
+    // Claim the viewport during commit, before auto-follow would jump to the anchored position next frame.
     onAnchorScrollingChange(true);
 
-    // The message paints at the bottom on this frame. Starting the animation on
-    // the next one keeps its clock aligned with painted frames, so a slow commit
-    // cannot make the first visible step skip ahead.
+    // Start on the next frame so the clock aligns with painted frames and a slow commit cannot skip the first step.
     window.requestAnimationFrame(() => {
       if (anchorScrollRef.current !== anchor) return;
 
-      // Animate progress, not a captured pixel destination. Keep the message
-      // pinned against current geometry, or follow the response when it has
-      // outgrown the viewport, without handing scrolling off mid-transition.
+      // Animate progress, not a captured destination, so the pin follows current geometry.
       animate(anchor.progress, 1, {
         duration: TIMELINE_ANCHOR_SCROLL_DURATION_MS / 1_000,
         ease: [0.16, 1, 0.3, 1],
@@ -342,9 +307,7 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
     });
   }, [canScrollToEnd, hasLiveUserRow, liveUserRowIndex, onAnchorScrollingChange, releaseAnchorScroll, scrollToEnd, shouldReduceMotion, syncAnchorSpace, virtualizer]);
 
-  // Anchor space only exists so a sent message can hold the viewport top while
-  // its response grows below. When a revert removes turns that purpose is gone,
-  // so collapse the space instead of letting it swallow the removed height.
+  // A revert removes turns: collapse the anchor space rather than let it swallow the removed height.
   useLayoutEffect(() => {
     const turnsReverted = turnCount < previousTurnCountRef.current;
     previousTurnCountRef.current = turnCount;
@@ -368,8 +331,7 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
 
   useLayoutEffect(syncViewport);
 
-  // Virtualized rows share no per-turn ancestor, so the hovered turn is flagged
-  // on each of its rows instead.
+  // Virtualized rows have no per-turn ancestor, so each row of the hovered turn is flagged.
   const setHoveredTurn = (viewport: HTMLDivElement, turnId: string | undefined): void => {
     for (const row of viewport.querySelectorAll<HTMLElement>("[data-turn-id]")) row.classList.toggle("turn-hover", turnId !== undefined && row.dataset.turnId === turnId);
   };
@@ -486,11 +448,7 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
   );
 }
 
-/**
- * Renders the virtualized session transcript. Auto-follow belongs to the
- * message scroller except while a newly sent message is being anchored to the
- * viewport top; that transition owns the scroll position until it settles.
- */
+/** Auto-follow belongs to the message scroller except while a sent message is being anchored. */
 export default function SessionTimeline(props: SessionTimelineProps) {
   const [anchorScrolling, setAnchorScrolling] = useState(false);
 

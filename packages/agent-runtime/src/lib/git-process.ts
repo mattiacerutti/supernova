@@ -13,7 +13,6 @@ interface GitProcessOptions {
   readonly input?: Buffer;
 }
 
-/** Runs Git and returns its exit code alongside its output, so callers can decide what a failure means. */
 export async function runGitResult(args: readonly string[], options: GitProcessOptions = {}): Promise<GitOutput & {readonly code: number}> {
   return new Promise((complete) => {
     const child = spawn("git", [...args], {cwd: options.cwd, env: options.env ?? process.env});
@@ -50,14 +49,12 @@ export async function runGitResult(args: readonly string[], options: GitProcessO
   });
 }
 
-/** Runs Git and throws when it fails. Failures carry Git's own message, which never reaches clients. */
 export async function runGit(args: readonly string[], options: GitProcessOptions = {}): Promise<GitOutput> {
   const output = await runGitResult(args, options);
   if (output.code !== 0) throw new Error(`Git command failed: ${output.stderr.trim() || args.join(" ")}`);
   return output;
 }
 
-/** Runs Git and returns its trimmed output, or undefined when the command fails or prints nothing. */
 export async function optionalGit(args: readonly string[], options: GitProcessOptions = {}): Promise<string | undefined> {
   const output = await runGitResult(args, options);
   const value = output.stdout.trim();

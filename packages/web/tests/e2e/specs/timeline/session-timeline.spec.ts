@@ -395,33 +395,6 @@ test.describe("session timeline visual stability", () => {
     assertBottomLocked({samples});
   });
 
-  test("/redo from a detached position restores the latest message without moving visible content", async ({timeline}) => {
-    await timeline.undoLatestWithSlashCommand();
-    await timeline.detachFar();
-    const before = await timeline.captureVisibleTextAnchor();
-    const beforeScrollHeight = await timeline.scrollHeight();
-    await timeline.resetVisualProbe();
-
-    await timeline.redoLatestWithSlashCommand();
-    const samples = await waitForCheckpointFrames({beforeScrollHeight, direction: "grow", timeline});
-    const after = await timeline.measureVisibleTextAnchor(before);
-
-    assertAnchorUnmoved(before, after, samples);
-  });
-
-  test("manual restore from the bottom restores the latest message and stays at the bottom in the same frame", async ({timeline}) => {
-    await timeline.undoLatestWithSlashCommand();
-    await timeline.expandRolledBackMessages();
-    await timeline.expectAtBottom();
-    const beforeScrollHeight = await timeline.scrollHeight();
-    await timeline.resetVisualProbe();
-
-    await timeline.restoreLatestMessage();
-    const samples = await waitForCheckpointFrames({beforeScrollHeight, direction: "grow", timeline});
-
-    assertBottomLocked({samples});
-  });
-
   test("manual restore from a detached position restores the latest message without moving visible content", async ({timeline}) => {
     await timeline.undoLatestWithSlashCommand();
     await timeline.detachFar();

@@ -7,7 +7,6 @@ export interface StreamErrorTimelineRow {
   readonly type: "stream-error";
 }
 
-/** A virtualized row: a timeline item, or the stream error shown after the last one. */
 export type TimelineRow = SessionTimelineItem | StreamErrorTimelineRow;
 
 interface BuildTimelineRowsInput {
@@ -16,7 +15,6 @@ interface BuildTimelineRowsInput {
   readonly streamError: string | null;
 }
 
-/** Concatenates committed and live items and appends the stream error to the active turn. */
 export function buildTimelineRows(input: BuildTimelineRowsInput): readonly TimelineRow[] {
   const {items, liveItems, streamError} = input;
   const rows: TimelineRow[] = [...items, ...liveItems];
@@ -27,10 +25,7 @@ export function buildTimelineRows(input: BuildTimelineRowsInput): readonly Timel
   return rows;
 }
 
-/**
- * Keeps virtual row identity stable when live event ids change on settlement, and when earlier turns load above: a
- * row is keyed by its turn's position in the whole history, after the `earlierTurns` not loaded yet.
- */
+/** Keyed by the turn's position in the whole history so identity survives settlement and prepended turns. */
 export function buildTimelineRowKeys(rows: readonly TimelineRow[], earlierTurns: number): readonly string[] {
   const typeCounts = new Map<string, number>();
   let turnIndex = earlierTurns - 1;
@@ -47,7 +42,6 @@ export function buildTimelineRowKeys(rows: readonly TimelineRow[], earlierTurns:
   });
 }
 
-/** Whether the live turn has produced anything visible yet. */
 export function hasLiveTimelineOutput(items: readonly SessionTimelineItem[]): boolean {
   return items.some((item) => {
     if (item.type === "assistant") return item.event.content.trim().length > 0;

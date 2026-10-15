@@ -3,7 +3,6 @@ import {useRef, useState} from "react";
 import {useVirtualizer} from "@tanstack/react-virtual";
 import {cn} from "@/lib/cn";
 
-/** How close to the end, in pixels, a scroll asks a paged list for more. */
 const END_REACHED_DISTANCE = 200;
 
 interface SearchableListInputProps {
@@ -38,18 +37,15 @@ interface StaticSearchableListProps<TItem> extends SearchableListBaseProps<TItem
 
 interface VirtualizedSearchableListProps<TItem> extends SearchableListBaseProps<TItem> {
   readonly estimateSize: (index: number) => number;
-  /** Called when the list is scrolled near its end; for loading the next page of a paged list. */
   readonly onEndReached?: () => void;
   readonly virtualized: true;
 }
 
 type SearchableListProps<TItem> = StaticSearchableListProps<TItem> | VirtualizedSearchableListProps<TItem>;
 
-/** Renders a keyboard and pointer navigable searchable list for command-style dialogs. */
 export default function SearchableList<TItem>(props: SearchableListProps<TItem>) {
   const {activeIndex, className, getItemKey, isItemSelectable = () => true, items, listStatus, onActiveIndexChange, onSelect, onSubmit, onTab, renderInput, renderItem} = props;
-  // A hover is remembered with the active index it set, so it only counts while that is still the active index. When
-  // the owner moves the highlight itself (a new query, entering a folder), the hover is stale and the keyboard wins.
+  // A hover counts only while the index it set is still active; when the owner moves the highlight, keyboard wins.
   const [hover, setHover] = useState<{readonly activeIndex: number; readonly index: number} | null>(null);
   const [selectionSource, setSelectionSource] = useState<"keyboard" | "mouse">("keyboard");
   const hoveredIndex = hover !== null && hover.activeIndex === activeIndex ? hover.index : null;

@@ -7,7 +7,6 @@ import {sessionKeys} from "@/features/sessions/api/query-keys";
 import {unwrap} from "@/runtime/runtime-result";
 import {useRuntime} from "@/runtime/use-runtime";
 
-/** Loads project resources on composer mount; only file searches make requests while typing. */
 export function useComposerSuggestions(projectPath: string, match: ComposerSuggestionMatch | null, input: {readonly slashCommandActions?: ClientSlashCommandActions} = {}) {
   const runtime = useRuntime();
   const resources = useQuery({

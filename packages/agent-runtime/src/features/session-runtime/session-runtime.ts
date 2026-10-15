@@ -28,12 +28,7 @@ export interface SessionRuntimeDeps {
   readonly titleGenerator: TitleGenerator;
 }
 
-/**
- * Live session execution: sending, aborting, compacting, checkpoint navigation, and each session's state. Keeps one
- * `SessionWorker` per session in use; the engine owns execution, the workers publish it.
- */
 export class SessionRuntime {
-  /** Activity, summaries, setup steps, and problems of every session in use, for clients that have not attached one. */
   public readonly board = new SessionBoard();
   private readonly workers = new Map<string, Promise<SessionWorker>>();
 
@@ -47,7 +42,6 @@ export class SessionRuntime {
     await (await this.worker(input.sessionId)).compact(input);
   }
 
-  /** Aborts the session's work if it has any; the session stays open. */
   public async abort(input: AbortSessionPayload): Promise<void> {
     await (await this.workers.get(input.sessionId)?.catch(() => undefined))?.abort();
   }
@@ -64,44 +58,36 @@ export class SessionRuntime {
     await (await this.worker(input.sessionId)).revertToMessage(input);
   }
 
-  /** A page of a session's branch beyond its document's window. */
   public async loadHistory(input: LoadHistoryPayload): Promise<LoadHistoryResult> {
     return (await this.worker(input.sessionId)).loadHistory(input);
   }
 
-  /** A durable session's document at its latest published revision. */
   public async current(sessionId: string): Promise<Session> {
     return (await this.worker(sessionId)).current();
   }
 
-  /** A durable session's document as replicated state, for the clients following it. */
   public async transcript(sessionId: string): Promise<MutableReplicatedState<Session>> {
     return (await this.worker(sessionId)).document;
   }
 
-  /** Rebuilds a session's document after a change outside the engine (a rename) and publishes it. */
   public async refresh(sessionId: string): Promise<Session> {
     return (await this.worker(sessionId)).refresh();
   }
 
-  /** Open sessions reinstall extensions from disk; an active turn finishes on the code it started with. */
   public reloadExtensions(): Promise<void> {
     return this.deps.store.reload();
   }
 
-  /** Marks the setup step of a session being created under `projectPath`, or its end; see `SessionSetupStep`. */
   public setSetupStep(input: {readonly projectPath: string; readonly sessionId: string; readonly step: SessionSetupStep | null}): void {
     this.board.update(input.sessionId, input.projectPath, {setupStep: input.step});
   }
 
-  /** Adds a notice to a session: an extension's diagnostic (a warning, with its path) or an engine report. */
   public notify(sessionId: string, notice: Pick<SessionNotice, "message" | "extensionPath" | "extensionName">): void {
     void this.deps.store.find(sessionId).then((record) => {
       if (record) this.board.notify(sessionId, record.projectPath, {level: "warning", ...notice});
     });
   }
 
-  /** Stops the session's work, closes it, and drops its checkpoints; used before a session is archived. `workspacePath` is where the agent ran. */
   public async release(input: {readonly sessionId: string; readonly workspacePath: string}): Promise<void> {
     const pending = this.workers.get(input.sessionId);
     this.workers.delete(input.sessionId);
@@ -113,7 +99,6 @@ export class SessionRuntime {
     await this.deps.checkpointStore.deleteSession({projectRoot: input.workspacePath, sessionId: input.sessionId});
   }
 
-  /** Stops every worker and closes every session file; interrupted work resumes at the next start. */
   public async dispose(): Promise<void> {
     const workers = await Promise.all([...this.workers.values()].map((pending) => pending.catch(() => undefined)));
     this.workers.clear();
@@ -121,7 +106,6 @@ export class SessionRuntime {
     await this.deps.store.dispose();
   }
 
-  /** The worker of a session, opened once; unknown ids fail. A failed open is retried by the next call. */
   private worker(sessionId: string): Promise<SessionWorker> {
     let pending = this.workers.get(sessionId);
     if (!pending) {

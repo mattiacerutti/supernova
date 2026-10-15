@@ -7,11 +7,9 @@ import {useForkSession} from "@/features/sessions/api/conversation/fork-session"
 interface ForkSessionDialogProps {
   readonly onClose: () => void;
   readonly sessionId: string;
-  /** Turn to fork through; the dialog is open while set. */
   readonly turnId: string | null;
 }
 
-/** Confirms forking a session through a turn, shows progress in place, and opens the fork. */
 export default function ForkSessionDialog(props: ForkSessionDialogProps) {
   const {onClose, sessionId, turnId} = props;
   const navigate = useNavigate();

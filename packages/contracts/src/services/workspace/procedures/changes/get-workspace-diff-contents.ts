@@ -1,7 +1,6 @@
 import {z} from "zod";
 
 export const WorkspaceDiffContentsGetPayload = z.object({
-  /** Repository-relative, as reported by `getWorkspaceChanges`. */
   path: z.string(),
   projectPath: z.string(),
   repositoryRoot: z.string(),

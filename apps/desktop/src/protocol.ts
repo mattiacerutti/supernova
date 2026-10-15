@@ -1,6 +1,5 @@
 import {extname, isAbsolute, relative, resolve} from "node:path";
 
-/** Resolves bundled assets and SPA routes without allowing requests outside the web bundle. */
 export function resolveRendererFile(root: string, requestUrl: string): string | undefined {
   try {
     const url = new URL(requestUrl);

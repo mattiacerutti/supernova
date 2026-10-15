@@ -7,10 +7,7 @@ interface EarlierHistoryStatusProps {
   readonly top: number;
 }
 
-/**
- * Sits above the first loaded turn while earlier ones exist. It is not a virtual row: it lives in the canvas's top
- * padding, so TanStack anchors a prepend to the turns themselves.
- */
+/** Not a virtual row: it lives in the canvas's top padding so TanStack anchors a prepend to the turns themselves. */
 export default function EarlierHistoryStatus(props: EarlierHistoryStatusProps) {
   const {failed, height, onRetry, top} = props;
 

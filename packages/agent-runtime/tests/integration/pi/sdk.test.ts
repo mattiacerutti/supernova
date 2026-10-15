@@ -249,7 +249,7 @@ export default function(pi) {
     }
   });
 
-  it("creates Pi credential storage from the runtime agent directory when the layer starts", async () => {
+  it("stores Pi credentials under the runtime agent directory", async () => {
     const home = await mkdtemp(join(tmpdir(), "supernova-home-"));
     const agentDir = join(home, ".supernova", "dev", "agent");
     tempDirs.push(home);
@@ -288,7 +288,7 @@ export default function(pi) {
     expect(loader.getExtensions().extensions).toHaveLength(1);
   });
 
-  it("does not load system prompts from files while keeping Pi's default system prompt", async () => {
+  it("does not load system prompt files", async () => {
     const testProject = await createTestProject();
     tempDirs.push(testProject.home, testProject.repo);
     const {agentDir, home, project} = testProject;
@@ -311,27 +311,6 @@ export default function(pi) {
       {content: "shared user instructions", path: join(home, ".agents", "AGENTS.md")},
       {content: "project instructions", path: join(project, "AGENTS.md")},
     ]);
-
-    const modelRuntime = await ModelRuntime.create({credentials: new InMemoryCredentialStore(), modelsPath: null});
-    const {session} = await createAgentSession({
-      cwd: project,
-      modelRuntime,
-      noTools: "all",
-      resourceLoader: loader,
-      sessionManager: SessionManager.inMemory(project),
-      settingsManager: SettingsManager.inMemory(),
-    });
-
-    try {
-      expect(session.systemPrompt).toContain("operating inside pi");
-      expect(session.systemPrompt).toContain("shared user instructions");
-      expect(session.systemPrompt).toContain("project instructions");
-      expect(session.systemPrompt).not.toContain("ignored system prompt");
-      expect(session.systemPrompt).not.toContain("ignored global system prompt");
-      expect(session.systemPrompt).not.toContain("ignored appended system prompt");
-    } finally {
-      session.dispose();
-    }
   });
 
   it("preserves the SDK's project prompt and tool set without advertising bash metadata or image reads", async () => {

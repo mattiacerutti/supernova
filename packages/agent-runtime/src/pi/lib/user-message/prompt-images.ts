@@ -3,11 +3,7 @@ import {convertToPng, formatDimensionNote, resizeImage} from "@earendil-works/pi
 
 const SUPPORTED_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
 
-/**
- * Prepares prompt images as the old SDK's `AgentSession.prompt` did: unsupported formats become PNG and, with
- * `images.autoResize`, images shrink to the model's inline limits. Images that cannot be prepared are dropped with a
- * hint the model sees in the prompt text. Mirrors pi-coding-agent's unexported `utils/image-process.ts`.
- */
+/** Mirrors pi-coding-agent's unexported `utils/image-process.ts`. */
 export async function preparePromptImages(
   images: readonly ImageContent[],
   options: {readonly autoResize: boolean; readonly model: Model<never> | undefined}

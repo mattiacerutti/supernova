@@ -2,9 +2,7 @@ import type {GetConfigurationPayload} from "@supernova/contracts/services/config
 import {GetConfigurationResult} from "@supernova/contracts/services/configuration/procedures";
 import {loadPiSettings} from "@supernova/agent-runtime/pi/config/settings";
 
-/** Client-safe view of the server's Pi settings. */
 export class Configuration {
-  /** Projects only supported frontend settings and validates them before they reach clients. */
   public get(input: GetConfigurationPayload): GetConfigurationResult {
     try {
       const settings = loadPiSettings(input.projectPath);

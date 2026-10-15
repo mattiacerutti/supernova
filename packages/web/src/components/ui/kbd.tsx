@@ -4,11 +4,9 @@ import {cn} from "@/lib/cn";
 
 interface KbdProps {
   readonly className?: string;
-  /** Shown together in one key cap, such as `["Mod+K"]` or `["ArrowUp", "ArrowDown"]`. */
   readonly hotkeys: readonly Hotkey[];
 }
 
-/** Renders shortcut keys as one small, quiet key cap, in the platform's notation (⌘K on macOS, Ctrl K elsewhere). */
 export default function Kbd(props: KbdProps) {
   const {className, hotkeys} = props;
   const keys = hotkeys.flatMap((hotkey) => formatForDisplay(hotkey, {parts: true}));

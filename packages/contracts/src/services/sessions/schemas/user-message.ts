@@ -3,15 +3,12 @@ import {z} from "zod";
 export const UserMessageAttachmentKind = z.union([z.literal("image"), z.literal("text")]);
 
 export const UserMessageAttachmentPart = z.object({
+  /** Sent with the message; absent in the stored turn, whose image lives in Pi's user entry. */
   contentBase64: z.string().optional(),
-  /** Stable client-generated attachment identifier. */
   id: z.string(),
   kind: UserMessageAttachmentKind,
-  /** Original file name selected by the user. */
   name: z.string(),
-  /** Attachment MIME type used by the backend and UI to interpret the file content. */
   mime: z.string(),
-  /** File size in bytes. */
   size: z.number(),
   type: z.literal("attachment"),
 });

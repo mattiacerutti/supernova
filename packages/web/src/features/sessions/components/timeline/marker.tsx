@@ -3,7 +3,7 @@ import {useRender} from "@base-ui/react/use-render";
 import type {ComponentProps} from "react";
 import {cn} from "@/lib/cn";
 
-export type MarkerVariant = "border" | "default" | "separator";
+type MarkerVariant = "border" | "default" | "separator";
 
 const markerVariantClasses: Record<MarkerVariant, string> = {
   border: "border-b border-border pb-2",
@@ -15,7 +15,6 @@ interface MarkerProps extends useRender.ComponentProps<"div"> {
   readonly variant?: MarkerVariant;
 }
 
-/** Displays a status, note, bordered row, or labeled separator. */
 function Marker(props: MarkerProps) {
   const {className, render, variant = "default", ...markerProps} = props;
 
@@ -39,14 +38,6 @@ function Marker(props: MarkerProps) {
   });
 }
 
-/** Renders a decorative marker icon. */
-function MarkerIcon(props: ComponentProps<"span">) {
-  const {className, ...iconProps} = props;
-
-  return <span aria-hidden="true" className={cn("size-4 shrink-0 [&_svg:not([class*='size-'])]:size-4", className)} data-slot="marker-icon" {...iconProps} />;
-}
-
-/** Renders marker text content. */
 function MarkerContent(props: ComponentProps<"span">) {
   const {className, ...contentProps} = props;
 
@@ -62,4 +53,4 @@ function MarkerContent(props: ComponentProps<"span">) {
   );
 }
 
-export {Marker, MarkerContent, MarkerIcon};
+export {Marker, MarkerContent};

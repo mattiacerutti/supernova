@@ -4,7 +4,6 @@ import {onOpenExtensionNotices} from "@/features/sessions/lib/session-notices";
 import {useSessionsStore} from "@/features/sessions/stores/sessions-store";
 import {useMountEffect} from "@/hooks/use-mount-effect";
 
-/** The extension's file or package name, without the path to it. */
 function extensionName(path: string): string {
   const segments = path.split(/[\\/]/).filter(Boolean);
   const last = segments.at(-1) ?? path;
@@ -12,7 +11,6 @@ function extensionName(path: string): string {
   return /^index\.[cm]?[jt]s$/.test(last) ? (segments.at(-2) ?? last) : last;
 }
 
-/** What a session's extensions could not do here, by extension. Mounted once; the extension notice toast opens it. */
 export default function ExtensionNoticesDialog() {
   // The session stays set while the dialog closes, so its content does not vanish mid-animation.
   const [sessionId, setSessionId] = useState<string | null>(null);

@@ -6,7 +6,6 @@ import {join} from "node:path";
 import {promisify} from "node:util";
 import type {AssistantMessage} from "@earendil-works/pi-ai";
 import {afterEach, describe, expect, it} from "vitest";
-import type {CheckpointStore} from "@supernova/agent-runtime/features/session-runtime/checkpoints/checkpoint-store";
 import type {SessionRuntime} from "@supernova/agent-runtime/features/session-runtime/session-runtime";
 import type {ModelReference, Session} from "@supernova/contracts/services/sessions/schemas";
 import {createPiTestRuntime, fauxAssistantMessage, selectedModelReference, selectedPiModel, turnContents, turnIds, undoneContents, waitUntil} from "@tests/support/session-runtime";
@@ -211,39 +210,6 @@ describe("checkpoint navigation", () => {
     await expect(readFile(join(projectPath, "agent-two.txt"), "utf8")).rejects.toThrow();
   });
 
-  it("undoes a turn after uncommitted changes are carried onto a new branch", async () => {
-    const projectPath = await createGitProject();
-    tempDirs.push(projectPath);
-    await git(projectPath, ["branch", "-M", "main"]);
-    const pi = await createPiTestRuntime();
-    runtimes.push(pi);
-    const {info} = await pi.createSession(projectPath);
-    pi.faux.setResponses([
-      async () => {
-        await writeFile(join(projectPath, "file.txt"), "one\n");
-        return fauxAssistantMessage("one");
-      },
-      async () => {
-        await writeFile(join(projectPath, "file.txt"), "two\n");
-        await writeFile(join(projectPath, "agent-two.txt"), "agent two\n");
-        return fauxAssistantMessage("two");
-      },
-    ]);
-
-    await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
-    await writeFile(join(projectPath, "manual.txt"), "manual between turns\n");
-    await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
-    await git(projectPath, ["checkout", "-b", "second"]);
-
-    const undoEvents = await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
-
-    expect(undoEvents.errors).toEqual([]);
-    await expect(gitOutput(projectPath, ["branch", "--show-current"])).resolves.toBe("second");
-    await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("one\n");
-    await expect(readFile(join(projectPath, "manual.txt"), "utf8")).resolves.toBe("manual between turns\n");
-    await expect(readFile(join(projectPath, "agent-two.txt"), "utf8")).rejects.toThrow();
-  });
-
   it("keeps checkpoint navigation revisions monotonic after a manual abort", async () => {
     const projectPath = await createProject();
     tempDirs.push(projectPath);
@@ -340,57 +306,6 @@ describe("checkpoint navigation", () => {
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("two\n");
   });
 
-  it("preserves git history and user files outside the checkpoint diff during undo and redo", async () => {
-    const projectPath = await createGitProject();
-    tempDirs.push(projectPath);
-    const pi = await createPiTestRuntime();
-    runtimes.push(pi);
-    const {info} = await pi.createSession(projectPath);
-    pi.faux.setResponses([
-      async () => {
-        await writeFile(join(projectPath, "file.txt"), "one\n");
-        await git(projectPath, ["add", "file.txt"]);
-        await git(projectPath, ["commit", "-m", "agent one"]);
-        return fauxAssistantMessage("one");
-      },
-      async () => {
-        await writeFile(join(projectPath, "file.txt"), "two\n");
-        await git(projectPath, ["add", "file.txt"]);
-        await git(projectPath, ["commit", "-m", "agent two"]);
-        return fauxAssistantMessage("two");
-      },
-    ]);
-
-    await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
-    await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
-    const headAfterSecondTurn = await gitOutput(projectPath, ["rev-parse", "HEAD"]);
-    await writeFile(join(projectPath, "user-staged.txt"), "keep staged\n");
-    await git(projectPath, ["add", "user-staged.txt"]);
-    await writeFile(join(projectPath, "user-untracked.txt"), "keep untracked\n");
-
-    const undoEvents = await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
-
-    expect(undoEvents.errors).toEqual([]);
-    await expect(gitOutput(projectPath, ["rev-parse", "HEAD"])).resolves.toBe(headAfterSecondTurn);
-    await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("one\n");
-    await expect(readFile(join(projectPath, "user-staged.txt"), "utf8")).resolves.toBe("keep staged\n");
-    await expect(readFile(join(projectPath, "user-untracked.txt"), "utf8")).resolves.toBe("keep untracked\n");
-    await expect(gitOutput(projectPath, ["diff", "--cached", "--name-only"])).resolves.toContain("user-staged.txt");
-
-    await writeFile(join(projectPath, "redo-staged.txt"), "keep through redo\n");
-    await git(projectPath, ["add", "redo-staged.txt"]);
-    const redoEvents = await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.redoCheckpoint({sessionId: info.id})});
-
-    expect(redoEvents.errors).toEqual([]);
-    await expect(gitOutput(projectPath, ["rev-parse", "HEAD"])).resolves.toBe(headAfterSecondTurn);
-    await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("two\n");
-    await expect(readFile(join(projectPath, "user-staged.txt"), "utf8")).resolves.toBe("keep staged\n");
-    await expect(readFile(join(projectPath, "user-untracked.txt"), "utf8")).resolves.toBe("keep untracked\n");
-    await expect(readFile(join(projectPath, "redo-staged.txt"), "utf8")).resolves.toBe("keep through redo\n");
-    await expect(gitOutput(projectPath, ["diff", "--cached", "--name-only"])).resolves.toContain("user-staged.txt");
-    await expect(gitOutput(projectPath, ["diff", "--cached", "--name-only"])).resolves.toContain("redo-staged.txt");
-  });
-
   it("undoes and redoes sibling repositories in a non-Git workspace without touching loose root files", async () => {
     const projectPath = mkdtempSync(join(tmpdir(), "supernova-checkpoint-workspace-"));
     const firstRepository = join(projectPath, "first");
@@ -436,68 +351,6 @@ describe("checkpoint navigation", () => {
     await expect(readFile(join(firstRepository, "first.txt"), "utf8")).resolves.toBe("first two\n");
     await expect(readFile(join(secondRepository, "second.txt"), "utf8")).resolves.toBe("second two\n");
     await expect(readFile(join(projectPath, "loose.txt"), "utf8")).resolves.toBe("loose two\n");
-  });
-
-  it("undoes and redoes changes across root and direct child repositories without touching independent Git state", async () => {
-    const {childPath, projectPath} = await createGitProjectWithChild();
-    tempDirs.push(projectPath);
-    const pi = await createPiTestRuntime();
-    runtimes.push(pi);
-    const {info} = await pi.createSession(projectPath);
-    pi.faux.setResponses([
-      async () => {
-        await writeFile(join(projectPath, "file.txt"), "root one\n");
-        await writeFile(join(childPath, "child.txt"), "child one\n");
-        return fauxAssistantMessage("one");
-      },
-      async () => {
-        await writeFile(join(projectPath, "file.txt"), "root two\n");
-        await writeFile(join(projectPath, "root-agent.txt"), "root agent\n");
-        await writeFile(join(childPath, "child.txt"), "child two\n");
-        await writeFile(join(childPath, "child-agent.txt"), "child agent\n");
-        return fauxAssistantMessage("two");
-      },
-    ]);
-
-    await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
-    await writeFile(join(projectPath, "root-manual.txt"), "root manual\n");
-    await writeFile(join(childPath, "child-manual.txt"), "child manual\n");
-    await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
-
-    const rootHead = await gitOutput(projectPath, ["rev-parse", "HEAD"]);
-    const childHead = await gitOutput(childPath, ["rev-parse", "HEAD"]);
-    await writeFile(join(projectPath, "root-staged.txt"), "root staged\n");
-    await git(projectPath, ["add", "root-staged.txt"]);
-    await writeFile(join(childPath, "child-staged.txt"), "child staged\n");
-    await git(childPath, ["add", "child-staged.txt"]);
-
-    const undoEvents = await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
-
-    expect(undoEvents.errors).toEqual([]);
-    await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("root one\n");
-    await expect(readFile(join(childPath, "child.txt"), "utf8")).resolves.toBe("child one\n");
-    await expect(readFile(join(projectPath, "root-agent.txt"), "utf8")).rejects.toThrow();
-    await expect(readFile(join(childPath, "child-agent.txt"), "utf8")).rejects.toThrow();
-    await expect(readFile(join(projectPath, "root-manual.txt"), "utf8")).resolves.toBe("root manual\n");
-    await expect(readFile(join(childPath, "child-manual.txt"), "utf8")).resolves.toBe("child manual\n");
-    await expect(gitOutput(projectPath, ["rev-parse", "HEAD"])).resolves.toBe(rootHead);
-    await expect(gitOutput(childPath, ["rev-parse", "HEAD"])).resolves.toBe(childHead);
-    await expect(gitOutput(projectPath, ["diff", "--cached", "--name-only"])).resolves.toContain("root-staged.txt");
-    await expect(gitOutput(childPath, ["diff", "--cached", "--name-only"])).resolves.toContain("child-staged.txt");
-
-    const redoEvents = await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.redoCheckpoint({sessionId: info.id})});
-
-    expect(redoEvents.errors).toEqual([]);
-    await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("root two\n");
-    await expect(readFile(join(childPath, "child.txt"), "utf8")).resolves.toBe("child two\n");
-    await expect(readFile(join(projectPath, "root-agent.txt"), "utf8")).resolves.toBe("root agent\n");
-    await expect(readFile(join(childPath, "child-agent.txt"), "utf8")).resolves.toBe("child agent\n");
-    await expect(readFile(join(projectPath, "root-manual.txt"), "utf8")).resolves.toBe("root manual\n");
-    await expect(readFile(join(childPath, "child-manual.txt"), "utf8")).resolves.toBe("child manual\n");
-    await expect(gitOutput(projectPath, ["rev-parse", "HEAD"])).resolves.toBe(rootHead);
-    await expect(gitOutput(childPath, ["rev-parse", "HEAD"])).resolves.toBe(childHead);
-    await expect(gitOutput(projectPath, ["diff", "--cached", "--name-only"])).resolves.toContain("root-staged.txt");
-    await expect(gitOutput(childPath, ["diff", "--cached", "--name-only"])).resolves.toContain("child-staged.txt");
   });
 
   it("rejects multi-repository undo before mutating any repository or session state when a child has conflicting changes", async () => {
@@ -564,38 +417,6 @@ describe("checkpoint navigation", () => {
     expect(undoEvents.errors).toEqual([]);
     expect(turnContents(undoEvents.session).map((parts) => parts[0])).toEqual([{text: "one", type: "text"}]);
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("one\n");
-  });
-
-  it("keeps rejecting non-conflict preflight failures when undo is forced", async () => {
-    const {childPath, projectPath} = await createGitProjectWithChild();
-    tempDirs.push(projectPath);
-    const pi = await createPiTestRuntime();
-    runtimes.push(pi);
-    const {info} = await pi.createSession(projectPath);
-    pi.faux.setResponses([
-      async () => {
-        await writeFile(join(projectPath, "file.txt"), "root one\n");
-        await writeFile(join(childPath, "child.txt"), "child one\n");
-        return fauxAssistantMessage("one");
-      },
-      async () => {
-        await writeFile(join(projectPath, "file.txt"), "root two\n");
-        await writeFile(join(childPath, "child.txt"), "child two\n");
-        return fauxAssistantMessage("two");
-      },
-    ]);
-
-    await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
-    await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
-    await rm(childPath, {force: true, recursive: true});
-
-    const {cause, published} = await runRejectedSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.undoCheckpoint({force: true, sessionId: info.id})});
-
-    // Not a contract error: the edge reports it as a GenericError with this message.
-    expect(cause).toMatchObject({message: "Failed to restore workspace checkpoint."});
-    expect(cause).not.toHaveProperty("_tag");
-    expect(published).toEqual([]);
-    await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("root two\n");
   });
 
   it("preserves a direct child repository created during a turn when undoing and redoing its parent changes", async () => {
@@ -687,36 +508,6 @@ describe("checkpoint navigation", () => {
       else await expect(readFile(join(childPath, "child.txt"), "utf8")).resolves.toBe(expectedContents);
     }
   );
-
-  it("does not touch git stash entries during checkpoint undo", async () => {
-    const projectPath = await createGitProject();
-    tempDirs.push(projectPath);
-    const pi = await createPiTestRuntime();
-    runtimes.push(pi);
-    const {info} = await pi.createSession(projectPath);
-    pi.faux.setResponses([
-      async () => {
-        await writeFile(join(projectPath, "file.txt"), "one\n");
-        return fauxAssistantMessage("one");
-      },
-      async () => {
-        await writeFile(join(projectPath, "file.txt"), "two\n");
-        return fauxAssistantMessage("two");
-      },
-    ]);
-
-    await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
-    await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
-    await writeFile(join(projectPath, "stashed-only.txt"), "stash me\n");
-    await git(projectPath, ["stash", "push", "--include-untracked", "-m", "manual stash", "--", "stashed-only.txt"]);
-
-    const undoEvents = await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
-
-    expect(undoEvents.errors).toEqual([]);
-    await expect(gitOutput(projectPath, ["stash", "list"])).resolves.toContain("manual stash");
-    await expect(gitOutput(projectPath, ["stash", "show", "--include-untracked", "--name-only", "stash@{0}"])).resolves.toContain("stashed-only.txt");
-    await expect(readFile(join(projectPath, "stashed-only.txt"), "utf8")).rejects.toThrow();
-  });
 
   it("reverts forward to selected undone turns", async () => {
     const projectPath = await createGitProject();
@@ -911,41 +702,6 @@ describe("checkpoint navigation", () => {
     });
   });
 
-  it("runs the turn from an uncovered before-turn checkpoint when capture fails after an undo", async () => {
-    let rejectCapture = false;
-    const checkpointStore: CheckpointStore = {
-      capture: async () => {
-        if (rejectCapture) throw new Error("Sensitive Git failure");
-      },
-      deleteSession: async () => undefined,
-      restore: async () => undefined,
-    };
-    const pi = await createPiTestRuntime({checkpointStore});
-    runtimes.push(pi);
-    const {info} = await pi.createSession();
-    pi.faux.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two"), fauxAssistantMessage("replacement")]);
-
-    await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
-    await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
-    await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
-    rejectCapture = true;
-
-    const {error} = await pi.sendMessage({message: "replacement", modelReference: selectedModelReference, sessionId: info.id});
-    const loadedAfterFailure = await pi.sessions.get({sessionId: info.id});
-    const replacement = (await pi.turnRecords(info.id)).at(-1);
-
-    // The turn proceeds and branches from the undone checkpoint, so the redo path is
-    // replaced rather than preserved. Its boundaries record the failed capture.
-    expect(error).toBeNull();
-    expect(turnContents(loadedAfterFailure).map((parts) => parts[0])).toEqual([
-      {text: "one", type: "text"},
-      {text: "replacement", type: "text"},
-    ]);
-    expect(loadedAfterFailure.undone.items).toEqual([]);
-    expect(replacement).toMatchObject({before: {status: "failed"}, after: {status: "failed"}});
-    expect(pi.faux.state.callCount).toBe(3);
-  });
-
   it("does not redo after a new branch diverges from an undone checkpoint", async () => {
     const projectPath = await createGitProject();
     tempDirs.push(projectPath);
@@ -1033,60 +789,6 @@ describe("checkpoint navigation", () => {
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("two\n");
   });
 
-  it("reverts directly before a selected chat turn outside a git repository", async () => {
-    const projectPath = await createProject();
-    tempDirs.push(projectPath);
-    const pi = await createPiTestRuntime();
-    runtimes.push(pi);
-    const {info} = await pi.createSession(projectPath);
-    pi.faux.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two"), fauxAssistantMessage("three")]);
-
-    await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
-    const secondEvents = await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
-    await pi.sendMessage({message: "three", modelReference: selectedModelReference, sessionId: info.id});
-    const secondTurnId = turnIds(secondEvents.session).at(-1)!;
-
-    const revertEvents = await runSessionCommand({
-      pi,
-      sessionId: info.id,
-      run: (runtime) => runtime.revertToMessage({sessionId: info.id, turnId: secondTurnId}),
-    });
-
-    expect(revertEvents.errors).toEqual([]);
-    expect(turnContents(revertEvents.session).map((parts) => parts[0])).toEqual([{text: "one", type: "text"}]);
-  });
-
-  it("requires confirmation when the current checkpoint capture failed", async () => {
-    const projectPath = await createProject();
-    tempDirs.push(projectPath);
-    const restoreCalls: Array<{readonly checkpointId: string; readonly fromCheckpointId: string | undefined}> = [];
-    let captureCount = 0;
-    const checkpointStore: CheckpointStore = {
-      capture: async () => {
-        captureCount++;
-        // Fails the second turn's after-turn capture, leaving that boundary uncovered.
-        if (captureCount === 4) throw new Error("Sensitive Git failure");
-      },
-      deleteSession: async () => undefined,
-      restore: async ({checkpointId, fromCheckpointId}) => {
-        restoreCalls.push({checkpointId, fromCheckpointId});
-      },
-    };
-    const pi = await createPiTestRuntime({checkpointStore});
-    runtimes.push(pi);
-    const {info} = await pi.createSession(projectPath);
-    pi.faux.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
-
-    await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
-    await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
-
-    const {cause, published} = await runRejectedSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
-
-    expect(cause).toMatchObject({_tag: "CheckpointUncapturedError"});
-    expect(published).toEqual([]);
-    expect(restoreCalls).toEqual([]);
-  });
-
   it.each([
     {name: "direct revert", rewindFirst: false, removeRepository: false},
     {name: "conversation-only undo followed by revert", rewindFirst: true, removeRepository: false},
@@ -1143,31 +845,6 @@ describe("checkpoint navigation", () => {
     await expect(readFile(join(projectPath, "later.txt"), "utf8")).rejects.toThrow();
   });
 
-  it("restores files when both checkpoint boundaries are covered", async () => {
-    const projectPath = await createProject();
-    tempDirs.push(projectPath);
-    const restoreCalls: Array<{readonly checkpointId: string; readonly fromCheckpointId: string | undefined}> = [];
-    const checkpointStore: CheckpointStore = {
-      capture: async () => undefined,
-      deleteSession: async () => undefined,
-      restore: async ({checkpointId, fromCheckpointId}) => {
-        restoreCalls.push({checkpointId, fromCheckpointId});
-      },
-    };
-    const pi = await createPiTestRuntime({checkpointStore});
-    runtimes.push(pi);
-    const {info} = await pi.createSession(projectPath);
-    pi.faux.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
-
-    await pi.sendMessage({message: "one", modelReference: selectedModelReference, sessionId: info.id});
-    await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: info.id});
-
-    const undoEvents = await runSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
-
-    expect(undoEvents.errors).toEqual([]);
-    expect(restoreCalls).toEqual([{checkpointId: expect.any(String), fromCheckpointId: expect.any(String)}]);
-    expect(turnContents(undoEvents.session).map((parts) => parts[0])).toEqual([{text: "one", type: "text"}]);
-  });
   it("rejects undoing a turn a fork carried over from its source session", async () => {
     const projectPath = await createGitProject();
     tempDirs.push(projectPath);

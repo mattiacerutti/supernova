@@ -5,11 +5,8 @@ import {delimiter, isAbsolute, join} from "node:path";
 import type {DesktopEditor, DesktopEditorId} from "@supernova/contracts/lib/desktop";
 
 interface EditorDefinition extends DesktopEditor {
-  /** Commands looked up on PATH, outside Windows. */
   readonly commands: readonly string[];
-  /** The app bundle's name on macOS, looked up in the user's and the system's Applications folders. */
   readonly macApp: string;
-  /** Executables on Windows, relative to the folder an environment variable names. */
   readonly windowsPaths: readonly (readonly [variable: string, path: string])[];
 }
 
@@ -44,17 +41,14 @@ const EDITORS: readonly EditorDefinition[] = [
   },
 ];
 
-/** What editor discovery reads from the machine; tests pass their own. */
 export interface EditorHost {
   readonly platform: NodeJS.Platform;
   readonly env: NodeJS.ProcessEnv;
   readonly home: string;
-  /** Whether `path` exists and, for files, can be executed. */
   readonly exists: (path: string) => boolean;
 }
 
-/** The program to run and the arguments that come before the directory to open. */
-export interface EditorLaunch {
+interface EditorLaunch {
   readonly command: string;
   readonly args: readonly string[];
 }
@@ -75,11 +69,7 @@ function defaultHost(): EditorHost {
   };
 }
 
-/**
- * How to start `editor` on this machine, or undefined when it is not installed. PATH comes first, so the user's own
- * install wins; on macOS an app bundle without its command installed still counts. Windows skips PATH because the
- * editors put `.cmd` shims there, which only run through a shell and would need the path quoted for it.
- */
+/** PATH first so the user's install wins. Windows skips PATH: editors put `.cmd` shims there, which need a shell. */
 function resolveEditorLaunch(editor: EditorDefinition, host: EditorHost): EditorLaunch | undefined {
   if (host.platform === "win32") {
     for (const [variable, path] of editor.windowsPaths) {
@@ -105,12 +95,10 @@ function resolveEditorLaunch(editor: EditorDefinition, host: EditorHost): Editor
   return undefined;
 }
 
-/** The editors installed on this machine, in display order. Checked on every call, so new installs show up. */
 export function listEditors(host: EditorHost = defaultHost()): DesktopEditor[] {
   return EDITORS.filter((editor) => resolveEditorLaunch(editor, host)).map(({id, label}) => ({id, label}));
 }
 
-/** Opens `path` as a window of the editor `id`. Both come from the renderer, so both are checked. */
 export async function openInEditor(id: unknown, path: unknown, host: EditorHost = defaultHost()): Promise<void> {
   const editor = EDITORS.find((candidate) => candidate.id === (id as DesktopEditorId));
   if (!editor) throw new Error("Unknown editor.");

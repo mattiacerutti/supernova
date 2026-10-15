@@ -65,7 +65,6 @@ function shadowTarget(repository: DiscoveredRepository): GitTarget {
   return {gitDir: repository.shadowGitDir, worktree: repository.root};
 }
 
-/** Cheap check that avoids spawning Git for directories that cannot be a worktree root. */
 async function hasGitEntry(candidate: string): Promise<boolean> {
   try {
     await lstat(join(candidate, ".git"));
@@ -99,8 +98,7 @@ async function discoverCandidate(candidate: string, projectRoot: string): Promis
 
   const [gitDir, objectDir] = await Promise.all([realpath(info.gitDir), realpath(info.objectDir)]);
   const gitDirMetadata = await stat(gitDir);
-  // Some filesystems report ctime as the birth time, and a Git directory's ctime changes on
-  // ordinary activity. Zero keeps the identity stable there at the cost of inode-only precision.
+  // Some filesystems report ctime as birth time, and a .git's ctime changes constantly.
   const birthTime = gitDirMetadata.birthtimeMs === gitDirMetadata.ctimeMs ? 0 : gitDirMetadata.birthtimeMs;
   const projectRelativeRoot = relative(projectRoot, canonicalCandidate);
 
@@ -115,7 +113,6 @@ async function discoverCandidate(candidate: string, projectRoot: string): Promis
   };
 }
 
-/** Finds the project root and its immediate child repositories, and assigns each one its shadow storage. */
 export async function discoverRepositories(projectRoot: string, repositoriesRoot: string): Promise<readonly DiscoveredRepository[]> {
   const candidates = [projectRoot];
   const children = await readdir(projectRoot, {withFileTypes: true});
@@ -137,7 +134,6 @@ export async function discoverRepositories(projectRoot: string, repositoriesRoot
   });
 }
 
-/** Creates the shadow repository on first use and keeps it pointed at the source object database. */
 async function ensureShadowRepository(repository: DiscoveredRepository): Promise<void> {
   await mkdir(dirname(repository.shadowGitDir), {recursive: true});
   let initialized = true;
@@ -152,7 +148,6 @@ async function ensureShadowRepository(repository: DiscoveredRepository): Promise
   await writeFile(join(repository.shadowGitDir, "objects", "info", "alternates"), `${repository.objectDir}\n`);
 }
 
-/** Filters candidate paths down to files and symlinks that exist now, optionally within a size limit. */
 async function existingFilePaths(paths: readonly string[], root: string, sizeLimit?: number): Promise<readonly string[]> {
   const files: string[] = [];
   for (const path of paths) {
@@ -170,7 +165,6 @@ async function existingFilePaths(paths: readonly string[], root: string, sizeLim
   return files;
 }
 
-/** Runs work against a private index, so no checkpoint operation shares mutable index state. */
 async function withTemporaryIndex<T>(run: (indexPath: string) => Promise<T>): Promise<T> {
   const directory = await mkdtemp(join(tmpdir(), "supernova-checkpoint-"));
   try {
@@ -180,7 +174,6 @@ async function withTemporaryIndex<T>(run: (indexPath: string) => Promise<T>): Pr
   }
 }
 
-/** Seeds the private index from the user's index, which reuses its object ids and cached file metadata. */
 async function seedIndex(repository: DiscoveredRepository, target: GitTarget, indexPath: string): Promise<void> {
   try {
     await copyFile(repository.sourceIndexPath, indexPath);
@@ -192,7 +185,6 @@ async function seedIndex(repository: DiscoveredRepository, target: GitTarget, in
   }
 }
 
-/** Builds a tree describing the current worktree, excluding paths owned by a child repository. */
 async function createSnapshotTree(repository: DiscoveredRepository): Promise<string> {
   await ensureShadowRepository(repository);
   const target = shadowTarget(repository);
@@ -216,7 +208,6 @@ async function createSnapshotTree(repository: DiscoveredRepository): Promise<str
   });
 }
 
-/** Captures one repository and publishes the private ref that pins its tree. */
 export async function captureRepository(repository: DiscoveredRepository, sessionId: string, checkpointId: string): Promise<RepositoryCheckpointState> {
   const treeId = await createSnapshotTree(repository);
   const refName = checkpointRefName(sessionId, checkpointId);
@@ -224,18 +215,15 @@ export async function captureRepository(repository: DiscoveredRepository, sessio
   return {refName, relativeRoot: repository.relativeRoot, repositoryId: repository.repositoryId, treeId};
 }
 
-/** Removes a checkpoint ref, used to clean up after an incomplete capture. */
 export async function deleteCheckpointRef(repository: Pick<DiscoveredRepository, "shadowGitDir">, ref: string): Promise<void> {
   await deleteRef(repository.shadowGitDir, ref);
 }
 
-/** Confirms a manifest's ref still resolves to the tree the manifest recorded. */
 export async function verifyCheckpointRef(repository: DiscoveredRepository, state: RepositoryCheckpointState): Promise<void> {
   await ensureShadowRepository(repository);
   if ((await resolveRefTree(repository.shadowGitDir, state.refName)) !== state.treeId) throw new Error("Checkpoint ref does not resolve to its recorded tree.");
 }
 
-/** Returns whether the current worktree already matches a tree, used for repositories a target claims but the current checkpoint does not. */
 export async function repositoryMatchesTree(repository: DiscoveredRepository, treeId: string): Promise<boolean> {
   return (await createSnapshotTree(repository)) === treeId;
 }
@@ -256,7 +244,6 @@ async function assertNoSymlinkAncestor(repositoryRoot: string, path: string): Pr
   }
 }
 
-/** Writes a tree whose affected paths carry the worktree's actual current content. */
 async function replaceTreePathsWithWorktree(repository: DiscoveredRepository, baseTreeId: string, affectedPaths: readonly string[]): Promise<string> {
   for (const path of affectedPaths) await assertNoSymlinkAncestor(repository.root, path);
   const target = shadowTarget(repository);
@@ -269,12 +256,7 @@ async function replaceTreePathsWithWorktree(repository: DiscoveredRepository, ba
   });
 }
 
-/**
- * Plans one repository's restore and detects manual changes before anything is written.
- *
- * The safety tree records the worktree's actual state for affected paths. When it differs from the
- * current checkpoint an affected path was changed by hand, which `force` discards.
- */
+/** The safety tree differing from the current checkpoint means a manual change, which only `force` discards. */
 export async function buildRestorePlan(
   repository: DiscoveredRepository,
   current: RepositoryCheckpointState,
@@ -307,7 +289,6 @@ async function containsGitMetadata(path: string): Promise<boolean> {
   return false;
 }
 
-/** Removes affected paths before restoring, which is what makes file and directory transitions work. */
 async function removeWorktreePaths(repository: DiscoveredRepository, paths: readonly string[]): Promise<void> {
   for (const path of topmostPaths(paths)) {
     validateGitPath(path);
@@ -324,14 +305,12 @@ async function applyTree(repository: DiscoveredRepository, treeId: string, affec
   await withTemporaryIndex((indexPath) => restoreWorktreePaths(shadowTarget(repository), indexPath, treeId, restorePaths));
 }
 
-/** Applies one repository's plan and verifies the affected paths match the target tree exactly. */
 export async function applyRestorePlan(plan: RepositoryRestorePlan): Promise<void> {
   await applyTree(plan.repository, plan.targetTreeId, plan.affectedPaths, plan.restorePaths);
   const verificationTreeId = await replaceTreePathsWithWorktree(plan.repository, plan.targetTreeId, plan.affectedPaths);
   if (verificationTreeId !== plan.targetTreeId) throw new Error("Workspace checkpoint verification failed.");
 }
 
-/** Restores affected paths from the plan's safety tree after a failed apply. */
 export async function rollbackRestorePlan(plan: RepositoryRestorePlan): Promise<void> {
   const treePathSet = new Set(await listTreePaths(shadowTarget(plan.repository), plan.safetyTreeId));
   const restorePaths = plan.affectedPaths.filter((path) => treePathSet.has(path));
@@ -347,7 +326,6 @@ async function listShadowGitDirs(repositoriesRoot: string): Promise<readonly str
   }
 }
 
-/** Removes every checkpoint ref owned by one session, leaving other sessions untouched. */
 export async function deleteSessionRefs(repositoriesRoot: string, sessionId: string): Promise<void> {
   const prefix = checkpointSessionRefPrefix(sessionId);
   for (const gitDir of await listShadowGitDirs(repositoriesRoot)) {
@@ -355,12 +333,7 @@ export async function deleteSessionRefs(repositoriesRoot: string, sessionId: str
   }
 }
 
-/**
- * Reclaims unreachable objects for one project's shadow repositories.
- *
- * Shadow repositories keep automatic Git maintenance enabled with a pinned prune window, so this
- * only exists to reclaim promptly after refs are deleted instead of waiting for Git's heuristic.
- */
+/** Git's auto-maintenance would get here eventually; this reclaims promptly after refs are deleted. */
 export async function collectShadowGarbage(repositoriesRoot: string): Promise<void> {
   for (const gitDir of await listShadowGitDirs(repositoriesRoot)) await collectGarbage(gitDir);
 }

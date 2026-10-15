@@ -19,22 +19,18 @@ function pushTextContentPart(parts: UserMessageContentPart[], text: string): voi
   parts.push({text, type: "text"});
 }
 
-/** Returns the editor-owned text and reference content parts, excluding file attachments. */
 export function editableComposerContentParts(parts: readonly UserMessageContentPart[]): readonly UserMessageContentPart[] {
   return parts.filter((part) => part.type !== "attachment");
 }
 
-/** Returns the attachment content parts for a composer draft. */
 export function attachmentComposerContentParts(parts: readonly UserMessageContentPart[]): readonly UserMessageAttachmentPart[] {
   return parts.filter((part): part is UserMessageAttachmentPart => part.type === "attachment");
 }
 
-/** Converts mixed text/reference composer parts into their plain text representation. */
 export function textFromComposerContentParts(parts: readonly UserMessageContentPart[]): string {
   return parts.map(contentPartValue).join("");
 }
 
-/** Trims only leading and trailing text while preserving reference parts and internal spacing. */
 export function trimComposerContentParts(parts: readonly UserMessageContentPart[]): readonly UserMessageContentPart[] {
   return parts
     .map((part, index): UserMessageContentPart => {
@@ -47,7 +43,6 @@ export function trimComposerContentParts(parts: readonly UserMessageContentPart[
     .filter((part) => part.type !== "text" || part.text.length > 0);
 }
 
-/** Converts persisted text/reference content parts into TipTap editor content. */
 export function contentPartsToEditorContent(parts: readonly UserMessageContentPart[]): JSONContent {
   const content: JSONContent[] = [];
 
@@ -71,9 +66,6 @@ export function contentPartsToEditorContent(parts: readonly UserMessageContentPa
 
 type ReferenceNodeAttributes = Omit<UserMessageReferencePart, "type">;
 
-/**
- * Creates a TipTap node representing a reference content part.
- */
 export function createReferenceNode(part: UserMessageReferencePart): JSONContent {
   return {
     attrs: {
@@ -86,9 +78,6 @@ export function createReferenceNode(part: UserMessageReferencePart): JSONContent
   };
 }
 
-/**
- * Converts TipTap editor's content to an array of content parts.
- */
 export function editorToContentParts(editor: Editor): readonly UserMessageContentPart[] {
   const parts: UserMessageContentPart[] = [];
 

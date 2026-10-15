@@ -37,7 +37,7 @@ export interface CheckpointStore {
   readonly restore: (input: {
     readonly checkpointId: string;
     readonly force: boolean;
-    /** When absent, force is required and the live workspace is captured as the restore baseline. */
+    // When absent, force is required and the live workspace is captured as the restore baseline.
     readonly fromCheckpointId: string | undefined;
     readonly projectRoot: string;
     readonly sessionId: string;
@@ -136,7 +136,6 @@ async function loadManifest(
   return parseManifest(JSON.parse(contents), expected);
 }
 
-/** Owns durable checkpoint manifests and coordinates app-private shadow repositories. */
 export class FileCheckpointStore implements CheckpointStore {
   private readonly projectLocks = new KeyedMutex<string>();
   private readonly storageRoot: string;
@@ -174,13 +173,11 @@ export class FileCheckpointStore implements CheckpointStore {
     }
   }
 
-  /** Captures every discovered repository and publishes the manifest. Requires the project lock. */
   private async captureProject(projectRoot: string, input: {readonly checkpointId: string; readonly sessionId: string}): Promise<void> {
     const projectStorage = projectStorageRoot(this.storageRoot, projectRoot);
     const repositoriesRoot = join(projectStorage, "repositories");
     const repositories = await discoverRepositories(projectRoot, repositoriesRoot);
 
-    // Repositories own separate shadow storage and temporary indexes, so they capture concurrently.
     const results = await Promise.allSettled(repositories.map((repository) => captureRepository(repository, input.sessionId, input.checkpointId)));
     const captured = repositories.flatMap((repository, index) => {
       const result = results[index];
@@ -204,7 +201,6 @@ export class FileCheckpointStore implements CheckpointStore {
     }
   }
 
-  /** Reconciles manifests and applies the workspace restore. Requires the project lock. */
   private async restoreProject(
     projectRoot: string,
     input: {readonly checkpointId: string; readonly force: boolean; readonly fromCheckpointId: string | undefined; readonly sessionId: string}
@@ -212,8 +208,7 @@ export class FileCheckpointStore implements CheckpointStore {
     const fromCheckpointId = input.fromCheckpointId ?? randomUUID();
     if (input.fromCheckpointId === undefined) {
       if (!input.force) throw new Error("Restoring without a current checkpoint requires force.");
-      // Keep a durable safety snapshot and reuse the normal diff, preflight and rollback pipeline.
-      // Capture and restore share the project lock so other checkpoint operations cannot interleave.
+      // Capture the live workspace as the baseline so the normal diff, preflight, and rollback apply.
       await this.captureProject(projectRoot, {checkpointId: fromCheckpointId, sessionId: input.sessionId});
     }
     const projectStorage = projectStorageRoot(this.storageRoot, projectRoot);

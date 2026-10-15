@@ -7,8 +7,7 @@ import {getAppTheme} from "@/lib/themes/theme";
 import {useSettingsStore} from "@/stores/settings-store";
 import {cn} from "@/lib/cn";
 
-// Overshoots the card bounds so clip-path anti-aliasing never exposes the layer beneath;
-// the diagonal still crosses the visible box at 38% (top) and 62% (bottom).
+/** Overshoots the card so clip-path anti-aliasing never exposes the layer beneath. */
 const SYSTEM_SPLIT_CLIP_PATH = "polygon(150% -50%, 26% -50%, 74% 150%, 150% 150%)";
 
 const modeOptions: ReadonlyArray<{icon: IconName; label: string; value: DesktopTheme}> = [

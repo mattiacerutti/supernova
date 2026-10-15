@@ -43,6 +43,7 @@ After understanding the problem, stop at the first option that meets the require
 - Don't improve adjacent code, comments, or formatting just because you're there. Refactor only where the requested change needs it.
 - Remove imports, variables, functions, and other code that your changes make unused. Flag unrelated dead code rather than deleting it.
 - Every changed line should serve the requested outcome. Ask before removing intentional functionality outside the agreed scope.
+- Code is the memory, not comments. Write a comment only for what the code cannot say: why, which invariant, which external quirk. Do not restate names or signatures, and do not trust a stale comment over the code; fix or delete it. See [Coding standards](docs/internal/coding-standards.md#comments).
 
 ### Goal-driven execution
 
@@ -76,7 +77,7 @@ This is the repository's only `AGENTS.md`. Shared and area-specific conventions 
 | -------------------------------------------------------------- | ------------------------------------------------------- |
 | Product direction and feature tradeoffs                        | [Product](docs/internal/product.md)                     |
 | Package boundaries, runtime ownership, desktop/browser hosting | [Architecture](docs/internal/architecture.md)           |
-| TypeScript implementation and code organization                | [Coding standards](docs/internal/coding-standards.md)   |
+| TypeScript conventions and when to comment                     | [Coding standards](docs/internal/coding-standards.md)   |
 | React UI, styling, client state, runtime hooks                 | [Web](docs/internal/web.md)                             |
 | Runtime features, Pi integration, backend organization         | [Agent runtime](docs/internal/agent-runtime.md)         |
 | Shared schemas, service payloads, errors, exports              | [Contracts](docs/internal/contracts.md)                 |

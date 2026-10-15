@@ -2,11 +2,7 @@ import type {Model} from "@earendil-works/pi-ai";
 import type {ExtensionContext, ExtensionUIContext, ModelRuntime} from "@earendil-works/pi-coding-agent";
 import {ModelRegistry} from "@earendil-works/pi-coding-agent";
 
-/**
- * The old SDK's `ctx.ui` as Supernova has always run it: print mode, no UI. Dialogs resolve to "no answer"
- * (`select`/`input` undefined, `confirm` false) and everything that draws is a no-op, exactly Pi's own `noOpUIContext`
- * for headless runs. The terminal `theme` is the one member we cannot stand in for; it throws when read.
- */
+/** Pi's print-mode `noOpUIContext`: dialogs answer "no", drawing is a no-op. `theme` has no stand-in and throws. */
 export const headlessUi: ExtensionUIContext = {
   select: async () => undefined,
   confirm: async () => false,
@@ -40,7 +36,6 @@ export const headlessUi: ExtensionUIContext = {
   setToolsExpanded: () => {},
 };
 
-/** What Supernova knows for one handler or tool call; the rest of `ctx` is built from it. */
 export interface ExtensionContextInput {
   readonly cwd: string;
   readonly modelRuntime: ModelRuntime;
@@ -49,11 +44,7 @@ export interface ExtensionContextInput {
   readonly signal: AbortSignal | undefined;
 }
 
-/**
- * The old SDK's `ExtensionContext` in print mode, as the old Supernova bound it. Members the engine has no equivalent
- * for (`sessionManager`, agent control) throw with the member's name when used, since the old SDK's objects do not
- * exist here; everything else behaves as it did headless.
- */
+/** Members the engine has no equivalent for (`sessionManager`, agent control) throw by name. */
 export function extensionContext(input: ExtensionContextInput): ExtensionContext {
   const unavailable = (member: string) => (): never => {
     throw new Error(`ctx.${member} is not available in Supernova.`);

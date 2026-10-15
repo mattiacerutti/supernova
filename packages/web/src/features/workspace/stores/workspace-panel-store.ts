@@ -8,30 +8,25 @@ import type {WorkspacePanelTab, WorkspacePanelTabKind, WorkspaceTerminalTab} fro
 
 const DEFAULT_WORKSPACE_PANEL_WIDTH = 348;
 const BASE_MIN_WORKSPACE_PANEL_WIDTH = 280;
-/** Windows overlays its window controls on the panel header. */
 const WINDOWS_WINDOW_CONTROLS_WIDTH = 138;
 
 export const MIN_WORKSPACE_PANEL_WIDTH = isWindowsEnvironment ? BASE_MIN_WORKSPACE_PANEL_WIDTH + WINDOWS_WINDOW_CONTROLS_WIDTH : BASE_MIN_WORKSPACE_PANEL_WIDTH;
 
 interface TabPresentation {
-  /** Shown as the tab icon; a file path renders that file's type icon instead. */
   readonly icon: IconName | {readonly file: string};
   readonly label: string;
-  /** Preview tabs show whatever was last selected; pinning makes the content theirs. */
   readonly preview: boolean;
 }
 
 interface WorkspaceTabKind<TTab extends WorkspacePanelTab> {
   readonly icon: IconName;
   readonly label: string;
-  /** At most one open at a time; opening again activates it and the + menu hides it. */
   readonly singleton: boolean;
   readonly create: () => TTab;
   readonly present: (tab: TTab) => TabPresentation;
   readonly pin?: (tab: TTab) => TTab;
 }
 
-/** Everything the panel and store need to know per tab kind. Adding a kind means adding an entry here and a `renderTab` case in the panel. */
 export const WORKSPACE_TAB_KINDS = {
   changes: {
     create: () => ({id: "changes", kind: "changes", repositoryRoot: null, selection: null}),
@@ -57,7 +52,6 @@ export const WORKSPACE_TAB_KINDS = {
   },
 } satisfies {readonly [K in WorkspacePanelTabKind]: WorkspaceTabKind<Extract<WorkspacePanelTab, {kind: K}>>};
 
-/** "Terminal 2", or "Terminal" before the server has numbered it. */
 export function terminalLabel(number: number | undefined): string {
   return number === undefined ? "Terminal" : `Terminal ${number}`;
 }
@@ -66,15 +60,13 @@ export function tabKind<TTab extends WorkspacePanelTab>(tab: TTab): WorkspaceTab
   return WORKSPACE_TAB_KINDS[tab.kind] as unknown as WorkspaceTabKind<TTab>;
 }
 
-/** Falls back to the same slot, or the last tab when the closed one was rightmost. */
-export function nextActiveTabId(tabs: readonly WorkspacePanelTab[], closedId: string, activeId: string | null): string | null {
+function nextActiveTabId(tabs: readonly WorkspacePanelTab[], closedId: string, activeId: string | null): string | null {
   if (activeId !== closedId) return activeId;
   const remaining = tabs.filter((tab) => tab.id !== closedId);
   const closedIndex = tabs.findIndex((tab) => tab.id === closedId);
   return remaining[Math.min(closedIndex, remaining.length - 1)]?.id ?? null;
 }
 
-/** A session's panel state. Kept per session so switching sessions restores each one's layout. */
 export interface WorkspacePanelLayout {
   readonly activeTabId: string | null;
   readonly open: boolean;
@@ -87,30 +79,21 @@ interface WorkspacePanelState {
   readonly layouts: Readonly<Record<string, WorkspacePanelLayout>>;
   readonly width: number;
   readonly closeTab: (sessionId: string, tabId: string) => void;
-  /** Opens a new tab of the kind, or activates the existing one for singleton kinds. */
   readonly openTab: (sessionId: string, kind: WorkspacePanelTabKind) => void;
-  /** Adds a tab for a terminal the server already runs and activates it; activates the tab instead if there is one. */
   readonly attachTerminal: (sessionId: string, terminal: Pick<WorkspaceTerminalTab, "exitCode" | "id" | "number">) => void;
   readonly pinTab: (sessionId: string, tabId: string) => void;
   readonly setActiveTab: (sessionId: string, tabId: string) => void;
-  /** Replaces a session's layout; used by tab-specific behavior such as opening a file. */
   readonly setLayout: (sessionId: string, layout: WorkspacePanelLayout) => void;
   readonly setWidth: (width: number, minWidth: number, maxWidth: number) => void;
   readonly togglePanel: (sessionId: string) => void;
   readonly updateTab: <TTab extends WorkspacePanelTab>(sessionId: string, tabId: string, update: (tab: TTab) => TTab) => void;
 }
 
-/** The shortcut that shows and hides the workspace panel, as VS Code does for its secondary sidebar. */
 export const WORKSPACE_PANEL_HOTKEY = "Mod+Alt+B";
 
 type PersistedPanel = Pick<WorkspacePanelState, "layouts" | "width">;
 
-/**
- * The width is the app's, in `localStorage`; layouts are this window's, in `sessionStorage`. A window's tabs (and the
- * terminals they reattach to by id) survive its reloads, but a new window starts without them: a client shows only
- * the shells it opened or attached itself. Layouts of archived sessions stay until the window closes; they are small
- * and never shown again.
- */
+/** Width is app-wide (`localStorage`); layouts are per window (`sessionStorage`), so a new window starts clean. */
 const panelStorage: PersistStorage<PersistedPanel> = {
   getItem: (name) => {
     const width = readState<Pick<PersistedPanel, "width">>(localStorage, name)?.width;
@@ -127,7 +110,6 @@ const panelStorage: PersistStorage<PersistedPanel> = {
   },
 };
 
-/** The `state` a persisted entry holds, or undefined when it is missing or unreadable. */
 function readState<T>(storage: Storage, name: string): Partial<T> | undefined {
   try {
     const raw = storage.getItem(name);

@@ -18,7 +18,6 @@ function insertTabAfterActive(tabs: readonly WorkspacePanelTab[], activeTabId: s
   return [...tabs.slice(0, insertAt), tab, ...tabs.slice(insertAt)];
 }
 
-/** An unpinned files tab shows the file in place; a pinned one keeps its file and a new tab opens after it. */
 function openFileInTabs(layout: WorkspacePanelLayout, path: string): WorkspacePanelLayout {
   const {activeTabId, tabs} = layout;
   const active = tabs.find((tab) => tab.id === activeTabId);

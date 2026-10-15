@@ -6,10 +6,8 @@ import {useSessionsStore} from "@/features/sessions/stores/sessions-store";
 
 const GENERAL_SECTION = "Actions";
 
-/** The pages the actions open; the palette renders each by name. */
 export type CommandPalettePageId = "new-session" | "open-project" | "open-session-in";
 
-/** The project of the open session, if a session is open. A new-session draft does not count: it is already new. */
 function useOpenSessionProject(projects: readonly Project[]): Project | undefined {
   const sessionId = useParams({select: (params) => params.sessionId, strict: false});
   // The runtime's directory names every open session's project; the session page already follows the open one.
@@ -18,7 +16,6 @@ function useOpenSessionProject(projects: readonly Project[]): Project | undefine
   return projectPath === undefined ? undefined : projects.find((project) => project.path === projectPath);
 }
 
-/** Where the open session's agent works: its worktree, or its project's checkout. Undefined until its document loads. */
 export function useOpenSessionWorkspacePath(): string | undefined {
   const sessionId = useParams({select: (params) => params.sessionId, strict: false});
 
@@ -28,10 +25,6 @@ export function useOpenSessionWorkspacePath(): string | undefined {
   });
 }
 
-/**
- * The actions the palette's root list offers, in display order. Add an action here; one that needs its own list or
- * input opens a page by `CommandPalettePageId` instead of running.
- */
 export function useCommandPaletteActions(): readonly CommandPaletteAction[] {
   const navigate = useNavigate();
   const projects = useProjectsStore((state) => state.projects);

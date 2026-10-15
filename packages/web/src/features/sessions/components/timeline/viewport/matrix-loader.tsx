@@ -1,6 +1,6 @@
 import {cn} from "@/lib/cn";
 
-// Stagger columns and outer rows to send a chevron wave across the grid.
+/** Stagger columns and outer rows to send a chevron wave across the grid. */
 const CHEVRON_DELAYS = [
   "[animation-delay:90ms]",
   "[animation-delay:180ms]",

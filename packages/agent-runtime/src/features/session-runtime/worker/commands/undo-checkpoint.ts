@@ -2,7 +2,6 @@ import type {UndoCheckpointPayload} from "@supernova/contracts/services/session-
 import {navigateToTurn} from "@supernova/agent-runtime/features/session-runtime/worker/lib/navigate-to-turn";
 import type {SessionWorker} from "@supernova/agent-runtime/features/session-runtime/worker/session-worker";
 
-/** Moves the session and workspace back before the last visible turn. */
 export async function undoCheckpoint(runtime: SessionWorker, input: UndoCheckpointPayload): Promise<void> {
   await navigateToTurn(runtime, {
     force: input.force ?? false,

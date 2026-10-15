@@ -59,7 +59,6 @@ interface UseComposerAttachmentsOptions {
   readonly onAttachmentsChange: (update: ComposerAttachmentsUpdate) => void;
 }
 
-/** Manages composer file attachment actions, validation, and drag/drop UI state. */
 export function useComposerAttachments(options: UseComposerAttachmentsOptions): ComposerAttachments {
   const {attachments, disabled, imageSupported, onAttachmentsChange} = options;
 

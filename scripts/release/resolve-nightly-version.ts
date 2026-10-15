@@ -1,7 +1,6 @@
 import {appendFileSync} from "node:fs";
 import {readDesktopVersion} from "@scripts/release/lib";
 
-/** Nightlies build on the next stable patch version, so they always sort above the current release. */
 function resolveNightlyBaseVersion(version: string): string {
   const stableCore = version.replace(/[-+].*$/, "");
   const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(stableCore);

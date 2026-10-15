@@ -4,7 +4,7 @@ import type {Provider} from "@supernova/contracts/services/providers/schemas";
 import {useCancelProviderLogin} from "@/features/settings/api/providers/login/cancel-provider-login";
 import {useStartProviderLogin} from "@/features/settings/api/providers/login/start-provider-login";
 
-export type ProviderConnectView = "login" | "method";
+type ProviderConnectView = "login" | "method";
 
 interface PendingClose {
   cancelLogin: boolean;
@@ -16,10 +16,6 @@ interface UseProviderConnectFlowOptions {
   readonly onLoginDialogClosed: () => void;
 }
 
-/**
- * Owns the provider connect dialog flow: method selection, login start,
- * and cancellation of in-flight logins when the dialog closes.
- */
 export function useProviderConnectFlow(options: UseProviderConnectFlowOptions) {
   const {onLoginDialogClosed} = options;
 

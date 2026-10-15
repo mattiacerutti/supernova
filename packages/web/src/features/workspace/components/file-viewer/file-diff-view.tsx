@@ -6,12 +6,10 @@ import {generateDiffOptions} from "@/lib/diffs/options";
 const VIRTUALIZER_CONFIG = {intersectionObserverMargin: 1200, overscrollSize: 600};
 
 interface FileDiffViewProps {
-  /** Show the whole file instead of collapsing unchanged regions. */
   readonly expanded: boolean;
   readonly newContents: string;
   readonly oldContents: string;
   readonly path: string;
-  /** Side-by-side instead of the unified single column. */
   readonly split: boolean;
 }
 

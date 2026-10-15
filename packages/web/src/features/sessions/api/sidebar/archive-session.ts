@@ -9,14 +9,12 @@ import {useRuntime} from "@/runtime/use-runtime";
 
 interface ArchiveSessionInput {
   readonly projectPath: string;
-  /** Also delete the session's worktree and branch. */
   readonly removeWorktree?: boolean;
   readonly sessionId: string;
 }
 
 const {patchOptimism} = useSessionsStore.getState();
 
-/** Archives a session, removing its row at once; a failure brings the row back. */
 export function useArchiveSession() {
   const runtime = useRuntime();
   const queryClient = useQueryClient();
@@ -26,8 +24,7 @@ export function useArchiveSession() {
     onMutate: (input) => patchOptimism(input.sessionId, {archived: true}),
     onError: (_error, input) => patchOptimism(input.sessionId, {archived: undefined}),
     onSuccess: async (result) => {
-      // The runtime dropped the session from its directory before archiving; drop it from the loaded pages too, so
-      // forgetting its optimism does not bring the row back.
+      // Drop it from the loaded pages too, or forgetting its optimism brings the row back.
       queryClient.setQueryData<InfiniteData<ProjectSessionsListResult>>(
         sessionKeys.list(result.projectPath),
         (data) => data && {...data, pages: data.pages.map((page) => ({...page, sessions: page.sessions.filter((session) => session.id !== result.sessionId)}))}

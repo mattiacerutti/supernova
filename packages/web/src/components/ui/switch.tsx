@@ -4,7 +4,6 @@ import {cn} from "@/lib/cn";
 
 type SwitchProps = ComponentProps<typeof BaseSwitch.Root>;
 
-/** Accessible Base UI switch styled for Supernova controls. */
 export default function Switch(props: SwitchProps) {
   const {className, ...switchProps} = props;
 

@@ -92,12 +92,10 @@ function pick(words: readonly string[]): string {
   return words[randomInt(words.length)]!;
 }
 
-/** `supernova/<adjective>-<noun>`; the session's title arrives later and is not needed to name the branch. */
 export function randomBranchName(): string {
   return `${WORKTREE_BRANCH_PREFIX}/${pick(ADJECTIVES)}-${pick(NOUNS)}`;
 }
 
-/** The first of `name`, `name-2`, `name-3`, … not in `taken`. */
 export function uniqueBranchName(name: string, taken: ReadonlySet<string>): string {
   if (!taken.has(name)) return name;
   for (let suffix = 2; ; suffix += 1) {

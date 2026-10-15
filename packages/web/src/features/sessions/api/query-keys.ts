@@ -1,4 +1,3 @@
-/** Query keys for session data. Parent keys prefix child keys so invalidation can target a whole family. */
 export const sessionKeys = {
   all: ["sessions"] as const,
   lists: () => [...sessionKeys.all, "list"] as const,

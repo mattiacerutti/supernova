@@ -13,7 +13,6 @@ interface SessionHold {
   count: number;
 }
 
-/** Each runtime connection's held sessions; a session is held once, however many places use it. */
 const holds = new WeakMap<RuntimeClient, Map<string, SessionHold>>();
 
 function holdsOf(runtime: RuntimeClient): Map<string, SessionHold> {
@@ -25,10 +24,7 @@ function holdsOf(runtime: RuntimeClient): Map<string, SessionHold> {
   return held;
 }
 
-/**
- * Holds a session's runtime service until the returned release. Holds of one session share one Chord handle. A hold
- * that failed (an unknown session, or one still being created) is dropped, so the next acquire tries again.
- */
+/** One handle per session, shared. A failed hold is dropped so the next acquire retries. */
 function acquireSession(runtime: RuntimeClient, sessionId: string): SessionRuntimeHold {
   const held = holdsOf(runtime);
   let entry = held.get(sessionId);
@@ -56,7 +52,6 @@ function acquireSession(runtime: RuntimeClient, sessionId: string): SessionRunti
   };
 }
 
-/** Runs `call` on a session's runtime service, holding it for the call. */
 export async function withSessionRuntime<T>(runtime: RuntimeClient, sessionId: string, call: (service: SessionRuntimeService) => Promise<T>): Promise<T> {
   const {release, service} = acquireSession(runtime, sessionId);
   try {
@@ -68,10 +63,7 @@ export async function withSessionRuntime<T>(runtime: RuntimeClient, sessionId: s
 
 const isKnown = (sessionId: string): boolean => useSessionsStore.getState().documents[sessionId] !== undefined;
 
-/**
- * Reads a session's document once, unless the store has it. A read that lands after the live document arrived is
- * dropped, so it never replaces a newer value.
- */
+/** A read landing after the live document is dropped so it never replaces a newer value. */
 function readDocument(runtime: RuntimeClient, sessionId: string): void {
   if (isKnown(sessionId)) return;
   void runtime.sessions.get({sessionId}).then(
@@ -84,10 +76,6 @@ function readDocument(runtime: RuntimeClient, sessionId: string): void {
   );
 }
 
-/**
- * Keeps the store's view of every session the runtime has open current and shows its notices. Returns the stop.
- * Called once, at app start. After a reconnect Chord holds the services again and their state arrives anew.
- */
 export function syncSessions(runtime: RuntimeClient): () => void {
   const notices = new NoticeToasts();
   return runtime.sessions.directory.subscribe((directory) => {
@@ -97,11 +85,7 @@ export function syncSessions(runtime: RuntimeClient): () => void {
   });
 }
 
-/**
- * Keeps a session's document in the store, read at once and then live, until the returned stop is called. Following
- * the same session from several places holds it once. A session that cannot be held yet (still being created) keeps
- * the document it was read with.
- */
+/** A session that cannot be held yet (still being created) keeps the document it was read with. */
 export function followSession(runtime: RuntimeClient, sessionId: string): () => void {
   readDocument(runtime, sessionId);
   const {release, service} = acquireSession(runtime, sessionId);
@@ -114,13 +98,11 @@ export function followSession(runtime: RuntimeClient, sessionId: string): () => 
   };
 }
 
-/** Reads a session's document into the store ahead of opening it, unless it is already there. */
 export function usePrefetchSession(): (sessionId: string) => void {
   const runtime = useRuntime();
   return (sessionId) => readDocument(runtime, sessionId);
 }
 
-/** Drops a session the runtime removed (archived, or failed to create). */
 export function forgetSession(sessionId: string): void {
   forget(sessionId);
 }
@@ -134,10 +116,6 @@ export function markSeenAsItChanges(sessionId: string): () => void {
   });
 }
 
-/**
- * Keeps a session's document in the store, read at once and then live, while the calling component is mounted, and
- * marks the session seen as it changes. Key the component by session.
- */
 export function useFollowSession(sessionId: string): void {
   const runtime = useRuntime();
   useMountEffect(() => {

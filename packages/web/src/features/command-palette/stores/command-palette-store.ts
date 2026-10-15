@@ -1,15 +1,12 @@
 import {create} from "zustand";
 import type {CommandPalettePage} from "@/features/command-palette/types/command-palette";
 
-/** The shortcut that opens and closes the palette from anywhere in the app. */
 export const COMMAND_PALETTE_HOTKEY = "Mod+K";
 
 interface CommandPaletteState {
   readonly open: boolean;
-  /** Pages opened on top of the root list, innermost last; empty shows the root list. */
   readonly pages: readonly CommandPalettePage[];
   readonly closePalette: () => void;
-  /** Opens the palette on its root list, or directly on `page`. */
   readonly openPalette: (page?: CommandPalettePage) => void;
   readonly popPage: () => void;
   readonly pushPage: (page: CommandPalettePage) => void;

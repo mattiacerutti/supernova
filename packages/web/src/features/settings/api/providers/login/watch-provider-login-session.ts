@@ -3,10 +3,6 @@ import {useRuntime} from "@/runtime/use-runtime";
 
 type Unsubscribe = () => void;
 
-/**
- * Returns a subscriber for one login's steps: the providers' state delivers its current step once it arrives and
- * every later one. Call the returned function from a mount effect.
- */
 export function useWatchProviderLoginSession(): (loginSessionId: string, onSession: (session: ProviderLoginSession) => void) => Unsubscribe {
   const runtime = useRuntime();
 

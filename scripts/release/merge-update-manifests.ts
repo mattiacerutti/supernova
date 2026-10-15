@@ -1,6 +1,4 @@
-// electron-updater reads a single manifest per platform and channel (for example
-// latest-mac.yml), but macOS arm64 and x64 builds each emit their own. Merging
-// the file lists lets both architectures resolve updates from one manifest.
+// electron-updater reads one manifest per platform, but macOS arm64 and x64 each emit their own.
 
 import {readFileSync, writeFileSync} from "node:fs";
 

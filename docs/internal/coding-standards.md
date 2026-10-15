@@ -23,6 +23,17 @@ Use these conventions for TypeScript implementation. [Web](web.md), [Agent runti
 These rules apply to implementation logic regardless of its folder: operations, helpers, mappers, resolvers, builders, state holders, and lifecycle coordinators.
 
 - Order function declarations as non-exported functions, then exported functions.
-- Add short TSDoc comments to exported functions, exported classes, and their public methods. Document non-exported behavior when it is not trivial.
 
 Component declaration order belongs in [Web](web.md#components-and-hooks); schema declaration order belongs in [Contracts](contracts.md#schema-organization).
+
+## Comments
+
+Code is the memory. A name, a type, and a body say what something does; a comment is only for what they cannot say: why a choice was made, which invariant a line protects, which external quirk it works around, where ported code came from.
+
+- Do not describe what the code does. `/** Lists the sessions */` above `listSessions`, a field annotation that repeats the field name, or a line comment narrating the next statement is noise; delete it.
+- Do not comment by default. Most functions, classes, interfaces, props, and schema fields need nothing. Write a comment only when a reader would otherwise get something wrong.
+- Keep it to one line where possible, two at most. If the reason needs a paragraph, the code probably needs a better shape.
+- Use `/** */` when the comment sits above a declaration (function, class, member, schema field), so it shows on hover at call sites. Use `//` inside bodies.
+- A `TODO` names the condition that resolves it: `TODO(queue): write the turn record when the engine places it`. A bare `TODO: clean up` is not allowed.
+- Never commit commented-out code; Git has it.
+- When a comment and the code disagree, the comment is wrong. Fix or delete it in the same change, and do not take a stale comment's word over the code when reading.

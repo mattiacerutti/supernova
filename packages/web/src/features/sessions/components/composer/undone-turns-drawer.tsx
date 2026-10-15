@@ -8,7 +8,6 @@ import Icon from "@/components/ui/icon";
 import {cn} from "@/lib/cn";
 
 const DRAWER_TRANSITION = {duration: 0.2, ease: "easeOut"} as const;
-/** Skeleton rows shown for turns still loading; title widths vary so they read as a list. */
 const SKELETON_TITLE_WIDTHS = ["w-3/5", "w-2/5", "w-1/2"];
 
 function contentPartKey(part: UserMessageContentPart, index: number): string {
@@ -44,7 +43,6 @@ function UndoneTurnTitle(props: UndoneTurnTitleProps) {
   );
 }
 
-/** Undone turns after the loaded ones, and loading them as the list scrolls to its end. */
 interface LaterUndoneTurns {
   readonly count: number;
   readonly failed: boolean;

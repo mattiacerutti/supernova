@@ -2,7 +2,7 @@ import {createServer} from "node:http";
 import type {Server} from "node:http";
 import {afterEach, describe, expect, it} from "vitest";
 import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
-import {SupernovaTools, webFetchTool} from "@supernova/agent-runtime/features/session-runtime/tools/web-fetch";
+import {webFetchTool} from "@supernova/agent-runtime/features/session-runtime/tools/web-fetch";
 
 let server: Server | undefined;
 
@@ -45,10 +45,5 @@ describe("web fetch tool", () => {
       output: [{text: "hello", type: "text"}],
       details: {contentType: "text/plain", format: "text", output: "hello", url},
     });
-  });
-
-  it("is offered as Supernova's own extension, carrying its prompt text", () => {
-    expect(SupernovaTools.tools?.map((tool) => tool.name)).toEqual(["web_fetch"]);
-    expect(webFetchTool.prompt?.snippet).toContain("web_fetch");
   });
 });

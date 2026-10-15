@@ -10,7 +10,6 @@ function defaultStorageRoot(): string {
   return join(resolve(agentDataRoot), "worktrees");
 }
 
-/** Git worktrees Supernova creates for sessions, stored outside the project so they never show up as project files. */
 export class Worktrees {
   private readonly storageRoot: string;
 
@@ -18,7 +17,6 @@ export class Worktrees {
     this.storageRoot = storageRoot;
   }
 
-  /** Creates a worktree on a new, randomly named branch off `baseRef`. */
   public async create(input: {readonly baseRef: string; readonly projectPath: string}): Promise<SessionWorktree> {
     const {baseRef, projectPath} = input;
     const taken = new Set((await optionalGit(["for-each-ref", "--format=%(refname:short)", "refs/heads"], {cwd: projectPath}))?.split("\n") ?? []);
@@ -29,7 +27,6 @@ export class Worktrees {
     return {branch, path: await realpath(path)};
   }
 
-  /** Removes the worktree and its branch, including uncommitted work. A worktree already gone is not an error. */
   public async remove(input: {readonly projectPath: string; readonly worktree: SessionWorktree}): Promise<void> {
     const {projectPath, worktree} = input;
     const removed = await runGitResult(["worktree", "remove", "--force", worktree.path], {cwd: projectPath});

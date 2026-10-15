@@ -53,7 +53,6 @@ function createSuggestionPlugin(input: {
   });
 }
 
-/** Filters the full resource snapshot locally, applying the display limit after searching. */
 export function filterComposerSuggestions(items: readonly ComposerSuggestionItem[], kind: ResourceTriggerKind, query: string): ComposerSuggestionItem[] {
   const candidates = items.filter((item) => (kind === "skill" ? item.kind === "skill" : item.kind !== "skill"));
   const normalizedQuery = query.trim();
@@ -66,7 +65,6 @@ export function filterComposerSuggestions(items: readonly ComposerSuggestionItem
   ).slice(0, MAX_SUGGESTIONS);
 }
 
-/** Creates a TipTap suggestion matcher that expands from the cursor to token boundaries. */
 export function findComposerSuggestionMatch(input: {char: string; startOfLine: boolean}): NonNullable<SuggestionOptions["findSuggestionMatch"]> {
   return ({$position}) => {
     const text = $position.parent.textBetween(0, $position.parent.content.size, "\n", "\n");
@@ -98,7 +96,6 @@ export function findComposerSuggestionMatch(input: {char: string; startOfLine: b
   };
 }
 
-/** Creates the TipTap extension that reports file, skill, and slash-command suggestion matches. */
 export function createSuggestionExtension(onMatch: (match: ComposerSuggestionMatch | null) => void) {
   return Node.create({
     addProseMirrorPlugins() {

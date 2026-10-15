@@ -1,9 +1,7 @@
 import {spawn} from "@lydell/node-pty";
 
-/** The pseudo-terminal a shell runs in, from `@lydell/node-pty`. */
 export interface Pty {
   readonly pid: number;
-  /** Sends the signal to the shell process. */
   readonly kill: (signal: "SIGHUP" | "SIGKILL") => void;
   readonly resize: (cols: number, rows: number) => void;
   readonly write: (data: string) => void;
@@ -14,7 +12,6 @@ export interface SpawnPtyInput {
   readonly cwd: string;
   readonly env: NodeJS.ProcessEnv;
   readonly onData: (data: string) => void;
-  /** Called once, with the shell's exit code. */
   readonly onExit: (exitCode: number) => void;
   readonly rows: number;
   readonly shell: string;
@@ -27,7 +24,6 @@ function shellArguments(): string[] {
   return process.platform === "win32" ? [] : ["-l"];
 }
 
-/** Starts a shell in a pseudo-terminal. */
 export const spawnPty: SpawnPty = async (input) => {
   const child = spawn(input.shell, shellArguments(), {cols: input.cols, cwd: input.cwd, env: input.env as Record<string, string>, name: "xterm-256color", rows: input.rows});
   child.onData(input.onData);

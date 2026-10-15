@@ -4,7 +4,6 @@ import {showToast} from "@/lib/toast";
 import UpdateInstallDialog from "@/features/updates/components/update-install-dialog";
 import {useDesktopUpdate} from "@/features/updates/hooks/use-desktop-update";
 
-/** Settings control that walks the whole update flow in place: check, download, then restart to install. */
 export default function UpdateCheckButton() {
   const {state, check, download, install} = useDesktopUpdate();
   const [pending, setPending] = useState(false);

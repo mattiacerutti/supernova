@@ -76,13 +76,11 @@ function renderCwd({env, agent}: PromptInput, fallback: string): string {
   return (env?.cwd ?? agent.cwd ?? fallback).replace(/\\/g, "/");
 }
 
-/** What a session's prompt is built from besides its tools: context files and skills of its working directory. */
 export interface PromptResources {
   readonly contextFiles: readonly {readonly path: string; readonly content: string}[];
   readonly skills: readonly Skill[];
 }
 
-/** Pi's system-prompt sections, rendered independently from the request's tools and current project resources. */
 export function createPromptSections(input: {readonly cwd: string; readonly resources: () => PromptResources}): PromptSection<PromptedTool>[] {
   const {cwd, resources} = input;
   return [

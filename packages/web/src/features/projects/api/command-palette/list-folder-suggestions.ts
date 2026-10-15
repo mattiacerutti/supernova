@@ -6,8 +6,7 @@ import {useRuntime} from "@/runtime/use-runtime";
 
 export function listFolderSuggestionsQueryOptions(runtime: RuntimeClient, query: string) {
   return queryOptions({
-    // Moving to another folder keeps the previous folder's listing on screen until the new one arrives, instead of
-    // emptying the list for a frame. Check `isPlaceholderData` before treating the listing as the current folder's.
+    // Keeps the previous folder's listing until the new one arrives; callers check `isPlaceholderData`.
     placeholderData: (previousData) => previousData,
     queryFn: () => unwrap(runtime.folders.listSuggestions({query})),
     queryKey: projectKeys.folderSuggestion(query),
@@ -20,7 +19,6 @@ export function useListFolderSuggestions(query: string) {
   return useQuery(listFolderSuggestionsQueryOptions(runtime, query));
 }
 
-/** Loads a folder's listing ahead of time, such as the folder the user is about to enter. */
 export function usePrefetchFolderSuggestions() {
   const runtime = useRuntime();
   const queryClient = useQueryClient();

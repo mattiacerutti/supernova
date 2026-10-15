@@ -17,10 +17,7 @@ interface UseFolderBrowserOptions {
   readonly recentProjectPaths: readonly string[];
 }
 
-/**
- * Browses the server's folders from a typed path. The listing is keyed by the path's folder, so typing within a name
- * filters locally while entering a folder (`enter`) loads first and then moves, so the rows never empty in between.
- */
+/** Typing within a name filters locally; entering a folder loads first, then moves, so rows never empty. */
 export function useFolderBrowser(options: UseFolderBrowserOptions) {
   const {recentProjectPaths} = options;
   const [path, setPath] = useState("");
@@ -36,14 +33,12 @@ export function useFolderBrowser(options: UseFolderBrowserOptions) {
 
   const prefetch = usePrefetchFolderSuggestions();
 
-  // A highlighted folder is probably about to be entered.
   const preload = (folderPath: string): void => {
     void prefetch(withTrailingProjectPathSeparator(folderPath));
   };
 
   const type = (value: string): void => {
     navigation.current += 1;
-    // Going up is one Backspace away, so the parent is loaded ahead.
     const parentPath = getProjectBrowseParentPath(getProjectBrowseDirectoryPath(value));
     if (parentPath) void prefetch(parentPath);
     setPath(value);
@@ -61,10 +56,8 @@ export function useFolderBrowser(options: UseFolderBrowserOptions) {
   return {
     enter,
     error: listingQuery.isError,
-    /** Set once the current folder's listing has loaded; until then the rows are the previous folder's. */
     folderLoaded,
     homePath: listing?.homePath,
-    /** Set while nothing has loaded yet, so the first listing is still on its way. */
     loading: listing === undefined,
     path,
     preload,

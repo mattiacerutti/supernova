@@ -39,7 +39,6 @@ interface MenuLabelProps {
   readonly className?: string;
 }
 
-/** Renders a section heading inside a menu or menu-like floating panel. */
 export function MenuLabel(props: MenuLabelProps) {
   const {children, className} = props;
 

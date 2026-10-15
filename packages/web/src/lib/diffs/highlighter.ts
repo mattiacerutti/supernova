@@ -11,19 +11,16 @@ export const CODE_HIGHLIGHT_THEMES = {
   light: "github-light",
 } as const;
 
-export type CodeHighlightTheme = (typeof CODE_HIGHLIGHT_THEMES)[keyof typeof CODE_HIGHLIGHT_THEMES];
+type CodeHighlightTheme = (typeof CODE_HIGHLIGHT_THEMES)[keyof typeof CODE_HIGHLIGHT_THEMES];
 
-// Stores completed highlighted HTML so stable messages do not re-tokenize; bounded because code blocks can be large.
 const highlightedCodeCache = new LRUCache<string, string>({
   max: MAX_HIGHLIGHT_CACHE_ENTRIES,
   maxSize: MAX_HIGHLIGHT_CACHE_MEMORY_BYTES,
   sizeCalculation: (html, cacheKey) => estimateHighlightedCodeSize(html, cacheKey),
 });
 
-// Stores in-flight highlight work so Suspense retries do not start duplicate highlighting for the same block.
 const pendingCodeHighlightingCache = new Map<string, Promise<string>>();
 
-// Stores highlighter setup by language because Pierre/Shiki grammar and theme initialization could become expensive.
 const highlighterByLanguageCache = new Map<string, Promise<DiffsHighlighter>>();
 
 function normalizeCodeLanguage(language?: string): string {
@@ -73,7 +70,6 @@ interface HighlightedCodeHtmlInput {
   readonly theme?: CodeHighlightTheme;
 }
 
-/** Reads already-highlighted code HTML without starting new highlighting work. */
 export function getCachedHighlightedCode(input: HighlightedCodeHtmlInput): string | undefined {
   const language = normalizeCodeLanguage(input.language);
   const theme = input.theme ?? CODE_HIGHLIGHT_THEMES.dark;
@@ -83,7 +79,6 @@ export function getCachedHighlightedCode(input: HighlightedCodeHtmlInput): strin
   return highlightedCodeCache.get(key);
 }
 
-/** Highlights code to HTML with the shared Pierre/Shiki highlighter and caches the result. */
 export function highlightCode(input: HighlightedCodeHtmlInput): Promise<string> {
   const language = normalizeCodeLanguage(input.language);
   const theme = input.theme ?? CODE_HIGHLIGHT_THEMES.dark;

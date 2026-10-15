@@ -8,7 +8,6 @@ import {useSessionModelsStore} from "@/features/sessions/stores/composer/session
 
 interface UseModelSelectionOptions {
   readonly projectPath: string;
-  /** Project defaults for a session that has not been sent yet. Omit for an existing session, whose own model wins. */
   readonly defaults?: ModelDefaults;
   readonly initialSelection?: ModelReference;
   readonly sessionId: string;
@@ -25,7 +24,6 @@ export interface ModelSelection {
   readonly selectThinkingLevel: (value: string) => void;
 }
 
-/** Owns model and thinking-level selection for one composer, persisted per session id. */
 export function useModelSelection(options: UseModelSelectionOptions): ModelSelection {
   const {defaults, initialSelection, projectPath, sessionId} = options;
 

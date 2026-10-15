@@ -3,12 +3,8 @@ import {userProcessEnv} from "@supernova/agent-runtime/lib/user-process-env";
 
 /** Output kept for clients that attach later. Enough for a few screens of scrollback without holding a build log forever. */
 const HISTORY_LIMIT_CHARS = 256 * 1024;
-/** How long a shell gets to exit on hangup before it is killed outright. */
 const KILL_GRACE_MS = 1_000;
-/**
- * A busy PTY delivers hundreds of small reads per second; each one published alone is a state revision, a socket
- * frame, and a client redraw. Reads are gathered for this long, or until this many characters, before publishing.
- */
+/** A busy PTY delivers hundreds of reads per second; each published alone is a revision, a frame, and a redraw. */
 const OUTPUT_COALESCE_MS = 8;
 const OUTPUT_COALESCE_CHARS = 32 * 1024;
 
@@ -19,18 +15,15 @@ export interface TerminalProcessInput {
   readonly rows: number;
   readonly sessionId: string;
   readonly spawnPty: SpawnPty;
-  /** Receives every output chunk and the exit; the owner publishes them. */
   readonly onOutput: (data: string) => void;
   readonly onExit: (exitCode: number) => void;
 }
 
-/** One shell for a session: its PTY. Its owner keeps the output it reports. */
 export class TerminalProcess {
   private exitCode: number | undefined;
   private pty: Pty | undefined;
   private closed = false;
 
-  /** Spawns the user's shell in `cwd`. */
   public static async spawn(input: TerminalProcessInput): Promise<TerminalProcess> {
     const process = new TerminalProcess();
     let pending = "";
@@ -73,7 +66,6 @@ export class TerminalProcess {
     if (this.exitCode === undefined) this.pty?.resize(cols, rows);
   }
 
-  /** Ends the shell as a closing terminal window would. */
   public close(): void {
     if (this.closed) return;
     this.closed = true;
@@ -88,7 +80,6 @@ export class TerminalProcess {
   }
 }
 
-/** Characters to drop from the front of `output` so it stays within the history cap. */
 export function overflow(output: string): number {
   return Math.max(0, output.length - HISTORY_LIMIT_CHARS);
 }

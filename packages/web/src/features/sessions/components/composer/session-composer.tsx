@@ -46,9 +46,7 @@ function clipboardFiles(event: ComposerClipboardEvent): File[] {
   });
 }
 
-// Tiptap's setHardBreak inserts via insertContent, which never marks the
-// transaction with scrollIntoView. In the height-capped composer that leaves a
-// freshly added line cut off at the bottom, so chain the scroll explicitly.
+/** Tiptap's setHardBreak never sets scrollIntoView, which leaves a new line cut off in the height-capped composer. */
 const ComposerHardBreak = HardBreak.extend({
   addKeyboardShortcuts() {
     return {
@@ -165,20 +163,16 @@ function ComposerSubmitButton(props: ComposerSubmitButtonProps) {
 }
 
 interface SessionComposerProps {
-  /** Rendered below the composer surface, aligned left; the workspace pickers. The row's height is always reserved so the composer never shifts when it fills in. */
   readonly bottomBar?: ReactNode;
-  /** Rendered on the toolbar between the attach and submit buttons; typically the pickers. */
   readonly children?: ReactNode;
   readonly onInterrupt?: () => void;
   readonly onSubmit: (contentParts: readonly UserMessageContentPart[]) => void;
   readonly placeholder?: string;
   readonly slashCommandActions?: ClientSlashCommandActions;
   readonly streamStatus?: SessionStatusKind;
-  /** Rendered above the composer surface, overlapping the timeline. */
   readonly topExtension?: ReactNode;
 }
 
-/** The message composer: editor, attachments, toolbar, and submit/stop. Reads its state from `ComposerContext`. */
 export default function SessionComposer(props: SessionComposerProps) {
   const {bottomBar, children, onInterrupt, onSubmit, placeholder = DEFAULT_PLACEHOLDER, slashCommandActions, streamStatus = "idle", topExtension} = props;
   const {attachments, disabled, draft, projectPath} = useComposerContext();

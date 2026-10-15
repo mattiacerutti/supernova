@@ -10,7 +10,6 @@ interface RenameSessionInput {
 
 const {patchOptimism} = useSessionsStore.getState();
 
-/** Renames a session, showing the new title at once; the runtime's directory reports it once applied. */
 export function useRenameSession() {
   const runtime = useRuntime();
 

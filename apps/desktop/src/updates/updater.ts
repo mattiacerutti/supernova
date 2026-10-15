@@ -14,7 +14,7 @@ interface CreateDesktopUpdaterOptions {
   readonly onStateChange: (state: DesktopUpdateState) => void;
 }
 
-export interface DesktopUpdater {
+interface DesktopUpdater {
   readonly getState: () => DesktopUpdateState;
   readonly start: () => void;
   readonly check: () => Promise<DesktopUpdateState | null>;
@@ -22,18 +22,12 @@ export interface DesktopUpdater {
   readonly quitAndInstall: () => void;
 }
 
-/** Updates require a packaged build with bundled updater metadata, and on Linux the AppImage distribution. */
 function isAutoUpdateSupported(): boolean {
   if (!app.isPackaged) return false;
   if (process.platform === "linux" && !process.env.APPIMAGE) return false;
   return existsSync(join(process.resourcesPath, "app-update.yml"));
 }
 
-/**
- * Creates the desktop auto-updater with two-step semantics: updates are never downloaded or
- * installed automatically. The renderer downloads on request and installs with an explicit restart.
- * Nightly builds follow the dedicated nightly prerelease channel.
- */
 export function createDesktopUpdater({nightly, onStateChange}: CreateDesktopUpdaterOptions): DesktopUpdater {
   const supported = isAutoUpdateSupported();
   let state = INITIAL_UPDATE_STATE;

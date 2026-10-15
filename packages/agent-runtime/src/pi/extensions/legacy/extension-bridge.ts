@@ -9,10 +9,6 @@ import {DELIVERED_EVENTS, eventHooks} from "@supernova/agent-runtime/pi/extensio
 import type {SessionExtension} from "@supernova/agent-runtime/pi/lib/tools/coding-tools";
 import {fromToolDefinition} from "@supernova/agent-runtime/pi/lib/tools/tool-definition";
 
-/**
- * Old-SDK registrations that only a terminal UI shows. The old Supernova accepted them and never showed them; they are
- * reported so an author knows why nothing appears.
- */
 const UNSUPPORTED_REGISTRATIONS = ["commands", "shortcuts", "flags", "messageRenderers"] as const;
 const REGISTRATION_LABELS: Record<(typeof UNSUPPORTED_REGISTRATIONS)[number], string> = {
   commands: "Commands",
@@ -26,12 +22,10 @@ interface BridgeInput {
   readonly modelRuntime: ModelRuntime;
 }
 
-/** The context an event handler gets: the session's print-mode context, with no model or signal, as outside a tool call. */
 function handlerContext(input: BridgeInput) {
   return extensionContext({cwd: input.cwd, model: undefined, modelRuntime: input.modelRuntime, signal: undefined, thinkingLevel: undefined});
 }
 
-/** An `Emit` over one extension's handlers: each gets the event with its `type` and a fresh print-mode context. */
 function emitter(handlers: ReadonlyMap<string, readonly Handler[]>, input: BridgeInput): Emit {
   return async (event, fields) => {
     const results: unknown[] = [];
@@ -40,7 +34,6 @@ function emitter(handlers: ReadonlyMap<string, readonly Handler[]>, input: Bridg
   };
 }
 
-/** An extension's problems, reported once when it loads. */
 export interface ExtensionDiagnostic {
   readonly extensionPath: string;
   readonly extensionName?: string;
@@ -59,7 +52,6 @@ function packageName(extension: PiExtension): string | undefined {
   }
 }
 
-/** Converts one loaded extension: its tools to engine tools, its supported events to engine hooks. */
 function bridgeExtension(source: PiExtension, input: BridgeInput, report: (diagnostic: ExtensionDiagnostic) => void): SessionExtension {
   const {modelRuntime} = input;
   const handlers = source.handlers as Map<string, Handler[]>;
@@ -77,17 +69,13 @@ function bridgeExtension(source: PiExtension, input: BridgeInput, report: (diagn
   return defineExtension({name: `extension:${source.path}`, hooks, tools});
 }
 
-/** The extensions of one project, bridged; `start()`/`stop()` deliver `session_start` and `session_shutdown`. */
 export interface BridgedExtensions {
   readonly extensions: readonly SessionExtension[];
   readonly start: () => Promise<void>;
   readonly stop: (reason: "quit" | "reload") => Promise<void>;
 }
 
-/**
- * Maps the extensions Pi's loader found onto engine extensions. Pi's own `ExtensionRunner` drives the old engine, so it
- * cannot be reused here.
- */
+/** Pi's own `ExtensionRunner` drives the old engine, so it cannot be reused. */
 export function bridgeExtensions(input: {
   readonly cwd: string;
   readonly loaded: LoadExtensionsResult;

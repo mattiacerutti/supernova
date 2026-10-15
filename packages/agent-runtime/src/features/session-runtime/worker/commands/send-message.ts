@@ -12,11 +12,6 @@ async function generateSessionTitle(input: {readonly payload: SendMessagePayload
   return title?.trim() || undefined;
 }
 
-/**
- * Accepts a user message: selects its model, prepares its content, captures the before-turn checkpoint, and submits
- * it. Resolves once the engine placed it; the run continues in the background and settles through the session's event
- * stream. A busy session rejects; see `SessionFile.send` for queueing.
- */
 export async function sendMessage(runtime: SessionWorker, input: SendMessagePayload): Promise<void> {
   const {file, store} = runtime;
   const {sessionId} = file;
@@ -26,7 +21,6 @@ export async function sendMessage(runtime: SessionWorker, input: SendMessagePayl
   const model = findSelectedModel(runtime.sdk, input.modelReference);
   if (!(await runtime.sdk.modelRuntime.checkAuth(model.provider))) throw new Error(`No API key for ${model.provider}/${model.id}`);
 
-  // The title is not needed to start; it is generated alongside the turn and applied when it arrives.
   if (record.title === undefined) {
     runtime.track(
       generateSessionTitle({payload: input, model, titleGenerator: runtime.titleGenerator}).then(async (title) => {

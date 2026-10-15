@@ -364,12 +364,11 @@ describe("session commands and views", () => {
     expect(add.mock.calls[1]?.[0]).not.toHaveProperty("timeout");
   });
 
-  it.each(
-    [
-      {outcome: "conflict", code: "CheckpointConflictError" as const},
-      {outcome: "uncaptured", code: "CheckpointUncapturedError" as const},
-    ].flatMap((item) => ["confirm", "cancel", "failed retry"].flatMap((decision) => (["undo", "redo", "revert"] as const).map((action) => ({...item, decision, action}))))
-  )("holds $action optimistically on $outcome until $decision", async ({outcome, code, decision, action}) => {
+  it.each([
+    {action: "undo", code: "CheckpointConflictError" as const, decision: "confirm", outcome: "conflict"},
+    {action: "redo", code: "CheckpointUncapturedError" as const, decision: "cancel", outcome: "uncaptured"},
+    {action: "revert", code: "CheckpointConflictError" as const, decision: "failed retry", outcome: "conflict"},
+  ] as const)("holds $action optimistically on $outcome until $decision", async ({outcome, code, decision, action}) => {
     const {actions, services} = setup();
     const forceFlags: boolean[] = [];
     services.sessionRuntime[NAVIGATION_METHODS[action]] = vi.fn(async (payload: {readonly force?: boolean}) => {

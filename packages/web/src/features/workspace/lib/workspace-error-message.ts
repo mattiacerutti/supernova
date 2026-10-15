@@ -15,7 +15,6 @@ const MESSAGES: Readonly<Record<WorkspaceFailureCode, string>> = {
   WorkspaceNotARepositoryError: "This project is not a Git repository.",
 };
 
-/** User-facing copy for a failed workspace query. Transport failures get the generic message. */
 export function workspaceErrorMessage(error: unknown): string {
   const code = runtimeError<WorkspaceService["readFile"]>(error)?.code;
   return code === undefined ? GENERIC_MESSAGE : MESSAGES[code];

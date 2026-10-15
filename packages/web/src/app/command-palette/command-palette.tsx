@@ -12,7 +12,6 @@ import OpenSessionInPage from "@/features/sessions/components/command-palette/op
 import {useMountEffect} from "@/hooks/use-mount-effect";
 import {useSidebarStore} from "@/stores/sidebar-store";
 
-/** The app's command palette: the `projects` and `sessions` features' actions and pages in one `CommandPalette`. */
 export default function AppCommandPalette() {
   const navigate = useNavigate();
   const actions = useCommandPaletteActions();

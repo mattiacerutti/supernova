@@ -2,12 +2,10 @@ import {AnimatePresence, motion, useReducedMotion} from "framer-motion";
 import {MessageScrollerButton} from "@/features/sessions/components/timeline/viewport/message-scroller";
 
 interface ScrollToEndButtonProps {
-  /** Height of anything overlaying the bottom of the viewport, so the button sits above it. */
   readonly bottomOffset: number;
   readonly visible: boolean;
 }
 
-/** Floating "jump to latest" control. */
 export default function ScrollToEndButton(props: ScrollToEndButtonProps) {
   const {bottomOffset, visible} = props;
   const shouldReduceMotion = useReducedMotion();

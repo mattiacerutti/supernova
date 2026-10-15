@@ -13,13 +13,10 @@ export interface TerminalsDeps {
 }
 
 interface TerminalEntry {
-  /** Registered before the spawn settles, so two opens of one id (React remounts) share one shell. */
   readonly process: Promise<TerminalProcess>;
-  /** This terminal's output alone, so a chunk touches nothing else and reaches only this terminal's subscribers. */
   readonly output: MutableReplicatedState<TerminalOutput>;
 }
 
-/** The smallest positive number no other terminal of the session uses. */
 function nextNumber(terminals: Readonly<Record<string, Terminal>>, sessionId: string): number {
   const used = new Set(Object.values(terminals).flatMap((terminal) => (terminal.sessionId === sessionId ? [terminal.number] : [])));
   let number = 1;
@@ -27,25 +24,17 @@ function nextNumber(terminals: Readonly<Record<string, Terminal>>, sessionId: st
   return number;
 }
 
-/**
- * Shells the server runs in sessions' workspaces. A terminal lives until it is closed or its session is released;
- * clients attach and detach freely, so switching sessions or reloading never ends a shell. Nothing survives a server
- * restart. `state` lists every terminal without its output; each terminal's output is its own replicated state
- * (`output(id)`), appended per chunk and capped from the front.
- */
+/** A terminal lives until closed or its session is released; clients attach and detach freely. */
 export class Terminals {
   public readonly state: MutableReplicatedState<TerminalsState> = replicatedState<TerminalsState>({terminals: {}});
   private readonly entries = new Map<string, TerminalEntry>();
 
   public constructor(private readonly deps: TerminalsDeps) {}
 
-  /** Starts a shell, or returns the existing terminal with that id so a reopened tab reattaches. */
   public async open(input: TerminalOpenPayload): Promise<TerminalOpenResult> {
     let entry = this.entries.get(input.id);
     if (!entry) {
       const {id, cwd, sessionId} = input;
-      // Listed and given an output from the open on, so output arriving before the spawn settles has a place; a
-      // closed terminal's entry is gone and its late output is dropped.
       const terminal: Terminal = {cwd, id, number: nextNumber(this.state.value.terminals, sessionId), sessionId, startedAt: new Date().toISOString()};
       this.state.change(BACKGROUND_CONTEXT, (draft) => {
         draft.terminals[id] = terminal;
@@ -87,7 +76,6 @@ export class Terminals {
     return terminal;
   }
 
-  /** A terminal's output, for as long as the terminal exists; closing it marks the output `closed` last. */
   public output(id: string): MutableReplicatedState<TerminalOutput> {
     const entry = this.entries.get(id);
     if (!entry) throw new TerminalNotFoundError({message: "Terminal not found."});
@@ -102,7 +90,6 @@ export class Terminals {
     (await this.process(input.id)).resize(input.cols, input.rows);
   }
 
-  /** Kills the shell. Closing an unknown terminal is not an error; the tab is gone either way. */
   public async close(input: TerminalClosePayload): Promise<void> {
     const entry = this.entries.get(input.id);
     if (!entry) return;
@@ -110,23 +97,19 @@ export class Terminals {
     (await entry.process.catch(() => undefined))?.close();
   }
 
-  /** Kills every shell of a session; runs before the session is archived and its worktree removed. */
   public async closeSession(sessionId: string): Promise<void> {
     const ids = Object.values(this.state.value.terminals).flatMap((terminal) => (terminal.sessionId === sessionId ? [terminal.id] : []));
     await Promise.all(ids.map((id) => this.close({id})));
   }
 
-  /** Kills every shell on server shutdown. */
   public async dispose(): Promise<void> {
     await Promise.all([...this.entries.keys()].map((id) => this.close({id})));
   }
 
-  /** Changes one terminal's output, unless it was closed. */
   private changeOutput(id: string, apply: (draft: Draft<TerminalOutput>) => void): void {
     this.entries.get(id)?.output.change(BACKGROUND_CONTEXT, apply);
   }
 
-  /** Forgets a terminal: attached clients see its output end as `closed`, and it leaves the list. */
   private remove(id: string): void {
     const entry = this.entries.get(id);
     if (!entry) return;

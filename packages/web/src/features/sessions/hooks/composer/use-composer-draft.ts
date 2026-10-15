@@ -5,9 +5,7 @@ import {useComposerDraftsStore} from "@/features/sessions/stores/composer/compos
 export interface ComposerDraft {
   readonly attachments: readonly UserMessageAttachmentPart[];
   readonly contentParts: readonly UserMessageContentPart[];
-  /** Bumps when the draft is replaced wholesale, so the editor remounts with the new content. */
   readonly revision: number;
-  /** Where a not-yet-created session will run. */
   readonly workspace: SessionWorkspaceSelection;
   readonly clear: () => void;
   readonly replaceContentParts: (contentParts: readonly UserMessageContentPart[]) => void;
@@ -16,7 +14,6 @@ export interface ComposerDraft {
   readonly setWorkspace: (workspace: SessionWorkspaceSelection) => void;
 }
 
-/** The composer content kept for a session, and the helpers that change it. */
 export function useComposerDraft(sessionId: string): ComposerDraft {
   const draft = useComposerDraftsStore((state) => state.drafts[sessionId]);
   const clearDraft = useComposerDraftsStore((state) => state.clearDraft);

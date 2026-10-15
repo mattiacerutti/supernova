@@ -3,7 +3,6 @@ import {Terminal} from "@supernova/contracts/services/workspace/schemas";
 
 export const TerminalOpenPayload = z.object({
   cols: z.number(),
-  /** Where the shell starts; the session's worktree or project. */
   cwd: z.string(),
   /** Client-chosen id, so the tab can exist before the server replies. */
   id: z.string(),

@@ -4,10 +4,7 @@ export const WorkspaceRepositoriesListPayload = z.object({
   projectPath: z.string(),
 });
 
-/**
- * Project-relative roots of the Git worktrees found at the project root and its immediate children,
- * sorted; `"."` is the project itself. Mirrors checkpoint discovery, so deeper repositories are not listed.
- */
+/** Root and immediate children only, sorted; `"."` is the project. Mirrors checkpoint discovery. */
 export const WorkspaceRepositoriesListResult = z.object({
   repositories: z.array(z.string()),
 });

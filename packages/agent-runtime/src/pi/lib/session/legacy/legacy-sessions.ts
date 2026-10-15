@@ -15,32 +15,23 @@ import {readLegacySession} from "@supernova/agent-runtime/pi/lib/session/legacy/
 
 const context = BACKGROUND_CONTEXT;
 
-/** Where the old SDK's project folders end up once their sessions are imported, inside the sessions directory. */
 export const LEGACY_DIR = "legacy";
 
-/** Pi names a project's session folder after its path, wrapped in `--`; new session folders are bare ids. */
 function isLegacyProjectDir(name: string): boolean {
   return name.startsWith("--") && name.endsWith("--");
 }
 
-/** A turn record that captures nothing: imported turns have no workspace checkpoints, so undo moves the conversation only. */
 function uncapturedTurn(sessionId: string, contentParts: readonly TurnRecord["contentParts"][number][]): TurnRecord {
   const boundary = () => ({checkpointId: randomUUID(), sessionId, status: "disabled" as const});
   return {contentParts: [...contentParts], capture: false, before: boundary(), after: boundary()};
 }
 
-/**
- * Writes an imported session's file: its entries into the root conversation in one commit, a turn record per composer
- * message, and the model and thinking level it last ran with. The Harness only commits; no task runs, so it needs no
- * models.
- */
 async function writeSessionFile(path: string, session: LegacySession): Promise<void> {
   const harness = await Harness.open(await openNodeSqliteStorage(path), {models: {} as Models, registry: createRegistry()}, context);
   try {
     await harness.root(context, {agent: {cwd: session.cwd}});
     await harness.commit(async (tx) => {
       const root = ROOT_CONVERSATION_ID as ConversationId;
-      // The first entry appended from each old branch position, for compaction heads.
       const firstAt = new Map<number, EntryId>();
       const turns: Record<string, TurnRecord> = {};
       for (const item of session.items) {
@@ -58,10 +49,7 @@ async function writeSessionFile(path: string, session: LegacySession): Promise<v
   }
 }
 
-/**
- * Imports one old session file unless the catalog already lists its id. The catalog record is written last, so a
- * session file without one is a crashed import, written again from scratch.
- */
+/** The catalog record is written last, so a session file without one is a crashed import and is written again. */
 async function importSession(input: {readonly root: string; readonly catalog: SessionCatalog; readonly path: string}): Promise<void> {
   const session = readLegacySession(await readFile(input.path, "utf8"));
   if (!session) throw new Error("Not a Pi session file.");
@@ -79,12 +67,7 @@ async function importSession(input: {readonly root: string; readonly catalog: Se
   input.catalog.insert(session.record);
 }
 
-/**
- * Imports the sessions the old SDK left in `root`, one `<project>/<timestamp>_<id>.jsonl` file each, then moves every
- * project folder into `root/legacy/` with its archived sessions, which are never imported. A folder moves only after
- * all its sessions were tried, so a crash resumes where it stopped. A session that fails to import is reported and
- * stays in the moved folder; nothing deletes an old file.
- */
+/** A folder moves only after all its sessions were tried, so a crash resumes. Nothing deletes an old file. */
 export async function importLegacySessions(input: {readonly root: string; readonly catalog: SessionCatalog; readonly report: (message: string) => void}): Promise<void> {
   const {root} = input;
   if (!existsSync(root)) return;

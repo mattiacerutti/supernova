@@ -3,7 +3,6 @@ import Icon from "@/components/ui/icon";
 import Menu, {MenuItem, MenuLabel} from "@/components/ui/menu";
 import {useComposerContext} from "@/features/sessions/hooks/composer/use-composer";
 
-/** Picks the thinking level of the selected model. Renders nothing for models without levels. */
 export default function ThinkingLevelPicker() {
   const {disabled, models} = useComposerContext();
   const thinkingLevels = models.selectedModelDetails?.thinkingLevels ?? [];

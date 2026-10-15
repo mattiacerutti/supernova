@@ -1,10 +1,7 @@
 import type {IconName} from "@/components/ui/icon";
 import type {SessionToolCall} from "@/features/sessions/types/session-turn";
 
-/**
- * A Pi tool call read for rendering: the built-in tools by name with the arguments and result details Pi defines,
- * anything else (extension tools) as `custom`. Arguments are untyped JSON from the model, so each field is checked.
- */
+/** Arguments are untyped JSON from the model, so each field is checked; unknown tools are `custom`. */
 export type ToolView =
   | {readonly kind: "command"; readonly command: string | undefined; readonly output: string | undefined; readonly truncated: boolean}
   | {readonly kind: "file-read"; readonly path: string | undefined; readonly offset: number | undefined; readonly limit: number | undefined; readonly truncated: boolean}
@@ -29,7 +26,6 @@ function truncated(details: unknown): boolean {
   return truncation?.truncated === true;
 }
 
-/** Text of a finished call's result, or what a running call streamed. */
 export function toolOutputText(tool: SessionToolCall): string | undefined {
   if (!tool.result) return tool.output;
   return tool.result.content
@@ -38,7 +34,6 @@ export function toolOutputText(tool: SessionToolCall): string | undefined {
     .join("\n");
 }
 
-/** Converts full file content into a standard new-file unified patch. */
 function newFilePatch(path: string | undefined, content: string | undefined): string {
   const lines = (content ?? "").split("\n");
   if (lines.at(-1) === "") lines.pop();
@@ -74,25 +69,21 @@ function pathSegments(path: string): readonly string[] {
   return path.split(/[\\/]/).filter(Boolean);
 }
 
-/** Returns the last segment of a file path, or the path itself when it has none. */
 export function fileName(path: string): string {
   return pathSegments(path).at(-1) ?? path;
 }
 
-/** Returns the skill name for a SKILL.md read, or undefined when the path is a regular file. */
 export function skillName(path: string): string | undefined {
   const segments = pathSegments(path);
   return segments.at(-1) === "SKILL.md" ? segments.at(-2) : undefined;
 }
 
-/** Compact line range a file read covered ("L120–169", "L120+", "L1–50"), or undefined for a whole-file read. */
 export function readLineRange(input: {readonly limit?: number; readonly offset?: number}): string | undefined {
   const start = input.offset ?? 1;
   if (input.limit !== undefined) return `L${start}–${start + input.limit - 1}`;
   return input.offset === undefined ? undefined : `L${start}+`;
 }
 
-/** Whether a tool's details panel would show anything. Cheap, so callers can offer an expand control without rendering the (possibly heavy) details. */
 export function hasToolDetails(tool: SessionToolCall): boolean {
   const view = toolView(tool);
   switch (view.kind) {
@@ -112,7 +103,6 @@ export function hasToolDetails(tool: SessionToolCall): boolean {
   }
 }
 
-/** The rail glyph for a tool; the row draws it on the tree branch rather than inline. */
 export function toolIcon(tool: SessionToolCall): IconName {
   const view = toolView(tool);
   switch (view.kind) {

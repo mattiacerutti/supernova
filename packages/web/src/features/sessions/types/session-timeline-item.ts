@@ -3,7 +3,6 @@ import type {SessionAssistantEvent, SessionCompactionEvent, SessionReasoningEven
 export type {SessionAssistantEvent, SessionCompactionEvent, SessionReasoningEvent, SessionWorkEvent} from "@/features/sessions/types/session-turn";
 
 interface SessionTimelineItemBase {
-  /** The turn's last item once settled; it carries the timestamp actions. */
   readonly final: boolean;
   readonly id: string;
   readonly spacing: "message" | "work";
@@ -41,7 +40,6 @@ export interface CompactionSessionTimelineItem extends SessionTimelineItemBase {
   readonly type: "compaction";
 }
 
-/** A settled turn's activity before its final response, folded behind "Worked for". */
 export interface TurnWorkSessionTimelineItem extends SessionTimelineItemBase {
   readonly durationMs: number | undefined;
   readonly items: readonly SessionTimelineItem[];

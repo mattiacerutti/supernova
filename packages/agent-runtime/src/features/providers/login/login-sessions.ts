@@ -33,9 +33,7 @@ function toLoginSession(state: LoginSessionState): ProviderLoginSession {
   ) as ProviderLoginSession;
 }
 
-/** In-flight provider logins. Each mutation publishes the session's new step as replicated state. */
 export class LoginSessions {
-  /** Every login's current step, for clients following one. */
   public readonly logins: MutableReplicatedState<ProviderLoginsState> = replicatedState<ProviderLoginsState>({logins: {}});
   private readonly sessions = new Map<string, LoginSessionState>();
   private readonly listeners = new Set<(session: ProviderLoginSession) => void>();
@@ -105,7 +103,6 @@ export class LoginSessions {
     });
   }
 
-  /** Shows `step` to the client and resolves with what the user submits, or rejects when the login is aborted. */
   public waitForInput(loginSessionId: string, options: WaitForInputOptions): Promise<string> {
     return new Promise((resolve, reject) => {
       this.update(loginSessionId, (state) => {
@@ -124,7 +121,6 @@ export class LoginSessions {
     });
   }
 
-  /** Calls `listener` with every later change of a login until the returned function is called. */
   public onChange(loginSessionId: string, listener: (session: ProviderLoginSession) => void): () => void {
     const filtered = (session: ProviderLoginSession) => {
       if (session.loginSessionId === loginSessionId) listener(session);

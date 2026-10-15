@@ -5,9 +5,8 @@ import type {ResourceLoader} from "@earendil-works/pi-coding-agent";
 import {createPiResourceLoaderOptions} from "@supernova/agent-runtime/pi/config/resource-loader";
 import {loadPiSettings} from "@supernova/agent-runtime/pi/config/settings";
 
-// Ported from Pi's packages/coding-agent/src/core/http-dispatcher.ts.
 const DEFAULT_HTTP_IDLE_TIMEOUT_MS = 300_000;
-// Node's 250ms default can terminate valid connection attempts on high-latency routes.
+/** Node's 250ms default can terminate valid connection attempts on high-latency routes. */
 const DEFAULT_AUTO_SELECT_FAMILY_ATTEMPT_TIMEOUT_MS = 2_000;
 
 const originalGlobalFetch = globalThis.fetch;
@@ -15,8 +14,7 @@ let installedGlobalFetch: typeof globalThis.fetch | undefined;
 
 const ignoreUndiciDispatcherError = (): void => {};
 
-// Undici can emit an internal Client "error" while terminating a mid-stream fetch body. The body stream still rejects
-// through reader.read(); this listener only prevents EventEmitter's unhandled "error" special case from crashing.
+/** Undici can emit an internal "error" while terminating a mid-stream body; this only prevents the unhandled crash. */
 function withUndiciErrorListener<T extends undici.Dispatcher>(dispatcher: T): T {
   if (dispatcher instanceof EventEmitter) EventEmitter.prototype.on.call(dispatcher, "error", ignoreUndiciDispatcherError);
   return dispatcher;
@@ -32,7 +30,6 @@ function createUndiciOriginDispatcher(origin: string | URL, options: object): un
   return withUndiciErrorListener(new undici.Pool(origin, {...dispatcherOptions, factory: createUndiciClient}));
 }
 
-/** Exports `httpProxy` from settings as the proxy environment variables, unless they are already set. */
 function applyHttpProxySettings(httpProxy: string | undefined): void {
   const proxy = httpProxy?.trim();
   if (!proxy) return;
@@ -40,10 +37,7 @@ function applyHttpProxySettings(httpProxy: string | undefined): void {
   process.env.HTTPS_PROXY ??= proxy;
 }
 
-/**
- * Installs Pi's global undici dispatcher: proxy support, idle timeouts, and one undici for fetch. Without it some
- * provider streams end early. The old SDK did this implicitly; call once before any provider request.
- */
+/** Without Pi's dispatcher some provider streams end early. The old SDK did this implicitly. */
 function configureHttpDispatcher(timeoutMs: number = DEFAULT_HTTP_IDLE_TIMEOUT_MS): void {
   if (!Number.isFinite(timeoutMs) || timeoutMs < 0) throw new Error(`Invalid HTTP idle timeout: ${String(timeoutMs)}`);
   const normalizedTimeoutMs = Math.floor(timeoutMs);
@@ -70,19 +64,14 @@ function configureHttpDispatcher(timeoutMs: number = DEFAULT_HTTP_IDLE_TIMEOUT_M
 
 export type PiModel = ReturnType<ModelRuntime["getModels"]>[number];
 
-/** The Pi surface the rest of the runtime uses. Tests substitute a faux `ModelRuntime` and in-memory loaders. */
 export interface PiSdk {
-  /**
-   * Loads a project's resources (extensions, skills, prompt templates, context files) with Supernova's discovery
-   * policy. Providers that extensions register are applied to `modelRuntime`.
-   */
+  /** Providers that extensions register are applied to `modelRuntime`. */
   readonly loadResourceLoader: (input: {readonly projectPath: string}) => Promise<ResourceLoader>;
   readonly modelRuntime: ModelRuntime;
   /** Updates the packages in the global Pi settings, as `pi update --extensions` does. Project packages are not touched. */
   readonly updatePackages: () => Promise<void>;
 }
 
-/** Connects to the real Pi SDK. Configures HTTP and discovers providers and models once; call at startup. */
 export async function createPiSdk(): Promise<PiSdk> {
   const settings = loadPiSettings();
   applyHttpProxySettings(settings.getGlobalSettings().httpProxy);

@@ -69,9 +69,7 @@ function turnToTimelineItems(turn: SessionTurn, live: boolean): SessionTimelineI
 
   flushWork(turn.status === "streaming" && live, turn.completedAt);
 
-  // Once settled, a turn ending on a response folds everything before it behind
-  // one "Worked for" row; a turn ending on work stays flat. Compaction is a
-  // marker and never concludes a turn.
+  // A settled turn ending on a response folds its work behind "Worked for"; one ending on work stays flat.
   const last = items.at(-1);
   if (!last || last.type === "user" || last.type === "compaction") return items;
   const response = last.type === "assistant" && last.event.content.trim().length > 0;
@@ -86,7 +84,6 @@ function turnToTimelineItems(turn: SessionTurn, live: boolean): SessionTimelineI
   ];
 }
 
-/** Builds committed and live timeline item groups from raw session turns. */
 export function buildSessionTimeline(input: BuildSessionTimelineInput): SessionTimelineItems {
   const {live, liveTurn, turns} = input;
 
@@ -96,12 +93,10 @@ export function buildSessionTimeline(input: BuildSessionTimelineInput): SessionT
   };
 }
 
-/** Builds timeline items for persisted turns. Callers can cache this by committed turn array identity. */
 export function buildCommittedTimelineItems(turns: readonly SessionTurn[]): readonly SessionTimelineItem[] {
   return turns.flatMap((turn) => turnToTimelineItems(turn, false));
 }
 
-/** Builds timeline items for the active turn only. */
 export function buildLiveTimelineItems(input: {readonly live: boolean; readonly liveTurn: SessionTurn | null}): readonly SessionTimelineItem[] {
   const {live, liveTurn} = input;
   return liveTurn ? turnToTimelineItems(liveTurn, live) : [];

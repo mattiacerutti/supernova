@@ -10,15 +10,10 @@ export type UpdaterEvent =
 
 export const INITIAL_UPDATE_STATE: DesktopUpdateState = {status: "idle", version: null, downloadPercent: null, message: null};
 
-/** Nightly builds carry a `-nightly.<date>.<run>` prerelease suffix produced by the release workflow. */
 export function isNightlyVersion(version: string): boolean {
   return version.includes("-nightly.");
 }
 
-/**
- * Applies an electron-updater event to the renderer-facing update state.
- * Background checks never demote an in-flight download or a downloaded update.
- */
 export function reduceUpdateState(state: DesktopUpdateState, event: UpdaterEvent): DesktopUpdateState {
   switch (event.type) {
     case "checking":

@@ -17,11 +17,7 @@ interface StreamingFadeTextProps {
 function StreamingFadeText(props: StreamingFadeTextProps) {
   const {children} = props;
 
-  // Split only the recent live-text tail into small keyed spans so CSS can fade
-  // newly mounted chunks without React state. Older text stays in one plain text
-  // node to avoid reconciling an unbounded number of animated spans.
-  // The 160-char window keeps the animated tail to about one short paragraph,
-  // while 8-char chunks keep fades visible without creating too many spans.
+  // Only the recent tail is split into keyed spans so CSS can fade new chunks; older text stays one node.
   const chunkStartIndex = Math.max(0, Math.floor((children.length - 160) / 8) * 8);
   const chunks: Array<{index: number; text: string}> = [];
 
@@ -53,8 +49,7 @@ export default function AssistantMessageContent(props: AssistantMessageContentPr
   const {children, className, fadeNewText = false, mode = "markdown", streaming = false} = props;
 
   if (streaming) {
-    // Trailing newlines are a paragraph break the model has not filled yet;
-    // rendered as pre-wrap text they add a blank line that vanishes on settle.
+    // Trailing newlines would render as a blank line that vanishes on settle.
     const segments = segmentStreamingMessage(children.replace(/\s+$/, ""));
 
     return (

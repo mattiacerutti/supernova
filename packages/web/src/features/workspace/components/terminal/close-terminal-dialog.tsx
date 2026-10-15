@@ -2,7 +2,6 @@ import Button from "@/components/ui/button";
 import Dialog from "@/components/ui/dialog";
 
 interface CloseTerminalDialogProps {
-  /** The terminal's label, such as "Terminal 2". */
   readonly label: string;
   readonly onCancel: () => void;
   readonly onDetach: () => void;
@@ -10,7 +9,6 @@ interface CloseTerminalDialogProps {
   readonly open: boolean;
 }
 
-/** Asks whether closing a running terminal's tab should keep its shell running (detach) or end it (kill); keeping it is the default. */
 export default function CloseTerminalDialog(props: CloseTerminalDialogProps) {
   const {label, onCancel, onDetach, onKill, open} = props;
 

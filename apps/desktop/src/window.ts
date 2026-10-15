@@ -12,7 +12,6 @@ interface CreateWindowOptions {
   readonly iconsDir: string;
 }
 
-/** Creates a hidden window with persisted bounds, native chrome, and restricted navigation. The caller owns loading and closing it. */
 export function createWindow({serverUrl, rendererUrl, iconsDir}: CreateWindowOptions): BrowserWindow {
   const saved = windowState({defaultWidth: 1280, defaultHeight: 800});
   let chrome: BrowserWindowConstructorOptions = {};

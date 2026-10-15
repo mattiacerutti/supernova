@@ -1,6 +1,5 @@
 import {FILE_TREE_ROW_HEIGHT_PX, FILE_TREE_ROW_INDENT_PX} from "@/features/workspace/components/file-tree/file-tree-row";
 
-/** [depth, label width class] for a plausible little tree: two folders with children, then loose files. */
 const ROWS: readonly (readonly [depth: number, width: string])[] = [
   [0, "w-16"],
   [1, "w-24"],

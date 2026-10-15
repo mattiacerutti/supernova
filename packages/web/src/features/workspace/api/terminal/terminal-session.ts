@@ -6,48 +6,36 @@ import {unwrap} from "@/runtime/runtime-result";
 import type {RuntimeClient} from "@/runtime/transport/runtime-client";
 import {useRuntime} from "@/runtime/use-runtime";
 
-export interface AttachTerminalInput {
+interface AttachTerminalInput {
   readonly cols: number;
-  /** Where a new shell starts: the session's worktree or project. */
   readonly cwd: string;
   readonly id: string;
   readonly rows: number;
   readonly sessionId: string;
-  /** Start the shell first; false for a terminal the server already runs, which then only reattaches. */
   readonly start: boolean;
   readonly onChange: (change: TerminalChange) => void;
-  /** Called once the server runs the shell, with its listing; only for a start. */
   readonly onStarted?: (terminal: Terminal) => void;
 }
 
-/** What changed in one terminal since the attached client last saw it. */
-export type TerminalChange =
-  /** Everything kept so far, on attach or when the client fell behind the scrollback cap. */
+type TerminalChange =
   | {readonly type: "terminal.history"; readonly data: string}
   | {readonly type: "terminal.output"; readonly data: string}
   | {readonly type: "terminal.exited"; readonly exitCode: number}
-  /** The terminal was closed, or no longer exists (another client killed it, the server restarted). Nothing follows. */
   | {readonly type: "terminal.closed"}
   | {readonly type: "terminal.error"; readonly message: string};
 
-/** A tab's connection to one server terminal: send input, claim its size, and detach without ending the shell. */
-export interface TerminalSession {
+interface TerminalSession {
   readonly resize: (cols: number, rows: number) => void;
   readonly write: (data: string) => void;
   readonly detach: () => void;
 }
 
-/**
- * Turns one terminal's successive output values into what to draw. Output is the terminal's capped history plus a
- * count of what the cap dropped, so the client knows the absolute position it has drawn up to and appends only what
- * follows; if the cap dropped past it, it redraws from the history.
- */
+/** `dropped` gives the absolute position: append what follows what was drawn, or redraw if the cap passed it. */
 function follow(onChange: (change: TerminalChange) => void): (output: TerminalOutput | undefined) => void {
   let drawnTo: number | undefined;
   let exited = false;
   let closed = false;
   return (output) => {
-    // Nothing until the value arrives; closed is final.
     if (!output || closed) return;
     const end = output.dropped + output.output.length;
     if (drawnTo === undefined || drawnTo < output.dropped) onChange({type: "terminal.history", data: output.output});
@@ -66,10 +54,6 @@ function follow(onChange: (change: TerminalChange) => void): (output: TerminalOu
 
 const errorMessage = (cause: unknown, fallback: string): string => (cause instanceof Error && cause.message ? cause.message : fallback);
 
-/**
- * Starts or reattaches a terminal, then holds it for as long as the tab shows it: only a held, subscribed terminal's
- * output reaches this client. Attaching claims the shell's size; whoever resizes last sets it.
- */
 function attachTerminal(runtime: RuntimeClient, input: AttachTerminalInput): TerminalSession {
   const {id, onChange} = input;
   let detached = false;
@@ -122,13 +106,11 @@ function attachTerminal(runtime: RuntimeClient, input: AttachTerminalInput): Ter
   };
 }
 
-/** Attaches to a server terminal. Call the returned function from a mount effect and `detach` on cleanup. */
 export function useAttachTerminal(): (input: AttachTerminalInput) => TerminalSession {
   const runtime = useRuntime();
   return (input) => attachTerminal(runtime, input);
 }
 
-/** Kills a terminal by id; closing an unknown one is not an error. */
 export function useCloseTerminal(): (id: string) => void {
   const runtime = useRuntime();
   return (id) => void runtime.workspace.closeTerminal({id}).catch(() => undefined);
@@ -145,10 +127,6 @@ function subscriberOf(readable: Readable<unknown>): (onChange: () => void) => ()
   return subscribe;
 }
 
-/**
- * The server's terminals, without output, for as long as the calling component is mounted: the list reaches this
- * client only while something subscribes. `undefined` until it arrives.
- */
 export function useServerTerminals(): TerminalsState | undefined {
   const {terminals} = useRuntime().workspace;
   return useSyncExternalStore(subscriberOf(terminals), () => terminals.value);

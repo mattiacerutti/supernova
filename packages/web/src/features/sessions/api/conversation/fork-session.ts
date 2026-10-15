@@ -16,7 +16,6 @@ export function useForkSession() {
   return useMutation({
     mutationFn: (input: ForkSessionInput) => unwrap(services.sessions.fork(input)),
     onSuccess: async (session) => {
-      // The fork opens next; its document is already known.
       useSessionsStore.getState().setDocument(session);
       await queryClient.invalidateQueries({queryKey: sessionKeys.list(session.projectPath)});
     },

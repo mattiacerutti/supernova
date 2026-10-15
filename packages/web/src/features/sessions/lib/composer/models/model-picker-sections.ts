@@ -2,7 +2,7 @@ import type {ModelDetails} from "@supernova/contracts/services/sessions/schemas"
 import {matchSorter} from "match-sorter";
 import {modelKey} from "@/features/sessions/lib/composer/models/model-reference";
 
-export interface ModelPickerSection {
+interface ModelPickerSection {
   readonly models: readonly ModelDetails[];
   readonly title: string;
 }
@@ -57,7 +57,6 @@ function groupByProvider(models: readonly ModelDetails[]): ModelPickerSection[] 
   return Array.from(sections.entries()).map(([title, sectionModels]) => ({models: sectionModels, title}));
 }
 
-/** Builds searchable model picker sections with favorites and recents pinned first. */
 export function getModelPickerSections(input: {
   readonly favoriteModelKeys: readonly string[];
   readonly models: readonly ModelDetails[];

@@ -13,14 +13,12 @@ export interface ExpansionOptions {
   readonly count: number;
   readonly firstIndex: number;
   readonly heightPx: number;
-  /** Commits the row removal once the collapse has animated. */
   readonly onCollapsed?: () => void;
   readonly phase: "collapse" | "expand";
   readonly topPx: number;
 }
 
 interface Expansion extends ExpansionOptions {
-  /** Group height, capped at what fits on screen. */
   readonly slidePx: number;
   readonly started: boolean;
 }
@@ -35,9 +33,8 @@ interface ExpandableVirtualListProps {
 }
 
 /**
- * Virtualized rows are absolutely positioned, so no container can animate its own height.
- * Instead the group is clipped into a block whose height animates while the rows after it
- * slide by the same distance. Collapses animate first; the caller removes rows in `onCollapsed`.
+ * Absolutely positioned rows cannot animate height, so the group is clipped and later rows slide by the same distance.
+ * Collapses animate first; the caller removes rows in `onCollapsed`.
  */
 export default function ExpandableVirtualList(props: ExpandableVirtualListProps) {
   const {estimateSize, getKey, label, renderRow, role, rowCount} = props;

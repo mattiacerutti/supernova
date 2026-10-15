@@ -1,4 +1,3 @@
-/** Query keys for workspace data. Everything sits under the project so a finished agent turn can invalidate the whole project at once. */
 export const workspaceKeys = {
   all: ["workspace"] as const,
   project: (projectPath: string) => [...workspaceKeys.all, projectPath] as const,

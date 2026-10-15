@@ -71,22 +71,14 @@ import {errorMessage} from "@supernova/agent-runtime/lib/errors";
 import type {AgentRuntime} from "@supernova/agent-runtime/runtime";
 import {archiveSession, createSession, pinSession} from "@supernova/agent-runtime/session-operations";
 
-/**
- * How one service method runs: its payload schema, the feature call, and its contract error value (a class, or an
- * `errorUnion` named next to the payload). Payloads cross a trust boundary, so each is parsed. The method's result
- * type comes from `error`, and the provider must satisfy the contract with it.
- */
+/** Payloads cross a trust boundary, so each is parsed. `error` types the method's result. */
 interface Operation<P extends z.ZodType, R, E extends ErrorValue> {
   readonly payload: P;
   readonly run: (payload: z.infer<P>) => R | Promise<R>;
   readonly error?: E;
 }
 
-/**
- * Runs a service call and returns its outcome as a `ServiceResult`. Chord carries only its own error codes, so a
- * declared contract error travels as data with its tag, and the client branches on it. Anything else (a bug, an
- * unexpected I/O failure, an invalid request) becomes a `GenericError` with the cause's message.
- */
+/** Chord carries only its own error codes, so a declared error travels as data; everything else is a `GenericError`. */
 async function run<P extends z.ZodType, R, E extends ErrorValue = never>(operation: Operation<P, R, E>, input: unknown): Promise<ServiceResult<R, ErrorOf<E>>> {
   // Clients see only the code and message; the cause (file paths, stack) stays in the server log.
   const fail = (error: TaggedErrorInstance) => {
@@ -106,24 +98,16 @@ async function run<P extends z.ZodType, R, E extends ErrorValue = never>(operati
   }
 }
 
-/** A service method for `operation`. */
 function method<P extends z.ZodType, R, E extends ErrorValue = never>(operation: Operation<P, R, E>): (payload: z.infer<P>) => Promise<ServiceResult<R, ErrorOf<E>>> {
   return (payload) => run(operation, payload);
 }
 
-/** A service method without a payload; clients pass `null`. */
 function action<R, E extends ErrorValue = never>(operation: Omit<Operation<z.ZodNull, R, E>, "payload">): (payload: null) => Promise<ServiceResult<R, ErrorOf<E>>> {
   const nullPayload = {safeParse: () => ({success: true, data: null})} as unknown as z.ZodNull;
   return (payload) => run({...operation, payload: nullPayload}, payload);
 }
 
-/**
- * Serves the runtime's features on a Chord host, one remote object per service (`ConfigurationService`, …), so
- * clients reach them over a link. Every service but session runtime and terminal is one object all clients share;
- * `SessionRuntimeService` is one per session and `TerminalService` one per terminal, and holding an unknown session
- * or terminal fails. The features own their state,
- * which outlives every client: a service copies it into a cell with a listener and serves the cell.
- */
+/** Features own their state, which outlives every client; a service copies it into a cell and serves the cell. */
 export function serveRuntime(host: Pick<Host, "serve">, runtime: AgentRuntime): void {
   const {configuration, extensions, folders, projects, providers, sessionRuntime, sessions, workspace} = runtime;
 
@@ -179,7 +163,6 @@ export function serveRuntime(host: Pick<Host, "serve">, runtime: AgentRuntime): 
   });
 
   host.serve(WorkspaceService, (_input, _principal, self) => {
-    // The terminals feature owns every shell, so a shell outlives its client; this cell follows the list of them.
     // Output is not here: each terminal's is its own `TerminalService`, sent only to clients showing it.
     const state = self.state({terminals: cell(json<TerminalsState>(), workspace.terminals.value)});
     self.listen({terminals: listener(workspace.terminals, (terminals, ctx) => state.terminals.replace(ctx, terminals, {diff: true}))});
@@ -198,9 +181,7 @@ export function serveRuntime(host: Pick<Host, "serve">, runtime: AgentRuntime): 
   });
 
   host.serve(TerminalService, ({terminalId}, _principal, self) => {
-    // The terminal's output activates the object; an unknown or closed terminal fails the hold. The shell outlives
-    // the object, which only follows its output: releasing it never ends the shell. The input names the terminal, so
-    // payloads leave out its id.
+    // Holding an unknown or closed terminal fails. Releasing never ends the shell.
     const res = self.resources({output: resource({rev: 1, open: () => workspace.terminalOutput(terminalId)})});
     // A placeholder until the terminal's first value, delivered as the object goes live and before any call.
     const state = self.state({output: cell(json<TerminalOutput>(), {output: "", dropped: 0})});
@@ -228,8 +209,7 @@ export function serveRuntime(host: Pick<Host, "serve">, runtime: AgentRuntime): 
   });
 
   host.serve(SessionsService, (_input, _principal, self) => {
-    // Session runtime's board owns the directory, written as sessions run; this cell follows it. Served here because
-    // clients read it before following any session.
+    // Served here, not on session runtime, because a client reads it before following any session.
     const state = self.state({directory: cell(json<SessionDirectoryState>(), sessionRuntime.board.state.value)});
     self.listen({directory: listener(sessionRuntime.board.state, (directory, ctx) => state.directory.replace(ctx, directory, {diff: true}))});
     return {
@@ -245,9 +225,7 @@ export function serveRuntime(host: Pick<Host, "serve">, runtime: AgentRuntime): 
   });
 
   host.serve(SessionRuntimeService, ({sessionId}, _principal, self) => {
-    // Opening the session's worker activates the object; an unknown session fails the hold. The worker outlives the
-    // object, which follows its document: releasing it never stops the session's work. The input names the session,
-    // so payloads leave out its id.
+    // Holding an unknown session fails. Releasing never stops the session's work.
     const res = self.resources({
       document: resource({
         rev: 1,

@@ -10,7 +10,6 @@ import type {
 } from "@supernova/contracts/services/folders/procedures";
 import {json, result, SERVER_WIDE} from "@supernova/contracts/lib/protocol";
 
-/** Folders on the server's machine: browsing for projects and mentioning files. */
 export const FoldersService = remote("supernova.folders", {
   version: 1,
   input: SERVER_WIDE,

@@ -3,7 +3,6 @@ import TurndownService from "turndown";
 
 const skippedTextTags = new Set(["script", "style", "noscript", "iframe", "object", "embed"]);
 
-/** Extracts visible text from HTML while ignoring active and embedded content. */
 export function extractTextFromHtml(html: string): string {
   let text = "";
   let skipDepth = 0;
@@ -32,7 +31,6 @@ export function extractTextFromHtml(html: string): string {
   return text.trim();
 }
 
-/** Converts HTML to model-friendly markdown and removes non-content document metadata. */
 export function convertHtmlToMarkdown(html: string): string {
   const turndown = new TurndownService({
     bulletListMarker: "-",

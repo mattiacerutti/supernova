@@ -21,7 +21,6 @@ interface PickerTriggerProps {
   readonly triggerProps?: Record<string, unknown>;
 }
 
-/** The small pill both pickers use; static when it only reports a locked-in choice. */
 function PickerTrigger(props: PickerTriggerProps) {
   const {children, disabled, icon, interactive = true, triggerProps} = props;
 
@@ -49,7 +48,6 @@ interface BranchPickerProps {
   readonly selected: string;
 }
 
-/** Picks the base ref of a new worktree. */
 function BranchPicker(props: BranchPickerProps) {
   const {branches, current, disabled, onSelect, projectPath, selected} = props;
   const [open, setOpen] = useState(false);
@@ -113,20 +111,14 @@ function BranchPicker(props: BranchPickerProps) {
   );
 }
 
-/** Placeholder pill for the picker while the server has not told us where the session runs yet. */
 export function WorkspacePickerSkeleton() {
   return <span aria-hidden="true" className="h-5 w-32 animate-pulse rounded-xl corner-superellipse/1.3 bg-overlay-pressed" />;
 }
 
 interface WorkspacePickerProps {
-  /** Set for an existing session; the choice is then shown, not changed. */
   readonly worktreeBranch?: string;
 }
 
-/**
- * Where a new session runs: the project's checkout, or a fresh worktree off a chosen branch. Hidden for
- * projects that are not Git repositories. For an existing worktree session it shows the branch only.
- */
 export default function WorkspacePicker(props: WorkspacePickerProps) {
   const {worktreeBranch} = props;
   const {disabled, draft, projectPath} = useComposerContext();

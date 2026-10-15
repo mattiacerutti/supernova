@@ -7,21 +7,17 @@ const TITLE_TRANSITION = {duration: 0.18, ease: "easeOut"} as const;
 const DOCK_TRANSITION = {type: "spring", visualDuration: 0.2, bounce: 0} as const;
 const TIMELINE_ENTER_TRANSITION = {delay: 0.08, duration: 0.25, ease: "easeOut"} as const;
 
-// The title clears the window controls and titlebar buttons, which differ per host.
+/** The title clears the window controls and titlebar buttons, which differ per host. */
 const TITLE_OFFSET = {mac: "left-48", web: "left-12", windows: "left-29", linux: "left-29"}[appEnvironment];
 
 type DropZoneProps = Pick<HTMLAttributes<HTMLDivElement>, "onDragEnter" | "onDragLeave" | "onDragOver" | "onDrop">;
 
 interface SessionLayoutProps extends DropZoneProps {
-  /** Main column: header, then timeline, then composer. */
   readonly children: ReactNode;
-  /** Rendered beside the main column, typically the workspace panel. */
   readonly aside?: ReactNode;
-  /** Rendered over the whole layout, above the header. */
   readonly overlay?: ReactNode;
 }
 
-/** Frame of the session screen: a main column with a fixed-height header row, plus optional aside and overlay slots. */
 export default function SessionLayout(props: SessionLayoutProps) {
   const {aside, children, overlay, ...dropZoneProps} = props;
 
@@ -39,11 +35,9 @@ export default function SessionLayout(props: SessionLayoutProps) {
 
 interface SessionHeaderProps {
   readonly children?: ReactNode;
-  /** Rendered right after the title and animated with it. */
   readonly actions?: ReactNode;
 }
 
-/** Title row. Slot children with the title; `actions` follow it. */
 export function SessionHeader(props: SessionHeaderProps) {
   const {actions, children} = props;
 
@@ -67,12 +61,10 @@ export function SessionHeader(props: SessionHeaderProps) {
 
 interface SessionBodyProps {
   readonly composer: ReactNode;
-  /** Shown above a centered composer before the session exists. Removing it docks the composer at the bottom. */
   readonly hero?: ReactNode;
   readonly timeline?: ReactNode;
 }
 
-/** Timeline and composer. With a hero the composer sits centered under it; without one it docks below the timeline, animating the same element. */
 export function SessionBody(props: SessionBodyProps) {
   const {composer, hero, timeline} = props;
   const reduceMotion = useReducedMotion();
@@ -101,7 +93,6 @@ interface SessionViewActionsProps {
   readonly children: ReactNode;
 }
 
-/** Top-right controls. Raised above the titlebar drag region so they stay clickable, and inset to clear native window controls. */
 export function SessionViewActions(props: SessionViewActionsProps) {
   const {children} = props;
 

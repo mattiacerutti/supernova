@@ -5,7 +5,6 @@ const unreleasedTemplate = ["## [Unreleased]", "", "### Breaking Changes", "", "
 
 function promoteChangelogEntries(version: string): void {
   const changelog = readFileSync(changelogPath, "utf8");
-  // Release jobs can be retried after metadata is already prepared.
   if (changelog.includes(`## [${version}]`)) {
     return;
   }
@@ -18,8 +17,6 @@ function promoteChangelogEntries(version: string): void {
 
   const beforeUnreleased = changelog.slice(0, unreleased.start).trimEnd();
   const afterUnreleased = changelog.slice(unreleased.end).trimStart();
-  // Reset Unreleased for the next cycle and append the current notes as the
-  // version section consumed by the GitHub Release body.
   const sections = [beforeUnreleased, unreleasedTemplate, `## [${version}]\n\n${releaseNotes}`];
 
   if (afterUnreleased !== "") {
@@ -32,8 +29,6 @@ function promoteChangelogEntries(version: string): void {
 const version = readReleaseVersion();
 updatePackageVersions(version);
 
-// Nightly builds only align package versions: the changelog stays unreleased
-// and becomes the nightly release notes.
 if (process.env.RELEASE_CHANNEL !== "nightly") {
   promoteChangelogEntries(version);
 }

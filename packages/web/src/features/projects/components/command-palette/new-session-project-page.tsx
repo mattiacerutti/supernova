@@ -8,11 +8,9 @@ import type {Project} from "@/features/projects/types/project";
 
 interface NewSessionProjectPageProps {
   readonly onBack: () => void;
-  /** Called once a project is chosen, before navigating to its new session. */
   readonly onClose: () => void;
 }
 
-/** The palette page that picks the project a new session starts in. */
 export default function NewSessionProjectPage(props: NewSessionProjectPageProps) {
   const {onBack, onClose} = props;
   const [query, setQuery] = useState("");

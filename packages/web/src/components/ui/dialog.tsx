@@ -18,8 +18,7 @@ interface DialogProps {
 export default function Dialog(props: DialogProps) {
   const {children, className, containerClassName, hideHeader = false, onOpenChange, onOpenChangeComplete, open, title} = props;
 
-  // The dialog is portaled, but React events still bubble through the tree that rendered it. A dialog opened from a
-  // clickable row (a sidebar session) must not activate that row when the user clicks inside it.
+  // React events bubble through the portal; a dialog opened from a clickable row must not activate the row.
   const stopPropagation = (event: MouseEvent): void => {
     event.stopPropagation();
   };

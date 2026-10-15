@@ -40,7 +40,6 @@ interface SortableProjectListProps {
   readonly onToggleProject: (projectId: string) => void;
 }
 
-/** Project list where items can be drag-reordered within their own section. */
 export default function SortableProjectList(props: SortableProjectListProps) {
   const {activeSessionId, className, expandedProjectIds, onToggleProject, projects} = props;
 

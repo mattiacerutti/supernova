@@ -6,7 +6,7 @@ import ProvidersSection from "@/features/settings/pages/providers-section";
 
 export type SettingsSectionId = "appearance" | "general" | "providers";
 
-export interface SettingsSection {
+interface SettingsSection {
   Component: ComponentType;
   icon: IconName;
   id: SettingsSectionId;
@@ -36,7 +36,6 @@ export const settingsSections: readonly SettingsSection[] = [
 
 export const defaultSettingsSectionId: SettingsSectionId = "general";
 
-/** Returns the section for the given id. Throws for unknown ids. */
 export function getSettingsSection(sectionId: string): SettingsSection {
   const section = settingsSections.find((candidate) => candidate.id === sectionId);
   if (!section) throw new Error(`Unknown settings section: ${sectionId}`);

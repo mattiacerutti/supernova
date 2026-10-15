@@ -16,7 +16,6 @@ interface OpenInTarget {
   readonly icon: IconName;
 }
 
-/** Electron prefixes errors from the main process with the channel name; the user only needs the reason after it. */
 function errorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   return message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, "");
@@ -26,18 +25,15 @@ interface OpenSessionInPageProps {
   readonly desktopApi: DesktopApi;
   readonly onBack: () => void;
   readonly onClose: () => void;
-  /** The directory to open, on this machine. */
   readonly path: string;
 }
 
-/** The palette page that opens a session's directory in an installed editor or the file manager. */
 export default function OpenSessionInPage(props: OpenSessionInPageProps) {
   const {desktopApi, onBack, onClose, path} = props;
   const [query, setQuery] = useState("");
   const editors = useInstalledEditors();
 
-  // The file manager joins the editors once they load, so the list does not reorder under the highlight. A failed
-  // lookup still offers the file manager rather than an empty page.
+  // The file manager joins once editors load so the list never reorders under the highlight.
   const installed = editors.isError ? [] : editors.data;
   const targets: OpenInTarget[] = installed
     ? [...installed.map((editor) => ({...editor, icon: "code" as const})), {id: "file-manager", label: FILE_MANAGER_NAME, icon: "folder-open"}]

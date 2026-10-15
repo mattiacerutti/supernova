@@ -8,14 +8,9 @@ const startedFormatter = new Intl.DateTimeFormat(undefined, {hour: "2-digit", mi
 
 interface AttachTerminalItemsProps {
   readonly sessionId: string;
-  /** This window's tabs for the session; their terminals are already open here and not offered. */
   readonly tabs: readonly WorkspacePanelTab[];
 }
 
-/**
- * The session's shells this window does not show, for the + menu: running ones from other windows, or ones this
- * window detached. Rendered only while the menu is open, so the server's list reaches this client only then.
- */
 export default function AttachTerminalItems(props: AttachTerminalItemsProps) {
   const {sessionId, tabs} = props;
   const serverTerminals = useServerTerminals();

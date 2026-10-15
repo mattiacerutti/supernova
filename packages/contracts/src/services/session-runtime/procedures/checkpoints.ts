@@ -2,9 +2,8 @@ import {z} from "zod";
 import type {ErrorOf} from "@supernova/contracts/lib/errors";
 import {errorUnion, TaggedError} from "@supernova/contracts/lib/errors";
 
-/** Shared fields for every checkpoint navigation command. */
 const CheckpointNavigationFields = {
-  /** Allows discarding conflicting or uncaptured workspace changes. */
+  // Allows discarding conflicting or uncaptured workspace changes.
   force: z.boolean().optional(),
   sessionId: z.string(),
 };

@@ -5,8 +5,7 @@ import {summarizeWork} from "@/features/sessions/lib/timeline/work/work-summary"
 import type {WorkSessionTimelineItem} from "@/features/sessions/types/session-timeline-item";
 import {cn} from "@/lib/cn";
 
-// Arrival cadence: the first row of a new group waits for the header, later
-// rows in the same batch stagger so a burst reads as a continuous log.
+/** The first row waits for the header; later rows in a batch stagger so a burst reads as a log. */
 const FIRST_ROW_DELAY_MS = 90;
 const ROW_STAGGER_MS = 65;
 
@@ -18,9 +17,7 @@ export default function AssistantWork(props: AssistantWorkProps) {
   const {item} = props;
   const [expanded, setExpanded] = useState<boolean | undefined>(undefined);
 
-  // Rows present at mount never animate (history, remounts while scrolling);
-  // only rows appended while this group is live reveal themselves. A live
-  // group that mounts empty animates its header along with its first row.
+  // Rows present at mount never animate; only rows appended while the group is live reveal themselves.
   const [initialCount] = useState(() => (item.live ? 0 : item.events.length));
   const [revealed, setRevealed] = useState<{batchStart: number; count: number}>({batchStart: initialCount, count: initialCount});
   if (revealed.count !== item.events.length) setRevealed({batchStart: Math.min(revealed.count, item.events.length), count: item.events.length});

@@ -19,7 +19,6 @@ declare const SUPERNOVA_SERVER_ENTRY: string;
 declare const SUPERNOVA_WEB_DIR: string;
 
 const APP_URL = "supernova://app";
-// Development ports match the server's default port and packages/web/vite.config.ts.
 const DEV_SERVER_URL = "http://127.0.0.1:4317";
 const DEV_WEB_URL = "http://127.0.0.1:48371";
 const ICONS_DIR = app.isPackaged ? join(process.resourcesPath, "icons") : join(__dirname, "../../resources/icons");
@@ -60,15 +59,13 @@ function registerDesktopIpc(): void {
   ipcMain.handle(DESKTOP_IPC_CHANNELS.installUpdate, async () => {
     if (quitting || updater.getState().status !== "downloaded") return;
 
-    // Stop the bundled API before handing control to the installer so quitAndInstall
-    // does not race the before-quit shutdown sequence.
+    // Stop the API first so quitAndInstall does not race the before-quit shutdown.
     quitting = true;
     await server?.close().catch(() => undefined);
     updater.quitAndInstall();
   });
 }
 
-/** Keeps a single window alive and propagates renderer startup failures to the app lifecycle. */
 async function openWindow(): Promise<void> {
   if (mainWindow || quitting) return;
 

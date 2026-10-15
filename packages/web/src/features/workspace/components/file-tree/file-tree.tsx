@@ -5,7 +5,6 @@ import FileTreeRow, {FILE_TREE_ROW_HEIGHT_PX} from "@/features/workspace/compone
 import type {FileTreeRowData} from "@/features/workspace/components/file-tree/file-tree-row";
 import type {FileTreeNode} from "@/features/workspace/lib/file-tree";
 
-/** Visible rows; only expanded branches are walked. */
 function flattenTree(nodes: readonly FileTreeNode[], isExpanded: (node: FileTreeNode) => boolean, depth = 0): readonly FileTreeRowData[] {
   return nodes.flatMap((node) => {
     const expandable = node.children.length > 0;
@@ -15,14 +14,12 @@ function flattenTree(nodes: readonly FileTreeNode[], isExpanded: (node: FileTree
   });
 }
 
-/** Rows a directory would reveal, so an expansion can be sized before the rows exist. */
 function countVisibleDescendants(node: FileTreeNode, isExpanded: (node: FileTreeNode) => boolean): number {
   return node.children.reduce((total, child) => total + 1 + (child.children.length > 0 && isExpanded(child) ? countVisibleDescendants(child, isExpanded) : 0), 0);
 }
 
 interface FileTreeProps {
   readonly emptyLabel: string;
-  /** Flips what `toggledPaths` tracks: closed directories instead of opened ones. */
   readonly expandedByDefault?: boolean;
   readonly label: string;
   readonly nodes: readonly FileTreeNode[];

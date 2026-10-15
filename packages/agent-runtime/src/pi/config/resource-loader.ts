@@ -4,7 +4,6 @@ import {resolve} from "node:path";
 import {DefaultResourceLoader, getAgentDir} from "@earendil-works/pi-coding-agent";
 import {loadPiSettings} from "@supernova/agent-runtime/pi/config/settings";
 
-/** Shares Supernova's discovery rules between session loaders and provider discovery. */
 export function createPiResourceLoaderOptions(projectPath: string): ConstructorParameters<typeof DefaultResourceLoader>[0] {
   return {
     agentDir: getAgentDir(),
@@ -32,7 +31,6 @@ export function createPiResourceLoaderOptions(projectPath: string): ConstructorP
   };
 }
 
-/** Uses Pi's extension, package, and skill discovery while leaving themes and prompt templates disabled. */
 export class CustomPiResourceLoader extends DefaultResourceLoader {
   constructor(projectPath: string) {
     super(createPiResourceLoaderOptions(projectPath));

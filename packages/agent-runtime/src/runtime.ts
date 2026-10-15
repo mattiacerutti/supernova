@@ -18,7 +18,6 @@ import {createResourceCache} from "@supernova/agent-runtime/pi/resource-cache";
 import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";
 import {createPiSdk} from "@supernova/agent-runtime/pi/sdk";
 
-/** Every feature, constructed once with its dependencies. */
 export interface AgentRuntime {
   readonly configuration: Configuration;
   readonly extensions: Extensions;
@@ -33,17 +32,12 @@ export interface AgentRuntime {
 }
 
 interface CreateAgentRuntimeOptions {
-  /** Defaults to the real Pi SDK; tests pass an in-memory one. */
   readonly sdk?: PiSdk;
-  /** Where durable session files and their index live; defaults to `<agentDir>/sessions`. */
   readonly sessionStorageRoot?: string;
-  /** Where checkpoint manifests and shadow repositories live. */
   readonly checkpointStorageRoot?: string;
-  /** Where session worktrees are created. */
   readonly worktreeStorageRoot?: string;
 }
 
-/** Wires the Pi SDK, stateful components, and features. Call `dispose()` on shutdown. */
 export async function createAgentRuntime(options: CreateAgentRuntimeOptions = {}): Promise<AgentRuntime> {
   const sdk = options.sdk ?? (await createPiSdk());
 

@@ -8,13 +8,11 @@ export interface ExtensionsDeps {
   readonly sdk: Pick<PiSdk, "updatePackages">;
 }
 
-/** Pi packages (extensions, skills, prompts) installed from npm or git. */
 export class Extensions {
   private pendingUpdate: Promise<void> | undefined;
 
   public constructor(private readonly deps: ExtensionsDeps) {}
 
-  /** Updates global packages. Concurrent callers share one run so two npm installs never race in the same directory. */
   public update(): Promise<void> {
     this.pendingUpdate ??= this.runUpdate().finally(() => {
       this.pendingUpdate = undefined;

@@ -42,7 +42,6 @@ function withImages(contentParts: readonly UserMessageContentPart[], message: Pi
   });
 }
 
-/** Collects the events of one turn. Event ids are positions in the turn, so a partial and its entry share them. */
 class TurnDraft {
   private readonly events: SessionTurnEvent[] = [];
   private readonly toolIndexes = new Map<string, number>();
@@ -50,7 +49,6 @@ class TurnDraft {
 
   public constructor(private readonly userMessage: SessionUserMessage) {}
 
-  /** Appends reasoning, text, tool calls, and an assistant error. `incompleteLastCall` hides streaming arguments. */
   public addAssistant(message: AssistantMessage, incompleteLastCall = false): void {
     const timestamp = isoTimestamp(message.timestamp);
     const error = message.stopReason === "aborted" ? undefined : message.errorMessage;
@@ -77,7 +75,6 @@ class TurnDraft {
     }
   }
 
-  /** Completes the call's event, or appends an orphan result. */
   public addToolResult(message: ToolResultMessage): void {
     const timestamp = isoTimestamp(message.timestamp);
     const status = message.isError ? "error" : "completed";
@@ -91,14 +88,12 @@ class TurnDraft {
     this.events[index!] = {...call, durationMs: Date.parse(timestamp) - Date.parse(call.timestamp), tool: {...call.tool, status, result: message}};
   }
 
-  /** Shows what a running call has streamed. */
   public addToolOutput(callId: string, output: string): void {
     const index = this.toolIndexes.get(callId);
     const call = index === undefined ? undefined : this.events[index];
     if (call?.type === "tool" && call.tool.status === "pending") this.events[index!] = {...call, tool: {...call.tool, output}};
   }
 
-  /** A summary, or a compaction still running when `summary` is undefined. */
   public addCompaction(timestamp: string, summary: string | undefined): void {
     this.push(summary === undefined ? {type: "compaction", status: "pending", timestamp} : {type: "compaction", status: "completed", summary, timestamp});
   }
@@ -121,7 +116,6 @@ class TurnDraft {
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 
-/** The live presentation Pi streams for the turn being answered: running tool output, compactions, the partial. */
 function addLive(draft: TurnDraft, live: LiveState): void {
   for (const slot of live.tools ?? []) {
     if (slot.status === "running" && slot.output !== undefined) draft.addToolOutput(slot.callId, slot.output);
@@ -136,15 +130,10 @@ function addLive(draft: TurnDraft, live: LiveState): void {
 
 interface BuildTurnsInput {
   readonly entries: readonly SessionEntry[];
-  /** Set for the turn being answered: its live presentation follows its entries and it is streaming. */
   readonly live?: LiveState;
 }
 
-/**
- * Projects session entries onto turns. A user entry with authored content starts a turn; one without (an extension's
- * continuation) is not shown, and what follows it folds into the current turn. Entries before the first turn have no
- * turn, except compactions, which open the next one.
- */
+/** A user entry without authored content (an extension's continuation) folds into the current turn. */
 export function buildTurns(input: BuildTurnsInput): SessionTurn[] {
   const {entries, live} = input;
   const result: SessionTurn[] = [];
@@ -173,7 +162,6 @@ export function buildTurns(input: BuildTurnsInput): SessionTurn[] {
   return result;
 }
 
-/** The session's committed turns, and the turn its active run is answering: entries from the run's first user entry on. */
 export function buildSessionTurns(session: Pick<Session, "entries" | "live" | "runStart">): {readonly turns: SessionTurn[]; readonly liveTurn: SessionTurn | undefined} {
   const {live, runStart} = session;
   const entries = session.entries.items;

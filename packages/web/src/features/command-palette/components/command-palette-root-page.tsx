@@ -11,17 +11,14 @@ import {formatRelativeTime} from "@/lib/format-relative-time";
 
 type RootRow = Exclude<CommandPaletteRow, {type: "header"}>;
 
-/** How long typing pauses before sessions are searched again; actions filter on every keystroke. */
 const SESSION_SEARCH_DELAY_MS = 150;
 
 interface CommandPaletteRootPageProps {
   readonly actions: readonly CommandPaletteAction[];
   readonly onOpenSession: (session: CommandPaletteSession) => void;
-  /** The sessions matching `query`, newest first. Called with the query once typing pauses. */
   readonly useSessionSearch: (query: string) => CommandPaletteSessionSearch;
 }
 
-/** The palette's first page: actions to run and the sessions to jump to, searched together. */
 export default function CommandPaletteRootPage(props: CommandPaletteRootPageProps) {
   const {actions, onOpenSession, useSessionSearch} = props;
   const [query, setQuery] = useState("");

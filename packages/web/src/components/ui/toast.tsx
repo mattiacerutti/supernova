@@ -29,32 +29,25 @@ function ToastItem(props: ToastItemProps) {
         "w-full rounded-2xl corner-superellipse/1.3 border border-border bg-surface-drawer p-3 shadow-2xl shadow-black/35",
         "select-text",
 
-        // Stack tuning
         "[--expanded-offset-y:calc(var(--toast-offset-y)*-1+(var(--toast-index)*var(--expanded-gap)*-1)+var(--toast-swipe-movement-y))]",
         "[--peek:0.75rem]",
         "[--expanded-gap:0.5rem]",
         "[--scale:calc(max(0.85,1-(var(--toast-index)*0.06)))]",
 
-        // Collapsed stack position
         "origin-bottom",
         "transform-[translateX(var(--toast-swipe-movement-x))_translateY(calc(var(--toast-swipe-movement-y)-(var(--toast-index)*var(--peek))))_scale(var(--scale))]",
 
-        // Expanded stack position
         "data-expanded:transform-[translateX(var(--toast-swipe-movement-x))_translateY(var(--expanded-offset-y))_scale(1)]",
         "after:absolute after:inset-x-0 after:top-full after:h-[calc(var(--expanded-gap)+1px)] after:content-['']",
 
-        // Enter animation
         "data-starting-style:transform-[translateY(150%)_scale(1)]",
         "data-starting-style:opacity-0",
 
-        // Normal exit animation
         "data-ending-style:opacity-0",
         "[&[data-ending-style]:not([data-swipe-direction])]:transform-[translateY(150%)_scale(1)]",
 
-        // Hide limited toasts
         "data-limited:opacity-0",
 
-        // Animation
         "transition-[transform,opacity] duration-300 ease-out"
       )}
       toast={toast}
@@ -107,7 +100,6 @@ interface ToastQueueProps {
   readonly hidden?: boolean;
 }
 
-/** One queue's toasts, stacked at the bottom-right corner. Below dialogs and menus (z-50), so a dialog covers toasts. */
 function ToastQueue(props: ToastQueueProps) {
   const {hidden = false, manager} = props;
   return (
@@ -126,7 +118,6 @@ interface ToastViewportProps {
   readonly openSessionId: string | undefined;
 }
 
-/** Where toasts appear: the app-wide queue, and every session's own, only the open session's shown. Render once. */
 export default function ToastViewport(props: ToastViewportProps) {
   const {openSessionId} = props;
   const sessions = useSessionToastManagers();

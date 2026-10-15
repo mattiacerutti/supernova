@@ -13,7 +13,6 @@ function formatJson(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
 
-/** A failed call's message: Pi puts it in the result's content. */
 function errorText(tool: SessionToolCall): string | undefined {
   return tool.status === "error" ? (toolOutputText(tool) ?? "Tool failed.") : undefined;
 }
@@ -160,7 +159,6 @@ export default function ToolDetails(props: ToolDetailsProps): ReactNode {
       return FileMutationToolDetails({tool, view});
     case "web-fetch":
       return WebFetchToolDetails({view});
-    // NOTE: Readonly tools such as list and find have no custom UI yet.
     default:
       return <DefaultToolDetails tool={tool} view={view} />;
   }

@@ -3,17 +3,13 @@ import type {DesktopUpdateState} from "@supernova/contracts/lib/desktop";
 import {showToast} from "@/lib/toast";
 import {useMountEffect} from "@/hooks/use-mount-effect";
 
-export interface DesktopUpdate {
+interface DesktopUpdate {
   readonly state: DesktopUpdateState | undefined;
   readonly check: () => Promise<DesktopUpdateState | null>;
   readonly download: () => Promise<void>;
   readonly install: () => Promise<void>;
 }
 
-/**
- * Tracks the desktop auto-update state and exposes its actions, reporting update failures once
- * each. State stays undefined outside the desktop app, which hides the update UI.
- */
 export function useDesktopUpdate(): DesktopUpdate {
   const [state, setState] = useState<DesktopUpdateState>();
   const reportedStatus = useRef<DesktopUpdateState["status"] | undefined>(undefined);
@@ -25,8 +21,7 @@ export function useDesktopUpdate(): DesktopUpdate {
     let active = true;
 
     const applyState = (next: DesktopUpdateState): void => {
-      // Updater failures arrive as pushed state rather than rejected calls, so
-      // surface them here, once per transition into the error status.
+      // Failures arrive as pushed state, not rejected calls; report once per transition into error.
       if (next.status === "error" && next.message && reportedStatus.current !== "error") {
         showToast("Update failed", next.message);
       }

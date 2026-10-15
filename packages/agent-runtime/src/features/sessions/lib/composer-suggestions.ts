@@ -11,7 +11,6 @@ function titleCase(kebab: string): string {
     .join(" ");
 }
 
-/** Skills and prompt templates as composer suggestion items. */
 export function toComposerSuggestions(skills: readonly Skill[], templates: readonly PromptTemplate[]): ComposerSuggestionItem[] {
   return [
     ...skills.map((skill) => ({

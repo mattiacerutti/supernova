@@ -5,7 +5,6 @@ import {cn} from "@/lib/cn";
 const SPRITE_ID = "workspace-file-icon-sprite";
 const resolver = createFileTreeIconResolver("complete");
 
-/** The sprite is shared by every icon on the page, so it is injected once and referenced by id. */
 function ensureSprite(): void {
   if (document.getElementById(SPRITE_ID)) return;
   const container = document.createElement("div");

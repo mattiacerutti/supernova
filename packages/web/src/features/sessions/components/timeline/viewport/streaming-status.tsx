@@ -8,14 +8,11 @@ const SETUP_LABELS: Record<SessionSetupStep, string> = {worktree: "Creating work
 
 interface StreamingStatusProps {
   readonly compacting: boolean;
-  /** Setup running before the first turn; shown as a marker like compaction. */
   readonly setupStep?: SessionSetupStep | null;
-  /** Tucks the status under the last message when that message ends with message spacing. */
   readonly pullIntoLastMessage: boolean;
   readonly ref: Ref<HTMLDivElement>;
 }
 
-/** Footer shown below the transcript while the agent works. */
 export default function StreamingStatus(props: StreamingStatusProps) {
   const {compacting, pullIntoLastMessage, ref, setupStep = null} = props;
   const marker = setupStep ? SETUP_LABELS[setupStep] : compacting ? "Compacting context" : null;

@@ -4,7 +4,6 @@ import {sessionKeys} from "@/features/sessions/api/query-keys";
 import {unwrap} from "@/runtime/runtime-result";
 import {useRuntime} from "@/runtime/use-runtime";
 
-/** Loads models after extension providers are registered, with an explicit retry on failure. */
 export function useSessionModels(projectPath: string) {
   const runtime = useRuntime();
   const queryClient = useQueryClient();

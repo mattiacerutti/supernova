@@ -20,7 +20,6 @@ interface FinalWorkProps {
   readonly timestamp: string;
 }
 
-/** A settled turn that ended on work (abort, error) stamps its last item with the time only. */
 function FinalWork(props: FinalWorkProps) {
   const {children, timestamp} = props;
 

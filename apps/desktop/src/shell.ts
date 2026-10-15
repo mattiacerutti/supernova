@@ -13,7 +13,6 @@ interface ShellAttempt {
   argv0?: string;
 }
 
-/** Uses each shell's command syntax and, where supported, retries without interactive startup files. */
 function shellCommand(shell: string, marker: string): {command: string; attempts: ShellAttempt[]} {
   const name = basename(shell);
   const script = `process.stdout.write(\`${marker}\` + JSON.stringify(process.env) + \`${marker}\`)`;
@@ -36,7 +35,6 @@ function shellCommand(shell: string, marker: string): {command: string; attempts
   return {command, attempts: [{args: ["-i", "-l", "-c"]}, {args: ["-l", "-c"]}]};
 }
 
-/** Ignores shell banners and validates the complete payload before changing the app's environment. */
 function parseEnvironment(stdout: string, marker: string): Record<string, string> {
   const start = stdout.indexOf(marker);
   const end = stdout.indexOf(marker, start + marker.length);
@@ -68,7 +66,6 @@ interface SyncShellEnvironmentOptions {
   readonly warn?: (message: string) => void;
 }
 
-/** Imports the full login-shell environment for GUI launches, keeping inherited values if both attempts fail. */
 export function syncShellEnvironment({
   env = process.env,
   platform = process.platform,

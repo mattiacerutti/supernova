@@ -18,20 +18,14 @@ import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";
 
 export interface SessionsDeps {
   readonly store: Pick<SessionStore, "create" | "delete" | "find" | "fork" | "update">;
-  /**
-   * Each durable session's document, owned by the session runtime; reads go through it so they match its
-   * `session.state` deltas. `refresh` rebuilds and publishes it after a change outside the engine.
-   */
   readonly documents: {readonly current: (sessionId: string) => Promise<Session>; readonly refresh: (sessionId: string) => Promise<Session>};
   readonly resourceCache: ResourceCache;
   readonly sdk: Pick<PiSdk, "modelRuntime">;
 }
 
-/** The durable session record: create, load, rename, and what a composer can reference. */
 export class Sessions {
   public constructor(private readonly deps: SessionsDeps) {}
 
-  /** Creates a new empty session for a project under the client's id. With a worktree the agent runs there. */
   public async create(input: {readonly id: string; readonly projectPath: string; readonly worktree?: SessionWorktree}): Promise<Session> {
     const {id, projectPath, worktree} = input;
     if (await this.deps.store.find(id)) throw new CreateSessionError({message: "A session with this id already exists."});
@@ -39,26 +33,19 @@ export class Sessions {
     return this.deps.documents.current(id);
   }
 
-  /** Whether the session exists. */
   public async exists(input: GetSessionPayload): Promise<boolean> {
     return (await this.deps.store.find(input.sessionId)) !== undefined;
   }
 
-  /** The worktree a session runs in, if any. */
   public async getWorktree(input: GetSessionPayload): Promise<SessionWorktree | undefined> {
     return (await this.deps.store.find(input.sessionId))?.worktree;
   }
 
-  /** Removes a session's file and record. For undoing a `create` whose setup failed; archiving keeps the file. */
   public async delete(input: GetSessionPayload): Promise<void> {
     await this.deps.store.delete(input.sessionId);
   }
 
-  /**
-   * Copies the conversation up to and including a visible turn into a new session. The source is untouched and
-   * workspace files are not changed. Checkpoints stay keyed by the source session, so the fork cannot undo
-   * inherited turns; only turns made after the fork restore files.
-   */
+  /** Checkpoints stay keyed by the source, so the fork cannot restore files for inherited turns. */
   public async fork(input: ForkSessionPayload): Promise<Session> {
     if (!(await this.deps.store.find(input.sessionId))) throw new ForkSessionError({message: "Session not found."});
     const forked = await this.deps.store.fork({sessionId: input.sessionId, turnId: input.turnId}).catch((cause: unknown) => {
@@ -67,13 +54,11 @@ export class Sessions {
     return this.deps.documents.current(forked);
   }
 
-  /** Loads one session's document. */
   public async get(input: GetSessionPayload): Promise<Session> {
     if (!(await this.deps.store.find(input.sessionId))) throw new Error("Session not found.");
     return this.deps.documents.current(input.sessionId);
   }
 
-  /** Renames a session. */
   public async rename(input: RenameSessionPayload): Promise<Session> {
     const title = input.title.trim();
     if (title.length === 0) throw new RenameSessionError({message: "Session title cannot be empty."});
@@ -82,7 +67,6 @@ export class Sessions {
     return this.deps.documents.refresh(input.sessionId);
   }
 
-  /** Lists available Pi models mapped into shared model details. */
   public async listModels(input: ListModelsPayload): Promise<ListModelsResult> {
     await this.deps.resourceCache.initialize(input.projectPath);
     await refreshAuthAndModels(this.deps.sdk);
@@ -90,7 +74,6 @@ export class Sessions {
     return modelRuntime.getAvailableSnapshot().map((model) => toAgentModelDetails(model, modelRuntime.getProvider(model.provider)?.name ?? model.provider));
   }
 
-  /** Returns the complete project resource list for client-side composer filtering. */
   public async listComposerSuggestions(input: ListComposerSuggestionsPayload): Promise<ListComposerSuggestionsResult> {
     const [skills, templates] = await Promise.all([this.deps.resourceCache.listSkills(input.projectPath), this.deps.resourceCache.listPromptTemplates(input.projectPath)]);
     return {items: toComposerSuggestions(skills, templates)};

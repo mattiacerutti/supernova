@@ -16,11 +16,7 @@ async function loadPage(runtime: RuntimeClient, sessionId: string, side: History
   addHistoryPage(sessionId, side, edge, page);
 }
 
-/**
- * Loads one side of a session's branch a page at a time: the shown turns before the first one the client has
- * (`entries`), or the undone turns after the last one (`undone`). `load` does nothing while a page is loading or after
- * one failed, so it can run on every scroll; `retry` is the user's, after a failure.
- */
+/** `load` is a no-op while a page loads or after one failed, so it can run on every scroll; `retry` is the user's. */
 export function useLoadHistory(sessionId: string, side: HistorySide) {
   const runtime = useRuntime();
   const mutation = useMutation({mutationFn: () => loadPage(runtime, sessionId, side)});

@@ -1,6 +1,5 @@
 import {SettingsManager} from "@earendil-works/pi-coding-agent";
 
-/** Reads Pi's merged file settings without loading resources or persisting changes; no project means global-only. */
 export function loadPiSettings(projectPath?: string, agentDir?: string): SettingsManager {
   // Preserve Supernova's existing project policy, but never load the server cwd's project settings for a global request.
   const settings = SettingsManager.create(projectPath ?? process.cwd(), agentDir, {projectTrusted: projectPath !== undefined});

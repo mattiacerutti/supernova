@@ -3,10 +3,7 @@ import type {Terminal} from "@xterm/xterm";
 /** xterm's vertical scrollbar width when `overviewRuler.width` is not set (`ViewportConstants.DEFAULT_SCROLL_BAR_WIDTH`). */
 const SCROLLBAR_WIDTH = 14;
 
-/**
- * Private renderer surface of xterm.js 6.0.0: cell size in CSS pixels, and the row painter. `@xterm/addon-fit` reads
- * the same `_core._renderService` for its measurements, so this is no more fragile than the addon would be.
- */
+/** Private xterm.js 6.0.0 surface; `@xterm/addon-fit` reads the same `_core._renderService`, so this is no more fragile. */
 interface Core {
   readonly _core: {
     readonly _renderService: {
@@ -16,14 +13,7 @@ interface Core {
   };
 }
 
-/**
- * Resizes the grid to fill `host`, and paints the new grid in the same task.
- *
- * `terminal.resize` clears the canvas at once (setting a canvas's size wipes it) but queues the repaint for the next
- * animation frame. Called from a ResizeObserver, that frame is the one after the browser's next paint, so the
- * terminal shows blank for a frame on every step of a drag. Painting the rows here closes that gap. Returns false
- * when the host has no size or the renderer has not measured the font yet.
- */
+/** `terminal.resize` clears the canvas now but repaints next frame; painting the rows here closes that blank frame. */
 export function fitTerminal(terminal: Terminal, host: HTMLElement): boolean {
   const {_renderService: render} = (terminal as unknown as Core)._core;
   const cell = render.dimensions.css.cell;

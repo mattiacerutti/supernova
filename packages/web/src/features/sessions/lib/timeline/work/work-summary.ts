@@ -9,7 +9,6 @@ function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-/** One-line summary of a work group: "Ran 3 commands · edited 2 files · 1 failed". */
 export function summarizeWork(events: readonly SessionWorkEvent[]): string {
   let commands = 0;
   let reads = 0;

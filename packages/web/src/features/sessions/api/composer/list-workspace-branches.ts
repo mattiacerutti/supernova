@@ -3,7 +3,6 @@ import {sessionKeys} from "@/features/sessions/api/query-keys";
 import {unwrap} from "@/runtime/runtime-result";
 import {useRuntime} from "@/runtime/use-runtime";
 
-/** Branches of the project repository, for choosing where a new session runs. Fails with `WorkspaceNotARepositoryError` for plain folders. */
 export function useWorkspaceBranches(projectPath: string, options: {readonly enabled?: boolean} = {}) {
   const runtime = useRuntime();
   return useQuery(
@@ -12,7 +11,6 @@ export function useWorkspaceBranches(projectPath: string, options: {readonly ena
       queryFn: () => unwrap(runtime.workspace.listBranches({projectPath})),
       queryKey: sessionKeys.branches(projectPath),
       refetchOnWindowFocus: false,
-      // Not a repository is deterministic; retrying only delays hiding the pickers.
       retry: false,
     })
   );

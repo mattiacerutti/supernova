@@ -19,16 +19,13 @@ export interface ProvidersDeps {
   readonly sdk: Pick<PiSdk, "modelRuntime">;
 }
 
-/** Model providers and their login flows. */
 export class Providers {
   public constructor(private readonly deps: ProvidersDeps) {}
 
-  /** Every login's current step as replicated state, for clients following one. */
   public get logins() {
     return this.deps.loginSessions.logins;
   }
 
-  /** Lists configured and configurable Pi providers with auth metadata. */
   public async list(): Promise<ProvidersListResult> {
     const {modelRuntime} = this.deps.sdk;
     await modelRuntime.refresh({allowNetwork: false});
@@ -56,13 +53,11 @@ export class Providers {
       .sort((left, right) => left.name.localeCompare(right.name));
   }
 
-  /** Removes stored credentials for a provider and refreshes model auth state. */
   public async logout(input: ProviderLogoutPayload): Promise<ProviderLogoutResult> {
     await this.deps.sdk.modelRuntime.logout(input.providerId);
     return {providerId: input.providerId};
   }
 
-  /** Starts a provider-owned login in the background and returns once it shows its first step. */
   public async startLogin(input: ProviderLoginStartPayload): Promise<ProviderLoginSession> {
     const {authType, providerId} = input;
     const provider = this.deps.sdk.modelRuntime.getProvider(providerId);

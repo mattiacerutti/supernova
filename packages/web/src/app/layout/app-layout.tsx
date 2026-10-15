@@ -12,15 +12,12 @@ import {EMPTY_LAYOUT, MIN_WORKSPACE_PANEL_WIDTH, useWorkspacePanelStore} from "@
 import {maxPanelWidth} from "@/components/layouts/panel-layout";
 import {MIN_SIDEBAR_WIDTH, SIDEBAR_HOTKEY, useSidebarStore} from "@/stores/sidebar-store";
 
-/** Back/forward for the desktop shell, where navigation stays inside the window. */
 function HistoryNavigation() {
   const router = useRouter();
   const canGoBack = useCanGoBack();
-  // Re-render on navigation so the forward check below stays current.
   useRouterState({select: (state) => state.location.href});
 
-  // TanStack Router does not expose canGoForward. This is good enough for desktop chrome,
-  // where navigation stays inside the Electron shell and we do not want extra state.
+  // TanStack Router does not expose canGoForward; good enough for desktop chrome.
   const currentIndex = router.history.location.state.__TSR_index ?? 0;
   const canGoForward = currentIndex < router.history.length - 1;
 
@@ -40,13 +37,11 @@ interface AppLayoutProps {
   readonly children: ReactNode;
 }
 
-/** The main app shell: project sidebar, titlebar controls, and the routed content. */
 export default function AppLayout(props: AppLayoutProps) {
   const {children} = props;
   const {animateSidebar, compactLayout, sidebarVisible, toggleSidebar} = useSidebarVisibility();
   const sidebarWidth = useSidebarStore((state) => state.sidebarWidth);
   const setSidebarWidth = useSidebarStore((state) => state.setSidebarWidth);
-  // The workspace panel belongs to the session route; outside it nothing is reserved.
   const sessionId = useParams({select: (params) => params.sessionId, strict: false});
   const workspaceOpen = useWorkspacePanelStore((state) => (sessionId === undefined ? false : (state.layouts[sessionId] ?? EMPTY_LAYOUT).open));
   const reservedContentWidth = workspaceOpen ? MIN_WORKSPACE_PANEL_WIDTH : 0;

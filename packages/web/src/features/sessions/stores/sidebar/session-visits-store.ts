@@ -4,17 +4,11 @@ import {persist} from "zustand/middleware";
 const SESSION_VISITS_STORAGE_KEY = "supernova-session-visits";
 
 interface SessionVisitsState {
-  /** Session id to ISO timestamp of the latest session activity the user has seen. */
   readonly visits: Record<string, string>;
   readonly markSessionVisited: (sessionId: string, visitedAt: string) => void;
 }
 
-/**
- * Tracks the latest activity each session had when the user last saw it, so
- * activity that lands while a session is closed can surface as unseen.
- * Stamps never move backwards: seeing one completion must not hide later
- * activity that was already recorded.
- */
+/** Stamps never move backwards: seeing one completion must not hide later activity already recorded. */
 export const useSessionVisitsStore = create<SessionVisitsState>()(
   persist(
     (set) => ({
@@ -35,17 +29,11 @@ export const useSessionVisitsStore = create<SessionVisitsState>()(
 );
 
 interface UnseenActivityInput {
-  /** Latest session activity, in epoch milliseconds. */
   readonly activityAtMs: number;
-  /** Activity timestamp recorded the last time the user saw the session. */
   readonly visitedAt: string | undefined;
 }
 
-/**
- * Whether a session has activity the user has not seen yet. Sessions the user
- * has never opened are not treated as unseen, otherwise every existing
- * session would be flagged the first time visits are recorded.
- */
+/** Never-opened sessions are not unseen, or every existing session would be flagged on first run. */
 export function hasUnseenActivity(input: UnseenActivityInput): boolean {
   const {activityAtMs, visitedAt} = input;
   if (visitedAt === undefined || Number.isNaN(activityAtMs)) return false;

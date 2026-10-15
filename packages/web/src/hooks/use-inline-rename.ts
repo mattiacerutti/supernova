@@ -6,7 +6,7 @@ interface UseInlineRenameOptions {
   readonly onSave: (value: string) => void;
 }
 
-export interface InlineRenameInputProps {
+interface InlineRenameInputProps {
   readonly onBlur: () => void;
   readonly onChange: (event: ChangeEvent<HTMLInputElement>) => void;
   readonly onClick: (event: MouseEvent<HTMLInputElement>) => void;
@@ -18,13 +18,11 @@ export interface InlineRenameInputProps {
 }
 
 interface UseInlineRenameResult {
-  /** Spread onto the rename `<input>`; owns focus, commit, and cancel behavior. */
   readonly inputProps: InlineRenameInputProps;
   readonly renaming: boolean;
   readonly startRenaming: () => void;
 }
 
-/** Manages inline rename input state, focus behavior, and commit/cancel keyboard interactions. */
 export function useInlineRename(options: UseInlineRenameOptions): UseInlineRenameResult {
   const {initialValue, onSave} = options;
 

@@ -3,7 +3,6 @@ import {TaggedError} from "@supernova/contracts/lib/errors";
 
 export const ForkSessionPayload = z.object({
   sessionId: z.string(),
-  /** Turn the fork ends with, included. */
   turnId: z.string(),
 });
 

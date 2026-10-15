@@ -25,7 +25,6 @@ interface CommandPaletteInputProps {
   readonly value: string;
 }
 
-/** The search row. A nested page gets a back button, and Backspace in its empty input goes back. */
 function CommandPaletteInput(props: CommandPaletteInputProps) {
   const {onBack, onChange, onKeyDown, placeholder, trailing, value} = props;
 
@@ -41,8 +40,7 @@ function CommandPaletteInput(props: CommandPaletteInputProps) {
   };
 
   return (
-    // Every page's search row is the same height with its text at the same position: the leading slot is one fixed
-    // box whether it holds the search icon or the back button, and trailing controls must fit `size-6`.
+    // The leading slot is one fixed box so every page's row is the same height; trailing controls must fit `size-6`.
     <SearchField
       aria-label={placeholder}
       autoFocus
@@ -72,7 +70,6 @@ interface CommandPaletteFooterProps {
   readonly hints: readonly CommandPaletteHint[];
 }
 
-/** The key hint bar. Navigation and close are always listed; the page adds what its keys do. */
 function CommandPaletteFooter(props: CommandPaletteFooterProps) {
   const {canGoBack, hints} = props;
   const allHints: readonly CommandPaletteHint[] = [
@@ -96,36 +93,22 @@ function CommandPaletteFooter(props: CommandPaletteFooterProps) {
 
 interface CommandPaletteListProps<TRow extends object> {
   readonly getRowKey: (row: TRow) => string;
-  /** The page's own keys, shown between navigation and back/close, such as Enter and Tab. */
   readonly hints: readonly CommandPaletteHint[];
-  /** A control after the input, such as a submit button; it must fit `size-6` so the row keeps its height. */
   readonly inputTrailing?: ReactNode;
-  /** Shown on nested pages: adds the back button, Backspace to go back, and its hint. */
   readonly onBack?: () => void;
-  /** Called when the list is scrolled near its end, to load the next page of a paged list. */
   readonly onEndReached?: () => void;
-  /** Called when a row is highlighted by keyboard or pointer, for example to load what selecting it will need. */
   readonly onHighlight?: (row: TRow) => void;
   readonly onQueryChange: (query: string) => void;
-  /** Called when a row is clicked, and on Enter unless `onSubmit` is set. */
   readonly onSelect: (row: TRow) => void;
-  /** Replaces what Enter does, for pages whose input is a value to submit rather than a filter. */
   readonly onSubmit?: () => void;
-  /** Called on Tab with the highlighted row, for pages that complete the input from a row. */
   readonly onTab?: (row: TRow) => void;
   readonly placeholder: string;
   readonly query: string;
   readonly renderRow: (row: TRow, itemState: CommandPaletteItemState) => ReactNode;
-  /** The rows for the current query, with `CommandPaletteHeaderRow`s between sections. */
   readonly rows: readonly (CommandPaletteHeaderRow | TRow)[];
-  /** Shown above the rows, for an empty, loading, or error state. */
   readonly status?: ReactNode;
 }
 
-/**
- * A palette page: the search row, the keyboard-navigable rows, and the key hint footer. The page owns the query and
- * the rows it produces; the highlight returns to the first row whenever the query changes.
- */
 export default function CommandPaletteList<TRow extends object>(props: CommandPaletteListProps<TRow>) {
   const {getRowKey, hints, inputTrailing, onBack, onEndReached, onHighlight, onQueryChange, onSelect, onSubmit, onTab, placeholder, query, renderRow, rows, status} = props;
   // The highlight is remembered with the query it was set for, so a new query starts from the first row again.

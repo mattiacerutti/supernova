@@ -9,7 +9,6 @@ interface RuntimeProviderProps {
   readonly runtime: RuntimeClient;
 }
 
-/** Makes the app-owned runtime connection available without taking ownership of its lifecycle. */
 export default function RuntimeProvider(props: RuntimeProviderProps) {
   const {children, runtime} = props;
 

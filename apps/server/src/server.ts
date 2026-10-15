@@ -14,7 +14,6 @@ function json(response: ServerResponse, status: number, body: unknown): void {
   response.writeHead(status, {"content-type": "application/json"}).end(JSON.stringify(body));
 }
 
-/** Parses a TCP port; zero asks the OS to allocate an available port. */
 export function parsePort(value: string): number {
   if (!/^\d+$/.test(value) || Number(value) > 65_535) {
     throw new Error("Port must be an integer between 0 and 65535.");
@@ -33,10 +32,6 @@ export interface StartServerOptions {
   readonly port: number;
 }
 
-/**
- * Starts the API only: `/health` over HTTP and the runtime's Chord services over the `/ws` WebSocket. Readiness
- * includes runtime initialization; closing stops the services, then disposes the runtime.
- */
 export async function startServer({host, port}: StartServerOptions): Promise<RunningServer> {
   parsePort(String(port));
   if (!host.trim()) throw new Error("A server host is required.");

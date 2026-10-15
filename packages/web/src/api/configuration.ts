@@ -8,7 +8,6 @@ export const configurationKeys = {
   project: (projectPath: string | null) => [...configurationKeys.all, projectPath] as const,
 };
 
-/** Caches effective server configuration in the query cache without persisting it in browser storage. */
 export function useConfiguration(projectPath?: string) {
   const runtime = useRuntime();
   return useQuery(

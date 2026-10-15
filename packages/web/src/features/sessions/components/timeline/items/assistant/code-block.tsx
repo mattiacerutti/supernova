@@ -49,7 +49,6 @@ interface CodeBlockProps {
   readonly language?: string;
 }
 
-/** Fenced code with a copy button. Highlights asynchronously and shows plain text until then. */
 export default function CodeBlock(props: CodeBlockProps) {
   const {code, language} = props;
   const [copied, setCopied] = useState(false);

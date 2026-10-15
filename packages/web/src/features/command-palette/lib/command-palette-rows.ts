@@ -1,7 +1,6 @@
 import {matchSorter} from "match-sorter";
 import type {CommandPaletteAction, CommandPaletteHeaderRow, CommandPaletteSession} from "@/features/command-palette/types/command-palette";
 
-/** A row of the root page: a section heading, an action, or a session. */
 export type CommandPaletteRow<TSession = CommandPaletteSession> =
   | CommandPaletteHeaderRow
   | {readonly type: "action"; readonly action: CommandPaletteAction}
@@ -10,14 +9,10 @@ export type CommandPaletteRow<TSession = CommandPaletteSession> =
 interface BuildCommandPaletteRowsInput<TSession> {
   readonly actions: readonly CommandPaletteAction[];
   readonly query: string;
-  /** Sessions already matched against the query, in the order to show them. */
   readonly sessions: readonly TSession[];
 }
 
-/**
- * The root list: matching actions under their section headings, then sessions. Sessions come last so a page of them
- * loaded later only ever appends.
- */
+/** Sessions come last so a page of them loaded later only appends. */
 export function buildCommandPaletteRows<TSession>(input: BuildCommandPaletteRowsInput<TSession>): CommandPaletteRow<TSession>[] {
   const {actions, query, sessions} = input;
   const trimmedQuery = query.trim();

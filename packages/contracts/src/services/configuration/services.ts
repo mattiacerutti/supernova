@@ -3,7 +3,6 @@ import {method, remote} from "@earendil-works/chord";
 import type {GetConfigurationPayload, GetConfigurationResult} from "@supernova/contracts/services/configuration/procedures";
 import {json, result, SERVER_WIDE} from "@supernova/contracts/lib/protocol";
 
-/** Effective configuration safe to expose to clients. */
 export const ConfigurationService = remote("supernova.configuration", {
   version: 1,
   input: SERVER_WIDE,

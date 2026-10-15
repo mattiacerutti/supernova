@@ -3,12 +3,10 @@ import type {ComponentProps} from "react";
 import Icon from "@/components/ui/icon";
 import {cn} from "@/lib/cn";
 
-/** Provides message-scroller behavior and state to a transcript. */
 function MessageScrollerProvider(props: ComponentProps<typeof MessageScrollerPrimitive.Provider>) {
   return <MessageScrollerPrimitive.Provider {...props} />;
 }
 
-/** Renders the message-scroller frame. */
 function MessageScroller(props: ComponentProps<typeof MessageScrollerPrimitive.Root>) {
   const {className, ...rootProps} = props;
 
@@ -21,7 +19,6 @@ function MessageScroller(props: ComponentProps<typeof MessageScrollerPrimitive.R
   );
 }
 
-/** Renders the native scrollable message viewport. */
 function MessageScrollerViewport(props: ComponentProps<typeof MessageScrollerPrimitive.Viewport>) {
   const {className, ...viewportProps} = props;
 
@@ -37,14 +34,12 @@ function MessageScrollerViewport(props: ComponentProps<typeof MessageScrollerPri
   );
 }
 
-/** Renders the transcript content container. */
 function MessageScrollerContent(props: ComponentProps<typeof MessageScrollerPrimitive.Content>) {
   const {className, ...contentProps} = props;
 
   return <MessageScrollerPrimitive.Content className={cn("flex h-max min-h-full flex-col", className)} data-slot="message-scroller-content" {...contentProps} />;
 }
 
-/** Renders a transcript edge navigation button. */
 function MessageScrollerButton(props: ComponentProps<typeof MessageScrollerPrimitive.Button>) {
   const {children, className, direction = "end", ...buttonProps} = props;
 

@@ -4,13 +4,10 @@ import {useCreateFolder} from "@/features/projects/api/command-palette/create-fo
 
 interface CreateFolderDialogProps {
   readonly onCancel: () => void;
-  /** Called with the created folder's path. */
   readonly onCreated: (path: string) => void;
-  /** The folder to create; the dialog is open while this is set. */
   readonly path: string | undefined;
 }
 
-/** Asks before creating a folder that does not exist yet, then creates it. */
 export default function CreateFolderDialog(props: CreateFolderDialogProps) {
   const {onCancel, onCreated, path} = props;
   const createFolder = useCreateFolder();

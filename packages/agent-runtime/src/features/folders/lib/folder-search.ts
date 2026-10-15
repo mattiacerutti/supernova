@@ -12,7 +12,6 @@ interface ParsedFolderQuery {
   readonly searchTerm: string;
 }
 
-/** Splits user folder input into a directory to scan and a child search term. */
 function parseFolderQuery(query: string): ParsedFolderQuery {
   const trimmedQuery = query.trim();
   if (trimmedQuery.length === 0) {
@@ -46,7 +45,6 @@ export async function readFolderPathType(path: string): Promise<"directory" | "f
   return folderStat.isDirectory() ? "directory" : "file";
 }
 
-/** Reads local child directories that match the folder-picker query. */
 export async function searchFolders(query: string): Promise<FolderSuggestion[]> {
   const parsedQuery = parseFolderQuery(query);
   const childDirectories = await readChildDirectories(parsedQuery.baseDir);

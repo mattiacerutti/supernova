@@ -2,7 +2,6 @@ import {readFile} from "node:fs/promises";
 import type {LoadExtensionsResult, PromptTemplate, ResourceLoader, Skill} from "@earendil-works/pi-coding-agent";
 import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";
 
-/** What a project's agents are built from, loaded once. */
 export interface ProjectResources {
   readonly contextFiles: readonly {readonly path: string; readonly content: string}[];
   readonly extensions: LoadExtensionsResult;
@@ -12,9 +11,7 @@ export interface ProjectResources {
 
 export interface ResourceCache {
   readonly initialize: (projectPath: string) => Promise<void>;
-  /** Drops every loaded project so the next request rediscovers resources, e.g. after packages change on disk. */
   readonly invalidate: () => void;
-  /** Everything one project's agents are built from. */
   readonly load: (projectPath: string) => Promise<ProjectResources>;
   readonly listPromptTemplates: (projectPath: string) => Promise<readonly PromptTemplate[]>;
   readonly listSkills: (projectPath: string) => Promise<readonly Skill[]>;
@@ -30,7 +27,6 @@ function resourcesOf(loader: ResourceLoader): ProjectResources {
   };
 }
 
-/** Loads each project's extensions, prompts, skills, and context files once and serves them from memory. */
 export function createResourceCache(sdk: Pick<PiSdk, "loadResourceLoader">): ResourceCache {
   const loaded = new Map<string, Promise<ProjectResources>>();
 

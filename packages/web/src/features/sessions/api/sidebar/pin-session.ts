@@ -10,7 +10,6 @@ interface PinSessionInput {
 
 const {patchOptimism} = useSessionsStore.getState();
 
-/** Pins or unpins a session, moving it at once; the runtime's directory reports it once applied. */
 export function usePinSession() {
   const runtime = useRuntime();
 

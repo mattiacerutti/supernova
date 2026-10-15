@@ -4,7 +4,6 @@ const piThinkingLevels = ["off", "minimal", "low", "medium", "high", "xhigh", "m
 
 const piThinkingLevelSet = new Set<string>(piThinkingLevels);
 
-/** Converts an optional UI thinking-level value into a Pi thinking level. */
 export function toPiThinkingLevel(value: string | undefined): ModelThinkingLevel {
   return value && piThinkingLevelSet.has(value) ? (value as ModelThinkingLevel) : "off";
 }

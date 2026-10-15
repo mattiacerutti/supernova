@@ -34,14 +34,10 @@ function PathBreadcrumb(props: PathBreadcrumbProps) {
 }
 
 interface FileViewerProps {
-  /** Header metadata and actions shown before the explorer toggle. */
   readonly actions?: ReactNode;
-  /** The opened file or diff. */
   readonly children: ReactNode;
   readonly deleted?: boolean;
-  /** The tree or change list. Fills the panel until a file opens, then sits beside it. */
   readonly explorer: ReactNode;
-  /** Path of the opened file, or null while only the explorer shows. */
   readonly path: string | null;
 }
 

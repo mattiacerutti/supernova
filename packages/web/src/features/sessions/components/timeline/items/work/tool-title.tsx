@@ -7,7 +7,6 @@ import {cn} from "@/lib/cn";
 
 type ViewOf<Kind extends ToolView["kind"]> = Extract<ToolView, {kind: Kind}>;
 
-/** Present participle while the tool runs, past tense once it has finished or failed. */
 function verb(pending: boolean, running: string, done: string): string {
   return pending ? running : done;
 }
@@ -31,7 +30,6 @@ interface LabelProps {
   readonly children: ReactNode;
 }
 
-/** The tool's verb. Takes the row's color, so errors tint it. */
 function Label(props: LabelProps) {
   return <span className="shrink-0">{props.children}</span>;
 }
@@ -41,7 +39,6 @@ interface ArgumentProps {
   readonly className?: string;
 }
 
-/** What the tool acted on. Quieter than the label until the row is hovered. */
 function Argument(props: ArgumentProps) {
   const {children, className} = props;
   return <span className={cn("flex min-w-0 items-baseline gap-1 text-ink-faint transition-colors group-hover/row:text-ink-muted", className)}>{children}</span>;
@@ -212,7 +209,6 @@ interface ToolTitleProps {
   readonly tool: SessionToolCall;
 }
 
-/** A tool row's label and argument. Each tool kind owns its own title. */
 export default function ToolTitle(props: ToolTitleProps) {
   const {tool} = props;
   const view = toolView(tool);

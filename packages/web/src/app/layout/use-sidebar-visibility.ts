@@ -3,13 +3,11 @@ import {useMountEffect} from "@/hooks/use-mount-effect";
 
 const COMPACT_SIDEBAR_MEDIA_QUERY = "(max-width: 767.98px)";
 
-/** Reads the responsive sidebar breakpoint without assuming browser APIs exist during initialization. */
 function getCompactSidebarLayout(): boolean {
   if (typeof window === "undefined") return false;
   return window.matchMedia(COMPACT_SIDEBAR_MEDIA_QUERY).matches;
 }
 
-/** Controls sidebar visibility across split and compact full-width layouts. */
 export function useSidebarVisibility() {
   const [compactLayout, setCompactLayout] = useState(getCompactSidebarLayout);
   const [animateSidebar, setAnimateSidebar] = useState(false);

@@ -17,7 +17,6 @@ interface SidebarSessionItemProps {
   readonly session: SessionSummary;
 }
 
-/** One session row in the sidebar: opens on click, prefetches on hover, and owns rename, pin, live, and unseen state. */
 export default function SidebarSessionItem(props: SidebarSessionItemProps) {
   const {projectPath, session} = props;
   const {forked, id: sessionId, pinned, title, updatedAt, worktree} = session;

@@ -3,7 +3,6 @@ import Icon from "@/components/ui/icon";
 import type {IconName} from "@/components/ui/icon";
 import {cn} from "@/lib/cn";
 
-/** What `CommandPaletteList` hands each row so it highlights and selects like every other row; spread it onto the item. */
 export interface CommandPaletteItemState {
   readonly highlighted: boolean;
   readonly onSelect: () => void;
@@ -12,14 +11,11 @@ export interface CommandPaletteItemState {
 
 interface CommandPaletteItemProps extends CommandPaletteItemState {
   readonly children: ReactNode;
-  /** Secondary context after the title, such as a session's project. */
   readonly detail?: ReactNode;
   readonly icon: IconName;
-  /** Right-aligned content, such as a timestamp or a chevron for items that open a page. */
   readonly trailing?: ReactNode;
 }
 
-/** A selectable palette row: an icon, a title, optional detail, and optional trailing content. */
 export default function CommandPaletteItem(props: CommandPaletteItemProps) {
   const {children, detail, highlighted, icon, onSelect, ref, trailing} = props;
 

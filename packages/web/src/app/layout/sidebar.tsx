@@ -20,7 +20,6 @@ interface SidebarAction {
   readonly icon: IconName;
   readonly id: string;
   readonly label: string;
-  /** The palette page the action opens; absent opens the palette's root list. */
   readonly page?: CommandPalettePage;
   readonly trailing?: ReactNode;
 }
@@ -134,11 +133,6 @@ export default function Sidebar() {
             <IconButton className="size-6" label="Collapse projects" onClick={collapseAllProjects}>
               <Icon name="maximize" size="xs" />
             </IconButton>
-            {/* TODO: Re-enable project filtering/sorting when the sidebar supports it.
-            <IconButton className="size-6" label="Filter projects">
-              <Icon name="filter" size="xs" />
-            </IconButton>
-            */}
             <IconButton className="size-6" label="New project" onClick={handleOpenProjectPage}>
               <Icon name="folder-plus" size="xs" />
             </IconButton>

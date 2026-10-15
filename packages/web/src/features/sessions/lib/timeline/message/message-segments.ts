@@ -1,4 +1,4 @@
-export interface StreamingMessageSegment {
+interface StreamingMessageSegment {
   mode: "markdown" | "text";
   text: string;
 }
@@ -9,8 +9,7 @@ function findOpenFenceStart(text: string): number | undefined {
   let open: {char: string; size: number; start: number} | undefined;
 
   for (const line of lines) {
-    // Markdown fences may be indented up to three spaces. Track the exact
-    // marker so longer fences can contain shorter ones without closing early.
+    // Fences may be indented up to three spaces; a longer fence can contain a shorter one.
     const match = line.match(/^[\t ]{0,3}(`{3,}|~{3,})/);
     if (match?.[1]) {
       const mark = match[1];
@@ -26,13 +25,10 @@ function findOpenFenceStart(text: string): number | undefined {
   return open?.start;
 }
 
-/** Splits streaming text so stable Markdown can render while unstable trailing text stays plain. */
 export function segmentStreamingMessage(text: string): StreamingMessageSegment[] {
   if (!text) return [];
 
-  // An unfinished fenced block is the most unstable Markdown shape while
-  // streaming: reparsing it on every token causes layout churn and repeated
-  // highlighter work. Keep the open fence and everything after it as text.
+  // An open fence reparsed on every token churns layout and the highlighter; keep it and everything after as text.
   const openFenceStart = findOpenFenceStart(text);
   if (openFenceStart !== undefined) {
     const head = text.slice(0, openFenceStart);
@@ -40,9 +36,7 @@ export function segmentStreamingMessage(text: string): StreamingMessageSegment[]
     return [...(head.trim().length > 0 ? [{mode: "markdown" as const, text: head}] : []), {mode: "text", text: tail}];
   }
 
-  // Outside code fences, only promote complete paragraphs to Markdown. The
-  // trailing paragraph is still changing token-by-token, so render it as text
-  // until a blank-line boundary makes it stable.
+  // The trailing paragraph changes token by token; it stays text until a blank line makes it stable.
   const boundary = text.lastIndexOf("\n\n");
   if (boundary === -1) return [{mode: "text", text}];
 

@@ -11,7 +11,6 @@ interface ResolveComposerModelSelectionOptions {
   readonly lastThinkingLevel?: string;
 }
 
-/** Resolves startup defaults without replacing explicit choices or applying them to resumed sessions. */
 export function resolveComposerModelSelection({models, activeSelection, defaults, isNewSession, recentModelKeys, lastThinkingLevel}: ResolveComposerModelSelectionOptions) {
   const activeModel = activeSelection && models.find((model) => model.providerId === activeSelection.providerId && model.id === activeSelection.id);
 

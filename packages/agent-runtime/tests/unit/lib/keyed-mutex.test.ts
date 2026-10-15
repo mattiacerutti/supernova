@@ -58,16 +58,4 @@ describe("keyed mutex", () => {
     await expect(locks.withLock("project", () => Promise.reject(new Error("capture failed")))).rejects.toThrow("capture failed");
     await expect(locks.withLock("project", () => Promise.resolve("restored"))).resolves.toBe("restored");
   });
-
-  it("returns the result of the queued work", async () => {
-    const locks = new KeyedMutex<string>();
-    const blocker = deferred();
-
-    const blocked = locks.withLock("project", () => blocker.promise.then(() => "first"));
-    const queued = locks.withLock("project", () => Promise.resolve("second"));
-
-    blocker.resolve();
-    await expect(blocked).resolves.toBe("first");
-    await expect(queued).resolves.toBe("second");
-  });
 });

@@ -13,7 +13,6 @@ Rules:
 
 const sessionTitleMaxTokens = 256;
 
-/** Creates the user prompt used for title generation from message content parts. */
 function titlePrompt(input: {contentParts: readonly UserMessageContentPart[]}): string {
   return input.contentParts
     .map((part) => {
@@ -25,7 +24,6 @@ function titlePrompt(input: {contentParts: readonly UserMessageContentPart[]}): 
     .trim();
 }
 
-/** Creates the simple completion context used to generate a session title. */
 function sessionTitleContext(input: {contentParts: readonly UserMessageContentPart[]}): Context {
   return {
     messages: [{content: titlePrompt(input), role: "user", timestamp: Date.now()}],
@@ -33,7 +31,6 @@ function sessionTitleContext(input: {contentParts: readonly UserMessageContentPa
   };
 }
 
-/** Normalizes a model response into a display title. */
 function titleFromResponse(response: AssistantMessage): string {
   const title = response.content
     .filter((part): part is {type: "text"; text: string} => part.type === "text")
@@ -55,7 +52,6 @@ export interface TitleGenerator {
   readonly generateSessionTitle: (input: {readonly contentParts: readonly UserMessageContentPart[]; readonly model: PiModel}) => Promise<string>;
 }
 
-/** Asks the session's model for a short title from the first user message. */
 export function createTitleGenerator(sdk: Pick<PiSdk, "modelRuntime">): TitleGenerator {
   return {
     generateSessionTitle: async ({contentParts, model}) => {

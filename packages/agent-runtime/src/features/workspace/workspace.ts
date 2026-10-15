@@ -33,25 +33,21 @@ export interface WorkspaceDeps {
   readonly terminals: Terminals;
 }
 
-/** An untracked file has no HEAD side, so its whole content counts as additions. */
 async function untrackedEntry(repository: string, path: string): Promise<WorkspaceChangeEntry> {
   const output = await workspaceGit(repository, ["diff", "--no-index", "--numstat", "-z", "--", "/dev/null", path], [0, 1]);
   return {...(parseNumstat(output).get(path) ?? {additions: 0, deletions: 0}), path, status: "untracked"};
 }
 
-/** A blob at a revision, or empty when the path did not exist there (untracked files). */
 async function blobAt(repository: string, revision: string, path: string): Promise<string> {
   const output = await runGitResult(["cat-file", "-p", `${revision}:${path}`], {cwd: repository});
   return output.code === 0 ? decodeWorkspaceFile(Buffer.from(output.stdout, "utf8")) : "";
 }
 
-/** The working-tree file. Empty when it was deleted, and likewise when the path leaves the repository, which has nothing to show. */
 async function workingFile(repository: string, path: string): Promise<string> {
   const target = await pathInProject(repository, path);
   return target ? decodeWorkspaceFile(await readFile(target)) : "";
 }
 
-/** Files on disk that Git considers part of one repository: tracked (minus deleted) plus untracked and not ignored. */
 async function repositoryFiles(projectPath: string, root: string): Promise<string[]> {
   const repository = join(projectPath, root);
   const [listed, deleted] = await Promise.all([
@@ -68,7 +64,6 @@ async function repositoryFiles(projectPath: string, root: string): Promise<strin
   );
 }
 
-/** `git worktree list --porcelain` as branch → worktree path. */
 function parseWorktreeBranches(output: string): Map<string, string> {
   const result = new Map<string, string>();
   for (const block of output.split("\n\n")) {
@@ -79,7 +74,6 @@ function parseWorktreeBranches(output: string): Map<string, string> {
   return result;
 }
 
-/** A session's folder: its files, uncommitted Git changes, branches, and the shells running in it. */
 export class Workspace {
   public constructor(private readonly deps: WorkspaceDeps) {}
 
@@ -95,27 +89,22 @@ export class Workspace {
     return this.deps.terminals.resize(input);
   }
 
-  /** Ends the shell; the only way a terminal goes away short of its session being released. */
   public closeTerminal(input: TerminalClosePayload): Promise<void> {
     return this.deps.terminals.close(input);
   }
 
-  /** Every terminal, without output, as replicated state. */
   public get terminals() {
     return this.deps.terminals.state;
   }
 
-  /** One terminal's output as replicated state; throws `TerminalNotFoundError` for an unknown or closed terminal. */
   public terminalOutput(id: string) {
     return this.deps.terminals.output(id);
   }
 
-  /** Kills a session's shells; runs before the session is archived and its worktree removed. */
   public closeSessionTerminals(sessionId: string): Promise<void> {
     return this.deps.terminals.closeSession(sessionId);
   }
 
-  /** Local branches by most recent commit, then remote-tracking branches, with the worktree each is checked out in. */
   public async listBranches(input: WorkspaceBranchesListPayload): Promise<WorkspaceBranchesListResult> {
     const {projectPath} = input;
     const [refs, worktrees, head] = await Promise.all([
@@ -139,7 +128,6 @@ export class Workspace {
     return {branches: [...local, ...remote], ...(current ? {current} : {})};
   }
 
-  /** Every change against HEAD, staged or not, plus untracked files with their line counts. */
   public async getChanges(input: WorkspaceChangesGetPayload): Promise<WorkspaceChangesGetResult> {
     const repository = await repositoryPath(input.projectPath, input.repositoryRoot);
     const [nameStatus, numstat, untracked] = await Promise.all([
@@ -154,7 +142,6 @@ export class Workspace {
     return {uncommitted: [...tracked, ...untrackedEntries]};
   }
 
-  /** Both sides of a file's uncommitted change: HEAD and the working tree. */
   public async getDiffContents(input: WorkspaceDiffContentsGetPayload): Promise<WorkspaceDiffContentsGetResult> {
     const repository = await repositoryPath(input.projectPath, input.repositoryRoot);
     // Probing the repository first keeps the not-a-repository reason consistent with the other operations.
@@ -167,10 +154,6 @@ export class Workspace {
     return {repositories: await discoverWorkspaceRepositories(input.projectPath)};
   }
 
-  /**
-   * The files of every discovered repository, as project-relative paths. Like checkpoints, this sees one level of
-   * nesting: loose files outside any repository and files inside repositories deeper than an immediate child are not listed.
-   */
   public async listFiles(input: WorkspaceFilesListPayload): Promise<WorkspaceFilesListResult> {
     const roots = await discoverWorkspaceRepositories(input.projectPath);
     if (roots.length === 0) throw new WorkspaceNotARepositoryError({message: "Not a Git repository."});
@@ -178,7 +161,6 @@ export class Workspace {
     return {files: files.flat()};
   }
 
-  /** Reads a project file as UTF-8, refusing paths that escape the project. */
   public async readFile(input: WorkspaceFileReadPayload): Promise<WorkspaceFileReadResult> {
     const target = await pathInProject(input.projectPath, input.path);
     if (!target) throw new WorkspaceFileNotFoundError({message: "File not found."});
