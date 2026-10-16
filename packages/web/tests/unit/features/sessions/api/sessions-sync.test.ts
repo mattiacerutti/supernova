@@ -315,6 +315,8 @@ describe("session commands and views", () => {
     services.sessionRuntime.sendMessage = vi.fn(() => new Promise<typeof ok>((resolve) => (accept = () => resolve(ok))));
 
     actions.sendMessage({contentParts, modelReference: model, sessionId: "session-1"});
+    expect(live("session-1", document("session-1"))).toMatchObject({liveMessage: contentParts, turnIds: ["1"], undoneTurns: []});
+    expect(document("session-1")?.undone).toEqual(initial.undone);
     await waitUntil(() => expect(services.sessionRuntime.sendMessage).toHaveBeenCalledOnce());
     const transcript = services.documents.get("session-1")!;
     const continuation = {conversationId: 1, id: 6, kind: "pi.user", model: [{content: "Continuation", role: "user", timestamp: 6}]} as unknown as SessionEntry;
@@ -326,15 +328,22 @@ describe("session commands and views", () => {
     expect(live("session-1", document("session-1"))).toMatchObject({liveMessage: contentParts, liveTurn: {id: "7"}, turnIds: ["1"], undoneTurns: []});
     accept();
     await waitUntil(() => expect(useSessionsStore.getState().optimism["session-1"]?.message).toBeUndefined());
+    expect(live("session-1", document("session-1")).undoneTurns).toEqual([]);
   });
 
-  it("drops the sent message and reports the error when the send fails", async () => {
-    const {actions, services} = setup();
+  it("restores undone turns, drops the sent message, and reports the error when the send fails", async () => {
+    const {actions, document, open, services} = setup();
+    const initial = undoneLast(twoTurns());
+    services.documents.set("session-1", fakeState(initial));
+    open("session-1");
+    await waitUntil(() => expect(document("session-1")).toEqual(initial));
+    const undoneTurns = live("session-1", document("session-1")).undoneTurns;
     services.sessionRuntime.sendMessage = vi.fn(async () => failure("GenericError", "Model unavailable"));
 
     actions.sendMessage({contentParts, modelReference: model, sessionId: "session-1"});
+    expect(live("session-1", document("session-1"))).toMatchObject({liveMessage: contentParts, undoneTurns: []});
 
-    await waitUntil(() => expect(live()).toMatchObject({error: "Model unavailable", liveMessage: undefined, status: "idle"}));
+    await waitUntil(() => expect(live("session-1", document("session-1"))).toMatchObject({error: "Model unavailable", liveMessage: undefined, status: "idle", undoneTurns}));
   });
 
   it("shows the runtime's notices as toasts in their session's queue: one for all extension notices, one per other notice", () => {

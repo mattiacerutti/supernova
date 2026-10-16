@@ -34,6 +34,7 @@ All notable changes to Supernova are documented in this file.
 ### Fixed
 
 - Fixed the new-chat composer not receiving focus automatically when opened.
+- The rolled-back messages drawer now hides immediately when sending a new message after undo, instead of waiting for the session update.
 - Extension limitation notices now show the installed package's name instead of entry folders such as `src`.
 - Fixed image attachments being omitted from messages in the packaged desktop app when automatic image resizing is enabled.
 - Terminals and agent commands in the desktop app no longer inherit `ELECTRON_RUN_AS_NODE`, so Electron apps started from them (such as `bun dev:desktop`) open normally instead of running as Node. They also no longer inherit Supernova's Pi directory settings, so running `pi` inside Supernova uses your own Pi configuration.
