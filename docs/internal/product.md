@@ -6,7 +6,7 @@ What Supernova is, who it is for, and why it exists.
 
 Supernova is a remote-controllable agentic development environment built on Pi. Pi provides the agent execution foundation; Supernova adds an opinionated workflow and product layer around it.
 
-Calling Supernova a GUI for Pi is useful shorthand, but incomplete. Supernova does not only display Pi through a different interface. It adds server-owned remote sessions, committed/live state, Git-backed checkpoint navigation, project organization, structured messages, and explicit recovery behavior. These capabilities change how agent work is controlled and recovered, not only how it is presented.
+Calling Supernova a GUI for Pi is useful shorthand, but incomplete. Supernova does not only display Pi through a different interface. It adds server-owned durable sessions, Git-backed checkpoint navigation, project organization, structured messages, and explicit recovery behavior. These capabilities change how agent work is controlled and recovered, not only how it is presented.
 
 The desktop and browser clients turn sessions, reasoning, tools, diffs, context, models, and checkpoints into one coherent workspace. Pi remains the engine underneath that experience rather than the boundary of what Supernova can provide.
 
@@ -32,7 +32,7 @@ Minimalism here means fewer concepts, fewer competing workflows, and less chrome
 
 Pi is one of the strongest agent harnesses available. Supernova uses it as an execution engine instead of rebuilding one.
 
-Provider protocols, model execution, durable session storage, resource loading, and coding tools remain Pi responsibilities. Supernova builds above that foundation: remote runtime ownership, committed/live session behavior, Git-backed checkpoint navigation, project workflows, recovery policy, and the graphical interaction model.
+Provider protocols, model execution, durable session storage, resource loading, and coding tools remain Pi responsibilities. Supernova builds above that foundation: remote runtime ownership, session workflows, Git-backed checkpoint navigation, project workflows, recovery policy, and the graphical interaction model.
 
 The boundary is deliberate. Supernova should reuse Pi wherever Pi already owns the problem, then add product behavior where an opinionated development environment needs stronger workflow guarantees.
 
@@ -72,7 +72,7 @@ Visual quality is not decoration applied after the workflow works. The interface
 
 A project is a client-owned record for one exact directory on the server machine. Projects are grouped in a resizable sidebar and expanded to show Pi sessions whose working directory matches that path.
 
-Users can browse and create server-host folders, organize projects locally, search sessions, and see activity from sessions running in the background. Project organization and pinning live in the browser or Electron profile; the server does not maintain a synchronized project registry.
+Users can browse and create server-host folders, organize projects locally, search sessions, and see activity from sessions running in the background. Project organization lives in the browser or Electron profile; the server does not maintain a synchronized project registry. Session pinning is stored on the server.
 
 ### Sessions
 
@@ -94,7 +94,7 @@ Supernova adapts this state into one consistent interface; it does not implement
 
 ### Desktop and browser
 
-The standalone server exposes only the health endpoint and the WebSocket; the browser client is hosted separately. Electron packages the API and web assets separately, loads its own renderer at a stable app origin, and starts a local API child on an OS-assigned port. It adds native window chrome, persisted geometry, host-path opening, shell-environment import, icons, and managed server lifecycle. The client endpoint is independent of UI hosting; remote selection and authentication remain future work.
+The browser client is hosted independently from the API. Electron brings the same workspace into a desktop shell, adding OS integration and a managed local server. Neither hosting choice changes who owns execution or where workspace paths resolve. Hosting and security constraints live in [Architecture](architecture.md).
 
 Electron is an operating-system shell, not a second agent runtime. Browser behavior remains independent of Electron-only capabilities.
 

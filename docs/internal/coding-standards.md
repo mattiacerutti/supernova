@@ -36,4 +36,4 @@ Code is the memory. A name, a type, and a body say what something does; a commen
 - Use `/** */` when the comment sits above a declaration (function, class, member, schema field), so it shows on hover at call sites. Use `//` inside bodies.
 - A `TODO` names the condition that resolves it: `TODO(queue): write the turn record when the engine places it`. A bare `TODO: clean up` is not allowed.
 - Never commit commented-out code; Git has it.
-- When a comment and the code disagree, the comment is wrong. Fix or delete it in the same change, and do not take a stale comment's word over the code when reading.
+- Do not trust a stale comment over executable behavior. Fix or delete stale descriptions in the same change. If the mismatch concerns an intended safety guarantee, investigate rather than deleting the guarantee to match a bug.

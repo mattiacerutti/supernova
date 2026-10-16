@@ -4,24 +4,13 @@ Conventions for `packages/agent-runtime`. See [Coding standards](coding-standard
 
 ## Boundaries
 
-Features are plain TypeScript. Chord (`@earendil-works/chord`) is the remote boundary: `runtime-services.ts` serves the features on a Chord host, one object per service clients use. Features that publish state clients follow hold it as Chord replicated state. Contract schemas are Zod; features may parse with them.
+Features are plain TypeScript. Chord is the remote boundary; `runtime-services.ts` validates inputs and serves feature methods and state. Keep transport concerns there, not inside product operations.
 
 Dependencies flow one way: `lib/` ← `pi/` ← `features/` ← root composition (`runtime.ts`, `runtime-services.ts`, `session-operations.ts`). A feature never depends on another feature, by import or by injection: it does not import one, and its `Deps` does not name one or declare an interface another feature's class happens to satisfy. `pi/` and `lib/` never import a feature. ESLint enforces the import half; the injection half is on you.
 
 Shared serializable contracts belong in `@supernova/contracts`. UI and HTTP routing belong outside this package.
 
 ## Layout
-
-```
-src/
-  index.ts        public exports: createAgentRuntime, serveRuntime
-  runtime.ts             composition root: constructs every class once and owns dispose()
-  runtime-services.ts    remote boundary: serves the features as Chord remote objects
-  session-operations.ts  product operations: coordinates create and archive across features
-  lib/            stateless helpers with no Pi or product knowledge
-  pi/             the Pi wrapper: the durable engine and Pi's file formats
-  features/       configuration, extensions, folders, projects, providers, session-runtime, sessions, workspace, worktrees
-```
 
 Where a file goes:
 
@@ -31,7 +20,7 @@ Where a file goes:
 - Used by exactly one file → that file.
 - Orchestrates several features (archive a session across `session-runtime` and `projects`, create a session and send its first message) → `session-operations.ts`. These are product operations, independent of transport. Root composition files may coordinate features; features never depend on each other.
 
-There is no `shared/`. A stateful class two features need is either Pi (`pi/`) or has no product owner; the second case has not occurred, so there is no folder for it.
+There is no catch-all `shared/`. Establish ownership before adding a new shared stateful layer.
 
 ## Features
 
@@ -55,48 +44,37 @@ Nothing else sits at a feature root.
 - `lib/` for helpers that serve the region.
 - When the region's surface is a value rather than a class, the file is named for what it exports (`tools/web-fetch.ts`).
 
-Group a folder once it holds more than about five files, by what the files are for. `session-runtime/worker/commands/` holds six because a session can do six things.
+Group a folder once it holds more than about five files, by what the files are for. Treat that as a readability guideline, not a reason to split one coherent concern arbitrarily.
 
 **Naming.** Files are kebab-case. A class is named for what it is, not the layer it sits in: `SessionWorker`, not `SessionRuntime` (the feature class has that name). Files ending in `-utils`, `-helpers`, `-manager`, `-service` are a smell; the path should carry the domain.
 
 ## Errors
 
-Throw the tagged error classes from `@supernova/contracts`; nothing else is needed inside a feature. Chord carries only its own error codes, so the edge returns failures as data: a `ServiceResult` whose `code` is the contract error's tag. `run()` in `runtime-services.ts` parses the payload, passes errors matching the operation's `error` (the contract's class or `errorUnion` value) through, and turns everything else (an invalid payload, a plain `Error`, a bug) into a `GenericError` with the cause's message; the cause is logged on the server only. `error` also types the method's result: passing an error the contract does not declare fails to compile, but leaving one out does not, so match the contract. Use `lib/errors.ts` `errorMessage(cause, fallback)` to build messages from unknown causes.
+Throw declared contract errors when clients need to distinguish a failure; use ordinary errors otherwise. The remote edge converts failures to `ServiceResult` data. Keep its declared error handling aligned with the contract: types can catch an undeclared error being added but do not guarantee that none were omitted. Wire representation and tag conventions live in [Contracts](contracts.md#errors).
 
 Throw a contract error where the failure is detected, not by classifying causes later; a checkpoint conflict, for example, is thrown as `CheckpointConflictError` by the shadow repository. See [Checkpoint system](checkpoint-system.md).
 
 ## Streams
 
-Anything clients follow over time is owned by its feature, so it outlives every client: a session's document (`SessionWorker.document`, replaced by whole revisions), `SessionBoard`, terminals (`Terminals.state`, the list without output) and each terminal's output (`Terminals.output(id)`, appended per chunk and capped from the front), and provider logins (`LoginSessions.logins`, changed in place), each a Chord `replicatedState`. The service object that serves it copies each revision into a cell of its own with a listener (`replace(ctx, value, {diff: true})`), and serves the cell; Chord sends subscribers a snapshot and then each change as deltas. That is Chord's pattern for state that lives outside the object ("mirroring an external immutable store"); a service object only exists while a client holds it, and its cell starts again from the feature's current value. Values must be strict JSON: no `undefined` fields.
+Anything clients follow over time is owned by its feature, so it outlives every client. A remote service mirrors that state rather than owning it: a service object exists only while a client holds it, and a new hold starts from the feature's current value. Chord handles the initial snapshot and subsequent deltas; do not add a parallel replication protocol.
+
+Keep high-volume state separate from summaries. A client that needs the terminal list should not also receive every terminal's output. Replicated values must be strict JSON: no `undefined` fields. See [runtime-services.ts](../../packages/agent-runtime/src/runtime-services.ts) for the serving pattern.
 
 ### Serving a feature
 
-`runtime-services.ts` serves each contract with `host.serve(Contract, factory)`; the factory runs once per object (per input) and returns its methods and state members. It is synchronous and only declares: `self.state` for cells, `self.listen` to follow a feature's state, `self.resources` for something to open (a session's worker). Keep state that must survive in a feature, not in a cell or a closure.
+Service factories declare methods, state mirroring, and resources; keep them thin. State that must survive belongs in a feature, not a connection-scoped cell or closure.
 
-The built-in services are not Chord facets: they ship and update with the app, and nothing reloads or removes them while the server runs. Revisit that when a built-in feature must be switched on and off live. Plugins will be facets, loaded next to them with `host.load`.
-
-`lib/event-bus.ts` remains for in-process fan-out.
+The built-in services are not Chord facets: they ship and update with the app, and nothing reloads or removes them while the server runs. Revisit that when a built-in feature must be switched on and off live; do not add plugin machinery in anticipation.
 
 ## `pi/`
 
-```
-pi/
-  sdk.ts              PiSdk interface and createPiSdk(); the seam onto @earendil-works/pi-coding-agent, and Pi's HTTP setup
-  resource-cache.ts   per-project memo of loaded extensions, prompts, skills, and context files
-  session-store.ts    SessionStore: the collection of sessions (catalog records) and their open files
-  session-file.ts     SessionFile: one session's Harness, branch and leaf, document build, and actions; the seam onto @earendil-works/pi-durable
-  config/             resource-loader, settings policy, engine settings, and the system prompt
-  extensions/         loadExtensions(): every source of engine extensions a session installs; legacy/ bridges old-SDK extensions
-  lib/                every Pi ↔ contracts mapping and behavior Pi lacks: turns, content parts, models, sessions, tools
-```
-
 Reach Pi through `Pick<PiSdk, …>` or `Pick<SessionStore, …>`; only `pi/` imports `@earendil-works/pi-durable`. An object over part of Pi earns a root file only when it holds state or behavior Pi lacks: `resource-cache.ts`, `session-store.ts`, and `session-file.ts` do; `turnPositions` is a `lib/` function.
 
-Two Pi packages, two roles. `@earendil-works/pi-durable` runs agents. `@earendil-works/pi-coding-agent` is used only for what reads files and returns plain data: `ModelRuntime`, `SettingsManager`, skills, context files, prompt templates, extension loading, package management, and tool definitions for their prompt text.
+Two Pi packages, two roles: `@earendil-works/pi-durable` runs agents; `@earendil-works/pi-coding-agent` supplies model/auth support, settings, resources, and compatibility loading. Reuse them rather than implementing parallel engine behavior.
 
 Code ported from Pi because it is not exported (the system prompt in `config/system-prompt.ts`, the HTTP setup in `sdk.ts`) names its upstream file path; replace it with the import if Pi exports it.
 
-`extensions/extensions.ts` is the one place extension sources meet; `SessionStore` installs what it returns and knows nothing else. Pi's durable extension format is not final, so the only source today is `extensions/legacy/`: extensions written for Pi's old SDK, loaded by Pi's loader and mapped onto the engine. `extension-events.ts` maps the old events onto engine hooks and lists which cannot be delivered; `extension-context.ts` is the old SDK's print-mode `ctx`, as Supernova has always bound it. What this means for extension authors is in [Pi compatibility](../pi-compatibility.md#extensions). Nothing outside `legacy/` knows the old shapes, so it is deleted whole when Pi's format lands.
+Keep extension-source composition in `extensions/extensions.ts` and old SDK shapes inside `extensions/legacy/`. The session store installs the result without knowing each compatibility source. This keeps migration work isolated instead of spreading legacy assumptions through features. User-visible support and limitations belong in [Pi compatibility](../pi-compatibility.md#extensions).
 
 Inside `pi/` names drop the `Pi` prefix. Outside it, values that hold Pi types keep it (`PiModel`) so the reader knows which side of the boundary they are on.
 
@@ -104,19 +82,13 @@ Inside `pi/` names drop the `Pi` prefix. Outside it, values that hold Pi types k
 
 Live execution: send, abort, compact, checkpoint navigation, and each session's state. `sessions` is the durable record: create, load, rename, fork. See [Session runtime](session-runtime.md).
 
-- `worker/session-worker.ts` watches the session's branch, publishes its document as replicated state, and captures after-turn checkpoints.
-- `worker/session-board.ts` is every open session's activity, summary, setup step, and notices, for clients that do not follow the session.
-- `session-runtime.ts` keeps one `SessionWorker` per session in use and dispatches to it. A worker opens with its file and runs the commands in `worker/commands/`, which receive the worker and use its file, checkpoint, and publication steps.
-- `worker/commands/` are what the feature class dispatches to a worker; `worker/lib/navigate-to-turn.ts` is the one restore-then-show path undo, redo, and revert share.
-- `checkpoints/` is the store, shadow repositories, and git plumbing.
-- `tools/` are Supernova's own tools, written as engine tools and installed in every session as one engine extension (`SupernovaTools`: `web_fetch`); they do not go through the old-SDK bridge.
+Keep per-session coordination in the worker, workspace recovery in `checkpoints/`, and Supernova's tools in `tools/`. Native engine tools do not go through the old-SDK bridge. Undo, redo, and revert must share the restore-then-show path; see [Checkpoint system](checkpoint-system.md).
 
 ## Testing
 
 See [Development](development.md#verification) for verification and the test workflow.
 
 - Tests mirror `src` file for file under `tests/unit` and `tests/integration` (`src/pi/lib/models/map-model.ts` → `tests/unit/pi/lib/models/map-model.test.ts`). Fixtures live in `tests/support`, named for what they build.
-- Construct the feature class with `Deps` built from real pieces: `tests/support/session-runtime.ts` builds `SessionRuntime`, `Sessions`, and `Projects` over a real engine with session files in a temp directory, Pi's `ModelRuntime` with `registerFauxProvider`, and in-memory settings. Seed history by running turns against the faux model, not by writing entries.
-- Assert with `await expect(feature.method(input)).rejects.toMatchObject({_tag: "…"})`.
-- Observe session state with `observe()` from `tests/support/session-runtime.ts`: the values a subscriber of the transcript and board received. `tests/support/runtime-server.ts` serves the runtime on a real Chord host and connects a client host over an in-memory link for edge tests. A remote state member holds a value only while subscribed.
+- Reuse support fixtures with real engine sessions in temporary storage, faux providers, and in-memory settings. Seed history by running turns, not by hand-writing engine entries.
+- Assert declared failures by their stable `_tag`, not message classification. Observe values subscribers receive, and use the existing in-memory Chord link for edge tests; remote state tests must actually subscribe.
 - Cover runtime behavior, failure handling, stream and session lifecycle, persistence, emitted events, and cleanup. Prefer real in-memory dependencies over mocks.

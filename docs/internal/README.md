@@ -6,14 +6,14 @@ Guidance for developers and coding agents building Supernova. User guides live i
 
 - [Product](product.md) — audience, direction, and product tradeoffs.
 - [Architecture](architecture.md) — package boundaries, runtime ownership, and hosting modes.
-- [Session runtime](session-runtime.md) — committed/live state, streaming, concurrency, and recovery.
+- [Session runtime](session-runtime.md) — durable session state, streaming, concurrency, and recovery.
 - [Checkpoint system](checkpoint-system.md) — capture, restore, persistence, and Git preservation.
 
 ## Implementation conventions
 
 - [Coding standards](coding-standards.md) — TypeScript, imports, and implementation layout.
 - [Web](web.md) — React, feature structure, styling, state, RPC hooks, and frontend tests.
-- [Agent runtime](agent-runtime.md) — services, layers, provider boundaries, and runtime tests.
+- [Agent runtime](agent-runtime.md) — feature structure, dependency boundaries, state ownership, and runtime tests.
 - [Contracts](contracts.md) — schema organization, RPC errors, and public exports.
 
 ## Working on the project

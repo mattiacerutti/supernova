@@ -1,6 +1,6 @@
 # Release process
 
-Supernova releases are published by the manual GitHub Actions workflow at `.github/workflows/release.yml`.
+Supernova releases are published by the [Release workflow](../../.github/workflows/release.yml), manually for stable or nightly builds and on a schedule for nightlies.
 
 The workflow creates a release-prep commit, builds desktop artifacts, and publishes a GitHub Release.
 
@@ -18,7 +18,7 @@ Use these sections:
 - `### Fixed`
 - `### Removed`
 
-When a release is run, the workflow moves the current `## [Unreleased]` entries into a new version section, for example `## [0.1.0]`, and uses that section as the GitHub release notes.
+When a stable-channel release is run, the workflow moves the current `## [Unreleased]` entries into a new version section, for example `## [0.1.0]`, and uses that section as the GitHub release notes.
 
 Do not create the version section manually.
 
@@ -36,9 +36,10 @@ Attribution:
 
 ## Version inputs
 
-The workflow has three inputs:
+The workflow's inputs distinguish the release channel from its version:
 
-- `version`: the version to release, for example `0.1.0` or `v0.1.0`
+- `channel`: `stable` or `nightly`
+- `version`: the version for a stable release, for example `0.1.0` or `v0.1.0`; nightly versions are generated
 - `prerelease`: whether to publish the GitHub Release as a prerelease
 - `signed`: whether desktop signing is enabled; defaults to `true`
 
@@ -48,36 +49,13 @@ Versions with suffixes, such as `0.1.0-beta.1`, are automatically treated as pre
 
 ## Release workflow
 
-The workflow performs these steps:
+Stable automation prepares the changelog, workspace versions, and lockfile in a release-prep commit, verifies and builds that revision, then pushes it and publishes the release. Existing tags/releases are refused. The workflow and [release scripts](../../scripts/release) own the exact steps; do not manually duplicate preparation or overwrite published history.
 
-1. Validates the release version.
-2. Fails if the tag or GitHub Release already exists.
-3. Promotes `CHANGELOG.md` entries from `## [Unreleased]` into `## [x.y.z]`.
-4. Updates workspace package versions to `x.y.z`.
-5. Commits the changelog, package versions, and lockfile changes in a release-prep commit.
-6. Runs `bun run lint`, `bun run typecheck`, and `bun run test`.
-7. Builds desktop artifacts for the platform matrix, with signing enabled or disabled from the workflow input.
-8. Pushes the release-prep commit to the triggering branch.
-9. Publishes the GitHub Release with the changelog section as release notes.
+Nightly releases use unreleased notes without promoting them into a version section or pushing the release-prep commit to the branch. They are prereleases, not GitHub's latest stable release.
 
 ## Release artifacts
 
-The workflow builds artifacts for:
-
-- macOS arm64
-- macOS x64
-- Linux x64
-- Windows x64
-
-The exact files come from Electron Builder configuration in `apps/desktop/electron-builder.yml`. The release upload step includes installer/package files matching:
-
-- `.dmg`
-- `.zip`
-- `.AppImage`
-- `.deb`
-- `.snap`
-- `.exe`
-- `.msi`
+Check the workflow's platform matrix and [Electron Builder configuration](../../apps/desktop/electron-builder.config.mjs) for current targets and formats. Published assets include updater metadata as well as installers/packages; a downloadable app alone does not prove the update path works.
 
 ## Manual checklist
 
@@ -86,8 +64,8 @@ Before running a release:
 1. Confirm `main` is green in CI.
 2. Confirm `CHANGELOG.md` has the release notes under `## [Unreleased]`.
 3. Open GitHub Actions and run the `Release` workflow.
-4. Enter the release version.
-5. Set `prerelease` only for preview builds.
-6. Leave `signed` enabled for production; disable it only for an intentional unsigned build. Signed builds fail when required signing secrets are missing.
-7. Wait for the workflow to complete and confirm the release-prep commit reached the triggering branch.
-8. Download and sanity-check the published artifacts.
+4. Choose the intended channel and enter the version for a stable release.
+5. Set `prerelease` for a preview on the stable workflow; nightlies are always prereleases.
+6. Leave `signed` enabled for production and verify signing actually occurred. Missing credentials can cause an unsigned fallback; build success is not proof of signing. Unsigned macOS builds cannot receive automatic updates.
+7. Wait for the workflow to complete. For stable releases, confirm the release-prep commit reached the triggering branch.
+8. Download and sanity-check the published artifacts, including installation, startup, and update metadata.

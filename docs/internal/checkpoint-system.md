@@ -1,577 +1,121 @@
-# Checkpoint System Architecture
+# Checkpoint system
 
-## Purpose
+## Purpose and ownership
 
-Supernova checkpoints keep conversation navigation and workspace files at the same logical point in time.
+Supernova checkpoints coordinate conversation navigation with workspace recovery without taking over the user's Git workflow. The durable session records turn boundaries and the shown conversation position; app-owned shadow Git repositories hold workspace snapshots. When navigation restores files, restoration must complete before the shown turns change.
 
-The system coordinates two durable state models:
+The boundaries are deliberate:
 
-- The session's durable engine file, whose conversations hold the turns and whose `supernova.session` document holds each turn's checkpoints and how much of the branch is shown.
-- App-owned shadow Git repositories, which store workspace file snapshots.
+- Session orchestration chooses turn boundaries and commits conversation navigation.
+- The [checkpoint store](../../packages/agent-runtime/src/features/session-runtime/checkpoints/checkpoint-store.ts) coordinates repository discovery, manifests, capture, restore, and cleanup.
+- The [shadow repository](../../packages/agent-runtime/src/features/session-runtime/checkpoints/shadow-repository.ts) owns Git snapshots, conflict detection, selective restoration, and verification for one worktree.
 
-A checkpoint navigation succeeds only when the workspace restore completes before the shown turns change.
-
-## Architecture overview
-
-```mermaid
-flowchart LR
-  CLIENT[Web client] --> RPC[Agent RPC]
-  RPC --> FEATURE[SessionRuntime]
-  FEATURE --> RUNTIME[SessionWorker]
-  RUNTIME --> PI[Session engine file]
-  RUNTIME --> STORE[CheckpointStore]
-  STORE --> MANIFESTS[Checkpoint manifests]
-  STORE --> SHADOWS[Shadow Git repositories]
-  SHADOWS -. object alternates .-> SOURCE[User Git object databases]
-  SHADOWS --> WORKTREES[User worktrees]
-```
-
-The architecture is divided into four responsibilities:
-
-| Subsystem              | Responsibility                                                                                                                                      |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Session orchestration  | Defines turn boundaries, resolves navigation targets, and commits conversation navigation only after workspace restoration.                         |
-| Workspace coordination | Discovers repositories, persists manifests, and coordinates multi-repository capture, restore, cleanup, and maintenance.                            |
-| Shadow Git storage     | Captures trees and performs comparison, conflict detection, selective restoration, verification, rollback, and garbage collection for one worktree. |
-| Lifecycle integration  | Releases active runtimes before archival and removes session-owned manifests and refs afterward.                                                    |
+Read those implementations for formats and Git plumbing. This guide owns preservation guarantees, recovery policy, and the limits contributors must not overlook.
 
 ## Core invariants
 
-1. A turn record claiming coverage is written only after its workspace manifest is durable.
-2. A checkpoint manifest is published only after every covered repository has a tree and private ref.
-3. Workspace restoration completes and verifies before the shown turns change.
-4. Restore mutates only paths changed between the current and target checkpoint trees.
-5. The user's Git `HEAD`, branch, index, refs, and stash are never changed.
-6. A direct child repository owns its subtree; a parent repository snapshot excludes that subtree.
-7. Manual changes to affected paths cause restore to fail before mutation unless the caller forces it.
-8. Checkpoint storage never writes refs, indexes, commits, or other metadata into the user's `.git` directory.
-9. Client-facing checkpoint failures are generic, apart from the workspace-conflict error, and are not logged by the checkpoint boundary.
+1. Claim coverage only after the manifest and every covered repository's tree and private ref are durable. A failed capture must never look successful.
+2. Finish and verify workspace restoration before committing conversation navigation. A failed restore leaves the conversation position unchanged.
+3. Restore only paths changed between the current and target checkpoint trees; preserve unrelated manual edits.
+4. Preserve the user's `HEAD`, branch, index, refs, reflogs, and stash. Checkpoint objects, refs, and temporary indexes stay app-owned, outside the user's `.git`.
+5. A direct child repository owns its subtree. Parent capture and restore must exclude it, including when it appeared after the checkpoint.
+6. Detect manual changes to affected paths before mutation unless the caller explicitly forces the restore.
+7. Validate ownership, repository identity, refs, and filesystem containment. Never traverse symlink ancestors or recursively delete nested Git metadata.
+8. Keep actionable refusals distinct from generic failures without exposing private Git commands or storage details.
 
-## Conversation checkpoint model
+## Conversation navigation
 
-Each session file has one Session-scoped document, `supernova.session` (`pi/lib/session/session-state.ts`):
+Checkpoint boundaries belong to turns, not individual transcript entries. Undo, redo, and revert move the shown position while retaining later turns for redo. Sending or compacting from an undone position forks there and replaces the redo path; merely navigating does not fork.
 
-```ts
-interface CheckpointRef {
-  readonly checkpointId: string;
-  /** The session that captured it; a fork inherits foreign ones. */
-  readonly sessionId: string;
-  readonly status: "captured" | "disabled" | "failed";
-}
+Undo targets the first hidden turn's **before** checkpoint, preserving manual edits made before that turn was sent. Redo and forward revert target the last shown turn's **after** checkpoint. Keep all three commands on the shared [navigation path](../../packages/agent-runtime/src/features/session-runtime/worker/lib/navigate-to-turn.ts), so they cannot acquire different restore checks.
 
-interface TurnRecord {
-  readonly contentParts: UserMessageContentPart[];
-  readonly capture: boolean;
-  readonly before: CheckpointRef;
-  readonly after?: CheckpointRef; // absent until the turn's run ends
-}
+Navigation also restores the model and thinking state associated with the shown conversation. A later send must fork from that state, not silently reuse the abandoned branch's settings.
 
-type SessionState = {
-  branch: number; // conversation holding every turn, undone ones included
-  leaf?: number | null; // last shown entry of the branch; absent at its end, null when nothing is shown
-  current?: CheckpointRef; // checkpoint the workspace last matched
-  turns: Record<string, TurnRecord>; // keyed by the turn's user entry id
-};
-```
-
-- A turn is a user entry with a turn record; its id is the user entry id.
-- Undo, redo, and revert only move `leaf`; the branch keeps every turn, so redo shows its later turns again.
-- Sending or compacting from an undone leaf first forks the branch at `leaf` (or starts an empty conversation when nothing is shown) and makes that the branch, which drops the redo path. The engine forks only when the agent acts again.
-- Checkpoint boundaries are per turn, not per entry, so they need no position in the transcript.
+A fork inherits conversation history, not ownership of its source session's workspace snapshots. Checkpoint references retain their capturing session's identity; inherited captured boundaries cannot restore files, even with force.
 
 ### Checkpoint coverage
 
-`status` records whether a boundary has a durable workspace manifest behind it.
+A boundary is `captured` only when it has a durable manifest. `disabled` means no capture was attempted; `failed` means capture was attempted but no manifest was published. Conversation boundaries remain valid without workspace coverage.
 
-| Status     | Meaning                                                        |
-| ---------- | -------------------------------------------------------------- |
-| `captured` | A manifest exists for `checkpointId`.                          |
-| `failed`   | Capture failed. No manifest was published.                     |
-| `disabled` | Checkpointing was off for this turn. No capture was attempted. |
+- **Uncovered target:** move the conversation alone and leave files untouched. Do not imply that transcript movement proves file recovery.
+- **Captured current and target:** restore their delta, checking affected paths against the current tree.
+- **Captured target without a captured current baseline:** refuse unless forced. Without the baseline, there is no reliable way to distinguish uncaptured agent changes from manual edits. The forced path captures the live workspace as its baseline, then uses normal planning and verification; it can discard uncaptured work.
 
-Every turn records both boundaries regardless of coverage, so turn boundaries and
-conversation navigation stay intact when no workspace state was captured.
-Workspace restoration requires both the current and target boundary to be captured;
-otherwise navigation moves the conversation alone and leaves files untouched.
-
-Both boundaries are required because a selective restore needs both trees: the plan is the
-delta between them, and the conflict check compares the worktree against the current tree.
-With no current tree there is no delta to compute and no way to separate agent changes from
-manual edits, so a captured target cannot be restored on its own.
-
-### Crossing an uncovered boundary
-
-Navigating across an uncovered boundary moves the conversation while the worktree stays
-where the turn left it, so conversation position and workspace state diverge. That
-divergence is not tracked, and it has two consequences on later navigation:
-
-- The next restore between two captured boundaries compares the worktree against the current
-  checkpoint tree. If the uncovered turns changed any path in that delta, the conflict check
-  fails and the restore is refused until a new turn re-baselines the workspace.
-- If the uncovered turns changed only unrelated paths, the restore proceeds and leaves a
-  mixed workspace: the restored delta is reverted while the uncovered changes remain.
-
-Both outcomes are the ordinary conflict semantics applied to a workspace that drifted from
-its checkpoint. Neither is reported as an uncovered-boundary problem.
-
-```mermaid
-flowchart LR
-  T1[Turn 1: before B1, after A1] --> T2[Turn 2: before B2, after A2]
-  BRANCH[Branch conversation] --- T1
-  BRANCH --- T2
-  UNDO[leaf after undo: end of turn 1] -. shows .-> T1
-```
-
-Undo returns the workspace to the first hidden turn's before-turn checkpoint (keeping manual changes made before that turn was sent); redo and forward revert return it to the last shown turn's after-turn checkpoint. Undo, redo, and revert-to-message resolve different target entries, but all use the same workspace restore operation.
-
-## Turn lifecycle
-
-A successful turn has a checkpoint on both sides of provider work.
-
-```mermaid
-sequenceDiagram
-  participant Client
-  participant Send as sendMessage
-  participant Store as CheckpointStore
-  participant File as SessionFile
-  participant Worker as SessionWorker
-
-  Client->>Send: send message
-  Send->>Store: capture before-turn checkpoint
-  Send->>File: submit input
-  File->>File: record the turn under its user entry
-  File->>File: generation, tools (engine)
-  File-->>Worker: run ended (view)
-  Worker->>Store: capture after-turn checkpoint
-  Worker->>File: record after-turn checkpoint
-  Worker-->>Client: session.state (run ended)
-```
-
-`sendMessage()` captures the before-turn checkpoint, then submits the input; the engine places an idle session's input at once, and its turn record is written under the new user entry. When the run ends, the worker captures one after-turn checkpoint and records it on every turn that lacks one, including turns finished while the server was down.
-
-Capture is best-effort. A failed capture marks that boundary `failed` and the turn continues: provider work still runs, the after-turn checkpoint is still recorded, and the turn still settles. The turn stays navigable, but navigation across that boundary does not restore files. Because the turn proceeds, a turn started from an undone checkpoint invalidates the redo path whether or not its capture succeeded.
-
-A workspace with no discovered Git repositories still receives valid manifests with empty `repositories` arrays. Conversation undo, redo, and revert therefore continue to work without changing loose files.
-
-## Repository discovery and identity
-
-Discovery runs on every capture and at the beginning of every restore.
-
-The store inspects:
-
-1. The project root itself.
-2. Each immediate child directory of the project root.
-
-A candidate is accepted only when its canonical path is exactly the Git worktree root returned by `git rev-parse --show-toplevel`. Bare repositories and directories merely located inside another repository are not accepted as separate roots.
-
-Each repository identity contains:
-
-```ts
-interface RepositoryIdentity {
-  readonly root: string;
-  readonly gitDir: string;
-  readonly objectDir: string;
-  readonly repositoryId: string;
-}
-```
-
-`repositoryId` is the SHA-256 hash of the canonical worktree root, the canonical Git directory, and that directory's inode number and birth time. Paths distinguish linked worktrees that share objects, and the inode pair distinguishes a repository recreated in place: filesystems such as ext4 recycle freed inode numbers immediately, so the number alone can collide, while the birth time separates two lives of the same inode. Some filesystems cannot store a birth time and report the ctime in its place, which changes on ordinary Git activity; a birth time equal to the ctime is therefore treated as zero, falling back to inode-only identity instead of churning.
-
-Discovered repositories are sorted by project-relative root. If a root repository contains a discovered direct child repository, the child root is excluded from the parent's capture and restore path set.
-
-Discovery does not recurse below immediate children. Deeper repositories are not independently checkpointed, and restore refuses recursive deletion of any path containing nested `.git` metadata.
-
-## Storage layout
-
-Checkpoint data lives below the Pi agent data directory. By default this is:
-
-```text
-~/.supernova/userdata/agent/checkpoints/
-```
-
-When `PI_CODING_AGENT_DIR` is set, its value replaces `~/.supernova/userdata/agent`.
-
-```text
-<agent-data>/checkpoints/
-  projects/
-    <sha256-canonical-project-root>/
-      repositories/
-        <repository-id>/
-          git/
-            HEAD
-            config
-            objects/
-              info/
-                alternates
-            refs/
-              supernova/
-                <sha256-session-id>/
-                  <sha256-checkpoint-id>
-      manifests/
-        <sha256-session-id>/
-          <sha256-checkpoint-id>.json
-```
-
-The exact physical ref representation may change after Git packs refs. The logical ref name is stored in the manifest.
-
-### Shadow repositories
-
-Each discovered user worktree has one bare, app-owned shadow repository. It:
-
-- Stores new checkpoint objects and refs.
-- Uses the user worktree as the command worktree.
-- Uses the source repository's object directory through `objects/info/alternates`.
-- Pins its prune window with `gc.pruneExpire=7.days` and leaves Git's automatic maintenance enabled.
-- Applies `core.autocrlf=false`, `core.fsmonitor=false`, `core.longpaths=true`, and `core.symlinks=true` (`false` on Windows, where symlink creation requires elevation Git for Windows usually lacks) to checkpoint commands. Disabling the filesystem monitor keeps checkpoint commands from starting or consulting a daemon for the user's worktree, and keeps monitor state copied from the user's index from being trusted.
-
-Capture and restore use temporary indexes under the operating-system temporary directory. Capture seeds its temporary index by copying the source index when available, then refreshes that private copy from the actual worktree. This reuses unchanged object IDs and filesystem metadata without introducing a shared mutable checkpoint index or application-level lock. Repositories without a source index fall back to an empty temporary index. The user's index is never used for writes, and temporary indexes are removed after each operation.
-
-The shadow ref points directly to a Git tree; Supernova does not create checkpoint commits.
-
-### Checkpoint manifests
-
-One manifest maps a Pi checkpoint ID to the tree captured for every discovered repository.
-
-```ts
-interface RepositoryCheckpointState {
-  readonly repositoryId: string;
-  readonly relativeRoot: string;
-  readonly treeId: string;
-  readonly refName: string;
-}
-
-interface WorkspaceCheckpointManifest {
-  readonly version: 1;
-  readonly checkpointId: string;
-  readonly sessionId: string;
-  readonly projectRoot: string;
-  readonly repositories: readonly RepositoryCheckpointState[];
-}
-```
-
-Manifest files contain metadata only. File contents and modes live in Git objects.
-
-```mermaid
-flowchart LR
-  ENTRY[Pi checkpoint entry] --> ID[checkpointId]
-  ID --> MANIFEST[Workspace manifest]
-  MANIFEST --> ROOT_TREE[Root repository tree]
-  MANIFEST --> CHILD_TREE[Child repository tree]
-  ROOT_TREE --> ROOT_REF[Private shadow ref]
-  CHILD_TREE --> CHILD_REF[Private shadow ref]
-```
-
-Project, session, and checkpoint identifiers are hashed in storage paths. Manifests retain the original checkpoint ID, session ID, canonical project root, relative repository roots, tree IDs, and logical ref names.
-
-Manifest loading validates:
-
-- Manifest version.
-- Requested checkpoint, session, and project ownership.
-- Duplicate repository identities.
-- Repository and tree hash formats.
-- Expected session/checkpoint ref names.
-- Project-relative repository paths.
-
-Manifests are written atomically through a temporary sibling file followed by `rename()`.
+Conversation-only navigation can therefore leave files and transcript at different logical points. A later file restore must still honor coverage and conflict checks. Selective restoration intentionally permits unrelated manual changes to remain beside restored files.
 
 ## Capture
 
-`CheckpointStore.capture()` captures one complete workspace checkpoint.
+With checkpointing enabled, capture is attempted before submission and after the run ends. Settlement catches up on missing after-turn boundaries when a session is reopened, including runs that finished while nothing watched them.
 
-```mermaid
-sequenceDiagram
-  participant Send
-  participant Store as CheckpointStore
-  participant Shadow as Shadow Git storage
-  participant Git
-  participant Manifest
+Capture is best-effort: failure marks the boundary uncovered but must not block provider work or erase conversation history. A turn started from an undone position still invalidates redo even if its capture fails. A workspace without discovered repositories can have a valid empty manifest; that does not protect loose files.
 
-  Send->>Store: capture(projectRoot, sessionId, checkpointId)
-  Store->>Store: canonicalize project and discover repositories
-  loop each repository
-    Store->>Shadow: open shadow repository
-    Shadow->>Git: create source-seeded temporary index
-    Shadow->>Git: refresh and add changed worktree paths
-    Shadow->>Git: write-tree
-    Shadow->>Git: update private checkpoint ref
-    Shadow-->>Store: tree ID
-  end
-  Store->>Manifest: atomic write
-  Store-->>Send: success
-```
+Capture must describe the actual worktree, not the staged version. Reusing a copy of the user's index is an optimization, never permission to write to it. Clear `skip-worktree` and `assume-unchanged` flags in the private copy so they cannot hide real changes. Preserve literal path handling, staged deletions, modes, and file/directory transitions; do not collapse paths through rename detection or recurse into separately owned repositories.
 
-Repositories capture concurrently. Each owns a separate shadow repository and a private
-temporary index, so no state is shared between them, and the project lock still serializes the
-capture as a whole against other checkpoint work. For each repository, capture:
+Publish the manifest only after every repository's private ref exists. On partial failure, leave no successful coverage claim and best-effort remove refs created for that incomplete capture.
 
-1. Creates a private temporary index.
-2. Copies the source index when available, otherwise initializes an empty tree.
-3. Removes discovered child repository roots owned by another snapshot.
-4. Clears `skip-worktree` and `assume-unchanged` in the temporary copy, for the entries that carry them. Both flags stop Git from reporting worktree changes, so an unflagged copy is what makes capture see the real files. Only flagged entries are rewritten, which keeps the cost proportional to flagged files rather than to repository size and preserves the copied index's cached directory trees.
-5. Reads changed tracked paths, staged deletions, and untracked, non-ignored paths in one status pass, which also refreshes cached index metadata against the actual worktree. Renames are disabled so a delete and add pair is never collapsed, and submodules are skipped so the pass never recurses into them.
-6. Keeps tracked files regardless of size or ignore status.
-7. Keeps untracked files and symlinks up to and including 2 MiB.
-8. Skips ignored untracked files, untracked files above 2 MiB, directories, and missing paths.
-9. Adds only changed, deleted, and eligible untracked paths with literal, NUL-delimited pathspecs.
-10. Writes a complete controlled-worktree tree into the shadow object database.
-11. Creates the session/checkpoint ref before publishing the manifest.
+### Coverage limits
 
-Tracked deletions are represented by absence from the newly built tree. Empty directories, ownership, ACLs, and extended attributes are not representable by Git trees.
+- Discover the project root and immediate child Git worktree roots, not arbitrary descendants or directories merely inside another repository. Bare repositories and loose files outside discovered roots are not covered.
+- Capture tracked files without a size limit. Ignore untracked files excluded by Git and untracked files above the capture size limit; check the source policy before claiming a file is protected.
+- Git trees represent file content, executable mode, and symlinks, not empty directories, ownership, ACLs, or extended attributes.
+- Windows checkpoint commands cannot assume permission to create real symlinks. With `core.symlinks=false`, a real-symlink checkout does not round-trip as it does on other platforms.
 
-If any repository capture or the manifest write fails, the manifest is not published. The store best-effort deletes refs already created for that incomplete checkpoint and propagates the failure.
+Repository identity must distinguish linked worktrees and repositories recreated at the same path. Inodes alone can be reused, while a filesystem's reported creation time may actually be mutable ctime. Keep those filesystem quirks in mind before simplifying identity checks; the implementation documents the fallback.
 
 ## Restore
 
-All navigation commands call:
+Restore is a preflight/apply/commit operation, not a whole-worktree reset.
 
-```ts
-restore({
-  projectRoot,
-  sessionId,
-  fromCheckpointId,
-  checkpointId,
-});
-```
+### Preflight and repository changes
 
-The operation has three phases: preflight, apply, and conversation commit.
+Validate manifest version and ownership, safe relative paths, unique repository identities, and refs resolving to their recorded trees. Rediscover repositories rather than trusting an old manifest's paths.
 
-### Repository-set reconciliation
+- Repositories in both manifests receive a selective restore plan.
+- A repository only in the current manifest is untouched: the target made no claim about it.
+- A repository only in the target must exist and already match its target tree. Do not overwrite it without a current source tree.
+- A required target repository that is missing or replaced fails the operation before mutation.
+- Newly discovered repositories absent from both manifests are untouched, and child roots remain excluded from parent plans.
 
-Restore loads the current and target manifests, rediscovers repositories, and matches entries by `repositoryId` plus `relativeRoot`.
+Build all plans and detect conflicts before applying changes. The safety snapshot records the actual affected-path state, not just the expected checkpoint state; this is what allows rollback after ordinary failures.
 
-| Relationship                                    | Behavior                                                                                                           |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Present in current and target manifests         | Build a selective restore plan between the two trees.                                                              |
-| Present only in the current manifest            | Leave it untouched. The target checkpoint made no claim about it.                                                  |
-| Present only in the target manifest             | Require the repository to exist and already match the target tree; do not overwrite without a current source tree. |
-| Required by target but missing or replaced      | Fail before mutation.                                                                                              |
-| Newly discovered and absent from both manifests | Leave it untouched.                                                                                                |
+### Conflicts and force
 
-Currently discovered child repositories are excluded from parent plans even when an older manifest predates the child. Restoring an old parent checkpoint therefore does not delete a repository added later.
+Compare the worktree against the current tree only on paths in the restore delta. Changes there are conflicts; manual edits outside that delta are preserved. Do not broaden the comparison into a requirement that the entire workspace be clean.
 
-Before planning mutations, restore verifies the available manifest refs resolve to their recorded trees.
+Clients attempt normal navigation first. A forced retry requires consent to discard manual or uncaptured changes, including an explicit preference to skip confirmation. Force can bypass conflicts or establish an uncovered baseline; it does not bypass ownership, repository, ref, path, nested `.git`, or verification checks. It cannot make an inherited checkpoint restorable.
 
-### Restore plan and conflict detection
+The conflict response does not enumerate paths, and the workspace can change between refusal and retry. Confirmation is therefore a blanket acknowledgement of the state when the retry runs. Rollback snapshots are not a user-facing undo history: do not promise recovery of discarded edits.
 
-For a repository present in both manifests, the shadow layer diffs the current checkpoint tree against the target tree with rename detection disabled.
+### Apply, verify, then commit
 
-```ts
-interface RepositoryRestorePlan {
-  readonly deletePaths: readonly string[];
-  readonly restorePaths: readonly string[];
-  readonly affectedPaths: readonly string[];
-  readonly repository: ShadowRepository;
-  readonly safetyTreeId: string;
-  readonly targetTreeId: string;
-}
-```
+Handle additions, deletions, executable modes, symlinks, and file/directory transitions. Check containment and symlink ancestors before destructive operations, and refuse recursive removal containing nested `.git` metadata.
 
-- Deleted paths exist in the current tree but not the target tree.
-- Restore paths are added or modified in the target tree.
-- Affected paths are the union of both sets.
+Verify the actual affected-path result against the target tree before moving the conversation. If application or verification fails, attempt rollback of every possibly touched plan in reverse order using its safety snapshot. Leave the conversation position unchanged and report failure.
 
-The planner builds a safety tree by starting from the current checkpoint tree and replacing only affected paths with their actual worktree state. If that safety tree differs from the expected current tree, an affected path was manually changed and restore fails before mutation with a `CheckpointConflictError`.
-
-Manual changes outside the affected path set are intentionally ignored and preserved.
-
-### Forced restores
-
-Navigation payloads accept `force`. A forced restore skips the safety-tree equality check and
-overwrites the conflicting paths, which permanently discards those manual changes; nothing
-pins the pre-force worktree state. `force` bypasses that single check and nothing else:
-missing or invalid manifests, unresolvable refs, missing or replaced repositories, the nested
-`.git` refusal, and post-apply verification all still fail.
-
-Clients are expected to attempt navigation without `force`, and to retry with it only after
-the user confirms discarding their changes in response to a `CheckpointConflictError`. The
-conflict error names no paths, so the confirmation is a blanket acknowledgement rather than a
-review of specific files. The workspace can also change between the refusal and the retry;
-`force` discards whatever conflicts at the moment it runs.
-
-### Applying and verifying
-
-```mermaid
-sequenceDiagram
-  participant Nav as Navigation
-  participant Store as CheckpointStore
-  participant Shadow
-  participant Worktree
-  participant Pi
-
-  Nav->>Store: restore current to target
-  Store->>Store: load, discover, verify, and reconcile
-  loop shared repository
-    Store->>Shadow: build conflict-checked plan and safety tree
-  end
-  loop target-only repository
-    Store->>Shadow: verify worktree already equals target tree
-  end
-  loop restore plan
-    Store->>Shadow: apply target operations
-    Shadow->>Worktree: remove affected paths
-    Shadow->>Worktree: restore target paths
-    Store->>Shadow: verify affected paths
-  end
-  alt all plans succeed
-    Store-->>Nav: success
-    Nav->>Pi: move the leaf to the target turn
-  else a plan fails
-    Store->>Shadow: best-effort rollback applied plans
-    Store-->>Nav: failure
-    Note over Nav,Pi: leaf unchanged
-  end
-```
-
-Application removes both delete and restore paths before running `git restore --worktree`. Removing first handles file-to-directory and directory-to-file transitions.
-
-Before recursive removal, the implementation:
-
-- Rejects unsafe or escaping repository paths.
-- Resolves and checks filesystem containment.
-- Refuses to traverse a symbolic-link ancestor.
-- Refuses to remove a path containing nested `.git` metadata.
-
-Only restore paths are read back from the target tree. Delete paths remain absent.
-
-Verification starts from the target tree, replaces affected paths with their actual post-restore worktree state, writes a verification tree, and requires its ID to equal the target tree ID. This verifies content, executable modes, symlinks, additions, and deletions for affected paths.
-
-### Best-effort rollback
-
-Each plan's safety tree records the actual affected-path state during preflight, before any plan is applied. If apply or verification fails, plans that may have been touched are processed in reverse order and restored from their safety trees.
-
-Safety trees are not referenced after the restore call and are eventually eligible for Git pruning. Rollback protects ordinary in-process failures; it does not make multi-repository restore transactionally atomic or crash-safe.
-
-### Conversation commit
-
-`navigateToTurn()` calls `SessionWorker.restoreCheckpoint()` before changing the conversation, and only when both the current and target boundaries are captured. Only after restore succeeds, or is skipped because a boundary is uncovered, does it:
-
-1. Move `leaf` to the target turn's last entry.
-2. Record the restored checkpoint as `current`.
-3. Publish the change to the session's state.
-
-The model and thinking level come back with it: the session document reads the branch's `pi.agent` as of the leaf, and the fork a later send makes keeps that copy, so nothing is stored per turn.
-
-A restore failure is converted to `Failed to restore workspace checkpoint.` The leaf does not change.
-
-A forked session copies its source's turn records; their checkpoints keep the source's `sessionId`, so navigating to an inherited captured boundary rejects with `CheckpointInheritedError`.
-
-## Git and filesystem preservation
-
-| State                                           | Behavior                                      |
-| ----------------------------------------------- | --------------------------------------------- |
-| User `HEAD` and current branch                  | Preserved.                                    |
-| User commits, branches, tags, refs, and reflogs | Preserved.                                    |
-| User index and staged state                     | Preserved.                                    |
-| Git stash                                       | Preserved.                                    |
-| Paths in the current-to-target tree delta       | Restored or deleted after conflict checks.    |
-| Paths outside that delta                        | Preserved.                                    |
-| Ignored untracked files                         | Not captured and not restored.                |
-| Untracked files through 2 MiB                   | Captured when inside a discovered repository. |
-| Untracked files above 2 MiB                     | Not captured.                                 |
-| Tracked files                                   | Captured without a size limit.                |
-| Loose files outside discovered repositories     | Not captured or restored.                     |
-| Empty directories                               | Not represented.                              |
-| Executable mode and symlinks                    | Captured and restored.                        |
-| Ownership, ACLs, and extended attributes        | Not represented.                              |
-| Nested `.git` metadata                          | Never recursively deleted by restore.         |
+Rollback protects ordinary in-process failures; it is **not** a transaction across repositories or crash recovery. A crash can leave a partially restored workspace, and there is no startup restore journal. Do not describe this as atomic recovery.
 
 ## Errors
 
-Checkpoint storage uses ordinary exceptions internally, except where the client must act on the failure: those are thrown as contract errors where they are detected.
+Throw expected refusal types where detected:
 
-- Capture failures are absorbed and recorded as a `failed` checkpoint boundary instead of failing the turn.
-- A workspace conflict is thrown by the shadow repository as `CheckpointConflictError`, so clients can offer a forced retry. It carries a fixed message and no paths.
-- Navigation throws `CheckpointUncapturedError` and `CheckpointInheritedError` itself when the target cannot be restored without `force`, or at all.
-- Every other restore failure is a plain `Error` with `Failed to restore workspace checkpoint.`, which clients receive as a `GenericError`.
-- Internal Git commands, paths, tree IDs, and manifest details are not sent to clients.
-- Checkpoint failures are not logged by the checkpoint system.
+- `CheckpointConflictError`: affected paths contain manual changes.
+- `CheckpointUncapturedError`: a captured target has no captured current baseline.
+- `CheckpointInheritedError`: the target snapshot belongs to the source of a fork.
 
-`CheckpointNavigationError` is the union of those three contract errors and is the declared error for the undo, redo, and revert procedures.
+Other restore failures receive the generic restore message, without internal commands, paths, tree IDs, or manifest details. Capture failures become boundary status rather than failing the turn. Keep the store's failure result unambiguous; callers must not mistake a failed operation for valid coverage.
 
-The store uses `Promise<void>` rather than booleans so callers cannot accidentally treat a failed capture as a valid checkpoint. `SessionWorker.captureCheckpoint()` converts that rejection into a boundary status, which is the only place a capture failure is interpreted.
+## Lifecycle, concurrency, and retention
 
-## Session archival and cleanup
+Navigation and compaction reject while that session has active work. Capture and restore are also serialized per canonical project root, so two checkpoint operations cannot interleave mutations or capture a partially restored tree. Different projects remain concurrent.
 
-Archiving a session follows this order:
+That lock is process-local and project-scoped. It does not exclude external edits, tool writes from other sessions, another server, or overlapping project roots. Do not infer workspace-wide isolation from checkpoint serialization.
 
-1. The archive operation in `session-operations.ts` releases and disposes the session runtime.
-2. The session's catalog record gets its archive time, which takes it out of listings and search; its session file stays where it is.
-3. `CheckpointStore.deleteSession()` runs as best-effort cleanup.
+Archival stops work and releases the runtime before deleting session-owned checkpoint refs and manifests; it archives rather than deletes the conversation file. Ordinary shutdown closes storage without aborting work, allowing recovery when the session next opens. Cleanup is best-effort and must never remove another session's refs or shared shadow repositories.
 
-Session cleanup:
+Retained refs protect checkpoint trees. App-owned Git maintenance must leave a grace period for objects created before their capture refs are published; do not let global user configuration shorten that safety window. Maintenance failures may increase storage use but must not erase retained history. There is no configurable storage budget or automatic removal of repositories orphaned by identity changes.
 
-1. Loads that session's manifests.
-2. Deletes each recorded session/checkpoint ref from its shadow repository.
-3. Removes that session's manifest directory.
-4. Leaves shared shadow repository directories in place.
-5. Schedules maintenance if the daily interval has elapsed.
+Shadow repositories borrow source Git objects through alternates. Rewriting source history followed by aggressive source pruning can make an old checkpoint incomplete even while its shadow ref remains. These are recovery snapshots, not independent archival backups. Older checkpoint data stored inside user repositories is not migrated or read.
 
-Cleanup never deletes another session's refs or automatically removes a shared shadow repository.
+## Verification
 
-## Maintenance and retention
-
-Shadow repositories keep Git's automatic maintenance enabled and pin the prune window in
-their own configuration:
-
-```sh
-git config gc.pruneExpire 7.days
-```
-
-Local configuration takes precedence over the user's global configuration, so the prune
-window is owned by the app even though the schedule is not. Git packs and prunes on its own
-loose-object heuristic, triggered by the index writes capture already performs. Session
-cleanup additionally runs an explicit pass so freeing a session reclaims promptly instead of
-waiting for that heuristic:
-
-```sh
-git gc --prune=7.days
-```
-
-Properties of this policy:
-
-- Trees reachable from retained session refs remain protected, so nothing expires while it is still referenced.
-- Objects unique to deleted checkpoints become unreachable after ref deletion.
-- Unreachable objects older than seven days may be reclaimed.
-- A user's `gc.pruneExpire` or `gc.auto` cannot shorten the window or disable pinning, because local configuration wins.
-- Fresh objects created before a capture ref is published have a seven-day safety window.
-- Maintenance failures are ignored. Git records `gc.log` and pauses its own automatic maintenance after a failure, so a repeatedly failing repository stops being packed; storage then grows, but no history is lost.
-- No application-level cleanup lock is used. Git takes its own lock, and automatic maintenance detaches rather than blocking capture.
-
-There is no retention policy beyond ref deletion: refs live until their session is archived,
-and nothing removes shadow repositories orphaned by a changed repository identity.
-
-Objects available only through the source repository alternate remain dependent on the source repository retaining them. Rewriting source history followed by aggressive source GC can therefore make an old checkpoint incomplete even while its shadow ref remains.
-
-## Concurrency and lifecycle
-
-`SessionRuntime` keeps one `SessionWorker` per session in use. Navigation and compaction run one at a time per session and reject while a run is active, so a restore never races a turn's file changes.
-
-- Session archival aborts the session's work, closes its file, then deletes its checkpoint refs.
-- Runtime shutdown closes every session file without aborting work; an interrupted turn resumes, and gets its after-turn checkpoint, when its session next opens.
-
-The checkpoint store serializes capture and restore per canonical project root with an
-in-process keyed lock. Concurrent sessions in the same project queue instead of observing
-each other mid-operation, so a capture never records a partially restored worktree and two
-restores never interleave worktree mutations. Different projects remain fully concurrent,
-and session cleanup is not serialized because ref deletion and manifest removal are
-independent of worktree state.
-
-The lock is process-local and project-scoped. It does not protect against a second
-Supernova process, against two overlapping project roots that share one worktree, or
-against agent tool writes that run outside checkpoint operations.
-
-## Accepted limitations
-
-- A process crash during restore can leave a partially restored workspace.
-- Restore is not atomic across repositories.
-- There is no startup restore journal or recovery pass.
-- There is no cross-process lock, and agent tool writes are not serialized against checkpoint operations.
-- Discovery includes only the project root and immediate child repositories.
-- Loose files outside discovered repositories are ignored.
-- Untracked files larger than 2 MiB are ignored; tracked files remain uncapped.
-- Empty directories, ownership, ACLs, and extended attributes are not captured.
-- On Windows, checkpoint commands run with `core.symlinks=false`, so a checkout that uses real symlinks has them captured by content and restored as regular files.
-- Source object alternates make some checkpoint objects depend on source repository retention.
-- Existing checkpoint data formerly stored in user repositories is not migrated or read.
-- Uncovered checkpoint boundaries are not surfaced to clients, so a turn without workspace coverage looks like any other turn.
-- There is no configurable storage budget or checkpoint-management UI.
+Use isolated Git fixtures to cover preservation of staged state, refs and stash, unrelated edits, repository additions/replacements, conflicts, forced retries, partial failures, and cleanup. Test failure behavior and non-mutation as carefully as successful undo. Session execution and restart constraints live in [Session runtime](session-runtime.md).

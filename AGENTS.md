@@ -6,7 +6,7 @@ Supernova is an opinionated development environment built on Pi. The Pi SDK owns
 
 - **Speed is a feature.** Long sessions, rapid streams, and dense timelines should stay responsive. Consider rendering, network, and runtime costs, not only the empty-screen experience.
 - **Correctness before convenience.** Keep behavior predictable through reconnects, session restarts, and partial streams. A simpler implementation is not a win if it loses work or hides failure.
-- **Polish is part of the work.** Loading states, keyboard interaction, scrolling, spacing, and transitions belong to the feature, not a later cleanup pass.
+- **Polish is part of the work.** Loading states, keyboard interaction, scrolling, spacing, and smooth transitions belong to the feature, not a later cleanup pass.
 - **Remote by design.** The server owns execution, credentials, and workspace access. Paths refer to the server's machine. Desktop is a shell, not a second runtime.
 
 ## How to work
@@ -77,23 +77,23 @@ This is the repository's only `AGENTS.md`. Shared and area-specific conventions 
 | -------------------------------------------------------------- | ------------------------------------------------------- |
 | Product direction and feature tradeoffs                        | [Product](docs/internal/product.md)                     |
 | Package boundaries, runtime ownership, desktop/browser hosting | [Architecture](docs/internal/architecture.md)           |
-| TypeScript conventions and when to comment                     | [Coding standards](docs/internal/coding-standards.md)   |
-| React UI, styling, client state, runtime hooks                 | [Web](docs/internal/web.md)                             |
+| Coding hygiene, quality, file/folder structure, comments       | [Coding standards](docs/internal/coding-standards.md)   |
+| React UI, styling, client state, server access                 | [Web](docs/internal/web.md)                             |
 | Runtime features, Pi integration, backend organization         | [Agent runtime](docs/internal/agent-runtime.md)         |
 | Shared schemas, service payloads, errors, exports              | [Contracts](docs/internal/contracts.md)                 |
-| Sessions, streaming, reconnects, committed/live state          | [Session runtime](docs/internal/session-runtime.md)     |
+| Sessions, streaming, reconnects, persistence, recovery         | [Session runtime](docs/internal/session-runtime.md)     |
 | Checkpoint capture, restore, Git preservation                  | [Checkpoint system](docs/internal/checkpoint-system.md) |
 | Local setup, verification, test conventions                    | [Development](docs/internal/development.md)             |
 | Desktop icon assets and generation                             | [Icons](docs/internal/icons.md)                         |
 | Changelog entries and publishing releases                      | [Release](docs/internal/release.md)                     |
 | Writing or reorganizing documentation                          | [Documentation](docs/internal/documentation.md)         |
 
-When comparing other projects or checking upstream patterns, look in `.context/` first. Available references include `.context/pi`, `.context/effect-smol`, and `.context/effect-solutions`; inspect the directory rather than assuming a mirror exists.
+When comparing other projects or checking upstream patterns, look in `.context/` first. Available references, for example, include `.context/pi`; inspect the directory rather than assuming a mirror exists.
 
 ## Documentation
 
 `docs/` contains guides for people **using** Supernova. `docs/internal/` contains conventions, architectural decisions, and procedures for people and agents **building** it.
 
-Keep one home for each subject and link to it elsewhere. Update the section that became inaccurate rather than appending a work log. Document constraints and reasoning the code cannot explain; don't maintain a prose copy of the implementation.
+Code is the source of truth for implementation; docs preserve philosophy, design reasoning, coding standards, structural conventions, constraints, and procedures. Trim clear implementation duplication and repetition, not the substance or voice that teaches judgment. Keep each subject in one home and rewrite stale sections rather than appending work logs. See [Documentation](docs/internal/documentation.md).
 
 Add changelog entries for user-facing, release-relevant changes under `## [Unreleased]` in `CHANGELOG.md`. Internal refactors, tests, and documentation-only changes don't need entries unless they affect released behavior or release operations.

@@ -1,6 +1,6 @@
 # Architecture
 
-Supernova uses the Pi SDK (`@earendil-works/pi-coding-agent`) as its execution engine. Product direction lives in [Product](product.md); this guide defines ownership across packages.
+Supernova uses Pi's durable engine (`@earendil-works/pi-durable`) for execution and the coding-agent SDK for resource loading, settings, and model/auth support. Product direction lives in [Product](product.md); this guide defines ownership across packages.
 
 ## Package boundaries
 
@@ -12,7 +12,9 @@ Supernova uses the Pi SDK (`@earendil-works/pi-coding-agent`) as its execution e
 
 Bun manages packages and scripts; Turborepo coordinates workspace tasks. The server runs on Node.
 
-Clients talk to the runtime only through Chord (`@earendil-works/chord`): the server is a Chord host named `server` that serves one remote object per agent-runtime feature, and the browser is a Chord client host linked to it over the `/ws` WebSocket. Each feature's contract is in the contracts folder of the same name (`features/workspace` is `WorkspaceService` in `contracts/src/services/workspace/services.ts`), with members named after the feature's methods: methods for commands and reads, state members for anything that changes over time (session documents and activity, terminal output, provider logins), which reach clients as a snapshot and then deltas. `SessionRuntimeService` is one object per session and `TerminalService` one per terminal, each addressed by its id; every other service is one object all clients share. A client holds a terminal only while a tab shows it, so terminal output reaches only those clients. The socket has no authentication: every client acts as the owner, so the server must only be reachable by its owner. The server's only other route is `GET /health`. Runtime code is plain TypeScript; there is no Effect.
+Clients talk to the runtime through Chord (`@earendil-works/chord`) over WebSocket. Feature contracts expose commands and reads as methods, and changing state as subscriptions that start with a snapshot and continue with deltas. Keep this remote boundary separate from feature ownership: subscriptions observe work but do not own its lifetime. See [Contracts](contracts.md) for contract conventions and [Agent runtime](agent-runtime.md) for state ownership.
+
+The socket has no authentication: every client acts as the owner, so the server must only be reachable by its owner. Remote-capable does not mean safe to expose publicly or on an untrusted network. Runtime code is plain TypeScript; there is no Effect.
 
 ## Runtime modes
 
@@ -35,6 +37,6 @@ UI hosting and API ownership are separate. Remote/LAN operations happen on the m
 
 The server runs on Node everywhere: `tsx watch` runs the source in development, the packaged server runs the bundle with Node, and the desktop app with Electron's Node. Bun is the package manager, script runner, and bundler, not a runtime for the server, so runtime code uses Node's APIs directly: `node:sqlite` (through pi-durable's `openNodeSqliteStorage` for session files) and `@lydell/node-pty` for terminals. Don't add Bun-only APIs or runtime switches.
 
-`@lydell/node-pty` is a native module, so it is marked `--external` in the server build and `scripts/prepare-tools.ts` copies it, with only the current platform's prebuilt binaries, to `dist/node_modules`, which electron-builder ships next to `cli.js`.
+Native dependencies such as the PTY module must be packaged for the target platform and architecture, not merely the build host. Check the server build and desktop packaging scripts when changing them.
 
 For execution and recovery guarantees, see [Session runtime](session-runtime.md). For workspace snapshot and restore guarantees, see [Checkpoint system](checkpoint-system.md).

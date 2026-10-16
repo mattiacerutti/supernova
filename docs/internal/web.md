@@ -13,86 +13,78 @@ Feature-first, with a small set of typed shared folders. The layout follows [bul
 
 ```
 src/
-  api/          app-wide server data (configuration); same rules as a feature api/ folder
-  app/          bootstrap and composition: app, command-palette/ (features composed into the palette), layout/ (shell + sidebar), providers/ (query, runtime client, session sync), routes/ (router + route components)
-  components/   shared UI; layouts/ for page shells, ui/ for design-system primitives
-  config/       runtime constants (app environment)
-  features/     product areas: projects, sessions, settings, updates, workspace
+  api/          app-wide server access; same conventions as feature api/
+  app/          bootstrap, routing, layout, and feature composition
+  components/   shared UI; layouts/ for shells, ui/ for design-system primitives
+  config/       app environment and runtime constants
+  features/     product areas
   hooks/        shared hooks
-  lib/          helpers used across features (cn, toast, project-paths) and preconfigured dependencies (diffs/, themes/)
-  runtime/      the runtime connection: Chord handles to the server's services (transport/runtime-client.ts)
-  stores/       app-wide Zustand stores
+  lib/          cross-feature helpers and configured dependencies
+  runtime/      server connection and transport
+  stores/       app-wide client state
 ```
-
-Features keep route-level components in `pages/` and helpers in `lib/`. Single components are default exports; props and options fields are `readonly`.
 
 ### Features
 
 A feature owns a screen or a panel a user would name. Layout regions (sidebar, titlebar) and app-wide state are not features; they live in `app/` and `stores/`. A feature has only the folders it needs, from this fixed list:
 
-| Folder        | Holds                                                                                                                                                                                                                                                                                                     |
-| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `api/`        | Server access. One file per operation, named after it (`get-session.ts`, `rename-session.ts`), exporting the hook and, when other code needs it, `getXQueryOptions`. `query-keys.ts` holds one `xKeys` object per feature. Keep `@/runtime` imports here so components and hooks never see the transport. |
-| `components/` | Feature UI. Subfolders are UI regions (`composer/`, `timeline/`); a file is either inside a region folder or shared by several regions, never a sibling of a folder that describes it.                                                                                                                    |
-| `hooks/`      | Feature hooks that are not server access.                                                                                                                                                                                                                                                                 |
-| `lib/`        | Domain logic that is not UI or React-specific: parsers, builders, mappers. The test for `lib` is whether the output stands on its own. A helper that only shapes one component's render input belongs in that component file.                                                                             |
-| `pages/`      | Route-level components and anything only they compose (a settings section registry, for example).                                                                                                                                                                                                         |
-| `stores/`     | Feature-scoped Zustand stores. File `x-store.ts` exports `useXStore`. Stores hold client state and do no I/O; commands that change one live in `api/`.                                                                                                                                                    |
-| `types/`      | Nouns of the domain shared by several files in the feature (`Session`, `Project`, `TimelineItem`). A type that describes one component's props or one function's input lives with that component or function, however many files import it.                                                               |
+- `api/`: one file per server operation, exporting its hook and reusable query-options builder when needed. Keep transport imports here and feature query keys in `query-keys.ts`.
+- `components/`: UI grouped by region, such as `composer/` or `timeline/`.
+- `hooks/`: React behavior other than server access.
+- `lib/`: domain logic whose output stands on its own. Render-input helpers stay with their component.
+- `pages/`: route components and things only they compose.
+- `stores/`: feature-scoped client state; `x-store.ts` exports `useXStore`. Server commands belong in `api/`.
+- `types/`: shared domain nouns, not props or function options; those stay with their owner even if exported.
 
 Cross-feature imports are limited to another feature's `components/` and `types/`; its `api/`, `hooks/`, `lib/`, `pages/`, and `stores/` are private. Shared code under `api/`, `components/`, `config/`, `hooks/`, `lib/`, and `stores/` never imports from `features/`; composition happens in `app/`. ESLint enforces both rules and kebab-case filenames.
 
-Keep folders small enough to read at a glance; around five loose files is the point to group. Group by what the files are for, and reuse the same names at every level so a concern can be traced by name: `sessions` uses `composer/`, `conversation/`, `sidebar/`, and `timeline/` under `api/`, `components/`, `hooks/`, `lib/`, and `stores/` alike, and inside those `editor/`, `toolbar/`, `rows/`, `work/`, and so on. Files shared by several subfolders stay at the parent level; that is the only reason a file sits beside folders. `components/ui` and `app/` are exempt: one is a flat catalogue by design, the other is bootstrap.
+Group growing folders by concern around five loose files, reusing concern names across API, components, hooks, logic, and stores. A file belongs inside the folder describing it; only files shared by several subfolders stay at the parent. `components/ui` and `app/` are exempt: one is a flat catalog, the other is bootstrap.
 
 A helper earns a place in `lib/` when several features use it. Something used by one feature belongs in that feature's `lib/`, even if it looks generic.
 
 ## Code standards
 
-- Keep components small and focused; compose smaller pieces instead of growing prop lists and nested conditionals. Extract reusable UI into shared components and typed props interfaces.
-- Co-locate state with its owner and derive computed values instead of storing them. Do not call `useEffect` directly.
+- Co-locate state with its owner and derive computed values instead of storing them. Do not call `useEffect` directly; follow the [no-use-effect skill](../../.agents/skills/no-use-effect/SKILL.md).
 - The web build enables React Compiler. Avoid `useMemo` and `useCallback` unless there is a specific need; React 19 alone does not provide automatic memoization.
 - React 19 accepts refs as props. Avoid `forwardRef` unless required for interop.
-- Avoid prop drilling; lift shared data to a feature-level context or custom hook. Keep hook names descriptive (`useLoginWithEmail`, `useAuthStatus`). The app environment is a constant from `@/config/app-environment`, never a prop.
+- The app environment comes from `@/config/app-environment`, never a prop.
 - Avoid duplicating mutation result data into local state when it can be derived from the mutation result.
 
 ### Components and hooks
 
 - Default-export UI components as `export default function Component(props: ComponentProps) { ... }`; define handlers as `const handleX = () => {}` inside the component. Compound components with several named parts (`Menu`/`MenuItem`, `SidebarLayout`/`SidebarLayoutSidebar`) use named exports.
-- Every component has an `interface XProps` with `readonly` fields directly above it; no inline `props: {…}` types. Hook options are `interface UseXOptions`.
+- Every component has an `interface XProps` with `readonly` fields directly above it; no inline `props: {…}` types. Hook options are `interface UseXOptions`, also with readonly fields.
 - Layouts are compound components with children and part components, not render-prop slots.
-- A component whose props grow past a handful, or that would take a "controller" object, reads from a feature context instead (`ComposerContext` from `useComposer`).
+- Keep components focused. Use feature context when growing prop lists or prop drilling would otherwise lead to a "controller" object; split coherent UI and behavior rather than hiding complexity.
 - Hooks that hand back DOM handlers return one spreadable `…Props` object (`useInlineRename().inputProps`), not a list of callbacks.
 - Do not add hooks that only re-export store selectors; call the store.
 - Keep components under roughly 250 lines. Split by extracting a part component or a behavior hook.
 - In files with multiple components and helpers, order declarations from top to bottom as helpers, non-exported components, then exported component.
-- Prefer shared components before creating feature-local variants; only fork when the shared version cannot be extended cleanly.
 - When you need to render conditional UI, prefer `condition && <Component />` over `condition ? <Component /> : null`.
 - Keep components in separate files unless they are small, deeply related implementation details of the parent component.
 
 ### UI and Styling rules
 
-- Prefer primitives from `@/components/ui` before creating custom UI or using default html elements.
+- Prefer primitives from `@/components/ui` before custom UI or default HTML controls. Only fork shared components when they cannot be extended cleanly.
 - `components/ui` holds design-system primitives only: controls and surfaces that make sense in any feature. A component that exists for one feature's screen lives in that feature, even when it is built like a primitive; promote it when a second feature needs it.
 - Only override primitive styles such as hover effects, text colors, spacing, or borders if explicitly requested by the user.
-- When designing new UI, respect the app's existing design language for colors, typography, icon/text sizes, layout positioning, interaction flows, motion, and animation timing.
 - Use semantic tailwind utilities (`text-xs`, `p-2`, `rounded-full`, etc.) over arbitrary pixel/rem size. Avoid things like `text-[10px]`, `p-[1.3rem]`, `rounded-[13px]`.
 - Use the shared `cn` helper from `@/lib/cn` for conditional class names so `clsx` handles conditions and `tailwind-merge` resolves conflicting Tailwind utilities.
 - For multi-step modal/dialog flows, prefer one shared dialog shell with swapped content instead of multiple dialogs that close/open between steps.
 
 ### Runtime hooks
 
-- Get the runtime connection with `useRuntime()` (or take a `RuntimeClient` parameter in an options builder, like `listProjectSessionsQueryOptions(runtime, projectPath)`). It has one Chord handle per server-wide service (`runtime.sessions`, `runtime.workspace`, …), whose methods take the procedure payload (`null` for none). A call made while the connection is down waits for it.
-- Calls return `ServiceResult`s. In React Query functions, `unwrap()` from `@/runtime/runtime-result` turns a failure into a thrown `RuntimeError`. Branch on its code with `runtimeError<Service["method"]>(error)?.code`, which is typed as the method's declared error tags plus `"GenericError"`; a `Record<FailureCode<…>, string>` of messages fails to compile when the contract gains an error.
-- Follow state members (`runtime.workspace.terminals`, `runtime.providers.logins`, `runtime.sessions.directory`, a session's `session`, a terminal's `output`) with `subscribe`. A state member reaches the client only while subscribed, so subscribe where it is shown: terminal output from a mounted tab, the terminal list from the open + menu. It delivers `undefined` until the server's value arrives, then every value; after a reconnect Chord holds the services again and the value arrives anew.
-- Sessions: `runtime.sessions` for lifecycle and reads; a session's commands and document are its `SessionRuntimeService`, held by id. Use `followSession` and `withSessionRuntime` (`api/sessions-sync`) rather than `runtime.holdSession`: they share one hold per session and release it when the last user is done. Session state reaches components through the sessions store, never straight from the runtime; see State management.
-- Query keys come from the feature's `xKeys` object, shaped `[feature, ...scope]`, and are read from `queryOptions().queryKey` where an options object exists. Invalidate with the parent key (`sessionKeys.lists()`), never a literal array.
+- Obtain the connection with `useRuntime()`, or pass `RuntimeClient` into query-options builders. Keep calls behind the feature API boundary.
+- Use `unwrap()` and the typed `runtimeError`/`FailureCode` helpers for result handling. Branch on declared codes, not message strings; keep exhaustive client handling aligned with contract changes.
+- Subscribe where changing state is needed. The initial `undefined` is loading, not an authoritative empty result; reconnect delivers a fresh value. Hidden terminals should not keep receiving output.
+- Reuse `followSession` and `withSessionRuntime` from `api/sessions-sync` to share and release holds. Components read the sessions store, not remote session state directly.
+- Build query keys through the feature's `xKeys`, shaped `[feature, ...scope]`. Reuse `queryOptions().queryKey` and invalidate parent keys, never literal arrays.
 
 ## Testing
 
 See [Development](development.md#verification) for verification and the test workflow.
 
-- Add tests only for important user-facing behavior, bug fixes, regression-prone flows, and critical lifecycle behavior that would be costly to break.
-- Avoid overtesting hooks, small components, trivial rendering, styling, or implementation details unless they protect an important lifecycle or user-visible regression.
+- Protect important user-facing behavior, regressions, and lifecycle boundaries. Avoid tests for trivial rendering, styling, or private hook mechanics.
 - Keep tests under `tests`, with paths aligned to the source feature or shared area they cover.
 
 ## State management
@@ -103,15 +95,13 @@ See [Development](development.md#verification) for verification and the test wor
 - Derive values from store state when possible instead of duplicating derived state.
 - Store actions take data and change state. They do not take callbacks, navigate, show toasts, or otherwise reach into the UI; a component reads store state and reacts to it.
 - Live session state has one home, `stores/sessions-store`, and one way in, `api/sessions-sync`:
-  - `syncSessions` (started once in `app/providers/providers.tsx`) keeps the runtime's report of every open session (activity, setup step, problem, summary) in the store.
-  - `followSession` reads a session's document into the store, then keeps it live while anyone follows it. `useFollowSession` follows the session a page shows.
-  - The store also holds optimism: what the user did that the runtime does not show yet (`message`, `navigation`, `stopping`, `title`, …). A command patches its field when the user acts and clears it when it settles.
-  - `lib/session-view` decides what is shown from the store: `sessionView` for a page, `sessionStatus` for a row, `projectSessions` for a listing. It is the only place optimism is applied. Components read it through `useSession` and `useSessionStatus` (`hooks/use-session`) and `useListProjectSessions`.
-  - A new optimistic command adds a field to `SessionOptimism`, patches it in its command, and reads it in `lib/session-view`.
+  - Share session subscriptions rather than opening a separate hold for every component. Directory summaries remain available for sessions whose full document is not being followed.
+  - Keep authoritative updates separate from optimism: what the user did that the runtime does not show yet. Commands own the lifecycle of their pending intent and must reconcile it on success or failure.
+  - Apply optimism only in `lib/session-view`, so pages, sidebar rows, and listings agree. Components consume those projections rather than reconstructing session state independently.
 - React Query holds what is fetched on request: listings, models, suggestions, workspace data. Live session state is never written into it.
-- Session listings and search are paged on the server: `useListProjectSessions` and `useSearchSessions` are infinite queries over cursors, and nothing loads every session to filter or slice it. Rows already loaded stay current from the store; a pin is optimism (`pinned`) like a rename (`title`).
-- App-wide reactions to server state are in `app/providers/providers.tsx`: everything is read again after a reconnect, and workspace data after any run ends. `lib/session-notices` shows the runtime's notices as toasts as they arrive in the directory.
-- A toast is app-wide unless it carries `data.sessionId`; then it shows only while that session's page is open and waits otherwise (`ToastViewport` filters by the route). Scope a toast to a session when it is about that session's work: a failed navigation, a notice. Composer and project failures stay app-wide.
+- Preserve server-side paging for listings and search; never load every session to filter or slice it. Already loaded rows reconcile against live state and pending intent.
+- Put app-wide reactions in providers: refresh stale queries after reconnect and workspace data after runs end.
+- Scope notices about a session's work to that session; retain them while another route is shown rather than losing or misattributing them. Composer and project failures stay app-wide.
 
 ## UI language and design style
 

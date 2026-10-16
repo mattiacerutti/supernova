@@ -1,167 +1,89 @@
 # Session runtime
 
-## Summary
+## Design and goals
 
-A session is Pi's state: its entries (the transcript) and its documents (`pi.agent`, `pi.live`, `pi.usage`), plus what Supernova adds (turn records, title, worktree, context usage). The server keeps one such document per session, the contract `Session`, as live state, and serves it with the session's commands as a Chord remote object. The browser holds the session it shows, receives each change to the document as a delta, and builds its timeline from it, the way Pi's TUI renders from `Conversation.viewState()`.
+Pi's durable engine owns execution and persisted session state. Supernova adds turn records, workspace checkpoints, project/session metadata, and product recovery policy. The browser receives the server's session document and builds the timeline; it does not maintain a competing execution model.
 
-There is no separate committed and live view: the active run is part of the state (`live.run`, `live.generation`, `runStart`), and the browser decides how to show it. Execution is owned by Pi's durable engine (`@earendil-works/pi-durable`): every streamed partial, tool output, and turn is committed to the session's file before it is shown, so a server restart resumes an interrupted run instead of losing it.
+The active run is part of the durable engine view, not a separate uncommitted browser stream. Published engine output has already been committed, so reopening a session can recover interrupted work rather than treating it as lost.
 
-This document explains the design, its guarantees, and the reasoning behind its boundaries. It is intended for contributors working on sessions, streaming, checkpoints, the session services, or timeline behavior.
+Preserve these goals:
 
-## Goals
+1. **Server-owned work:** acceptance must not tie execution to a request, route, or subscription.
+2. **Independent sessions:** different sessions run concurrently without sharing lifecycle state or a storage commit line.
+3. **Single-run consistency:** navigation and manual compaction cannot race a session's active work; busy sends are rejected.
+4. **Pi's shapes end to end:** carry engine-owned state rather than inventing lookalike models; timeline rows are a client rendering concern.
+5. **Responsive streaming:** propagate changes, not a growing copy of the whole transcript.
+6. **Distinct failure outcomes:** rejection, run failure, user abort, disconnect, and shutdown are not interchangeable.
 
-1. **Server-owned execution.** Agent work continues independently of the browser that started it, and across server restarts.
-2. **Parallel sessions.** Different sessions run at the same time without sharing lifecycle state or storage.
-3. **Single-run consistency.** A session runs one input at a time; sends while busy are rejected today (queueing is designed in, see below).
-4. **Pi's shapes end to end.** The browser receives Pi's documents unchanged and entries enriched with authored `contentParts`; mapping them to rows is rendering, done in the browser.
-5. **Responsive streaming.** Each engine commit reaches the browser as a delta of what changed, not a copy of the running turn.
-6. **Predictable failure behavior.** Disconnecting a client, stopping a run, and rejecting a command have distinct outcomes.
+Client-owned execution, durable client replay of every stream event, and multi-client fencing are not goals of this design.
 
-## Non-goals
+## Ownership and storage
 
-- client-owned or browser-local agent execution
-- durable replay of every stream event to clients
-- multi-client fencing
+Start with [SessionFile](../../packages/agent-runtime/src/pi/session-file.ts) for the engine boundary and [SessionWorker](../../packages/agent-runtime/src/features/session-runtime/worker/session-worker.ts) for product coordination.
 
-## Storage
+| State                                 | Owner                           | Lifetime       |
+| ------------------------------------- | ------------------------------- | -------------- |
+| Transcript, runs, tasks               | Engine session file             | Durable        |
+| Turn records and navigation           | Supernova document in that file | Durable        |
+| Project/session metadata              | Session catalog                 | Durable        |
+| Published document, activity, notices | Server runtime                  | Server process |
+| Mirrored state and optimistic intent  | Client sessions store           | Client process |
 
-Each Supernova session is one SQLite file, `<agentDir>/sessions/<sessionId>/session.sqlite`, opened by one Harness. The session's chat starts as the file's root conversation; undo moves a pointer into it, and the next send forks there inside the same file (see [Checkpoint system](checkpoint-system.md)). One file per session follows Pi's own durable coding agent: a storage failure is fatal only to its own file, sessions never contend on one commit line, and idle sessions can close.
+Each session has its own SQLite file. This isolates storage failures and commit contention and allows idle sessions to close. The separate catalog exists because Pi cannot list sessions by project; lookup, listings, and search must not open every session file.
 
-`<agentDir>/sessions/catalog.sqlite` holds every session's record (project, worktree, title, fork source, pin, archive time), one row each (`pi/lib/session/session-catalog.ts`). Lookup by id, listing by project, and title search read only the catalog; no session file is opened for any. The engine cannot list by project, so the catalog is ours.
+Page listings and searches on the server, using opaque cursors and deterministic ordering including ties. Do not load the whole catalog to filter or slice a page. The queries and migrations live in [session-catalog.ts](../../packages/agent-runtime/src/pi/lib/session/session-catalog.ts).
 
-Listings and searches are paged on the server. Two partial indexes over unarchived rows hold them in order: `(project_path, pinned DESC, updated_at DESC, id DESC)` for a project's listing, and `(updated_at DESC, id DESC)` for search, which filters titles with an escaped `LIKE` while it walks it. A page is a keyset query that continues after the last row's sort key, read from the index without sorting; its cursor is that key, opaque to clients. The id breaks ties, so a page boundary never skips or repeats a row.
+### Persistence changes
 
-Both use Node's `node:sqlite`: session files through pi-durable's `openNodeSqliteStorage`, the catalog directly.
+These stores are user data across releases. Migrate in place; never require deletion of session files to upgrade.
 
-### Sessions from the old SDK
+- Append catalog migrations rather than editing applied ones. Keep them transactional and restartable, and test that records built by earlier migrations survive.
+- Version changes to the persisted Supernova document. Its migration must be pure and return a complete current value.
+- Refuse unsupported newer formats rather than guessing; downgrades are not supported.
 
-Releases before the durable engine stored sessions as Pi's JSONL files in the same directory, one `--<project path>--/` folder per project, with archived ones in its `archive/`. All code that reads them lives in `pi/lib/session/legacy/`, so it can be removed as one folder once no install still has them.
+Legacy JSONL imports remain isolated in `pi/lib/session/legacy/`. Preserve original files and tolerate interrupted imports. The imported conversation is the branch the user last saw, not every abandoned or undone branch; model context must retain compaction meaning. Imported turns have no workspace snapshots, and unfinished tool calls need interrupted outcomes rather than invented success. Archived sessions remain archived. Read the importer for conversion details rather than reproducing its file traversal here.
 
-The first time the catalog opens, it imports every non-archived file and then moves each project folder, `archive/` included, into `sessions/legacy/`. Old files are never written or deleted. An import keeps the conversation the user last saw: the path from the file's last entry, where the old checkpoint cursor left it, so undone turns and abandoned branches are dropped. Pi's own context projection turns messages and compaction summaries into engine entries, so the model gets the same context it got before. Each composer message becomes a turn with disabled checkpoints, so undo moves the conversation and leaves files alone. A tool call that a crash left without a result gets an aborted result, as the engine records for calls that never ran. Archived sessions are moved but never imported or listed.
+## Observation and publication
 
-The catalog record is written last, so after a crash the next start sees a session file with no record and writes it again. A file that fails to import is reported in the server log and moves with its folder. Folders whose name is a cataloged session id are left alone, because session ids are chosen by the client.
+The shared sessions service exposes lifecycle operations and directory summaries. Per-session runtime services expose documents and commands, bound to a session id. A route change must never redirect an already-issued command to another session.
 
-### Schema changes
+Directory activity must be available without following every full transcript. A subscription observes feature-owned state; releasing it does not stop work. A later hold begins from the current document. Follow [Agent runtime](agent-runtime.md#streams) for state ownership and [Contracts](contracts.md#errors) for wire failures.
 
-Both stores live on users' machines across releases, so every change to what they hold migrates in place; a release never asks a user to delete a file.
+Chord owns snapshot/delta synchronization. Reconnect from a new authoritative snapshot rather than maintaining hand-written replay counters. A slow client can be disconnected and resynchronize; do not retain unbounded output for it or assume clients saw every intermediate transition.
 
-- **Catalog.** `MIGRATIONS` in `session-catalog.ts` is the schema as the ordered SQL that builds it. SQLite's `user_version` records how many entries a catalog has run; `open` runs the rest, each in its own transaction, so a crash between two leaves a catalog a later open finishes. A schema change is a new entry at the end, never an edit to an existing one (`ALTER TABLE`, `DROP INDEX`/`CREATE INDEX`, or a copy-and-rename for what SQLite cannot alter), with a test that opens a catalog built by the previous entries and checks its records survive. A catalog whose `user_version` exceeds the list was written by a newer Supernova and is refused; downgrades are not supported.
-- **Session files.** The `supernova.session` document carries `version` in its `defineDoc`. A change to `SessionState` bumps it and extends `migrate(value, fromVersion)`, which the engine runs when a file written by an older version is next read (durable spec §3.6); it is pure and returns a complete current value. The engine refuses a document written by a newer version.
+Publication must preserve coherence:
 
-## Architecture
+- Build from the current engine view, so delayed notifications cannot move state backwards.
+- Publish the user entry and authored turn metadata together. The engine places the input and Supernova records its turn separately; no intermediate revision should expose an entry without the metadata needed to interpret it.
+- Make the accepted message visible before its optimistic placeholder disappears. A successful send response must not briefly erase the user's message.
+- Never combine newer final transcript entries with older live partials. Partial tool arguments may be incomplete; do not present them as a finished invocation.
 
-```mermaid
-flowchart BT
-    subgraph server[Server]
-        edge["Session services<br/>Chord host on /ws"]
-        sessions["Sessions<br/>create, load, rename, fork"]
-        runtimeService["SessionRuntime<br/>commands, board"]
-        worker["SessionWorker per session<br/>document as replicated state"]
-        store["SessionStore<br/>catalog + open session files"]
-        file["SessionFile<br/>Harness, branch, document"]
+## History and presentation
 
-        edge --> sessions
-        edge --> runtimeService
-        sessions --> runtimeService
-        runtimeService --> worker
-        worker --> store
-        store --> file
-    end
+The document combines shown and undone history, agent state at the navigation point, and live state. Authored content stays attached on both sides; durable workspace checkpoint records stay server-side.
 
-    subgraph browser[Browser]
-        client["Chord client host<br/>service handles"]
-        sync["sessions-sync<br/>directory + followed documents"]
-        sessionsStore["sessions store<br/>directory entries, documents, optimism"]
-        view["sessionView<br/>what a session shows"]
-        timeline["build-turns<br/>entries + pi.live → rows"]
-    end
+Keep the replicated history bounded around the navigation point, preserving whole turns. Repeated undo/revert must not grow it without bound. Additional pages must still belong to the requested side of the current branch when they arrive; a stale page cannot merge into a different conversation after navigation. Retain previously loaded history only while it continues that branch. A single turn larger than the transport frame limit remains a limitation.
 
-    edge <-->|services, state deltas| client
-    client --> sync
-    sync --> sessionsStore
-    sessionsStore --> view
-    view --> timeline
-```
+Reuse append-only history instead of rereading and rebuilding it on every stream update. The live-turn boundary must identify the user entry being answered, not merely the latest entry or input submission id. The projection and paging policy live in [session-snapshot.ts](../../packages/agent-runtime/src/pi/lib/session/session-snapshot.ts).
 
-Contracts import Pi's types (type-only) so the browser sees Pi's shapes; `z.custom<PiType>()` carries those values unchecked.
+Keep server truth separate from pending client intent; apply optimism in one shared client projection. See [Web](web.md#state-management) for stores and UI integration.
 
-| State                                      | Owner                                     | Lifetime        |
-| ------------------------------------------ | ----------------------------------------- | --------------- |
-| Transcript, runs, tasks                    | Engine session file                       | Durable         |
-| Turn records, navigation                   | `supernova.session` document in that file | Durable         |
-| Session records                            | `catalog.sqlite`                          | Durable         |
-| Session document                           | `SessionWorker`                           | Server process  |
-| Activity, summaries, notices               | `SessionBoard`                            | Server process  |
-| Mirrored directory and documents, optimism | Zustand sessions store                    | Browser process |
+## Admission, settlement, and engine capabilities
 
-## Services
+Sending resolves when the engine has placed the input, not when the run finishes. Work and any later failures belong to the session after that point. Settlement must catch runs completed while nothing watched them, including missing after-turn checkpoints after a restart. Do not depend only on observing a running-to-idle transition.
 
-Two services carry sessions, one per feature: `SessionsService` (`contracts/src/services/sessions/services.ts`) and `SessionRuntimeService` (`contracts/src/services/session-runtime/services.ts`). They are served by `agent-runtime/src/runtime-services.ts` on the server's Chord host, with every other runtime service, and reached over the HTTP server's `/ws` WebSocket (`apps/server/src/runtime-socket.ts`).
+Queueing and steering are not exposed merely because the engine supports them. First define admission, withdrawal, and checkpoint semantics: a queued turn's before-checkpoint must describe the workspace when the engine places it, not when the user submitted it.
 
-| Object          | Service                 | Members                                                                                                       |
-| --------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------- |
-| One, shared     | `SessionsService`       | `directory` (every open session's activity, summary, setup step, notices), `create`, `fork`, `rename`, `get`, |
-|                 |                         | `listModels`, `listComposerSuggestions`                                                                       |
-| One per session | `SessionRuntimeService` | `session` (the session document), `loadHistory`, `sendMessage`, `compact`, `abort`, `undoCheckpoint`,         |
-|                 |                         | `redoCheckpoint`, `revertToMessage`                                                                           |
-
-`directory` is written by session runtime (`SessionBoard`) but served on `SessionsService`, because a client reads it before following any session.
-
-A session's **notices** are problems that did not fail a command: a failure of the session's own work (an unanswered input, a failed compaction) is an `error`; something an installed extension cannot do here is a `warning` carrying the extension's path. The board keeps the last twenty per session and never clears them for a run, since a notice may be raised by the run that is starting. The browser shows new notices as toasts scoped to their session: one toast for all of a session's extension notices (they arrive as a batch; it stays until dismissed and opens a dialog listing them by extension), and each other notice on its own.
-
-A `SessionRuntimeService` object's input is the session id, so a call always reaches the session it was made for; holding an unknown session fails. The object opens the session's worker when it activates and copies its document into a cell it serves; releasing it never stops the session's work, and the next hold starts from the worker's current document. The browser holds the session it shows (and, for a command, the session it is for) and reads others (a sidebar prefetch) with `get`.
-
-Expected failures are results, not errors: Chord carries only its own error codes, so a method returns `{ok: false, error: {code, message}}` with the contract error's tag, and the client branches on the tag (`CheckpointConflictError` offers a forced retry).
-
-## The session document
-
-`SessionFile.snapshot()` builds the `Session` from the branch's current view, split at the leaf: its history through the leaf in append order (compacted entries included, system prompt entries left out), the entries past the leaf as `undone`, `pi.agent` as of the leaf, `pi.live`, `pi.usage`, authored `contentParts` attached to user entries in both history and `undone`, `runStart`, and the context usage of a request from the leaf (`Conversation.context(context, {at})`). The durable turn records and their checkpoints stay server-side; there is no separate public turns map. `entries` and `undone` are a window around the leaf, not the whole branch: the newest shown turns before it and the oldest undone turns after it, each side at most 20 whole turns and about 2 MB (`entriesPage` in `session-snapshot.ts`). Each is a `SessionEntries`: its `items`, and `remaining`, the whole turns beyond them on that side. A whole transcript would be too large for one snapshot, and no sequence of undo or revert can grow the document past the window. Turns beyond the window are read with `loadHistory({side, edge})`: `side` names the document field the page extends (`entries`, as the timeline nears its top; `undone`, as the undone drawer scrolls to its end) and `edge` is the client's outermost entry on that side. It fails when `edge` is no longer on that side of the leaf, so a page never lands in the wrong place after navigation. `undone[0]` is always what redo restores, and a client that undid turns itself already has them in full. The browser keeps the branch it has seen (`withKnownBranch` in the sessions store): shown entries before the window and undone entries after it stay while the window's edges are entries it has, and a window with nothing outside it replaces everything. One turn larger than a frame still cannot be sent. Entries are read only up to the view's newest one, so a final answer never appears beside the partial `pi.live` still streams. Entries are append-only, so a rebuild reads only entries after the last one it has while the branch is unchanged; moving the leaf reads nothing.
-
-`runStart` is the first user entry of the active run. Pi's `pi.live.run` lists the run's input submissions, not entries; the server resolves them so the browser knows where the turn being answered starts.
-
-## Streaming
-
-`SessionWorker` holds the session document as Chord replicated state. Every engine frame of the branch, and every change no frame shows (a rename, navigation, a placed input's turn record), rebuilds it and publishes it as one revision. The session's service object copies each revision into its cell, which diffs it against the previous one with Chord's `diffRevisions`. A frame only triggers a rebuild of the current state, so a frame handled late never moves the document backwards. The board follows the document's activity (`idle`, `running`, `compacting`, from `pi.live`) and summary, for sessions a client does not follow.
-
-Chord owns replication from there: a subscription starts with a snapshot, later revisions arrive as deltas encoded per client. A reconnecting client's handles are held again and start from a new snapshot; nothing is versioned by hand. A client that stops reading is disconnected once 64 MB are queued for it, and starts over when it reconnects.
-
-Submitting runs inside the worker's publication queue: the engine places the user entry and the turn record is written in a second commit, and no revision may be published between them, or the browser would show a user entry without its record.
-
-## Running a turn
-
-`sendMessage` selects and checks the model, prepares the prompt and images, forks at an undone leaf, configures the branch's model, captures the before-turn checkpoint, and submits the input; a busy session rejects it. It resolves once the engine placed the input; the run continues under the engine. The title is generated alongside and published with the document and the board.
-
-When a frame shows no active run, the worker captures the after-turn checkpoint of every turn that lacks one: one capture serves all inputs a run answered, and runs that finished while nothing watched (after a restart) are caught up on first watch.
-
-The browser shows the message it sent at once as a pending turn, until the send resolves. The worker publishes the placed input's turn before the send's reply leaves, so the document already holds the turn when the pending one goes; the wire test asserts this order. It projects entries before `runStart` as settled turns and entries from it on, plus `pi.live` (streamed partial, running tool output, blocking compactions), as the live turn (`lib/timeline/turns/build-turns.ts`). A streaming partial's last tool call shows no arguments: they may be cut. The engine commits partials at most every 100 ms, so intermediate states may be coalesced.
-
-### Queueing and steering
-
-Not exposed yet. The engine supports it (`whenBusy: "steer" | "followUp"` on submit, the queue in `pi.inbox`, withdrawal), and busy state already comes from the engine's run state. Exposing it means a `whenBusy` field on `sendMessage`, `pi.inbox` in the session document, a withdraw call, and writing a queued input's turn record and before-turn checkpoint when the engine places it rather than at submit (`TODO(queue)` in `SessionFile.submit`).
-
-### Settings
-
-`pi/config/harness-settings.ts` maps Pi's file settings onto Harness settings read at every use: compaction, retry, stream timeouts, transport, queue modes. Thinking budgets and the websocket timeout, which the engine's stream options lack, are added to every request by the `Models` wrapper in the same file. Shell path and command prefix configure command execution. The durable `read` tool returns PNG, JPEG, GIF, and WebP files within the model's image limits as they are; larger ones are not resized (no image processor is configured), and images attached in the composer are sent to the provider either way. Background compaction is off (`TODO(pi-durable)` in `harness-settings.ts`): the old SDK never compacted in the background and the timeline has no design for it.
-
-## Concurrency
-
-Different sessions run independently. Within a session the engine runs one input at a time; navigation and manual compaction reject while a run is active or another command runs. Route changes in the browser never interrupt server work.
+Similarly, background compaction needs a timeline design before enabling it. Keep settings adaptation at the Pi boundary rather than distributing provider-specific policy through features. Workspace coverage and navigation ordering live in [Checkpoint system](checkpoint-system.md).
 
 ## Failure and recovery
 
-- **Command rejection.** Failures while selecting the model, preparing, or admitting the input fail the command with a `GenericError` result. The browser drops its pending message.
-- **Run failure.** A model error is an assistant error entry, shown in the turn. An input that ends unanswered for another reason adds an error notice to the session.
-- **User abort.** `abortSession` aborts the branch's work; the run ends through the normal path and the document shows what was produced.
-- **Browser disconnect.** Releases that connection's holds only. On reconnect Chord holds the browser's services and sessions again, and the browser refetches every cached query.
-- **Server shutdown or crash.** Closing the server closes every session file without aborting work. On the next open the engine resumes the run from its last commit: an interrupted tool call that is not replay-safe gets an interrupted result, and the turn finishes. Turns that finished without an after-turn checkpoint get one when their session is next watched.
-- **Extension reload.** Updating extensions reinstalls them on every open session in place; a running call finishes on the code it took.
+- **Command rejection:** preparation or admission failure rejects the command; remove its pending client intent without pretending work was accepted.
+- **Run failure:** preserve produced output and surface the failure in the turn or a session notice. A returned send response does not mean later work succeeded.
+- **User abort:** end the run through its normal settlement path, retaining what was produced.
+- **Browser disconnect:** release that connection's holds only. Reestablish subscriptions and refresh stale query data on reconnect.
+- **Server shutdown or crash:** close storage without converting work into user cancellation. On reopening, let the engine resume from committed state and decide replay safety; non-replay-safe tools must not be blindly rerun.
+- **Archival:** deliberately stop work and release its resources before checkpoint cleanup. This is not equivalent to closing storage for shutdown.
+- **Extension reload:** replace future behavior in place; running calls finish on the code they took.
 
-## System invariants
-
-1. The server's session document is the only source of session state; the browser changes it only with values of its state member or a read.
-2. State reaches a client as a snapshot and then contiguous deltas; a reconnected client starts from a new snapshot.
-3. A user entry and its authored `contentParts` appear in the same revision.
-4. Every visible state was committed to the session file first.
-5. One session runs one input at a time; sessions run concurrently.
-6. Unsubscribing a client never aborts server-owned work; closing a session never aborts it either.
-7. A session call reaches only the session it was made for.
+Notices report problems that did not reject a command. Distinguish session work failures from extension compatibility warnings, and retain enough context to attribute them correctly. Starting another run must not erase a notice raised during startup; switching routes must not discard an unseen session failure. Client presentation belongs in the web guide, not in the engine lifecycle.

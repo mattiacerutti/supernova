@@ -2,25 +2,13 @@
 
 Desktop icon sources live in `apps/desktop/icons`.
 
-The root folder may contain shared source artwork such as the original SVG logo. Generated desktop assets do not read directly from that root artwork. Instead, icon generation reads from one of the variant folders:
-
-```text
-apps/desktop/icons/
-  dev/
-    macos.icon
-    macos.png
-    icon.png
-  prod/
-    macos.icon
-    macos.png
-    icon.png
-```
+Edit the selected variant's source artwork, not generated assets. Shared artwork at the root, such as the original SVG logo, is not read directly by icon generation; each variant supplies its own three source files.
 
 ## Variants
 
 `dev` is used when running the desktop app in development.
 
-`prod` is used for builds, packaging, and preview/start runs.
+`prod` is used for stable builds, packaging, and preview/start runs. Nightly versions select `nightly` by default. The [generator](../../apps/desktop/scripts/generate-icons.ts) owns variant selection and explicit overrides.
 
 The generator writes the selected variant into `apps/desktop/resources/icons`, which is the folder consumed by Electron and Electron Builder.
 
@@ -34,22 +22,11 @@ The generator writes the selected variant into `apps/desktop/resources/icons`, w
 
 We do not reuse `macos.png` for Windows or Linux because the Icon Composer export includes macOS-specific diagonal light in the corners.
 
-## Generated outputs
-
-The generator creates these files in `apps/desktop/resources/icons`:
-
-| Output                         | Source                          | Used by                                                      |
-| ------------------------------ | ------------------------------- | ------------------------------------------------------------ |
-| `icon.icon`                    | `macos.icon`                    | Packaged macOS app icon                                      |
-| `icon.icns`                    | `macos.png`                     | macOS DMG icon                                               |
-| `dock.png`                     | `macos.png`                     | Runtime macOS Dock override for dev                          |
-| `icon.png`                     | `icon.png` with rounded corners | Electron `BrowserWindow.icon` fallback, mostly Windows/Linux |
-| `icon.ico`                     | `icon.png` with rounded corners | Windows packaged app icon                                    |
-| `16x16.png`, `32x32.png`, etc. | `icon.png` with rounded corners | Linux packaged app icons                                     |
-
 ## Commands
 
-Generate production icons:
+After changing source artwork, regenerate explicitly: development startup may reuse existing generated files. Inspect the platform-specific results at small sizes as well as the full-size source.
+
+Generate icons for the current build variant:
 
 ```sh
 bun run --filter @supernova/desktop generate:icons
