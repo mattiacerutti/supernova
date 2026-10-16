@@ -237,6 +237,7 @@ export default function SessionPage(props: SessionPageProps) {
             ) : (
               <SessionComposer
                 key={composer.draft.revision}
+                autoFocus={target.kind === "new"}
                 bottomBar={
                   target.kind === "new" ? (
                     <WorkspacePicker />

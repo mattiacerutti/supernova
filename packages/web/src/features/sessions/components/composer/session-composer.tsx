@@ -163,6 +163,7 @@ function ComposerSubmitButton(props: ComposerSubmitButtonProps) {
 }
 
 interface SessionComposerProps {
+  readonly autoFocus?: boolean;
   readonly bottomBar?: ReactNode;
   readonly children?: ReactNode;
   readonly onInterrupt?: () => void;
@@ -174,7 +175,7 @@ interface SessionComposerProps {
 }
 
 export default function SessionComposer(props: SessionComposerProps) {
-  const {bottomBar, children, onInterrupt, onSubmit, placeholder = DEFAULT_PLACEHOLDER, slashCommandActions, streamStatus = "idle", topExtension} = props;
+  const {autoFocus = false, bottomBar, children, onInterrupt, onSubmit, placeholder = DEFAULT_PLACEHOLDER, slashCommandActions, streamStatus = "idle", topExtension} = props;
   const {attachments, disabled, draft, projectPath} = useComposerContext();
 
   const [draftText, setDraftText] = useState(() => textFromComposerContentParts(draft.contentParts));
@@ -186,6 +187,7 @@ export default function SessionComposer(props: SessionComposerProps) {
 
   const editor = useEditor(
     {
+      autofocus: autoFocus ? "end" : false,
       editable: !disabled,
       content: contentPartsToEditorContent(draft.contentParts),
       editorProps: {

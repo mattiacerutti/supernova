@@ -1,7 +1,7 @@
 import {BOTTOM_TOLERANCE_PX, DETACHED_DISTANCE_PX, expect, test} from "@e2e/support/timeline-fixture";
 import type {TimelineDriver, VisibleTextAnchor} from "@e2e/support/timeline-fixture";
 import type {TimelineVisualSample} from "@e2e/support/timeline-test-api";
-import {OTHER_SESSION_ID, TIMELINE_SESSION_ID} from "@e2e/mocks/timeline-data";
+import {OTHER_SESSION_ID, TIMELINE_PROJECT_NAME, TIMELINE_SESSION_ID} from "@e2e/mocks/timeline-data";
 
 function visibleSamples(samples: readonly TimelineVisualSample[], sessionId: string): readonly TimelineVisualSample[] {
   return samples.filter((sample) => sample.visible && sample.pathname === `/session/${sessionId}`);
@@ -502,6 +502,28 @@ test.describe("starting a session", () => {
     await timeline.openNewSessionScreen();
   });
 
+  test("focuses the new-session composer so typing needs no click", async ({page}) => {
+    const editor = page.locator('[contenteditable="true"]').first();
+    await expect(editor).toBeFocused();
+
+    await page.keyboard.type("Start building");
+    await expect(editor).toHaveText("Start building");
+  });
+
+  test("focuses the new-session composer when opened from the command palette", async ({page, timeline}) => {
+    await timeline.switchToMainSession();
+    await page.keyboard.press("ControlOrMeta+k");
+    await page.getByRole("textbox", {name: "Search sessions and actions"}).fill("New session");
+    await page.getByText("New session in…", {exact: true}).click();
+    await page.getByRole("dialog").getByText(TIMELINE_PROJECT_NAME, {exact: true}).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+
+    const editor = page.locator('[contenteditable="true"]').first();
+    await expect(editor).toBeFocused();
+    await page.keyboard.type("From the palette");
+    await expect(editor).toHaveText("From the palette");
+  });
+
   test("keeps the composer and docks it while the first message becomes the new session", async ({page, timeline}) => {
     await timeline.markComposer();
     const heroTop = await timeline.composerTop();
@@ -524,13 +546,17 @@ test.describe("starting a session", () => {
     await timeline.clickNewSessionInSidebar();
 
     expect(page.url(), "coming back finds the same draft").toBe(draftUrl);
-    await expect(page.locator('[contenteditable="true"]').first()).toHaveText("Half-written");
+    const editor = page.locator('[contenteditable="true"]').first();
+    await expect(editor).toBeFocused();
+    await page.keyboard.type(" more");
+    await expect(editor).toHaveText("Half-written more");
 
     await timeline.submitComposer("Half-written and sent");
     await expect(page).toHaveURL(`/session/${new URL(draftUrl).searchParams.get("draft")}`);
 
     await timeline.clickNewSessionInSidebar();
     expect(page.url(), "the next new session gets its own id").not.toBe(draftUrl);
+    await expect(editor).toBeFocused();
   });
 
   test("returns to the new-session screen with the prompt restored when the session cannot start", async ({page, timeline}) => {
