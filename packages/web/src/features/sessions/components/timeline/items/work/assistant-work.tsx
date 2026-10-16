@@ -1,5 +1,6 @@
 import {useState} from "react";
 import Icon from "@/components/ui/icon";
+import RollingText from "@/components/ui/rolling-text";
 import WorkRow from "@/features/sessions/components/timeline/items/work/work-row";
 import {summarizeWork} from "@/features/sessions/lib/timeline/work/work-summary";
 import type {WorkSessionTimelineItem} from "@/features/sessions/types/session-timeline-item";
@@ -49,7 +50,7 @@ export default function AssistantWork(props: AssistantWorkProps) {
         <span className="grid w-[22px] shrink-0 place-items-center">
           <Icon className={cn("transition-transform duration-150 ease-out", !open && "-rotate-90")} name="chevron-down" size="xs" />
         </span>
-        <span className={cn("min-w-0 truncate", item.live && "shimmer [--shimmer-duration:3.4s]")}>{summary}</span>
+        <RollingText className={cn(item.live && "shimmer [--shimmer-duration:3.4s]")}>{summary}</RollingText>
       </button>
       <div className="grid grid-rows-[0fr] transition-[grid-template-rows] duration-150 ease-out data-[expanded=true]:grid-rows-[1fr]" data-expanded={open}>
         <div className="min-h-0 overflow-hidden">

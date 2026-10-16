@@ -159,7 +159,7 @@ export default function Sidebar() {
 
       <div className="flex items-center gap-2.5 px-2.5 pb-2.5 pt-2.5">
         <Link
-          className="flex flex-1 items-center gap-2 rounded-xl corner-superellipse/1.3 px-2 py-1.5 text-left text-sm text-ink hover:bg-overlay-hover hover:text-ink-strong"
+          className="flex flex-1 items-center gap-2 rounded-xl corner-superellipse/1.3 px-2 py-1.5 text-left text-sm text-ink transition-colors hover:bg-overlay-hover hover:text-ink-strong"
           to="/settings"
         >
           <Icon name="settings" size="sm" />

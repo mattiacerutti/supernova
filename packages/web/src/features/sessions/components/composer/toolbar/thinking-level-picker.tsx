@@ -1,6 +1,7 @@
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import Menu, {MenuItem, MenuLabel} from "@/components/ui/menu";
+import RollingText from "@/components/ui/rolling-text";
 import {useComposerContext} from "@/features/sessions/hooks/composer/use-composer";
 
 export default function ThinkingLevelPicker() {
@@ -16,7 +17,7 @@ export default function ThinkingLevelPicker() {
       className="w-40"
       trigger={(triggerProps) => (
         <Button {...triggerProps} className="flex min-w-0 items-center gap-1.5  px-2.5 py-1 text-xs" disabled={disabled} type="button" variant="primary">
-          <span className="truncate">{models.selectedThinkingLabel}</span>
+          <RollingText>{models.selectedThinkingLabel}</RollingText>
           <Icon className="shrink-0 text-ink-muted" name="chevron-down" size="xs" />
         </Button>
       )}

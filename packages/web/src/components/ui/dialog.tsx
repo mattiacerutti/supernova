@@ -50,7 +50,7 @@ export default function Dialog(props: DialogProps) {
                   <BaseDialog.Title className="text-base font-medium text-ink" data-slot="dialog-title">
                     {title}
                   </BaseDialog.Title>
-                  <BaseDialog.Close aria-label="Close dialog" className="grid cursor-pointer place-items-center text-ink-muted hover:text-ink-strong">
+                  <BaseDialog.Close aria-label="Close dialog" className="grid cursor-pointer place-items-center text-ink-muted transition-colors hover:text-ink-strong">
                     <Icon name="x" size="md" className="-mb-0.5" />
                   </BaseDialog.Close>
                 </div>

@@ -4,6 +4,7 @@ import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import IconButton from "@/components/ui/icon-button";
 import Menu, {MenuLabel} from "@/components/ui/menu";
+import RollingText from "@/components/ui/rolling-text";
 import SearchField from "@/components/ui/search-field";
 import {useComposerContext} from "@/features/sessions/hooks/composer/use-composer";
 import {getModelPickerSections} from "@/features/sessions/lib/composer/models/model-picker-sections";
@@ -53,7 +54,7 @@ export default function ModelPicker() {
       sideOffset={10}
       trigger={(triggerProps) => (
         <Button {...triggerProps} className="flex min-w-0 items-center gap-1.5  px-2.5 py-1 text-xs" disabled={disabled || models.length === 0} type="button" variant="primary">
-          <span className="truncate">{selectedModel?.name ?? "Select model"}</span>
+          <RollingText>{selectedModel?.name ?? "Select model"}</RollingText>
           <Icon className="shrink-0 text-ink-muted" name="chevron-down" size="xs" />
         </Button>
       )}

@@ -1,11 +1,16 @@
-import {LayoutGroup, motion, useReducedMotion} from "framer-motion";
+import {AnimatePresence, LayoutGroup, motion, useReducedMotion} from "framer-motion";
 import type {HTMLAttributes, ReactNode} from "react";
+import {useRouter} from "@tanstack/react-router";
+import {useState} from "react";
 import {appEnvironment} from "@/config/app-environment";
 import {cn} from "@/lib/cn";
 
 const TITLE_TRANSITION = {duration: 0.18, ease: "easeOut"} as const;
 const DOCK_TRANSITION = {type: "spring", visualDuration: 0.2, bounce: 0} as const;
-const TIMELINE_ENTER_TRANSITION = {delay: 0.08, duration: 0.25, ease: "easeOut"} as const;
+const HERO_EXIT_TRANSITION = {duration: 0.1, ease: "easeOut"} as const;
+const TIMELINE_ENTER_TRANSITION = {delay: 0.08, duration: 0.2, ease: "easeOut"} as const;
+const ENTER_TRANSITION = {duration: 0.25, ease: "easeInOut"} as const;
+const ENTER_FROM = {opacity: 0, y: 8} as const;
 
 /** The title clears the window controls and titlebar buttons, which differ per host. */
 const TITLE_OFFSET = {mac: "left-48", web: "left-12", windows: "left-29", linux: "left-29"}[appEnvironment];
@@ -69,19 +74,47 @@ export function SessionBody(props: SessionBodyProps) {
   const {composer, hero, timeline} = props;
   const reduceMotion = useReducedMotion();
   const centered = hero !== undefined;
+  const router = useRouter();
+  // On mount the router still resolves to the page being left. Moving between two pages of the same kind (session to session,
+  // or new-session to new-session) swaps them in place; every other arrival plays the entrance.
+  const [enter] = useState(() => {
+    const from = router.state.resolvedLocation?.pathname;
+    const fromCentered = from === "/session/new";
+    const fromSession = from?.startsWith("/session/") === true && !fromCentered;
+    return !reduceMotion && (centered ? !fromCentered : !fromSession);
+  });
 
   return (
     <>
-      {centered && <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col justify-end px-4 md:px-6">{hero}</div>}
+      <AnimatePresence mode="popLayout">
+        {centered && (
+          <motion.div
+            animate={{opacity: 1, transition: ENTER_TRANSITION, y: 0}}
+            className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col justify-end px-4 md:px-6"
+            exit={reduceMotion ? undefined : {opacity: 0, y: -8, transition: HERO_EXIT_TRANSITION}}
+            initial={enter ? ENTER_FROM : false}
+            key="hero"
+          >
+            {hero}
+          </motion.div>
+        )}
+      </AnimatePresence>
       <motion.div
         className={cn("flex min-h-0 flex-1 flex-col", centered && "hidden")}
-        animate={centered ? {opacity: 0, y: 25} : {opacity: 1, y: 0}}
-        initial={false}
-        transition={reduceMotion ? {duration: 0} : TIMELINE_ENTER_TRANSITION}
+        animate={centered ? {opacity: 0, y: 8} : {opacity: 1, y: 0}}
+        initial={enter && !centered ? ENTER_FROM : false}
+        transition={reduceMotion ? {duration: 0} : enter ? ENTER_TRANSITION : TIMELINE_ENTER_TRANSITION}
       >
         {!centered && timeline}
       </motion.div>
-      <motion.div className="relative z-20" layout={reduceMotion ? false : "position"} layoutDependency={centered} transition={DOCK_TRANSITION}>
+      <motion.div
+        animate={{opacity: 1, y: 0}}
+        className="relative z-20"
+        initial={enter ? ENTER_FROM : false}
+        layout={reduceMotion ? false : "position"}
+        layoutDependency={centered}
+        transition={{default: ENTER_TRANSITION, layout: DOCK_TRANSITION}}
+      >
         {composer}
       </motion.div>
       <div className={cn("min-h-0", centered && "flex-1")} />

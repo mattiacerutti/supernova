@@ -47,7 +47,7 @@ function PanelTab(props: PanelTabProps) {
     <div
       className={cn(
         // Mirrors Button's primary variant; a div because the tab holds two buttons.
-        "group/tab relative flex h-7 min-w-0 shrink-0 items-center rounded-xl text-sm text-ink-muted corner-superellipse/1.3 hover:bg-overlay-hover hover:text-ink-strong",
+        "group/tab relative flex h-7 min-w-0 shrink-0 items-center rounded-xl text-sm text-ink-muted corner-superellipse/1.3 transition-colors hover:bg-overlay-hover hover:text-ink-strong",
         active && "bg-overlay-pressed text-ink-strong"
       )}
     >

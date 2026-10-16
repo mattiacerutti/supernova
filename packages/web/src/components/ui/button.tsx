@@ -38,7 +38,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 export default function Button(props: ButtonProps) {
   const {as = "button", children, className, onClick, onKeyDown, shape = "default", size = "none", type = "button", variant = "bare", ...buttonProps} = props;
-  const resolvedClassName = cn(variantClasses[variant], shape === "icon" ? iconSizeClasses[size] : defaultSizeClasses[size], className);
+  const resolvedClassName = cn("transition-colors", variantClasses[variant], shape === "icon" ? iconSizeClasses[size] : defaultSizeClasses[size], className);
 
   if (as === "div") {
     const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {

@@ -5,6 +5,7 @@ import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import type {IconName} from "@/components/ui/icon";
 import Menu, {MenuItem, MenuLabel} from "@/components/ui/menu";
+import RollingText from "@/components/ui/rolling-text";
 import SearchField from "@/components/ui/search-field";
 import {useWorkspaceBranches} from "@/features/sessions/api/composer/list-workspace-branches";
 import {useComposerContext} from "@/features/sessions/hooks/composer/use-composer";
@@ -33,7 +34,7 @@ function PickerTrigger(props: PickerTriggerProps) {
       variant="primary"
     >
       <Icon className="shrink-0 text-ink-muted" name={icon} size="xs" />
-      <span className="truncate">{children}</span>
+      <RollingText>{children}</RollingText>
       {interactive && <Icon className="shrink-0 text-ink-muted" name="chevron-down" size="xs" />}
     </Button>
   );
