@@ -8,6 +8,8 @@ export const OTHER_SESSION_ID = "other-session";
 export const OTHER_SESSION_TITLE = "Second long session";
 export const EMPTY_SESSION_ID = "empty-session";
 export const EMPTY_SESSION_TITLE = "Empty session";
+export const WORK_SESSION_ID = "work-session";
+export const WORK_SESSION_TITLE = "Recorded tool work";
 export const PAGED_SESSION_ID = "paged-session";
 export const PAGED_SESSION_TITLE = "Paginated history";
 
@@ -88,6 +90,62 @@ function historySession(input: {readonly historyTurnCount: number; readonly id: 
   };
 }
 
+function workHistorySession(): Session {
+  const session = historySession({historyTurnCount: 0, id: WORK_SESSION_ID, title: WORK_SESSION_TITLE});
+  const calls = Array.from({length: 60}, (_, index) => ({arguments: {command: `echo recorded-work-${index}`}, id: `call-${index}`, name: "bash", type: "toolCall" as const}));
+  const results = calls.map((call, index) => ({
+    conversationId: 1,
+    id: index + 3,
+    kind: "pi.tool-result",
+    model: [
+      {
+        content: [{text: index === 1 ? Array.from({length: 100}, (_, line) => `Output line ${line}`).join("\n") : `Recorded output ${index}`, type: "text"}],
+        isError: false,
+        role: "toolResult",
+        timestamp: Date.parse(timestamp(300 + index)),
+        toolCallId: call.id,
+        toolName: call.name,
+      },
+    ],
+  })) as unknown as EntryRecord[];
+  const groups = Array.from({length: 120}, (_, index) => {
+    const call = {arguments: {command: `echo group-${index}`}, id: `group-call-${index}`, name: "bash", type: "toolCall" as const};
+    return [
+      assistantEntry(100 + index * 2, {
+        ...assistantMessage([{thinking: `Recorded reasoning ${index}. ${"Variable height reasoning. ".repeat(1 + (index % 5) * 3)}`, type: "thinking"}, call], 2000 + index * 10),
+        stopReason: "toolUse",
+      }),
+      {
+        ...results[0],
+        id: 101 + index * 2,
+        model: [
+          {
+            content: [{text: `Group output ${index}`, type: "text"}],
+            isError: false,
+            role: "toolResult",
+            timestamp: Date.parse(timestamp(2001 + index * 10)),
+            toolCallId: call.id,
+            toolName: call.name,
+          },
+        ],
+      } as unknown as EntryRecord,
+    ];
+  }).flat();
+  return {
+    ...session,
+    entries: {
+      items: [
+        userEntry(1, "Inspect the recorded work", 0),
+        assistantEntry(2, {...assistantMessage([{thinking: "Review the recorded commands.", type: "thinking"}, ...calls], 200), stopReason: "toolUse"}),
+        ...results,
+        ...groups,
+        assistantEntry(400, assistantMessage([{text: "The recorded work is complete.", type: "text"}], 4000)),
+      ],
+      remaining: 0,
+    },
+  };
+}
+
 function pagedHistorySession(): Session {
   const session = historySession({historyTurnCount: 12, id: PAGED_SESSION_ID, title: PAGED_SESSION_TITLE});
   return {
@@ -122,6 +180,7 @@ export function createTimelineSessions(): Map<string, Session> {
     historySession({historyTurnCount: 28, id: TIMELINE_SESSION_ID, title: TIMELINE_SESSION_TITLE}),
     historySession({historyTurnCount: 24, id: OTHER_SESSION_ID, title: OTHER_SESSION_TITLE}),
     historySession({historyTurnCount: 0, id: EMPTY_SESSION_ID, title: EMPTY_SESSION_TITLE}),
+    workHistorySession(),
     pagedHistorySession(),
   ];
 

@@ -36,6 +36,7 @@ All notable changes to Supernova are documented in this file.
 
 - Fixed the timeline jumping, briefly showing different text, or overlapping messages when earlier history loads while scrolling up.
 - Fixed avoidable stuttering when sent messages glide into place and improved responsiveness while long chats stream responses.
+- Reduced stalls when opening extensive historical work, navigating checkpoints, switching sessions, or resizing side panels. Expanded work now renders only nearby rows while preserving expand/collapse animations and nested open states.
 - Fixed the new-chat composer not receiving focus automatically when opened.
 - The rolled-back messages drawer now hides immediately when sending a new message after undo, instead of waiting for the session update.
 - Extension limitation notices now show the installed package's name instead of entry folders such as `src`.

@@ -1,7 +1,11 @@
 import {useState} from "react";
+import type {ReactNode} from "react";
 import Icon from "@/components/ui/icon";
 import RollingText from "@/components/ui/rolling-text";
 import WorkRow from "@/features/sessions/components/timeline/items/work/work-row";
+import VirtualWorkList from "@/features/sessions/components/timeline/items/work/virtual-work-list";
+import WorkExpansionBody from "@/features/sessions/components/timeline/items/work/work-expansion-body";
+import {useWorkExpansion} from "@/features/sessions/hooks/use-work-expansion";
 import {summarizeWork} from "@/features/sessions/lib/timeline/work/work-summary";
 import type {WorkSessionTimelineItem} from "@/features/sessions/types/session-timeline-item";
 import {cn} from "@/lib/cn";
@@ -10,13 +14,29 @@ import {cn} from "@/lib/cn";
 const FIRST_ROW_DELAY_MS = 90;
 const ROW_STAGGER_MS = 65;
 
+interface WorkRowsProps {
+  readonly item: WorkSessionTimelineItem;
+  readonly renderRow: (index: number) => ReactNode;
+}
+
+function WorkRows(props: WorkRowsProps) {
+  const {item, renderRow} = props;
+  // Keep the live DOM through automatic closure; the next historical opening can virtualize it.
+  const [liveAtMount] = useState(item.live);
+  return liveAtMount ? (
+    item.events.map((_, index) => renderRow(index))
+  ) : (
+    <VirtualWorkList count={item.events.length} estimateSize={() => 32} getKey={(index) => item.events[index]!.id} id={item.id} renderRow={renderRow} />
+  );
+}
+
 interface AssistantWorkProps {
   readonly item: WorkSessionTimelineItem;
 }
 
 export default function AssistantWork(props: AssistantWorkProps) {
   const {item} = props;
-  const [expanded, setExpanded] = useState<boolean | undefined>(undefined);
+  const {expanded: open, toggle} = useWorkExpansion(item.id, item.live);
 
   // Rows present at mount never animate; only rows appended while the group is live reveal themselves.
   const [initialCount] = useState(() => (item.live ? 0 : item.events.length));
@@ -24,17 +44,23 @@ export default function AssistantWork(props: AssistantWorkProps) {
   if (revealed.count !== item.events.length) setRevealed({batchStart: Math.min(revealed.count, item.events.length), count: item.events.length});
 
   const revealDelayFor = (index: number): number | undefined => {
-    if (index < revealed.batchStart) return undefined;
+    if (!item.live || index < revealed.batchStart) return undefined;
     return (initialCount === 0 && revealed.batchStart === 0 ? FIRST_ROW_DELAY_MS : 0) + (index - revealed.batchStart) * ROW_STAGGER_MS;
   };
 
-  const open = expanded ?? item.live;
   const summary = summarizeWork(item.events);
   const headerAnimates = initialCount === 0;
 
-  const handleToggle = (): void => {
-    setExpanded(!open);
-  };
+  const renderRow = (index: number) => (
+    <WorkRow
+      continuationDelay={index + 1 < item.events.length ? revealDelayFor(index + 1) : undefined}
+      continues={index + 1 < item.events.length}
+      event={item.events[index]!}
+      hasPredecessor={index > 0}
+      key={item.events[index]!.id}
+      revealDelay={revealDelayFor(index)}
+    />
+  );
 
   return (
     <section className="flex flex-col">
@@ -44,7 +70,7 @@ export default function AssistantWork(props: AssistantWorkProps) {
           "group/header flex h-7 w-full cursor-pointer items-center gap-1.5 text-left text-sm text-ink-muted transition-colors hover:text-ink motion-reduce:animate-none",
           headerAnimates && "animate-work-reveal [animation-duration:360ms]"
         )}
-        onClick={handleToggle}
+        onClick={toggle}
         type="button"
       >
         <span className="grid w-[22px] shrink-0 place-items-center">
@@ -52,25 +78,9 @@ export default function AssistantWork(props: AssistantWorkProps) {
         </span>
         <RollingText className={cn(item.live && "shimmer [--shimmer-duration:3.4s]")}>{summary}</RollingText>
       </button>
-      <div className="grid grid-rows-[0fr] transition-[grid-template-rows] duration-150 ease-out data-[expanded=true]:grid-rows-[1fr]" data-expanded={open}>
-        <div className="min-h-0 overflow-hidden">
-          <div className="flex flex-col pt-0.5">
-            {item.events.map((event, index) => {
-              const nextDelay = index + 1 < item.events.length ? revealDelayFor(index + 1) : undefined;
-              return (
-                <WorkRow
-                  continuationDelay={nextDelay}
-                  continues={index + 1 < item.events.length}
-                  event={event}
-                  hasPredecessor={index > 0}
-                  key={event.id}
-                  revealDelay={revealDelayFor(index)}
-                />
-              );
-            })}
-          </div>
-        </div>
-      </div>
+      <WorkExpansionBody expanded={open}>
+        <WorkRows item={item} renderRow={renderRow} />
+      </WorkExpansionBody>
     </section>
   );
 }

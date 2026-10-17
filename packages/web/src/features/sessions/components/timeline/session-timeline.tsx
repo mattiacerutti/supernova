@@ -11,6 +11,7 @@ import ScrollToEndButton from "@/features/sessions/components/timeline/viewport/
 import SessionTimelineVirtualRow from "@/features/sessions/components/timeline/rows/session-timeline-virtual-row";
 import StreamingStatus from "@/features/sessions/components/timeline/viewport/streaming-status";
 import TimelineEmptyState from "@/features/sessions/components/timeline/viewport/timeline-empty-state";
+import {WorkExpansionContext, useWorkExpansionState} from "@/features/sessions/hooks/use-work-expansion";
 import {buildTimelineRowKeys, buildTimelineRows, hasLiveTimelineOutput} from "@/features/sessions/lib/timeline/rows/timeline-rows";
 import type {SessionTimelineItem} from "@/features/sessions/types/session-timeline-item";
 
@@ -61,6 +62,8 @@ interface SessionTimelineProps {
 interface SessionTimelineViewportProps extends SessionTimelineProps {
   readonly anchorFirstIndex: number | null;
   readonly onAnchorChange: (firstIndex: number | null) => void;
+  readonly autoFollowPausedByExpansion: boolean;
+  readonly onResumeAutoFollow: () => void;
 }
 
 function SessionTimelineViewport(props: SessionTimelineViewportProps) {
@@ -68,6 +71,8 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
     anchorFirstIndex,
     bottomOverlayHeight = 0,
     compacting,
+    autoFollowPausedByExpansion,
+    onResumeAutoFollow,
     earlierHistory,
     isStreaming,
     items,
@@ -261,7 +266,7 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
     const viewport = viewportRef.current;
     if (!viewport) return;
     syncAnchorSpace(viewport);
-    if (anchorScrollRef.current === null && !canScrollToEnd) scrollToEnd({behavior: "auto"});
+    if (!autoFollowPausedByExpansion && anchorScrollRef.current === null && !canScrollToEnd) scrollToEnd({behavior: "auto"});
     easeStreamGrowth();
   };
 
@@ -302,6 +307,7 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
     const row = virtualizer.getVirtualItems().find((item) => item.index === liveUserRowIndex);
     if (!viewport || !content || !row) return;
 
+    onResumeAutoFollow();
     stopAnchorScroll();
     streamScrollAnimationRef.current?.cancel();
     // Sending from history reveals the new message first; never mount the entire history to animate across it.
@@ -335,7 +341,7 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
       if (anchorScrollRef.current === anchor) releaseAnchorScroll();
     };
     viewport.scrollTop = anchorScrollTop;
-  }, [hasLiveUserRow, liveUserRowIndex, onAnchorChange, releaseAnchorScroll, scrollToEnd, shouldReduceMotion, syncAnchorSpace, virtualizer]);
+  }, [hasLiveUserRow, liveUserRowIndex, onAnchorChange, onResumeAutoFollow, releaseAnchorScroll, scrollToEnd, shouldReduceMotion, syncAnchorSpace, virtualizer]);
 
   // A revert removes turns: collapse the anchor space rather than let it swallow the removed height.
   useLayoutEffect(() => {
@@ -389,7 +395,10 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
     if (event.defaultPrevented || target.isContentEditable || target.closest("input, textarea, select")) return;
     if (event.key === " " && target.closest("button")) return;
     // Message Scroller cancels its own scrolling on these keys, not our animation.
-    if (["ArrowUp", "ArrowDown", "Home", "PageUp", "PageDown", " "].includes(event.key)) releaseAnchorScroll();
+    if (["ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown", " "].includes(event.key)) {
+      releaseAnchorScroll();
+      onResumeAutoFollow();
+    }
   };
 
   const handleViewportScroll = (event: UIEvent<HTMLDivElement>): void => {
@@ -433,10 +442,19 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
             aria-label="Session timeline"
             onKeyDown={handleViewportKeyDown}
             onPointerLeave={handleViewportPointerLeave}
+            onPointerDown={(event) => {
+              if (event.target === event.currentTarget) onResumeAutoFollow();
+            }}
             onPointerOver={handleViewportPointerOver}
             onScroll={handleViewportScroll}
-            onTouchMove={releaseAnchorScroll}
-            onWheel={releaseAnchorScroll}
+            onTouchMove={() => {
+              releaseAnchorScroll();
+              onResumeAutoFollow();
+            }}
+            onWheel={() => {
+              releaseAnchorScroll();
+              onResumeAutoFollow();
+            }}
             ref={viewportRef}
           >
             <MessageScrollerContent aria-busy={isStreaming} className="block min-h-full overflow-clip">
@@ -481,7 +499,7 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
               <div aria-hidden="true" className="shrink-0" data-timeline-fake-space ref={anchorSpaceRef} />
             </MessageScrollerContent>
           </MessageScrollerViewport>
-          <ScrollToEndButton bottomOffset={bottomOverlayHeight} visible={scrollButtonVisible} />
+          <ScrollToEndButton bottomOffset={bottomOverlayHeight} onClick={onResumeAutoFollow} visible={scrollButtonVisible} />
         </MessageScroller>
       ) : (
         <TimelineEmptyState />
@@ -493,11 +511,22 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
 /** Auto-follow belongs to the message scroller except while a sent message is being anchored. */
 export default function SessionTimeline(props: SessionTimelineProps) {
   const [anchorFirstIndex, setAnchorFirstIndex] = useState<number | null>(null);
+  const [autoFollowPausedByExpansion, setAutoFollowPausedByExpansion] = useState(false);
+  const resumeAutoFollow = useCallback(() => setAutoFollowPausedByExpansion(false), []);
+  const workExpansion = useWorkExpansionState(() => setAutoFollowPausedByExpansion(true));
 
   // DOM bounds can be fractional even at the native scroll limit.
   return (
-    <MessageScrollerProvider autoScroll={anchorFirstIndex === null} defaultScrollPosition="end" scrollEdgeThreshold={1}>
-      <SessionTimelineViewport {...props} anchorFirstIndex={anchorFirstIndex} onAnchorChange={setAnchorFirstIndex} />
+    <MessageScrollerProvider autoScroll={anchorFirstIndex === null && !autoFollowPausedByExpansion} defaultScrollPosition="end" scrollEdgeThreshold={1}>
+      <WorkExpansionContext value={workExpansion}>
+        <SessionTimelineViewport
+          {...props}
+          anchorFirstIndex={anchorFirstIndex}
+          onAnchorChange={setAnchorFirstIndex}
+          autoFollowPausedByExpansion={autoFollowPausedByExpansion}
+          onResumeAutoFollow={resumeAutoFollow}
+        />
+      </WorkExpansionContext>
     </MessageScrollerProvider>
   );
 }

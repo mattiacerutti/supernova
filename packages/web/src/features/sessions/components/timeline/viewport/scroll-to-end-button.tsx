@@ -4,10 +4,11 @@ import {MessageScrollerButton} from "@/features/sessions/components/timeline/vie
 interface ScrollToEndButtonProps {
   readonly bottomOffset: number;
   readonly visible: boolean;
+  readonly onClick: () => void;
 }
 
 export default function ScrollToEndButton(props: ScrollToEndButtonProps) {
-  const {bottomOffset, visible} = props;
+  const {bottomOffset, visible, onClick} = props;
   const shouldReduceMotion = useReducedMotion();
 
   return (
@@ -20,7 +21,7 @@ export default function ScrollToEndButton(props: ScrollToEndButtonProps) {
           initial={{opacity: 0, scale: 0.95, x: "-50%", y: shouldReduceMotion ? 0 : "100%"}}
           style={{bottom: `calc(1rem + ${bottomOffset}px)`}}
         >
-          <MessageScrollerButton behavior="auto" className="static translate-x-0 bg-surface transition-colors hover:bg-surface-popover rtl:translate-x-0" />
+          <MessageScrollerButton onClick={onClick} behavior="auto" className="static translate-x-0 bg-surface transition-colors hover:bg-surface-popover rtl:translate-x-0" />
         </motion.div>
       )}
     </AnimatePresence>
