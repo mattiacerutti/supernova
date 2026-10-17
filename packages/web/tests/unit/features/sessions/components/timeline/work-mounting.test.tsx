@@ -1,8 +1,11 @@
 import {renderToStaticMarkup} from "react-dom/server";
-import {describe, expect, it} from "vitest";
+import {describe, expect, it, vi} from "vitest";
 import AssistantTurnWork from "@/features/sessions/components/timeline/items/work/assistant-turn-work";
 import AssistantWork from "@/features/sessions/components/timeline/items/work/assistant-work";
 import type {WorkSessionTimelineItem} from "@/features/sessions/types/session-timeline-item";
+
+// These server-render tests have no Worker runtime; browser tests exercise the real pool.
+vi.mock("@/lib/diffs/worker-pool", () => ({getDiffWorkerPool: async () => undefined}));
 
 const work: WorkSessionTimelineItem = {
   durationMs: 1000,

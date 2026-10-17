@@ -171,7 +171,7 @@ test("reverses an in-flight work collapse without losing the open group", async 
   await expect(page.getByRole("button", {name: "Ran echo recorded-work-0", exact: true})).toBeVisible();
 });
 
-test("retains the output reading position across virtual unmounts", async ({page, timeline}) => {
+test("retains expansion but resets output scrolling across virtual unmounts", async ({page, timeline}) => {
   await timeline.openWorkSession();
   const viewport = page.getByLabel("Session timeline");
   await page.getByRole("button", {name: /^Worked for/}).click();
@@ -193,7 +193,7 @@ test("retains the output reading position across virtual unmounts", async ({page
     element.scrollTop = 0;
   });
   await expect(command).toHaveAttribute("aria-expanded", "true");
-  await expect.poll(() => output.evaluate((element) => element.scrollTop)).toBe(180);
+  await expect.poll(() => output.evaluate((element) => element.scrollTop)).toBe(0);
 });
 
 test("keyboard traversal reaches calls beyond the first virtual window", async ({page, timeline}) => {

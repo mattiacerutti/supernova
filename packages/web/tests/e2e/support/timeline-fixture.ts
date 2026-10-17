@@ -1,6 +1,8 @@
 import {expect, test as base} from "@playwright/test";
 import type {Page} from "@playwright/test";
 import {
+  DIFF_SESSION_ID,
+  DIFF_SESSION_TITLE,
   OTHER_SESSION_TITLE,
   PAGED_SESSION_ID,
   PAGED_SESSION_TITLE,
@@ -62,6 +64,10 @@ export class TimelineDriver {
 
   public async openWorkSession(): Promise<void> {
     await this.openSession(WORK_SESSION_ID, WORK_SESSION_TITLE);
+  }
+
+  public async openDiffSession(): Promise<void> {
+    await this.openSession(DIFF_SESSION_ID, DIFF_SESSION_TITLE);
   }
 
   public async openPagedSession(): Promise<void> {

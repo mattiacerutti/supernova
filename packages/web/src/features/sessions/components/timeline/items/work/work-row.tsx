@@ -4,7 +4,7 @@ import Icon from "@/components/ui/icon";
 import type {IconName} from "@/components/ui/icon";
 import ToolDetails from "@/features/sessions/components/timeline/items/work/tool-details";
 import ToolTitle from "@/features/sessions/components/timeline/items/work/tool-title";
-import {useWorkExpansion, useWorkOutputScroll} from "@/features/sessions/hooks/use-work-expansion";
+import {useWorkExpansion} from "@/features/sessions/hooks/use-work-expansion";
 import {hasToolDetails, toolIcon} from "@/features/sessions/lib/timeline/work/tool-details";
 import type {SessionWorkEvent} from "@/features/sessions/types/session-timeline-item";
 import {cn} from "@/lib/cn";
@@ -108,7 +108,6 @@ export default function WorkRow(props: WorkRowProps) {
   // Details are expensive: mounted on first request, then kept so collapsing can animate.
   const [detailsRequested, setDetailsRequested] = useState(false);
   const open = expandable && expanded;
-  const outputScrollProps = useWorkOutputScroll(event.id, open);
 
   const icon = toolIcon(tool);
   const timing = hasPredecessor ? CONNECTOR_TIMING.next : CONNECTOR_TIMING.first;
@@ -154,9 +153,7 @@ export default function WorkRow(props: WorkRowProps) {
             inert={!open}
           >
             <div className="min-h-0 min-w-0 overflow-hidden">
-              <div className="min-w-0 pb-3 pr-1" {...outputScrollProps}>
-                {detailBody}
-              </div>
+              <div className="min-w-0 pb-3 pr-1">{detailBody}</div>
             </div>
           </div>
         )}

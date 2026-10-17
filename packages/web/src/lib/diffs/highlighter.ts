@@ -1,7 +1,9 @@
 import {getSharedHighlighter} from "@pierre/diffs";
-import type {DiffsHighlighter, SupportedLanguages} from "@pierre/diffs";
+import type {DiffsHighlighter, HighlighterTypes, SupportedLanguages} from "@pierre/diffs";
 import {LRUCache} from "lru-cache";
 import murmurHash from "imurmurhash";
+
+export const CODE_HIGHLIGHT_ENGINE: HighlighterTypes = "shiki-js";
 
 const MAX_HIGHLIGHT_CACHE_ENTRIES = 500;
 const MAX_HIGHLIGHT_CACHE_MEMORY_BYTES = 50 * 1024 * 1024;
@@ -52,7 +54,7 @@ function getHighlighterPromise(language: string): Promise<DiffsHighlighter> {
 
   const promise = getSharedHighlighter({
     langs: [language as SupportedLanguages],
-    preferredHighlighter: "shiki-js",
+    preferredHighlighter: CODE_HIGHLIGHT_ENGINE,
     themes: [CODE_HIGHLIGHT_THEMES.dark, CODE_HIGHLIGHT_THEMES.light],
   }).catch((error) => {
     highlighterByLanguageCache.delete(language);

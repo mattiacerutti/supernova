@@ -1,4 +1,4 @@
-import type {AssistantMessage, EntryRecord, ModelDetails, ModelReference, Session, SessionSummary, SessionEntry} from "@supernova/contracts/services/sessions/schemas";
+import type {AssistantMessage, EntryRecord, ModelDetails, ModelReference, Session, SessionSummary, SessionEntry, ToolCall} from "@supernova/contracts/services/sessions/schemas";
 
 export const TIMELINE_PROJECT_PATH = "/tmp/supernova-timeline-e2e";
 export const TIMELINE_PROJECT_NAME = "supernova-timeline-e2e";
@@ -10,6 +10,10 @@ export const EMPTY_SESSION_ID = "empty-session";
 export const EMPTY_SESSION_TITLE = "Empty session";
 export const WORK_SESSION_ID = "work-session";
 export const WORK_SESSION_TITLE = "Recorded tool work";
+export const DIFF_SESSION_ID = "diff-session";
+export const DIFF_SESSION_TITLE = "Recorded file changes";
+export const LARGE_DIFF_SESSION_ID = "large-diff-session";
+export const LARGE_DIFF_SESSION_TITLE = "Large recorded file changes";
 export const PAGED_SESSION_ID = "paged-session";
 export const PAGED_SESSION_TITLE = "Paginated history";
 
@@ -146,6 +150,69 @@ function workHistorySession(): Session {
   };
 }
 
+function diffHistorySession(large = false): Session {
+  const session = historySession({historyTurnCount: 0, id: large ? LARGE_DIFF_SESSION_ID : DIFF_SESSION_ID, title: large ? LARGE_DIFF_SESSION_TITLE : DIFF_SESSION_TITLE});
+  const calls = ["first", "second", "plain"].map<ToolCall>((version, index) => {
+    let args: ToolCall["arguments"];
+    if (large && version === "second") {
+      args = {path: "worker.ts", oldText: "Previous declarations", newText: "Updated declarations"};
+    } else {
+      args = {
+        path: version === "plain" ? "notes.txt" : "worker.ts",
+        content: Array.from({length: large ? 1_000 : 100}, (_, line) =>
+          version === "plain"
+            ? `Plain note ${line}`
+            : `export const ${version}${line} = "${version} revision${large && line % 11 === 0 ? " with a long wrapped value".repeat(12) : ""}";`
+        ).join("\n"),
+      };
+    }
+    return {arguments: args, id: `diff-call-${index}`, name: large && version === "second" ? "edit" : "write", type: "toolCall"};
+  });
+  return {
+    ...session,
+    entries: {
+      remaining: 0,
+      items: [
+        userEntry(1, "Inspect the recorded file changes", 0),
+        assistantEntry(2, {...assistantMessage(calls, 200), stopReason: "toolUse"}),
+        ...calls.map(
+          (call, index) =>
+            ({
+              conversationId: 1,
+              id: index + 3,
+              kind: "pi.tool-result",
+              model: [
+                {
+                  content: [{text: "Written successfully", type: "text"}],
+                  details:
+                    large && index === 1
+                      ? {
+                          patch: [
+                            "--- a/worker.ts",
+                            "+++ b/worker.ts",
+                            ...[10_000, 50_000].flatMap((start) => [
+                              `@@ -${start},500 +${start},500 @@`,
+                              ...Array.from({length: 500}, (_, line) => `-export const previous${start + line} = "old";`),
+                              ...Array.from({length: 500}, (_, line) => `+export const updated${start + line} = "new${line % 11 === 0 ? " wrapped value".repeat(20) : ""}";`),
+                            ]),
+                          ].join("\n"),
+                        }
+                      : undefined,
+                  isError: false,
+                  role: "toolResult",
+                  timestamp: Date.parse(timestamp(300 + index)),
+                  toolCallId: call.id,
+                  toolName: call.name,
+                },
+              ],
+            }) as unknown as EntryRecord
+        ),
+        assistantEntry(6, assistantMessage([{text: "The file changes are complete.", type: "text"}], 1000)),
+      ],
+    },
+  };
+}
+
 function pagedHistorySession(): Session {
   const session = historySession({historyTurnCount: 12, id: PAGED_SESSION_ID, title: PAGED_SESSION_TITLE});
   return {
@@ -181,6 +248,8 @@ export function createTimelineSessions(): Map<string, Session> {
     historySession({historyTurnCount: 24, id: OTHER_SESSION_ID, title: OTHER_SESSION_TITLE}),
     historySession({historyTurnCount: 0, id: EMPTY_SESSION_ID, title: EMPTY_SESSION_TITLE}),
     workHistorySession(),
+    diffHistorySession(),
+    diffHistorySession(true),
     pagedHistorySession(),
   ];
 

@@ -17,7 +17,9 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
-- Reduced the UI's startup time and memory use.
+- Reduced startup time and memory use, and improved responsiveness while streaming long sessions.
+- Improved responsiveness when expanding large work histories, navigating checkpoints, switching sessions, or resizing side panels.
+- Improved responsiveness when opening, revisiting, scrolling, and resizing large tool diffs.
 - Changed the file viewer to scroll long lines horizontally instead of wrapping them.
 - Changing the model, thinking level, workspace mode, or base branch rolls the changed letters of the label into place while the button resizes, and a live work group's summary rolls as tools arrive. Starting a session fades the welcome screen out as the composer glides to the bottom; opening a session or the new-session screen from elsewhere fades it in as it rises into place, while moving between sessions swaps them at once. Hover colors fade in, and menus open from the side of the button they belong to.
 - A window keeps its workspace tabs across reloads, and only its own: a new window or browser tab no longer opens every terminal the session has. Terminals are numbered ("Terminal 2"), and a terminal closed in another window shows as closed instead of freezing.
@@ -35,8 +37,6 @@ All notable changes to Supernova are documented in this file.
 ### Fixed
 
 - Fixed the timeline jumping, briefly showing different text, or overlapping messages when earlier history loads while scrolling up.
-- Fixed avoidable stuttering when sent messages glide into place and improved responsiveness while long chats stream responses.
-- Reduced stalls when opening extensive historical work, navigating checkpoints, switching sessions, or resizing side panels. Expanded work now renders only nearby rows while preserving expand/collapse animations and nested open states.
 - Fixed the new-chat composer not receiving focus automatically when opened.
 - The rolled-back messages drawer now hides immediately when sending a new message after undo, instead of waiting for the session update.
 - Extension limitation notices now show the installed package's name instead of entry folders such as `src`.
