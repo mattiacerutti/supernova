@@ -15,6 +15,9 @@ import type {SessionToolCall, SessionTurn, SessionTurnEvent, SessionUserMessage}
 const SUMMARY_PREFIX = "The conversation history before this point was compacted into the following summary:\n\n<summary>\n";
 const SUMMARY_SUFFIX = "\n</summary>";
 
+// Replicated entry arrays are immutable; streaming changes `live`, not the settled history.
+const historyCache = new WeakMap<readonly SessionEntry[], {runStart: number | undefined; turns: SessionTurn[]; liveEntries: readonly SessionEntry[] | undefined}>();
+
 function isoTimestamp(milliseconds: number | undefined): string {
   return new Date(milliseconds ?? 0).toISOString();
 }
@@ -165,7 +168,15 @@ export function buildTurns(input: BuildTurnsInput): SessionTurn[] {
 export function buildSessionTurns(session: Pick<Session, "entries" | "live" | "runStart">): {readonly turns: SessionTurn[]; readonly liveTurn: SessionTurn | undefined} {
   const {live, runStart} = session;
   const entries = session.entries.items;
-  const start = runStart === undefined ? -1 : entries.findIndex((entry) => entry.id >= runStart);
-  if (start === -1) return {turns: buildTurns({entries}), liveTurn: undefined};
-  return {turns: buildTurns({entries: entries.slice(0, start)}), liveTurn: buildTurns({entries: entries.slice(start), live}).at(-1)};
+  let history = historyCache.get(entries);
+  if (!history || history.runStart !== runStart) {
+    const start = runStart === undefined ? -1 : entries.findIndex((entry) => entry.id >= runStart);
+    history = {
+      runStart,
+      turns: buildTurns({entries: start === -1 ? entries : entries.slice(0, start)}),
+      liveEntries: start === -1 ? undefined : entries.slice(start),
+    };
+    historyCache.set(entries, history);
+  }
+  return {turns: history.turns, liveTurn: history.liveEntries ? buildTurns({entries: history.liveEntries, live}).at(-1) : undefined};
 }

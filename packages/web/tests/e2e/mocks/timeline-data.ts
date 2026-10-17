@@ -8,6 +8,8 @@ export const OTHER_SESSION_ID = "other-session";
 export const OTHER_SESSION_TITLE = "Second long session";
 export const EMPTY_SESSION_ID = "empty-session";
 export const EMPTY_SESSION_TITLE = "Empty session";
+export const PAGED_SESSION_ID = "paged-session";
+export const PAGED_SESSION_TITLE = "Paginated history";
 
 export const timelineModel = {
   id: "timeline-model",
@@ -86,12 +88,41 @@ function historySession(input: {readonly historyTurnCount: number; readonly id: 
   };
 }
 
+function pagedHistorySession(): Session {
+  const session = historySession({historyTurnCount: 12, id: PAGED_SESSION_ID, title: PAGED_SESSION_TITLE});
+  return {
+    ...session,
+    entries: {
+      remaining: 0,
+      items: session.entries.items.map((entry, index) =>
+        entry.kind === "pi.assistant"
+          ? assistantEntry(
+              entry.id,
+              assistantMessage(
+                [
+                  {
+                    type: "text",
+                    text: Array.from({length: 5 + (index % 5) * 6}, (_, line) => `History ${index}, paragraph ${line}. ${"Variable-height history content. ".repeat(6)}`).join(
+                      "\n\n"
+                    ),
+                  },
+                ],
+                index * 1_000
+              )
+            )
+          : entry
+      ),
+    },
+  };
+}
+
 /** Creates the sessions used by every isolated browser test. */
 export function createTimelineSessions(): Map<string, Session> {
   const sessions = [
     historySession({historyTurnCount: 28, id: TIMELINE_SESSION_ID, title: TIMELINE_SESSION_TITLE}),
     historySession({historyTurnCount: 24, id: OTHER_SESSION_ID, title: OTHER_SESSION_TITLE}),
     historySession({historyTurnCount: 0, id: EMPTY_SESSION_ID, title: EMPTY_SESSION_TITLE}),
+    pagedHistorySession(),
   ];
 
   return new Map(sessions.map((session) => [session.id, session]));

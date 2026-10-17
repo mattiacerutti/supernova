@@ -1,6 +1,15 @@
 import {expect, test as base} from "@playwright/test";
 import type {Page} from "@playwright/test";
-import {OTHER_SESSION_TITLE, timelineStreamLine, TIMELINE_PROJECT_NAME, TIMELINE_PROJECT_PATH, TIMELINE_SESSION_ID, TIMELINE_SESSION_TITLE} from "@e2e/mocks/timeline-data";
+import {
+  OTHER_SESSION_TITLE,
+  PAGED_SESSION_ID,
+  PAGED_SESSION_TITLE,
+  timelineStreamLine,
+  TIMELINE_PROJECT_NAME,
+  TIMELINE_PROJECT_PATH,
+  TIMELINE_SESSION_ID,
+  TIMELINE_SESSION_TITLE,
+} from "@e2e/mocks/timeline-data";
 import {installTimelineVisualProbe} from "@e2e/support/install-visual-probe";
 import type {TimelineMockState, TimelineVisualSample} from "@e2e/support/timeline-test-api";
 
@@ -47,6 +56,10 @@ export class TimelineDriver {
   /** Opens the primary long session and waits for its timeline to become visible. */
   public async openMainSession(): Promise<void> {
     await this.openSession(TIMELINE_SESSION_ID, TIMELINE_SESSION_TITLE);
+  }
+
+  public async openPagedSession(): Promise<void> {
+    await this.openSession(PAGED_SESSION_ID, PAGED_SESSION_TITLE);
   }
 
   /** Opens the project's new-session screen once its composer can take input. */

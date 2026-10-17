@@ -1,176 +1,153 @@
-import {icons as bxIcons} from "@iconify-json/bx";
-import {icons as cuidaIcons} from "@iconify-json/cuida";
-import {icons as fluentIcons} from "@iconify-json/fluent";
-import {icons as iconoirIcons} from "@iconify-json/iconoir";
-import {icons as lucideIcons} from "@iconify-json/lucide";
-import {icons as materialSymbolsIcons} from "@iconify-json/material-symbols";
-import {icons as mdiIcons} from "@iconify-json/mdi";
-import {icons as mingcuteIcons} from "@iconify-json/mingcute";
-import {icons as solarIcons} from "@iconify-json/solar";
-import {icons as stashIcons} from "@iconify-json/stash";
-import {icons as tablerIcons} from "@iconify-json/tabler";
+import chat from "@iconify-icons/bx/chat";
+import editOutline from "@iconify-icons/cuida/edit-outline";
+import folderOutline from "@iconify-icons/cuida/folder-outline";
+import arrowClockwise16Filled from "@iconify-icons/fluent/arrow-clockwise-16-filled";
+import arrowUp16Filled from "@iconify-icons/fluent/arrow-up-16-filled";
+import branchFork16Regular from "@iconify-icons/fluent/branch-fork-16-regular";
+import folderOpen24Regular from "@iconify-icons/fluent/folder-open-24-regular";
+import pin12Regular from "@iconify-icons/fluent/pin-12-regular";
+import starSolid from "@iconify-icons/iconoir/star-solid";
+import archive from "@iconify-icons/lucide/archive";
+import arrowDown from "@iconify-icons/lucide/arrow-down";
+import arrowLeft from "@iconify-icons/lucide/arrow-left";
+import arrowRight from "@iconify-icons/lucide/arrow-right";
+import check from "@iconify-icons/lucide/check";
+import chevronDown from "@iconify-icons/lucide/chevron-down";
+import chevronRight from "@iconify-icons/lucide/chevron-right";
+import circleAlert from "@iconify-icons/lucide/circle-alert";
+import codeXml from "@iconify-icons/lucide/code-xml";
+import columns2 from "@iconify-icons/lucide/columns-2";
+import copy from "@iconify-icons/lucide/copy";
+import cornerLeftUp from "@iconify-icons/lucide/corner-left-up";
+import file from "@iconify-icons/lucide/file";
+import foldVertical from "@iconify-icons/lucide/fold-vertical";
+import folderGit2 from "@iconify-icons/lucide/folder-git-2";
+import folders from "@iconify-icons/lucide/folders";
+import gauge from "@iconify-icons/lucide/gauge";
+import gitCommitHorizontal from "@iconify-icons/lucide/git-commit-horizontal";
+import globe from "@iconify-icons/lucide/globe";
+import image from "@iconify-icons/lucide/image";
+import keyRound from "@iconify-icons/lucide/key-round";
+import listFilter from "@iconify-icons/lucide/list-filter";
+import loaderCircle from "@iconify-icons/lucide/loader-circle";
+import maximize2 from "@iconify-icons/lucide/maximize-2";
+import minimize2 from "@iconify-icons/lucide/minimize-2";
+import monitor from "@iconify-icons/lucide/monitor";
+import moon from "@iconify-icons/lucide/moon";
+import moreHorizontal from "@iconify-icons/lucide/more-horizontal";
+import palette from "@iconify-icons/lucide/palette";
+import panelTop from "@iconify-icons/lucide/panel-top";
+import paperclip from "@iconify-icons/lucide/paperclip";
+import plus from "@iconify-icons/lucide/plus";
+import rectangleHorizontal from "@iconify-icons/lucide/rectangle-horizontal";
+import redo2 from "@iconify-icons/lucide/redo-2";
+import search from "@iconify-icons/lucide/search";
+import server from "@iconify-icons/lucide/server";
+import settings from "@iconify-icons/lucide/settings";
+import shield from "@iconify-icons/lucide/shield";
+import squareTerminal from "@iconify-icons/lucide/square-terminal";
+import star from "@iconify-icons/lucide/star";
+import sun from "@iconify-icons/lucide/sun";
+import trash2 from "@iconify-icons/lucide/trash-2";
+import triangleAlert from "@iconify-icons/lucide/triangle-alert";
+import undo2 from "@iconify-icons/lucide/undo-2";
+import unfoldVertical from "@iconify-icons/lucide/unfold-vertical";
+import user from "@iconify-icons/lucide/user";
+import workflow from "@iconify-icons/lucide/workflow";
+import x from "@iconify-icons/lucide/x";
+import stopRounded from "@iconify-icons/material-symbols/stop-rounded";
+import createNewFolderOutline from "@iconify-icons/mdi/create-new-folder-outline";
+import toolLine from "@iconify-icons/mingcute/tool-line";
+import checklistLinear from "@iconify-icons/solar/checklist-linear";
+import documentAddLinear from "@iconify-icons/solar/document-add-linear";
+import documentLinear from "@iconify-icons/solar/document-linear";
+import folderWithFilesLinear from "@iconify-icons/solar/folder-with-files-linear";
+import globalLinear from "@iconify-icons/solar/global-linear";
+import penLinear from "@iconify-icons/solar/pen-linear";
+import widgetLinear from "@iconify-icons/solar/widget-linear";
+import arrowUpSolid from "@iconify-icons/stash/arrow-up-solid";
+import layoutSidebar from "@iconify-icons/tabler/layout-sidebar";
+import layoutSidebarRight from "@iconify-icons/tabler/layout-sidebar-right";
 import {Icon as IconifyIcon} from "@iconify/react/offline";
 import type {IconProps as IconifyIconProps} from "@iconify/react/offline";
-import {getIconData} from "@iconify/utils";
-
 import {cn} from "@/lib/cn";
 
-export type IconName =
-  | "alert-triangle"
-  | "circle-alert"
-  | "archive"
-  | "arrow-down"
-  | "arrow-left"
-  | "arrow-right"
-  | "check"
-  | "chevron-down"
-  | "chevron-right"
-  | "columns"
-  | "compact"
-  | "code"
-  | "copy"
-  | "corner-left-up"
-  | "edit"
-  | "file"
-  | "filter"
-  | "fold-vertical"
-  | "folder"
-  | "folder-git"
-  | "folder-open"
-  | "folder-plus"
-  | "folders"
-  | "gauge"
-  | "git-branch"
-  | "git-commit"
-  | "globe"
-  | "key"
-  | "image"
-  | "loader"
-  | "maximize"
-  | "monitor"
-  | "moon"
-  | "more-horizontal"
-  | "new-session"
-  | "panel-left"
-  | "panel-right"
-  | "panel-top"
-  | "palette"
-  | "paperclip"
-  | "pin"
-  | "plus"
-  | "rectangle-horizontal"
-  | "redo"
-  | "restart"
-  | "search"
-  | "send"
-  | "server"
-  | "session"
-  | "settings"
-  | "tool-command"
-  | "tool-edit"
-  | "tool-fetch"
-  | "tool-find"
-  | "tool-read"
-  | "tool-todo"
-  | "tool-unknown"
-  | "tool-write"
-  | "shield"
-  | "skill"
-  | "star"
-  | "star-filled"
-  | "stop"
-  | "sun"
-  | "terminal"
-  | "trash"
-  | "undo"
-  | "unfold-vertical"
-  | "update"
-  | "user"
-  | "workflow"
-  | "x";
-
-function getStaticIcon(collection: Parameters<typeof getIconData>[0], name: string): IconifyIconProps["icon"] {
-  const icon = getIconData(collection, name);
-
-  if (!icon) throw new Error(`Missing static icon data for ${collection.prefix}:${name}`);
-
-  return icon;
-}
-
 const icons = {
-  "alert-triangle": getStaticIcon(lucideIcons, "triangle-alert"),
-  "circle-alert": getStaticIcon(lucideIcons, "circle-alert"),
-  archive: getStaticIcon(lucideIcons, "archive"),
-  "arrow-down": getStaticIcon(lucideIcons, "arrow-down"),
-  "arrow-left": getStaticIcon(lucideIcons, "arrow-left"),
-  "arrow-right": getStaticIcon(lucideIcons, "arrow-right"),
-  check: getStaticIcon(lucideIcons, "check"),
-  "chevron-down": getStaticIcon(lucideIcons, "chevron-down"),
-  "chevron-right": getStaticIcon(lucideIcons, "chevron-right"),
-  columns: getStaticIcon(lucideIcons, "columns-2"),
-  compact: getStaticIcon(lucideIcons, "minimize-2"),
-  code: getStaticIcon(lucideIcons, "code-xml"),
-  copy: getStaticIcon(lucideIcons, "copy"),
-  "corner-left-up": getStaticIcon(lucideIcons, "corner-left-up"),
-  edit: getStaticIcon(cuidaIcons, "edit-outline"),
-  file: getStaticIcon(lucideIcons, "file"),
-  filter: getStaticIcon(lucideIcons, "list-filter"),
-  "fold-vertical": getStaticIcon(lucideIcons, "fold-vertical"),
-  folder: getStaticIcon(cuidaIcons, "folder-outline"),
-  "folder-git": getStaticIcon(lucideIcons, "folder-git-2"),
-  "folder-open": getStaticIcon(fluentIcons, "folder-open-24-regular"),
-  "folder-plus": getStaticIcon(mdiIcons, "create-new-folder-outline"),
-  folders: getStaticIcon(lucideIcons, "folders"),
-  gauge: getStaticIcon(lucideIcons, "gauge"),
-  "git-branch": getStaticIcon(fluentIcons, "branch-fork-16-regular"),
-  "git-commit": getStaticIcon(lucideIcons, "git-commit-horizontal"),
-  globe: getStaticIcon(lucideIcons, "globe"),
-  image: getStaticIcon(lucideIcons, "image"),
-  key: getStaticIcon(lucideIcons, "key-round"),
-  loader: getStaticIcon(lucideIcons, "loader-circle"),
-  maximize: getStaticIcon(lucideIcons, "maximize-2"),
-  monitor: getStaticIcon(lucideIcons, "monitor"),
-  moon: getStaticIcon(lucideIcons, "moon"),
-  "more-horizontal": getStaticIcon(lucideIcons, "more-horizontal"),
-  "new-session": getStaticIcon(cuidaIcons, "edit-outline"),
-  "panel-left": getStaticIcon(tablerIcons, "layout-sidebar"),
-  "panel-right": getStaticIcon(tablerIcons, "layout-sidebar-right"),
-  "panel-top": getStaticIcon(lucideIcons, "panel-top"),
-  palette: getStaticIcon(lucideIcons, "palette"),
-  paperclip: getStaticIcon(lucideIcons, "paperclip"),
-  pin: getStaticIcon(fluentIcons, "pin-12-regular"),
-  plus: getStaticIcon(lucideIcons, "plus"),
-  "rectangle-horizontal": getStaticIcon(lucideIcons, "rectangle-horizontal"),
-  redo: getStaticIcon(lucideIcons, "redo-2"),
-  restart: getStaticIcon(fluentIcons, "arrow-clockwise-16-filled"),
-  search: getStaticIcon(lucideIcons, "search"),
-  send: getStaticIcon(stashIcons, "arrow-up-solid"),
-  server: getStaticIcon(lucideIcons, "server"),
-  session: getStaticIcon(bxIcons, "chat"),
-  settings: getStaticIcon(lucideIcons, "settings"),
-  "tool-command": getStaticIcon(lucideIcons, "square-terminal"),
-  "tool-edit": getStaticIcon(solarIcons, "pen-linear"),
-  "tool-fetch": getStaticIcon(solarIcons, "global-linear"),
-  "tool-find": getStaticIcon(solarIcons, "folder-with-files-linear"),
-  "tool-read": getStaticIcon(solarIcons, "document-linear"),
-  "tool-todo": getStaticIcon(solarIcons, "checklist-linear"),
-  "tool-unknown": getStaticIcon(solarIcons, "widget-linear"),
-  "tool-write": getStaticIcon(solarIcons, "document-add-linear"),
-  shield: getStaticIcon(lucideIcons, "shield"),
-  skill: getStaticIcon(mingcuteIcons, "tool-line"),
-  star: getStaticIcon(lucideIcons, "star"),
-  "star-filled": getStaticIcon(iconoirIcons, "star-solid"),
-  stop: getStaticIcon(materialSymbolsIcons, "stop-rounded"),
-  sun: getStaticIcon(lucideIcons, "sun"),
-  terminal: getStaticIcon(lucideIcons, "square-terminal"),
-  trash: getStaticIcon(lucideIcons, "trash-2"),
-  undo: getStaticIcon(lucideIcons, "undo-2"),
-  "unfold-vertical": getStaticIcon(lucideIcons, "unfold-vertical"),
-  update: getStaticIcon(fluentIcons, "arrow-up-16-filled"),
-  user: getStaticIcon(lucideIcons, "user"),
-  workflow: getStaticIcon(lucideIcons, "workflow"),
-  x: getStaticIcon(lucideIcons, "x"),
-} satisfies Record<IconName, IconifyIconProps["icon"]>;
+  "alert-triangle": triangleAlert,
+  "circle-alert": circleAlert,
+  archive,
+  "arrow-down": arrowDown,
+  "arrow-left": arrowLeft,
+  "arrow-right": arrowRight,
+  check,
+  "chevron-down": chevronDown,
+  "chevron-right": chevronRight,
+  columns: columns2,
+  compact: minimize2,
+  code: codeXml,
+  copy,
+  "corner-left-up": cornerLeftUp,
+  edit: editOutline,
+  file,
+  filter: listFilter,
+  "fold-vertical": foldVertical,
+  folder: folderOutline,
+  "folder-git": folderGit2,
+  "folder-open": folderOpen24Regular,
+  "folder-plus": createNewFolderOutline,
+  folders,
+  gauge,
+  "git-branch": branchFork16Regular,
+  "git-commit": gitCommitHorizontal,
+  globe,
+  image,
+  key: keyRound,
+  loader: loaderCircle,
+  maximize: maximize2,
+  monitor,
+  moon,
+  "more-horizontal": moreHorizontal,
+  "new-session": editOutline,
+  "panel-left": layoutSidebar,
+  "panel-right": layoutSidebarRight,
+  "panel-top": panelTop,
+  palette,
+  paperclip,
+  pin: pin12Regular,
+  plus,
+  "rectangle-horizontal": rectangleHorizontal,
+  redo: redo2,
+  restart: arrowClockwise16Filled,
+  search,
+  send: arrowUpSolid,
+  server,
+  session: chat,
+  settings,
+  "tool-command": squareTerminal,
+  "tool-edit": penLinear,
+  "tool-fetch": globalLinear,
+  "tool-find": folderWithFilesLinear,
+  "tool-read": documentLinear,
+  "tool-todo": checklistLinear,
+  "tool-unknown": widgetLinear,
+  "tool-write": documentAddLinear,
+  shield,
+  skill: toolLine,
+  star,
+  "star-filled": starSolid,
+  stop: stopRounded,
+  sun,
+  terminal: squareTerminal,
+  trash: trash2,
+  undo: undo2,
+  "unfold-vertical": unfoldVertical,
+  update: arrowUp16Filled,
+  user,
+  workflow,
+  x,
+} as const;
+
+export type IconName = keyof typeof icons;
 
 const sizeClasses: Record<NonNullable<IconProps["size"]>, string> = {
   xs: "size-3.5",
