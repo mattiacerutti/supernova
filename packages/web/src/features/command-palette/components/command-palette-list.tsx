@@ -1,5 +1,5 @@
-import type {KeyboardEvent, ReactNode} from "react";
-import {useState} from "react";
+import type {KeyboardEvent, ReactNode, RefCallback, RefObject} from "react";
+import {createContext, use, useCallback, useRef, useState} from "react";
 import SearchableList from "@/components/searchable-list";
 import Icon from "@/components/ui/icon";
 import IconButton from "@/components/ui/icon-button";
@@ -11,6 +11,7 @@ import type {CommandPaletteHeaderRow, CommandPaletteHint} from "@/features/comma
 
 const HEADER_ROW_HEIGHT = 28;
 const ITEM_ROW_HEIGHT = 40;
+const CommandPaletteInputRef = createContext<RefCallback<HTMLInputElement> | undefined>(undefined);
 
 function isHeaderRow(row: object): row is CommandPaletteHeaderRow {
   return "type" in row && row.type === "header";
@@ -27,6 +28,7 @@ interface CommandPaletteInputProps {
 
 function CommandPaletteInput(props: CommandPaletteInputProps) {
   const {onBack, onChange, onKeyDown, placeholder, trailing, value} = props;
+  const inputRef = use(CommandPaletteInputRef);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
     // A held Backspace that just cleared the query should not keep going and leave the page.
@@ -43,7 +45,7 @@ function CommandPaletteInput(props: CommandPaletteInputProps) {
     // The leading slot is one fixed box so every page's row is the same height; trailing controls must fit `size-6`.
     <SearchField
       aria-label={placeholder}
-      autoFocus
+      ref={inputRef}
       className="-mx-5 h-12 px-5 py-0"
       leading={
         <span className="-ml-1 grid size-6 shrink-0 place-items-center">
@@ -89,6 +91,29 @@ function CommandPaletteFooter(props: CommandPaletteFooterProps) {
       ))}
     </div>
   );
+}
+
+interface CommandPaletteFocusProps {
+  readonly children: ReactNode;
+  readonly inputRef: RefObject<HTMLInputElement | null>;
+}
+
+export function CommandPaletteFocus(props: CommandPaletteFocusProps) {
+  const {children, inputRef} = props;
+  const previousInput = useRef<HTMLInputElement | null>(null);
+
+  const registerInput = useCallback(
+    (input: HTMLInputElement | null) => {
+      inputRef.current = input;
+      if (!input) return;
+      // Base UI owns initial focus; only subsequent page mounts need our help.
+      if (previousInput.current && previousInput.current !== input) input.focus();
+      previousInput.current = input;
+    },
+    [inputRef]
+  );
+
+  return <CommandPaletteInputRef value={registerInput}>{children}</CommandPaletteInputRef>;
 }
 
 interface CommandPaletteListProps<TRow extends object> {

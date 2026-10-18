@@ -6,6 +6,7 @@ import {getAgentDir} from "@earendil-works/pi-coding-agent";
 import type {SettingsManager} from "@earendil-works/pi-coding-agent";
 import type {SessionNotice} from "@supernova/contracts/services/session-runtime/procedures";
 import type {SessionWorktree} from "@supernova/contracts/services/sessions/schemas";
+import {resolveProjectPath} from "@supernova/agent-runtime/lib/project-path";
 import {loadPiSettings} from "@supernova/agent-runtime/pi/config/settings";
 import {SessionCatalog} from "@supernova/agent-runtime/pi/lib/session/session-catalog";
 import {importLegacySessions} from "@supernova/agent-runtime/pi/lib/session/legacy/legacy-sessions";
@@ -57,7 +58,7 @@ export class SessionStore {
     const now = new Date().toISOString();
     const record: SessionRecord = {
       id: input.id,
-      projectPath: input.projectPath,
+      projectPath: resolveProjectPath(input.projectPath),
       ...(input.worktree ? {worktree: input.worktree} : {}),
       ...(input.forkedFrom ? {forkedFrom: input.forkedFrom} : {}),
       pinned: false,

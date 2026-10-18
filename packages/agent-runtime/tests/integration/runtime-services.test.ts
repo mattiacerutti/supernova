@@ -17,6 +17,7 @@ import {Worktrees} from "@supernova/agent-runtime/features/worktrees/worktrees";
 import type {AgentRuntime} from "@supernova/agent-runtime/runtime";
 import {assistantTexts, createPiTestRuntime, fauxAssistantMessage, selectedModelReference, turnContents, waitUntil} from "@tests/support/session-runtime";
 import {startRuntimeServer} from "@tests/support/runtime-server";
+import {shellCommand, testShell} from "@tests/support/terminal";
 
 const firstMessage = {contentParts: [{text: "Hi", type: "text" as const}], modelReference: selectedModelReference};
 const at = {at: RUNTIME_HOST};
@@ -198,12 +199,12 @@ describe("runtime services over the wire", () => {
 
   describe("terminals", () => {
     const originalShell = process.env.SHELL;
-    // A plain sh starts instantly and has no rc files, unlike the developer's login shell.
     beforeEach(() => {
-      process.env.SHELL = "/bin/sh";
+      process.env.SHELL = testShell;
     });
     afterEach(() => {
-      process.env.SHELL = originalShell;
+      if (originalShell === undefined) delete process.env.SHELL;
+      else process.env.SHELL = originalShell;
     });
 
     it("sends a terminal's output only to clients subscribed to it, and its listing to every client", async () => {
@@ -224,7 +225,7 @@ describe("runtime services over the wire", () => {
       const stopOutput = terminal.output.subscribe(() => undefined);
       cleanups.push(async () => stopOutput());
       await terminal.ready;
-      await terminal.write({data: "echo WIRE_$((20+1))\n"});
+      await terminal.write({data: shellCommand("echo WIRE_$((20+1))", "node -p \"'WIRE_' + (20+1)\"")});
       await waitUntil(() => expect(terminal.output.value?.output).toContain("WIRE_21"), {timeoutMs: 5_000});
       // The listing carries no output, and the window that never subscribed received none.
       expect(JSON.stringify(otherWorkspace.terminals.value)).not.toContain("WIRE_21");
@@ -237,7 +238,7 @@ describe("runtime services over the wire", () => {
       const first = server.client.get(TerminalService, {terminalId: "shared"}, at);
       const stopFirst = first.output.subscribe(() => undefined);
       cleanups.push(async () => stopFirst());
-      await first.write({data: "echo EARLY_$((1+1))\n"});
+      await first.write({data: shellCommand("echo EARLY_$((1+1))", "node -p \"'EARLY_' + (1+1)\"")});
       await waitUntil(() => expect(first.output.value?.output).toContain("EARLY_2"), {timeoutMs: 5_000});
 
       const other = server.connectClient().host.get(TerminalService, {terminalId: "shared"}, at);
@@ -248,7 +249,7 @@ describe("runtime services over the wire", () => {
       // Whoever resizes last sets the shell's size.
       await first.resize({cols: 100, rows: 30});
       await other.resize({cols: 90, rows: 20});
-      await other.write({data: "stty size\n"});
+      await other.write({data: shellCommand("stty size", "node -p \"process.stdout.rows + ' ' + process.stdout.columns\"")});
       await waitUntil(() => expect(first.output.value?.output).toContain("20 90"), {timeoutMs: 5_000});
 
       expect(await workspace.closeTerminal({id: "shared"})).toEqual({ok: true, value: null});

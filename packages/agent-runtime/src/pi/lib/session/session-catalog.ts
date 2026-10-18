@@ -1,6 +1,7 @@
 import {mkdir} from "node:fs/promises";
 import {dirname} from "node:path";
 import {DatabaseSync} from "node:sqlite";
+import {resolveProjectPath} from "@supernova/agent-runtime/lib/project-path";
 import type {SessionRecord} from "@supernova/agent-runtime/pi/lib/session/session-state";
 
 const BUSY_TIMEOUT_MS = 5_000;
@@ -26,6 +27,7 @@ const MIGRATIONS: readonly string[] = [
   CREATE INDEX sessions_listing ON sessions (project_path, pinned DESC, updated_at DESC, id DESC) WHERE archived_at IS NULL;
   CREATE INDEX sessions_recent ON sessions (updated_at DESC, id DESC) WHERE archived_at IS NULL;
   `,
+  "UPDATE sessions SET project_path = resolve_project_path(project_path);",
 ];
 
 const COLUMNS = "id, project_path, worktree_branch, worktree_path, title, forked_from, pinned, archived_at, created_at, updated_at";
@@ -66,7 +68,7 @@ function toRecord(row: SessionRow): SessionRecord {
 function toValues(record: SessionRecord): (string | number | null)[] {
   return [
     record.id,
-    record.projectPath,
+    resolveProjectPath(record.projectPath),
     record.worktree?.branch ?? null,
     record.worktree?.path ?? null,
     record.title ?? null,
@@ -90,6 +92,7 @@ export class SessionCatalog {
       database.exec("PRAGMA synchronous = NORMAL");
       const {user_version: version} = database.prepare("PRAGMA user_version").get() as {user_version: number};
       if (version > MIGRATIONS.length) throw new Error(`The session catalog at ${path} was written by a newer version of Supernova.`);
+      database.function("resolve_project_path", (path) => resolveProjectPath(String(path)));
       // Each migration commits on its own, so a crash between two leaves a catalog a later open finishes.
       for (let next = version; next < MIGRATIONS.length; next++) {
         database.exec("BEGIN IMMEDIATE");
@@ -114,7 +117,7 @@ export class SessionCatalog {
     const continued = after ? "AND (pinned, updated_at, id) < (?, ?, ?)" : "";
     const rows = this.database
       .prepare(`SELECT ${COLUMNS} FROM sessions WHERE project_path = ? AND archived_at IS NULL ${continued} ORDER BY pinned DESC, updated_at DESC, id DESC LIMIT ?`)
-      .all(projectPath, ...(after ? [after.pinned ? 1 : 0, after.updatedAt, after.id] : []), limit) as unknown as SessionRow[];
+      .all(resolveProjectPath(projectPath), ...(after ? [after.pinned ? 1 : 0, after.updatedAt, after.id] : []), limit) as unknown as SessionRow[];
     return rows.map(toRecord);
   }
 
@@ -126,7 +129,7 @@ export class SessionCatalog {
       .prepare(
         `SELECT ${COLUMNS} FROM sessions INDEXED BY sessions_recent WHERE archived_at IS NULL AND COALESCE(title, '') LIKE ? ESCAPE '\\' ${inProjects} ${continued} ORDER BY updated_at DESC, id DESC LIMIT ?`
       )
-      .all(`%${escapeLike(query)}%`, ...(projectPaths ?? []), ...(after ? [after.updatedAt, after.id] : []), limit) as unknown as SessionRow[];
+      .all(`%${escapeLike(query)}%`, ...(projectPaths?.map(resolveProjectPath) ?? []), ...(after ? [after.updatedAt, after.id] : []), limit) as unknown as SessionRow[];
     return rows.map(toRecord);
   }
 
@@ -151,7 +154,7 @@ export class SessionCatalog {
         "UPDATE sessions SET project_path = ?, worktree_branch = ?, worktree_path = ?, title = ?, forked_from = ?, pinned = ?, archived_at = ?, created_at = ?, updated_at = ? WHERE id = ?"
       )
       .run(...values, sessionId);
-    return next;
+    return {...next, projectPath: resolveProjectPath(next.projectPath)};
   }
 
   public delete(sessionId: string): boolean {

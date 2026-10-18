@@ -1,6 +1,6 @@
 import {mkdir, mkdtemp} from "node:fs/promises";
 import {tmpdir} from "node:os";
-import {join} from "node:path";
+import {join, resolve, sep} from "node:path";
 import {afterEach, describe, expect, it} from "vitest";
 import {Projects} from "@supernova/agent-runtime/features/projects/projects";
 import type {SessionRecord} from "@supernova/agent-runtime/pi/lib/session/session-state";
@@ -77,8 +77,10 @@ describe("listing, searching, pinning, and archiving project sessions", () => {
     const first = await projects.searchSessions({query: " login ", projectPaths: ["/workspace", "/other"], limit: 1});
     const second = await projects.searchSessions({query: "login", projectPaths: ["/workspace", "/other"], limit: 1, cursor: first.nextCursor!});
 
-    expect(first.sessions).toEqual([{id: "b", forked: false, pinned: false, projectPath: "/other", title: "Login page", updatedAt: "2026-01-02T00:00:00.000Z", worktree: false}]);
-    expect(second).toMatchObject({sessions: [{id: "a", projectPath: "/workspace"}], nextCursor: null});
+    expect(first.sessions).toEqual([
+      {id: "b", forked: false, pinned: false, projectPath: resolve("/other").split(sep).join("/"), title: "Login page", updatedAt: "2026-01-02T00:00:00.000Z", worktree: false},
+    ]);
+    expect(second).toMatchObject({sessions: [{id: "a", projectPath: resolve("/workspace").split(sep).join("/")}], nextCursor: null});
     expect(await projects.searchSessions({query: "login", projectPaths: [], limit: 10})).toEqual({sessions: [], nextCursor: null});
   });
 

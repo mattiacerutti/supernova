@@ -30,7 +30,7 @@ export const spawnPty: SpawnPty = async (input) => {
   child.onExit(({exitCode}) => input.onExit(exitCode));
   return {
     pid: child.pid,
-    kill: (signal) => child.kill(signal),
+    kill: (signal) => child.kill(process.platform === "win32" ? undefined : signal),
     resize: (cols, rows) => child.resize(cols, rows),
     write: (data) => child.write(data),
   };
