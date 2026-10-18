@@ -204,9 +204,11 @@ test.describe("session timeline visual stability", () => {
     await timeline.expectAtBottom();
   });
 
-  test("streamed content stays bottom-locked in the same frame while auto-following", async ({timeline}) => {
+  test("streamed content stays bottom-locked in the same frame while auto-following", async ({page, timeline}) => {
     await timeline.sendMessage();
     await timeline.waitForLineGrowth(30);
+    // Pinning owns motion until it finishes; measure auto-follow afterwards.
+    await expect.poll(() => page.locator("[data-timeline-virtual-content]").evaluate((element) => element.parentElement!.getAnimations().length)).toBe(0);
 
     const samples = await timeline.recordStreamGrowth(60);
     const animatedFrames = visibleSamples(samples, TIMELINE_SESSION_ID).filter((sample) => sample.streamOffset > 0.5);

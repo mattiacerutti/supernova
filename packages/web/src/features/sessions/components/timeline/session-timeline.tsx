@@ -15,7 +15,7 @@ import {WorkExpansionContext, useWorkExpansionState} from "@/features/sessions/h
 import {buildTimelineRowKeys, buildTimelineRows, hasLiveTimelineOutput} from "@/features/sessions/lib/timeline/rows/timeline-rows";
 import type {SessionTimelineItem} from "@/features/sessions/types/session-timeline-item";
 
-const TIMELINE_ANCHOR_SCROLL_DURATION_MS = 400;
+const TIMELINE_ANCHOR_SCROLL_DURATION_MS = 700;
 const TIMELINE_ANCHOR_TOP_MARGIN_PX = 24;
 const TIMELINE_BOTTOM_PADDING_PX = 16;
 const TIMELINE_EARLIER_HISTORY_HEIGHT_PX = 48;
@@ -335,7 +335,7 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
 
     anchor.animation = content.animate([{transform: `translateY(${anchor.offset}px)`}, {transform: "translateY(0)"}], {
       duration: TIMELINE_ANCHOR_SCROLL_DURATION_MS,
-      easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+      easing: "cubic-bezier(0.16, 1, 0.3, 1)",
     });
     anchor.animation.onfinish = () => {
       if (anchorScrollRef.current === anchor) releaseAnchorScroll();
