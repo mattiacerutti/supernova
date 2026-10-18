@@ -1,6 +1,6 @@
 import {mkdtempSync, rmSync} from "node:fs";
 import {tmpdir} from "node:os";
-import {join} from "node:path";
+import {join, sep} from "node:path";
 import type {PromptTemplate, Skill} from "@earendil-works/pi-coding-agent";
 import {discoverAndLoadExtensions, ModelRuntime, SettingsManager} from "@earendil-works/pi-coding-agent";
 import type {Api, FauxProviderRegistration} from "@earendil-works/pi-ai/compat";
@@ -127,7 +127,7 @@ export async function createPiTestRuntime(input?: {
 }) {
   const checkpointStorageRoot = mkdtempSync(join(tmpdir(), "supernova-checkpoint-storage-"));
   const sessionStorageRoot = input?.sessionStorageRoot ?? mkdtempSync(join(tmpdir(), "supernova-session-storage-"));
-  const defaultProjectRoot = mkdtempSync(join(tmpdir(), "supernova-test-project-"));
+  const defaultProjectRoot = mkdtempSync(join(tmpdir(), "supernova-test-project-")).split(sep).join("/");
   const modelRuntime = await ModelRuntime.create({modelsPath: null});
   const faux = registerFauxProvider({
     api: selectedPiModel.api,

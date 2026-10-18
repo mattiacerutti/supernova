@@ -1,6 +1,6 @@
 import {mkdir, mkdtemp, writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
-import {join} from "node:path";
+import {join, sep} from "node:path";
 import {afterEach, describe, expect, it} from "vitest";
 import {Folders} from "@supernova/agent-runtime/features/folders/folders";
 
@@ -26,7 +26,7 @@ describe("suggesting local folders", () => {
 
     expect(result.query).toBe(join(tempDir, "al"));
     expect(result.queryPathType).toBe("missing");
-    expect(result.suggestions).toEqual([{name: "alpha", path: join(tempDir, "alpha")}]);
+    expect(result.suggestions).toEqual([{name: "alpha", path: join(tempDir, "alpha").split(sep).join("/")}]);
 
     const directoryResult = await folders.listSuggestions({query: `${tempDir}/`});
     expect(directoryResult.suggestions.map((suggestion) => suggestion.name)).toEqual([".alpha-hidden", "alpha", "beta"]);

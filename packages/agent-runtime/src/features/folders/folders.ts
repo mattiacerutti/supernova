@@ -10,13 +10,14 @@ import type {
 } from "@supernova/contracts/services/folders/procedures";
 import {searchProjectFiles} from "@supernova/agent-runtime/features/folders/lib/file-search";
 import {readFolderPathType, searchFolders} from "@supernova/agent-runtime/features/folders/lib/folder-search";
-import {normalizePathForDisplay, resolveFolderPath} from "@supernova/agent-runtime/features/folders/lib/paths";
+import {normalizePathForDisplay} from "@supernova/agent-runtime/features/folders/lib/paths";
+import {resolveProjectPath} from "@supernova/agent-runtime/lib/project-path";
 
 export class Folders {
   public async create(input: FolderCreatePayload): Promise<FolderCreateResult> {
-    const resolvedPath = resolveFolderPath(input.path);
+    const resolvedPath = resolveProjectPath(input.path.trim());
     await mkdir(resolvedPath, {recursive: true});
-    return {path: normalizePathForDisplay(resolvedPath)};
+    return {path: resolvedPath};
   }
 
   public async listFiles(input: FolderFilesListPayload): Promise<FolderFilesListResult> {
@@ -25,7 +26,7 @@ export class Folders {
 
   public async listSuggestions(input: FolderSuggestionsListPayload): Promise<FolderSuggestionsListResult> {
     const {query} = input;
-    const queryPath = query.trim().length > 0 ? resolveFolderPath(query) : homedir();
+    const queryPath = query.trim().length > 0 ? resolveProjectPath(query.trim()) : homedir();
 
     return {
       homePath: normalizePathForDisplay(homedir()),

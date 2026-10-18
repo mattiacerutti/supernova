@@ -22,7 +22,11 @@ export interface TerminalProcessInput {
 export class TerminalProcess {
   private exitCode: number | undefined;
   private pty: Pty | undefined;
-  private closed = false;
+  private resolveExit!: () => void;
+  private readonly exited = new Promise<void>((resolve) => {
+    this.resolveExit = resolve;
+  });
+  private closing: Promise<void> | undefined;
 
   public static async spawn(input: TerminalProcessInput): Promise<TerminalProcess> {
     const process = new TerminalProcess();
@@ -50,6 +54,7 @@ export class TerminalProcess {
         // The last output must land before the exit code, or the client draws the exit notice above it.
         flush();
         process.exitCode = exitCode;
+        process.resolveExit();
         input.onExit(exitCode);
       },
       rows: input.rows,
@@ -66,17 +71,22 @@ export class TerminalProcess {
     if (this.exitCode === undefined) this.pty?.resize(cols, rows);
   }
 
-  public close(): void {
-    if (this.closed) return;
-    this.closed = true;
-    if (this.exitCode === undefined && this.pty) {
-      // Interactive shells ignore SIGTERM; SIGHUP is what losing the terminal means to them.
+  public close(): Promise<void> {
+    this.closing ??= (async () => {
+      if (this.exitCode !== undefined || !this.pty) return;
       const pty = this.pty;
-      pty.kill("SIGHUP");
-      setTimeout(() => {
+      const forceKill = setTimeout(() => {
         if (this.exitCode === undefined) pty.kill("SIGKILL");
       }, KILL_GRACE_MS).unref();
-    }
+      try {
+        // Interactive POSIX shells ignore SIGTERM; the PTY adapter translates termination on Windows.
+        pty.kill("SIGHUP");
+        await this.exited;
+      } finally {
+        clearTimeout(forceKill);
+      }
+    })();
+    return this.closing;
   }
 }
 

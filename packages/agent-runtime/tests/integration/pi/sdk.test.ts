@@ -26,8 +26,9 @@ async function createTestProject(): Promise<{agentDir: string; home: string; pro
   const project = join(repo, "packages", "app");
   const agentDir = join(home, ".supernova", "userdata", "agent");
 
-  process.env.HOME = home;
-  process.env.PI_CODING_AGENT_DIR = agentDir;
+  vi.stubEnv("HOME", home);
+  vi.stubEnv("USERPROFILE", home);
+  vi.stubEnv("PI_CODING_AGENT_DIR", agentDir);
   await mkdir(join(repo, ".git"), {recursive: true});
   await mkdir(project, {recursive: true});
 
@@ -35,27 +36,10 @@ async function createTestProject(): Promise<{agentDir: string; home: string; pro
 }
 
 describe("Supernova Pi SDK config", () => {
-  const originalHome = process.env.HOME;
-  const originalPiCodingAgentDir = process.env.PI_CODING_AGENT_DIR;
-  const originalPiOffline = process.env.PI_OFFLINE;
   const tempDirs: string[] = [];
 
   afterEach(() => {
-    if (originalHome === undefined) {
-      delete process.env.HOME;
-    } else {
-      process.env.HOME = originalHome;
-    }
-    if (originalPiCodingAgentDir === undefined) {
-      delete process.env.PI_CODING_AGENT_DIR;
-    } else {
-      process.env.PI_CODING_AGENT_DIR = originalPiCodingAgentDir;
-    }
-    if (originalPiOffline === undefined) {
-      delete process.env.PI_OFFLINE;
-    } else {
-      process.env.PI_OFFLINE = originalPiOffline;
-    }
+    vi.unstubAllEnvs();
     cleanupTempDirs(tempDirs);
   });
 
@@ -253,9 +237,10 @@ export default function(pi) {
     const home = await mkdtemp(join(tmpdir(), "supernova-home-"));
     const agentDir = join(home, ".supernova", "dev", "agent");
     tempDirs.push(home);
-    process.env.HOME = home;
-    process.env.PI_CODING_AGENT_DIR = agentDir;
-    process.env.PI_OFFLINE = "1";
+    vi.stubEnv("HOME", home);
+    vi.stubEnv("USERPROFILE", home);
+    vi.stubEnv("PI_CODING_AGENT_DIR", agentDir);
+    vi.stubEnv("PI_OFFLINE", "1");
 
     const piSdk = await createPiSdk();
 

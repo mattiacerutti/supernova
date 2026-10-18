@@ -61,7 +61,7 @@ beforeAll(async () => {
   // A repository reachable only through a symlinked child, used to check that requests cannot follow it.
   outsideRepo = await mkdtemp(join(tmpdir(), "supernova-outside-"));
   await exec("git", ["init", "-q", "-b", "main"], {cwd: outsideRepo});
-  await symlink(outsideRepo, join(repo, "linked"));
+  await symlink(outsideRepo, join(repo, "linked"), "dir");
 });
 
 afterAll(async () => {

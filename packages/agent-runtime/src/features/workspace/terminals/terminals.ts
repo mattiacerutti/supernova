@@ -93,8 +93,8 @@ export class Terminals {
   public async close(input: TerminalClosePayload): Promise<void> {
     const entry = this.entries.get(input.id);
     if (!entry) return;
+    await (await entry.process.catch(() => undefined))?.close();
     this.remove(input.id);
-    (await entry.process.catch(() => undefined))?.close();
   }
 
   public async closeSession(sessionId: string): Promise<void> {
