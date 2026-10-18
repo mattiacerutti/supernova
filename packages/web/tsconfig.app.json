@@ -7,8 +7,9 @@
     "paths": {
       "@/*": ["./src/*"],
       "@assets/*": ["./assets/*"],
-      "@e2e/*": ["./tests/e2e/*"]
+      "@tests/*": ["./tests/*"]
     }
   },
-  "include": ["src", "tests"]
+  "include": ["src", "tests"],
+  "exclude": ["tests/e2e"]
 }

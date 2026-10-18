@@ -102,7 +102,7 @@ export default function ProjectListItem(props: ProjectListItemProps) {
         </div>
       </Button>
 
-      <SidebarProjectSessions activeSessionId={activeSessionId} collapsed={!expanded && dragging} expanded={expanded} projectPath={project.path} />
+      <SidebarProjectSessions activeSessionId={activeSessionId} collapsed={!expanded && dragging} expanded={expanded} projectName={project.name} projectPath={project.path} />
     </>
   );
 }

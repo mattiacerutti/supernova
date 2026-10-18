@@ -12,15 +12,21 @@ export interface StartServerProcessOptions {
   readonly execArgv?: readonly string[];
   readonly env?: NodeJS.ProcessEnv;
   readonly port?: number;
+  readonly onOutput?: (chunk: string) => void;
 }
 
-export async function startServerProcess({entry, execPath, execArgv = [], env, port = 0}: StartServerProcessOptions): Promise<ServerProcess> {
+export async function startServerProcess({entry, execPath, execArgv = [], env, port = 0, onOutput}: StartServerProcessOptions): Promise<ServerProcess> {
+  const output = onOutput ? "pipe" : "inherit";
   const child = fork(entry, ["--host", "127.0.0.1", "--port", String(port)], {
     execPath,
     execArgv: [...execArgv],
     env: {...process.env, ...env},
-    stdio: ["ignore", "inherit", "inherit", "ipc"],
+    stdio: ["ignore", output, output, "ipc"],
   });
+  if (onOutput) {
+    child.stdout?.setEncoding("utf8").on("data", onOutput);
+    child.stderr?.setEncoding("utf8").on("data", onOutput);
+  }
   const exited = new Promise<void>((resolve) => child.once("exit", () => resolve()));
   let closing: Promise<void> | undefined;
 

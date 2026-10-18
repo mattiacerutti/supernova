@@ -77,16 +77,6 @@ export const imageAttachment = {
   type: "attachment" as const,
 };
 
-export const textAttachment = {
-  contentBase64: "VGhpcyBpcyBhIHRleHQgZmlsZS4=",
-  id: "text-1",
-  kind: "text" as const,
-  mime: "text/plain",
-  name: "notes.txt",
-  size: 20,
-  type: "attachment" as const,
-};
-
 async function registerFauxModel(input: {faux: FauxProviderRegistration; modelRuntime: ModelRuntime}): Promise<void> {
   const model = input.faux.getModel();
   input.modelRuntime.registerProvider(model.provider, {

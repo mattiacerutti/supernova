@@ -1,0 +1,52 @@
+import type {TimelineVisualSample} from "@tests/timeline/test-api";
+
+/** Installs a post-paint probe that records the native timeline geometry for every rendered frame. */
+export function installTimelineVisualProbe(): void {
+  const samples: TimelineVisualSample[] = [];
+
+  const capturePaintedFrame = (): void => {
+    const viewport = document.querySelector<HTMLElement>('[aria-label="Session timeline"]');
+    if (!viewport) return;
+
+    const style = window.getComputedStyle(viewport);
+    const streamContent = viewport.querySelector<HTMLElement>("[data-timeline-stream-content]");
+    const streamTransform = streamContent ? window.getComputedStyle(streamContent).transform : "none";
+    const statusFooter = viewport.querySelector<HTMLElement>('[data-timeline-footer="streaming-status"]');
+    const footerTransform = statusFooter ? window.getComputedStyle(statusFooter).transform : "none";
+    const lastUserMessage = [...viewport.querySelectorAll<HTMLElement>("article.justify-end")].at(-1);
+    samples.push({
+      bottomDistance: viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop,
+      clientHeight: viewport.clientHeight,
+      lastRowIndex: Math.max(-1, ...[...viewport.querySelectorAll<HTMLElement>("[data-index]")].map((row) => Number(row.dataset.index))),
+      lastUserMessageTop: lastUserMessage ? lastUserMessage.getBoundingClientRect().top - viewport.getBoundingClientRect().top : null,
+      lineCount: window.__supernovaTimelineMock?.getState().lineCount ?? 0,
+      pathname: window.location.pathname,
+      scrollButtonVisible: document.querySelector('[data-slot="message-scroller-button"]') !== null,
+      scrollHeight: viewport.scrollHeight,
+      scrollTop: viewport.scrollTop,
+      statusFooterOffset: footerTransform === "none" ? 0 : new DOMMatrixReadOnly(footerTransform).m42,
+      statusFooterTop: statusFooter?.getBoundingClientRect().top ?? null,
+      streamOffset: streamTransform === "none" ? 0 : new DOMMatrixReadOnly(streamTransform).m42,
+      source: "frame",
+      timestamp: performance.now(),
+      visible: style.display !== "none" && style.visibility !== "hidden",
+    });
+
+    if (samples.length > 10_000) samples.splice(0, 1_000);
+  };
+
+  const scheduleFrame = (): void => {
+    window.requestAnimationFrame(() => {
+      window.setTimeout(capturePaintedFrame, 0);
+      scheduleFrame();
+    });
+  };
+  scheduleFrame();
+
+  window.__supernovaTimelineVisualProbe = {
+    read: () => [...samples],
+    reset: () => {
+      samples.length = 0;
+    },
+  };
+}

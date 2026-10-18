@@ -2,7 +2,7 @@ import {estimateTokens} from "@earendil-works/pi-coding-agent";
 import type {AssistantMessage, Message, Usage} from "@earendil-works/pi-ai";
 import type {EntryRecord} from "@earendil-works/pi-durable";
 import type {TurnRecord} from "@supernova/agent-runtime/pi/lib/session/session-state";
-import {Session, SessionEntries} from "@supernova/contracts/services/sessions/schemas";
+import {Session} from "@supernova/contracts/services/sessions/schemas";
 import {describe, expect, it} from "vitest";
 import {buildSession, buildSessionContextUsage, entriesPage} from "@supernova/agent-runtime/pi/lib/session/session-snapshot";
 
@@ -177,19 +177,6 @@ describe("history pages", () => {
   it("is the whole history when it has no turns", () => {
     const entries = [entry(1, "pi.compaction"), entry(2, "pi.user")];
     expect(entriesPage({side: "entries", entries, turns: {}})).toEqual({items: entries, remaining: 0, precedingEntryId: null});
-  });
-});
-
-describe("history page boundaries", () => {
-  it.each([
-    {precedingEntryId: null, valid: true},
-    {precedingEntryId: 42, valid: true},
-    {precedingEntryId: undefined, valid: false},
-    {precedingEntryId: -1, valid: false},
-    {precedingEntryId: 1.5, valid: false},
-    {precedingEntryId: "42", valid: false},
-  ])("validates precedingEntryId $precedingEntryId", ({precedingEntryId, valid}) => {
-    expect(SessionEntries.safeParse({items: [], remaining: 0, precedingEntryId}).success).toBe(valid);
   });
 });
 

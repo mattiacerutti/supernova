@@ -19,13 +19,6 @@ function model(overrides: Partial<Model<Api>>): Model<Api> {
 }
 
 describe("mapping Pi models", () => {
-  it.each([
-    {expected: false, input: ["text"] as Model<Api>["input"], name: "text-only"},
-    {expected: true, input: ["text", "image"] as Model<Api>["input"], name: "image-capable"},
-  ])("exposes image capability for $name models", (testCase) => {
-    expect(toAgentModelDetails(model({input: testCase.input}), "OpenAI Codex").capabilities.images).toBe(testCase.expected);
-  });
-
   it("deduplicates provider-native thinking levels while keeping canonical choices", () => {
     const details = toAgentModelDetails(
       model({

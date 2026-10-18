@@ -168,6 +168,62 @@ describe("sending messages through Pi sessions", () => {
     expect(assistantTexts(session)).toEqual(["Reviewed."]);
   });
 
+  it("gives the model each selected skill once and text attachments escaped, but stores only what the user wrote", async () => {
+    const skill = {
+      baseDir: "/skills/demo",
+      description: "demo skill",
+      disableModelInvocation: false,
+      filePath: "/skills/demo/SKILL.md",
+      name: "demo",
+      sourceInfo: {origin: "top-level" as const, path: "/skills/demo/SKILL.md", scope: "project" as const, source: "test"},
+    };
+    const pi = await createPiTestRuntime({skills: [skill], skillContentByPath: {[skill.filePath]: "---\nname: demo\n---\n\nUse cobalt.\n"}});
+    runtimes.push(pi);
+    const {info} = await pi.createSession();
+    const notes = {
+      contentBase64: Buffer.from("Use <tag> & 'quote'").toString("base64"),
+      id: "text-1",
+      kind: "text" as const,
+      mime: "text/plain",
+      name: `a&b<'".txt`,
+      size: 19,
+      type: "attachment" as const,
+    };
+    const contentParts = [
+      {text: "Use ", type: "text" as const},
+      {id: "skill-1", kind: "skill" as const, name: "Demo", type: "reference" as const, value: "demo"},
+      {text: " and ", type: "text" as const},
+      {id: "skill-2", kind: "skill" as const, name: "Demo", type: "reference" as const, value: "demo"},
+      {id: "skill-3", kind: "skill" as const, name: "Gone", type: "reference" as const, value: "uninstalled"},
+      notes,
+      imageAttachment,
+    ];
+    let prompt: unknown;
+    pi.faux.setResponses([
+      (context) => {
+        prompt = context.messages.find((message) => message.role === "user")?.content;
+        return fauxAssistantMessage("Done.");
+      },
+    ]);
+
+    const {session} = await pi.sendMessage({contentParts, modelReference: selectedModelReference, sessionId: info.id});
+
+    expect(prompt).toEqual([
+      {
+        text: [
+          "Use demo and demouninstalled",
+          "<skill>\n<name>demo</name>\n<path>/skills/demo/SKILL.md</path>\n---\nname: demo\n---\n\nUse cobalt.\n</skill>",
+          `<attachment id="text-1" name="a&amp;b&lt;&apos;&quot;.txt" mime="text/plain" size="19">\nUse &lt;tag&gt; &amp; &apos;quote&apos;\n</attachment>`,
+        ].join("\n\n"),
+        type: "text",
+      },
+      {data: imageAttachment.contentBase64, mimeType: "image/png", type: "image"},
+    ]);
+    // The turn shows what was authored; neither attachment's bytes are kept in it.
+    const stored = (part: typeof notes | typeof imageAttachment) => Object.fromEntries(Object.entries(part).filter(([key]) => key !== "contentBase64"));
+    expect(turnContents(session)).toEqual([[...contentParts.slice(0, 5), stored(notes), stored(imageAttachment)]]);
+  });
+
   it("streams a pending auto-compaction in pi.live and commits its summary entry", async () => {
     const pi = await createPiTestRuntime();
     runtimes.push(pi);

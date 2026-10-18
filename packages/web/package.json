@@ -12,8 +12,9 @@
     "preview": "vite preview",
     "test": "vitest run tests/unit",
     "test:e2e": "playwright test",
-    "test:e2e:report": "playwright show-report tests/e2e/playwright-report",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:report": "playwright show-report tests/e2e/report",
+    "test:e2e:ui": "playwright test --ui",
+    "test:timeline": "playwright test --config playwright.timeline.config.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
@@ -73,6 +74,7 @@
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.60.0",
     "@rolldown/plugin-babel": "^0.2.3",
+    "@supernova/server": "workspace:*",
     "@tailwindcss/vite": "^4.2.4",
     "@types/imurmurhash": "^0.1.4",
     "@types/node": "^24.12.2",

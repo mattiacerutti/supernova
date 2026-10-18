@@ -12,13 +12,14 @@ Guidance for developers and coding agents building Supernova. User guides live i
 ## Implementation conventions
 
 - [Coding standards](coding-standards.md) — TypeScript, imports, and implementation layout.
-- [Web](web.md) — React, feature structure, styling, state, RPC hooks, and frontend tests.
-- [Agent runtime](agent-runtime.md) — feature structure, dependency boundaries, state ownership, and runtime tests.
+- [Web](web.md) — React, feature structure, styling, state, and RPC hooks.
+- [Agent runtime](agent-runtime.md) — feature structure, dependency boundaries, and state ownership.
 - [Contracts](contracts.md) — schema organization, RPC errors, and public exports.
 
 ## Working on the project
 
 - [Development](development.md) — setup, commands, and verification.
+- [Testing](testing.md) — which layer a test belongs in, how many a change needs, and when to run each suite.
 - [Icons](icons.md) — desktop icon sources, variants, and generation.
 - [Release](release.md) — changelog conventions and publishing procedures.
 - [Documentation](documentation.md) — audience, placement, maintenance, and writing style.

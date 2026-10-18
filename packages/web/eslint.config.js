@@ -37,7 +37,7 @@ const featureBoundaryRules = features.map((feature) => ({
 }));
 
 export default defineConfig([
-  globalIgnores(["dist"]),
+  globalIgnores(["dist", "tests/*/report", "tests/*/results"]),
 
   {
     files: ["**/*.{ts,tsx}"],
@@ -68,4 +68,15 @@ export default defineConfig([
   },
 
   ...featureBoundaryRules,
+
+  // Node code run by Playwright, not the browser app: fixtures pass values through `use`, which is not React's hook,
+  // and a fixture with no dependencies must still destructure an empty object for Playwright to read its signature.
+  {
+    files: ["tests/e2e/**/*.ts", "playwright*.config.ts"],
+    languageOptions: {globals: globals.node},
+    rules: {
+      "no-empty-pattern": "off",
+      "react-hooks/rules-of-hooks": "off",
+    },
+  },
 ]);

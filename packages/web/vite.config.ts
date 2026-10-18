@@ -42,16 +42,17 @@ export default defineConfig(({mode}) => ({
   },
   resolve: {
     alias: [
-      ...(mode === "e2e"
+      // The timeline suite's build swaps the server connection for an in-browser server (tests/timeline).
+      ...(mode === "timeline"
         ? [
             {
               find: /^@\/runtime\/transport\/runtime-client$/,
-              replacement: resolve(__dirname, "tests/e2e/mocks/timeline-runtime-client.ts"),
+              replacement: resolve(__dirname, "tests/timeline/runtime-client.ts"),
             },
           ]
         : []),
       {find: "@assets", replacement: resolve(__dirname, "assets")},
-      {find: "@e2e", replacement: resolve(__dirname, "tests/e2e")},
+      {find: "@tests", replacement: resolve(__dirname, "tests")},
       {find: "@", replacement: resolve(__dirname, "src")},
     ],
   },

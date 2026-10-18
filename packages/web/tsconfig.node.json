@@ -2,8 +2,11 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
-    "lib": ["ES2023"],
-    "types": ["node"]
+    "lib": ["ES2023", "DOM"],
+    "types": ["node"],
+    "paths": {
+      "@tests/*": ["./tests/*"]
+    }
   },
-  "include": ["playwright.config.ts", "vite.config.ts"]
+  "include": ["playwright.config.ts", "playwright.timeline.config.ts", "vite.config.ts", "tests/e2e"]
 }
