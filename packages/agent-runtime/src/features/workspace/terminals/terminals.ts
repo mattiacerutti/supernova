@@ -94,7 +94,7 @@ export class Terminals {
     const entry = this.entries.get(input.id);
     if (!entry) return;
     this.remove(input.id);
-    (await entry.process.catch(() => undefined))?.close();
+    await (await entry.process.catch(() => undefined))?.close();
   }
 
   public async closeSession(sessionId: string): Promise<void> {

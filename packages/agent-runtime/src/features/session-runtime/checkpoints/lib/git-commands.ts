@@ -86,7 +86,8 @@ export async function readRepositoryInfo(directory: string): Promise<RepositoryI
 
 /** Local config beats the user's global config, so auto-maintenance never reclaims objects not yet pinned by a ref. */
 export async function createShadowRepository(gitDir: string, objectFormat: GitObjectFormat): Promise<void> {
-  await runGit(["init", "--bare", `--object-format=${objectFormat}`, gitDir]);
+  // Initialization itself writes deep paths before the repository's local config exists.
+  await runGit([...PINNED_CONFIG, "init", "--bare", `--object-format=${objectFormat}`, gitDir]);
 
   const settings: ReadonlyArray<readonly [string, string]> = [
     ["gc.pruneExpire", PRUNE_EXPIRY],
@@ -95,7 +96,7 @@ export async function createShadowRepository(gitDir: string, objectFormat: GitOb
     ["core.longpaths", "true"],
     ["core.symlinks", SYMLINKS_MODE],
   ];
-  for (const [key, value] of settings) await runGit([`--git-dir=${gitDir}`, "config", key, value]);
+  for (const [key, value] of settings) await runGit([...PINNED_CONFIG, `--git-dir=${gitDir}`, "config", key, value]);
 }
 
 export async function listFlaggedPaths(target: GitTarget, indexPath: string): Promise<readonly string[]> {

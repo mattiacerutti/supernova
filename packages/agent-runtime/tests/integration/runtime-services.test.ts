@@ -225,7 +225,7 @@ describe("runtime services over the wire", () => {
       const stopOutput = terminal.output.subscribe(() => undefined);
       cleanups.push(async () => stopOutput());
       await terminal.ready;
-      await terminal.write({data: shellCommand("echo WIRE_$((20+1))", "Write-Output ('WIRE_' + (20+1))")});
+      await terminal.write({data: shellCommand("echo WIRE_$((20+1))", "node -p \"'WIRE_' + (20+1)\"")});
       await waitUntil(() => expect(terminal.output.value?.output).toContain("WIRE_21"), {timeoutMs: 5_000});
       // The listing carries no output, and the window that never subscribed received none.
       expect(JSON.stringify(otherWorkspace.terminals.value)).not.toContain("WIRE_21");
@@ -238,7 +238,7 @@ describe("runtime services over the wire", () => {
       const first = server.client.get(TerminalService, {terminalId: "shared"}, at);
       const stopFirst = first.output.subscribe(() => undefined);
       cleanups.push(async () => stopFirst());
-      await first.write({data: shellCommand("echo EARLY_$((1+1))", "Write-Output ('EARLY_' + (1+1))")});
+      await first.write({data: shellCommand("echo EARLY_$((1+1))", "node -p \"'EARLY_' + (1+1)\"")});
       await waitUntil(() => expect(first.output.value?.output).toContain("EARLY_2"), {timeoutMs: 5_000});
 
       const other = server.connectClient().host.get(TerminalService, {terminalId: "shared"}, at);
@@ -249,7 +249,7 @@ describe("runtime services over the wire", () => {
       // Whoever resizes last sets the shell's size.
       await first.resize({cols: 100, rows: 30});
       await other.resize({cols: 90, rows: 20});
-      await other.write({data: shellCommand("stty size", "'{0} {1}' -f $Host.UI.RawUI.WindowSize.Height, $Host.UI.RawUI.WindowSize.Width")});
+      await other.write({data: shellCommand("stty size", "node -p \"process.stdout.rows + ' ' + process.stdout.columns\"")});
       await waitUntil(() => expect(first.output.value?.output).toContain("20 90"), {timeoutMs: 5_000});
 
       expect(await workspace.closeTerminal({id: "shared"})).toEqual({ok: true, value: null});

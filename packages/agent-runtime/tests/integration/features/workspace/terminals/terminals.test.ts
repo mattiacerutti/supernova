@@ -48,7 +48,7 @@ describe("Terminals", () => {
     const terminal = await terminals.open({cols: 80, cwd, id: "t1", rows: 24, sessionId: "s1"});
     expect(terminal).toEqual({cwd, id: "t1", number: 1, sessionId: "s1", startedAt: expect.any(String)});
 
-    await terminals.write({data: shellCommand("pwd", "(Get-Location).Path"), id: "t1"});
+    await terminals.write({data: shellCommand("pwd", "cd"), id: "t1"});
     await output("t1", (current) => expect(current.output).toContain(cwd));
     expect(terminals.state.value.terminals).toEqual({t1: terminal});
   });
@@ -65,7 +65,7 @@ describe("Terminals", () => {
   it("keeps history for clients that subscribe later and reports exit without removing the terminal", async () => {
     const cwd = await workspace();
     await terminals.open({cols: 80, cwd, id: "t2", rows: 24, sessionId: "s1"});
-    await terminals.write({data: shellCommand("echo MARKER_$((40+2))", "Write-Output ('MARKER_' + (40+2))"), id: "t2"});
+    await terminals.write({data: shellCommand("echo MARKER_$((40+2))", "node -p \"'MARKER_' + (40+2)\""), id: "t2"});
     await output("t2", (current) => expect(current.output).toContain("MARKER_42"));
     // A subscriber that arrives later receives the history at once.
     let seen: TerminalOutput | undefined;
@@ -104,7 +104,7 @@ describe("Terminals", () => {
     await terminals.write({
       data: shellCommand(
         "yes 0123456789012345678901234567890123456789 | head -n 9000; echo DONE_$((1+1))",
-        "[Console]::Write(('0123456789012345678901234567890123456789' + [Environment]::NewLine) * 9000); Write-Output ('DONE_' + (1+1))"
+        "node -e \"process.stdout.write(('0123456789012345678901234567890123456789\\n').repeat(9000)); console.log('DONE_' + (1+1))\""
       ),
       id: "big",
     });
