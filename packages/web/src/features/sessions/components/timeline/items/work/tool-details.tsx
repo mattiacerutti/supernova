@@ -133,10 +133,12 @@ function FileMutationToolDetails(props: FileMutationToolDetailsProps) {
       <div className="flex items-center justify-between px-2.5 pb-1.5 pt-2.5 font-sans text-sm text-ink-muted">
         <span className="min-w-0 truncate">{fileName(path)}</span>
       </div>
-      <div className="scroll-fade max-h-72 overflow-auto overscroll-contain" data-scrollable>
-        {fileDiff && <DiffViewer fileDiff={fileDiff} key={patch} />}
-        {error && <p className="px-2.5 pb-2.5 text-sm leading-none text-danger-ink">{error}</p>}
-      </div>
+      {fileDiff && <DiffViewer fileDiff={fileDiff} key={patch} />}
+      {error && (
+        <div className="scroll-fade max-h-72 overflow-auto overscroll-contain" data-scrollable>
+          <p className="px-2.5 pb-2.5 text-sm leading-none text-danger-ink">{error}</p>
+        </div>
+      )}
     </ContentPanel>
   );
 }
@@ -156,7 +158,7 @@ export default function ToolDetails(props: ToolDetailsProps): ReactNode {
       return ReadToolDetails({tool, view});
     case "file-edit":
     case "file-write":
-      return FileMutationToolDetails({tool, view});
+      return <FileMutationToolDetails tool={tool} view={view} />;
     case "web-fetch":
       return WebFetchToolDetails({view});
     default:

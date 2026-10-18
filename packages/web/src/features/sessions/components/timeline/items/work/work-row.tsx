@@ -4,6 +4,7 @@ import Icon from "@/components/ui/icon";
 import type {IconName} from "@/components/ui/icon";
 import ToolDetails from "@/features/sessions/components/timeline/items/work/tool-details";
 import ToolTitle from "@/features/sessions/components/timeline/items/work/tool-title";
+import {useWorkExpansion} from "@/features/sessions/hooks/use-work-expansion";
 import {hasToolDetails, toolIcon} from "@/features/sessions/lib/timeline/work/tool-details";
 import type {SessionWorkEvent} from "@/features/sessions/types/session-timeline-item";
 import {cn} from "@/lib/cn";
@@ -103,7 +104,7 @@ export default function WorkRow(props: WorkRowProps) {
   const tool = event.tool;
   const error = tool?.status === "error";
   const expandable = hasToolDetails(tool);
-  const [expanded, setExpanded] = useState(false);
+  const {expanded, toggle} = useWorkExpansion(event.id);
   // Details are expensive: mounted on first request, then kept so collapsing can animate.
   const [detailsRequested, setDetailsRequested] = useState(false);
   const open = expandable && expanded;
@@ -112,7 +113,7 @@ export default function WorkRow(props: WorkRowProps) {
   const timing = hasPredecessor ? CONNECTOR_TIMING.next : CONNECTOR_TIMING.first;
 
   const handleToggle = (): void => {
-    setExpanded(!open);
+    toggle();
     setDetailsRequested(true);
   };
 
@@ -147,8 +148,9 @@ export default function WorkRow(props: WorkRowProps) {
         )}
         {expandable && (
           <div
-            className="grid grid-rows-[0fr] opacity-0 transition-[grid-template-rows,opacity] duration-150 ease-out data-[expanded=true]:grid-rows-[1fr] data-[expanded=true]:opacity-100"
+            className="grid grid-rows-[0fr] opacity-0 transition-[grid-template-rows,opacity] duration-150 ease-out motion-reduce:transition-none data-[expanded=true]:grid-rows-[1fr] data-[expanded=true]:opacity-100"
             data-expanded={open}
+            inert={!open}
           >
             <div className="min-h-0 min-w-0 overflow-hidden">
               <div className="min-w-0 pb-3 pr-1">{detailBody}</div>

@@ -38,35 +38,30 @@ function assertAnchorUnmoved(before: VisibleTextAnchor, after: VisibleTextAnchor
   expect(scrollJump, `a transient scroll jump was rendered during settlement: ${JSON.stringify(scrollJump)}`).toBeUndefined();
 }
 
-function assertAnimatedScroll(input: {readonly end: number; readonly label: string; readonly samples: readonly TimelineVisualSample[]; readonly start: number}): void {
-  const {end, label, samples, start} = input;
-  const frames = visibleSamples(samples, TIMELINE_SESSION_ID).filter((sample) => sample.source === "frame" && sample.scrollTop > start + 1 && sample.scrollTop < end - 1);
-  const duration = (frames.at(-1)?.timestamp ?? 0) - (frames[0]?.timestamp ?? 0);
-  const quarterFrame = frames.find((sample) => sample.scrollTop >= start + (end - start) / 4);
-
-  expect(frames.length, `${label} should span multiple rendered frames`).toBeGreaterThanOrEqual(4);
-  expect(duration, `${label} should be visibly animated`).toBeGreaterThanOrEqual(40);
-  expect((quarterFrame?.timestamp ?? Number.POSITIVE_INFINITY) - (frames[0]?.timestamp ?? 0), `${label} should move immediately instead of easing in`).toBeLessThanOrEqual(40);
-  expect(
-    frames.find((sample) => sample.scrollButtonVisible),
-    "the scroll-to-latest button should stay hidden during automatic scrolling"
-  ).toBeUndefined();
-}
-
-/** The sent message must paint at the bottom, then move up in one continuous motion: never a frame ahead at the anchored position, never a frame back. */
-function assertContinuousAnchorScroll(input: {readonly end: number; readonly rowIndexBeforeSend: number; readonly samples: readonly TimelineVisualSample[]}): void {
-  const {end, rowIndexBeforeSend, samples} = input;
-  const frames = visibleSamples(samples, TIMELINE_SESSION_ID).filter((sample) => sample.source === "frame" && sample.lastRowIndex > rowIndexBeforeSend);
+/** Assert painted positions: compositor motion intentionally differs from native scrollTop. */
+function assertContinuousAnchorScroll(input: {readonly rowIndexBeforeSend: number; readonly samples: readonly TimelineVisualSample[]}): void {
+  const {rowIndexBeforeSend, samples} = input;
+  const frames = visibleSamples(samples, TIMELINE_SESSION_ID).filter((sample) => sample.lastRowIndex > rowIndexBeforeSend && sample.lastUserMessageTop !== null);
   const firstFrame = frames[0];
-  const settledIndex = frames.findIndex((sample) => sample.scrollTop >= end - 1);
-  const movingFrames = frames.slice(0, settledIndex < 0 ? frames.length : settledIndex + 1);
-  const backwardJump = movingFrames.find((sample, index) => index > 0 && sample.scrollTop < movingFrames[index - 1]!.scrollTop - 1);
-  const forwardJump = movingFrames.find((sample, index) => index > 0 && sample.scrollTop - movingFrames[index - 1]!.scrollTop > (end - firstFrame!.scrollTop) / 3);
+  expect(firstFrame, "the sent message should paint before reaching its anchor").toBeDefined();
+  const travel = firstFrame!.lastUserMessageTop! - 24;
+  expect(travel, "the message should first paint near the bottom").toBeGreaterThanOrEqual(DETACHED_DISTANCE_PX);
 
-  expect(firstFrame, "the sent message should be painted before the anchored position is reached").toBeDefined();
-  expect(end - firstFrame!.scrollTop, "the sent message should first paint at the bottom rather than already anchored at the top").toBeGreaterThanOrEqual(DETACHED_DISTANCE_PX);
-  expect(backwardJump, `the anchor scroll moved back down mid-transition: ${JSON.stringify(backwardJump)}`).toBeUndefined();
-  expect(forwardJump, `the anchor scroll jumped ahead mid-transition: ${JSON.stringify(forwardJump)}`).toBeUndefined();
+  const settledIndex = frames.findIndex((sample) => sample.lastUserMessageTop! <= 25);
+  const movingFrames = frames.slice(0, settledIndex < 0 ? frames.length : settledIndex + 1);
+  expect(movingFrames.length, "pinning should span multiple painted positions").toBeGreaterThanOrEqual(4);
+  expect(movingFrames.at(-1)!.timestamp - firstFrame!.timestamp).toBeGreaterThanOrEqual(40);
+  const quarterFrame = movingFrames.find((sample) => sample.lastUserMessageTop! <= firstFrame!.lastUserMessageTop! - travel / 4);
+  expect((quarterFrame?.timestamp ?? Number.POSITIVE_INFINITY) - firstFrame!.timestamp, "pinning should move immediately").toBeLessThanOrEqual(40);
+
+  const backwardJump = movingFrames.find((sample, index) => index > 0 && sample.lastUserMessageTop! > movingFrames[index - 1]!.lastUserMessageTop! + 1);
+  const forwardJump = movingFrames.find((sample, index) => index > 0 && movingFrames[index - 1]!.lastUserMessageTop! - sample.lastUserMessageTop! > travel / 3);
+  expect(backwardJump, `pinning moved backwards: ${JSON.stringify(backwardJump)}`).toBeUndefined();
+  expect(forwardJump, `pinning jumped forwards: ${JSON.stringify(forwardJump)}`).toBeUndefined();
+  expect(
+    movingFrames.some((sample) => sample.scrollButtonVisible),
+    "hide the scroll-to-latest button during pinning"
+  ).toBe(false);
 }
 
 async function waitForPrimaryFrames(input: {readonly count?: number; readonly timeline: TimelineDriver}): Promise<readonly TimelineVisualSample[]> {
@@ -174,7 +169,6 @@ test.describe("session timeline visual stability", () => {
 
   test("sending a message scrolls it to the top of the viewport and expands the response below it", async ({timeline}) => {
     await timeline.expectAtBottom();
-    const scrollTopBeforeSend = await timeline.scrollTop();
     const rowIndexBeforeSend = await timeline.lastRowIndex();
     await timeline.resetVisualProbe();
     const messageText = "Anchor this message at the top of the timeline";
@@ -185,10 +179,8 @@ test.describe("session timeline visual stability", () => {
     expect(await timeline.fakeSpaceHeight(), "fake space should back the anchored position").toBeGreaterThan(0);
     await timeline.expectAtBottom();
 
-    const anchoredScrollTop = await timeline.scrollTop();
     const samples = await timeline.visualSamples();
-    assertAnimatedScroll({end: anchoredScrollTop, label: "the scroll that pins the message at the top", samples, start: scrollTopBeforeSend});
-    assertContinuousAnchorScroll({end: anchoredScrollTop, rowIndexBeforeSend, samples});
+    assertContinuousAnchorScroll({rowIndexBeforeSend, samples});
 
     await timeline.waitForLineGrowth(5);
     expect(await timeline.messageViewportTop(messageText), "streamed rows should expand below the anchored message without scrolling").toBeLessThanOrEqual(30);
@@ -212,9 +204,11 @@ test.describe("session timeline visual stability", () => {
     await timeline.expectAtBottom();
   });
 
-  test("streamed content stays bottom-locked in the same frame while auto-following", async ({timeline}) => {
+  test("streamed content stays bottom-locked in the same frame while auto-following", async ({page, timeline}) => {
     await timeline.sendMessage();
     await timeline.waitForLineGrowth(30);
+    // Pinning owns motion until it finishes; measure auto-follow afterwards.
+    await expect.poll(() => page.locator("[data-timeline-virtual-content]").evaluate((element) => element.parentElement!.getAnimations().length)).toBe(0);
 
     const samples = await timeline.recordStreamGrowth(60);
     const animatedFrames = visibleSamples(samples, TIMELINE_SESSION_ID).filter((sample) => sample.streamOffset > 0.5);

@@ -247,6 +247,33 @@ describe("session commands and views", () => {
     expect(shown()).toEqual([20]);
   });
 
+  it.each(["entries", "undone"] as const)("keeps loaded %s stable across live-only updates", (side) => {
+    const {setDocument, addHistoryPage} = useSessionsStore.getState();
+    const window = session({[side]: {items: [userEntry(5), userEntry(7)], remaining: 2}});
+    setDocument(window);
+    addHistoryPage("session-1", side, side === "entries" ? 5 : 7, all(side === "entries" ? [userEntry(1), userEntry(3)] : [userEntry(9), userEntry(11)]));
+    const before = useSessionsStore.getState().documents["session-1"]!;
+    const beforeView = live("session-1", before);
+
+    setDocument({...window, live: {run: {inputs: [7], taskId: 10}} as Session["live"]});
+
+    const after = useSessionsStore.getState().documents["session-1"]!;
+    expect(after[side], "merging the server window must not invalidate unchanged loaded history").toBe(before[side]);
+    expect(live("session-1", after)[side === "entries" ? "turns" : "undoneTurns"]).toBe(beforeView[side === "entries" ? "turns" : "undoneTurns"]);
+    expect(after.live).not.toBe(before.live);
+  });
+
+  it.each(["entries", "undone"] as const)("accepts a changed %s payload even when its entry id is unchanged", (side) => {
+    const {setDocument} = useSessionsStore.getState();
+    const window = session({[side]: all([userEntry(5)])});
+    setDocument(window);
+    const changed = {...window[side].items[0]!, contentParts: [{type: "text", text: "Changed"}] as const};
+
+    setDocument({...window, [side]: all([changed])});
+
+    expect(useSessionsStore.getState().documents["session-1"]![side].items[0]).toBe(changed);
+  });
+
   it("shows what the runtime's directory reports, with no optimism, until the document says otherwise", () => {
     const {services} = setup();
 

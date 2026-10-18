@@ -94,10 +94,18 @@ const SHARED_OPTIONS = {
   unsafeCSS: SUPERNOVA_DIFF_VIEW_CSS,
 } as const;
 
-export function generateFileOptions<T>(mode: "dark" | "light"): FileOptions<T> {
+export function generateFileOptions<T>(mode: "dark" | "light"): FileOptions<T, undefined> {
   return {...SHARED_OPTIONS, overflow: "scroll", theme: CODE_HIGHLIGHT_THEMES[mode], themeType: mode};
 }
 
-export function generateDiffOptions<T>(mode: "dark" | "light"): FileDiffOptions<T> {
-  return {...SHARED_OPTIONS, diffIndicators: "bars", diffStyle: "unified", hunkSeparators: "simple", lineDiffType: "none", theme: CODE_HIGHLIGHT_THEMES[mode], themeType: mode};
+export function generateDiffOptions<T>(mode: "dark" | "light") {
+  return {
+    ...SHARED_OPTIONS,
+    diffIndicators: "bars",
+    diffStyle: "unified",
+    hunkSeparators: "simple",
+    lineDiffType: "none",
+    theme: CODE_HIGHLIGHT_THEMES[mode],
+    themeType: mode,
+  } satisfies FileDiffOptions<T, undefined>;
 }

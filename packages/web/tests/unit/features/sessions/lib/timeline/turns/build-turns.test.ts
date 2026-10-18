@@ -105,6 +105,41 @@ describe("building turns from Pi entries", () => {
 });
 
 describe("splitting a running session into committed and live turns", () => {
+  it.each([undefined, 5])("reuses unchanged history across live updates (runStart: %s)", (runStart) => {
+    const entries = {items: [user(1, "First"), assistant(2, [{text: "Old", type: "text"}]), user(5, "Second")], remaining: 0};
+    const before = buildSessionTurns({entries, live: {}, runStart});
+    const live = {generation: {attempt: 0, message: assistant(6, [{text: "New partial", type: "text"}]).model![0]}} as unknown as LiveState;
+    const after = buildSessionTurns({entries: {...entries}, live, runStart});
+
+    expect(after.turns, "streaming must not rebuild the settled transcript").toBe(before.turns);
+    expect(after.turns).toEqual(before.turns);
+    if (runStart !== undefined) {
+      expect(after.liveTurn?.events).toMatchObject([{type: "assistant", content: "New partial"}]);
+      expect(before.liveTurn?.events).toEqual([]);
+    } else {
+      expect(after.liveTurn).toBeUndefined();
+    }
+  });
+
+  it.each(["settlement", "run boundary", "undo", "prepend", "replacement"] as const)("refreshes history after %s", (change) => {
+    const items = [user(1, "First"), assistant(2, [{text: "Old", type: "text"}]), user(5, "Second")];
+    const session = {entries: {items, remaining: 0}, live: {}, runStart: 5};
+    buildSessionTurns(session);
+    const next = {
+      ...session,
+      runStart: change === "settlement" ? undefined : change === "run boundary" ? 1 : 5,
+      entries: {
+        items:
+          change === "undo" ? items.slice(0, 2) : change === "prepend" ? [user(0, "Earlier"), ...items] : change === "replacement" ? [user(1, "Edited"), ...items.slice(1)] : items,
+        remaining: 0,
+      },
+    };
+    const result = buildSessionTurns(next);
+    const split = next.runStart === undefined ? -1 : next.entries.items.findIndex((entry) => entry.id >= next.runStart!);
+    expect(result.turns).toEqual(buildTurns({entries: split < 0 ? next.entries.items : next.entries.items.slice(0, split)}));
+    expect(result.liveTurn).toEqual(split < 0 ? undefined : buildTurns({entries: next.entries.items.slice(split), live: {}}).at(-1));
+  });
+
   it("projects entries from the run's first user entry, plus pi.live, as the live turn", () => {
     const live = {
       compactions: [{attempt: 1, blocking: true, reason: "threshold", taskId: 9}],

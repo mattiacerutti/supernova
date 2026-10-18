@@ -40,6 +40,11 @@ function without<T>(record: Readonly<Record<string, T>>, key: string): Record<st
   return Object.fromEntries(Object.entries(record).filter(([recordKey]) => recordKey !== key));
 }
 
+function reuseEntries(known: SessionEntries, next: SessionEntries): SessionEntries {
+  // Merging a paged window must not make every streaming partial rebuild the loaded transcript.
+  return known.remaining === next.remaining && known.items.length === next.items.length && known.items.every((item, index) => item === next.items[index]) ? known : next;
+}
+
 /**
  * Navigation only moves the leaf, so entries this client has stay part of the branch and are kept around the new
  * window. A window with nothing outside it replaces everything.
@@ -54,7 +59,7 @@ function withKnownBranch(known: Session | undefined, next: Session): Session {
   const last = undone.items.at(-1)?.id;
   const lastAt = last === undefined ? -1 : branch.findIndex((entry) => entry.id === last);
   if (undone.remaining > 0 && lastAt >= 0 && lastAt < branch.length - 1) undone = {items: [...undone.items, ...branch.slice(lastAt + 1)], remaining: known.undone.remaining};
-  return {...next, entries, undone};
+  return {...next, entries: reuseEntries(known.entries, entries), undone: reuseEntries(known.undone, undone)};
 }
 
 export const useSessionsStore = create<SessionsStoreState>()((set) => ({

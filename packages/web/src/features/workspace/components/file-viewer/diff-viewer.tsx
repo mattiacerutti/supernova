@@ -1,41 +1,50 @@
-import {FileDiff} from "@pierre/diffs";
-import type {FileDiffMetadata, FileDiffOptions} from "@pierre/diffs";
+import {CodeView} from "@pierre/diffs";
+import type {FileDiffMetadata} from "@pierre/diffs";
 import {useRef} from "react";
 import {generateDiffOptions} from "@/lib/diffs/options";
+import {getDiffWorkerPool} from "@/lib/diffs/worker-pool";
 import {useSettingsStore} from "@/stores/settings-store";
 import type {ResolvedAppearanceMode} from "@/stores/settings-store";
-import {cn} from "@/lib/cn";
 import {useMountEffect} from "@/hooks/use-mount-effect";
 
 interface DiffViewerContentProps {
-  readonly className?: string;
   readonly fileDiff: FileDiffMetadata;
   readonly mode: ResolvedAppearanceMode;
-  readonly options?: FileDiffOptions<unknown>;
 }
 
 function DiffViewerContent(props: DiffViewerContentProps) {
-  const {className, fileDiff, mode, options} = props;
+  const {fileDiff, mode} = props;
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   useMountEffect(() => {
-    if (wrapperRef.current === null) return;
-
-    const renderer = new FileDiff<unknown>({...generateDiffOptions<unknown>(mode), ...options});
-    renderer.render({containerWrapper: wrapperRef.current, fileDiff});
+    let disposed = false;
+    let renderer: CodeView | undefined;
+    // Plain-text diffs have no highlight task to retry a render before the pool is ready.
+    void getDiffWorkerPool(mode).then((workerPool) => {
+      if (disposed || wrapperRef.current === null) return;
+      renderer = new CodeView(
+        {
+          ...generateDiffOptions(mode),
+          itemMetrics: {lineHeight: 24, spacing: 0, hunkSeparatorHeight: 0, diffHeaderHeight: 0},
+          layout: {paddingTop: 0, paddingBottom: 0, gap: 0},
+        },
+        workerPool
+      );
+      renderer.setup(wrapperRef.current);
+      renderer.setItems([{id: fileDiff.name, type: "diff", fileDiff}]);
+    });
 
     return () => {
-      renderer.cleanUp();
+      disposed = true;
+      renderer?.cleanUp();
     };
   });
 
-  return <div className={cn("min-w-0 [&>diffs-container]:block [&>diffs-container]:min-w-0", className)} ref={wrapperRef} />;
+  return <div className="scroll-fade min-w-0 max-h-72 overflow-auto overscroll-contain" data-scrollable ref={wrapperRef} />;
 }
 
 interface DiffViewerProps {
-  readonly className?: string;
   readonly fileDiff: FileDiffMetadata;
-  readonly options?: FileDiffOptions<unknown>;
 }
 
 export default function DiffViewer(props: DiffViewerProps) {
