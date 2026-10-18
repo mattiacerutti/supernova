@@ -13,7 +13,6 @@ import {fakeState} from "@e2e/mocks/fake-state";
 import {
   assistantEntry,
   createTimelineSessions,
-  PAGED_SESSION_ID,
   timelineModelDetails,
   timelineSessionSummary,
   timelineStreamMessage,
@@ -38,9 +37,6 @@ const value = async <T>(result: T): Promise<ServiceResult<T>> => ({ok: true, val
  */
 class TimelineServer {
   private readonly sessions = createTimelineSessions();
-  private readonly pagedHistory = this.sessions.get(PAGED_SESSION_ID)!.entries.items;
-  private releaseHistoryPage: (() => void) | null = null;
-  private historyRequests = 0;
   private readonly documents = new Map<string, FakeState<Session>>();
   private readonly directory = fakeState<SessionDirectoryState>({sessions: {}});
   private activeSessionId = TIMELINE_SESSION_ID;
@@ -52,14 +48,7 @@ class TimelineServer {
   private streamTargetLineCount = 0;
 
   public constructor() {
-    const paged = this.sessions.get(PAGED_SESSION_ID)!;
-    this.sessions.set(PAGED_SESSION_ID, {...paged, entries: {items: this.pagedHistory.slice(-6), remaining: 9}});
     window.__supernovaTimelineMock = {
-      releaseHistoryPage: () => {
-        if (!this.releaseHistoryPage) throw new Error("No history request is pending.");
-        this.releaseHistoryPage();
-        this.releaseHistoryPage = null;
-      },
       breakForReasoning: () => this.breakForReasoning(),
       completeStream: () => this.settleStream("completed"),
       emitLines: (lineCount) => this.emitLines(lineCount),
@@ -69,7 +58,7 @@ class TimelineServer {
       getState: () => {
         const session = this.session(TIMELINE_SESSION_ID);
         const count = (entries: Session["entries"]) => entries.items.filter((entry) => entry.contentParts !== undefined).length;
-        return {historyRequests: this.historyRequests, lineCount: this.lineCount, status: this.status, turnCount: count(session.entries), undoneTurnCount: count(session.undone)};
+        return {lineCount: this.lineCount, status: this.status, turnCount: count(session.entries), undoneTurnCount: count(session.undone)};
       },
     };
   }
@@ -83,16 +72,8 @@ class TimelineServer {
       session: this.sessions.has(sessionId) ? this.document(sessionId) : missing,
       abort: async () => (this.settleStream("aborted"), ok),
       compact: async () => ok,
-      loadHistory: async ({edge}) => {
-        if (sessionId !== PAGED_SESSION_ID) return {ok: true, value: {items: [], remaining: 0}};
-        this.historyRequests += 1;
-        await new Promise<void>((resolve) => {
-          this.releaseHistoryPage = resolve;
-        });
-        const end = this.pagedHistory.findIndex((entry) => entry.id === edge);
-        const start = Math.max(0, end - 6);
-        return {ok: true, value: {items: this.pagedHistory.slice(start, end), remaining: start / 2}};
-      },
+      // Timeline sessions are one page; paging is the server's and covered by its tests.
+      loadHistory: async () => ({ok: true, value: {items: [], remaining: 0}}),
       redoCheckpoint: async () => (this.redoCheckpoint(sessionId), ok),
       revertToMessage: async ({turnId}) => (this.revertToMessage(sessionId, turnId), ok),
       sendMessage: async ({contentParts}) => (this.startStream(sessionId, contentParts), ok),

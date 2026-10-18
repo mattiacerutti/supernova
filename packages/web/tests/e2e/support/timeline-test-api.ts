@@ -1,5 +1,4 @@
 export interface TimelineMockState {
-  readonly historyRequests: number;
   readonly lineCount: number;
   readonly status: "aborted" | "completed" | "idle" | "streaming";
   readonly turnCount: number;
@@ -7,7 +6,6 @@ export interface TimelineMockState {
 }
 
 export interface TimelineMockController {
-  readonly releaseHistoryPage: () => void;
   readonly breakForReasoning: () => void;
   readonly completeStream: () => void;
   readonly emitLines: (lineCount: number) => void;
