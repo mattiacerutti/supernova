@@ -88,7 +88,8 @@ describe("checkpoint store", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
-    while (tempDirs.length > 0) rmSync(tempDirs.pop()!, {force: true, recursive: true});
+    // Windows can briefly hold handles from exited git processes, failing rmdir with EBUSY.
+    while (tempDirs.length > 0) rmSync(tempDirs.pop()!, {force: true, maxRetries: 5, recursive: true, retryDelay: 100});
   });
 
   it("publishes manifests and refs only in app-owned shadow repositories", async () => {
