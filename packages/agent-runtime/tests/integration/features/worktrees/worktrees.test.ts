@@ -2,7 +2,7 @@ import {execFile} from "node:child_process";
 import {existsSync} from "node:fs";
 import {mkdtemp, realpath, writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
-import {join} from "node:path";
+import {join, sep} from "node:path";
 import {promisify} from "node:util";
 import {afterEach, describe, expect, it} from "vitest";
 import {Workspace} from "@supernova/agent-runtime/features/workspace/workspace";
@@ -41,14 +41,14 @@ describe("Worktrees", () => {
     const worktree = await worktrees.create({baseRef: "main", projectPath: repo});
 
     expect(worktree.branch).toMatch(/^supernova\/[a-z]+-[a-z]+$/);
-    expect(worktree.path.startsWith(await realpath(storage))).toBe(true);
+    expect(worktree.path.startsWith((await realpath(storage)).split(sep).join("/"))).toBe(true);
     expect(await git(worktree.path, "rev-parse", "--abbrev-ref", "HEAD")).toBe(worktree.branch);
     expect(existsSync(join(worktree.path, "a.txt"))).toBe(true);
 
     const branches = await new Workspace({terminals: {} as WorkspaceDeps["terminals"]}).listBranches({projectPath: repo});
     expect(branches.current).toBe("main");
     expect(branches.branches).toContainEqual({name: worktree.branch, remote: false, worktreePath: worktree.path});
-    expect(branches.branches.find((branch) => branch.name === "main")).toMatchObject({remote: false, worktreePath: await realpath(repo)});
+    expect(branches.branches.find((branch) => branch.name === "main")).toMatchObject({remote: false, worktreePath: (await realpath(repo)).split(sep).join("/")});
   });
 
   it("removes the worktree and its branch even with uncommitted work, and tolerates a worktree already gone", async () => {

@@ -10,14 +10,14 @@ const PROJECT = "/workspace/app";
 const PROJECT_DIR = "--workspace-app--";
 
 /** Builds an old session file: a header, then entries chained by `parentId` unless an entry names its parent. */
-function oldSession(id: string, entries: readonly Record<string, unknown>[]): string {
+function oldSession(id: string, entries: readonly Record<string, unknown>[], cwd = PROJECT): string {
   let previous: string | null = null;
   const lines = entries.map((entry, index) => {
     const line = {id: `e${index}`, parentId: previous, timestamp: new Date(Date.UTC(2026, 0, 1, 0, index)).toISOString(), ...entry};
     previous = line.id;
     return line;
   });
-  return [{type: "session", version: 3, id, timestamp: "2026-01-01T00:00:00.000Z", cwd: PROJECT}, ...lines].map((line) => JSON.stringify(line)).join("\n") + "\n";
+  return [{type: "session", version: 3, id, timestamp: "2026-01-01T00:00:00.000Z", cwd}, ...lines].map((line) => JSON.stringify(line)).join("\n") + "\n";
 }
 
 const at = (minute: number) => Date.UTC(2026, 0, 1, 0, minute);
@@ -117,6 +117,35 @@ describe("importing the old SDK's sessions", () => {
       await pi.sessionRuntime.undoCheckpoint({sessionId: "old-1"});
       await pi.sessionRuntime.undoCheckpoint({sessionId: "old-1"});
       expect(turnContents(await pi.sessionRuntime.current("old-1"))).toEqual([]);
+    } finally {
+      await pi.unregister();
+    }
+  });
+
+  it.runIf(process.platform === "win32").each([
+    {name: "drive", cwd: "C:\\Users\\Alice\\app", projectDir: "--C--Users-Alice-app--", projectPath: "C:/Users/Alice/app"},
+    {name: "UNC", cwd: "\\\\server\\share\\app", projectDir: "---server-share-app--", projectPath: "//server/share/app"},
+    {
+      name: "worktree",
+      cwd: "C:\\worktrees\\app",
+      projectDir: "--C--Users-Alice-app--",
+      projectPath: "C:/Users/Alice/app",
+      worktree: {projectPath: "C:\\Users\\Alice\\app", worktree: {branch: "supernova/test", path: "C:\\worktrees\\app"}},
+    },
+  ])("lists and searches imported Windows $name sessions using the UI's path separators", async ({cwd, projectDir, projectPath, worktree}) => {
+    const root = oldSessionsDir({
+      [`${projectDir}/2026-01-01T00-00-00-000Z_windows.jsonl`]: oldSession(
+        "windows",
+        [...(worktree ? [{type: "custom", customType: "supernova.worktree", data: worktree}] : []), parts("Old question"), user("Old question", 1)],
+        cwd
+      ),
+    });
+    const pi = await createPiTestRuntime({sessionStorageRoot: root});
+    try {
+      expect((await pi.projects.listSessions({projectPath, limit: 5})).sessions.map((session) => session.id)).toEqual(["windows"]);
+      expect((await pi.projects.searchSessions({projectPaths: [projectPath], query: "Old question", limit: 5})).sessions.map((session) => session.id)).toEqual(["windows"]);
+      expect(turnContents(await pi.sessionRuntime.current("windows"))).toEqual([[{type: "text", text: "Old question"}]]);
+      expect(existsSync(join(root, "legacy", projectDir, "2026-01-01T00-00-00-000Z_windows.jsonl"))).toBe(true);
     } finally {
       await pi.unregister();
     }

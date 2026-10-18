@@ -6,6 +6,7 @@ import type {TerminalOutput} from "@supernova/contracts/services/workspace/schem
 import {spawnPty} from "@supernova/agent-runtime/features/workspace/terminals/pty";
 import {Terminals} from "@supernova/agent-runtime/features/workspace/terminals/terminals";
 import {cleanupTempDirs, waitUntil} from "@tests/support/async";
+import {shellCommand, testShell} from "@tests/support/terminal";
 
 describe("Terminals", () => {
   const tempDirs: string[] = [];
@@ -29,12 +30,12 @@ describe("Terminals", () => {
   };
   const originalShell = process.env.SHELL;
 
-  // A plain sh starts instantly and has no rc files, unlike the developer's login shell.
   beforeAll(() => {
-    process.env.SHELL = "/bin/sh";
+    process.env.SHELL = testShell;
   });
   afterAll(() => {
-    process.env.SHELL = originalShell;
+    if (originalShell === undefined) delete process.env.SHELL;
+    else process.env.SHELL = originalShell;
   });
 
   afterEach(async () => {
@@ -47,7 +48,7 @@ describe("Terminals", () => {
     const terminal = await terminals.open({cols: 80, cwd, id: "t1", rows: 24, sessionId: "s1"});
     expect(terminal).toEqual({cwd, id: "t1", number: 1, sessionId: "s1", startedAt: expect.any(String)});
 
-    await terminals.write({data: "pwd\n", id: "t1"});
+    await terminals.write({data: shellCommand("pwd", "(Get-Location).Path"), id: "t1"});
     await output("t1", (current) => expect(current.output).toContain(cwd));
     expect(terminals.state.value.terminals).toEqual({t1: terminal});
   });
@@ -64,14 +65,14 @@ describe("Terminals", () => {
   it("keeps history for clients that subscribe later and reports exit without removing the terminal", async () => {
     const cwd = await workspace();
     await terminals.open({cols: 80, cwd, id: "t2", rows: 24, sessionId: "s1"});
-    await terminals.write({data: "echo MARKER_$((40+2))\n", id: "t2"});
+    await terminals.write({data: shellCommand("echo MARKER_$((40+2))", "Write-Output ('MARKER_' + (40+2))"), id: "t2"});
     await output("t2", (current) => expect(current.output).toContain("MARKER_42"));
     // A subscriber that arrives later receives the history at once.
     let seen: TerminalOutput | undefined;
     terminals.output("t2").subscribe((value) => void (seen = value))();
     expect(seen?.output).toContain("MARKER_42");
 
-    await terminals.write({data: "exit 3\n", id: "t2"});
+    await terminals.write({data: shellCommand("exit 3", "exit 3"), id: "t2"});
     const exited = await output("t2", (current) => expect(current.exitCode).toBe(3));
     expect(exited.closed).toBeUndefined();
     expect(terminals.state.value.terminals.t2?.exitCode).toBe(3);
@@ -100,7 +101,13 @@ describe("Terminals", () => {
     const cwd = await workspace();
     await terminals.open({cols: 80, cwd, id: "big", rows: 24, sessionId: "s1"});
     // About 400 KB of output, past the 256 KB cap.
-    await terminals.write({data: "yes 0123456789012345678901234567890123456789 | head -n 9000; echo DONE_$((1+1))\n", id: "big"});
+    await terminals.write({
+      data: shellCommand(
+        "yes 0123456789012345678901234567890123456789 | head -n 9000; echo DONE_$((1+1))",
+        "[Console]::Write(('0123456789012345678901234567890123456789' + [Environment]::NewLine) * 9000); Write-Output ('DONE_' + (1+1))"
+      ),
+      id: "big",
+    });
     // Computed by the shell, so the echoed command line does not match.
     const capped = await output("big", (current) => expect(current.output).toContain("DONE_2"));
     expect(capped.output.length).toBeLessThanOrEqual(256 * 1024);

@@ -2,7 +2,7 @@ import {execFile} from "node:child_process";
 import {existsSync} from "node:fs";
 import {mkdtemp, realpath, writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
-import {join} from "node:path";
+import {join, sep} from "node:path";
 import {promisify} from "node:util";
 import type {CreateSessionPayload} from "@supernova/contracts/services/sessions/procedures";
 import {afterEach, describe, expect, it} from "vitest";
@@ -90,7 +90,7 @@ describe("creating a session with its first turn", () => {
     }
 
     const session = await pi.sessions.get({sessionId: "in-worktree"});
-    expect(session).toMatchObject({projectPath: repo, title: "Generated title", worktree: {branch: expect.stringMatching(/^supernova\/[a-z]+-[a-z]+$/)}});
+    expect(session).toMatchObject({projectPath: repo.split(sep).join("/"), title: "Generated title", worktree: {branch: expect.stringMatching(/^supernova\/[a-z]+-[a-z]+$/)}});
     const worktreePath = session.worktree?.path;
     expect(worktreePath && existsSync(join(worktreePath, "a.txt"))).toBe(true);
     expect(await pi.store.cwd("in-worktree")).toBe(worktreePath);

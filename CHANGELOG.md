@@ -33,6 +33,7 @@ All notable changes to Supernova are documented in this file.
 
 ### Fixed
 
+- Fixed imported Windows sessions appearing missing because their project paths used backslashes. Existing imported sessions are repaired automatically without reimporting conversations.
 - Fixed the new-chat composer not receiving focus automatically when opened.
 - The rolled-back messages drawer now hides immediately when sending a new message after undo, instead of waiting for the session update.
 - Extension limitation notices now show the installed package's name instead of entry folders such as `src`.

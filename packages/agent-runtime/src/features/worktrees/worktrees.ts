@@ -4,6 +4,7 @@ import {basename, join, resolve} from "node:path";
 import type {SessionWorktree} from "@supernova/contracts/services/sessions/schemas";
 import {randomBranchName, uniqueBranchName} from "@supernova/agent-runtime/features/worktrees/lib/branch-name";
 import {optionalGit, runGit, runGitResult} from "@supernova/agent-runtime/lib/git-process";
+import {resolveProjectPath} from "@supernova/agent-runtime/lib/project-path";
 
 function defaultStorageRoot(): string {
   const agentDataRoot = process.env.PI_CODING_AGENT_DIR?.trim() || join(homedir(), ".supernova", "userdata", "agent");
@@ -24,7 +25,7 @@ export class Worktrees {
     const path = join(this.storageRoot, basename(projectPath), branch.replaceAll("/", "-"));
     await runGit(["worktree", "add", "-b", branch, path, baseRef], {cwd: projectPath});
     // Git reports worktrees by their real path; store the same so branch listings match the session.
-    return {branch, path: await realpath(path)};
+    return {branch, path: resolveProjectPath(await realpath(path))};
   }
 
   public async remove(input: {readonly projectPath: string; readonly worktree: SessionWorktree}): Promise<void> {

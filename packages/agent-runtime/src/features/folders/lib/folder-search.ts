@@ -3,7 +3,8 @@ import {readdir, stat} from "node:fs/promises";
 import {homedir} from "node:os";
 import {basename, dirname, isAbsolute, join} from "node:path";
 import type {FolderSuggestion} from "@supernova/contracts/services/folders/schemas";
-import {expandHomePath, normalizePathForDisplay, resolveFolderPath} from "@supernova/agent-runtime/features/folders/lib/paths";
+import {normalizePathForDisplay} from "@supernova/agent-runtime/features/folders/lib/paths";
+import {expandHomePath, resolveProjectPath} from "@supernova/agent-runtime/lib/project-path";
 
 const MAX_SUGGESTIONS = 200;
 
@@ -24,7 +25,7 @@ function parseFolderQuery(query: string): ParsedFolderQuery {
     return {baseDir: homedir(), searchTerm: expandedQuery};
   }
 
-  const resolvedQuery = resolveFolderPath(expandedQuery);
+  const resolvedQuery = resolveProjectPath(expandedQuery);
   const endsWithSeparator = trimmedQuery.endsWith("/") || trimmedQuery.endsWith("\\");
   if (endsWithSeparator) {
     return {baseDir: resolvedQuery, searchTerm: ""};

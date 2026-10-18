@@ -14,12 +14,14 @@ describe("sessions", () => {
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
 
-    const session = await pi.sessions.create({id: "client-chosen-id", projectPath: "/workspace"});
+    const projectPath = pi.defaultProjectRoot;
+    const session = await pi.sessions.create({id: "client-chosen-id", projectPath: `${projectPath}/child/..`});
 
-    expect(session).toMatchObject({id: "client-chosen-id", projectPath: "/workspace", title: "Untitled session", entries: {items: []}});
+    expect(session).toMatchObject({id: "client-chosen-id", projectPath, title: "Untitled session", entries: {items: []}});
     expect(existsSync(join(pi.sessionStorageRoot, "client-chosen-id", "session.sqlite"))).toBe(true);
-    expect(await pi.store.find("client-chosen-id")).toMatchObject({projectPath: "/workspace"});
-    await expect(pi.sessions.create({id: "client-chosen-id", projectPath: "/workspace"})).rejects.toMatchObject({
+    expect(await pi.store.find("client-chosen-id")).toMatchObject({projectPath});
+    expect((await pi.projects.listSessions({projectPath: join(projectPath, "."), limit: 5})).sessions.map((item) => item.id)).toEqual(["client-chosen-id"]);
+    await expect(pi.sessions.create({id: "client-chosen-id", projectPath})).rejects.toMatchObject({
       _tag: "CreateSessionError",
       message: "A session with this id already exists.",
     });

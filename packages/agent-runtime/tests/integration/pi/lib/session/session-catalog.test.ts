@@ -1,13 +1,20 @@
 import {mkdtempSync, rmSync} from "node:fs";
 import {tmpdir} from "node:os";
-import {join} from "node:path";
+import {join, resolve, sep} from "node:path";
 import {DatabaseSync} from "node:sqlite";
 import {afterEach, describe, expect, it} from "vitest";
 import {SessionCatalog} from "@supernova/agent-runtime/pi/lib/session/session-catalog";
 import type {SessionRecord} from "@supernova/agent-runtime/pi/lib/session/session-state";
 
 function record(overrides: Partial<SessionRecord>): SessionRecord {
-  return {id: "session-1", projectPath: "/workspace", pinned: false, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", ...overrides};
+  return {
+    id: "session-1",
+    projectPath: resolve("/workspace").split(sep).join("/"),
+    pinned: false,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    ...overrides,
+  };
 }
 
 describe("session catalog", () => {
@@ -90,6 +97,33 @@ describe("session catalog", () => {
     expect(ids("", catalog.find("b"))).toEqual(["c", "a"]);
   });
 
+  it.runIf(process.platform === "win32").each([
+    {stored: "C:\\Users\\Alice\\app", requested: "C:/Users/Alice/app"},
+    {stored: "C:/Users/Alice/app", requested: "C:\\Users\\Alice\\app"},
+    {stored: "C:\\Users/Alice\\app", requested: "C:/Users/Alice/app"},
+    {stored: "C:/Users/Alice/app/./src/..", requested: "C:/Users/Alice/app/"},
+    {stored: "\\\\server\\share\\app", requested: "//server/share/app"},
+    {stored: "//server/share/app", requested: "\\\\server\\share\\app"},
+  ])("matches Windows project separators: $stored → $requested", async ({stored, requested}) => {
+    const catalog = await open(path());
+    catalog.insert(record({projectPath: stored, title: "Old session"}));
+    catalog.insert(record({id: "other", projectPath: `${stored}-other`, title: "Old session"}));
+    const ids = () => catalog.list({projectPath: requested, limit: 5}).map((session) => session.id);
+
+    expect(ids()).toEqual(["session-1"]);
+    expect(catalog.search({projectPaths: [requested], query: "Old", limit: 5}).map((session) => session.id)).toEqual(["session-1"]);
+    const updated = catalog.update("session-1", (current) => ({...current, projectPath: requested, pinned: true}));
+    expect(ids()).toEqual(["session-1"]);
+    expect(catalog.find("session-1")).toEqual(updated);
+  });
+
+  it.skipIf(process.platform === "win32")("keeps literal backslashes in POSIX project names distinct from separators", async () => {
+    const catalog = await open(path());
+    catalog.insert(record({projectPath: "/workspace/a\\b"}));
+    expect(catalog.list({projectPath: "/workspace/a\\b", limit: 5}).map((session) => session.id)).toEqual(["session-1"]);
+    expect(catalog.list({projectPath: "/workspace/a/b", limit: 5})).toEqual([]);
+  });
+
   it("updates and deletes records, and refuses unknown or re-keyed ones", async () => {
     const catalog = await open(path());
     catalog.insert(record({id: "s"}));
@@ -138,6 +172,31 @@ describe("session catalog", () => {
     } finally {
       database.close();
     }
+  });
+
+  it.runIf(process.platform === "win32")("repairs Windows project paths already imported into a version 1 catalog", async () => {
+    const at = path();
+    const first = await SessionCatalog.open(at);
+    first.insert(record({id: "drive", title: "Kept title", pinned: true}));
+    first.insert(record({id: "unc"}));
+    first.insert(record({id: "posix"}));
+    first.close();
+
+    const database = new DatabaseSync(at);
+    try {
+      const update = database.prepare("UPDATE sessions SET project_path = ? WHERE id = ?");
+      update.run("C:\\Users\\Alice\\app", "drive");
+      update.run("\\\\server\\share\\app", "unc");
+      update.run("/workspace/a\\b", "posix");
+      database.exec("PRAGMA user_version = 1");
+    } finally {
+      database.close();
+    }
+
+    const catalog = await open(at);
+    expect(catalog.list({projectPath: "C:/Users/Alice/app", limit: 5})).toEqual([record({id: "drive", projectPath: "C:/Users/Alice/app", title: "Kept title", pinned: true})]);
+    expect(catalog.search({projectPaths: ["//server/share/app"], query: "", limit: 5}).map((session) => session.id)).toEqual(["unc"]);
+    expect(catalog.find("posix")?.projectPath).toBe(resolve("/workspace/a\\b").split(sep).join("/"));
   });
 
   it("migrates a catalog to the current schema and keeps its records, and refuses one from a newer Supernova", async () => {

@@ -98,7 +98,7 @@ describe("checkpoint store", () => {
 
     await capture(storageRoot, repo, "cp-1");
 
-    const canonicalRoot = await gitOutput(repo, ["rev-parse", "--show-toplevel"]);
+    const canonicalRoot = await realpath(repo);
     const projectStorage = join(storageRoot, "projects", hash(canonicalRoot));
     const manifest = JSON.parse(await readFile(join(projectStorage, "manifests", hash(sessionId), `${hash("cp-1")}.json`), "utf8"));
     const shadowGitDir = join(projectStorage, "repositories", manifest.repositories[0].repositoryId, "git");
@@ -163,7 +163,7 @@ describe("checkpoint store", () => {
     await expect(readFile(join(repo, "tracked.txt"), "utf8")).resolves.toBe("manual\n");
   });
 
-  it("restores tracked deletions, executable modes, symlinks, and file-directory transitions", async () => {
+  it("restores tracked deletions and file-directory transitions, plus POSIX modes and symlinks", async () => {
     const repo = await createRepo();
     const storageRoot = mkdtempSync(join(tmpdir(), "supernova-checkpoint-storage-"));
     tempDirs.push(repo, storageRoot);
@@ -171,15 +171,18 @@ describe("checkpoint store", () => {
     await writeFile(join(repo, "shape"), "file before\n");
     await writeFile(join(repo, "target-before.txt"), "before\n");
     await writeFile(join(repo, "target-after.txt"), "after\n");
-    await symlink("target-before.txt", join(repo, "link"));
+    // Windows snapshots disable symlinks and do not preserve POSIX executable bits.
+    if (process.platform !== "win32") await symlink("target-before.txt", join(repo, "link"));
     await git(repo, ["add", "."]);
     await git(repo, ["commit", "-m", "tree fidelity"]);
     await capture(storageRoot, repo, "before");
 
     await rm(join(repo, "deleted.txt"));
-    await chmod(join(repo, "script.sh"), 0o755);
-    await rm(join(repo, "link"));
-    await symlink("target-after.txt", join(repo, "link"));
+    if (process.platform !== "win32") {
+      await chmod(join(repo, "script.sh"), 0o755);
+      await rm(join(repo, "link"));
+      await symlink("target-after.txt", join(repo, "link"));
+    }
     await rm(join(repo, "shape"));
     await mkdir(join(repo, "shape"));
     await writeFile(join(repo, "shape", "nested.txt"), "directory after\n");
@@ -188,15 +191,19 @@ describe("checkpoint store", () => {
     await restore(storageRoot, repo, "after", "before");
 
     await expect(readFile(join(repo, "deleted.txt"), "utf8")).resolves.toBe("delete me\n");
-    expect((await stat(join(repo, "script.sh"))).mode & 0o111).toBe(0);
-    await expect(readlink(join(repo, "link"))).resolves.toBe("target-before.txt");
+    if (process.platform !== "win32") {
+      expect((await stat(join(repo, "script.sh"))).mode & 0o111).toBe(0);
+      await expect(readlink(join(repo, "link"))).resolves.toBe("target-before.txt");
+    }
     await expect(readFile(join(repo, "shape"), "utf8")).resolves.toBe("file before\n");
 
     await restore(storageRoot, repo, "before", "after");
 
     await expect(stat(join(repo, "deleted.txt"))).rejects.toThrow();
-    expect((await stat(join(repo, "script.sh"))).mode & 0o111).not.toBe(0);
-    await expect(readlink(join(repo, "link"))).resolves.toBe("target-after.txt");
+    if (process.platform !== "win32") {
+      expect((await stat(join(repo, "script.sh"))).mode & 0o111).not.toBe(0);
+      await expect(readlink(join(repo, "link"))).resolves.toBe("target-after.txt");
+    }
     await expect(readFile(join(repo, "shape", "nested.txt"), "utf8")).resolves.toBe("directory after\n");
   });
 
