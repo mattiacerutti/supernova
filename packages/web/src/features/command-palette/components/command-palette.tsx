@@ -1,4 +1,5 @@
-import {Fragment} from "react";
+import {Fragment, useRef} from "react";
+import {CommandPaletteFocus} from "@/features/command-palette/components/command-palette-list";
 import {useHotkey} from "@tanstack/react-hotkeys";
 import Dialog from "@/components/ui/dialog";
 import CommandPaletteRootPage from "@/features/command-palette/components/command-palette-root-page";
@@ -20,6 +21,9 @@ interface CommandPaletteProps {
 
 export default function CommandPalette(props: CommandPaletteProps) {
   const {actions, onOpenSession, pages, useSessionSearch} = props;
+  const inputRef = useRef<HTMLInputElement>(null);
+  const returnFocusRef = useRef<HTMLElement>(null);
+  const popupRef = useRef<Element>(null);
 
   const open = useCommandPaletteStore((state) => state.open);
   const pageStack = useCommandPaletteStore((state) => state.pages);
@@ -36,16 +40,32 @@ export default function CommandPalette(props: CommandPaletteProps) {
     if (!nextOpen) closePalette();
   };
 
+  const handleInitialFocus = (): HTMLInputElement | null => {
+    const active = document.activeElement;
+    returnFocusRef.current = active instanceof HTMLElement && active !== document.body ? active : null;
+    popupRef.current = inputRef.current?.closest('[role="dialog"]') ?? null;
+    return inputRef.current;
+  };
+
+  const handleFinalFocus = (): HTMLElement | false => {
+    // A selected action may already have focused its destination outside the palette.
+    const active = document.activeElement;
+    if (active !== document.body && !popupRef.current?.contains(active)) return false;
+    return returnFocusRef.current?.isConnected ? returnFocusRef.current : false;
+  };
+
   return (
-    <Dialog hideHeader onOpenChange={handleOpenChange} open={open} title="Command palette">
-      {/* Keyed by depth so each page starts with a fresh query and highlight, including the root when going back. */}
-      <Fragment key={pageStack.length}>
-        {page === undefined ? (
-          <CommandPaletteRootPage actions={actions} onOpenSession={onOpenSession} useSessionSearch={useSessionSearch} />
-        ) : (
-          pages[page]?.({onBack: popPage, onClose: closePalette})
-        )}
-      </Fragment>
+    <Dialog hideHeader initialFocus={handleInitialFocus} finalFocus={handleFinalFocus} onOpenChange={handleOpenChange} open={open} title="Command palette">
+      <CommandPaletteFocus inputRef={inputRef}>
+        {/* Keyed by depth so each page starts with a fresh query and highlight, including the root when going back. */}
+        <Fragment key={pageStack.length}>
+          {page === undefined ? (
+            <CommandPaletteRootPage actions={actions} onOpenSession={onOpenSession} useSessionSearch={useSessionSearch} />
+          ) : (
+            pages[page]?.({onBack: popPage, onClose: closePalette})
+          )}
+        </Fragment>
+      </CommandPaletteFocus>
     </Dialog>
   );
 }

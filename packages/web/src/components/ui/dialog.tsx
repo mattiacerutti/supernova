@@ -9,6 +9,8 @@ interface DialogProps {
   readonly containerClassName?: string;
   /** Keeps the title for assistive technology but hides the header row, for dialogs whose content leads with its own input. */
   readonly hideHeader?: boolean;
+  readonly initialFocus?: BaseDialog.Popup.Props["initialFocus"];
+  readonly finalFocus?: BaseDialog.Popup.Props["finalFocus"];
   readonly onOpenChange: (open: boolean) => void;
   readonly onOpenChangeComplete?: (open: boolean) => void;
   readonly open: boolean;
@@ -16,7 +18,7 @@ interface DialogProps {
 }
 
 export default function Dialog(props: DialogProps) {
-  const {children, className, containerClassName, hideHeader = false, onOpenChange, onOpenChangeComplete, open, title} = props;
+  const {children, className, containerClassName, hideHeader = false, initialFocus, finalFocus, onOpenChange, onOpenChangeComplete, open, title} = props;
 
   // React events bubble through the portal; a dialog opened from a clickable row must not activate the row.
   const stopPropagation = (event: MouseEvent): void => {
@@ -42,6 +44,8 @@ export default function Dialog(props: DialogProps) {
                 className
               )}
               data-slot="dialog-content"
+              initialFocus={initialFocus}
+              finalFocus={finalFocus}
             >
               {hideHeader ? (
                 <BaseDialog.Title className="sr-only">{title}</BaseDialog.Title>

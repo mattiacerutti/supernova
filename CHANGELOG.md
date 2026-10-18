@@ -35,6 +35,7 @@ All notable changes to Supernova are documented in this file.
 
 - Fixed checkpoint initialization failing on long Windows paths and terminal shutdown using unsupported signals. Closing a terminal now waits for its process to exit.
 - Fixed imported Windows sessions appearing missing because their project paths used backslashes. Existing imported sessions are repaired automatically without reimporting conversations.
+- Closing the command palette now restores focus to the previously focused control, including the composer, without focusing an unrelated control when nothing was focused.
 - Fixed the new-chat composer not receiving focus automatically when opened.
 - The rolled-back messages drawer now hides immediately when sending a new message after undo, instead of waiting for the session update.
 - Extension limitation notices now show the installed package's name instead of entry folders such as `src`.
