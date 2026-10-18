@@ -107,11 +107,14 @@ export class Workspace {
 
   public async listBranches(input: WorkspaceBranchesListPayload): Promise<WorkspaceBranchesListResult> {
     const {projectPath} = input;
-    const [refs, worktrees, head] = await Promise.all([
+    const commands = [
       workspaceGit(projectPath, ["for-each-ref", "--sort=-committerdate", "--format=%(refname)", "refs/heads", "refs/remotes"]),
       workspaceGit(projectPath, ["worktree", "list", "--porcelain"]),
       workspaceGit(projectPath, ["symbolic-ref", "--quiet", "--short", "HEAD"], [0, 1]),
-    ]);
+    ] as const;
+    // Drain every process before reporting a failure; a running Git process locks its cwd on Windows.
+    await Promise.allSettled(commands);
+    const [refs, worktrees, head] = await Promise.all(commands);
     const worktreeByBranch = parseWorktreeBranches(worktrees);
     const local: WorkspaceBranch[] = [];
     const remote: WorkspaceBranch[] = [];

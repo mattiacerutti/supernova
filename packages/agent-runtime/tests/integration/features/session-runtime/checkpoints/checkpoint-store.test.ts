@@ -105,7 +105,7 @@ describe("checkpoint store", () => {
 
     expect(manifest).toMatchObject({checkpointId: "cp-1", projectRoot: canonicalRoot, sessionId, version: 1});
     expect(manifest.repositories).toHaveLength(1);
-    await expect(gitOutput(repo, ["--git-dir", shadowGitDir, "rev-parse", `${manifest.repositories[0].refName}^{tree}`])).resolves.toBe(manifest.repositories[0].treeId);
+    await expect(gitOutput(shadowGitDir, ["rev-parse", `${manifest.repositories[0].refName}^{tree}`])).resolves.toBe(manifest.repositories[0].treeId);
     expect(existsSync(join(repo, ".git", "supernova"))).toBe(false);
     expect(existsSync(join(repo, ".git", "refs", "supernova"))).toBe(false);
   });
@@ -276,7 +276,7 @@ describe("checkpoint store", () => {
     await expect(capture(storageRoot, repo, "incomplete")).rejects.toThrow();
 
     await expect(stat(join(projectStorage, "manifests", hash(sessionId), `${hash("incomplete")}.json`))).rejects.toThrow();
-    await expect(gitOutput(repo, ["--git-dir", rootShadowGitDir, "rev-parse", "--verify", checkpointRefName(sessionId, "incomplete")])).rejects.toThrow();
+    await expect(gitOutput(rootShadowGitDir, ["rev-parse", "--verify", checkpointRefName(sessionId, "incomplete")])).rejects.toThrow();
   });
 
   it("rolls back earlier repositories when a later restore refuses to remove nested Git metadata", async () => {
@@ -329,7 +329,7 @@ describe("checkpoint store", () => {
     const projectStorage = join(storageRoot, "projects", hash(await realpath(repo)));
     const manifest = JSON.parse(await readFile(join(projectStorage, "manifests", hash(sessionId), `${hash("before")}.json`), "utf8"));
     const shadowGitDir = join(projectStorage, "repositories", manifest.repositories[0].repositoryId, "git");
-    await git(repo, ["--git-dir", shadowGitDir, "update-ref", "-d", manifest.repositories[0].refName]);
+    await git(shadowGitDir, ["update-ref", "-d", manifest.repositories[0].refName]);
 
     await expect(restore(storageRoot, repo, "after", "before")).rejects.toThrow();
     await expect(readFile(join(repo, "tracked.txt"), "utf8")).resolves.toBe("after\n");
@@ -366,9 +366,9 @@ describe("checkpoint store", () => {
     expect((await stat(retainedManifestPath)).isFile()).toBe(true);
     for (const [index, ownedRepository] of ownedManifest.repositories.entries()) {
       const shadowGitDir = join(projectStorage, "repositories", ownedRepository.repositoryId, "git");
-      await expect(gitOutput(repo, ["--git-dir", shadowGitDir, "rev-parse", "--verify", ownedRepository.refName])).rejects.toThrow();
-      await expect(gitOutput(repo, ["--git-dir", shadowGitDir, "rev-parse", "--verify", checkpointRefName(sessionId, "owned-second")])).rejects.toThrow();
-      await expect(gitOutput(repo, ["--git-dir", shadowGitDir, "rev-parse", "--verify", retainedManifest.repositories[index].refName])).resolves.toHaveLength(40);
+      await expect(gitOutput(shadowGitDir, ["rev-parse", "--verify", ownedRepository.refName])).rejects.toThrow();
+      await expect(gitOutput(shadowGitDir, ["rev-parse", "--verify", checkpointRefName(sessionId, "owned-second")])).rejects.toThrow();
+      await expect(gitOutput(shadowGitDir, ["rev-parse", "--verify", retainedManifest.repositories[index].refName])).resolves.toHaveLength(40);
     }
 
     gitCommands.mockClear();
@@ -412,9 +412,9 @@ describe("checkpoint store", () => {
     const shadowGitDir = join(projectStorage, "repositories", manifest.repositories[0].repositoryId, "git");
 
     // The prune window must come from the shadow repository, not the user's global config.
-    await expect(gitOutput(repo, ["--git-dir", shadowGitDir, "config", "--local", "--get", "gc.pruneExpire"])).resolves.toBe("7.days");
-    await expect(gitOutput(repo, ["--git-dir", shadowGitDir, "config", "--local", "--get", "gc.auto"])).rejects.toThrow();
-    await expect(gitOutput(repo, ["--git-dir", shadowGitDir, "config", "--local", "--get", "core.fsmonitor"])).resolves.toBe("false");
+    await expect(gitOutput(shadowGitDir, ["config", "--local", "--get", "gc.pruneExpire"])).resolves.toBe("7.days");
+    await expect(gitOutput(shadowGitDir, ["config", "--local", "--get", "gc.auto"])).rejects.toThrow();
+    await expect(gitOutput(shadowGitDir, ["config", "--local", "--get", "core.fsmonitor"])).resolves.toBe("false");
   });
 
   it("captures staged deletions whether or not the file remains in the worktree", async () => {
@@ -461,7 +461,7 @@ describe("checkpoint store", () => {
     expect(manifest.repositories.map((repository: {relativeRoot: string}) => repository.relativeRoot)).toEqual([".", "child"]);
     const parentTree = manifest.repositories.find((repository: {relativeRoot: string}) => repository.relativeRoot === ".");
     const parentGitDir = join(projectStorage, "repositories", parentTree.repositoryId, "git");
-    await expect(gitOutput(repo, ["--git-dir", parentGitDir, "ls-tree", "-r", "--name-only", parentTree.treeId])).resolves.not.toContain("child/");
+    await expect(gitOutput(parentGitDir, ["ls-tree", "-r", "--name-only", parentTree.treeId])).resolves.not.toContain("child/");
   });
 
   it("captures a consistent workspace when a capture runs during a restore", async () => {

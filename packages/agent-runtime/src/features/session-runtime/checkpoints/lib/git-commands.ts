@@ -32,8 +32,13 @@ interface WorkspaceStatus {
   readonly untracked: readonly string[];
 }
 
+function repositoryArgs(gitDir: string, args: readonly string[]): readonly string[] {
+  // Git caps an explicit GIT_DIR at PATH_MAX - 40, even when core.longpaths is enabled.
+  return [...PINNED_CONFIG, "-C", gitDir, "--git-dir=.", ...args];
+}
+
 function targetArgs(target: GitTarget, args: readonly string[]): readonly string[] {
-  return [...PINNED_CONFIG, `--git-dir=${target.gitDir}`, `--work-tree=${target.worktree}`, ...args];
+  return repositoryArgs(target.gitDir, [`--work-tree=${target.worktree}`, ...args]);
 }
 
 function indexEnv(indexPath: string): NodeJS.ProcessEnv {
@@ -96,7 +101,7 @@ export async function createShadowRepository(gitDir: string, objectFormat: GitOb
     ["core.longpaths", "true"],
     ["core.symlinks", SYMLINKS_MODE],
   ];
-  for (const [key, value] of settings) await runGit([...PINNED_CONFIG, `--git-dir=${gitDir}`, "config", key, value]);
+  for (const [key, value] of settings) await runGit(repositoryArgs(gitDir, ["config", key, value]));
 }
 
 export async function listFlaggedPaths(target: GitTarget, indexPath: string): Promise<readonly string[]> {
@@ -205,29 +210,29 @@ export async function restoreWorktreePaths(target: GitTarget, indexPath: string,
 }
 
 export async function writeRef(gitDir: string, ref: string, objectId: string): Promise<void> {
-  await runGit([`--git-dir=${gitDir}`, "update-ref", ref, objectId]);
+  await runGit(repositoryArgs(gitDir, ["update-ref", ref, objectId]));
 }
 
 export async function deleteRef(gitDir: string, ref: string): Promise<void> {
-  await runGitResult([`--git-dir=${gitDir}`, "update-ref", "-d", ref]);
+  await runGitResult(repositoryArgs(gitDir, ["update-ref", "-d", ref]));
 }
 
 export async function deleteRefs(gitDir: string, refs: readonly string[]): Promise<void> {
   if (refs.length === 0) return;
   const input = Buffer.from(refs.map((ref) => `delete ${ref}\n`).join(""));
-  await runGitResult([`--git-dir=${gitDir}`, "update-ref", "--stdin"], {input});
+  await runGitResult(repositoryArgs(gitDir, ["update-ref", "--stdin"]), {input});
 }
 
 export async function listRefs(gitDir: string, prefix: string): Promise<readonly string[]> {
-  const output = await optionalGit([`--git-dir=${gitDir}`, "for-each-ref", "--format=%(refname)", prefix]);
+  const output = await optionalGit(repositoryArgs(gitDir, ["for-each-ref", "--format=%(refname)", prefix]));
   return output ? output.split("\n").filter(Boolean) : [];
 }
 
 export async function resolveRefTree(gitDir: string, ref: string): Promise<string> {
-  const output = await runGit([`--git-dir=${gitDir}`, "rev-parse", `${ref}^{tree}`]);
+  const output = await runGit(repositoryArgs(gitDir, ["rev-parse", `${ref}^{tree}`]));
   return output.stdout.trim();
 }
 
 export async function collectGarbage(gitDir: string): Promise<void> {
-  await runGitResult([`--git-dir=${gitDir}`, "gc", `--prune=${PRUNE_EXPIRY}`]);
+  await runGitResult(repositoryArgs(gitDir, ["gc", `--prune=${PRUNE_EXPIRY}`]));
 }
