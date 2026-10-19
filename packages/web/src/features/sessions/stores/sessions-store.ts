@@ -42,7 +42,12 @@ function without<T>(record: Readonly<Record<string, T>>, key: string): Record<st
 
 function reuseEntries(known: SessionEntries, next: SessionEntries): SessionEntries {
   // Merging a paged window must not make every streaming partial rebuild the loaded transcript.
-  return known.remaining === next.remaining && known.items.length === next.items.length && known.items.every((item, index) => item === next.items[index]) ? known : next;
+  return known.remaining === next.remaining &&
+    known.precedingEntryId === next.precedingEntryId &&
+    known.items.length === next.items.length &&
+    known.items.every((item, index) => item === next.items[index])
+    ? known
+    : next;
 }
 
 /**
@@ -55,10 +60,13 @@ function withKnownBranch(known: Session | undefined, next: Session): Session {
   let {entries, undone} = next;
   const first = entries.items[0]?.id;
   const firstAt = first === undefined ? -1 : branch.findIndex((entry) => entry.id === first);
-  if (entries.remaining > 0 && firstAt > 0) entries = {items: [...branch.slice(0, firstAt), ...entries.items], remaining: known.entries.remaining};
+  // An oversized turn can leave no overlap when the next turn starts; its last entry still connects the windows.
+  const prefixEnd = firstAt >= 0 ? firstAt : branch.findIndex((entry) => entry.id === entries.precedingEntryId) + 1;
+  if (entries.remaining > 0 && prefixEnd > 0) entries = {...known.entries, items: [...branch.slice(0, prefixEnd), ...entries.items]};
   const last = undone.items.at(-1)?.id;
   const lastAt = last === undefined ? -1 : branch.findIndex((entry) => entry.id === last);
-  if (undone.remaining > 0 && lastAt >= 0 && lastAt < branch.length - 1) undone = {items: [...undone.items, ...branch.slice(lastAt + 1)], remaining: known.undone.remaining};
+  if (undone.remaining > 0 && lastAt >= 0 && lastAt < branch.length - 1)
+    undone = {...undone, items: [...undone.items, ...branch.slice(lastAt + 1)], remaining: known.undone.remaining};
   return {...next, entries: reuseEntries(known.entries, entries), undone: reuseEntries(known.undone, undone)};
 }
 
@@ -76,8 +84,8 @@ export const useSessionsStore = create<SessionsStoreState>()((set) => ({
       if (!session) return state;
       const extended =
         side === "entries"
-          ? session.entries.items[0]?.id === edge && {...session, entries: {items: [...page.items, ...session.entries.items], remaining: page.remaining}}
-          : session.undone.items.at(-1)?.id === edge && {...session, undone: {items: [...session.undone.items, ...page.items], remaining: page.remaining}};
+          ? session.entries.items[0]?.id === edge && {...session, entries: {...page, items: [...page.items, ...session.entries.items]}}
+          : session.undone.items.at(-1)?.id === edge && {...session, undone: {...session.undone, items: [...session.undone.items, ...page.items], remaining: page.remaining}};
       return extended ? {documents: {...state.documents, [sessionId]: extended}} : state;
     }),
   setLoadError: (sessionId, message) => set((state) => ({loadErrors: {...state.loadErrors, [sessionId]: message}})),

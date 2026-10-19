@@ -19,6 +19,8 @@ export const SessionEntry = z.custom<EntryRecord>().and(
 export const SessionEntries = z.object({
   items: z.array(SessionEntry).readonly(),
   remaining: z.number().int().nonnegative(),
+  /** Entry immediately before `items` on this branch, even when it is outside the page's history side; null for an empty page or the branch's start. */
+  precedingEntryId: z.number().int().nonnegative().nullable(),
 });
 
 export const Session = z.object({

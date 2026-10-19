@@ -156,7 +156,12 @@ export class SessionFile {
     const side = input.side === "entries" ? shown : history.slice(shown.length);
     const at = side.findIndex((entry) => entry.id === input.edge);
     if (at === -1) throw new Error(`This part of the conversation is no longer ${input.side === "entries" ? "shown" : "undone"}.`);
-    return entriesPage({side: input.side, entries: input.side === "entries" ? side.slice(0, at) : side.slice(at + 1), turns: state.turns});
+    return entriesPage({
+      side: input.side,
+      entries: input.side === "entries" ? side.slice(0, at) : side.slice(at + 1),
+      turns: state.turns,
+      precedingEntryId: input.side === "undone" ? input.edge : undefined,
+    });
   }
 
   public async isRunning(): Promise<boolean> {

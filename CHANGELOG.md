@@ -36,6 +36,7 @@ All notable changes to Supernova are documented in this file.
 
 ### Fixed
 
+- Fixed sending a message after a large turn briefly removing and reloading already-loaded history.
 - Fixed the timeline jumping, briefly showing different text, or overlapping messages when earlier history loads while scrolling up.
 - Fixed checkpoint initialization failing on long Windows paths and terminal shutdown using unsupported signals. Closing a terminal now waits for its process to exit.
 - Fixed imported Windows sessions appearing missing because their project paths used backslashes. Existing imported sessions are repaired automatically without reimporting conversations.

@@ -236,12 +236,15 @@ export async function createPiTestRuntime(input?: {
   };
 
   /** Waits until the session's run ended and every turn has its after-turn checkpoint. */
-  const settled = async (sessionId: string): Promise<void> => {
-    await waitUntil(async () => {
-      if ((await runtime.current(sessionId)).live.run !== undefined) throw new Error("Session is still running.");
-      const turns = await (await store.file(sessionId)).turnRecords();
-      if (Object.values(turns).some((record) => record.after === undefined)) throw new Error("A turn has no after-turn checkpoint yet.");
-    });
+  const settled = async (sessionId: string, timeoutMs?: number): Promise<void> => {
+    await waitUntil(
+      async () => {
+        if ((await runtime.current(sessionId)).live.run !== undefined) throw new Error("Session is still running.");
+        const turns = await (await store.file(sessionId)).turnRecords();
+        if (Object.values(turns).some((record) => record.after === undefined)) throw new Error("A turn has no after-turn checkpoint yet.");
+      },
+      {timeoutMs}
+    );
   };
 
   /** The board's newest error notice for a session, or null. */

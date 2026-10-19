@@ -41,8 +41,8 @@ function session(input?: Partial<Session>): Session {
     pinned: false,
     projectPath: "/workspace",
     updatedAt: "2026-01-01T00:00:00.000Z",
-    entries: {items: [], remaining: 0},
-    undone: {items: [], remaining: 0},
+    entries: {items: [], remaining: 0, precedingEntryId: null},
+    undone: {items: [], remaining: 0, precedingEntryId: null},
     agent: {},
     live: {},
     usage: {models: {}, tools: {}},
@@ -63,8 +63,8 @@ function userEntry(id: number): SessionEntry {
 }
 
 /** Entries with nothing beyond them. */
-function all(items: readonly SessionEntry[]): SessionEntries {
-  return {items, remaining: 0};
+function all(items: readonly SessionEntry[], precedingEntryId: number | null = null): SessionEntries {
+  return {items, remaining: 0, precedingEntryId};
 }
 
 /** A session with two turns, starting at entries 1 and 3. */
@@ -74,7 +74,7 @@ function twoTurns(): Session {
 
 /** The same session with its last turn undone. */
 function undoneLast(document: Session): Session {
-  return {...document, entries: all(document.entries.items.slice(0, 1)), undone: all(document.entries.items.slice(1))};
+  return {...document, entries: all(document.entries.items.slice(0, 1)), undone: all(document.entries.items.slice(1), document.entries.items[0]!.id)};
 }
 
 function entry(input?: Partial<SessionDirectoryEntry>): SessionDirectoryEntry {
@@ -129,7 +129,7 @@ function fakeServices(): FakeServices {
   const sessionRuntime = {
     abort: vi.fn(async () => ok),
     compact: vi.fn(async () => ok),
-    loadHistory: vi.fn(async () => ({ok: true, value: {items: [], remaining: 0}}) as const),
+    loadHistory: vi.fn(async () => ({ok: true, value: {items: [], remaining: 0, precedingEntryId: null}}) as const),
     redoCheckpoint: vi.fn(async () => ok),
     revertToMessage: vi.fn(async () => ok),
     sendMessage: vi.fn(async () => ok),
@@ -213,43 +213,85 @@ describe("session commands and views", () => {
     const document = () => useSessionsStore.getState().documents["session-1"]!;
     const shown = () => document().entries.items.map((item) => item.id);
     const undone = () => document().undone.items.map((item) => item.id);
-    setDocument(session({entries: {items: [userEntry(5), userEntry(7)], remaining: 2}}));
+    setDocument(session({entries: {items: [userEntry(5), userEntry(7)], remaining: 2, precedingEntryId: 3}}));
 
     // A page that no longer ends at the first entry is dropped.
     addHistoryPage("session-1", "entries", 3, all([userEntry(1)]));
     expect(shown()).toEqual([5, 7]);
     addHistoryPage("session-1", "entries", 5, all([userEntry(1), userEntry(3)]));
     expect(shown()).toEqual([1, 3, 5, 7]);
+    expect(document().entries.precedingEntryId).toBeNull();
 
     // A new turn slides the window past turn 5; what came before stays.
-    setDocument(session({entries: {items: [userEntry(7), userEntry(9)], remaining: 3}}));
+    setDocument(session({entries: {items: [userEntry(7), userEntry(9)], remaining: 3, precedingEntryId: 5}}));
     expect(shown()).toEqual([1, 3, 5, 7, 9]);
     expect(document().entries.remaining).toBe(0);
 
     // Undoing turn 9 keeps it as the first undone turn; the client then has it in full.
-    setDocument(session({entries: {items: [userEntry(7)], remaining: 3}, undone: all([userEntry(9)])}));
+    setDocument(session({entries: {items: [userEntry(7)], remaining: 3, precedingEntryId: 5}, undone: all([userEntry(9)], 7)}));
     expect(shown()).toEqual([1, 3, 5, 7]);
     expect(undone()).toEqual([9]);
 
     // Undone turns beyond the window stay too, so what the client undid itself is there to redo.
-    setDocument(session({entries: all([userEntry(1), userEntry(3)]), undone: {items: [userEntry(5), userEntry(7), userEntry(9)], remaining: 1}}));
-    setDocument(session({entries: all([userEntry(1)]), undone: {items: [userEntry(3), userEntry(5)], remaining: 3}}));
+    setDocument(session({entries: all([userEntry(1), userEntry(3)]), undone: {items: [userEntry(5), userEntry(7), userEntry(9)], remaining: 1, precedingEntryId: 3}}));
+    setDocument(session({entries: all([userEntry(1)]), undone: {items: [userEntry(3), userEntry(5)], remaining: 3, precedingEntryId: 1}}));
     expect(shown()).toEqual([1]);
     expect(undone()).toEqual([3, 5, 7, 9]);
     expect(document().undone.remaining).toBe(1);
     // A page of later undone turns extends the back the same way.
-    addHistoryPage("session-1", "undone", 9, all([userEntry(11)]));
+    addHistoryPage("session-1", "undone", 9, all([userEntry(11)], 9));
     expect(undone()).toEqual([3, 5, 7, 9, 11]);
     expect(document().undone.remaining).toBe(0);
+    expect(document().undone.precedingEntryId).toBe(1);
 
     // A window starting the history (a send after undoing every turn) replaces it.
     setDocument(session({entries: all([userEntry(20)])}));
     expect(shown()).toEqual([20]);
   });
 
+  it.each([0, 2])("keeps a loaded oversized turn when a new window starts after it (%i earlier turns)", (remaining) => {
+    const {setDocument} = useSessionsStore.getState();
+    const answer = {
+      conversationId: 1,
+      id: 6,
+      kind: "pi.assistant",
+      model: [{content: [{type: "text", text: "x".repeat(6 * 1024 * 1024)}], role: "assistant", timestamp: 6}],
+    } as unknown as SessionEntry;
+    const loaded = {items: [userEntry(5), answer], remaining, precedingEntryId: remaining === 0 ? null : 4};
+    setDocument(session({entries: loaded}));
+    const window = session({entries: {items: [userEntry(7)], remaining: remaining + 1, precedingEntryId: 6}, runStart: 7});
+
+    setDocument(window);
+
+    const document = useSessionsStore.getState().documents["session-1"]!;
+    expect(document.entries.items.map((item) => item.id)).toEqual([5, 6, 7]);
+    expect(document.entries.items[1]).toBe(answer);
+    expect(document.entries).toMatchObject({remaining, precedingEntryId: loaded.precedingEntryId});
+    expect(live("session-1", document)).toMatchObject({turnIds: ["5"], liveTurn: {id: "7"}});
+
+    setDocument({...window, live: {run: {inputs: [7], taskId: 10}} as Session["live"]});
+    expect(useSessionsStore.getState().documents["session-1"]!.entries).toBe(document.entries);
+  });
+
+  it.each([
+    {name: "send after undo", precedingEntryId: 1, remaining: 1, expected: [1, 9]},
+    {name: "missed update", precedingEntryId: 7, remaining: 3, expected: [9]},
+    {name: "history restart", precedingEntryId: null, remaining: 0, expected: [9]},
+  ])("connects a disjoint window only at its known boundary: $name", ({precedingEntryId, remaining, expected}) => {
+    const {setDocument} = useSessionsStore.getState();
+    setDocument(session({entries: all([userEntry(1)]), undone: all([userEntry(3), userEntry(5)], 1)}));
+
+    setDocument(session({entries: {items: [userEntry(9)], remaining, precedingEntryId}}));
+
+    const document = useSessionsStore.getState().documents["session-1"]!;
+    expect(document.entries.items.map((item) => item.id)).toEqual(expected);
+    expect(document.entries.remaining).toBe(expected.length === 2 ? 0 : remaining);
+    expect(document.undone.items).toEqual([]);
+  });
+
   it.each(["entries", "undone"] as const)("keeps loaded %s stable across live-only updates", (side) => {
     const {setDocument, addHistoryPage} = useSessionsStore.getState();
-    const window = session({[side]: {items: [userEntry(5), userEntry(7)], remaining: 2}});
+    const window = session({[side]: {items: [userEntry(5), userEntry(7)], remaining: 2, precedingEntryId: side === "entries" ? 3 : null}});
     setDocument(window);
     addHistoryPage("session-1", side, side === "entries" ? 5 : 7, all(side === "entries" ? [userEntry(1), userEntry(3)] : [userEntry(9), userEntry(11)]));
     const before = useSessionsStore.getState().documents["session-1"]!;
@@ -334,7 +376,7 @@ describe("session commands and views", () => {
 
   it("shows a new authored turn after undo without splitting extension continuations", async () => {
     const {actions, document, open, services} = setup();
-    const initial = session({entries: all([userEntry(1)]), undone: all([userEntry(3), userEntry(5)])});
+    const initial = session({entries: all([userEntry(1)]), undone: all([userEntry(3), userEntry(5)], 1)});
     services.documents.set("session-1", fakeState(initial));
     open("session-1");
     await waitUntil(() => expect(document("session-1")).toEqual(initial));

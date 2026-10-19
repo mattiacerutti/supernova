@@ -55,7 +55,12 @@ export function contextUsageOf(input: {readonly entries: readonly EntryRecord[];
 }
 
 /** Read from the leaf outwards. The page reaching the far end also holds what precedes the first turn. */
-export function entriesPage(input: {readonly side: HistorySide; readonly entries: readonly EntryRecord[]; readonly turns: Readonly<Record<string, TurnRecord>>}): SessionEntries {
+export function entriesPage(input: {
+  readonly side: HistorySide;
+  readonly entries: readonly EntryRecord[];
+  readonly turns: Readonly<Record<string, TurnRecord>>;
+  readonly precedingEntryId?: number;
+}): SessionEntries {
   const {side, entries, turns} = input;
 
   const starts = entries.flatMap((entry, index) => (entry.kind === "pi.user" && turns[String(entry.id)] ? [index] : []));
@@ -75,8 +80,10 @@ export function entriesPage(input: {readonly side: HistorySide; readonly entries
 
   const count = pageTurnCount(side === "entries" ? sizes.toReversed() : sizes);
   const remaining = starts.length - count;
-  const items = remaining === 0 ? entries : side === "entries" ? entries.slice(starts[remaining]) : entries.slice(0, starts[count]);
-  return {items: authoredEntries(items, turns), remaining};
+  const start = side === "entries" && remaining > 0 ? starts[remaining]! : 0;
+  const items = remaining === 0 ? entries : entries.slice(start, side === "undone" ? starts[count] : entries.length);
+  const precedingEntryId = items.length === 0 ? null : start > 0 ? entries[start - 1]!.id : (input.precedingEntryId ?? null);
+  return {items: authoredEntries(items, turns), remaining, precedingEntryId};
 }
 
 export function timelineEntries(history: readonly EntryRecord[]): EntryRecord[] {
@@ -97,7 +104,7 @@ export function buildSession(input: {
 }): Session {
   const {context, record, runStart, turns} = input;
   const entries = entriesPage({side: "entries", entries: input.history, turns});
-  const undone = entriesPage({side: "undone", entries: input.undone, turns});
+  const undone = entriesPage({side: "undone", entries: input.undone, turns, precedingEntryId: input.history.at(-1)?.id});
   // Activity stops at the live turn's user message so a running session does not keep climbing the sidebar.
   const liveStart = runStart === undefined ? -1 : entries.items.findIndex((entry) => entry.id >= runStart);
   const settled = liveStart === -1 ? entries.items : entries.items.slice(0, liveStart + 1);

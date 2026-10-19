@@ -107,6 +107,35 @@ describe("runtime services over the wire", () => {
     );
   });
 
+  it("publishes the connection to an oversized turn when a send moves it outside the live window", async () => {
+    const {hold, pi} = await connect();
+    const {info} = await pi.createSession();
+    pi.faux.setResponses([fauxAssistantMessage("x".repeat(6 * 1024 * 1024))]);
+    await pi.sessionRuntime.sendMessage({...firstMessage, sessionId: info.id, captureCheckpoints: false});
+    // Persisting the 6 MiB fixture exceeds the usual two-second deadline on CI runners.
+    await pi.settled(info.id, 15_000);
+    const {sessionRuntime} = await hold(info.id);
+    const stop = sessionRuntime.session.subscribe(() => undefined);
+    try {
+      await waitUntil(async () => expect(sessionRuntime.session.value).toEqual(await pi.sessions.get({sessionId: info.id})));
+      const before = sessionRuntime.session.value!.entries;
+      expect(before.remaining).toBe(0);
+      pi.faux.setResponses([fauxAssistantMessage("Next answer.")]);
+
+      expect(await sessionRuntime.sendMessage({contentParts: [{text: "Next prompt", type: "text"}], modelReference: selectedModelReference})).toEqual({ok: true, value: null});
+
+      const after = sessionRuntime.session.value!.entries;
+      expect(after).toMatchObject({remaining: 1, precedingEntryId: before.items.at(-1)!.id});
+      expect(after.items[0]!.contentParts).toEqual([{text: "Next prompt", type: "text"}]);
+      expect(after.items.some((entry) => entry.id === before.items[0]!.id)).toBe(false);
+      const page = await sessionRuntime.loadHistory({side: "entries", edge: after.items[0]!.id});
+      expect(page).toEqual({ok: true, value: before});
+      await pi.settled(info.id);
+    } finally {
+      stop();
+    }
+  });
+
   it("serves a session again after every client released it, from its current document", async () => {
     const {hold, pi, sessions} = await connect();
     pi.faux.setResponses([fauxAssistantMessage("First."), fauxAssistantMessage("Second.")]);

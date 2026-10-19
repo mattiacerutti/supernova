@@ -340,7 +340,7 @@ describe("sending messages through Pi sessions", () => {
     expect(compactionsSeen(versions).pending).toBe(true);
     // The summary and the continuation both follow the turn's user entry, with no other turn between.
     expect(after.some((entry) => entry.kind === "pi.compaction" && JSON.stringify(entry).includes("Compacted overflow summary."))).toBe(true);
-    expect(assistantTexts({entries: {items: after, remaining: 0}}).at(-1)).toBe("Continued after compaction.");
+    expect(assistantTexts({entries: {items: after, remaining: 0, precedingEntryId: session.entries.items[userIndex]!.id}}).at(-1)).toBe("Continued after compaction.");
     expect(after.some((entry) => entry.contentParts !== undefined)).toBe(false);
   });
 

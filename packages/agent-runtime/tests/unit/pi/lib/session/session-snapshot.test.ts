@@ -2,7 +2,7 @@ import {estimateTokens} from "@earendil-works/pi-coding-agent";
 import type {AssistantMessage, Message, Usage} from "@earendil-works/pi-ai";
 import type {EntryRecord} from "@earendil-works/pi-durable";
 import type {TurnRecord} from "@supernova/agent-runtime/pi/lib/session/session-state";
-import {Session} from "@supernova/contracts/services/sessions/schemas";
+import {Session, SessionEntries} from "@supernova/contracts/services/sessions/schemas";
 import {describe, expect, it} from "vitest";
 import {buildSession, buildSessionContextUsage, entriesPage} from "@supernova/agent-runtime/pi/lib/session/session-snapshot";
 
@@ -51,13 +51,14 @@ describe("session entries", () => {
     expect(session.entries.items[0]).toMatchObject({contentParts: [{type: "text", text: "Original input"}], model: authored.model});
     expect(session.entries.items[1]).toBe(continuation);
     expect(session.undone.items[0]).toMatchObject({contentParts: []});
+    expect(session.undone.precedingEntryId).toBe(continuation.id);
     expect(session).not.toHaveProperty("turns");
     expect(session.entries.items[0]).not.toHaveProperty("before");
     expect(authored).not.toHaveProperty("contentParts");
     expect(undone).not.toHaveProperty("contentParts");
     expect(session.title).toBe("Untitled session");
     expect(Session.parse(session)).toEqual(session);
-    expect(Session.safeParse({...session, entries: {items: [{...authored, contentParts: [{type: "text", text: 1}]}], remaining: 0}}).success).toBe(false);
+    expect(Session.safeParse({...session, entries: {...session.entries, items: [{...authored, contentParts: [{type: "text", text: 1}]}]}}).success).toBe(false);
   });
 });
 
@@ -118,13 +119,15 @@ describe("history pages", () => {
     expect(turnStarts(newest.items, turns)).toHaveLength(20);
     expect(newest.items[0]?.id).toBe(2 + 25 * 3);
     expect(newest.items.at(-1)).toBe(entries.at(-1));
+    expect(newest.precedingEntryId).toBe(entries[entries.findIndex((entry) => entry.id === newest.items[0]!.id) - 1]?.id);
 
     const middle = shown(entries.findIndex((candidate) => candidate.id === newest.items[0]!.id));
     expect(middle.remaining).toBe(5);
-    expect(middle.items.at(-1)?.id).toBe(newest.items[0]!.id - 1);
+    expect(middle.items.at(-1)?.id).toBe(newest.precedingEntryId);
 
     const first = shown(entries.findIndex((candidate) => candidate.id === middle.items[0]!.id));
     expect(first.remaining).toBe(0);
+    expect(first.precedingEntryId).toBeNull();
     // The leading compaction comes with the first turn.
     expect(first.items[0]).toBe(entries[0]);
     expect(turnStarts(first.items, turns)).toHaveLength(5);
@@ -140,24 +143,53 @@ describe("history pages", () => {
     expect(turnStarts(page.items, huge.turns)).toHaveLength(1);
   });
 
+  it("connects a new turn to the oversized turn excluded from its window", () => {
+    const {history: entries, turns} = history(1, "x".repeat(6 * 1024 * 1024));
+    const before = entriesPage({side: "entries", entries, turns});
+    const nextUser = entry(10, "pi.user");
+
+    const after = entriesPage({side: "entries", entries: [...entries, nextUser], turns: {...turns, "10": record()}});
+
+    expect(before.items).toHaveLength(entries.length);
+    expect(after.items.map((entry) => entry.id)).toEqual([10]);
+    expect(after).toMatchObject({remaining: 1, precedingEntryId: entries.at(-1)!.id});
+  });
+
   it("pages undone turns from the leaf forward, with the continuation before the first", () => {
     const {history: entries, turns} = history(25);
     // Undone from the second turn on; the first turn's trailing continuation (no record) leads the undone entries.
     const undone = entries.slice(3);
     expect(turns[String(undone[0]!.id)]).toBeUndefined();
 
-    const page = entriesPage({side: "undone", entries: undone, turns});
+    const page = entriesPage({side: "undone", entries: undone, turns, precedingEntryId: entries[2]!.id});
     expect(page.remaining).toBe(4);
+    expect(page.precedingEntryId).toBe(entries[2]!.id);
     expect(page.items[0]?.id).toBe(undone[0]!.id);
     expect(turnStarts(page.items, turns)).toHaveLength(20);
     expect(entriesPage({side: "undone", entries: entries.slice(-6), turns})).toMatchObject({remaining: 0});
     expect(entriesPage({side: "undone", entries: entries.slice(-6), turns}).items).toHaveLength(6);
-    expect(entriesPage({side: "undone", entries: [], turns})).toEqual({items: [], remaining: 0});
+    const edge = page.items.at(-1)!.id;
+    const next = entriesPage({side: "undone", entries: undone.slice(undone.findIndex((entry) => entry.id === edge) + 1), turns, precedingEntryId: edge});
+    expect(next).toMatchObject({remaining: 0, precedingEntryId: edge});
+    expect(entriesPage({side: "undone", entries: [], turns, precedingEntryId: edge})).toEqual({items: [], remaining: 0, precedingEntryId: null});
   });
 
   it("is the whole history when it has no turns", () => {
     const entries = [entry(1, "pi.compaction"), entry(2, "pi.user")];
-    expect(entriesPage({side: "entries", entries, turns: {}})).toEqual({items: entries, remaining: 0});
+    expect(entriesPage({side: "entries", entries, turns: {}})).toEqual({items: entries, remaining: 0, precedingEntryId: null});
+  });
+});
+
+describe("history page boundaries", () => {
+  it.each([
+    {precedingEntryId: null, valid: true},
+    {precedingEntryId: 42, valid: true},
+    {precedingEntryId: undefined, valid: false},
+    {precedingEntryId: -1, valid: false},
+    {precedingEntryId: 1.5, valid: false},
+    {precedingEntryId: "42", valid: false},
+  ])("validates precedingEntryId $precedingEntryId", ({precedingEntryId, valid}) => {
+    expect(SessionEntries.safeParse({items: [], remaining: 0, precedingEntryId}).success).toBe(valid);
   });
 });
 
