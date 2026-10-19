@@ -5,6 +5,8 @@ description: Create a pull request with conventional branch naming and title, an
 
 # Create PR
 
+Always read and use the [commit-message skill](../commit-message/SKILL.md) to generate the branch name, PR title, and any commit messages. For the PR title, use the full diff against the base branch rather than only staged changes.
+
 ## Branch
 
 First determine whether the current branch already has a remote branch.
