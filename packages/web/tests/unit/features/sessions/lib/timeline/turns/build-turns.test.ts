@@ -106,7 +106,7 @@ describe("building turns from Pi entries", () => {
 
 describe("splitting a running session into committed and live turns", () => {
   it.each([undefined, 5])("reuses unchanged history across live updates (runStart: %s)", (runStart) => {
-    const entries = {items: [user(1, "First"), assistant(2, [{text: "Old", type: "text"}]), user(5, "Second")], remaining: 0};
+    const entries = {items: [user(1, "First"), assistant(2, [{text: "Old", type: "text"}]), user(5, "Second")], remaining: 0, precedingEntryId: null};
     const before = buildSessionTurns({entries, live: {}, runStart});
     const live = {generation: {attempt: 0, message: assistant(6, [{text: "New partial", type: "text"}]).model![0]}} as unknown as LiveState;
     const after = buildSessionTurns({entries: {...entries}, live, runStart});
@@ -123,7 +123,7 @@ describe("splitting a running session into committed and live turns", () => {
 
   it.each(["settlement", "run boundary", "undo", "prepend", "replacement"] as const)("refreshes history after %s", (change) => {
     const items = [user(1, "First"), assistant(2, [{text: "Old", type: "text"}]), user(5, "Second")];
-    const session = {entries: {items, remaining: 0}, live: {}, runStart: 5};
+    const session = {entries: {items, remaining: 0, precedingEntryId: null}, live: {}, runStart: 5};
     buildSessionTurns(session);
     const next = {
       ...session,
@@ -132,6 +132,7 @@ describe("splitting a running session into committed and live turns", () => {
         items:
           change === "undo" ? items.slice(0, 2) : change === "prepend" ? [user(0, "Earlier"), ...items] : change === "replacement" ? [user(1, "Edited"), ...items.slice(1)] : items,
         remaining: 0,
+        precedingEntryId: null,
       },
     };
     const result = buildSessionTurns(next);
@@ -156,7 +157,7 @@ describe("splitting a running session into committed and live turns", () => {
     } as unknown as LiveState;
     const entries = [user(1, "First"), assistant(2, [{text: "Old", type: "text"}]), user(5, "Second")];
 
-    const {liveTurn, turns: committed} = buildSessionTurns({entries: {items: entries, remaining: 0}, live, runStart: 5});
+    const {liveTurn, turns: committed} = buildSessionTurns({entries: {items: entries, remaining: 0, precedingEntryId: null}, live, runStart: 5});
 
     expect(committed.map((turn) => turn.id)).toEqual(["1"]);
     expect(liveTurn).toMatchObject({
@@ -172,7 +173,7 @@ describe("splitting a running session into committed and live turns", () => {
   });
 
   it("has no live turn while idle", () => {
-    const {liveTurn, turns: committed} = buildSessionTurns({entries: {items: [user(1, "First")], remaining: 0}, live: {}});
+    const {liveTurn, turns: committed} = buildSessionTurns({entries: {items: [user(1, "First")], remaining: 0, precedingEntryId: null}, live: {}});
 
     expect(liveTurn).toBeUndefined();
     expect(committed).toHaveLength(1);

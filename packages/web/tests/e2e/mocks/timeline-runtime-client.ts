@@ -73,7 +73,7 @@ class TimelineServer {
       abort: async () => (this.settleStream("aborted"), ok),
       compact: async () => ok,
       // Timeline sessions are one page; paging is the server's and covered by its tests.
-      loadHistory: async () => ({ok: true, value: {items: [], remaining: 0}}),
+      loadHistory: async () => ({ok: true, value: {items: [], remaining: 0, precedingEntryId: null}}),
       redoCheckpoint: async () => (this.redoCheckpoint(sessionId), ok),
       revertToMessage: async ({turnId}) => (this.revertToMessage(sessionId, turnId), ok),
       sendMessage: async ({contentParts}) => (this.startStream(sessionId, contentParts), ok),
@@ -186,8 +186,8 @@ class TimelineServer {
       pinned: false,
       projectPath,
       updatedAt: new Date().toISOString(),
-      entries: {items: [], remaining: 0},
-      undone: {items: [], remaining: 0},
+      entries: {items: [], remaining: 0, precedingEntryId: null},
+      undone: {items: [], remaining: 0, precedingEntryId: null},
       agent: {},
       live: {},
       usage: {models: {}, tools: {}},
@@ -218,7 +218,15 @@ class TimelineServer {
     const all = [...session.entries.items, ...session.undone.items];
     const starts = this.turnStarts(all);
     const cut = starts[count] ?? all.length;
-    this.commit({...session, entries: {items: all.slice(0, cut), remaining: 0}, undone: {items: all.slice(cut), remaining: 0}, updatedAt: new Date().toISOString()}, "idle");
+    this.commit(
+      {
+        ...session,
+        entries: {items: all.slice(0, cut), remaining: 0, precedingEntryId: null},
+        undone: {items: all.slice(cut), remaining: 0, precedingEntryId: cut < all.length ? (all[cut - 1]?.id ?? null) : null},
+        updatedAt: new Date().toISOString(),
+      },
+      "idle"
+    );
   }
 
   private visibleTurnCount(session: Session): number {
@@ -260,8 +268,8 @@ class TimelineServer {
     this.commit(
       {
         ...session,
-        entries: {items: [...session.entries.items, {...userEntry(userId, text, 80_000), contentParts: [...contentParts]}], remaining: 0},
-        undone: {items: [], remaining: 0},
+        entries: {items: [...session.entries.items, {...userEntry(userId, text, 80_000), contentParts: [...contentParts]}], remaining: 0, precedingEntryId: null},
+        undone: {items: [], remaining: 0, precedingEntryId: null},
         runStart: userId,
         live: this.streamLive(),
       },
@@ -328,7 +336,7 @@ class TimelineServer {
     const answer = timelineStreamMessage({lineCount: Math.max(this.lineCount, 1), reasoningBreaks: this.reasoningBreaks});
     const next = {
       ...previous,
-      entries: {items: [...previous.entries.items, assistantEntry(this.nextEntryId(previous), answer)], remaining: 0},
+      entries: {items: [...previous.entries.items, assistantEntry(this.nextEntryId(previous), answer)], remaining: 0, precedingEntryId: null},
       live: {},
       updatedAt: new Date().toISOString(),
     };
