@@ -110,7 +110,10 @@ describe("runtime services over the wire", () => {
   it("publishes the connection to an oversized turn when a send moves it outside the live window", async () => {
     const {hold, pi} = await connect();
     const {info} = await pi.createSession();
-    await pi.appendConversation(info.id, {assistantText: "x".repeat(6 * 1024 * 1024)});
+    pi.faux.setResponses([fauxAssistantMessage("x".repeat(6 * 1024 * 1024))]);
+    await pi.sessionRuntime.sendMessage({...firstMessage, sessionId: info.id, captureCheckpoints: false});
+    // Persisting the 6 MiB fixture exceeds the usual two-second deadline on CI runners.
+    await pi.settled(info.id, 15_000);
     const {sessionRuntime} = await hold(info.id);
     const stop = sessionRuntime.session.subscribe(() => undefined);
     try {

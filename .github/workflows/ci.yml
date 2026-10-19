@@ -85,7 +85,9 @@ jobs:
 
       - name: Install fd (Windows)
         if: runner.os == 'Windows'
-        run: choco install fd --yes --no-progress
+        run: |
+          choco install fd --yes --no-progress
+          fd --version
 
       - name: Configure Git fixtures
         run: |
