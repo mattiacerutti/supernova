@@ -6,6 +6,18 @@ All notable changes to Supernova are documented in this file.
 
 ### Breaking Changes
 
+### Added
+
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.7.0]
+
+### Breaking Changes
+
 - Sessions are now stored as SQLite files under `sessions` in the agent directory. Sessions from earlier versions are imported on first start: each keeps its visible conversation (messages, tool calls, and compactions) and can be continued, but undo on its imported turns no longer restores files, and turns it had undone or branched away from are not kept. Archived sessions are not imported. The old session files move to `sessions/legacy` and are not deleted.
 - Pi extensions now run against the durable engine through a compatibility layer, and some no longer work as before. Streaming events (`message_update`, `tool_execution_update`), `input`, `session_compact`, `model_select`, `thinking_level_select`, and the session tree, fork, switch, and info events are not delivered; `before_agent_start` runs but its result is not applied. Extensions that subscribe to an undelivered event are reported in the session. Tools, providers, and the remaining events work as they did. See [Pi compatibility](docs/pi-compatibility.md#extensions).
 
@@ -49,8 +61,6 @@ All notable changes to Supernova are documented in this file.
 - Extension limitation notices now show the installed package's name instead of entry folders such as `src`.
 - Fixed image attachments being omitted from messages in the packaged desktop app when automatic image resizing is enabled.
 - Terminals and agent commands in the desktop app no longer inherit `ELECTRON_RUN_AS_NODE`, so Electron apps started from them (such as `bun dev:desktop`) open normally instead of running as Node. They also no longer inherit Supernova's Pi directory settings, so running `pi` inside Supernova uses your own Pi configuration.
-
-### Removed
 
 ## [0.6.0]
 

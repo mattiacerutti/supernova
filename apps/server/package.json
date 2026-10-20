@@ -1,7 +1,7 @@
 {
   "name": "@supernova/server",
   "private": true,
-  "version": "0.6.0",
+  "version": "0.7.0",
   "type": "module",
   "exports": {
     "./process": "./src/process.ts"
