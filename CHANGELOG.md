@@ -21,7 +21,7 @@ All notable changes to Supernova are documented in this file.
 - Improved responsiveness when expanding large work histories, navigating checkpoints, switching sessions, or resizing side panels.
 - Improved responsiveness when opening, revisiting, scrolling, and resizing large tool diffs.
 - Changed the file viewer and Changes diffs to scroll long lines horizontally instead of wrapping them.
-- Changing the model, thinking level, workspace mode, or base branch rolls the changed letters of the label into place while the button resizes, and a live work group's summary rolls as tools arrive. Starting a session fades the welcome screen out as the composer glides to the bottom; opening a session or the new-session screen from elsewhere fades it in as it rises into place, while moving between sessions swaps them at once. Hover colors fade in, and menus open from the side of the button they belong to.
+- Changing the model, thinking level, workspace mode, or base branch rolls the changed words of the label into place while the button resizes. Live work summaries and individual tool titles and arguments use the same word-level animation. Starting a session fades the welcome screen out as the composer glides to the bottom; opening a session or the new-session screen from elsewhere fades it in as it rises into place, while moving between sessions swaps them at once. Hover colors fade in, and menus open from the side of the button they belong to.
 - A window keeps its workspace tabs across reloads, and only its own: a new window or browser tab no longer opens every terminal the session has. Terminals are numbered ("Terminal 2"), and a terminal closed in another window shows as closed instead of freezing.
 - A terminal's output is sent only to windows showing it, instead of every terminal's output to every window with a terminal open. Whoever resizes or focuses a shared terminal last sets its size.
 - Sessions now run on Pi's durable engine (`pi-durable`). Every streamed partial, tool output, and turn is written to the session's file before it is shown, so a server restart or crash resumes an interrupted response from where it stopped instead of losing it, and a browser that opens a session mid-response sees everything produced so far.
@@ -37,6 +37,8 @@ All notable changes to Supernova are documented in this file.
 ### Fixed
 
 - Fixed pasted messages losing line breaks when sent, and plain-text pastes collapsing blank lines.
+- Work-summary shimmer now continues across rolling words without jumping when the label grows or shrinks.
+- Reopening a running tool group no longer replays its tree and title entrance animations; new calls still animate as they arrive.
 - Fixed sending a message after a large turn briefly removing and reloading already-loaded history.
 - Fixed the timeline jumping, briefly showing different text, or overlapping messages when earlier history loads while scrolling up.
 - Fixed checkpoint initialization failing on long Windows paths and terminal shutdown using unsupported signals. Closing a terminal now waits for its process to exit.

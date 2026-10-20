@@ -107,6 +107,7 @@ export default function WorkRow(props: WorkRowProps) {
   const {expanded, toggle} = useWorkExpansion(event.id);
   // Details are expensive: mounted on first request, then kept so collapsing can animate.
   const [detailsRequested, setDetailsRequested] = useState(false);
+  const [animateTitleOnMount] = useState(revealDelay !== undefined);
   const open = expandable && expanded;
 
   const icon = toolIcon(tool);
@@ -121,7 +122,7 @@ export default function WorkRow(props: WorkRowProps) {
 
   const header = (
     <div className={cn("flex min-w-0 items-baseline gap-3 text-sm leading-8", error ? "text-danger-ink" : "text-ink-muted")} style={{height: ROW_HEIGHT}}>
-      <ToolTitle tool={tool} />
+      <ToolTitle animateOnMount={animateTitleOnMount} tool={tool} />
       {expandable && (
         <Icon
           className={cn("ml-auto shrink-0 self-center opacity-0 transition-[opacity,transform] duration-150 ease-out group-hover/row:opacity-100", open && "rotate-90")}
@@ -139,13 +140,16 @@ export default function WorkRow(props: WorkRowProps) {
         className={cn("min-w-0 flex-1 motion-reduce:animate-none", expandable && "group/row", revealDelay !== undefined && "animate-work-reveal")}
         style={phase(revealDelay, timing.branch)}
       >
-        {expandable ? (
-          <button aria-expanded={open} className="block w-full cursor-pointer text-left" onClick={handleToggle} type="button">
-            {header}
-          </button>
-        ) : (
-          header
-        )}
+        {/* Keep the title mounted when arguments or results make the row expandable. */}
+        <button
+          aria-expanded={expandable ? open : undefined}
+          className={cn("block w-full text-left", expandable && "cursor-pointer")}
+          disabled={!expandable}
+          onClick={handleToggle}
+          type="button"
+        >
+          {header}
+        </button>
         {expandable && (
           <div
             className="grid grid-rows-[0fr] opacity-0 transition-[grid-template-rows,opacity] duration-150 ease-out motion-reduce:transition-none data-[expanded=true]:grid-rows-[1fr] data-[expanded=true]:opacity-100"

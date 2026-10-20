@@ -38,7 +38,6 @@ export default function AssistantWork(props: AssistantWorkProps) {
   const {item} = props;
   const {expanded: open, toggle} = useWorkExpansion(item.id, item.live);
 
-  // Rows present at mount never animate; only rows appended while the group is live reveal themselves.
   const [initialCount] = useState(() => (item.live ? 0 : item.events.length));
   const [revealed, setRevealed] = useState<{batchStart: number; count: number}>({batchStart: initialCount, count: initialCount});
   if (revealed.count !== item.events.length) setRevealed({batchStart: Math.min(revealed.count, item.events.length), count: item.events.length});
@@ -46,6 +45,11 @@ export default function AssistantWork(props: AssistantWorkProps) {
   const revealDelayFor = (index: number): number | undefined => {
     if (!item.live || index < revealed.batchStart) return undefined;
     return (initialCount === 0 && revealed.batchStart === 0 ? FIRST_ROW_DELAY_MS : 0) + (index - revealed.batchStart) * ROW_STAGGER_MS;
+  };
+
+  const handleToggle = (): void => {
+    if (!open) setRevealed({batchStart: item.events.length, count: item.events.length});
+    toggle();
   };
 
   const summary = summarizeWork(item.events);
@@ -70,13 +74,15 @@ export default function AssistantWork(props: AssistantWorkProps) {
           "group/header flex h-7 w-full cursor-pointer items-center gap-1.5 text-left text-sm text-ink-muted transition-colors hover:text-ink motion-reduce:animate-none",
           headerAnimates && "animate-work-reveal [animation-duration:360ms]"
         )}
-        onClick={toggle}
+        onClick={handleToggle}
         type="button"
       >
         <span className="grid w-[22px] shrink-0 place-items-center">
           <Icon className={cn("transition-transform duration-150 ease-out", !open && "-rotate-90")} name="chevron-down" size="xs" />
         </span>
-        <RollingText className={cn(item.live && "shimmer [--shimmer-duration:3.4s]")}>{summary}</RollingText>
+        <RollingText className="[--shimmer-duration:3.4s]" shimmer={item.live}>
+          {summary}
+        </RollingText>
       </button>
       <WorkExpansionBody expanded={open}>
         <WorkRows item={item} renderRow={renderRow} />

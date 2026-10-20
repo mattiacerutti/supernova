@@ -1,4 +1,6 @@
+import {createContext, useContext} from "react";
 import type {ReactNode} from "react";
+import RollingText from "@/components/ui/rolling-text";
 import FileIcon from "@/features/workspace/components/file-tree/file-icon";
 import {fileName, readLineRange, skillName, toolView} from "@/features/sessions/lib/timeline/work/tool-details";
 import type {ToolView} from "@/features/sessions/lib/timeline/work/tool-details";
@@ -6,6 +8,8 @@ import type {SessionToolCall} from "@/features/sessions/types/session-turn";
 import {cn} from "@/lib/cn";
 
 type ViewOf<Kind extends ToolView["kind"]> = Extract<ToolView, {kind: Kind}>;
+
+const TitleAnimationContext = createContext(false);
 
 function verb(pending: boolean, running: string, done: string): string {
   return pending ? running : done;
@@ -26,12 +30,25 @@ function diffStats(patch: string): {readonly additions: number; readonly deletio
   return {additions, deletions};
 }
 
+interface TitleTextProps {
+  readonly children: string;
+}
+
+function TitleText(props: TitleTextProps) {
+  const animateOnMount = useContext(TitleAnimationContext);
+  return <RollingText animateOnMount={animateOnMount}>{props.children}</RollingText>;
+}
+
 interface LabelProps {
-  readonly children: ReactNode;
+  readonly children: string;
 }
 
 function Label(props: LabelProps) {
-  return <span className="shrink-0">{props.children}</span>;
+  return (
+    <span className="shrink-0">
+      <TitleText>{props.children}</TitleText>
+    </span>
+  );
 }
 
 interface ArgumentProps {
@@ -56,7 +73,7 @@ function FileArgument(props: FileArgumentProps) {
   return (
     <Argument>
       <FileIcon className="size-3.5 translate-y-0.5 opacity-80" path={path} />
-      <span className="min-w-0 truncate">{fileName(path)}</span>
+      <TitleText>{fileName(path)}</TitleText>
       {children}
     </Argument>
   );
@@ -73,7 +90,7 @@ function TextArgument(props: TextArgumentProps) {
 
   return (
     <Argument className={cn(mono && "font-mono text-[0.8125rem]")}>
-      <span className="min-w-0 truncate">{children}</span>
+      <TitleText>{children}</TitleText>
     </Argument>
   );
 }
@@ -205,11 +222,11 @@ function CustomTitle(props: CustomTitleProps) {
   );
 }
 
-interface ToolTitleProps {
+interface ToolTitleContentProps {
   readonly tool: SessionToolCall;
 }
 
-export default function ToolTitle(props: ToolTitleProps) {
+function ToolTitleContent(props: ToolTitleContentProps) {
   const {tool} = props;
   const view = toolView(tool);
   const pending = tool.status === "pending";
@@ -231,4 +248,18 @@ export default function ToolTitle(props: ToolTitleProps) {
     case "custom":
       return <CustomTitle pending={pending} view={view} />;
   }
+}
+
+interface ToolTitleProps {
+  readonly animateOnMount: boolean;
+  readonly tool: SessionToolCall;
+}
+
+export default function ToolTitle(props: ToolTitleProps) {
+  const {animateOnMount, tool} = props;
+  return (
+    <TitleAnimationContext value={animateOnMount}>
+      <ToolTitleContent tool={tool} />
+    </TitleAnimationContext>
+  );
 }

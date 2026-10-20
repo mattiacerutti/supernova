@@ -1,0 +1,15 @@
+/* One inherited clock keeps all words aligned, independent of the label's width. */
+@property --rolling-shimmer-offset {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+
+@keyframes rolling-shimmer {
+  from {
+    --rolling-shimmer-offset: -20rem;
+  }
+  to {
+    --rolling-shimmer-offset: 20rem;
+  }
+}
