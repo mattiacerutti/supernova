@@ -1,5 +1,6 @@
 import type {UserMessageAttachmentPart, UserMessageContentPart, UserMessageReferencePart} from "@supernova/contracts/services/sessions/schemas";
 import type {Editor, JSONContent} from "@tiptap/react";
+import {Slice, type ResolvedPos} from "@tiptap/pm/model";
 
 function contentPartValue(part: UserMessageContentPart): string {
   if (part.type === "text") return part.text;
@@ -64,6 +65,12 @@ export function contentPartsToEditorContent(parts: readonly UserMessageContentPa
   return {content: [{content, type: "paragraph"}], type: "doc"};
 }
 
+/** The default clipboard parser collapses consecutive newlines into one paragraph boundary. */
+export function parseComposerClipboardText(text: string, context: ResolvedPos): Slice {
+  const content = contentPartsToEditorContent([{type: "text", text: text.replace(/\r\n?/g, "\n")}]);
+  return Slice.maxOpen(context.doc.type.schema.nodeFromJSON(content).content);
+}
+
 type ReferenceNodeAttributes = Omit<UserMessageReferencePart, "type">;
 
 export function createReferenceNode(part: UserMessageReferencePart): JSONContent {
@@ -81,7 +88,11 @@ export function createReferenceNode(part: UserMessageReferencePart): JSONContent
 export function editorToContentParts(editor: Editor): readonly UserMessageContentPart[] {
   const parts: UserMessageContentPart[] = [];
 
-  editor.state.doc.descendants((node) => {
+  editor.state.doc.descendants((node, position) => {
+    if (node.type.name === "paragraph" && position > 0) {
+      pushTextContentPart(parts, "\n");
+    }
+
     if (node.type.name === "text") {
       pushTextContentPart(parts, node.text ?? "");
       return;

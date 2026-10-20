@@ -19,6 +19,7 @@ import type {ClientSlashCommandActions} from "@/features/sessions/lib/composer/e
 import {
   contentPartsToEditorContent,
   editorToContentParts,
+  parseComposerClipboardText,
   textFromComposerContentParts,
   trimComposerContentParts,
 } from "@/features/sessions/lib/composer/editor/composer-content-parts";
@@ -191,6 +192,7 @@ export default function SessionComposer(props: SessionComposerProps) {
       editable: !disabled,
       content: contentPartsToEditorContent(draft.contentParts),
       editorProps: {
+        clipboardTextParser: parseComposerClipboardText,
         attributes: {
           class: cn(
             "scroll-fade-y max-h-48 min-h-10 w-full min-w-0 overflow-y-auto whitespace-pre-wrap wrap-anywhere bg-transparent p-1 text-sm leading-5 text-ink outline-none",
