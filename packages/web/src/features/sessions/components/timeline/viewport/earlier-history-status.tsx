@@ -7,12 +7,19 @@ interface EarlierHistoryStatusProps {
   readonly top: number;
 }
 
-/** Not a virtual row: it lives in the canvas's top padding so TanStack anchors a prepend to the turns themselves. */
+/**
+ * Not a virtual row: it lives in the canvas's top padding so TanStack anchors a prepend to the turns themselves.
+ * It stays mounted far above the viewport; `content-visibility` stops its endless shimmer from repainting every frame there.
+ */
 export default function EarlierHistoryStatus(props: EarlierHistoryStatusProps) {
   const {failed, height, onRetry, top} = props;
 
   return (
-    <div className="absolute inset-x-0 mx-auto flex w-full max-w-3xl items-center justify-center px-5 md:px-8" data-timeline-earlier-history style={{height, top}}>
+    <div
+      className="absolute inset-x-0 mx-auto flex w-full max-w-3xl items-center justify-center px-5 [content-visibility:auto] md:px-8"
+      data-timeline-earlier-history
+      style={{height, top}}
+    >
       {failed ? (
         <p className="flex items-center gap-2 text-sm text-ink-faint" role="alert">
           Unable to load earlier messages.
