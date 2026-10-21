@@ -121,6 +121,16 @@ describe("splitting a running session into committed and live turns", () => {
     }
   });
 
+  it("keeps the settled history when the running turn commits an entry", () => {
+    const items = [user(1, "First"), assistant(2, [{text: "Old", type: "text"}]), user(5, "Second")];
+    const before = buildSessionTurns({entries: {items, remaining: 0, precedingEntryId: null}, live: {}, runStart: 5});
+    const committed = [...items, assistant(6, [{text: "Step", type: "text"}])];
+    const after = buildSessionTurns({entries: {items: committed, remaining: 0, precedingEntryId: null}, live: {}, runStart: 5});
+
+    expect(after.turns, "a run's entries must not rebuild the transcript before it").toBe(before.turns);
+    expect(after.liveTurn?.events).toMatchObject([{type: "assistant", content: "Step"}]);
+  });
+
   it.each(["settlement", "run boundary", "undo", "prepend", "replacement"] as const)("refreshes history after %s", (change) => {
     const items = [user(1, "First"), assistant(2, [{text: "Old", type: "text"}]), user(5, "Second")];
     const session = {entries: {items, remaining: 0, precedingEntryId: null}, live: {}, runStart: 5};
