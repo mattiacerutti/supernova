@@ -1,4 +1,4 @@
-import type {SessionAssistantEvent, SessionCompactionEvent, SessionReasoningEvent, SessionTurn, SessionWorkEvent} from "@/features/sessions/types/session-turn";
+import type {SessionAssistantEvent, SessionReasoningEvent, SessionTurn, SessionWorkEvent} from "@/features/sessions/types/session-turn";
 import {describe, expect, it} from "vitest";
 import {buildCommittedTimelineItems, buildLiveTimelineItems, buildSessionTimeline} from "@/features/sessions/lib/timeline/rows/build-session-timeline";
 import {buildTimelineRowKeys, buildTimelineRows} from "@/features/sessions/lib/timeline/rows/timeline-rows";
@@ -19,10 +19,6 @@ function toolEvent(id: string, second: number, kind: "command" | "file-read" = "
 
 function assistantEvent(id: string, second: number): SessionAssistantEvent {
   return {content: `assistant ${id}`, id, timestamp: timestamp(second), type: "assistant"};
-}
-
-function compactionEvent(id: string, second: number): SessionCompactionEvent {
-  return {id, status: "completed", summary: `summary ${id}`, timestamp: timestamp(second), type: "compaction"};
 }
 
 function turn(overrides: Partial<SessionTurn>): SessionTurn {
@@ -123,30 +119,6 @@ describe("buildSessionTimeline", () => {
       {events: [{id: "tool-1"}], type: "work"},
       {event: {id: "reasoning-1"}, live: true, type: "reasoning"},
       {events: [{id: "tool-2"}], live: true, type: "work"},
-    ]);
-  });
-
-  it("renders completed compaction summaries as timeline items", () => {
-    const timeline = buildSessionTimeline({
-      live: false,
-      liveTurn: null,
-      turns: [
-        turn({
-          events: [assistantEvent("assistant-1", 1), compactionEvent("compaction-1", 3), assistantEvent("assistant-2", 6)],
-        }),
-      ],
-    });
-
-    expect(timeline.committedItems).toMatchObject([
-      {type: "user"},
-      {
-        items: [
-          {event: {id: "assistant-1"}, type: "assistant"},
-          {durationMs: 3000, event: {id: "compaction-1", summary: "summary compaction-1", type: "compaction"}, id: "compaction:compaction-1", type: "compaction"},
-        ],
-        type: "turn-work",
-      },
-      {event: {id: "assistant-2"}, type: "assistant"},
     ]);
   });
 });

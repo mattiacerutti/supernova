@@ -82,10 +82,10 @@ A helper earns a place in `lib/` when several features use it. Something used by
 
 ## Testing
 
-See [Development](development.md#verification) for verification and the test workflow.
+See [Testing](testing.md).
 
-- Protect important user-facing behavior, regressions, and lifecycle boundaries. Avoid tests for trivial rendering, styling, or private hook mechanics.
-- Keep tests under `tests`, with paths aligned to the source feature or shared area they cover.
+- Keep tests under `tests`, with paths aligned to the source feature they cover. Shared builders live in `tests/support`.
+- Do not unit-test hooks, small components, or rendering; cover them through the behavior suite.
 
 ## State management
 

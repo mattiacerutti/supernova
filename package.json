@@ -25,7 +25,8 @@
     "test:e2e": "bun run --filter @supernova/web test:e2e",
     "typecheck": "turbo run typecheck && bun run typecheck:scripts",
     "typecheck:scripts": "tsc --project scripts/tsconfig.json",
-    "prepare": "husky"
+    "prepare": "husky",
+    "test:timeline": "bun run --filter @supernova/web test:timeline"
   },
   "devDependencies": {
     "@types/node": "^22.19.1",

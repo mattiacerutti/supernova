@@ -83,7 +83,8 @@ This is the repository's only `AGENTS.md`. Shared and area-specific conventions 
 | Shared schemas, service payloads, errors, exports              | [Contracts](docs/internal/contracts.md)                 |
 | Sessions, streaming, reconnects, persistence, recovery         | [Session runtime](docs/internal/session-runtime.md)     |
 | Checkpoint capture, restore, Git preservation                  | [Checkpoint system](docs/internal/checkpoint-system.md) |
-| Local setup, verification, test conventions                    | [Development](docs/internal/development.md)             |
+| Local setup and verification commands                          | [Development](docs/internal/development.md)             |
+| Writing, placing, and running tests                            | [Testing](docs/internal/testing.md)                     |
 | Desktop icon assets and generation                             | [Icons](docs/internal/icons.md)                         |
 | Changelog entries and publishing releases                      | [Release](docs/internal/release.md)                     |
 | Writing or reorganizing documentation                          | [Documentation](docs/internal/documentation.md)         |

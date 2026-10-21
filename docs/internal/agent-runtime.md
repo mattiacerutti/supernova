@@ -86,9 +86,7 @@ Keep per-session coordination in the worker, workspace recovery in `checkpoints/
 
 ## Testing
 
-See [Development](development.md#verification) for verification and the test workflow.
+See [Testing](testing.md).
 
-- Tests mirror `src` file for file under `tests/unit` and `tests/integration` (`src/pi/lib/models/map-model.ts` → `tests/unit/pi/lib/models/map-model.test.ts`). Fixtures live in `tests/support`, named for what they build.
-- Reuse support fixtures with real engine sessions in temporary storage, faux providers, and in-memory settings. Seed history by running turns, not by hand-writing engine entries.
-- Assert declared failures by their stable `_tag`, not message classification. Observe values subscribers receive, and use the existing in-memory Chord link for edge tests; remote state tests must actually subscribe.
-- Cover runtime behavior, failure handling, stream and session lifecycle, persistence, emitted events, and cleanup. Prefer real in-memory dependencies over mocks.
+- Tests mirror `src` under `tests/unit` (pure functions only) and `tests/integration` (everything with a dependency). Fixtures live in `tests/support`, named for what they build.
+- Cover runtime behavior, failure handling, stream and session lifecycle, persistence, emitted events, and cleanup.

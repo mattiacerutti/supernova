@@ -6,9 +6,21 @@ import {join} from "node:path";
 import {promisify} from "node:util";
 import type {AssistantMessage} from "@earendil-works/pi-ai";
 import {afterEach, describe, expect, it} from "vitest";
+import {FileCheckpointStore} from "@supernova/agent-runtime/features/session-runtime/checkpoints/checkpoint-store";
+import type {CheckpointStore} from "@supernova/agent-runtime/features/session-runtime/checkpoints/checkpoint-store";
 import type {SessionRuntime} from "@supernova/agent-runtime/features/session-runtime/session-runtime";
 import type {ModelReference, Session} from "@supernova/contracts/services/sessions/schemas";
-import {createPiTestRuntime, fauxAssistantMessage, selectedModelReference, selectedPiModel, turnContents, turnIds, undoneContents, waitUntil} from "@tests/support/session-runtime";
+import {
+  assistantTexts,
+  createPiTestRuntime,
+  fauxAssistantMessage,
+  selectedModelReference,
+  selectedPiModel,
+  turnContents,
+  turnIds,
+  undoneContents,
+  waitUntil,
+} from "@tests/support/session-runtime";
 
 const execFilePromise = promisify(execFile);
 
@@ -508,6 +520,48 @@ describe("checkpoint navigation", () => {
       else await expect(readFile(join(childPath, "child.txt"), "utf8")).resolves.toBe(expectedContents);
     }
   );
+
+  // TODO(pi-tasks): enable once checkpoints run as Pi tasks. The after-checkpoint lands after the run is published as
+  // finished, so an undo in between restores the wrong checkpoint; pi-durable extensions cannot yet start such a task.
+  it.skip("restores files on an undo that arrives before the finished turn's after-checkpoint is captured", async () => {
+    const projectPath = await createGitProject();
+    tempDirs.push(projectPath);
+    const storageRoot = mkdtempSync(join(tmpdir(), "supernova-checkpoint-storage-"));
+    tempDirs.push(storageRoot);
+    const files = new FileCheckpointStore(storageRoot);
+    // Holds the after-turn capture, as a slow capture of a large repository would.
+    let captures = 0;
+    let releaseCapture!: () => void;
+    const captureReleased = new Promise<void>((resolve) => (releaseCapture = resolve));
+    const checkpointStore: CheckpointStore = {
+      capture: async (input) => {
+        if (captures++ > 0) await captureReleased;
+        await files.capture(input);
+      },
+      deleteSession: (input) => files.deleteSession(input),
+      restore: (input) => files.restore(input),
+    };
+    const pi = await createPiTestRuntime({checkpointStore});
+    runtimes.push(pi);
+    const {info} = await pi.createSession(projectPath);
+    pi.faux.setResponses([
+      async () => {
+        await writeFile(join(projectPath, "file.txt"), "changed\n");
+        return fauxAssistantMessage("changed");
+      },
+    ]);
+    const observation = await pi.observe(info.id);
+
+    await pi.sessionRuntime.sendMessage({contentParts: [{text: "change", type: "text"}], modelReference: selectedModelReference, sessionId: info.id});
+    await waitUntil(() => expect(observation.versions.at(-1)?.live.run === undefined && assistantTexts(observation.versions.at(-1)!).includes("changed")).toBe(true));
+    observation.stop();
+    const undo = pi.sessionRuntime.undoCheckpoint({sessionId: info.id});
+    releaseCapture();
+    await undo;
+
+    await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("initial\n");
+    expect(turnContents(await pi.sessionRuntime.current(info.id))).toEqual([]);
+  });
 
   it("reverts forward to selected undone turns", async () => {
     const projectPath = await createGitProject();
