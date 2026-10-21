@@ -1,5 +1,6 @@
 import type {ModelDetails, ModelReference} from "@supernova/contracts/services/sessions/schemas";
 import type {ModelDefaults} from "@supernova/contracts/services/configuration/schemas";
+import {useMemo} from "react";
 import {resolveComposerModelSelection} from "@/features/sessions/lib/composer/models/model-defaults";
 import {useSessionModels} from "@/features/sessions/api/composer/list-session-models";
 import {modelKey, resolveThinkingLevel, createModelReference} from "@/features/sessions/lib/composer/models/model-reference";
@@ -24,11 +25,13 @@ export interface ModelSelection {
   readonly selectThinkingLevel: (value: string) => void;
 }
 
+// Shared while models load, so the memoized selection below does not recompute every render.
+const NO_MODELS: readonly ModelDetails[] = [];
+
 export function useModelSelection(options: UseModelSelectionOptions): ModelSelection {
   const {defaults, initialSelection, projectPath, sessionId} = options;
 
-  const {data: models, isPending} = useSessionModels(projectPath);
-  const availableModels = models ?? [];
+  const {data: availableModels = NO_MODELS, isPending} = useSessionModels(projectPath);
 
   const storedSessionSelection = useSessionModelsStore((state) => state.models[sessionId]);
   const setSessionModel = useSessionModelsStore((state) => state.setSessionModel);
@@ -38,14 +41,20 @@ export function useModelSelection(options: UseModelSelectionOptions): ModelSelec
   const recordRecentThinkingLevel = useModelPickerStore((state) => state.recordRecentThinkingLevel);
 
   const activeSelection = storedSessionSelection ?? initialSelection;
-  const {selectedModelDetails, modelReference} = resolveComposerModelSelection({
-    models: availableModels,
-    activeSelection,
-    defaults,
-    isNewSession: defaults !== undefined,
-    recentModelKeys,
-    lastThinkingLevel,
-  });
+  // A new reference every render would change every command that sends with it, and with them the whole session page
+  // on each keystroke and streamed frame.
+  const {selectedModelDetails, modelReference} = useMemo(
+    () =>
+      resolveComposerModelSelection({
+        models: availableModels,
+        activeSelection,
+        defaults,
+        isNewSession: defaults !== undefined,
+        recentModelKeys,
+        lastThinkingLevel,
+      }),
+    [activeSelection, availableModels, defaults, lastThinkingLevel, recentModelKeys]
+  );
   const selectedThinkingLabel = selectedModelDetails?.thinkingLevels.find((level) => level.value === modelReference?.thinkingLevel)?.label ?? "Reasoning";
 
   const findModel = (key: string): ModelDetails | undefined => availableModels.find((model) => modelKey(model.providerId, model.id) === key);

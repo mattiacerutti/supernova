@@ -15,6 +15,11 @@ export function useSession(sessionId: string): SessionView & {readonly loadError
   const optimism = useSessionsStore((state) => state.optimism[sessionId]);
   const loadError = useSessionsStore((state) => state.loadErrors[sessionId]);
   // Building turns walks every entry, and the page re-renders on every keystroke in the composer.
-  const view = useMemo(() => sessionView({entry, optimism, session}), [entry, optimism, session]);
-  return {...view, loadError};
+  return useMemo(() => ({...sessionView({entry, optimism, session}), loadError}), [entry, loadError, optimism, session]);
+}
+
+/** The view as it is now, for handlers: reading it when they run keeps them from changing with every document update. */
+export function readSessionView(sessionId: string): SessionView {
+  const {documents, entries, optimism} = useSessionsStore.getState();
+  return sessionView({entry: entries[sessionId], optimism: optimism[sessionId], session: documents[sessionId]});
 }
