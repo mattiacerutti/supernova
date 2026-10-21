@@ -1,4 +1,4 @@
-import {useState} from "react";
+import {useMemo, useState} from "react";
 import SearchField from "@/components/ui/search-field";
 import FileTree from "@/features/workspace/components/file-tree/file-tree";
 import FileTreeSkeleton from "@/features/workspace/components/file-tree/file-tree-skeleton";
@@ -53,6 +53,8 @@ export default function FilesTab(props: FilesTabProps) {
   const files = useWorkspaceFiles(projectPath);
   const setLayout = useWorkspacePanelStore((state) => state.setLayout);
   const [query, setQuery] = useState("");
+  // A large project has thousands of paths; the compiler would rebuild the tree with each keystroke of the search.
+  const tree = useMemo(() => buildTree(files.data?.files ?? []), [files.data?.files]);
 
   const openFile = (path: string): void => {
     setLayout(sessionId, openFileInTabs(useWorkspacePanelStore.getState().layouts[sessionId] ?? EMPTY_LAYOUT, path));
@@ -69,6 +71,7 @@ export default function FilesTab(props: FilesTabProps) {
   const paths = files.data?.files ?? [];
   const needle = query.trim().toLowerCase();
   const searching = needle.length > 0;
+  const matches = searching ? buildFlatList(paths.filter((path) => path.toLowerCase().includes(needle))) : undefined;
 
   return (
     <FileViewer
@@ -82,7 +85,7 @@ export default function FilesTab(props: FilesTabProps) {
               emptyLabel={searching ? "No files match." : "This project has no files."}
               key={searching ? "search" : "tree"}
               label="Project files"
-              nodes={searching ? buildFlatList(paths.filter((path) => path.toLowerCase().includes(needle))) : buildTree(paths)}
+              nodes={matches ?? tree}
               onSelectFile={(node) => node.path !== tab.file && openFile(node.path)}
               selectedPath={tab.file ?? undefined}
             />
