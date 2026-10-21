@@ -69,10 +69,6 @@
   }
 }
 
-.shimmer-text[data-paused] * {
-  animation-play-state: paused;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .shimmer-text-band {
     display: none;
