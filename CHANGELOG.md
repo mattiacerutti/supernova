@@ -12,6 +12,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Fixed
 
+- Screen readers now announce the message composer and the sidebar's pinned, forked, and worktree session markers.
+
 ### Removed
 
 ## [0.7.0]

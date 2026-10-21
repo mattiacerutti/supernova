@@ -9,11 +9,12 @@ interface SidebarProjectSessionsProps {
   readonly activeSessionId: string;
   readonly collapsed: boolean;
   readonly expanded: boolean;
+  readonly projectName: string;
   readonly projectPath: string;
 }
 
 export default function SidebarProjectSessions(props: SidebarProjectSessionsProps) {
-  const {activeSessionId, collapsed, expanded, projectPath} = props;
+  const {activeSessionId, collapsed, expanded, projectName, projectPath} = props;
   const listing = useListProjectSessions(projectPath);
   const sessions = listing.sessions ?? [];
 
@@ -30,7 +31,7 @@ export default function SidebarProjectSessions(props: SidebarProjectSessionsProp
 
   return (
     <div className={cn("overflow-hidden", showsAnything && "py-0.5")} onPointerDown={(event) => event.stopPropagation()}>
-      <ul className="flex flex-col gap-0.5" ref={attachAutoAnimate}>
+      <ul aria-label={`Sessions in ${projectName}`} className="flex flex-col gap-0.5" ref={attachAutoAnimate}>
         {expanded && listing.isPending && (
           <li className="ml-10 inline-flex items-center justify-start gap-2 px-0 py-1 text-sm text-ink-faint">
             Loading sessions

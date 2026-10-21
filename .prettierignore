@@ -1,8 +1,8 @@
 node_modules
 dist
 out
-**/playwright-report
-**/test-results
+packages/web/tests/*/report
+packages/web/tests/*/results
 .turbo
 .cache
 *.tsbuildinfo

@@ -32,6 +32,10 @@ bun x --no-install prettier --check AGENTS.md README.md 'docs/**/*.md'
 
 Check local links and references after moving documents. Documentation-only edits do not require runtime tests unless they change executable examples or release procedures.
 
-Test observable behavior and meaningful failure paths rather than trivial rendering or implementation details. Use isolated fixtures, prefer real in-memory dependencies and narrow replacements at external boundaries, and wait on observable conditions rather than arbitrary sleeps. Clean up processes and resources you start; do not treat live user data as test fixtures.
+Test commands, described in [Testing](testing.md):
 
-Package-specific test scope and placement live in [Web](web.md#testing) and [Agent runtime](agent-runtime.md#testing).
+```sh
+bun run test           # unit and integration
+bun run test:e2e       # behavior E2E
+bun run test:timeline  # timeline visual, only after timeline changes
+```

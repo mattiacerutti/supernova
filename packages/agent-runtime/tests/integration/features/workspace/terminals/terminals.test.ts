@@ -97,6 +97,23 @@ describe("Terminals", () => {
     expect(Object.keys(terminals.state.value.terminals)).toEqual(["c"]);
   });
 
+  // POSIX only: cmd.exe has no way to ignore the hang-up, so Windows never needs the forced kill.
+  it.skipIf(process.platform === "win32")("closing waits for the shell to exit, and forces one that ignores the hang-up", async () => {
+    const cwd = await workspace();
+    await terminals.open({cols: 80, cwd, id: "stubborn", rows: 24, sessionId: "s1"});
+    // A shell that ignores SIGHUP, as a program trapping it would; only the forced kill after the grace period ends it.
+    await terminals.write({data: "trap '' HUP; echo TRAPPED_$((1+1))\n", id: "stubborn"});
+    await output("stubborn", (current) => expect(current.output).toContain("TRAPPED_2"));
+    const outputs = terminals.output("stubborn");
+
+    const started = Date.now();
+    await Promise.all([terminals.close({id: "stubborn"}), terminals.close({id: "stubborn"}), terminals.dispose()]);
+
+    expect(Date.now() - started).toBeGreaterThanOrEqual(900);
+    expect(outputs.value.closed).toBe(true);
+    expect(terminals.state.value.terminals).toEqual({});
+  });
+
   it("caps the scrollback from the front and counts what it dropped", async () => {
     const cwd = await workspace();
     await terminals.open({cols: 80, cwd, id: "big", rows: 24, sessionId: "s1"});

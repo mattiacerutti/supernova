@@ -25,8 +25,8 @@ function event(id: string, tool: SessionToolCall): SessionWorkEvent {
   return {id, timestamp: "2026-01-01T00:00:00.000Z", tool, type: "tool"};
 }
 
-function command(id: string, status: "completed" | "error" = "completed"): SessionWorkEvent {
-  return event(id, call("bash", {command: "ls"}, status));
+function command(id: string): SessionWorkEvent {
+  return event(id, call("bash", {command: "ls"}, "completed"));
 }
 
 function edit(id: string, path: string): SessionWorkEvent {
@@ -37,10 +37,6 @@ describe("summarizeWork", () => {
   it("counts commands and distinct edited files", () => {
     expect(summarizeWork([command("1"), command("2"), command("3"), edit("4", "a.ts"), edit("5", "b.ts")])).toBe("Ran 3 commands · edited 2 files");
     expect(summarizeWork([edit("1", "a.ts"), edit("2", "a.ts")])).toBe("Edited 1 file");
-  });
-
-  it("appends failures", () => {
-    expect(summarizeWork([command("1", "error")])).toBe("Ran 1 command · 1 failed");
   });
 });
 

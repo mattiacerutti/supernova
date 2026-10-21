@@ -194,6 +194,10 @@ export default function SessionComposer(props: SessionComposerProps) {
       editorProps: {
         clipboardTextParser: parseComposerClipboardText,
         attributes: {
+          // ProseMirror's editable has no role or name of its own; assistive technology needs both.
+          "aria-label": "Message",
+          "aria-multiline": "true",
+          role: "textbox",
           class: cn(
             "scroll-fade-y max-h-48 min-h-10 w-full min-w-0 overflow-y-auto whitespace-pre-wrap wrap-anywhere bg-transparent p-1 text-sm leading-5 text-ink outline-none",
             disabled && "cursor-default opacity-60"

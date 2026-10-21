@@ -166,5 +166,9 @@ export default function Icon(props: IconProps) {
   const icon = icons[name];
   const resolvedClassName = cn(sizeClasses[size], "shrink-0", className);
 
-  return <IconifyIcon aria-hidden="true" className={resolvedClassName} icon={icon} ssr {...iconProps} />;
+  // Decorative unless labelled: a caller that names the icon means it to be announced. Iconify hides every icon
+  // unless told otherwise, so a labelled one must say `aria-hidden={false}` explicitly.
+  const decorative = iconProps["aria-label"] === undefined;
+
+  return <IconifyIcon aria-hidden={decorative} className={resolvedClassName} icon={icon} ssr {...iconProps} />;
 }
