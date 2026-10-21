@@ -149,6 +149,15 @@ describe("rebuilding the timeline while a turn streams", () => {
     else expect(after.liveTurn?.events).toMatchObject([{content: "New partial", type: "assistant"}]);
   });
 
+  it("reuses settled turns when the running turn commits an entry", () => {
+    const items = history();
+    const before = buildSessionTurns({entries: page(items), live: {}, runStart: 3});
+    const after = buildSessionTurns({entries: page([...items, ...transcript([assistantEntry("Step")], {firstId: 4})]), live: {}, runStart: 3});
+
+    expect(after.turns, "a run's entries must not rebuild the transcript before it").toBe(before.turns);
+    expect(after.liveTurn?.events).toMatchObject([{content: "Step", type: "assistant"}]);
+  });
+
   it.each(["settlement", "run boundary", "undo", "prepend", "replacement"] as const)("rebuilds settled turns after %s", (change) => {
     const items = history();
     buildSessionTurns({entries: page(items), live: {}, runStart: 3});
