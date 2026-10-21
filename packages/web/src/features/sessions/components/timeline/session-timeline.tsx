@@ -3,7 +3,7 @@ import type {SessionSetupStep} from "@supernova/contracts/services/session-runti
 import {defaultRangeExtractor, elementScroll, observeElementOffset, useVirtualizer} from "@tanstack/react-virtual";
 import type {VirtualItem} from "@tanstack/react-virtual";
 import {useReducedMotion} from "framer-motion";
-import {useCallback, useLayoutEffect, useRef, useState} from "react";
+import {useCallback, useLayoutEffect, useMemo, useRef, useState} from "react";
 import type {KeyboardEvent, PointerEvent, UIEvent} from "react";
 import {MessageScroller, MessageScrollerContent, MessageScrollerProvider, MessageScrollerViewport} from "@/features/sessions/components/timeline/viewport/message-scroller";
 import EarlierHistoryStatus from "@/features/sessions/components/timeline/viewport/earlier-history-status";
@@ -25,6 +25,7 @@ const TIMELINE_STREAM_SCROLL_ANIMATION_MS = 160;
 const TIMELINE_STREAM_SCROLL_MAX_OFFSET_PX = 56;
 
 const timelineCache = new Map<string, VirtualItem[]>();
+
 
 /** Transform-only, so it runs on the compositor and never triggers layout while streaming. */
 function animateCatchUp(element: HTMLElement, offset: number, current: Animation | null, maxOffset = TIMELINE_STREAM_SCROLL_MAX_OFFSET_PX): Animation {
@@ -107,7 +108,16 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
   if (!hasLiveOutput) streamAnimationReadyRef.current = false;
 
   const pullStatusIntoLastMessage = hasLiveOutput && liveItems.at(-1)?.spacing === "message";
-  const virtualRowKeys = buildTimelineRowKeys(timelineRows, earlierHistory.count);
+  // Not compiled (TanStack Virtual), so the history's share is memoized by hand: these walk every loaded row, and the
+  // timeline renders on every streamed frame and scroll range change. A stable `getItemKey` also spares TanStack
+  // from re-measuring every row on each render.
+  const committedRowKeys = useMemo(() => buildTimelineRowKeys(items, earlierHistory.count), [earlierHistory.count, items]);
+  const committedTurns = useMemo(() => ({ids: new Set(items.map((item) => item.turnId)), starts: items.filter((item) => item.type === "user").length}), [items]);
+  // Live rows open a new turn, so their keys continue from the history's turn count.
+  const tailRowKeySignature = buildTimelineRowKeys(timelineRows.slice(committedRowKeys.length), earlierHistory.count + committedTurns.starts).join(" ");
+  const tailRowKeys = useMemo(() => (tailRowKeySignature ? tailRowKeySignature.split(" ") : []), [tailRowKeySignature]);
+  const getItemKey = useCallback((index: number) => committedRowKeys[index] ?? tailRowKeys[index - committedRowKeys.length] ?? index, [committedRowKeys, tailRowKeys]);
+  const firstRowKey = committedRowKeys[0] ?? tailRowKeys[0];
   const hasEarlierHistory = earlierHistory.count > 0;
   // The status sits in the canvas's top padding rather than in a row, so loaded turns go in below it.
   const paddingStart = TIMELINE_ANCHOR_TOP_MARGIN_PX + (hasEarlierHistory ? TIMELINE_EARLIER_HISTORY_HEIGHT_PX : 0);
@@ -119,7 +129,7 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
   const previousHasLiveUserRowRef = useRef(hasLiveUserRow);
 
   // Distinct, so a settling turn rendered by both projections counts once.
-  const turnCount = new Set([...items, ...liveItems].map((item) => item.turnId)).size;
+  const turnCount = committedTurns.ids.size + (activeTurnId !== null && !committedTurns.ids.has(activeTurnId) ? 1 : 0);
   const previousTurnCountRef = useRef(turnCount);
 
   // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual owns mutable scroll state by design.
@@ -139,7 +149,7 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
       }
       if (!scrolling) syncViewport();
     },
-    getItemKey: (index) => virtualRowKeys[index] ?? index,
+    getItemKey,
     getScrollElement: () => viewportRef.current,
     initialMeasurementsCache: timelineCache.get(sessionId),
     observeElementOffset: (instance, onOffsetChange) => {
@@ -281,14 +291,14 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
   const firstRowRef = useRef<{readonly key: string; readonly start: number} | null>(null);
   const prependRef = useRef<{readonly shift: number; readonly beforeIndex: number} | null>(null);
   const previousFirstRow = firstRowRef.current;
-  const prependedIndex = previousFirstRow ? virtualRowKeys.indexOf(previousFirstRow.key) : -1;
+  const prependedIndex = previousFirstRow ? committedRowKeys.indexOf(previousFirstRow.key) : -1;
   virtualizer.getTotalSize();
   if (previousFirstRow && prependedIndex > 0) {
     const shift = (virtualizer.measurementsCache[prependedIndex]?.start ?? previousFirstRow.start) - previousFirstRow.start;
     virtualizer.scrollOffset = (virtualizer.scrollOffset ?? 0) + shift;
     prependRef.current = {shift: (prependRef.current?.shift ?? 0) + shift, beforeIndex: prependedIndex};
   }
-  firstRowRef.current = virtualRowKeys[0] === undefined ? null : {key: virtualRowKeys[0], start: virtualizer.measurementsCache[0]?.start ?? paddingStart};
+  firstRowRef.current = firstRowKey === undefined ? null : {key: firstRowKey, start: virtualizer.measurementsCache[0]?.start ?? paddingStart};
 
   const virtualItems = virtualizer.getVirtualItems();
 
