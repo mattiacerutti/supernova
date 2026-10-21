@@ -1,0 +1,80 @@
+/*
+ * Same look as shadcn's `shimmer`, drawn on the compositor. That utility moves a gradient clipped to the glyphs, which
+ * repaints the text on the main thread every frame. Here the text keeps its color and a copy in the highlight color
+ * sits on top, seen through a band-shaped mask: the mask layer slides one way while the copy inside slides back by the
+ * same distance, so the glyphs stay put and only the band sweeps. Both are transform animations.
+ *
+ * The copy adds what the gradient adds at full glyph coverage: in light, the surface color at 80% over the text (the
+ * highlight is the text at 20% alpha); in dark, the lifted text color at 0.4 / (1 - alpha) over it.
+ */
+.shimmer-text {
+  --shimmer-text-spread: calc(3ch + 40px);
+  position: relative;
+  display: inline-block;
+  overflow: clip;
+  vertical-align: bottom;
+}
+
+.shimmer-text-band {
+  --shimmer-text-band: linear-gradient(
+    110deg,
+    transparent calc(50% - var(--shimmer-text-spread)),
+    rgb(0 0 0 / 0.5) calc(50% - var(--shimmer-text-spread) * 0.5),
+    #000 50%,
+    rgb(0 0 0 / 0.5) calc(50% + var(--shimmer-text-spread) * 0.5),
+    transparent calc(50% + var(--shimmer-text-spread))
+  );
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(200% + var(--shimmer-text-spread) * 2);
+  pointer-events: none;
+  -webkit-mask-image: var(--shimmer-text-band);
+  mask-image: var(--shimmer-text-band);
+  animation: shimmer-text-band var(--shimmer-duration, 2s) linear infinite;
+}
+
+.shimmer-text-copy {
+  /* The label's width, so its shift exactly cancels the band's. */
+  display: block;
+  width: calc((100% - var(--shimmer-text-spread) * 2) / 2);
+  white-space: nowrap;
+  color: var(--theme-surface);
+  opacity: 0.8;
+  animation: shimmer-text-copy var(--shimmer-duration, 2s) linear infinite;
+}
+
+/* Keyed to the system scheme, as shadcn's `shimmer` is (its `dark` variant is this media query). */
+@media (prefers-color-scheme: dark) {
+  .shimmer-text-copy {
+    color: oklch(from currentColor max(0.8, calc(l + 0.4)) c h / calc(0.4 / (1 - alpha)));
+    opacity: 1;
+  }
+}
+
+@keyframes shimmer-text-band {
+  from {
+    transform: translateX(calc(-50% - var(--shimmer-text-spread)));
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes shimmer-text-copy {
+  from {
+    transform: translateX(calc(100% + var(--shimmer-text-spread) * 2));
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.shimmer-text[data-paused] * {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shimmer-text-band {
+    display: none;
+  }
+}

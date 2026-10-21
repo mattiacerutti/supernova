@@ -1,10 +1,11 @@
 import Button from "@/components/ui/button";
+import ShimmerText from "@/components/ui/shimmer-text";
 
-/** Pauses the shimmer while the status is out of view: it stays mounted far above the viewport, and an endless shimmer there repaints every frame. */
+/** Pauses the shimmer while the status is out of view: it stays mounted far above the viewport, where an endless sweep would keep producing frames. */
 function pauseShimmerOffscreen(element: HTMLElement | null): (() => void) | undefined {
   if (!element) return;
   const observer = new IntersectionObserver(([entry]) => {
-    element.dataset.offscreen = String(!entry?.isIntersecting);
+    element.toggleAttribute("data-paused", !entry?.isIntersecting);
   });
   observer.observe(element);
   return () => observer.disconnect();
@@ -31,8 +32,8 @@ export default function EarlierHistoryStatus(props: EarlierHistoryStatusProps) {
           </Button>
         </p>
       ) : (
-        <p className="shimmer text-sm text-ink-faint data-[offscreen=true]:[animation-play-state:paused]" ref={pauseShimmerOffscreen} role="status">
-          Loading earlier messages
+        <p className="text-sm text-ink-faint" role="status">
+          <ShimmerText ref={pauseShimmerOffscreen}>Loading earlier messages</ShimmerText>
         </p>
       )}
     </div>
