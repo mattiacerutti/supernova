@@ -3,6 +3,7 @@ import type {AnimationPlaybackControls} from "framer-motion";
 import {useLayoutEffect, useRef, useState} from "react";
 import {cn} from "@/lib/cn";
 import "@/components/ui/rolling-text.css";
+import "@/components/ui/shimmer-text.css";
 
 const DURATION = 0.55;
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -37,13 +38,15 @@ function wordXs(line: HTMLElement, words: readonly string[]): readonly number[] 
 }
 
 interface RollLayerProps {
-  readonly onDone: () => void;
+  /** The live shimmer's copy replays the label's roll with the same timing but leaves sizing and completion to it. */
+  readonly copy?: boolean;
+  readonly onDone?: () => void;
   readonly paintClassName: string;
   readonly roll: Roll;
 }
 
 function RollLayer(props: RollLayerProps) {
-  const {onDone, paintClassName, roll} = props;
+  const {copy = false, onDone, paintClassName, roll} = props;
   const ref = useRef<HTMLSpanElement>(null);
   const from = roll.from.match(/\s+|\S+/g) ?? [];
   const to = roll.to.match(/\s+|\S+/g) ?? [];
@@ -73,19 +76,19 @@ function RollLayer(props: RollLayerProps) {
     rollWords("[data-entering]", toXs, {opacity: [0, 1], top: ["100%", "0%"]});
 
     let cancelled = false;
-    void Promise.all(controls).then(() => !cancelled && onDone());
+    void Promise.all(controls).then(() => !cancelled && onDone?.());
 
     const suffixElement = layer.querySelector<HTMLElement>("[data-suffix]");
     if (suffixElement) {
       const x = toXs[to.length - suffix]!;
       controls.push(animate(suffixElement, {"--rolling-word-x": [`${fromXs[from.length - suffix]}px`, `${x}px`]}, LAYOUT_TRANSITION));
     }
-    controls.push(animate(label, {width: [fromLine!.getBoundingClientRect().width, toLine!.getBoundingClientRect().width]}, LAYOUT_TRANSITION));
+    if (!copy) controls.push(animate(label, {width: [fromLine!.getBoundingClientRect().width, toLine!.getBoundingClientRect().width]}, LAYOUT_TRANSITION));
 
     return () => {
       cancelled = true;
       controls.forEach((control) => control.stop());
-      label.style.width = "";
+      if (!copy) label.style.width = "";
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -136,23 +139,31 @@ export default function RollingText(props: RollingTextProps) {
     setRoll(reduceMotion ? null : {from: text, to: children});
   }
 
-  const paintClassName = cn(
-    "left-[var(--rolling-word-x,0px)]",
-    shimmer && "shimmer shimmer-angle-0 animate-none bg-size-[40rem_100%] bg-repeat bg-position-[calc(var(--rolling-shimmer-offset)-var(--rolling-word-x,0px))_0]"
+  const paintClassName = "left-[var(--rolling-word-x,0px)]";
+  const plainLabel = <span className={cn("min-w-0 truncate whitespace-pre", paintClassName, roll && "opacity-0")}>{children}</span>;
+
+  // The label's glyphs and its roll, replayed under each shimmer layer: base color outside the band, highlight inside.
+  const shimmerLayer = (band: boolean) => (
+    <span className={cn("rolling-text-shimmer-layer shimmer-layer", band && "shimmer-layer-band")}>
+      <span className="rolling-text-shimmer-copy">
+        {plainLabel}
+        {roll && <RollLayer copy key={roll.to} paintClassName={paintClassName} roll={roll} />}
+      </span>
+    </span>
   );
 
   return (
-    <span
-      className={cn(
-        "relative inline-flex min-w-0 max-w-full",
-        shimmer && "animate-[rolling-shimmer_var(--shimmer-duration,2s)_linear_infinite] motion-reduce:animate-none",
-        className
-      )}
-    >
+    <span className={cn("relative inline-flex min-w-0 max-w-full", shimmer && "shimmer-group", className)}>
       {/* The plain label holds the layout and stays readable to assistive technology; it is only hidden while a roll draws. */}
-      <span className={cn("min-w-0 truncate whitespace-pre", paintClassName, roll && "opacity-0")}>{children}</span>
+      {plainLabel}
       {/* Consecutive rolls always end on different text, so this remounts the layer for each change. */}
       {roll && <RollLayer key={roll.to} onDone={() => setRoll(null)} paintClassName={paintClassName} roll={roll} />}
+      {shimmer && (
+        <span aria-hidden="true" className="rolling-text-shimmer">
+          {shimmerLayer(false)}
+          {shimmerLayer(true)}
+        </span>
+      )}
     </span>
   );
 }

@@ -6,14 +6,17 @@ interface ShimmerTextProps {
   readonly className?: string;
 }
 
-/** Text with a sweeping highlight, animated on the compositor so it costs no main-thread work per frame. */
+/** Single-line text with a sweeping highlight, animated on the compositor so it costs no main-thread work per frame. */
 export default function ShimmerText(props: ShimmerTextProps) {
   const {children, className} = props;
 
   return (
-    <span className={cn("shimmer-text", className)}>
+    <span className={cn("shimmer-text shimmer-group", className)}>
       {children}
-      <span aria-hidden="true" className="shimmer-text-band">
+      <span aria-hidden="true" className="shimmer-text-layer shimmer-layer">
+        <span className="shimmer-text-copy">{children}</span>
+      </span>
+      <span aria-hidden="true" className="shimmer-text-layer shimmer-layer shimmer-layer-band">
         <span className="shimmer-text-copy">{children}</span>
       </span>
     </span>

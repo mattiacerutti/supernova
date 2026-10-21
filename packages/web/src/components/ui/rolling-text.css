@@ -1,15 +1,52 @@
-/* One inherited clock keeps all words aligned, independent of the label's width. */
-@property --rolling-shimmer-offset {
-  syntax: "<length>";
-  inherits: true;
-  initial-value: 0px;
+/*
+ * Where `RollingText` places the shared shimmer layers (`shimmer-text.css`). The geometry is the shadcn shimmer this
+ * replaced: a vertical band in a 40rem tile that repeats, sweeping one tile per period so the loop is seamless, laid in
+ * the label's coordinates so it runs straight across rolling words. Each layer starts 60rem left of the label, which
+ * puts a band centre on the label's left edge as the sweep begins and keeps the label covered throughout.
+ */
+.rolling-text-shimmer {
+  --shimmer-layer-angle: 90deg;
+  position: absolute;
+  inset: 0;
+  overflow: clip;
 }
 
-@keyframes rolling-shimmer {
+.rolling-text-shimmer-layer {
+  position: absolute;
+  inset-block: 0;
+  left: -60rem;
+  width: calc(100% + 60rem);
+  -webkit-mask-size: 40rem 100%;
+  mask-size: 40rem 100%;
+  -webkit-mask-repeat: repeat-x;
+  mask-repeat: repeat-x;
+  animation: rolling-text-shimmer-layer var(--shimmer-duration, 2s) linear infinite;
+}
+
+.rolling-text-shimmer-copy {
+  /* Laid out exactly as the label below it, which is as wide as the layer minus its lead. */
+  position: absolute;
+  inset-block: 0;
+  left: 60rem;
+  display: flex;
+  width: calc(100% - 60rem);
+  animation: rolling-text-shimmer-copy var(--shimmer-duration, 2s) linear infinite;
+}
+
+@keyframes rolling-text-shimmer-layer {
   from {
-    --rolling-shimmer-offset: -20rem;
+    transform: translateX(0);
   }
   to {
-    --rolling-shimmer-offset: 20rem;
+    transform: translateX(40rem);
+  }
+}
+
+@keyframes rolling-text-shimmer-copy {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-40rem);
   }
 }
