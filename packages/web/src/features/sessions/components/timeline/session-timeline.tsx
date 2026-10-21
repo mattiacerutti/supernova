@@ -26,7 +26,6 @@ const TIMELINE_STREAM_SCROLL_MAX_OFFSET_PX = 56;
 
 const timelineCache = new Map<string, VirtualItem[]>();
 
-
 /** Transform-only, so it runs on the compositor and never triggers layout while streaming. */
 function animateCatchUp(element: HTMLElement, offset: number, current: Animation | null, maxOffset = TIMELINE_STREAM_SCROLL_MAX_OFFSET_PX): Animation {
   const transform = window.getComputedStyle(element).transform;
