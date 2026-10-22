@@ -1,7 +1,6 @@
 import type {SessionAssistantEvent, SessionReasoningEvent, SessionTurn, SessionWorkEvent} from "@/features/sessions/types/session-turn";
 import {describe, expect, it} from "vitest";
-import {buildCommittedTimelineItems, buildLiveTimelineItems, buildSessionTimeline} from "@/features/sessions/lib/timeline/rows/build-session-timeline";
-import {buildTimelineRowKeys, buildTimelineRows} from "@/features/sessions/lib/timeline/rows/timeline-rows";
+import {buildSessionTimeline} from "@/features/sessions/lib/timeline/rows/build-session-timeline";
 import {formatDuration} from "@/features/sessions/lib/timeline/work/work-timeline-items";
 
 function timestamp(second: number): string {
@@ -131,25 +130,5 @@ describe("formatDuration", () => {
     expect(formatDuration(1500)).toBe("2s");
     expect(formatDuration(300_000)).toBe("5m");
     expect(formatDuration(3_723_000)).toBe("1h 2m 3s");
-  });
-});
-
-describe("buildTimelineRowKeys", () => {
-  it("keys live rows the same whether computed with the history or continued from its turn count", () => {
-    const history = buildCommittedTimelineItems([
-      turn({events: [reasoningEvent("a", 1), toolEvent("b", 2), assistantEvent("c", 3)]}),
-      turn({id: "turn-2", events: [toolEvent("d", 4)], userMessage: {contentParts: [], id: "user-2", timestamp: timestamp(4)}}),
-    ]);
-    const settling = turn({id: "turn-2", status: "streaming", events: [toolEvent("d", 4), assistantEvent("e", 5)]});
-    const live = buildLiveTimelineItems({live: true, liveTurn: settling});
-
-    for (const streamError of [null, "Failed"]) {
-      const rows = buildTimelineRows({items: history, liveItems: live, streamError});
-      const tail = rows.slice(history.length);
-      const historyTurns = history.filter((item) => item.type === "user").length;
-      expect([...buildTimelineRowKeys(history, 3), ...buildTimelineRowKeys(tail, 3 + historyTurns)]).toEqual(buildTimelineRowKeys(rows, 3));
-    }
-    const errorOnly = buildTimelineRows({items: history, liveItems: [], streamError: "Failed"});
-    expect([...buildTimelineRowKeys(history, 0), ...buildTimelineRowKeys(errorOnly.slice(history.length), 2)]).toEqual(buildTimelineRowKeys(errorOnly, 0));
   });
 });

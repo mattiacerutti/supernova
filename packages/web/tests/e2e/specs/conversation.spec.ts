@@ -17,6 +17,22 @@ test.describe("a conversation", () => {
     await app.timeline.expectExchange("Plan the refactor", "Here is the plan.");
   });
 
+  test("shows code in an answer highlighted for its language, and after a reload", async ({app, model}) => {
+    model.reply("Here it is:\n\n```ts\nconst answer: number = 42;\n```");
+
+    await app.composer.send("Show me the code");
+
+    // Highlighting replaces the plain block once it is ready; each token is its own colored span.
+    const token = (text: string) => app.timeline.root.locator("pre.shiki .line > span").filter({hasText: new RegExp(`^\\s*${text}\\s*$`)});
+    await expect(token("const")).toBeVisible();
+    const keywordColor = await token("const").evaluate((element) => getComputedStyle(element).color);
+    const numberColor = await token("42").evaluate((element) => getComputedStyle(element).color);
+    expect(keywordColor).not.toBe(numberColor);
+
+    await app.reload();
+    await expect(token("const")).toHaveCSS("color", keywordColor);
+  });
+
   test("sends the whole conversation to the model on the next turn", async ({app, model}) => {
     model.reply("First answer.").reply("Second answer.");
 
