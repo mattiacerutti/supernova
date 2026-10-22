@@ -1,5 +1,5 @@
 import type {FileDiffOptions, FileOptions} from "@pierre/diffs";
-import {CODE_HIGHLIGHT_THEMES} from "@/lib/diffs/highlighter";
+import {CODE_HIGHLIGHT_THEMES} from "@/lib/highlighter/constants";
 
 const SUPERNOVA_DIFF_VIEW_CSS = `
 :host {

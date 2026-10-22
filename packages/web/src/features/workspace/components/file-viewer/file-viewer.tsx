@@ -4,7 +4,7 @@ import type {ReactNode} from "react";
 import Icon from "@/components/ui/icon";
 import IconButton from "@/components/ui/icon-button";
 import {cn} from "@/lib/cn";
-import {diffWorkerPool} from "@/lib/diffs/worker-pool";
+import {highlightWorkerPool} from "@/lib/highlighter/worker-pool";
 import {useSettingsStore} from "@/stores/settings-store";
 
 interface PathBreadcrumbProps {
@@ -76,7 +76,7 @@ export default function FileViewer(props: FileViewerProps) {
       <div className="@container flex min-h-0 flex-1">
         {hasFile && (
           // Without the pool in context, Pierre tokenizes every opened file and diff on the main thread.
-          <WorkerPoolContext value={diffWorkerPool(mode)}>
+          <WorkerPoolContext value={highlightWorkerPool(mode)}>
             <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
           </WorkerPoolContext>
         )}

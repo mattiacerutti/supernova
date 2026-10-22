@@ -1,19 +1,13 @@
-import {getResolvedOrResolveLanguage, getResolvedOrResolveTheme, getSharedHighlighter} from "@pierre/diffs";
-import type {DiffsHighlighter, HighlighterTypes, SupportedLanguages} from "@pierre/diffs";
+import {getResolvedOrResolveTheme, getSharedHighlighter} from "@pierre/diffs";
+import type {DiffsHighlighter, SupportedLanguages, ThemedFileResult} from "@pierre/diffs";
+import {toHtml} from "hast-util-to-html";
 import {LRUCache} from "lru-cache";
 import murmurHash from "imurmurhash";
-import type {HighlightRequest, HighlightResponse} from "@/lib/diffs/highlight-worker";
-import HighlightWorker from "@/lib/diffs/highlight-worker?worker";
-
-export const CODE_HIGHLIGHT_ENGINE: HighlighterTypes = "shiki-js";
+import {CODE_HIGHLIGHT_ENGINE, CODE_HIGHLIGHT_THEMES} from "@/lib/highlighter/constants";
+import {getHighlightWorkerPool} from "@/lib/highlighter/worker-pool";
 
 const MAX_HIGHLIGHT_CACHE_ENTRIES = 500;
 const MAX_HIGHLIGHT_CACHE_MEMORY_BYTES = 50 * 1024 * 1024;
-
-export const CODE_HIGHLIGHT_THEMES = {
-  dark: "github-dark",
-  light: "github-light",
-} as const;
 
 type CodeHighlightTheme = (typeof CODE_HIGHLIGHT_THEMES)[keyof typeof CODE_HIGHLIGHT_THEMES];
 
@@ -78,58 +72,37 @@ function highlightOnMainThread(input: {readonly code: string; readonly language:
   });
 }
 
-let worker: Worker | null | undefined;
-let nextRequestId = 0;
-const workerRequests = new Map<number, (html: string | null) => void>();
-
-/** `null` once the worker failed: highlighting then runs on the main thread, as before the worker existed. */
-function highlightWorker(): Worker | null {
-  if (worker !== undefined) return worker;
-  try {
-    const created = new HighlightWorker();
-    created.addEventListener("message", (event: MessageEvent<HighlightResponse>) => {
-      workerRequests.get(event.data.id)?.(event.data.html);
-      workerRequests.delete(event.data.id);
-    });
-    created.addEventListener("error", () => {
-      worker = null;
-      created.terminate();
-      for (const resolve of workerRequests.values()) resolve(null);
-      workerRequests.clear();
-    });
-    worker = created;
-  } catch {
-    worker = null;
-  }
-  return worker;
-}
-
-/** An unknown language resolves to `null` and renders as text, as the main-thread fallback does. */
-async function resolvedLanguage(language: string): Promise<HighlightRequest["language"]> {
-  if (language === "text") return null;
-  try {
-    const resolved = await getResolvedOrResolveLanguage(language as Exclude<SupportedLanguages, "text">);
-    return {name: resolved.name, data: sentToWorker.has(resolved.name) ? [] : resolved.data};
-  } catch {
-    return null;
-  }
-}
-
-// Grammars and themes are large; the worker keeps what it was sent once, so later requests only name them.
-const sentToWorker = new Set<string>();
-
-async function highlightInWorker(input: {readonly code: string; readonly language: string; readonly theme: CodeHighlightTheme}): Promise<string> {
-  const target = highlightWorker();
-  if (!target) return highlightOnMainThread(input);
-  const [language, theme] = await Promise.all([resolvedLanguage(input.language), sentToWorker.has(input.theme) ? input.theme : getResolvedOrResolveTheme(input.theme)]);
-  const id = nextRequestId++;
-  const html = await new Promise<string | null>((resolve) => {
-    workerRequests.set(id, resolve);
-    target.postMessage({id, code: input.code, language, theme} satisfies HighlightRequest);
-    if (language) sentToWorker.add(language.name);
-    sentToWorker.add(input.theme);
+/** Pierre's highlighted lines, wrapped as Shiki's `codeToHtml` wraps them, so both paths produce the same markup. */
+async function shikiHtml(lines: ThemedFileResult["code"], theme: CodeHighlightTheme): Promise<string> {
+  const {bg, fg, name} = await getResolvedOrResolveTheme(theme);
+  const children = lines.flatMap((line, index) => {
+    // Pierre gives an empty line a newline so its row keeps a height; Shiki leaves the line's span empty.
+    const empty = line.type === "element" && line.children.length === 1 && line.children[0]?.type === "text" && line.children[0].value === "\n";
+    const span = {type: "element", tagName: "span", properties: {class: "line"}, children: empty || line.type !== "element" ? [] : line.children} as const;
+    return index === 0 ? [span] : [{type: "text", value: "\n"} as const, span];
   });
-  return html ?? highlightOnMainThread(input);
+  return toHtml({
+    type: "element",
+    tagName: "pre",
+    properties: {class: `shiki ${name}`, style: `background-color:${bg};color:${fg}`, tabindex: "0"},
+    children: [{type: "element", tagName: "code", properties: {}, children}],
+  });
+}
+
+/** `undefined` when the pool cannot highlight this block as the main thread would, which then does. */
+async function highlightInPool(input: {readonly code: string; readonly key: string; readonly language: string; readonly theme: CodeHighlightTheme}): Promise<string | undefined> {
+  if (input.language === "text") return undefined;
+  const pool = await getHighlightWorkerPool(input.theme === CODE_HIGHLIGHT_THEMES.dark ? "dark" : "light");
+  if (!pool) return undefined;
+  const {theme, tokenizeMaxLineLength} = pool.getFileRenderOptions();
+  // The pool leaves lines this long untokenized, and a theme switch may still be applying.
+  if (theme !== input.theme || input.code.split("\n").some((line) => line.length >= tokenizeMaxLineLength)) return undefined;
+  const file = {cacheKey: `code-block:${input.key}`, contents: input.code, lang: input.language as SupportedLanguages, name: ""};
+  await pool.primeFileHighlightCache(file);
+  const lines = pool.getFileResultCache(file)?.result.code;
+  // Our cache keeps the markup; leaving the lines in the pool's would push out the diffs it caches.
+  pool.evictFileFromCache(file.cacheKey);
+  return lines && shikiHtml(lines, input.theme);
 }
 
 interface HighlightedCodeHtmlInput {
@@ -155,7 +128,9 @@ export function highlightCode(input: HighlightedCodeHtmlInput): Promise<string> 
   const pending = pendingCodeHighlightingCache.get(key);
   if (pending) return pending;
 
-  const highlighted = highlightInWorker({code: input.code, language, theme})
+  const highlighted = highlightInPool({code: input.code, key, language, theme})
+    .catch(() => undefined)
+    .then((html) => html ?? highlightOnMainThread({code: input.code, language, theme}))
     .catch(() => plainCodeHtml(input.code))
     .then((html) => {
       highlightedCodeCache.set(key, html, {size: estimateHighlightedCodeSize(html, input.code)});

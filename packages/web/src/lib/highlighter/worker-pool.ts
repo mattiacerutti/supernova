@@ -1,7 +1,7 @@
 import {getOrCreateWorkerPoolSingleton, terminateWorkerPoolSingleton} from "@pierre/diffs/worker";
 import type {WorkerPoolManager} from "@pierre/diffs/worker";
 import DiffWorker from "@pierre/diffs/worker/worker.js?worker";
-import {CODE_HIGHLIGHT_ENGINE, CODE_HIGHLIGHT_THEMES} from "@/lib/diffs/highlighter";
+import {CODE_HIGHLIGHT_ENGINE, CODE_HIGHLIGHT_THEMES} from "@/lib/highlighter/constants";
 
 let ready: Promise<WorkerPoolManager | undefined> | undefined;
 // Set as soon as the pool exists, before its workers finish loading; `null` once it failed.
@@ -39,7 +39,7 @@ function initializeWorkerPool(mode: "dark" | "light"): Promise<WorkerPoolManager
   return Promise.race([pool.initialize(), failed]).then(() => pool);
 }
 
-export function getDiffWorkerPool(mode: "dark" | "light"): Promise<WorkerPoolManager | undefined> {
+export function getHighlightWorkerPool(mode: "dark" | "light"): Promise<WorkerPoolManager | undefined> {
   requestedMode = mode;
   ready ??= initializeWorkerPool(mode);
   // A theme switch can remount several viewers while the previous theme is still loading.
@@ -61,8 +61,8 @@ export function getDiffWorkerPool(mode: "dark" | "light"): Promise<WorkerPoolMan
  * The pool for Pierre components that take it from context. They queue highlighting until it is ready, so it is handed
  * out at once; without it they tokenize on the main thread. `undefined` once it failed.
  */
-export function diffWorkerPool(mode: "dark" | "light"): WorkerPoolManager | undefined {
-  if (requestedMode !== mode) void getDiffWorkerPool(mode);
+export function highlightWorkerPool(mode: "dark" | "light"): WorkerPoolManager | undefined {
+  if (requestedMode !== mode) void getHighlightWorkerPool(mode);
   return current ?? undefined;
 }
 
