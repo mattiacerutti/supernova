@@ -2,7 +2,7 @@ import {useRef, useState} from "react";
 import type {SessionRuntimeService} from "@supernova/contracts/services/session-runtime/services";
 import type {ModelReference, Session, SessionWorkspaceSelection, UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
 import {forgetSession, withSessionRuntime} from "@/features/sessions/api/sessions-sync";
-import type {SessionView} from "@/features/sessions/lib/session-view";
+import {readSessionView} from "@/features/sessions/hooks/use-session";
 import {sessionStatus} from "@/features/sessions/lib/session-view";
 import type {SessionOptimism} from "@/features/sessions/stores/sessions-store";
 import {useSessionsStore} from "@/features/sessions/stores/sessions-store";
@@ -167,13 +167,12 @@ const NAVIGATION_FAILURE_TITLES: Readonly<Record<CheckpointNavigation["action"],
 
 interface UseSessionCommandsOptions {
   readonly sessionId: string;
-  readonly view: SessionView;
   readonly modelReference: ModelReference | undefined;
 }
 
 /** A refused restore keeps the timeline moved until the user confirms (forced retry) or cancels. */
 export function useSessionCommands(options: UseSessionCommandsOptions) {
-  const {modelReference, sessionId, view} = options;
+  const {modelReference, sessionId} = options;
   const actions = sessionActions(useRuntime());
   const [confirmation, setConfirmation] = useState<{readonly open: boolean; readonly reason: "conflict" | "uncaptured"}>({open: false, reason: "conflict"});
   const refused = useRef<CheckpointNavigation | null>(null);
@@ -216,6 +215,7 @@ export function useSessionCommands(options: UseSessionCommandsOptions) {
 
   const closeConfirmation = (): void => setConfirmation((current) => ({...current, open: false}));
 
+  // Navigation targets are read when the command runs, so the commands keep their identity while a response streams.
   return {
     startSession: (input: Omit<StartSessionInput, "sessionId">): Promise<StartSessionOutcome> => actions.startSession({...input, sessionId}),
     sendMessage: (contentParts: readonly UserMessageContentPart[]): void => {
@@ -225,11 +225,15 @@ export function useSessionCommands(options: UseSessionCommandsOptions) {
     compact: (): void => {
       if (modelReference) actions.compactSession({modelReference, sessionId});
     },
-    undo: (): void => void navigate({action: "undo", lastTurnId: view.turns.at(-2)?.id ?? null}),
-    redo: (): void => void navigate({action: "redo", lastTurnId: view.undoneTurns[0]?.id ?? view.turns.at(-1)?.id ?? null}),
+    undo: (): void => void navigate({action: "undo", lastTurnId: readSessionView(sessionId).turns.at(-2)?.id ?? null}),
+    redo: (): void => {
+      const {turns, undoneTurns} = readSessionView(sessionId);
+      void navigate({action: "redo", lastTurnId: undoneTurns[0]?.id ?? turns.at(-1)?.id ?? null});
+    },
     revertToMessage: (turnId: string): void => {
-      const shownIndex = view.turns.findIndex((turn) => turn.id === turnId);
-      const lastTurnId = shownIndex >= 0 ? (view.turns[shownIndex - 1]?.id ?? null) : turnId;
+      const {turns} = readSessionView(sessionId);
+      const shownIndex = turns.findIndex((turn) => turn.id === turnId);
+      const lastTurnId = shownIndex >= 0 ? (turns[shownIndex - 1]?.id ?? null) : turnId;
       void navigate({action: "revert", lastTurnId, turnId});
     },
     checkpointConflict: {

@@ -2,7 +2,7 @@ import {CodeView} from "@pierre/diffs";
 import type {FileDiffMetadata} from "@pierre/diffs";
 import {useRef} from "react";
 import {generateDiffOptions} from "@/lib/diffs/options";
-import {getDiffWorkerPool} from "@/lib/diffs/worker-pool";
+import {getHighlightWorkerPool} from "@/lib/highlighter/worker-pool";
 import {useSettingsStore} from "@/stores/settings-store";
 import type {ResolvedAppearanceMode} from "@/stores/settings-store";
 import {useMountEffect} from "@/hooks/use-mount-effect";
@@ -20,7 +20,7 @@ function DiffViewerContent(props: DiffViewerContentProps) {
     let disposed = false;
     let renderer: CodeView | undefined;
     // Plain-text diffs have no highlight task to retry a render before the pool is ready.
-    void getDiffWorkerPool(mode).then((workerPool) => {
+    void getHighlightWorkerPool(mode).then((workerPool) => {
       if (disposed || wrapperRef.current === null) return;
       renderer = new CodeView(
         {

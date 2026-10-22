@@ -65,7 +65,8 @@ export function useComposerAttachments(options: UseComposerAttachmentsOptions): 
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
   const dragDepthRef = useRef(0);
 
-  const processFilesMutation = useMutation({
+  // Only stable members of the mutation are read, so the handlers below keep their identity across renders.
+  const {isPending: isProcessing, mutate: processFiles} = useMutation({
     mutationFn: async (files: readonly File[]): Promise<ProcessFilesResult> => {
       const nextAttachments: UserMessageAttachmentPart[] = [];
       const errors: string[] = [];
@@ -104,8 +105,6 @@ export function useComposerAttachments(options: UseComposerAttachmentsOptions): 
     },
   });
 
-  const isProcessing = processFilesMutation.isPending;
-
   const clear = (): void => {
     onAttachmentsChange([]);
   };
@@ -126,7 +125,7 @@ export function useComposerAttachments(options: UseComposerAttachmentsOptions): 
       return;
     }
 
-    processFilesMutation.mutate(files);
+    processFiles(files);
   };
 
   const handleDragEnter = (event: DragEvent<HTMLDivElement>): void => {

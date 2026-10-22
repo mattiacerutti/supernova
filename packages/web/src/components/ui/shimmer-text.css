@@ -1,0 +1,103 @@
+/*
+ * Same look as shadcn's `shimmer`, drawn on the compositor. That utility moves a gradient clipped to the glyphs, which
+ * repaints the text on the main thread every frame. Here the label's own glyphs are left unpainted and two copies draw
+ * them, each seen through a band-shaped mask: the text color outside the band, the highlight inside it. Each mask layer
+ * slides one way while its copy slides back by the same distance, so the glyphs stay put and only the band sweeps; both
+ * are transform animations. The copies are summed (`plus-lighter`) inside an isolated group, which is the gradient's own
+ * blend of the two colors, so the highlight fades into whatever the label sits on, as the utility's does.
+ *
+ * Shared by `ShimmerText` and `RollingText`, which place the layers; the copies must lay out exactly as the label.
+ */
+.shimmer-group {
+  --shimmer-layer-spread: calc(3ch + 40px);
+  isolation: isolate;
+  -webkit-text-fill-color: transparent;
+}
+
+.shimmer-layer {
+  --shimmer-layer-mask: linear-gradient(
+    var(--shimmer-layer-angle),
+    #000 calc(50% - var(--shimmer-layer-spread)),
+    rgb(0 0 0 / 0.5) calc(50% - var(--shimmer-layer-spread) * 0.5),
+    transparent 50%,
+    rgb(0 0 0 / 0.5) calc(50% + var(--shimmer-layer-spread) * 0.5),
+    #000 calc(50% + var(--shimmer-layer-spread))
+  );
+  pointer-events: none;
+  user-select: none;
+  -webkit-text-fill-color: currentColor;
+  -webkit-mask-image: var(--shimmer-layer-mask);
+  mask-image: var(--shimmer-layer-mask);
+}
+
+.shimmer-layer-band {
+  --shimmer-layer-mask: linear-gradient(
+    var(--shimmer-layer-angle),
+    transparent calc(50% - var(--shimmer-layer-spread)),
+    rgb(0 0 0 / 0.5) calc(50% - var(--shimmer-layer-spread) * 0.5),
+    #000 50%,
+    rgb(0 0 0 / 0.5) calc(50% + var(--shimmer-layer-spread) * 0.5),
+    transparent calc(50% + var(--shimmer-layer-spread))
+  );
+  color: oklch(from currentColor l c h / calc(alpha * 0.2));
+  mix-blend-mode: plus-lighter;
+}
+
+/* Keyed to the system scheme, as shadcn's `shimmer` is (its `dark` variant is this media query). */
+@media (prefers-color-scheme: dark) {
+  .shimmer-layer-band {
+    color: oklch(from currentColor max(0.8, calc(l + 0.4)) c h / calc(alpha + 0.4));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shimmer-group {
+    -webkit-text-fill-color: currentColor;
+  }
+
+  .shimmer-layer {
+    display: none;
+  }
+}
+
+/* `ShimmerText`: one band sweeping across the label, from just before it to just past it. */
+.shimmer-text {
+  --shimmer-layer-angle: 110deg;
+  position: relative;
+  display: inline-block;
+  overflow: clip;
+  vertical-align: bottom;
+}
+
+.shimmer-text-layer {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(200% + var(--shimmer-layer-spread) * 2);
+  animation: shimmer-text-layer var(--shimmer-duration, 2s) linear infinite;
+}
+
+.shimmer-text-copy {
+  /* The label's width, so its shift exactly cancels the layer's. */
+  display: block;
+  width: calc((100% - var(--shimmer-layer-spread) * 2) / 2);
+  white-space: nowrap;
+  animation: shimmer-text-copy var(--shimmer-duration, 2s) linear infinite;
+}
+
+@keyframes shimmer-text-layer {
+  from {
+    transform: translateX(calc(-50% - var(--shimmer-layer-spread)));
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes shimmer-text-copy {
+  from {
+    transform: translateX(calc(100% + var(--shimmer-layer-spread) * 2));
+  }
+  to {
+    transform: translateX(0);
+  }
+}

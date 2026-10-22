@@ -1,4 +1,4 @@
-import type {Session, SessionWorkspaceSelection, UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
+import type {SessionWorkspaceSelection, UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
 import {useNavigate} from "@tanstack/react-router";
 import {useState} from "react";
 import {useConfiguration} from "@/api/configuration";
@@ -23,7 +23,8 @@ import SessionTitleText from "@/features/sessions/components/session-title-text"
 import SessionTimeline from "@/features/sessions/components/timeline/session-timeline";
 import {ComposerContext, useComposer} from "@/features/sessions/hooks/composer/use-composer";
 import {useFollowSession} from "@/features/sessions/api/sessions-sync";
-import {useSession} from "@/features/sessions/hooks/use-session";
+import {readSessionView, useSession} from "@/features/sessions/hooks/use-session";
+import type {SessionView} from "@/features/sessions/lib/session-view";
 import {buildCommittedTimelineItems, buildLiveTimelineItems} from "@/features/sessions/lib/timeline/rows/build-session-timeline";
 import {useComposerDraftsStore} from "@/features/sessions/stores/composer/composer-drafts-store";
 import type {SessionTurn} from "@/features/sessions/types/session-turn";
@@ -34,28 +35,21 @@ import {projectIdFromPath} from "@/lib/project-paths";
 import {showToast} from "@/lib/toast";
 
 interface SessionTitleProps {
-  readonly session: Session;
-  readonly title: string;
   readonly pinned: boolean;
+  readonly projectPath: string;
+  readonly sessionId: string;
+  readonly title: string;
+  readonly worktree: boolean;
 }
 
 function SessionTitle(props: SessionTitleProps) {
-  const {pinned, session, title} = props;
+  const {pinned, projectPath, sessionId, title, worktree} = props;
   const renameSession = useRenameSession();
-  const {inputProps, renaming, startRenaming} = useInlineRename({initialValue: title, onSave: (nextTitle) => renameSession.mutate({sessionId: session.id, title: nextTitle})});
+  const {inputProps, renaming, startRenaming} = useInlineRename({initialValue: title, onSave: (nextTitle) => renameSession.mutate({sessionId, title: nextTitle})});
 
   return (
     <SessionHeader
-      actions={
-        <SessionActionsMenu
-          onRename={startRenaming}
-          pinned={pinned}
-          projectPath={session.projectPath}
-          sessionId={session.id}
-          sessionTitle={title}
-          worktree={session.worktree !== undefined}
-        />
-      }
+      actions={<SessionActionsMenu onRename={startRenaming} pinned={pinned} projectPath={projectPath} sessionId={sessionId} sessionTitle={title} worktree={worktree} />}
     >
       {renaming ? (
         <input {...inputProps} className="block h-5 min-w-0 w-64 truncate border-0 bg-transparent p-0 text-sm font-medium leading-5 text-ink outline-none" />
@@ -114,18 +108,29 @@ export default function SessionPage(props: SessionPageProps) {
   const creatingSession = creatingWorkspace !== null;
   const view = useSession(sessionId);
   const {session} = view;
+  // The document is replaced on every streamed frame; only the parts read below are passed on, so everything that
+  // does not show the timeline keeps its props and skips those renders.
+  const hasSession = session !== undefined;
+  const agent = session?.agent;
+  const sessionContext = session?.context;
+  const sessionProjectPath = session?.projectPath;
+  const sessionTitle = session?.title;
+  const worktree = session?.worktree;
+  const entriesRemaining = session?.entries.remaining ?? 0;
+  const undoneRemaining = session?.undone.remaining ?? 0;
   const newSessionProjectPath = target.kind === "new" ? target.projectPath : undefined;
   const configuration = useConfiguration(newSessionProjectPath);
-  const projectPath = newSessionProjectPath ?? session?.projectPath ?? "";
+  const projectPath = newSessionProjectPath ?? sessionProjectPath ?? "";
 
   const composer = useComposer({
     disabled: target.kind === "new" && configuration.isPending,
-    initialModelReference: session?.agent.model && {id: session.agent.model.modelId, providerId: session.agent.model.provider, thinkingLevel: session.agent.thinkingLevel ?? "off"},
+    initialModelReference: agent?.model && {id: agent.model.modelId, providerId: agent.model.provider, thinkingLevel: agent.thinkingLevel ?? "off"},
     modelDefaults: configuration.data?.modelDefaults,
     projectPath,
     sessionId,
   });
-  const commands = useSessionCommands({modelReference: composer.models.modelReference, sessionId, view});
+  const {replaceContentParts} = composer.draft;
+  const commands = useSessionCommands({modelReference: composer.models.modelReference, sessionId});
   const earlierHistory = useLoadHistory(sessionId, "entries");
   const laterUndone = useLoadHistory(sessionId, "undone");
   const [undoneDrawerHeight, setUndoneDrawerHeight] = useState(0);
@@ -161,31 +166,41 @@ export default function SessionPage(props: SessionPageProps) {
   };
 
   const restoreDraftFrom = (turn: SessionTurn | undefined): void => {
-    composer.draft.replaceContentParts(turn?.userMessage.contentParts ?? []);
+    replaceContentParts(turn?.userMessage.contentParts ?? []);
+  };
+
+  // These read the view when they run, so the timeline and composer keep the same handlers while a response streams.
+  const idleView = (): SessionView | undefined => {
+    const current = readSessionView(sessionId);
+    return current.session && current.status === "idle" ? current : undefined;
   };
 
   const handleUndo = (): void => {
-    if (!session || !idle) return;
-    restoreDraftFrom(view.turns.at(-1));
+    const current = idleView();
+    if (!current) return;
+    restoreDraftFrom(current.turns.at(-1));
     commands.undo();
   };
 
   const handleRedo = (): void => {
-    if (!session || !idle) return;
-    restoreDraftFrom(view.undoneTurns[1]);
+    const current = idleView();
+    if (!current) return;
+    restoreDraftFrom(current.undoneTurns[1]);
     commands.redo();
   };
 
   const handleRevertToMessage = (turnId: string): void => {
-    if (!session || !idle) return;
-    restoreDraftFrom([...view.turns, ...view.undoneTurns].find((turn) => turn.id === turnId));
+    const current = idleView();
+    if (!current) return;
+    restoreDraftFrom([...current.turns, ...current.undoneTurns].find((turn) => turn.id === turnId));
     commands.revertToMessage(turnId);
   };
 
   const handleRestoreUndoneTurn = (turnId: string): void => {
-    if (!session || !idle) return;
-    const restoredIndex = view.undoneTurns.findIndex((turn) => turn.id === turnId);
-    restoreDraftFrom(view.undoneTurns[restoredIndex + 1]);
+    const current = idleView();
+    if (!current) return;
+    const restoredIndex = current.undoneTurns.findIndex((turn) => turn.id === turnId);
+    restoreDraftFrom(current.undoneTurns[restoredIndex + 1]);
     commands.revertToMessage(turnId);
   };
 
@@ -198,7 +213,7 @@ export default function SessionPage(props: SessionPageProps) {
     setUndoneDrawerHeight((current) => (Math.abs(current - height) < 0.5 ? current : height));
   };
 
-  if (target.kind === "session" && !session && view.loadError) {
+  if (target.kind === "session" && !hasSession && view.loadError) {
     return (
       <div className="grid flex-1 place-items-center px-6 py-10">
         <p className="text-sm text-danger-ink">Unable to load this session.</p>
@@ -210,7 +225,7 @@ export default function SessionPage(props: SessionPageProps) {
     <ComposerContext value={composer}>
       <SessionLayout
         {...composer.attachments.dropZoneProps}
-        aside={session && <WorkspacePanel projectPath={session.worktree?.path ?? session.projectPath} sessionId={session.id} />}
+        aside={sessionProjectPath !== undefined && <WorkspacePanel projectPath={worktree?.path ?? sessionProjectPath} sessionId={sessionId} />}
         overlay={
           <>
             {target.kind === "session" && (
@@ -224,8 +239,8 @@ export default function SessionPage(props: SessionPageProps) {
       >
         {target.kind === "new" ? (
           <SessionHeader />
-        ) : session ? (
-          <SessionTitle pinned={view.pinned} session={session} title={view.title ?? session.title} />
+        ) : sessionProjectPath !== undefined ? (
+          <SessionTitle pinned={view.pinned} projectPath={sessionProjectPath} sessionId={sessionId} title={view.title ?? sessionTitle ?? ""} worktree={worktree !== undefined} />
         ) : (
           <LoadingTitle title={view.title} />
         )}
@@ -241,8 +256,8 @@ export default function SessionPage(props: SessionPageProps) {
                 bottomBar={
                   target.kind === "new" ? (
                     <WorkspacePicker />
-                  ) : session?.worktree ? (
-                    <WorkspacePicker worktreeBranch={session.worktree.branch} />
+                  ) : worktree ? (
+                    <WorkspacePicker worktreeBranch={worktree.branch} />
                   ) : (
                     // The branch name only arrives with the first snapshot.
                     creatingWorkspace?.mode === "worktree" && <WorkspacePickerSkeleton />
@@ -250,13 +265,13 @@ export default function SessionPage(props: SessionPageProps) {
                 }
                 onInterrupt={commands.stop}
                 onSubmit={target.kind === "new" ? (contentParts) => void startSession(contentParts) : commands.sendMessage}
-                slashCommandActions={session && {compact: commands.compact, redo: handleRedo, undo: handleUndo}}
+                slashCommandActions={hasSession ? {compact: commands.compact, redo: handleRedo, undo: handleUndo} : undefined}
                 streamStatus={view.status}
                 topExtension={
-                  session && (
+                  hasSession && (
                     <UndoneTurnsDrawer
                       disabled={composer.disabled || !idle}
-                      later={{count: session.undone.remaining, ...laterUndone}}
+                      later={{count: undoneRemaining, ...laterUndone}}
                       onHeightChange={handleUndoneDrawerHeightChange}
                       onRevertToMessage={handleRestoreUndoneTurn}
                       turns={view.undoneTurns}
@@ -264,7 +279,7 @@ export default function SessionPage(props: SessionPageProps) {
                   )
                 }
               >
-                {session && <SessionContextIndicator context={session.context} />}
+                {sessionContext && <SessionContextIndicator context={sessionContext} />}
                 <ModelPicker />
                 <ThinkingLevelPicker />
               </SessionComposer>
@@ -272,18 +287,18 @@ export default function SessionPage(props: SessionPageProps) {
           }
           hero={target.kind === "new" ? <NewSessionHero projectName={target.projectName} /> : undefined}
           timeline={
-            session ? (
+            hasSession ? (
               <SessionTimeline
-                key={session.id}
+                key={sessionId}
                 bottomOverlayHeight={undoneDrawerHeight}
                 compacting={view.status === "compacting"}
-                earlierHistory={{count: session.entries.remaining, ...earlierHistory}}
+                earlierHistory={{count: entriesRemaining, ...earlierHistory}}
                 isStreaming={streaming}
                 items={committedItems}
                 liveItems={liveItems}
                 onForkFromTurn={idle ? handleForkFromTurn : undefined}
                 onRevertToMessage={handleRevertToMessage}
-                sessionId={session.id}
+                sessionId={sessionId}
                 setupStep={view.setupStep}
                 streamError={view.error}
               />
@@ -295,7 +310,7 @@ export default function SessionPage(props: SessionPageProps) {
       </SessionLayout>
 
       {target.kind === "session" && !creatingSession && <FollowSession key={sessionId} sessionId={sessionId} />}
-      {session && <ForkSessionDialog onClose={() => setForkTurnId(null)} sessionId={session.id} turnId={forkTurnId} />}
+      {hasSession && <ForkSessionDialog onClose={() => setForkTurnId(null)} sessionId={sessionId} turnId={forkTurnId} />}
       <CheckpointConflictDialog
         onCancel={commands.checkpointConflict.cancel}
         onConfirm={commands.checkpointConflict.confirm}

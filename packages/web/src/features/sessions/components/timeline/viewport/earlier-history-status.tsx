@@ -1,4 +1,5 @@
 import Button from "@/components/ui/button";
+import ShimmerText from "@/components/ui/shimmer-text";
 
 interface EarlierHistoryStatusProps {
   readonly failed: boolean;
@@ -21,8 +22,8 @@ export default function EarlierHistoryStatus(props: EarlierHistoryStatusProps) {
           </Button>
         </p>
       ) : (
-        <p className="shimmer text-sm text-ink-faint" role="status">
-          Loading earlier messages
+        <p className="text-sm text-ink-faint" role="status">
+          <ShimmerText>Loading earlier messages</ShimmerText>
         </p>
       )}
     </div>

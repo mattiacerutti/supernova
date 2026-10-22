@@ -58,6 +58,7 @@
     "@xterm/xterm": "6.0.0",
     "clsx": "^2.1.1",
     "framer-motion": "^12.40.0",
+    "hast-util-to-html": "9.0.5",
     "imurmurhash": "^0.1.4",
     "lru-cache": "^11.3.5",
     "match-sorter": "^8.3.0",

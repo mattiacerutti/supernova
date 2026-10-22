@@ -19,12 +19,13 @@ async function loadPage(runtime: RuntimeClient, sessionId: string, side: History
 /** `load` is a no-op while a page loads or after one failed, so it can run on every scroll; `retry` is the user's. */
 export function useLoadHistory(sessionId: string, side: HistorySide) {
   const runtime = useRuntime();
-  const mutation = useMutation({mutationFn: () => loadPage(runtime, sessionId, side)});
+  // `useMutation` returns a new object every render; reading only its stable members keeps these callbacks stable too.
+  const {isError, isPending, mutate} = useMutation({mutationFn: () => loadPage(runtime, sessionId, side)});
   return {
-    failed: mutation.isError,
+    failed: isError,
     load: (): void => {
-      if (!mutation.isPending && !mutation.isError) mutation.mutate();
+      if (!isPending && !isError) mutate();
     },
-    retry: (): void => mutation.mutate(),
+    retry: (): void => mutate(),
   };
 }

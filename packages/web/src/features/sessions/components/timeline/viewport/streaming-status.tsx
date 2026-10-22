@@ -1,5 +1,6 @@
 import type {SessionSetupStep} from "@supernova/contracts/services/session-runtime/procedures";
 import type {Ref} from "react";
+import ShimmerText from "@/components/ui/shimmer-text";
 import {Marker, MarkerContent} from "@/features/sessions/components/timeline/marker";
 import MatrixLoader from "@/features/sessions/components/timeline/viewport/matrix-loader";
 import {cn} from "@/lib/cn";
@@ -22,12 +23,14 @@ export default function StreamingStatus(props: StreamingStatusProps) {
     <div className={cn("relative z-10 mx-auto w-full max-w-3xl bg-surface px-5 pb-8 md:px-8", pullIntoLastMessage && "-mt-5")} data-timeline-footer="streaming-status" ref={ref}>
       {marker ? (
         <Marker role="status" variant="separator">
-          <MarkerContent className="shimmer text-ink-faint">{label}</MarkerContent>
+          <MarkerContent className="text-ink-faint">
+            <ShimmerText>{label}</ShimmerText>
+          </MarkerContent>
         </Marker>
       ) : (
         <p className="flex w-fit items-center gap-2.5 text-sm text-ink-faint" role="status">
           <MatrixLoader />
-          <span className="shimmer">{label}</span>
+          <ShimmerText>{label}</ShimmerText>
         </p>
       )}
     </div>

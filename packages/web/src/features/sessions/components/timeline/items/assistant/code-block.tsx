@@ -2,7 +2,8 @@ import {Suspense, use, useState} from "react";
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import ContentPanel from "@/features/sessions/components/timeline/items/content-panel";
-import {CODE_HIGHLIGHT_THEMES, getCachedHighlightedCode, highlightCode} from "@/lib/diffs/highlighter";
+import {CODE_HIGHLIGHT_THEMES} from "@/lib/highlighter/constants";
+import {getCachedHighlightedCode, highlightCode} from "@/lib/highlighter/highlight-code";
 import {useSettingsStore} from "@/stores/settings-store";
 
 const SHIKI_CLASS_NAME =

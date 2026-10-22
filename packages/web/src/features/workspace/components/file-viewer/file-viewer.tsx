@@ -1,8 +1,11 @@
+import {WorkerPoolContext} from "@pierre/diffs/react";
 import {Fragment, useState} from "react";
 import type {ReactNode} from "react";
 import Icon from "@/components/ui/icon";
 import IconButton from "@/components/ui/icon-button";
 import {cn} from "@/lib/cn";
+import {highlightWorkerPool} from "@/lib/highlighter/worker-pool";
+import {useSettingsStore} from "@/stores/settings-store";
 
 interface PathBreadcrumbProps {
   readonly deleted: boolean;
@@ -44,6 +47,7 @@ interface FileViewerProps {
 export default function FileViewer(props: FileViewerProps) {
   const {actions, children, deleted = false, explorer, path} = props;
   const [explorerVisible, setExplorerVisible] = useState(true);
+  const mode = useSettingsStore((state) => state.resolvedMode);
 
   const hasFile = path !== null;
   const showExplorer = !hasFile || explorerVisible;
@@ -70,7 +74,12 @@ export default function FileViewer(props: FileViewerProps) {
       )}
 
       <div className="@container flex min-h-0 flex-1">
-        {hasFile && <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>}
+        {hasFile && (
+          // Without the pool in context, Pierre tokenizes every opened file and diff on the main thread.
+          <WorkerPoolContext value={highlightWorkerPool(mode)}>
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
+          </WorkerPoolContext>
+        )}
         <div
           className={cn(
             "min-h-0 shrink-0 overflow-hidden transition-[width] duration-200 ease-out",

@@ -17,6 +17,22 @@ const SUMMARY_SUFFIX = "\n</summary>";
 
 // Replicated entry arrays are immutable; streaming changes `live`, not the settled history.
 const historyCache = new WeakMap<readonly SessionEntry[], {runStart: number | undefined; turns: SessionTurn[]; liveEntries: readonly SessionEntry[] | undefined}>();
+// Keyed by the first settled entry, which keeps its identity while a run appends entries after it.
+const settledCache = new WeakMap<SessionEntry, {settled: readonly SessionEntry[]; turns: SessionTurn[]}>();
+
+/**
+ * Each entry a run commits replaces the entries array, but the history before the run keeps its entries, so its turns
+ * are reused; rebuilding them would walk the whole loaded transcript and re-render every row on each tool result.
+ */
+function settledTurns(settled: readonly SessionEntry[]): SessionTurn[] {
+  const first = settled[0];
+  if (!first) return buildTurns({entries: settled});
+  const known = settledCache.get(first);
+  if (known && known.settled.length === settled.length && known.settled.every((entry, index) => entry === settled[index])) return known.turns;
+  const turns = buildTurns({entries: settled});
+  settledCache.set(first, {settled, turns});
+  return turns;
+}
 
 function isoTimestamp(milliseconds: number | undefined): string {
   return new Date(milliseconds ?? 0).toISOString();
@@ -171,11 +187,8 @@ export function buildSessionTurns(session: Pick<Session, "entries" | "live" | "r
   let history = historyCache.get(entries);
   if (!history || history.runStart !== runStart) {
     const start = runStart === undefined ? -1 : entries.findIndex((entry) => entry.id >= runStart);
-    history = {
-      runStart,
-      turns: buildTurns({entries: start === -1 ? entries : entries.slice(0, start)}),
-      liveEntries: start === -1 ? undefined : entries.slice(start),
-    };
+    const settled = start === -1 ? entries : entries.slice(0, start);
+    history = {runStart, turns: settledTurns(settled), liveEntries: start === -1 ? undefined : entries.slice(start)};
     historyCache.set(entries, history);
   }
   return {turns: history.turns, liveTurn: history.liveEntries ? buildTurns({entries: history.liveEntries, live}).at(-1) : undefined};
