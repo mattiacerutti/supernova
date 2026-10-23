@@ -46,10 +46,10 @@ describe("listing, searching, pinning, and archiving project sessions", () => {
     expect(await projects.listSessions({projectPath: "/workspace", limit: 10})).toEqual({
       projectPath: "/workspace",
       sessions: [
-        {id: "pinned", forked: true, pinned: true, title: "Pinned", updatedAt: "2026-01-01T00:00:00.000Z", worktree: false},
-        {id: "newest", forked: false, pinned: false, title: "Newest", updatedAt: "2026-01-03T00:00:00.000Z", worktree: false},
-        {id: "middle", forked: false, pinned: false, title: "Untitled session", updatedAt: "2026-01-02T00:00:00.000Z", worktree: true},
-        {id: "older", forked: false, pinned: false, title: "Older", updatedAt: "2026-01-01T00:00:00.000Z", worktree: false},
+        {id: "pinned", forked: true, pinned: true, title: "Pinned", updatedAt: "2026-01-01T00:00:00.000Z"},
+        {id: "newest", forked: false, pinned: false, title: "Newest", updatedAt: "2026-01-03T00:00:00.000Z"},
+        {id: "middle", forked: false, pinned: false, title: "Untitled session", updatedAt: "2026-01-02T00:00:00.000Z", worktree: {branch: "supernova/x", path: "/wt"}},
+        {id: "older", forked: false, pinned: false, title: "Older", updatedAt: "2026-01-01T00:00:00.000Z"},
       ],
       nextCursor: null,
     });
@@ -78,7 +78,7 @@ describe("listing, searching, pinning, and archiving project sessions", () => {
     const second = await projects.searchSessions({query: "login", projectPaths: ["/workspace", "/other"], limit: 1, cursor: first.nextCursor!});
 
     expect(first.sessions).toEqual([
-      {id: "b", forked: false, pinned: false, projectPath: resolve("/other").split(sep).join("/"), title: "Login page", updatedAt: "2026-01-02T00:00:00.000Z", worktree: false},
+      {id: "b", forked: false, pinned: false, projectPath: resolve("/other").split(sep).join("/"), title: "Login page", updatedAt: "2026-01-02T00:00:00.000Z"},
     ]);
     expect(second).toMatchObject({sessions: [{id: "a", projectPath: resolve("/workspace").split(sep).join("/")}], nextCursor: null});
     expect(await projects.searchSessions({query: "login", projectPaths: [], limit: 10})).toEqual({sessions: [], nextCursor: null});

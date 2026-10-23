@@ -1,3 +1,4 @@
+import ForkDivider from "@/features/sessions/components/timeline/rows/fork-divider";
 import SessionTimelineItemFrame from "@/features/sessions/components/timeline/rows/session-timeline-item-frame";
 import SessionTimelineRow from "@/features/sessions/components/timeline/rows/session-timeline-row";
 import type {TimelineRow} from "@/features/sessions/lib/timeline/rows/timeline-rows";
@@ -12,6 +13,8 @@ interface SessionTimelineVirtualRowProps {
 export default function SessionTimelineVirtualRow(props: SessionTimelineVirtualRowProps) {
   const {activeTurnId, item, onForkFromTurn, onRevertToMessage} = props;
   const settled = !activeTurnId || item.turnId !== activeTurnId;
+
+  if (item.type === "fork-divider") return <ForkDivider />;
 
   if (item.type === "stream-error") {
     return (

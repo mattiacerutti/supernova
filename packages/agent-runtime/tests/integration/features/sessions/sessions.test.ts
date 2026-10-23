@@ -110,6 +110,7 @@ describe("forking a session", () => {
     expect(fork.id).not.toBe(sessionId);
     expect(fork).toMatchObject({
       forked: true,
+      lastCopiedTurnId: String(fork.entries.items.find((entry) => entry.kind === "pi.user")?.id),
       title: "Original title",
       undone: {items: []},
       agent: {model: {modelId: selectedModelReference.id, provider: selectedModelReference.providerId}, thinkingLevel: "high"},
@@ -126,8 +127,11 @@ describe("forking a session", () => {
         return fauxAssistantMessage("Forked answer");
       },
     ]);
-    await pi.sendMessage({message: "Fork continues", modelReference: selectedModelReference, sessionId: fork.id});
+    const continued = await pi.sendMessage({message: "Fork continues", modelReference: selectedModelReference, sessionId: fork.id});
     expect(providerTexts).toEqual(["First", "Fork continues"]);
+    // The fork's own turn follows the copied one, so the copied history still ends where it did.
+    expect(turnContents(continued.session)).toHaveLength(2);
+    expect(continued.session.lastCopiedTurnId).toBe(fork.lastCopiedTurnId);
   });
 
   it("rejects a turn that is not in the session", async () => {

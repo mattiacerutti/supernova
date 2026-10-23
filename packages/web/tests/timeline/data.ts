@@ -60,7 +60,7 @@ export function createTimelineSessions(): Map<string, Session> {
 
 /** Builds a summary for the real project-session list UI. */
 export function timelineSessionSummary(session: Session): SessionSummary {
-  return {forked: false, id: session.id, pinned: session.pinned, title: session.title, updatedAt: session.updatedAt, worktree: false};
+  return {forked: false, id: session.id, pinned: session.pinned, title: session.title, updatedAt: session.updatedAt};
 }
 
 /** Formats a unique full-height line emitted by the stress stream. */

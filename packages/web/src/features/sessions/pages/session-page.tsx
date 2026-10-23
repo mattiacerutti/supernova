@@ -293,6 +293,7 @@ export default function SessionPage(props: SessionPageProps) {
                 bottomOverlayHeight={undoneDrawerHeight}
                 compacting={view.status === "compacting"}
                 earlierHistory={{count: entriesRemaining, ...earlierHistory}}
+                lastCopiedTurnId={session.lastCopiedTurnId}
                 isStreaming={streaming}
                 items={committedItems}
                 liveItems={liveItems}

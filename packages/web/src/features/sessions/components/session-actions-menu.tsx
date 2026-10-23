@@ -10,6 +10,8 @@ import {cn} from "@/lib/cn";
 import {projectIdFromPath} from "@/lib/project-paths";
 
 interface SessionActionsMenuProps {
+  /** For callers that hide competing UI while the menu is open. */
+  readonly onOpenChange?: (open: boolean) => void;
   readonly onRename: () => void;
   readonly pinned: boolean;
   readonly triggerClassName?: string;
@@ -20,7 +22,7 @@ interface SessionActionsMenuProps {
 }
 
 export default function SessionActionsMenu(props: SessionActionsMenuProps) {
-  const {onRename, pinned, projectPath, sessionId, sessionTitle, triggerClassName, worktree} = props;
+  const {onOpenChange, onRename, pinned, projectPath, sessionId, sessionTitle, triggerClassName, worktree} = props;
 
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
@@ -32,6 +34,11 @@ export default function SessionActionsMenu(props: SessionActionsMenuProps) {
 
   const handleToggleSessionPinned = (): void => {
     pinSession.mutate({pinned: !pinned, sessionId});
+  };
+
+  const handleActionsMenuOpenChange = (open: boolean): void => {
+    setActionsMenuOpen(open);
+    onOpenChange?.(open);
   };
 
   const archiveSession = (removeWorktree: boolean): void => {
@@ -51,7 +58,7 @@ export default function SessionActionsMenu(props: SessionActionsMenuProps) {
     <>
       <ArchiveWorktreeSessionDialog onArchive={archiveSession} onCancel={() => setArchiveDialogOpen(false)} open={archiveDialogOpen} />
       <Menu
-        onOpenChange={setActionsMenuOpen}
+        onOpenChange={handleActionsMenuOpenChange}
         open={actionsMenuOpen}
         trigger={(triggerProps) => (
           <Button {...triggerProps} className={cn("size-7 text-ink-muted hover:text-ink", triggerClassName)} shape="icon" size="md" variant="ghost">
