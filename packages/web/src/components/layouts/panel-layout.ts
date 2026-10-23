@@ -1,7 +1,11 @@
 export const MIN_CONTENT_WIDTH = 480;
 
 /** Animate visibility, never the fitted width: container changes must apply immediately. */
-export const PANEL_TRANSITION = "transition-[--panel-open] duration-250 ease-in-out motion-reduce:transition-none";
+export function panelTransition(open: boolean): string {
+  return open
+    ? "transition-[--panel-open] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+    : "transition-[--panel-open] duration-160 ease-[cubic-bezier(0.4,0,1,1)] motion-reduce:transition-none";
+}
 
 /** Floored at the panel minimum: when nothing fits the content yields, and `max < min` would overwrite the stored width. */
 export function maxPanelWidth(availableWidth: number, minWidth: number, reservedWidth = 0): number {

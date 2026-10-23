@@ -16,7 +16,7 @@ import {EMPTY_LAYOUT, MIN_WORKSPACE_PANEL_WIDTH, tabKind, terminalLabel, useWork
 import type {WorkspacePanelTab, WorkspacePanelTabKind, WorkspaceTerminalTab} from "@/features/workspace/types/workspace-panel";
 import {useDragResize} from "@/hooks/use-drag-resize";
 import {cn} from "@/lib/cn";
-import {clampedPanelWidth, maxPanelWidth, observePanelWidth, PANEL_TRANSITION} from "@/components/layouts/panel-layout";
+import {clampedPanelWidth, maxPanelWidth, observePanelWidth, panelTransition} from "@/components/layouts/panel-layout";
 
 const WORKSPACE_TAB_KIND_NAMES = Object.keys(WORKSPACE_TAB_KINDS) as readonly WorkspacePanelTabKind[];
 
@@ -207,7 +207,7 @@ export default function WorkspacePanel(props: WorkspacePanelProps) {
     <div
       className={cn(
         "relative h-full shrink-0 overflow-hidden w-[calc(var(--panel-width)*var(--panel-open))]",
-        PANEL_TRANSITION,
+        panelTransition(open),
         open ? "[--panel-open:1] border-l border-border-muted" : "[--panel-open:0]"
       )}
       inert={!open}

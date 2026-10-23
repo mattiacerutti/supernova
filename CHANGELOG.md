@@ -10,6 +10,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+- Sidebars now use a smooth ease-out when opening and a faster ease-in when closing.
+
 ### Fixed
 
 - Screen readers now announce the message composer and the sidebar's pinned, forked, and worktree session markers.

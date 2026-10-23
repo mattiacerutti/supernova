@@ -2,7 +2,7 @@ import type {CSSProperties, ReactNode} from "react";
 import {isDesktopEnvironment, isMacEnvironment, isWindowsEnvironment} from "@/config/app-environment";
 import {useDragResize} from "@/hooks/use-drag-resize";
 import {cn} from "@/lib/cn";
-import {clampedPanelWidth, observePanelWidth, PANEL_TRANSITION} from "@/components/layouts/panel-layout";
+import {clampedPanelWidth, observePanelWidth, panelTransition} from "@/components/layouts/panel-layout";
 import {useSettingsStore} from "@/stores/settings-store";
 
 interface SidebarLayoutProps {
@@ -68,7 +68,7 @@ export function SidebarLayoutSidebar(props: SidebarLayoutSidebarProps) {
       className={cn(
         "relative shrink-0 overflow-hidden w-[calc(var(--panel-width)*var(--panel-open))]",
         resizable ? "[--panel-width:100vw] md:[--panel-width:var(--sidebar-width)]" : "[--panel-width:var(--sidebar-width)]",
-        animate && PANEL_TRANSITION,
+        animate && panelTransition(visible),
         visible ? "[--panel-open:1]" : "[--panel-open:0]"
       )}
       inert={!visible}
@@ -98,7 +98,7 @@ export function SidebarLayoutContent(props: SidebarLayoutContentProps) {
     <section
       className={cn(
         "flex h-full min-h-0 min-w-0 flex-1 flex-col border-l-[0.1px] bg-surface",
-        sidebarVisible ? "rounded-xl border-border-strong" : "rounded-r-xl border-l-transparent transition-[border-color,border-radius] delay-200 duration-0"
+        sidebarVisible ? "rounded-xl border-border-strong" : "rounded-r-xl border-l-transparent transition-[border-color,border-radius] delay-160 duration-0"
       )}
     >
       {children}
