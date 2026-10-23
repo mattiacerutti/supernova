@@ -2,6 +2,16 @@ import type {App} from "@tests/e2e/harness/app";
 import {expect, test} from "@tests/e2e/harness/fixtures";
 import {ScriptedModel} from "@tests/e2e/harness/model-server";
 
+/** Forks at the message holding `text` and waits for the fork to open. */
+async function forkFrom(app: App, text: string): Promise<void> {
+  const source = app.page.url();
+  const message = app.timeline.root.locator("article").filter({has: app.page.getByText(text, {exact: true})});
+  await message.hover();
+  await message.getByRole("button", {name: "Fork from this message"}).click();
+  await app.page.getByRole("dialog", {name: "Fork session?"}).getByRole("button", {name: "Fork"}).click();
+  await expect(app.page).not.toHaveURL(source);
+}
+
 test.describe("managing sessions", () => {
   test.beforeEach(async ({app, model}) => {
     model.reply("First answer.");
@@ -55,11 +65,53 @@ test.describe("managing sessions", () => {
     await app.timeline.expectExchange("First question", "First answer.");
     await expect(app.timeline.text("Second question")).toHaveCount(0);
     // The fork keeps the source's title; only its marker tells them apart.
-    const forked = app.sidebar.session("Original").filter({has: app.page.getByRole("img", {name: "Forked session"})});
+    const forked = app.sidebar.forkOf("Original");
     await expect(forked).toHaveCount(1);
 
     await app.page.goto(original);
     await app.timeline.expectExchange("First question", "First answer.", "Second question", "Second answer.");
+  });
+
+  test("a fork marks where its copied history ends and its own turns begin", async ({app, model}) => {
+    await forkFrom(app, "First answer.");
+    const divider = app.timeline.forkDivider();
+    await expect(divider).toHaveText("Forked from an earlier session");
+
+    model.reply("Fork answer.");
+    await app.composer.send("Fork question");
+    await expect(app.timeline.text("Fork answer.")).toBeVisible();
+    const dividerBox = (await divider.boundingBox())!;
+    expect((await app.timeline.text("First answer.").boundingBox())!.y).toBeLessThan(dividerBox.y);
+    expect((await app.timeline.text("Fork question").boundingBox())!.y).toBeGreaterThan(dividerBox.y);
+
+    await app.reload();
+    await expect(app.timeline.forkDivider()).toHaveCount(1);
+  });
+
+  test("a forked session's details open beside it on hover and keyboard focus, and a plain session has none", async ({app}) => {
+    await app.sidebar.rename(ScriptedModel.title, "Original");
+    await forkFrom(app, "First answer.");
+    const fork = app.sidebar.forkOf("Original");
+    const plain = app.sidebar.session("Original").filter({hasNot: app.sidebar.forkMarker()});
+    const details = app.sidebar.details();
+
+    await fork.hover();
+    await expect(details).toContainText("Forked session");
+    await app.page.mouse.move(0, 0);
+    await expect(details).toHaveCount(0);
+
+    // Tooltips open on keyboard focus only, so the row is reached with the keyboard.
+    await fork.getByRole("button").first().focus();
+    await app.page.keyboard.press("Shift+Tab");
+    await app.page.keyboard.press("Tab");
+    await expect(fork.getByRole("button").first()).toBeFocused();
+    await expect(details).toContainText("Forked session");
+    await app.page.keyboard.press("Escape");
+
+    await plain.hover();
+    // Past the open delay, so a card that was going to open would have.
+    await app.page.waitForTimeout(800);
+    await expect(details).toHaveCount(0);
   });
 
   test("archiving a session removes it from the sidebar and returns to a new session", async ({app}) => {
@@ -138,7 +190,7 @@ test.describe("starting a session", () => {
       await app.composer.send("Write a file");
 
       await expect(app.timeline.text("Wrote it.")).toBeVisible();
-      await expect(app.sidebar.session(ScriptedModel.title).getByRole("img", {name: "Worktree session"})).toBeVisible();
+      await expect(app.sidebar.session(ScriptedModel.title).getByText(/^Worktree session on supernova\//)).toBeAttached();
       expect(await project.read("from-worktree.txt"), "the project's own checkout is untouched").toBeUndefined();
     });
 

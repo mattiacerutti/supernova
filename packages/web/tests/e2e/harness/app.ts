@@ -97,6 +97,20 @@ export class Sidebar {
       .evaluateAll((buttons) => buttons.map((button) => button.getAttribute("aria-label")!));
     return labels.map((label) => label.slice("Chat actions for ".length));
   }
+
+  /** The marker is an icon; the row carries the same fact as screen-reader text. */
+  public forkMarker(): Locator {
+    return this.page.getByText("Forked session", {exact: true});
+  }
+
+  public forkOf(title: string): Locator {
+    return this.session(title).filter({has: this.forkMarker()});
+  }
+
+  /** The details card opened beside a row, portalled out of the sidebar. */
+  public details(): Locator {
+    return this.page.locator("[data-session-details]");
+  }
 }
 
 export class Composer {
@@ -177,6 +191,10 @@ export class Timeline {
 
   public tool(title: RegExp): Locator {
     return this.root.getByRole("button", {name: title});
+  }
+
+  public forkDivider(): Locator {
+    return this.root.locator('[data-timeline-row="fork-divider"]');
   }
 }
 

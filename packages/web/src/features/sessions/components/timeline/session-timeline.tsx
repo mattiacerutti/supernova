@@ -12,7 +12,7 @@ import SessionTimelineVirtualRow from "@/features/sessions/components/timeline/r
 import StreamingStatus from "@/features/sessions/components/timeline/viewport/streaming-status";
 import TimelineEmptyState from "@/features/sessions/components/timeline/viewport/timeline-empty-state";
 import {WorkExpansionContext, useWorkExpansionState} from "@/features/sessions/hooks/use-work-expansion";
-import {buildTimelineRowKeys, buildTimelineRows, hasLiveTimelineOutput} from "@/features/sessions/lib/timeline/rows/timeline-rows";
+import {buildTimelineRowKeys, buildTimelineRows, hasLiveTimelineOutput, withForkDivider} from "@/features/sessions/lib/timeline/rows/timeline-rows";
 import type {SessionTimelineItem} from "@/features/sessions/types/session-timeline-item";
 
 const TIMELINE_ANCHOR_SCROLL_DURATION_MS = 700;
@@ -49,6 +49,8 @@ interface SessionTimelineProps {
   readonly bottomOverlayHeight?: number;
   readonly earlierHistory: TimelineEarlierHistory;
   readonly compacting: boolean;
+  /** In a fork, where its copied history ends. */
+  readonly lastCopiedTurnId?: string;
   readonly isStreaming: boolean;
   readonly items: readonly SessionTimelineItem[];
   readonly liveItems: readonly SessionTimelineItem[];
@@ -76,6 +78,7 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
     earlierHistory,
     isStreaming,
     items,
+    lastCopiedTurnId,
     liveItems,
     onAnchorChange,
     onForkFromTurn,
@@ -101,7 +104,9 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
   const footerAnimationRef = useRef<Animation | null>(null);
 
   const hasTimelineContent = items.length > 0 || liveItems.length > 0 || isStreaming || streamError !== null;
-  const timelineRows = hasTimelineContent ? buildTimelineRows({items, liveItems, streamError}) : [];
+  // The divider sits among the committed rows, so their keys and indexes stay one memoized run.
+  const committedRows = useMemo(() => withForkDivider(items, lastCopiedTurnId), [items, lastCopiedTurnId]);
+  const timelineRows = hasTimelineContent ? buildTimelineRows({items: committedRows, liveItems, streamError}) : [];
   const activeTurnId = liveItems[0]?.turnId ?? null;
   const hasLiveOutput = hasLiveTimelineOutput(liveItems);
   if (!hasLiveOutput) streamAnimationReadyRef.current = false;
@@ -110,7 +115,7 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
   // Not compiled (TanStack Virtual), so the history's share is memoized by hand: these walk every loaded row, and the
   // timeline renders on every streamed frame and scroll range change. A stable `getItemKey` also spares TanStack
   // from re-measuring every row on each render.
-  const committedRowKeys = useMemo(() => buildTimelineRowKeys(items, earlierHistory.count), [earlierHistory.count, items]);
+  const committedRowKeys = useMemo(() => buildTimelineRowKeys(committedRows, earlierHistory.count), [committedRows, earlierHistory.count]);
   const committedTurns = useMemo(() => ({ids: new Set(items.map((item) => item.turnId)), starts: items.filter((item) => item.type === "user").length}), [items]);
   // Live rows open a new turn, so their keys continue from the history's turn count.
   const tailRowKeySignature = buildTimelineRowKeys(timelineRows.slice(committedRowKeys.length), earlierHistory.count + committedTurns.starts).join(" ");
@@ -124,7 +129,7 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
   const shouldReduceMotion = useReducedMotion();
 
   const hasLiveUserRow = liveItems[0]?.type === "user";
-  const liveUserRowIndex = hasLiveUserRow ? items.length : -1;
+  const liveUserRowIndex = hasLiveUserRow ? committedRows.length : -1;
   const previousHasLiveUserRowRef = useRef(hasLiveUserRow);
 
   // Distinct, so a settling turn rendered by both projections counts once.

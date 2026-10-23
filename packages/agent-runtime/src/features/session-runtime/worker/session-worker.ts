@@ -212,7 +212,7 @@ export class SessionWorker {
       pinned: session.pinned,
       title: session.title,
       updatedAt: session.updatedAt,
-      worktree: session.worktree !== undefined,
+      ...(session.worktree ? {worktree: session.worktree} : {}),
     };
     this.input.board.update(this.input.sessionId, session.projectPath, {activity, summary, ...(activity === "running" ? {setupStep: null} : {})});
     return session;
