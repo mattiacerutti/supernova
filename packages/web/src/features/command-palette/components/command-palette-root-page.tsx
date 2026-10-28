@@ -1,13 +1,14 @@
 import {useRef, useState} from "react";
 import Icon from "@/components/ui/icon";
 import CommandPaletteItem from "@/features/command-palette/components/command-palette-item";
+import type {CommandPaletteItemState} from "@/features/command-palette/components/command-palette-item";
 import CommandPaletteList from "@/features/command-palette/components/command-palette-list";
 import {buildCommandPaletteRows} from "@/features/command-palette/lib/command-palette-rows";
 import type {CommandPaletteRow} from "@/features/command-palette/lib/command-palette-rows";
 import {useCommandPaletteStore} from "@/features/command-palette/stores/command-palette-store";
 import type {CommandPaletteAction, CommandPaletteSession, CommandPaletteSessionSearch} from "@/features/command-palette/types/command-palette";
 import SessionTitleText from "@/features/sessions/components/session-title-text";
-import {formatRelativeTime} from "@/lib/format-relative-time";
+import {useRelativeTime} from "@/hooks/use-relative-time";
 
 type RootRow = Exclude<CommandPaletteRow, {type: "header"}>;
 
@@ -69,13 +70,26 @@ export default function CommandPaletteRootPage(props: CommandPaletteRootPageProp
             {row.action.title}
           </CommandPaletteItem>
         ) : (
-          <CommandPaletteItem {...itemState} detail={row.session.projectName} icon="session" trailing={formatRelativeTime(row.session.updatedAt)}>
-            <SessionTitleText title={row.session.title} />
-          </CommandPaletteItem>
+          <SessionRow itemState={itemState} session={row.session} />
         )
       }
       rows={rows}
       status={rows.length === 0 && !search.isPending && <p className="px-3 py-2 text-sm text-ink-faint">No matching actions or sessions.</p>}
     />
+  );
+}
+
+interface SessionRowProps {
+  readonly itemState: CommandPaletteItemState;
+  readonly session: CommandPaletteSession;
+}
+
+function SessionRow(props: SessionRowProps) {
+  const {itemState, session} = props;
+  const relativeTime = useRelativeTime(session.updatedAt);
+  return (
+    <CommandPaletteItem {...itemState} detail={session.projectName} icon="session" trailing={relativeTime}>
+      <SessionTitleText title={session.title} />
+    </CommandPaletteItem>
   );
 }
