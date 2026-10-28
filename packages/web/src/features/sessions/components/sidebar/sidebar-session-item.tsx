@@ -12,8 +12,8 @@ import SessionTitleText from "@/features/sessions/components/session-title-text"
 import SidebarSessionDetails from "@/features/sessions/components/sidebar/sidebar-session-details";
 import {hasUnseenActivity, useSessionVisitsStore} from "@/features/sessions/stores/sidebar/session-visits-store";
 import {useInlineRename} from "@/hooks/use-inline-rename";
+import {useRelativeTime} from "@/hooks/use-relative-time";
 import {cn} from "@/lib/cn";
-import {formatRelativeTime} from "@/lib/format-relative-time";
 
 interface SidebarSessionItemProps {
   readonly projectPath: string;
@@ -29,6 +29,7 @@ export default function SidebarSessionItem(props: SidebarSessionItemProps) {
   const renameSession = useRenameSession();
   const liveStatus = useSessionStatus(sessionId).status;
   const visitedAt = useSessionVisitsStore((state) => state.visits[sessionId]);
+  const relativeTime = useRelativeTime(updatedAt);
   const {inputProps, renaming, startRenaming} = useInlineRename({initialValue: title, onSave: (nextTitle) => renameSession.mutate({sessionId, title: nextTitle})});
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
 
@@ -91,7 +92,7 @@ export default function SidebarSessionItem(props: SidebarSessionItemProps) {
               ) : unseen ? (
                 <span className="inline-block size-1.5 rounded-full bg-accent" aria-label="Finished while closed" role="status" />
               ) : (
-                formatRelativeTime(updatedAt)
+                relativeTime
               )}
             </span>
             <SessionActionsMenu

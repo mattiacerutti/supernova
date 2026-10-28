@@ -18,6 +18,8 @@ All notable changes to Supernova are documented in this file.
 ### Fixed
 
 - Screen readers now announce the message composer and the sidebar's pinned, forked, and worktree session markers.
+- Fixed OpenAI subscription login failing because an installation device ID was missing.
+- Session times in the sidebar and command palette now keep counting while the app is open. Before, a session showed the time it had when it last changed or when the app started, so it could read "now" days later.
 
 ### Removed
 

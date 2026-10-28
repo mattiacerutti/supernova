@@ -114,6 +114,18 @@ test.describe("managing sessions", () => {
     await expect(details).toHaveCount(0);
   });
 
+  test("the sidebar's activity time keeps counting while nothing changes", async ({app}) => {
+    await app.page.clock.install();
+    await app.reload();
+    const row = app.sidebar.session(ScriptedModel.title);
+    await expect(row.getByText("now", {exact: true})).toBeVisible();
+
+    await app.page.clock.runFor("02:00");
+
+    // Labels refresh on wall-clock minute boundaries, so two minutes later the label reads 1m or 2m.
+    await expect(row.getByText(/^[12]m$/)).toBeVisible();
+  });
+
   test("archiving a session removes it from the sidebar and returns to a new session", async ({app}) => {
     await app.sidebar.rename(ScriptedModel.title, "To archive");
 
