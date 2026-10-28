@@ -15,6 +15,7 @@ All notable changes to Supernova are documented in this file.
 ### Fixed
 
 - Screen readers now announce the message composer and the sidebar's pinned, forked, and worktree session markers.
+- Fixed OpenAI subscription login failing because an installation device ID was missing.
 
 ### Removed
 

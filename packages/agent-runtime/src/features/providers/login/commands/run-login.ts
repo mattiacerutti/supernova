@@ -3,6 +3,7 @@ import type {ProviderLoginAuthType} from "@supernova/contracts/services/provider
 import type {ProviderLoginStep, ProviderLoginTextInput} from "@supernova/contracts/services/providers/schemas";
 import type {LoginSessions} from "@supernova/agent-runtime/features/providers/login/login-sessions";
 import {errorMessage} from "@supernova/agent-runtime/lib/errors";
+import {loadPiSettings} from "@supernova/agent-runtime/pi/config/settings";
 import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";
 
 function textInput(prompt: Exclude<AuthPrompt, {type: "select"}>): ProviderLoginTextInput {
@@ -47,31 +48,36 @@ export async function runProviderLogin(
   };
 
   try {
-    await sdk.modelRuntime.login(providerId, authType, {
-      notify,
-      prompt: async (prompt) => {
-        if (prompt.type === "select") {
+    await sdk.modelRuntime.login(
+      providerId,
+      authType,
+      {
+        notify,
+        prompt: async (prompt) => {
+          if (prompt.type === "select") {
+            return sessions.waitForInput(loginSessionId, {
+              signal: prompt.signal,
+              step: {message: prompt.message, options: [...prompt.options], type: "select"},
+            });
+          }
+
+          if (prompt.type === "manual_code") {
+            const input = textInput(prompt);
+            const step: ProviderLoginStep = latestBrowserStep
+              ? {...latestBrowserStep, manualInput: input}
+              : {authUrl: "", instructions: "Complete login in your browser, or enter the requested authorization code below.", manualInput: input, type: "browser_auth"};
+            return sessions.waitForInput(loginSessionId, {signal: prompt.signal, step});
+          }
+
           return sessions.waitForInput(loginSessionId, {
             signal: prompt.signal,
-            step: {message: prompt.message, options: [...prompt.options], type: "select"},
+            step: {input: textInput(prompt), type: "prompt"},
           });
-        }
-
-        if (prompt.type === "manual_code") {
-          const input = textInput(prompt);
-          const step: ProviderLoginStep = latestBrowserStep
-            ? {...latestBrowserStep, manualInput: input}
-            : {authUrl: "", instructions: "Complete login in your browser, or enter the requested authorization code below.", manualInput: input, type: "browser_auth"};
-          return sessions.waitForInput(loginSessionId, {signal: prompt.signal, step});
-        }
-
-        return sessions.waitForInput(loginSessionId, {
-          signal: prompt.signal,
-          step: {input: textInput(prompt), type: "prompt"},
-        });
+        },
+        signal: sessions.abortSignal(loginSessionId),
       },
-      signal: sessions.abortSignal(loginSessionId),
-    });
+      {getDeviceId: () => loadPiSettings().getOrCreateDeviceId()}
+    );
     sessions.succeed(loginSessionId);
   } catch (cause) {
     if (sessions.abortSignal(loginSessionId).aborted) {
