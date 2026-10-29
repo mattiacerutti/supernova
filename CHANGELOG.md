@@ -8,9 +8,12 @@ All notable changes to Supernova are documented in this file.
 
 ### Added
 
+- Added a divider in forked sessions where the copied conversation ends and the fork's own messages begin.
+
 ### Changed
 
 - Sidebars now use a smooth ease-out when opening and a faster ease-in when closing.
+- The sidebar's leading icon now only marks pinned sessions. Worktree and forked sessions show small markers after their title instead. Hovering or focusing a worktree or forked session opens a card beside it with its full title, status, and worktree branch.
 
 ### Fixed
 

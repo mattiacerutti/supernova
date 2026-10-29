@@ -27,6 +27,8 @@ export const Session = z.object({
   id: z.string(),
   title: z.string(),
   forked: z.boolean(),
+  /** In a fork, the last shown turn copied from its source; the fork's own turns follow it. */
+  lastCopiedTurnId: z.string().optional(),
   pinned: z.boolean(),
   projectPath: z.string(),
   worktree: SessionWorktree.optional(),
@@ -47,7 +49,7 @@ export const SessionSummary = z.object({
   forked: z.boolean(),
   title: z.string(),
   updatedAt: z.string(),
-  worktree: z.boolean(),
+  worktree: SessionWorktree.optional(),
   pinned: z.boolean(),
 });
 

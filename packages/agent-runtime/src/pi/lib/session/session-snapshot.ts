@@ -4,6 +4,7 @@ import {calculateContextTokens, estimateTokens} from "@earendil-works/pi-coding-
 import type {HistorySide} from "@supernova/contracts/services/session-runtime/procedures";
 import type {Session, SessionContextUsage, SessionEntries, SessionEntry} from "@supernova/contracts/services/sessions/schemas";
 import type {SessionRecord, TurnRecord} from "@supernova/agent-runtime/pi/lib/session/session-state";
+import {turnPositions} from "@supernova/agent-runtime/pi/lib/session/session-state";
 
 type ContextMessage = Parameters<typeof estimateTokens>[0];
 
@@ -86,6 +87,11 @@ export function entriesPage(input: {
   return {items: authoredEntries(items, turns), remaining, precedingEntryId};
 }
 
+/** A copied turn keeps the source's checkpoints, and copied turns precede the fork's own. */
+function lastCopiedTurnId(history: readonly EntryRecord[], turns: Readonly<Record<string, TurnRecord>>, sessionId: string): string | undefined {
+  return turnPositions(history, turns).findLast((turn) => turn.record.before.sessionId !== sessionId)?.turnId;
+}
+
 export function timelineEntries(history: readonly EntryRecord[]): EntryRecord[] {
   return history.filter((entry) => entry.kind !== "pi.system");
 }
@@ -103,6 +109,8 @@ export function buildSession(input: {
   readonly context: Session["context"];
 }): Session {
   const {context, record, runStart, turns} = input;
+  const forked = record.forkedFrom !== undefined;
+  const copiedTurnId = forked ? lastCopiedTurnId(input.history, turns, record.id) : undefined;
   const entries = entriesPage({side: "entries", entries: input.history, turns});
   const undone = entriesPage({side: "undone", entries: input.undone, turns, precedingEntryId: input.history.at(-1)?.id});
   // Activity stops at the live turn's user message so a running session does not keep climbing the sidebar.
@@ -112,7 +120,8 @@ export function buildSession(input: {
   return {
     id: record.id,
     title: record.title ?? "Untitled session",
-    forked: record.forkedFrom !== undefined,
+    forked,
+    ...(copiedTurnId ? {lastCopiedTurnId: copiedTurnId} : {}),
     pinned: record.pinned,
     projectPath: record.projectPath,
     ...(record.worktree ? {worktree: record.worktree} : {}),

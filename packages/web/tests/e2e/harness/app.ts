@@ -97,6 +97,20 @@ export class Sidebar {
       .evaluateAll((buttons) => buttons.map((button) => button.getAttribute("aria-label")!));
     return labels.map((label) => label.slice("Chat actions for ".length));
   }
+
+  /** The marker is an icon; the row carries the same fact as screen-reader text. */
+  public forkMarker(): Locator {
+    return this.page.getByText("Forked session", {exact: true});
+  }
+
+  public forkOf(title: string): Locator {
+    return this.session(title).filter({has: this.forkMarker()});
+  }
+
+  /** The details card beside the row titled `title`. It is portalled out of the app and has no role, so it is found by that title. */
+  public details(title: string): Locator {
+    return this.page.locator("body > *:not(:has(aside))").filter({has: this.page.getByText(title, {exact: true})});
+  }
 }
 
 export class Composer {
@@ -154,7 +168,7 @@ export class Composer {
 export class Timeline {
   public readonly root: Locator;
 
-  public constructor(page: Page) {
+  public constructor(private readonly page: Page) {
     this.root = page.getByLabel("Session timeline");
   }
 
@@ -177,6 +191,20 @@ export class Timeline {
 
   public tool(title: RegExp): Locator {
     return this.root.getByRole("button", {name: title});
+  }
+
+  public forkDivider(): Locator {
+    return this.root.getByRole("separator", {name: "Forked from an earlier session"});
+  }
+
+  /** Forks at the message showing `text` and waits for the fork to open. */
+  public async forkFrom(text: string): Promise<void> {
+    const source = this.page.url();
+    const message = this.root.locator("article").filter({has: this.page.getByText(text, {exact: true})});
+    await message.hover();
+    await message.getByRole("button", {name: "Fork from this message"}).click();
+    await this.page.getByRole("dialog", {name: "Fork session?"}).getByRole("button", {name: "Fork"}).click();
+    await expect(this.page).not.toHaveURL(source);
   }
 }
 

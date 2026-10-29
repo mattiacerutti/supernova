@@ -919,16 +919,22 @@ describe("checkpoint navigation", () => {
     const firstTurnId = turnIds(firstEvents.session).at(-1)!;
 
     const fork = await pi.sessions.fork({sessionId: source.id, turnId: firstTurnId});
+    const copiedTurnId = turnIds(fork).at(-1);
+    expect(fork.lastCopiedTurnId).toBe(copiedTurnId);
     const undo = await runRejectedSessionCommand({pi, sessionId: fork.id, run: (runtime) => runtime.undoCheckpoint({sessionId: fork.id})});
 
     expect(undo.cause).toMatchObject({_tag: "CheckpointInheritedError"});
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("one\n");
 
     // The fork's own turn keeps its snapshot, so undoing it still restores files.
-    await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: fork.id});
+    const ownTurn = await pi.sendMessage({message: "two", modelReference: selectedModelReference, sessionId: fork.id});
+    expect(ownTurn.session.lastCopiedTurnId).toBe(copiedTurnId);
     const undoOwnTurn = await runSessionCommand({pi, sessionId: fork.id, run: (runtime) => runtime.undoCheckpoint({sessionId: fork.id})});
 
     expect(undoOwnTurn.errors).toEqual([]);
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("one\n");
+    // Undone, the fork's own turn leaves the copied history ending where it did.
+    expect(turnIds(undoOwnTurn.session)).toEqual([copiedTurnId]);
+    expect(undoOwnTurn.session.lastCopiedTurnId).toBe(copiedTurnId);
   });
 });

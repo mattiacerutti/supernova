@@ -10,7 +10,7 @@ export function toSessionSummary(record: SessionRecord): SessionSummary {
     // Untitled until the title arrives; the catalog does not hold the first message.
     title: record.title ?? "Untitled session",
     updatedAt: record.updatedAt,
-    worktree: record.worktree !== undefined,
+    ...(record.worktree ? {worktree: record.worktree} : {}),
     pinned: record.pinned,
   };
 }

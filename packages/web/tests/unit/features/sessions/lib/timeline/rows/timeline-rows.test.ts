@@ -1,7 +1,7 @@
 import {describe, expect, it} from "vitest";
 import {sessionView} from "@/features/sessions/lib/session-view";
 import {buildCommittedTimelineItems, buildLiveTimelineItems} from "@/features/sessions/lib/timeline/rows/build-session-timeline";
-import {buildTimelineRowKeys, buildTimelineRows} from "@/features/sessions/lib/timeline/rows/timeline-rows";
+import {buildTimelineRowKeys, buildTimelineRows, withForkDivider} from "@/features/sessions/lib/timeline/rows/timeline-rows";
 import {assistantEntry, runningLive, sessionDocument, toolCall, toolResultEntry, transcript, userEntry} from "@tests/support/session";
 
 const EARLIER_TURNS = 3;
@@ -34,5 +34,35 @@ describe("timeline row keys", () => {
 
     expect(rows.length).toBeGreaterThan(history.length);
     expect(continued).toEqual(buildTimelineRowKeys(rows, EARLIER_TURNS));
+  });
+});
+
+describe("the fork divider", () => {
+  /** Each row as the turn it belongs to, the divider as "|", with runs of the same turn collapsed. */
+  const layout = (rows: readonly {readonly type: string; readonly turnId: string}[], turnIds: readonly string[]) =>
+    rows.map((row) => (row.type === "fork-divider" ? "|" : String(turnIds.indexOf(row.turnId)))).filter((label, index, labels) => label !== labels[index - 1]);
+
+  it.each([
+    {name: "follows the last copied turn's rows, before the fork's own", live: false},
+    {name: "precedes a live turn when the fork has none of its own yet", live: true},
+  ])("$name", ({live}) => {
+    const {history, live: liveItems} = timeline(live);
+    const turnIds = [...new Set([...history, ...liveItems].map((item) => item.turnId))];
+    const rows = buildTimelineRows({items: withForkDivider(history, turnIds[0]), liveItems, streamError: null});
+
+    expect(layout(rows, turnIds)).toEqual(["0", "|", "1"]);
+  });
+
+  it("is left out while the copied turns are not loaded", () => {
+    const {history} = timeline(false);
+
+    expect(withForkDivider(history, "not-loaded")).toBe(history);
+  });
+
+  it("keys the rows around it as they were keyed without it", () => {
+    const {history} = timeline(false);
+    const withDivider = buildTimelineRowKeys(withForkDivider(history, history[0]!.turnId), EARLIER_TURNS);
+
+    expect(withDivider.filter((key) => !key.includes("fork-divider"))).toEqual(buildTimelineRowKeys(history, EARLIER_TURNS));
   });
 });

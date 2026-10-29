@@ -301,7 +301,7 @@ describe("session commands and views", () => {
   });
 
   it("lists loaded sessions with the runtime's newest summaries, new ones, and renames and pins not yet applied, in the runtime's order", () => {
-    const summary = (id: string, title: string, updatedAt: string, pinned = false) => ({forked: false, id, pinned, title, updatedAt, worktree: false});
+    const summary = (id: string, title: string, updatedAt: string, pinned = false) => ({forked: false, id, pinned, title, updatedAt});
     const loaded = [summary("session-1", "Old", "t1"), summary("session-3", "Untouched", "t0"), summary("session-4", "Unpinning", "t0", true)];
     const entries = {
       "session-1": entry({summary: summary("session-1", "New", "t3")}),
@@ -319,7 +319,7 @@ describe("session commands and views", () => {
   });
 
   it("leaves a session being archived out, whether loaded or only in the directory", () => {
-    const summary = (id: string, updatedAt: string) => ({forked: false, id, pinned: false, title: id, updatedAt, worktree: false});
+    const summary = (id: string, updatedAt: string) => ({forked: false, id, pinned: false, title: id, updatedAt});
     const loaded = [summary("session-1", "t1"), summary("session-3", "t0")];
     const entries = {"session-2": entry({summary: summary("session-2", "t2")})};
     const optimism = {"session-1": {archived: true}, "session-2": {archived: true}};
@@ -571,7 +571,7 @@ describe("session commands and views", () => {
   });
 
   it("moves a pin at once and keeps it until the runtime confirms", async () => {
-    const summary = (id: string, updatedAt: string, pinned = false) => ({forked: false, id, pinned, title: id, updatedAt, worktree: false});
+    const summary = (id: string, updatedAt: string, pinned = false) => ({forked: false, id, pinned, title: id, updatedAt});
     const loaded = [summary("newer", "t2"), summary("older", "t1")];
     const order = () =>
       projectSessions({entries: useSessionsStore.getState().entries, loaded, optimism: useSessionsStore.getState().optimism, projectPath: "/workspace"}).map(
