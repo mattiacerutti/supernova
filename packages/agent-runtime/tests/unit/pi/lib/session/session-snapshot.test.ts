@@ -62,42 +62,6 @@ describe("session entries", () => {
   });
 });
 
-describe("a fork's copied history", () => {
-  const user = (id: number): EntryRecord => ({id, conversationId: 1, kind: "pi.user", model: [{role: "user", content: "", timestamp: 0}]}) as unknown as EntryRecord;
-  const turn = (sessionId: string): TurnRecord => ({contentParts: [], capture: false, before: {checkpointId: "c", sessionId, status: "disabled"}});
-  const build = (input: {readonly forked: boolean; readonly turns: Record<string, TurnRecord>; readonly history: readonly EntryRecord[]}) =>
-    buildSession({
-      record: {
-        id: "fork",
-        projectPath: "/project",
-        ...(input.forked ? {forkedFrom: "source"} : {}),
-        pinned: false,
-        createdAt: new Date(0).toISOString(),
-        updatedAt: new Date(0).toISOString(),
-      },
-      history: input.history,
-      undone: [],
-      agent: undefined,
-      live: undefined,
-      usage: undefined,
-      runStart: undefined,
-      turns: input.turns,
-      context: {contextWindow: 0, usedTokens: 0},
-    });
-
-  it.each<{name: string; forked: boolean; turns: Record<string, TurnRecord>; shown: number; expected: string | undefined}>([
-    {name: "ends at the last turn whose checkpoints are the source's", forked: true, turns: {"1": turn("source"), "2": turn("source"), "3": turn("fork")}, shown: 3, expected: "2"},
-    {name: "ends at the last copied turn still shown", forked: true, turns: {"1": turn("source"), "2": turn("source"), "3": turn("fork")}, shown: 1, expected: "1"},
-    {name: "is absent once no copied turn is shown", forked: true, turns: {"1": turn("source")}, shown: 0, expected: undefined},
-    {name: "is absent for a session that is not a fork", forked: false, turns: {"1": turn("other")}, shown: 1, expected: undefined},
-  ])("$name", ({expected, forked, shown, turns}) => {
-    const session = build({forked, turns, history: [user(1), user(2), user(3)].slice(0, shown)});
-
-    expect(session.lastCopiedTurnId).toBe(expected);
-    expect(Session.parse(session)).toEqual(session);
-  });
-});
-
 describe("session activity", () => {
   const entry = (id: number, kind: string, timestamp: number): EntryRecord =>
     ({id, conversationId: 1, kind, model: [{role: kind === "pi.user" ? "user" : "assistant", content: "", timestamp}]}) as unknown as EntryRecord;

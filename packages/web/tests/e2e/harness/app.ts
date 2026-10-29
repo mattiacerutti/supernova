@@ -107,9 +107,9 @@ export class Sidebar {
     return this.session(title).filter({has: this.forkMarker()});
   }
 
-  /** The details card opened beside a row, portalled out of the sidebar. */
-  public details(): Locator {
-    return this.page.locator("[data-session-details]");
+  /** The details card beside the row titled `title`. It is portalled out of the app and has no role, so it is found by that title. */
+  public details(title: string): Locator {
+    return this.page.locator("body > *:not(:has(aside))").filter({has: this.page.getByText(title, {exact: true})});
   }
 }
 
@@ -168,7 +168,7 @@ export class Composer {
 export class Timeline {
   public readonly root: Locator;
 
-  public constructor(page: Page) {
+  public constructor(private readonly page: Page) {
     this.root = page.getByLabel("Session timeline");
   }
 
@@ -194,7 +194,17 @@ export class Timeline {
   }
 
   public forkDivider(): Locator {
-    return this.root.locator('[data-timeline-row="fork-divider"]');
+    return this.root.getByRole("separator", {name: "Forked from an earlier session"});
+  }
+
+  /** Forks at the message showing `text` and waits for the fork to open. */
+  public async forkFrom(text: string): Promise<void> {
+    const source = this.page.url();
+    const message = this.root.locator("article").filter({has: this.page.getByText(text, {exact: true})});
+    await message.hover();
+    await message.getByRole("button", {name: "Fork from this message"}).click();
+    await this.page.getByRole("dialog", {name: "Fork session?"}).getByRole("button", {name: "Fork"}).click();
+    await expect(this.page).not.toHaveURL(source);
   }
 }
 

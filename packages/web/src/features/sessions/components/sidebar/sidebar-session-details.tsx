@@ -36,7 +36,7 @@ export default function SidebarSessionDetails(props: SidebarSessionDetailsProps)
   const relativeTime = useRelativeTime(updatedAt);
 
   return (
-    <div className="flex w-64 flex-col p-1" data-session-details>
+    <div className="flex w-64 flex-col p-1">
       <div className="flex items-start gap-3 px-2 pb-1 pt-1.5">
         <span className="line-clamp-3 min-w-0 flex-1 text-sm leading-5 wrap-break-word text-ink">{title}</span>
         <span className="shrink-0 text-xs leading-5 text-ink-faint">{relativeTime}</span>
