@@ -391,13 +391,15 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
 
   useLayoutEffect(syncViewport);
 
-  // Virtualized rows have no per-turn ancestor, so each row of the hovered turn is flagged.
-  const setHoveredTurn = (viewport: HTMLDivElement, turnId: string | undefined): void => {
-    for (const row of viewport.querySelectorAll<HTMLElement>("[data-turn-id]")) row.classList.toggle("turn-hover", turnId !== undefined && row.dataset.turnId === turnId);
+  // Virtualized rows have no per-turn ancestor, so each row of the hovered group is flagged. A turn's user
+  // message is its own group; otherwise hovering it would reveal the assistant's actions, and vice versa.
+  const setHoveredTurn = (viewport: HTMLDivElement, hoverGroup: string | undefined): void => {
+    for (const row of viewport.querySelectorAll<HTMLElement>("[data-hover-group]"))
+      row.classList.toggle("turn-hover", hoverGroup !== undefined && row.dataset.hoverGroup === hoverGroup);
   };
 
   const handleViewportPointerOver = (event: PointerEvent<HTMLDivElement>): void => {
-    setHoveredTurn(event.currentTarget, (event.target as HTMLElement).closest<HTMLElement>("[data-turn-id]")?.dataset.turnId);
+    setHoveredTurn(event.currentTarget, (event.target as HTMLElement).closest<HTMLElement>("[data-hover-group]")?.dataset.hoverGroup);
   };
 
   const handleViewportPointerLeave = (event: PointerEvent<HTMLDivElement>): void => {
@@ -498,7 +500,7 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
                         <div
                           className="group/turn absolute inset-s-0 w-full"
                           data-index={virtualItem.index}
-                          data-turn-id={item.turnId}
+                          data-hover-group={item.type === "user" ? `user:${item.turnId}` : item.turnId}
                           key={virtualItem.key}
                           ref={virtualizer.measureElement}
                         >
