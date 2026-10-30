@@ -4,12 +4,12 @@ import type {CommandPalettePageId} from "@/app/command-palette/hooks/use-command
 import {useCommandPaletteSessions} from "@/app/command-palette/hooks/use-command-palette-sessions";
 import CommandPalette from "@/features/command-palette/components/command-palette";
 import type {CommandPalettePageRenderer, CommandPaletteSession} from "@/features/command-palette/types/command-palette";
-import {usePrefetchFolderSuggestions} from "@/features/projects/api/command-palette/list-folder-suggestions";
+import {usePrefetchHomeFolderSuggestions} from "@/features/projects/api/command-palette/list-folder-suggestions";
 import NewSessionProjectPage from "@/features/projects/components/command-palette/new-session-project-page";
 import OpenProjectPage from "@/features/projects/components/command-palette/open-project-page";
 import {useProjectsStore} from "@/features/projects/stores/projects-store";
 import OpenSessionInPage from "@/features/sessions/components/command-palette/open-session-in-page";
-import {useMountEffect} from "@/hooks/use-mount-effect";
+import {usePrefetchInstalledEditors} from "@/features/sessions/hooks/command-palette/use-installed-editors";
 import {useSidebarStore} from "@/stores/sidebar-store";
 
 export default function AppCommandPalette() {
@@ -19,9 +19,8 @@ export default function AppCommandPalette() {
   const desktopApi = window.desktopApi;
   const addProject = useProjectsStore((state) => state.addProject);
   const expandProject = useSidebarStore((state) => state.expandProject);
-  // Open project lists the home folder first; loading it as the app starts means the page opens with its folders there.
-  const prefetchFolderSuggestions = usePrefetchFolderSuggestions();
-  useMountEffect(() => void prefetchFolderSuggestions(""));
+  usePrefetchHomeFolderSuggestions();
+  usePrefetchInstalledEditors();
 
   const handleOpenSession = (session: CommandPaletteSession): void => {
     void navigate({params: {sessionId: session.id}, to: "/session/$sessionId"});

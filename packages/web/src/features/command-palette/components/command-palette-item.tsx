@@ -20,9 +20,9 @@ export default function CommandPaletteItem(props: CommandPaletteItemProps) {
   const {children, detail, highlighted, icon, onSelect, ref, trailing} = props;
 
   return (
-    <div className={cn("flex cursor-pointer items-center gap-3 rounded-xl corner-superellipse/1.3 px-3 py-2", highlighted && "bg-overlay-hover")} onClick={onSelect} ref={ref}>
+    <div className={cn("flex cursor-pointer items-center gap-2.5 rounded-xl corner-superellipse/1.3 px-3 py-1.5", highlighted && "bg-overlay-hover")} onClick={onSelect} ref={ref}>
       <Icon className="shrink-0 text-ink-muted" name={icon} size="sm" />
-      <span className="min-w-0 truncate text-[15px] text-ink">{children}</span>
+      <span className="min-w-0 truncate text-sm leading-5 text-ink">{children}</span>
       {detail && <span className="min-w-0 max-w-1/3 shrink-0 truncate text-sm text-ink-faint">{detail}</span>}
       {trailing && <span className="ml-auto flex shrink-0 items-center pl-2 text-xs text-ink-muted">{trailing}</span>}
     </div>

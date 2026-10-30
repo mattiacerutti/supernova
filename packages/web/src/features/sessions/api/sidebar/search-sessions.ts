@@ -20,7 +20,8 @@ export function useSearchSessions(query: string, projectPaths: readonly string[]
   const search = useInfiniteQuery(searchSessionsQueryOptions(useRuntime(), query, projectPaths));
   return {
     sessions: search.data?.pages.flatMap((page) => page.sessions) ?? [],
-    isPending: search.isPending,
+    // Placeholder data is the previous query's results, so the current query is still being searched.
+    isPending: search.isPending || search.isPlaceholderData,
     hasMore: search.hasNextPage,
     loadMore: () => {
       if (search.hasNextPage && !search.isFetchingNextPage) void search.fetchNextPage();

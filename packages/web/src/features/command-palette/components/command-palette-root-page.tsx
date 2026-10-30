@@ -12,7 +12,7 @@ import {useRelativeTime} from "@/hooks/use-relative-time";
 
 type RootRow = Exclude<CommandPaletteRow, {type: "header"}>;
 
-const SESSION_SEARCH_DELAY_MS = 150;
+const SESSION_SEARCH_DELAY_MS = 100;
 
 interface CommandPaletteRootPageProps {
   readonly actions: readonly CommandPaletteAction[];
@@ -24,6 +24,7 @@ export default function CommandPaletteRootPage(props: CommandPaletteRootPageProp
   const {actions, onOpenSession, useSessionSearch} = props;
   const [query, setQuery] = useState("");
   const [sessionQuery, setSessionQuery] = useState("");
+  const [showingNoMatches, setShowingNoMatches] = useState(false);
   const sessionQueryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const closePalette = useCommandPaletteStore((state) => state.closePalette);
   const pushPage = useCommandPaletteStore((state) => state.pushPage);
@@ -37,6 +38,11 @@ export default function CommandPaletteRootPage(props: CommandPaletteRootPageProp
     else sessionQueryTimer.current = setTimeout(() => setSessionQuery(value.trim()), SESSION_SEARCH_DELAY_MS);
   };
   const rows = buildCommandPaletteRows({actions, query, sessions: search.sessions});
+  // "No matches" waits for the search of the query on screen, so it never flashes before results arrive.
+  // Once shown, it stays while the next query is searched and nothing matches locally, so typing on doesn't blink it.
+  const searchSettled = !search.isPending && sessionQuery === query.trim();
+  const noMatches = rows.length === 0 && (searchSettled || showingNoMatches);
+  if (noMatches !== showingNoMatches) setShowingNoMatches(noMatches);
 
   const handleSelect = (row: RootRow): void => {
     if (row.type === "session") {
@@ -74,7 +80,7 @@ export default function CommandPaletteRootPage(props: CommandPaletteRootPageProp
         )
       }
       rows={rows}
-      status={rows.length === 0 && !search.isPending && <p className="px-3 py-2 text-sm text-ink-faint">No matching actions or sessions.</p>}
+      status={noMatches && <p className="px-3 py-2 text-sm text-ink-faint">No matching actions or sessions.</p>}
     />
   );
 }

@@ -8,9 +8,10 @@ import {MenuLabel} from "@/components/ui/menu";
 import SearchField from "@/components/ui/search-field";
 import type {CommandPaletteItemState} from "@/features/command-palette/components/command-palette-item";
 import type {CommandPaletteHeaderRow, CommandPaletteHint} from "@/features/command-palette/types/command-palette";
+import {cn} from "@/lib/cn";
 
 const HEADER_ROW_HEIGHT = 28;
-const ITEM_ROW_HEIGHT = 40;
+const ITEM_ROW_HEIGHT = 32;
 const CommandPaletteInputRef = createContext<RefCallback<HTMLInputElement> | undefined>(undefined);
 
 function isHeaderRow(row: object): row is CommandPaletteHeaderRow {
@@ -159,7 +160,8 @@ export default function CommandPaletteList<TRow extends object>(props: CommandPa
     <>
       <SearchableList
         activeIndex={activeIndex}
-        className="pt-1"
+        // The list's padding spaces rows; a status line shown alone gets the same 12px above and below.
+        className={cn("pt-1", rows.length === 0 && status ? "pb-1" : undefined)}
         estimateSize={(index) => (rows[index] && isHeaderRow(rows[index]) ? HEADER_ROW_HEIGHT : ITEM_ROW_HEIGHT)}
         getItemKey={(row) => (isHeaderRow(row) ? `header-${row.id}` : getRowKey(row))}
         isItemSelectable={(row) => !isHeaderRow(row)}

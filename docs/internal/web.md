@@ -79,6 +79,7 @@ A helper earns a place in `lib/` when several features use it. Something used by
 - Subscribe where changing state is needed. The initial `undefined` is loading, not an authoritative empty result; reconnect delivers a fresh value. Hidden terminals should not keep receiving output.
 - Reuse `followSession` and `withSessionRuntime` from `api/sessions-sync` to share and release holds. Components read the sessions store, not remote session state directly.
 - Build query keys through the feature's `xKeys`, shaped `[feature, ...scope]`. Reuse `queryOptions().queryKey` and invalidate parent keys, never literal arrays.
+- Prefetch data a component will need with `usePrefetchQuery`, not an effect. Use `queryClient.prefetchQuery` only from event handlers. A prefetch that nothing reads yet is dropped after the default `gcTime`, so set a longer `gcTime` on the prefetch when the page may open much later.
 
 ## Testing
 

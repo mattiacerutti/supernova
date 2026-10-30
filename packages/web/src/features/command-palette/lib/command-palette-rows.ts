@@ -6,16 +6,22 @@ export type CommandPaletteRow<TSession = CommandPaletteSession> =
   | {readonly type: "action"; readonly action: CommandPaletteAction}
   | {readonly type: "session"; readonly session: TSession};
 
-interface BuildCommandPaletteRowsInput<TSession> {
+interface BuildCommandPaletteRowsInput<TSession extends {readonly title: string}> {
   readonly actions: readonly CommandPaletteAction[];
   readonly query: string;
   readonly sessions: readonly TSession[];
 }
 
-/** Sessions come last so a page of them loaded later only appends. */
-export function buildCommandPaletteRows<TSession>(input: BuildCommandPaletteRowsInput<TSession>): CommandPaletteRow<TSession>[] {
-  const {actions, query, sessions} = input;
+/**
+ * Sessions come last so a page of them loaded later only appends.
+ * Sessions are filtered again by the current query because the last search's results stay up while the next one runs.
+ * Matching a case-insensitive title substring, like the server search, only drops sessions the next results would drop too.
+ */
+export function buildCommandPaletteRows<TSession extends {readonly title: string}>(input: BuildCommandPaletteRowsInput<TSession>): CommandPaletteRow<TSession>[] {
+  const {actions, query} = input;
   const trimmedQuery = query.trim();
+  const lowerQuery = trimmedQuery.toLowerCase();
+  const sessions = input.sessions.filter((session) => session.title.toLowerCase().includes(lowerQuery));
   const matchedActions = trimmedQuery.length === 0 ? actions : matchSorter(actions, trimmedQuery, {keys: ["title", (action) => [...(action.keywords ?? [])]]});
   const sections = [...new Set(actions.map((action) => action.section))];
 

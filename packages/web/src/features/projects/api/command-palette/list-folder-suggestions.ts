@@ -1,4 +1,4 @@
-import {queryOptions, useQuery, useQueryClient} from "@tanstack/react-query";
+import {queryOptions, usePrefetchQuery, useQuery, useQueryClient} from "@tanstack/react-query";
 import {projectKeys} from "@/features/projects/api/query-keys";
 import {unwrap} from "@/runtime/runtime-result";
 import type {RuntimeClient} from "@/runtime/transport/runtime-client";
@@ -17,6 +17,12 @@ export function listFolderSuggestionsQueryOptions(runtime: RuntimeClient, query:
 export function useListFolderSuggestions(query: string) {
   const runtime = useRuntime();
   return useQuery(listFolderSuggestionsQueryOptions(runtime, query));
+}
+
+/** Open project lists the home folder first; keeping it cached for the app's run means the page always opens with its folders. */
+export function usePrefetchHomeFolderSuggestions() {
+  const runtime = useRuntime();
+  usePrefetchQuery({...listFolderSuggestionsQueryOptions(runtime, ""), gcTime: Infinity});
 }
 
 export function usePrefetchFolderSuggestions() {
