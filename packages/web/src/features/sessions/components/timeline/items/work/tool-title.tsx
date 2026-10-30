@@ -44,11 +44,7 @@ interface LabelProps {
 }
 
 function Label(props: LabelProps) {
-  return (
-    <span className="shrink-0">
-      <TitleText>{props.children}</TitleText>
-    </span>
-  );
+  return <span className="shrink-0">{props.children}</span>;
 }
 
 interface ArgumentProps {
