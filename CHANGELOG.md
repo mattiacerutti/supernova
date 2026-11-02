@@ -9,6 +9,7 @@ All notable changes to Supernova are documented in this file.
 ### Added
 
 - Added a divider in forked sessions where the copied conversation ends and the fork's own messages begin.
+- Appearance settings now include interface, code and diff, and terminal font sizes, plus comfortable, wide, and full-width conversations.
 
 ### Changed
 

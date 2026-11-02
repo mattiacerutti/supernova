@@ -1,7 +1,7 @@
 import {CodeView} from "@pierre/diffs";
 import type {FileDiffMetadata} from "@pierre/diffs";
 import {useRef} from "react";
-import {generateDiffOptions} from "@/lib/diffs/options";
+import {generateDiffOptions, getDiffLineHeight} from "@/lib/diffs/options";
 import {getHighlightWorkerPool} from "@/lib/highlighter/worker-pool";
 import {useSettingsStore} from "@/stores/settings-store";
 import type {ResolvedAppearanceMode} from "@/stores/settings-store";
@@ -10,10 +10,11 @@ import {useMountEffect} from "@/hooks/use-mount-effect";
 interface DiffViewerContentProps {
   readonly fileDiff: FileDiffMetadata;
   readonly mode: ResolvedAppearanceMode;
+  readonly lineHeight: number;
 }
 
 function DiffViewerContent(props: DiffViewerContentProps) {
-  const {fileDiff, mode} = props;
+  const {fileDiff, lineHeight, mode} = props;
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   useMountEffect(() => {
@@ -25,7 +26,7 @@ function DiffViewerContent(props: DiffViewerContentProps) {
       renderer = new CodeView(
         {
           ...generateDiffOptions(mode),
-          itemMetrics: {lineHeight: 24, spacing: 0, hunkSeparatorHeight: 0, diffHeaderHeight: 0},
+          itemMetrics: {lineHeight, spacing: 0, hunkSeparatorHeight: 0, diffHeaderHeight: 0},
           layout: {paddingTop: 0, paddingBottom: 0, gap: 0},
         },
         workerPool
@@ -49,6 +50,7 @@ interface DiffViewerProps {
 
 export default function DiffViewer(props: DiffViewerProps) {
   const mode = useSettingsStore((state) => state.resolvedMode);
+  const lineHeight = useSettingsStore((state) => getDiffLineHeight(state.fontSizes.code, state.fontSizes.interface));
 
-  return <DiffViewerContent {...props} key={mode} mode={mode} />;
+  return <DiffViewerContent {...props} key={`${mode}:${lineHeight}`} lineHeight={lineHeight} mode={mode} />;
 }

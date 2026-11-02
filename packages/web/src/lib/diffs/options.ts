@@ -1,10 +1,13 @@
 import type {FileDiffOptions, FileOptions} from "@pierre/diffs";
 import {CODE_HIGHLIGHT_THEMES} from "@/lib/highlighter/constants";
+import {DEFAULT_FONT_SIZES} from "@/stores/settings-store";
+
+const DEFAULT_CODE_LINE_HEIGHT = 24;
 
 const SUPERNOVA_DIFF_VIEW_CSS = `
 :host {
-  --diffs-font-size: 0.8125rem;
-  --diffs-line-height: 1.5rem;
+  --diffs-font-size: var(--code-font-size);
+  --diffs-line-height: calc(var(--code-font-size) * ${DEFAULT_CODE_LINE_HEIGHT} / ${DEFAULT_FONT_SIZES.code});
 }
 
 [data-diff],
@@ -93,6 +96,12 @@ const SHARED_OPTIONS = {
   overflow: "wrap",
   unsafeCSS: SUPERNOVA_DIFF_VIEW_CSS,
 } as const;
+
+export function getDiffLineHeight(codeFontSize: number, interfaceFontSize: number): number {
+  const codeScale = codeFontSize / DEFAULT_FONT_SIZES.code;
+  const interfaceScale = interfaceFontSize / DEFAULT_FONT_SIZES.interface;
+  return DEFAULT_CODE_LINE_HEIGHT * codeScale * interfaceScale;
+}
 
 export function generateFileOptions<T>(mode: "dark" | "light"): FileOptions<T, undefined> {
   return {...SHARED_OPTIONS, overflow: "scroll", theme: CODE_HIGHLIGHT_THEMES[mode], themeType: mode};

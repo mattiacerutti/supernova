@@ -86,6 +86,8 @@
   --font-sans: -apple-system, BlinkMacSystemFont, Inter, sans-serif;
   --font-mono: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
   --text-sm: 0.85rem;
+  --text-code: var(--code-font-size);
+  --text-code--line-height: calc(var(--code-font-size) * 24 / 13);
 
   /* Work tree arrivals; rows set animation-delay and animation-duration inline. */
   --animate-work-rail-grow: work-rail-grow 1s cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -112,8 +114,13 @@
   }
 }
 
+@utility max-w-conversation {
+  max-width: var(--conversation-width, 48rem);
+}
+
 @layer base {
   :root {
+    font-size: var(--interface-font-size);
     background: var(--theme-surface-deep);
     color: var(--theme-ink);
     font-synthesis: none;

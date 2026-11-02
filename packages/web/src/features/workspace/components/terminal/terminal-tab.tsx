@@ -60,7 +60,7 @@ export default function TerminalTab(props: TerminalTabProps) {
       allowProposedApi: true,
       cursorBlink: true,
       fontFamily: getComputedStyle(host).getPropertyValue("--font-mono"),
-      fontSize: 12,
+      fontSize: useSettingsStore.getState().fontSizes.terminal,
       macOptionIsMeta: true,
       scrollback: 5_000,
       theme: terminalTheme(host),
@@ -120,8 +120,9 @@ export default function TerminalTab(props: TerminalTabProps) {
     document.fonts.addEventListener("loadingdone", refit);
     const unsubscribeTheme = useSettingsStore.subscribe((state, previous) => {
       if (state.resolvedMode !== previous.resolvedMode || state.themeId !== previous.themeId) terminal.options.theme = terminalTheme(host);
-      if (state.codeFont !== previous.codeFont) {
+      if (state.codeFont !== previous.codeFont || state.fontSizes.terminal !== previous.fontSizes.terminal) {
         terminal.options.fontFamily = getComputedStyle(host).getPropertyValue("--font-mono");
+        terminal.options.fontSize = state.fontSizes.terminal;
         refit();
       }
     });
