@@ -50,7 +50,7 @@ interface DiffViewerProps {
 
 export default function DiffViewer(props: DiffViewerProps) {
   const mode = useSettingsStore((state) => state.resolvedMode);
-  const lineHeight = useSettingsStore((state) => getDiffLineHeight(state.fontSizes.code, state.fontSizes.interface));
+  const lineHeight = useSettingsStore((state) => getDiffLineHeight(state.fontSizes.code));
 
   return <DiffViewerContent {...props} key={`${mode}:${lineHeight}`} lineHeight={lineHeight} mode={mode} />;
 }

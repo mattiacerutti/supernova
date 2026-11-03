@@ -16,7 +16,7 @@ interface FileDiffViewProps {
 export default function FileDiffView(props: FileDiffViewProps) {
   const {expanded, newContents, oldContents, path, split} = props;
   const mode = useSettingsStore((state) => state.resolvedMode);
-  const lineHeight = useSettingsStore((state) => getDiffLineHeight(state.fontSizes.code, state.fontSizes.interface));
+  const lineHeight = useSettingsStore((state) => getDiffLineHeight(state.fontSizes.code));
   // Diffing both full sides lets Pierre reveal unchanged context on demand, which a patch alone cannot.
   const fileDiff = parseDiffFromFile({contents: oldContents, name: path}, {contents: newContents, name: path});
 

@@ -97,10 +97,9 @@ const SHARED_OPTIONS = {
   unsafeCSS: SUPERNOVA_DIFF_VIEW_CSS,
 } as const;
 
-export function getDiffLineHeight(codeFontSize: number, interfaceFontSize: number): number {
+export function getDiffLineHeight(codeFontSize: number): number {
   const codeScale = codeFontSize / DEFAULT_FONT_SIZES.code;
-  const interfaceScale = interfaceFontSize / DEFAULT_FONT_SIZES.interface;
-  return DEFAULT_CODE_LINE_HEIGHT * codeScale * interfaceScale;
+  return DEFAULT_CODE_LINE_HEIGHT * codeScale;
 }
 
 export function generateFileOptions<T>(mode: "dark" | "light"): FileOptions<T, undefined> {

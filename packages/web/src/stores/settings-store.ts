@@ -101,8 +101,7 @@ function setCssVariable(property: string, value: string | undefined): void {
 
 function applyFontSize(target: FontSizeTarget, size: number): void {
   if (target === "terminal") return;
-  // Code is a baseline at a 16px root; rem keeps it proportional to interface scaling.
-  setCssVariable(`--${target}-font-size`, target === "code" ? `${size / DEFAULT_FONT_SIZES.interface}rem` : `${size}px`);
+  setCssVariable(`--${target}-font-size`, `${size}px`);
 }
 
 function applyTheme(mode: DesktopTheme, themeId: ThemeId): ResolvedAppearanceMode {
