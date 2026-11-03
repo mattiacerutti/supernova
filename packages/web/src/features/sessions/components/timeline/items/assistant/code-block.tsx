@@ -6,8 +6,7 @@ import {CODE_HIGHLIGHT_THEMES} from "@/lib/highlighter/constants";
 import {getCachedHighlightedCode, highlightCode} from "@/lib/highlighter/highlight-code";
 import {useSettingsStore} from "@/stores/settings-store";
 
-const SHIKI_CLASS_NAME =
-  "scroll-fade-x overflow-x-auto [&_pre]:m-0 [&_pre]:min-w-full [&_pre]:w-max [&_pre]:p-0 [&_pre]:!bg-transparent [&_code]:font-mono [&_code]:text-[0.8125rem] [&_code]:leading-6";
+const SHIKI_CLASS_NAME = "scroll-fade-x overflow-x-auto [&_pre]:m-0 [&_pre]:min-w-full [&_pre]:w-max [&_pre]:p-0 [&_pre]:!bg-transparent [&_code]:font-mono [&_code]:text-code";
 
 interface HighlightedCodeProps {
   readonly code: string;

@@ -25,7 +25,7 @@ const components: Components = {
   code: ({children, className, ...codeProps}) => {
     const language = languageFromClassName(className);
     return (
-      <code className={cn(language ? "font-mono text-[13px]" : "rounded bg-overlay-pressed px-1 py-0.5 font-mono text-xs text-ink", className)} {...codeProps}>
+      <code className={cn(language ? "font-mono text-code" : "rounded bg-overlay-pressed px-1 py-0.5 font-mono text-xs text-ink", className)} {...codeProps}>
         {children}
       </code>
     );

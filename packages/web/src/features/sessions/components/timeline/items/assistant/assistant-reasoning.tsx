@@ -9,7 +9,7 @@ export default function AssistantReasoning(props: AssistantReasoningProps) {
   const {item} = props;
 
   return (
-    <article className="max-w-3xl">
+    <article className="max-w-conversation">
       <AssistantMessageContent streaming={item.live}>{item.event.content}</AssistantMessageContent>
     </article>
   );

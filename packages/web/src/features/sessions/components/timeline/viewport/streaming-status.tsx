@@ -20,7 +20,11 @@ export default function StreamingStatus(props: StreamingStatusProps) {
   const label = marker ?? "Thinking";
 
   return (
-    <div className={cn("relative z-10 mx-auto w-full max-w-3xl bg-surface px-5 pb-8 md:px-8", pullIntoLastMessage && "-mt-5")} data-timeline-footer="streaming-status" ref={ref}>
+    <div
+      className={cn("relative z-10 mx-auto w-full max-w-conversation bg-surface px-5 pb-8 md:px-8", pullIntoLastMessage && "-mt-5")}
+      data-timeline-footer="streaming-status"
+      ref={ref}
+    >
       {marker ? (
         <Marker role="status" variant="separator">
           <MarkerContent className="text-ink-faint">
