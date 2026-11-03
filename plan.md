@@ -118,7 +118,7 @@ Move followed state/resource ownership into Chord without rewriting behavior unn
 
 ### Implementation order
 
-1. **Resolve the blocking choices below and establish reproducible dependencies.** Build all required Pi packages from one pinned main commit; do not mix incompatible runtime/context versions. The temporary approach is a local pack script with rewritten internal dependencies and `file:` tarball pins, replaced by a suitable release later. Include transitive Pi dependencies and verify clean install/build in CI and Desktop. Target Node 24 (`24.22` was selected), matching the desktop runtime and updating types/tooling coherently.
+1. **Establish reproducible dependencies.** Select and record one exact upstream main commit containing the required APIs; build all required Pi packages from that commit, not a floating `main` reference or mixed runtime/context versions. Use a small local script to build/pack tarballs, rewrite internal Pi dependencies to those tarballs, and pin them with `file:` paths. **This is disposable release-gap tooling: keep it simple, with no generic packaging framework, custom registry or automated upstream-update system.** Include required transitive Pi packages and ensure a clean checkout can obtain the pinned artifacts and install/build in CI and Desktop. Once a published release contains the required APIs, switch to normal package versions and remove the script/tarball workaround. Target Node 24 (`24.22` was selected), matching the desktop runtime and updating types/tooling coherently.
 2. **Adapt the Pi integration.** Start with `pi/session-file.ts`, session state definitions, tool schemas and watch adapters. Known break areas: removed `viewState`, windowed history, `defineDoc` checkpoint settings, TypeBox removal from pi-ai, new watch callback shapes, contexts, and retained `runFailure` (not a running-state indicator). Confirm exact APIs against the selected pin.
 3. **Port contracts and host composition.** Replace v1 `input`/`MembersOf`/cells/listeners/resources with v2 params/placement/references/state/resource APIs. Port client reference/reconnect handling and the existing bounded socket adapter. Introduce session-host routing, worker identity/generation handling, and `Chat → SessionRuntime`; remove coordinator forwarding.
 4. **Implement catalog/status separation and update callers together.** Add local owners and owner/worker variants, move session operations into `Sessions`, connect cross-host reports, and replace sidebar summary overlays with progressively loaded live views. Wire view acquisition/release and query/depth restoration on reconnect. Port remaining followed-state owners after their focused review.
@@ -126,9 +126,10 @@ Move followed state/resource ownership into Chord without rewriting behavior unn
 
 The session-file migration is accepted as **one-way**, with a release note that downgrade is unsupported. No automatic backup feature is planned. Use disposable 1.2.0 fixtures for migration tests, never live user/dev sessions.
 
-### Resolve before the affected implementation
+### Implementation follow-through
 
-- **Listing maintenance/status retention:** choose internal catalog invalidation scope/coalescing against actual write rates; define status entry/notice retention without unbounded growth. The live-view interface and reference ownership are already decided.
+- **Listing maintenance:** choose internal catalog invalidation scope/coalescing against actual write rates. The live-view interface and reference ownership are already decided.
+- **Status cleanup:** preserve current behavior, not a new retention policy. Explicit session release removes its status entry and notices; archival and failed-initial-send cleanup use that release path. Browser disconnect and ordinary run completion do not remove the entry. Status is in-memory across server lifetimes. Wire this cleanup into the release workflow explicitly; closing a session host alone does not remove server-owned status.
 - **Worker trust:** establish session identity and generations on in-process host links, and assign release/archive/reload workflows. General browser authentication is not being added in this phase.
 - **Dependency pin/build:** verify exports and reproducibility; decide PR slicing without shipping a mixed-version runtime.
 
