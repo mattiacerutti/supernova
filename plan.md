@@ -1,6 +1,6 @@
 # Chord v2 and durable plugins: migration plan
 
-Status: draft for review. Sources are the Pi monorepo cloned at `.context/pi` (main, `90b42bc`, 2026-11-03) and the published npm packages. The repository's `.gitignore` already excludes `.context`.
+Status: draft for review. Sources are the Pi monorepo cloned at `.context/pi` (main, `a57438e`, 2026-11-03) and the published npm packages. The repository's `.gitignore` already excludes `.context`.
 
 ## What I found
 
@@ -8,7 +8,7 @@ Status: draft for review. Sources are the Pi monorepo cloned at `.context/pi` (m
 
 - Supernova pins every Pi package at **1.2.0**. The latest release is **1.5.0** (2026-11-02).
 - In the published `@earendil-works/chord@1.5.0`, the root export is still **Chord v1**. Chord v2 ships under the experimental subpath `@earendil-works/chord/next`. That subpath has the kernel (contracts, hosts, links, documents, registries, `self.follow`, `self.writable`) but no Node components.
-- On Pi's `main` (unreleased), v2 moved to the root, v1 moved to `/old`, and the Node components became exports: `/http`, `/workers`, `/plugins`, `/plugins/runtime`, `/app`, `/surfaces`, `/web`, `/react`, `/tui`. The plugin loader is unreleased and only on `main`.
+- On Pi's `main` (unreleased), v2 is the root and Chord v1 is deleted (`ed4f488`). The Node components are exports: `/http`, `/workers`, `/plugins`, `/plugins/runtime`, `/app`, `/surfaces`, `/web`, `/react`, `/tui`. The plugin loader is unreleased and only on `main`.
 - `pi-durable@1.5.0` depends on `chord@1.5.0` exactly, and its `StoreStorage` already imports `chord/next`.
 
 ### Consequence: the Pi upgrade and the Chord v2 port are one step
@@ -50,17 +50,57 @@ Agreed. `startServer` owns all of these:
 
 Those conflict with the Vite client, the Electron shell, per-session SQLite files plus the catalog, and the desktop's local API child. The low-level parts fit: `createHost`, `createPlugins`/`createPluginRuntime`, optionally `createHttp`, `/surfaces`' `startClient` and `keepConnected`, and `/react`.
 
+### p2: Pi's reference app on Durable and Chord v2
+
+`apps/p2` (imported 2026-11-03, `05dc8d2`) is a self-hosted Durable UI built from Chord plugins: about 64k lines and 32 plugins. Its README says it is an unsupported prototype that "will be gone soon". We read it for patterns and import nothing from it. What it shows:
+
+- **It doesn't use the app kit.** It builds on `createHost`, `createPlugins`, `createWorkers`, its own `node:http` server, and `webSocketLink` over its own `ws` server with a capped socket (`src/hosts/server.ts`), like our `runtime-socket.ts`. Its web UI is its own esbuild bundle. This confirms the low-level route.
+- **Its own plugin API.** `@p2/app/v1` re-exports Chord plus p2's runtime, split by kind (`src/api/v1/{index,node,server,worker,web,tui}.ts`), with `createPlugins({ api: { name: "@p2/app", versions: ["v1"] } })` (`src/hosts/plugins.ts`). Agent extensions come from a registry read with `registryReader`-style composition (`durableRegistry(extensions, switches, …)` in `src/runtime/worker.ts`). This is the clearest preview of the shape Pi's API will have. It is still p2's, not Pi's.
+- **One worker process per session.** Each session runs in its own forked worker (`createWorkers`, `src/hosts/session-workers.ts`), with the Harness opened in a `self.open` native on the session's own SQLite file (`openNodeSqliteStorage`). The server relays clients to the session's worker by contract placement (`hostAddress: sessionHost`).
+- **The windowed view.** `Chat.view` follows Durable's window directly with `self.follow(observeConversation)`. Clients merge it with `ConversationTranscript` and page older entries through a `Chat.entries` method over `Conversation.entries()`. Measured: opening sends 50 entries instead of 101. Our design differs because we build our own document (turns, undo, checkpoints) on the server, so we read history server-side (1a) instead of merging on the client.
+- **State.** It uses persisted `defineState` documents, `self.derive`, `self.writable` exposed through a derive, and `self.follow` only for Durable views.
+- **Schemas.** It types open values with a pi-schema cast (`schema as Schema<T>`, `src/runtime/schema.ts`), which is the replacement for our `json<T>()`.
+
 **Risk to watch:** p3 is being built on the app kit. If Pi's plugin API v1 re-exports app-kit objects (`AppInfo`, `WorkerInfo`, `Sessions`, `Files`) or assumes one worker process per session, Supernova must serve those contracts too. Phase 4 depends on this.
 
 ## Phase 1: upgrade Pi to 1.5.x and port to Chord v2
 
 Goal: same product behaviour on current Pi and Chord v2. No new features.
 
-**Decision needed first: which import path.**
-- Option (a): port now against `chord@1.5.0` `/next`. When the next release moves v2 to the root, the switch is one search-and-replace.
-- Option (b): wait for that release.
+### Decided
 
-I recommend (a). The server and the web client ship from one build, so wire compatibility is not an issue. The cost is that `/next` is marked experimental, and `main` has changed it since 1.5.0. Those changes are small for us: `host.get` before `load` throws, HTTP denies by default, and new `onError` kinds.
+- **Pi comes from a pinned `main` commit, not a release (temporary).** We need commits that are only on main. The current pin is `a57438e` (2026-11-03). Since `ed4f488`, Chord v1 is deleted: v2 is the root export, and `/http`, `/plugins`, `/surfaces` and the other Node components are exported, so the `/next` question is gone.
+  - We build the tarballs ourselves: a throwaway script clones Pi at the pinned SHA, builds it, runs `npm pack` on the packages we use, and rewrites their internal dependencies to the local tarballs. Supernova pins them with `file:` paths. The script is unpolished and unpublished, and it goes away once a Pi release has what we need.
+  - Packages: chord, pi-durable, pi-coding-agent, pi-ai, plus their internal dependencies pi-schema, pi-telemetry, pi-codemode, pi-agent-core, pi-mcp and pi-tui. pi-env is not needed.
+  - Pi's preview registry (`pkg.earendil.com/<pkg>@<sha>`) would replace the script, but it needs an auth token.
+- **The session-file migration is accepted as one-way.** Sessions are personal, and nobody downgrades. Changelog entry: no downgrade after this release. No backup in the product. The developer's own dev sessions are backed up at `~/.supernova/dev/agent/sessions.backup-pi-1.2.0-20261103-130434` (241 files, checked identical to the source).
+- **Node 24.** `mise.toml` pins `node = "24.22"` and `@types/node` moves to 24. Pi main needs at least 22.19. Electron 44.10 bundles Node 24.22.1, so the desktop's server already runs on 24, and dev now matches what ships.
+
+- **History is read only through `Conversation.entries()` and the view's window (agreed).** History means every committed entry on the current branch, fork chain included, oldest first. It is not the model context, which comes from `conversation.context()`. Phase 1 keeps the server-built session document. Merging Durable's window on the client, as p2 does, is a possible Phase 2 item if the rebuild per update proves costly.
+  - `SessionFile` keeps the branch's history cached in memory. It also keeps one Durable watch of the current branch, whose current value supplies the newest entries and the live documents (`pi.live`, `pi.usage`, `pi.agent`).
+  - A snapshot reuses what it already holds and queries SQLite only for entries missing *before* the window. With `tail` the newest cached entry:
+    - The window has no `before`, or `before <= tail`: nothing is missing. Take the window's entries after `tail`. No query.
+    - `before > tail`: entries were committed between the cache and the window. Query `entries({minEntryId: tail + 1, maxEntryId: before})` once, then append the window.
+    - First open (empty cache): query everything up to `before`, then append the window.
+  - Entry IDs are not contiguous within a conversation (the session allocates them), so the gap check uses the view's `before` field and never `id + 1`.
+  - The window counts entries, not turns: Durable's default is 50, then appends, then trims to 50 past 100. Its size affects only how often a gap query runs, never correctness. A run longer than the window loses nothing, because the gap query fills what left it.
+  - While a run streams, partials change `pi.live` but add no entry, so a snapshot runs no query.
+  - `session-snapshot.ts` is unchanged.
+
+- **Followed state moves into Chord objects (option C), in Phase 1.** Four classes own state that clients follow live. Each keeps its logic and its file, but its published state moves into a document of a local Chord object, and Chord owns its lifetime:
+  - `SessionWorker` → `Session {sessionId}` (document `supernova.session`). The factory opens the worker with `self.open` and gives it a `write(edit)` function. `publish()` edits the draft instead of replacing the document: it pushes only new entries and replaces only the small fields (`live`, `usage`, `context`), and assigns a history page whole only after navigation. `SessionRuntime`'s worker map goes away.
+  - `SessionBoard` → `SessionDirectory {}`.
+  - `LoginSessions` → `ProviderLogins {}`.
+  - `Terminals` → `Terminals {}`, with one document for the list and one keyed document per terminal's output. Output is written with `appendText`, and trimmed with slack (from 256 KB down to 192 KB) so the full-string rewrite happens once per 64 KB, not on every chunk.
+  - The remote services in `runtime-services.ts` (what the browser holds) expose the local objects' members and keep the Zod parse. `cell`, `listener`, `resource` and the per-client copies are gone.
+  - Classes that need another object's state get a reference from the factory (`self.get(SessionDirectory, {})`) through their constructor, so their tests can pass a fake. Tests of the objects themselves run on an in-memory Chord host.
+  - The browser receives exactly what it does today.
+- **The agent-runtime rule "features are plain TypeScript, Chord is only the remote boundary" is rewritten in Phase 1.** It was written for Chord v1. `docs/internal/agent-runtime.md` will say that followed state and lifetimes belong to Chord objects, and logic stays in classes and functions.
+
+### Still open for Phase 1
+
+- Who keeps a `Session` object alive when no tab holds it (see 1b).
+- Keep `ServiceResult` in Phase 1 (proposed), and whether to ship one PR or two.
 
 ### 1a. Pi API breaks (not Chord)
 
@@ -85,9 +125,10 @@ Verify:
 | `remote(name, { input, variants })` in `packages/contracts/src/services/*/services.ts` | `remote(name, { params, hostAddress: () => Server(), variants })`, with `Server = hostKind("server")` in `lib/protocol.ts` |
 | `json<T>()` = `Type.Unsafe` | A pi-schema `Schema<T>` cast over `unknown()`. Zod stays the one boundary check. Chord refuses schemas with non-enumerable keys, so TypeBox `Unsafe` may be refused. Verify. |
 | `MembersOf<typeof X>` | `Reference<typeof X>` / `Held<typeof X>` |
-| `self.state({ x: cell(...) })` + `self.listen(listener(...))` + `replace(..., {diff: true})` | Mirror the feature's value with `self.follow(attach)` (the feature emits `WatchCall`s with its own ops), or with `self.writable` plus `self.derive`. See 2.1. |
+| `self.state({ x: cell(...) })` + `self.listen(listener(...))` + `replace(..., {diff: true})` | The remote object exposes a local object's document: `self.get(SessionDirectory, {}).sessions` |
 | `self.resources({ document: resource({ open }) })` | `self.open(open, close)` |
-| `replicatedState` in `SessionBoard`, `Terminals`, `LoginSessions`, `SessionWorker` | Gone in v2. Replace with a small feature-owned observable that the service follows (2.1 decides which). |
+| `replicatedState` in `SessionBoard`, `Terminals`, `LoginSessions`, `SessionWorker` | Documents (`defineState`) of local objects, changed with `doc.change(draft => …)` (see "Decided") |
+| `SessionRuntime`'s `Map<sessionId, Promise<SessionWorker>>` | One `Session {sessionId}` object per session. Chord creates and ends it, and closes the worker with it. A local object with params lives only while referenced, so something must hold it while a run is active and no tab is open (open question). |
 | `acceptWebSockets(...)` in `apps/server/src/runtime-socket.ts` | `host.accept(webSocketLink(boundedSocket(ws)), { principal: { kind: "owner" } }, ctx)` per connection |
 | Client: `host.get(X, {}, { at })`, `handle.ready`, `onStatus("gone")` | `client.connect(link, { principal }, ctx)`, `await client.load([], ctx)`, then `host.hold` (sync) or `await host.get`. "Gone" comes from watching `ref.state` for `ended`/`failed`. |
 | Every call without a context | Context last, required (`BACKGROUND_CONTEXT` at the edges) |
@@ -101,17 +142,16 @@ Verify:
   - Close a terminal while a tab shows it. The "gone" state should appear.
   - Run a long streaming answer and compare frame timing with the current build.
   - Open a packaged desktop build against its local API child.
+  - Close every tab while an answer streams, then reopen the session. The run should have finished, and the session should show the whole answer.
+- Integration tests per object: the ops a `Session` publish emits during streaming (appends only, no `["r", …]` and no whole `entries` array), and that a terminal chunk is one append op.
 
-Docs: `docs/pi-compatibility.md` (it says Pi 1.1.0; update to the new version), `docs/internal/{architecture,contracts,agent-runtime}.md` (cells and `MembersOf` wording), and a `CHANGELOG.md` entry for the session-file migration (no downgrade).
+Docs: `docs/pi-compatibility.md` (it says Pi 1.1.0; update to the new version), `docs/internal/{architecture,contracts}.md` (cells and `MembersOf` wording), `docs/internal/agent-runtime.md` (the rule above, and "Streams" and "Serving a feature" rewritten for Chord objects), and a `CHANGELOG.md` entry for the session-file migration (no downgrade).
 
 ## Phase 2: let Chord v2 replace our plumbing
 
 Each item is optional and independent. Do one only when it removes code without losing behaviour. Ordered by value.
 
-1. **Feature state into services.** Today `runtime-services.ts` copies every feature value into a cell and diffs the whole value per change. Phase 1 has to pick a replacement anyway:
-   - `self.follow` carries the feature's own ops, so there is no full diff per frame. That matters for terminal output and the session document.
-   - A derive over a `self.writable` is shorter, but it diffs the whole value per change.
-   - Pick per service. Measure the session document with a long transcript.
+1. **Terminal output as a byte channel.** p2 sends PTY bytes over a separate WebSocket and keeps only control in Chord (`apps/p2/plugins/terminals/service.ts`). Consider it only if measurements show the output documents cost too much.
 2. **Reconnect loop.** `runtime-client.ts` reconnects every 1 s forever. Chord's `keepConnected` (root export, `surfaces/connection.ts`) adds a backoff from 250 ms to 5 s and reconnects at once on visibility or online events. It also drops stale sockets (25 s without pings) and times out a connect after 20 s. This helps remote use.
 3. **Server socket.** Chord's `/http` links endpoint has a capped output buffer, a heartbeat, a host allow-list and an `Authenticators` registry. We have the cap, no heartbeat and no auth. Adoption is blocked by its `Origin` check: the desktop renderer (`supernova://app`) and the Vite dev proxy likely send an origin it refuses. Verify, and revisit together with authentication. Until then, keep our `ws` server.
 4. **Errors.** v2 carries `PluginError(code, message, details)` across links. That could remove the `ServiceResult` envelope (`run`/`fail` in `runtime-services.ts`, `unwrap`/`runtimeError` at 35 web call sites). The trade-off is that `code` is a plain string, so typed `FailureCode<Method>` would need a typed helper. Decide before touching it.
@@ -146,7 +186,7 @@ Verify:
 - Editing a plugin reloads it without restarting the server. A running tool call finishes on its old code, as Durable's reload rules say.
 
 Decisions:
-- **In-process vs one worker process per session (`/workers`).** In-process is simpler and matches today. Per-session workers isolate crashing plugins and would match p3's host model. I recommend in-process unless Pi's API turns out to require worker hosts.
+- **In-process vs one worker process per session (`/workers`).** In-process is simpler and matches today. Per-session workers isolate crashing plugins and match p3's host model; p2 already runs one worker per session (`src/hosts/session-workers.ts`). I recommend in-process unless Pi's API turns out to require worker hosts.
 - **Project-level plugin roots.** Opening a project would run its code, which is the same trust issue extensions have today.
 
 ## Phase 4: load Pi's durable plugins (blocked on Pi)
@@ -180,7 +220,7 @@ Out of scope until Phase 4 shows what Pi plugins need.
 
 ## Open questions for you
 
-1. Phase 1 on `chord@1.5.0` `/next` now, or wait for the release with v2 at the root?
+1. ~~Phase 1 on `/next` or wait for a release?~~ Decided: a pinned main commit, built locally (Phase 1, "Decided").
 2. In-process plugins, or one worker process per session?
 3. Global plugin root only, or project roots too?
 4. Keep `ServiceResult`, or move to `PluginError` (Phase 2.4)?
