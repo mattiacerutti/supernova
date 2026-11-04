@@ -8,7 +8,7 @@ import {estimateTokens} from "@earendil-works/pi-coding-agent";
 import {afterEach, describe, expect, it, vi} from "vitest";
 import type {CheckpointStore} from "@supernova/agent-runtime/features/session-runtime/checkpoints/checkpoint-store";
 import type {Session} from "@supernova/contracts/services/sessions/schemas";
-import type {SessionDirectoryState} from "@supernova/contracts/services/sessions/services";
+import type {SessionStatuses} from "@supernova/contracts/services/sessions/services";
 import {
   assistantTexts,
   createPiTestRuntime,
@@ -48,9 +48,9 @@ function shownToolCalls(versions: readonly Session[]): Array<{readonly name: str
   });
 }
 
-/** Every activity the board showed for a session, in order, without repeats. */
-function activities(board: readonly SessionDirectoryState[], sessionId: string): string[] {
-  return board.flatMap((value) => value.sessions[sessionId]?.activity ?? []).filter((activity, index, all) => activity !== all[index - 1]);
+/** Every activity status showed for a session, in order, without repeats; an idle session with nothing to show is absent. */
+function activities(board: readonly SessionStatuses[], sessionId: string): string[] {
+  return board.map((value) => value.sessions[sessionId]?.activity ?? "idle").filter((activity, index, all) => activity !== all[index - 1]);
 }
 
 /** The pending blocking compactions any version showed, and the summaries entries carried. */
@@ -126,10 +126,10 @@ describe("sending messages through Pi sessions", () => {
     vi.spyOn(pi.titleGenerator, "generateSessionTitle").mockRejectedValue(new Error("Title generation failed"));
     pi.faux.setResponses([fauxAssistantMessage("Done.")]);
 
-    const {session} = await pi.sendMessage({message: "Fix the flaky tests", modelReference: selectedModelReference, sessionId: info.id});
+    await pi.sendMessage({message: "Fix the flaky tests", modelReference: selectedModelReference, sessionId: info.id});
 
     expect((await pi.store.find(info.id))!.title).toBeUndefined();
-    expect(session.title).toBe("Untitled session");
+    expect(await pi.sessions.record({sessionId: info.id})).toMatchObject({title: "Untitled session"});
   });
 
   it("sends authored text and images to the provider while displaying authored content parts", async () => {
@@ -231,9 +231,13 @@ describe("sending messages through Pi sessions", () => {
     await pi.appendConversation(info.id, {requestText: "Older request", assistantText: "Older response."});
     // Sized to cross the compaction threshold but stay under the window, so the engine compacts before the request
     // rather than on overflow; the text's token estimate is the engine's (`estimateTokens`).
+    // Earlier turns with automatic compaction off, so none compacts before the run this test watches.
+    pi.settings.applyOverrides({compaction: {enabled: false}});
     const request = "x".repeat(Math.floor((selectedPiModel.contextWindow - 20_000) * 3.5));
     await pi.appendConversation(info.id, {requestText: request, assistantText: "Old response."});
     expect(estimateTokens({role: "user", content: request, timestamp: 0})).toBeLessThan(selectedPiModel.contextWindow);
+    // The context now sits below the window but within the reserve: the next request crosses the threshold.
+    pi.settings.applyOverrides({compaction: {enabled: true, reserveTokens: selectedPiModel.contextWindow - 100_000}});
     // The engine compacts before the request once the estimate crosses the threshold, so the summary comes first.
     pi.faux.setResponses([fauxAssistantMessage("Compacted summary."), fauxAssistantMessage("Done.")]);
 
@@ -280,7 +284,8 @@ describe("sending messages through Pi sessions", () => {
     const {session} = await pi.sendMessage({message: "third", modelReference: selectedModelReference, sessionId: info.id});
     expect(pi.loadCount).toBe(loadsBefore);
 
-    await pi.sessionRuntime.dispose();
+    // The session's host stops and its file closes; the next read starts it again from the file.
+    await pi.sessionRuntime.release({sessionId: info.id, workspacePath: pi.defaultProjectRoot});
     const reopened = await pi.sessions.get({sessionId: info.id});
     expect(reopened.entries).toEqual(session.entries);
     expect(turnContents(reopened)).toEqual([[{text: "first", type: "text"}], [{text: "second", type: "text"}], [{text: "third", type: "text"}]]);
@@ -461,23 +466,31 @@ describe("sending messages through Pi sessions", () => {
     const pi = await createPiTestRuntime();
     runtimes.push(pi);
     const {info} = await pi.createSession();
-    let completeTitleGeneration: (() => void) | undefined;
-    const titleGenerationStarted = new Promise<void>((resolveStarted) => {
-      vi.spyOn(pi.titleGenerator, "generateSessionTitle").mockImplementation(
+    // Preparation reads the session's skills; holding that read open holds the send before it prompts Pi.
+    let completePreparation: (() => void) | undefined;
+    const preparationStarted = new Promise<void>((resolveStarted) => {
+      vi.spyOn(pi.resourceCache, "listSkills").mockImplementation(
         () =>
-          new Promise<string>((resolveTitle) => {
-            completeTitleGeneration = () => resolveTitle("Generated title");
+          new Promise((resolveSkills) => {
+            completePreparation = () => resolveSkills([]);
             resolveStarted();
           })
       );
     });
     pi.faux.setResponses([fauxAssistantMessage("Should not run.")]);
 
-    const sendRun = pi.sessionRuntime.sendMessage({contentParts: [{text: "Fix it", type: "text"}], modelReference: selectedModelReference, sessionId: info.id});
+    const sendRun = pi.sessionRuntime.sendMessage({
+      contentParts: [
+        {text: "Use ", type: "text"},
+        {id: "skill-1", kind: "skill", name: "anything", type: "reference", value: "anything"},
+      ],
+      modelReference: selectedModelReference,
+      sessionId: info.id,
+    });
 
-    await titleGenerationStarted;
+    await preparationStarted;
     await pi.sessionRuntime.abort({sessionId: info.id});
-    completeTitleGeneration?.();
+    completePreparation?.();
     await expect(sendRun).rejects.toThrow("Session was cancelled.");
 
     expect(pi.faux.state.callCount).toBe(0);

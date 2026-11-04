@@ -3,6 +3,8 @@ import {userProcessEnv} from "@supernova/agent-runtime/lib/user-process-env";
 
 /** Output kept for clients that attach later. Enough for a few screens of scrollback without holding a build log forever. */
 const HISTORY_LIMIT_CHARS = 256 * 1024;
+/** Trimmed with slack: a trim resends the whole buffer, so it happens once per 64 KiB, not on every chunk. */
+const HISTORY_TRIMMED_CHARS = 192 * 1024;
 const KILL_GRACE_MS = 1_000;
 /** A busy PTY delivers hundreds of reads per second; each published alone is a revision, a frame, and a redraw. */
 const OUTPUT_COALESCE_MS = 8;
@@ -91,5 +93,5 @@ export class TerminalProcess {
 }
 
 export function overflow(output: string): number {
-  return Math.max(0, output.length - HISTORY_LIMIT_CHARS);
+  return output.length > HISTORY_LIMIT_CHARS ? output.length - HISTORY_TRIMMED_CHARS : 0;
 }

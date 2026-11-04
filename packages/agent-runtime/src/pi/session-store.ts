@@ -4,7 +4,7 @@ import {rm} from "node:fs/promises";
 import {join} from "node:path";
 import {getAgentDir} from "@earendil-works/pi-coding-agent";
 import type {SettingsManager} from "@earendil-works/pi-coding-agent";
-import type {SessionNotice} from "@supernova/contracts/services/session-runtime/procedures";
+import type {SessionNotice} from "@supernova/contracts/services/sessions/procedures";
 import type {SessionWorktree} from "@supernova/contracts/services/sessions/schemas";
 import {resolveProjectPath} from "@supernova/agent-runtime/lib/project-path";
 import {loadPiSettings} from "@supernova/agent-runtime/pi/config/settings";
@@ -44,10 +44,21 @@ export class SessionStore {
   private readonly root: string;
   private readonly open = new Map<string, Promise<OpenSession>>();
   private readonly settingsCache = new Map<string, SettingsManager>();
+  private readonly catalogListeners = new Set<() => void>();
   private catalogOpening: Promise<SessionCatalog> | undefined;
 
   public constructor(private readonly deps: SessionStoreDeps) {
     this.root = deps.root ?? join(getAgentDir(), SESSIONS_DIR);
+  }
+
+  /** Opening imports legacy sessions; after it, reads are synchronous SQLite calls. */
+  public async openCatalog(): Promise<Pick<SessionCatalog, "find" | "list">> {
+    return this.catalog();
+  }
+
+  public onCatalogChange(listener: () => void): () => void {
+    this.catalogListeners.add(listener);
+    return () => this.catalogListeners.delete(listener);
   }
 
   public async create(input: {readonly id: string; readonly projectPath: string; readonly worktree?: SessionWorktree; readonly forkedFrom?: string}): Promise<SessionRecord> {
@@ -66,6 +77,7 @@ export class SessionStore {
       updatedAt: now,
     };
     catalog.insert(record);
+    this.catalogChanged();
 
     try {
       await this.openSession(input.id);
@@ -90,7 +102,9 @@ export class SessionStore {
   }
 
   public async update(sessionId: string, change: (record: SessionRecord) => SessionRecord): Promise<SessionRecord> {
-    return (await this.catalog()).update(sessionId, change);
+    const updated = (await this.catalog()).update(sessionId, change);
+    this.catalogChanged();
+    return updated;
   }
 
   public async file(sessionId: string): Promise<SessionFile> {
@@ -158,6 +172,7 @@ export class SessionStore {
     await this.release(sessionId);
     await rm(join(this.root, sessionId), {force: true, recursive: true});
     (await this.catalog()).delete(sessionId);
+    this.catalogChanged();
   }
 
   public async dispose(): Promise<void> {
@@ -169,6 +184,10 @@ export class SessionStore {
 
   private databasePath(sessionId: string): string {
     return join(this.root, sessionId, "session.sqlite");
+  }
+
+  private catalogChanged(): void {
+    for (const listener of [...this.catalogListeners]) listener();
   }
 
   private openSession(sessionId: string): Promise<OpenSession> {

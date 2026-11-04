@@ -1,6 +1,4 @@
 import {useMutation, useQueryClient} from "@tanstack/react-query";
-import type {InfiniteData} from "@tanstack/react-query";
-import type {ProjectSessionsListResult} from "@supernova/contracts/services/projects/procedures";
 import {forgetSession} from "@/features/sessions/api/sessions-sync";
 import {sessionKeys} from "@/features/sessions/api/query-keys";
 import {useSessionsStore} from "@/features/sessions/stores/sessions-store";
@@ -20,15 +18,11 @@ export function useArchiveSession() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (input: ArchiveSessionInput) => unwrap(runtime.projects.archiveSession(input)),
+    mutationFn: (input: ArchiveSessionInput) => unwrap(runtime.sessions.archive(input)),
+    // Hidden until the listings drop it; they re-query on the archive itself.
     onMutate: (input) => patchOptimism(input.sessionId, {archived: true}),
     onError: (_error, input) => patchOptimism(input.sessionId, {archived: undefined}),
     onSuccess: async (result) => {
-      // Drop it from the loaded pages too, or forgetting its optimism brings the row back.
-      queryClient.setQueryData<InfiniteData<ProjectSessionsListResult>>(
-        sessionKeys.list(result.projectPath),
-        (data) => data && {...data, pages: data.pages.map((page) => ({...page, sessions: page.sessions.filter((session) => session.id !== result.sessionId)}))}
-      );
       forgetSession(result.sessionId);
       await queryClient.invalidateQueries({queryKey: sessionKeys.branches(result.projectPath)});
     },

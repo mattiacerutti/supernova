@@ -1,7 +1,4 @@
 import {randomUUID} from "node:crypto";
-import type {MutableReplicatedState} from "@earendil-works/chord";
-import {replicatedState} from "@earendil-works/chord";
-import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import type {
   CompactSessionPayload,
   LoadHistoryPayload,
@@ -11,7 +8,9 @@ import type {
   SendMessagePayload,
   UndoCheckpointPayload,
 } from "@supernova/contracts/services/session-runtime/procedures";
-import {CheckpointConflictError, sessionActivityOf} from "@supernova/contracts/services/session-runtime/procedures";
+import type {SessionActivity} from "@supernova/contracts/services/sessions/procedures";
+import {CheckpointConflictError} from "@supernova/contracts/services/session-runtime/procedures";
+import {sessionActivityOf} from "@supernova/contracts/services/sessions/procedures";
 import type {Session} from "@supernova/contracts/services/sessions/schemas";
 import type {CheckpointRef, CheckpointStatus} from "@supernova/agent-runtime/pi/lib/session/session-state";
 import {findSelectedModel} from "@supernova/agent-runtime/pi/lib/models/selected-model";
@@ -20,27 +19,32 @@ import type {SessionFile} from "@supernova/agent-runtime/pi/session-file";
 import type {SessionStore} from "@supernova/agent-runtime/pi/session-store";
 import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";
 import type {ResourceCache} from "@supernova/agent-runtime/pi/resource-cache";
+import type {SessionReport} from "@supernova/contracts/services/sessions/procedures";
 import type {CheckpointStore} from "@supernova/agent-runtime/features/session-runtime/checkpoints/checkpoint-store";
 import {redoCheckpoint} from "@supernova/agent-runtime/features/session-runtime/worker/commands/redo-checkpoint";
 import {revertToMessage} from "@supernova/agent-runtime/features/session-runtime/worker/commands/revert-to-message";
 import {sendMessage} from "@supernova/agent-runtime/features/session-runtime/worker/commands/send-message";
 import {undoCheckpoint} from "@supernova/agent-runtime/features/session-runtime/worker/commands/undo-checkpoint";
-import type {SessionBoard} from "@supernova/agent-runtime/features/session-runtime/worker/session-board";
 import type {TitleGenerator} from "@supernova/agent-runtime/features/session-runtime/worker/title-generator";
 
+export interface SessionWorkerPorts {
+  readonly publish: (session: Session) => Promise<void>;
+  readonly report: (report: SessionReport) => Promise<void>;
+}
+
 export interface SessionWorkerInput {
-  readonly board: SessionBoard;
   readonly checkpointStore: CheckpointStore;
+  readonly ports: SessionWorkerPorts;
   readonly resourceCache: ResourceCache;
   readonly sdk: Pick<PiSdk, "modelRuntime">;
   readonly sessionId: string;
-  readonly store: SessionStore;
+  readonly store: Pick<SessionStore, "file" | "find">;
   readonly titleGenerator: TitleGenerator;
 }
 
 export class SessionWorker {
-  public readonly document: MutableReplicatedState<Session>;
-  public readonly store: SessionStore;
+  public readonly store: Pick<SessionStore, "file" | "find">;
+  public readonly ports: SessionWorkerPorts;
   public readonly sdk: Pick<PiSdk, "modelRuntime">;
   public readonly resourceCache: ResourceCache;
   public readonly titleGenerator: TitleGenerator;
@@ -50,14 +54,18 @@ export class SessionWorker {
   private cancelled = false;
   private readonly background = new Set<Promise<unknown>>();
   private readonly stopWatching: () => void;
+  private published: Session;
+  /** The activity last reported, so status changes only when it does, not on every streamed partial. */
+  private activity: SessionActivity | undefined;
 
   private constructor(
     private readonly input: SessionWorkerInput,
     public readonly file: SessionFile,
-    document: MutableReplicatedState<Session>
+    initial: Session
   ) {
-    this.document = document;
+    this.published = initial;
     this.store = input.store;
+    this.ports = input.ports;
     this.sdk = input.sdk;
     this.resourceCache = input.resourceCache;
     this.titleGenerator = input.titleGenerator;
@@ -70,7 +78,8 @@ export class SessionWorker {
   public static async open(input: SessionWorkerInput): Promise<SessionWorker> {
     const file = await input.store.file(input.sessionId);
     const session = await file.snapshot(await SessionWorker.record(input));
-    return new SessionWorker(input, file, replicatedState(session));
+    await input.ports.publish(session);
+    return new SessionWorker(input, file, session);
   }
 
   public async sendMessage(input: SendMessagePayload): Promise<void> {
@@ -111,20 +120,18 @@ export class SessionWorker {
     await this.file.abort();
   }
 
-  public async current(): Promise<Session> {
-    await this.enqueue(async () => undefined);
-    return this.document.value;
-  }
-
-  public refresh(): Promise<Session> {
+  /** A navigation moves the leaf, which no engine frame announces. */
+  public republish(): Promise<Session> {
     return this.enqueue(() => this.publish());
   }
 
+  public async current(): Promise<Session> {
+    await this.enqueue(async () => undefined);
+    return this.published;
+  }
+
   public reportError(message: string): void {
-    void SessionWorker.record(this.input).then(
-      (record) => this.input.board.notify(this.input.sessionId, record.projectPath, {level: "error", message}),
-      () => undefined
-    );
+    void this.ports.report({kind: "notice", notice: {level: "error", message}}).catch(() => undefined);
   }
 
   /** Best-effort: a failed capture leaves the boundary uncovered rather than failing the turn. */
@@ -204,17 +211,14 @@ export class SessionWorker {
 
   private async publish(): Promise<Session> {
     const session = await this.file.snapshot(await SessionWorker.record(this.input));
-    this.document.replace(BACKGROUND_CONTEXT, session);
+    await this.ports.publish(session);
+    this.published = session;
     const activity = sessionActivityOf(session.live);
-    const summary = {
-      id: session.id,
-      forked: session.forked,
-      pinned: session.pinned,
-      title: session.title,
-      updatedAt: session.updatedAt,
-      ...(session.worktree ? {worktree: session.worktree} : {}),
-    };
-    this.input.board.update(this.input.sessionId, session.projectPath, {activity, summary, ...(activity === "running" ? {setupStep: null} : {})});
+    // Status carries activity only; titles and ordering reach listings through the catalog.
+    if (activity !== this.activity) {
+      this.activity = activity;
+      await this.ports.report({kind: "activity", activity}).catch(() => undefined);
+    }
     return session;
   }
 

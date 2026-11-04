@@ -3,7 +3,8 @@ import {existsSync} from "node:fs";
 import {mkdir, readdir, readFile, rename, rm} from "node:fs/promises";
 import {join} from "node:path";
 import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
-import type {Models, ModelThinkingLevel} from "@earendil-works/pi-ai";
+import type {ModelThinkingLevel} from "@earendil-works/pi-ai";
+import {createModels} from "@earendil-works/pi-ai/models";
 import type {ConversationId, EntryId} from "@earendil-works/pi-durable";
 import {configure, createRegistry, Harness, ROOT_CONVERSATION_ID} from "@earendil-works/pi-durable";
 import {openNodeSqliteStorage} from "@earendil-works/pi-durable/storage/sqlite/node";
@@ -27,7 +28,8 @@ function uncapturedTurn(sessionId: string, contentParts: readonly TurnRecord["co
 }
 
 async function writeSessionFile(path: string, session: LegacySession): Promise<void> {
-  const harness = await Harness.open(await openNodeSqliteStorage(path), {models: {} as Models, registry: createRegistry()}, context);
+  // Writing entries calls no model; the Harness still wraps the registry it is given.
+  const harness = await Harness.open(await openNodeSqliteStorage(path), {models: createModels(), registry: createRegistry()}, context);
   try {
     await harness.root(context, {agent: {cwd: session.cwd}});
     await harness.commit(async (tx) => {

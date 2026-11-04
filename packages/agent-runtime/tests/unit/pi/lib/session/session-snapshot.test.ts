@@ -56,7 +56,8 @@ describe("session entries", () => {
     expect(session.entries.items[0]).not.toHaveProperty("before");
     expect(authored).not.toHaveProperty("contentParts");
     expect(undone).not.toHaveProperty("contentParts");
-    expect(session.title).toBe("Untitled session");
+    // The catalog record is not copied into the conversation.
+    expect(session).not.toHaveProperty("title");
     expect(Session.parse(session)).toEqual(session);
     expect(Session.safeParse({...session, entries: {...session.entries, items: [{...authored, contentParts: [{type: "text", text: 1}]}]}}).success).toBe(false);
   });

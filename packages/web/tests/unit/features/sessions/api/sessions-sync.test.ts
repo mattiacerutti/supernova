@@ -1,14 +1,13 @@
 import type {ModelReference, Session, UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
-import type {SessionRuntimeService} from "@supernova/contracts/services/session-runtime/services";
-import type {SessionDirectoryEntry, SessionDirectoryState, SessionsService} from "@supernova/contracts/services/sessions/services";
+import type {ListedSession, SessionStatusEntry, SessionStatuses, SessionsView} from "@supernova/contracts/services/sessions/services";
 import {afterEach, beforeEach, describe, expect, it, vi} from "vitest";
 import {sessionActions} from "@/features/sessions/api/conversation/session-commands";
 import {followSession, markSeenAsItChanges, syncSessions} from "@/features/sessions/api/sessions-sync";
-import {projectSessions, sessionView} from "@/features/sessions/lib/session-view";
+import {listedSessions, sessionView} from "@/features/sessions/lib/session-view";
 import {useSessionsStore} from "@/features/sessions/stores/sessions-store";
 import {hasUnseenActivity, useSessionVisitsStore} from "@/features/sessions/stores/sidebar/session-visits-store";
 import {sessionToastManager} from "@/lib/toast";
-import type {RuntimeClient} from "@/runtime/transport/runtime-client";
+import type {ChatOwner, RuntimeClient, SessionsOwner} from "@/runtime/transport/runtime-client";
 import {assistantEntry, page, runningLive, sessionDocument, text, transcript, turnAt, userEntry} from "@tests/support/session";
 import type {FakeState} from "@tests/support/fake-state";
 import {fakeState} from "@tests/support/fake-state";
@@ -26,11 +25,11 @@ const NAVIGATION_METHODS = {redo: "redoCheckpoint", revert: "revertToMessage", u
 
 /**
  * How the page shows a session: its document (`document`, an empty session by default; `null` before it loaded),
- * with the store's directory entry and optimism.
+ * with the store's status and optimism.
  */
 function live(sessionId = "session-1", document: Session | null = session({id: sessionId})) {
-  const {entries, optimism} = useSessionsStore.getState();
-  const view = sessionView({entry: entries[sessionId], optimism: optimism[sessionId], session: document ?? undefined});
+  const {optimism, records, statuses} = useSessionsStore.getState();
+  const view = sessionView({entry: statuses[sessionId], optimism: optimism[sessionId], record: records[sessionId], session: document ?? undefined});
   return {...view, liveMessage: view.liveTurn?.userMessage?.contentParts, turnIds: view.turns.map((turn) => turn.id)};
 }
 
@@ -48,8 +47,12 @@ function undoneLast(document: Session): Session {
   return {...document, entries: page(document.entries.items.slice(0, 1)), undone: page(document.entries.items.slice(1), document.entries.items[0]!.id)};
 }
 
-function entry(input?: Partial<SessionDirectoryEntry>): SessionDirectoryEntry {
-  return {activity: "idle", notices: [], projectPath: "/workspace", setupStep: null, summary: null, ...input};
+function entry(input?: Partial<SessionStatusEntry>): SessionStatusEntry {
+  return {activity: "idle", notices: [], setupStep: null, ...input};
+}
+
+function listed(id: string, title: string, updatedAt: string, pinned = false, projectPath = "/workspace"): ListedSession {
+  return {forked: false, id, pinned, projectPath, title, updatedAt};
 }
 
 /** A failed result with any code; each fake returns one its method declares. */
@@ -75,18 +78,20 @@ async function waitUntil(assertion: () => void | Promise<void>): Promise<void> {
 /** Server-side state the fake services publish, and the calls the client made to them. */
 interface FakeServices {
   readonly client: RuntimeClient;
-  readonly directory: FakeState<SessionDirectoryState>;
+  readonly statuses: FakeState<SessionStatuses>;
   /** Each session's document. */
   readonly documents: Map<string, FakeState<Session>>;
-  readonly sessionRuntime: {-readonly [K in keyof Omit<SessionRuntimeService, "session">]: SessionRuntimeService[K]};
-  readonly sessions: {-readonly [K in keyof Omit<SessionsService, "directory">]: SessionsService[K]};
+  readonly records: Map<string, ListedSession>;
+  readonly view: FakeState<SessionsView>;
+  readonly chat: {-readonly [K in keyof Omit<ChatOwner, "session">]: ChatOwner[K]};
+  readonly sessions: {-readonly [K in keyof Omit<SessionsOwner, "view">]: SessionsOwner[K]};
   /** The sessions the client held, in order. */
   readonly held: string[];
 }
 
 /** A runtime client backed by local state, as Chord's handles expose the server's: each session is held by id. */
 function fakeServices(): FakeServices {
-  const directory = fakeState<SessionDirectoryState>({sessions: {}});
+  const statuses = fakeState<SessionStatuses>({sessions: {}});
   const documents = new Map<string, FakeState<Session>>();
   const held: string[] = [];
   const documentOf = (sessionId: string) => {
@@ -97,7 +102,10 @@ function fakeServices(): FakeServices {
     }
     return document;
   };
-  const sessionRuntime = {
+  const records = new Map<string, ListedSession>();
+  const view = fakeState<SessionsView>({projects: {}, open: null});
+  const recordOf = (sessionId: string) => records.get(sessionId) ?? listed(sessionId, "Session", "2026-01-01T00:00:00.000Z");
+  const chat = {
     abort: vi.fn(async () => ok),
     compact: vi.fn(async () => ok),
     loadHistory: vi.fn(async () => ({ok: true, value: page([], null, 0)}) as const),
@@ -105,35 +113,38 @@ function fakeServices(): FakeServices {
     revertToMessage: vi.fn(async () => ok),
     sendMessage: vi.fn(async () => ok),
     undoCheckpoint: vi.fn(async () => ok),
-  } as FakeServices["sessionRuntime"];
+  } as FakeServices["chat"];
   const sessions = {
     create: vi.fn(async (payload) => ({ok: true, value: session({id: payload.id})}) as const),
-    fork: vi.fn(async () => ({ok: true, value: session()}) as const),
-    get: vi.fn(async ({sessionId}) => ({ok: true, value: documents.get(sessionId)?.value ?? session({id: sessionId})}) as const),
+    fork: vi.fn(async () => ({ok: true, value: listed("fork", "Session", "2026-01-01T00:00:00.000Z")}) as const),
     listComposerSuggestions: vi.fn(async () => ({ok: true as const, value: {items: []}})),
     listModels: vi.fn(async () => ({ok: true as const, value: []})),
-    rename: vi.fn(async () => ({ok: true, value: session()}) as const),
-  } as FakeServices["sessions"];
+    rename: vi.fn(async () => ok),
+    openSession: vi.fn(async ({sessionId}: {readonly sessionId: string}) => (await view.change((draft) => void (draft.open = recordOf(sessionId))), ok)),
+    closeSession: vi.fn(async () => (await view.change((draft) => void (draft.open = null)), ok)),
+    pin: vi.fn(async () => ok),
+  } as unknown as FakeServices["sessions"];
   // Only what the sessions feature uses; the other services are never reached.
   const client = {
-    sessions: Object.assign(sessions, {directory}),
-    holdSession: (sessionId: string) => {
+    sessions: new Proxy(sessions, {get: (target, member) => (member === "view" ? view : target[member as keyof typeof target])}),
+    status: {statuses},
+    holdChat: (sessionId: string) => {
       held.push(sessionId);
       // Methods are looked up per call, so tests can replace one after creating the client.
-      const service = new Proxy(sessionRuntime, {
+      const service = new Proxy(chat, {
         get: (target, member) => (member === "session" ? documentOf(sessionId) : target[member as keyof typeof target]),
       });
-      return {service, ready: Promise.resolve(), release: () => undefined};
+      return {service, ready: Promise.resolve(), onGone: () => () => undefined, release: () => undefined};
     },
     ready: async () => undefined,
     onConnectionChange: () => () => undefined,
     dispose: async () => undefined,
   } as unknown as RuntimeClient;
-  return {client, directory, documents, held, sessionRuntime, sessions};
+  return {client, statuses, documents, records, view, held, chat, sessions};
 }
 
-function setDirectory(services: FakeServices, sessions: Record<string, SessionDirectoryEntry>): void {
-  services.directory.replace({sessions});
+function setStatuses(services: FakeServices, sessions: Record<string, SessionStatusEntry>): Promise<void> {
+  return services.statuses.replace({sessions});
 }
 
 describe("session commands and views", () => {
@@ -141,14 +152,14 @@ describe("session commands and views", () => {
 
   beforeEach(() => {
     disconnect();
-    useSessionsStore.setState({documents: {}, entries: {}, loadErrors: {}, optimism: {}});
+    useSessionsStore.setState({documents: {}, statuses: {}, loadErrors: {}, optimism: {}});
     useSessionVisitsStore.setState({visits: {}});
   });
 
   afterEach(() => {
     disconnect();
     disconnect = () => undefined;
-    useSessionsStore.setState({documents: {}, entries: {}, loadErrors: {}, optimism: {}});
+    useSessionsStore.setState({documents: {}, statuses: {}, loadErrors: {}, optimism: {}});
     useSessionVisitsStore.setState({visits: {}});
   });
 
@@ -165,7 +176,7 @@ describe("session commands and views", () => {
     return {actions: sessionActions(services.client), document, open, services};
   }
 
-  it("keeps every value of a followed session's replicated document in the store", async () => {
+  it("keeps every value of a followed session's conversation and record in the store", async () => {
     const {document, open, services} = setup();
     services.documents.set("session-1", fakeState(session()));
 
@@ -173,10 +184,28 @@ describe("session commands and views", () => {
     await waitUntil(() => expect(services.held).toEqual(["session-1"]));
     await waitUntil(() => expect(document("session-1")).toEqual(session()));
 
-    services.documents.get("session-1")!.change((draft) => {
-      draft.title = "Renamed";
-    });
-    expect(document("session-1")?.title).toBe("Renamed");
+    // A rename reaches the page through the tab's view, the conversation untouched.
+    await waitUntil(() => expect(useSessionsStore.getState().records["session-1"]?.title).toBe("Session"));
+    await services.view.change((draft) => void (draft.open = listed("session-1", "Renamed", "2026-01-01T00:00:00.000Z")));
+    await waitUntil(() => expect(useSessionsStore.getState().records["session-1"]?.title).toBe("Renamed"));
+    expect(document("session-1")).toEqual(session());
+  });
+
+  it("opens one session at a time: the next page's open replaces it, and the old page leaving does not clear it", async () => {
+    const services = fakeServices();
+    const first = followSession(services.client, "session-1");
+    await waitUntil(() => expect(services.view.value.open?.id).toBe("session-1"));
+
+    // The next page mounts before the first one unmounts, as a route change does.
+    const second = followSession(services.client, "session-2");
+    await waitUntil(() => expect(services.view.value.open?.id).toBe("session-2"));
+    first();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(services.sessions.closeSession).not.toHaveBeenCalled();
+    expect(services.view.value.open?.id).toBe("session-2");
+
+    second();
+    await waitUntil(() => expect(services.view.value.open).toBeNull());
   });
 
   it("keeps the branch it has seen as the document's window moves, and drops it when history restarts", () => {
@@ -282,60 +311,62 @@ describe("session commands and views", () => {
     expect(useSessionsStore.getState().documents["session-1"]![side].items[0]).toBe(changed);
   });
 
-  it("shows what the runtime's directory reports, with no optimism, until the document says otherwise", () => {
+  it("shows what the runtime's status reports, with no optimism, until the document says otherwise", async () => {
     const {services} = setup();
 
-    setDirectory(services, {"session-1": entry({activity: "running"}), "session-2": entry({setupStep: "worktree"})});
+    await setStatuses(services, {"session-1": entry({activity: "running"}), "session-2": entry({setupStep: "worktree"})});
     expect(live("session-1", null)).toMatchObject({status: "streaming"});
     expect(live("session-2")).toMatchObject({setupStep: "worktree", status: "idle"});
 
-    setDirectory(services, {"session-1": entry({activity: "compacting"}), "session-2": entry()});
+    await setStatuses(services, {"session-1": entry({activity: "compacting"}), "session-2": entry()});
     expect(live("session-1", null)).toMatchObject({status: "compacting"});
     expect(live("session-2")).toMatchObject({setupStep: null, status: "idle"});
     expect(useSessionsStore.getState().optimism).toEqual({});
 
-    // The directory's activity replicates apart from the document; a known document is the source so status and
-    // content never disagree within one update.
+    // Status replicates apart from the document; a known document is the source so status and content never
+    // disagree within one update.
     expect(live()).toMatchObject({status: "idle"});
     expect(live("session-2", session({id: "session-2", live: runningLive()}))).toMatchObject({status: "streaming"});
   });
 
-  it("lists loaded sessions with the runtime's newest summaries, new ones, and renames and pins not yet applied, in the runtime's order", () => {
-    const summary = (id: string, title: string, updatedAt: string, pinned = false) => ({forked: false, id, pinned, title, updatedAt});
-    const loaded = [summary("session-1", "Old", "t1"), summary("session-3", "Untouched", "t0"), summary("session-4", "Unpinning", "t0", true)];
-    const entries = {
-      "session-1": entry({summary: summary("session-1", "New", "t3")}),
-      "session-2": entry({summary: summary("session-2", "Just created", "t2")}),
-      elsewhere: entry({projectPath: "/other", summary: summary("elsewhere", "Other project", "t9")}),
-    };
+  it("lists the live listing with renames and pins not yet applied, in listing order", () => {
+    const items = [listed("session-1", "New", "t3"), listed("session-3", "Untouched", "t0"), listed("session-4", "Unpinning", "t0", true)];
     const optimism = {"session-3": {pinned: true, title: "Renaming"}, "session-4": {pinned: false}};
 
-    expect(projectSessions({entries, loaded, optimism, projectPath: "/workspace"}).map((session) => [session.id, session.title, session.pinned])).toEqual([
+    expect(listedSessions({items, optimism, projectPath: "/workspace", starting: []}).map((session) => [session.id, session.title, session.pinned])).toEqual([
       ["session-3", "Renaming", true],
       ["session-1", "New", false],
-      ["session-2", "Just created", false],
       ["session-4", "Unpinning", false],
     ]);
   });
 
-  it("leaves a session being archived out, whether loaded or only in the directory", () => {
-    const summary = (id: string, updatedAt: string) => ({forked: false, id, pinned: false, title: id, updatedAt});
-    const loaded = [summary("session-1", "t1"), summary("session-3", "t0")];
-    const entries = {"session-2": entry({summary: summary("session-2", "t2")})};
-    const optimism = {"session-1": {archived: true}, "session-2": {archived: true}};
+  it("shows a session this client is starting until the listing has it, in its project only", () => {
+    const optimism = {"session-2": {message: {id: "m", contentParts, timestamp: "t2"}}, elsewhere: {message: {id: "m", contentParts, timestamp: "t9"}}};
+    const starting = [listed("session-2", "Just created", "t2"), listed("elsewhere", "Elsewhere", "t9", false, "/other")];
+    const items = [listed("session-1", "One", "t1")];
 
-    expect(projectSessions({entries, loaded, optimism, projectPath: "/workspace"}).map((session) => session.id)).toEqual(["session-3"]);
+    expect(listedSessions({items, optimism, projectPath: "/workspace", starting}).map((session) => session.id)).toEqual(["session-2", "session-1"]);
+    expect(listedSessions({items: [listed("session-2", "Just created", "t2"), ...items], optimism, projectPath: "/workspace", starting}).map((session) => session.id)).toEqual([
+      "session-2",
+      "session-1",
+    ]);
+  });
+
+  it("leaves a session being archived out", () => {
+    const items = [listed("session-1", "One", "t1"), listed("session-3", "Three", "t0")];
+
+    expect(listedSessions({items, optimism: {"session-1": {archived: true}}, projectPath: "/workspace", starting: []}).map((session) => session.id)).toEqual(["session-3"]);
   });
 
   it("shows a sent message until the send resolves", async () => {
     const {actions, services} = setup();
     let accept!: () => void;
-    services.sessionRuntime.sendMessage = vi.fn(() => new Promise<typeof ok>((resolve) => (accept = () => resolve(ok))));
+    services.chat.sendMessage = vi.fn(() => new Promise<typeof ok>((resolve) => (accept = () => resolve(ok))));
 
     actions.sendMessage({contentParts, modelReference: model, sessionId: "session-1"});
 
     expect(live()).toMatchObject({liveMessage: contentParts, status: "streaming"});
-    await waitUntil(() => expect(services.sessionRuntime.sendMessage).toHaveBeenCalledWith({captureCheckpoints: true, contentParts, modelReference: model}));
+    await waitUntil(() => expect(services.chat.sendMessage).toHaveBeenCalledWith({captureCheckpoints: true, contentParts, modelReference: model}));
     accept();
     await waitUntil(() => expect(live()).toMatchObject({liveMessage: undefined, status: "idle"}));
   });
@@ -347,20 +378,20 @@ describe("session commands and views", () => {
     open("session-1");
     await waitUntil(() => expect(document("session-1")).toEqual(initial));
     let accept!: () => void;
-    services.sessionRuntime.sendMessage = vi.fn(() => new Promise<typeof ok>((resolve) => (accept = () => resolve(ok))));
+    services.chat.sendMessage = vi.fn(() => new Promise<typeof ok>((resolve) => (accept = () => resolve(ok))));
 
     actions.sendMessage({contentParts, modelReference: model, sessionId: "session-1"});
     expect(live("session-1", document("session-1"))).toMatchObject({liveMessage: contentParts, turnIds: ["1"], undoneTurns: []});
     expect(document("session-1")?.undone).toEqual(initial.undone);
-    await waitUntil(() => expect(services.sessionRuntime.sendMessage).toHaveBeenCalledOnce());
+    await waitUntil(() => expect(services.chat.sendMessage).toHaveBeenCalledOnce());
     const served = services.documents.get("session-1")!;
     // An extension's continuation: a user entry with nothing authored, so it belongs to the turn before it.
     const continuation = transcript([userEntry({parts: [text("Continuation")], authored: false})], {firstId: 6});
-    served.replace({...initial, entries: page([...initial.entries.items, ...continuation])});
+    await served.replace({...initial, entries: page([...initial.entries.items, ...continuation])});
     expect(live("session-1", document("session-1"))).toMatchObject({liveMessage: contentParts, turnIds: ["1"]});
     expect(useSessionsStore.getState().optimism["session-1"]?.message).toBeDefined();
 
-    served.replace(session({entries: page([...served.value!.entries.items, {...turnAt(7), contentParts}]), runStart: 7}));
+    await served.replace(session({entries: page([...served.value!.entries.items, {...turnAt(7), contentParts}]), runStart: 7}));
     expect(live("session-1", document("session-1"))).toMatchObject({liveMessage: contentParts, liveTurn: {id: "7"}, turnIds: ["1"], undoneTurns: []});
     accept();
     await waitUntil(() => expect(useSessionsStore.getState().optimism["session-1"]?.message).toBeUndefined());
@@ -374,7 +405,7 @@ describe("session commands and views", () => {
     open("session-1");
     await waitUntil(() => expect(document("session-1")).toEqual(initial));
     const undoneTurns = live("session-1", document("session-1")).undoneTurns;
-    services.sessionRuntime.sendMessage = vi.fn(async () => failure("GenericError", "Model unavailable"));
+    services.chat.sendMessage = vi.fn(async () => failure("GenericError", "Model unavailable"));
 
     actions.sendMessage({contentParts, modelReference: model, sessionId: "session-1"});
     expect(live("session-1", document("session-1"))).toMatchObject({liveMessage: contentParts, undoneTurns: []});
@@ -382,13 +413,13 @@ describe("session commands and views", () => {
     await waitUntil(() => expect(live("session-1", document("session-1"))).toMatchObject({error: "Model unavailable", liveMessage: undefined, status: "idle", undoneTurns}));
   });
 
-  it("shows the runtime's notices as toasts in their session's queue: one for all extension notices, one per other notice", () => {
+  it("shows the runtime's notices as toasts in their session's queue: one for all extension notices, one per other notice", async () => {
     const {services} = setup();
     const add = vi.spyOn(sessionToastManager("session-1"), "add").mockReturnValue("toast-1");
     const notice = (id: string, message: string, extensionPath?: string) => ({id, at: "t1", level: "warning" as const, message, ...(extensionPath ? {extensionPath} : {})});
     const failure = {id: "n3", at: "t2", level: "error" as const, message: "The message was not answered (no_model)."};
 
-    setDirectory(services, {"session-1": entry({notices: [notice("n1", 'subscribes to "message_update", which Supernova does not deliver.', "/ext/fixture.ts")]})});
+    await setStatuses(services, {"session-1": entry({notices: [notice("n1", 'subscribes to "message_update", which Supernova does not deliver.', "/ext/fixture.ts")]})});
     expect(add).toHaveBeenCalledTimes(1);
     expect(add.mock.calls[0]?.[0]).toMatchObject({title: "Some extensions are limited", timeout: 0, type: "warning"});
 
@@ -397,13 +428,13 @@ describe("session commands and views", () => {
       notice("n1", 'subscribes to "message_update", which Supernova does not deliver.', "/ext/fixture.ts"),
       notice("n2", "registers commands (fixture), which Supernova does not support.", "/ext/other.ts"),
     ];
-    setDirectory(services, {"session-1": entry({notices: both})});
-    setDirectory(services, {"session-1": entry({notices: both})});
+    await setStatuses(services, {"session-1": entry({notices: both})});
+    await setStatuses(services, {"session-1": entry({notices: both})});
     expect(add).toHaveBeenCalledTimes(1);
     expect(add.mock.calls[0]?.[0].actionProps).toMatchObject({children: "Details"});
 
     // A failure of the session's own work is its own, fading toast.
-    setDirectory(services, {"session-1": entry({notices: [...both, failure]})});
+    await setStatuses(services, {"session-1": entry({notices: [...both, failure]})});
     expect(add).toHaveBeenCalledTimes(2);
     expect(add.mock.calls[1]?.[0]).toMatchObject({title: "Something went wrong", description: failure.message, type: "error"});
     expect(add.mock.calls[1]?.[0]).not.toHaveProperty("timeout");
@@ -416,7 +447,7 @@ describe("session commands and views", () => {
   ] as const)("holds $action optimistically on $outcome until $decision", async ({outcome, code, decision, action}) => {
     const {actions, services} = setup();
     const forceFlags: boolean[] = [];
-    services.sessionRuntime[NAVIGATION_METHODS[action]] = vi.fn(async (payload: {readonly force?: boolean}) => {
+    services.chat[NAVIGATION_METHODS[action]] = vi.fn(async (payload: {readonly force?: boolean}) => {
       forceFlags.push(payload.force ?? false);
       if (!payload.force) return failure(code, "Refused.");
       return decision === "failed retry" ? failure("GenericError", "Restore failed") : ok;
@@ -455,14 +486,14 @@ describe("session commands and views", () => {
     open("session-1");
     await waitUntil(() => expect(document("session-1")).toEqual(before));
     let reply!: () => void;
-    services.sessionRuntime[NAVIGATION_METHODS[navigation.action]] = vi.fn(() => new Promise<typeof ok>((resolve) => (reply = () => resolve(ok))));
+    services.chat[NAVIGATION_METHODS[navigation.action]] = vi.fn(() => new Promise<typeof ok>((resolve) => (reply = () => resolve(ok))));
 
     const outcome = actions.navigateCheckpoint({...navigation, sessionId: "session-1"});
     expect(live("session-1", document("session-1"))).toMatchObject({turnIds: shown});
 
     // The runtime publishes the navigated document first; the reply follows.
-    await waitUntil(() => expect(services.sessionRuntime[NAVIGATION_METHODS[navigation.action]]).toHaveBeenCalledOnce());
-    services.documents.get("session-1")!.replace(after);
+    await waitUntil(() => expect(services.chat[NAVIGATION_METHODS[navigation.action]]).toHaveBeenCalledOnce());
+    await services.documents.get("session-1")!.replace(after);
     expect(live("session-1", document("session-1"))).toMatchObject({turnIds: shown});
     reply();
     await expect(outcome).resolves.toEqual({status: "applied"});
@@ -471,7 +502,7 @@ describe("session commands and views", () => {
 
   it("reports a navigation the server rejects outright by its code", async () => {
     const {actions, services} = setup();
-    services.sessionRuntime.undoCheckpoint = vi.fn(async () => failure("CheckpointInheritedError", "Inherited."));
+    services.chat.undoCheckpoint = vi.fn(async () => failure("CheckpointInheritedError", "Inherited."));
 
     const outcome = await actions.navigateCheckpoint({action: "undo", lastTurnId: null, sessionId: "session-1"});
 
@@ -497,7 +528,9 @@ describe("session commands and views", () => {
       workspace: {baseRef: "main", mode: "worktree"},
     });
 
-    expect(document("new-session")).toMatchObject({id: "new-session", entries: {items: []}, projectPath: "/workspace"});
+    expect(document("new-session")).toMatchObject({id: "new-session", entries: {items: []}});
+    // Its record shows it in its project's sidebar before the server answers.
+    expect(useSessionsStore.getState().records["new-session"]).toMatchObject({id: "new-session", projectPath: "/workspace", title: "Untitled session"});
     expect(live("new-session")).toMatchObject({liveMessage: contentParts, setupStep: "worktree", status: "streaming"});
     resolveCreate();
     await expect(pending).resolves.toEqual({status: "started"});
@@ -515,41 +548,41 @@ describe("session commands and views", () => {
     expect(useSessionsStore.getState().optimism["new-session"]).toBeUndefined();
   });
 
-  it("guards session commands while the server reports work", () => {
+  it("guards session commands while the server reports work", async () => {
     const {actions, services} = setup();
-    setDirectory(services, {"session-1": entry({activity: "running"})});
+    await setStatuses(services, {"session-1": entry({activity: "running"})});
 
     actions.sendMessage({contentParts, modelReference: model, sessionId: "session-1"});
     actions.compactSession({modelReference: model, sessionId: "session-1"});
 
-    expect(services.sessionRuntime.sendMessage).not.toHaveBeenCalled();
-    expect(services.sessionRuntime.compact).not.toHaveBeenCalled();
+    expect(services.chat.sendMessage).not.toHaveBeenCalled();
+    expect(services.chat.compact).not.toHaveBeenCalled();
   });
 
   it("shows a stop until the server reports the session idle", async () => {
     const {actions, services} = setup();
-    setDirectory(services, {"session-1": entry({activity: "running"})});
+    await setStatuses(services, {"session-1": entry({activity: "running"})});
 
     actions.abortSession("session-1");
 
     expect(live()).toMatchObject({status: "stopping"});
-    await waitUntil(() => expect(services.sessionRuntime.abort).toHaveBeenCalledOnce());
+    await waitUntil(() => expect(services.chat.abort).toHaveBeenCalledOnce());
     // The abort answered, but the directory still says running: the stop stays shown.
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(live()).toMatchObject({status: "stopping"});
-    setDirectory(services, {"session-1": entry({activity: "idle"})});
+    await setStatuses(services, {"session-1": entry({activity: "idle"})});
     await waitUntil(() => expect(live()).toMatchObject({status: "idle"}));
   });
 
   it("shows a compaction from the request until the server's compaction ends", async () => {
     const {actions, services} = setup();
     let finish!: () => void;
-    services.sessionRuntime.compact = vi.fn(() => new Promise<typeof ok>((resolve) => (finish = () => resolve(ok))));
+    services.chat.compact = vi.fn(() => new Promise<typeof ok>((resolve) => (finish = () => resolve(ok))));
 
     actions.compactSession({modelReference: model, sessionId: "session-1"});
 
     expect(live()).toMatchObject({status: "compacting"});
-    await waitUntil(() => expect(services.sessionRuntime.compact).toHaveBeenCalledOnce());
+    await waitUntil(() => expect(services.chat.compact).toHaveBeenCalledOnce());
     finish();
     await waitUntil(() => expect(live()).toMatchObject({status: "idle"}));
   });
@@ -561,7 +594,7 @@ describe("session commands and views", () => {
     const stopMarking = markSeenAsItChanges("session-1");
     await waitUntil(() => expect(document("session-1")).toBeDefined());
 
-    services.documents.get("session-1")!.change((draft) => {
+    await services.documents.get("session-1")!.change((draft) => {
       draft.updatedAt = "2026-01-01T00:05:00.000Z";
     });
 
@@ -570,19 +603,16 @@ describe("session commands and views", () => {
     stopMarking();
   });
 
-  it("moves a pin at once and keeps it until the runtime confirms", async () => {
-    const summary = (id: string, updatedAt: string, pinned = false) => ({forked: false, id, pinned, title: id, updatedAt});
-    const loaded = [summary("newer", "t2"), summary("older", "t1")];
+  it("moves a pin at once and keeps it until the runtime confirms", () => {
+    const listing = {items: [listed("newer", "newer", "t2"), listed("older", "older", "t1")]};
     const order = () =>
-      projectSessions({entries: useSessionsStore.getState().entries, loaded, optimism: useSessionsStore.getState().optimism, projectPath: "/workspace"}).map(
-        (session) => session.id
-      );
-    const {patchOptimism, setEntries} = useSessionsStore.getState();
+      listedSessions({items: listing.items, optimism: useSessionsStore.getState().optimism, projectPath: "/workspace", starting: []}).map((session) => session.id);
+    const {patchOptimism} = useSessionsStore.getState();
 
     patchOptimism("older", {pinned: true});
     expect(order()).toEqual(["older", "newer"]);
-    // The runtime reports the pin, then the mutation settles: the order never flips back.
-    setEntries({older: entry({summary: summary("older", "t1", true)})});
+    // The listing reports the pin, then the mutation settles: the order never flips back.
+    listing.items = [listed("older", "older", "t1", true), listed("newer", "newer", "t2")];
     expect(order()).toEqual(["older", "newer"]);
     patchOptimism("older", {pinned: undefined});
     expect(order()).toEqual(["older", "newer"]);

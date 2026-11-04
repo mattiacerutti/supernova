@@ -1,5 +1,4 @@
-import {useMutation, useQueryClient} from "@tanstack/react-query";
-import {sessionKeys} from "@/features/sessions/api/query-keys";
+import {useMutation} from "@tanstack/react-query";
 import {useSessionsStore} from "@/features/sessions/stores/sessions-store";
 import {unwrap} from "@/runtime/runtime-result";
 import {useRuntime} from "@/runtime/use-runtime";
@@ -10,14 +9,11 @@ interface ForkSessionInput {
 }
 
 export function useForkSession() {
-  const queryClient = useQueryClient();
   const services = useRuntime();
 
   return useMutation({
     mutationFn: (input: ForkSessionInput) => unwrap(services.sessions.fork(input)),
-    onSuccess: async (session) => {
-      useSessionsStore.getState().setDocument(session);
-      await queryClient.invalidateQueries({queryKey: sessionKeys.list(session.projectPath)});
-    },
+    // Listings show the fork once the catalog has it.
+    onSuccess: (record) => useSessionsStore.getState().setRecord(record),
   });
 }

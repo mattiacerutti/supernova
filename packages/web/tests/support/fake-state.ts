@@ -1,23 +1,41 @@
-import type {Draft, Readable} from "@earendil-works/chord";
-import {replicatedState} from "@earendil-works/chord";
-import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
+import type {Watchable} from "@earendil-works/chord";
+import type {Context} from "@earendil-works/chord/context";
+import type {Draft} from "@earendil-works/chord/delta";
+import {Watch} from "@earendil-works/chord/watch";
 
-/** State a fake service owns: what a contract state member reads, plus the writes the server would make. */
-export interface FakeState<T> extends Readable<T> {
-  replace(value: T): void;
-  change(mutate: (draft: Draft<T>) => void): void;
+/** Watches get a write asynchronously, as a held member does; a write resolves once its watchers have it. */
+export interface FakeState<T> extends Watchable<T> {
+  replace(value: T): Promise<void>;
+  change(mutate: (draft: Draft<T>) => void): Promise<void>;
 }
 
-/** A contract state member over local state; subscribers get the current value at once and every later one, synchronously. */
 export function fakeState<T extends object>(initial: T): FakeState<T> {
-  const state = replicatedState(initial);
+  let value = initial;
+  const watches = new Set<Watch<T>>();
+  const publish = async (next: T) => {
+    value = next;
+    for (const watch of watches) watch.advance({kind: "value", value: next, ops: [["r", next as never]], retired: false}, {} as Context);
+    // A watch delivers on a later task.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  };
   return {
     get value() {
-      return state.value;
+      return value;
     },
-    subscribe: (listener) => state.subscribe((value) => listener(value)),
-    events: (listener) => state.subscribe((value, _context, delivery) => listener({type: delivery.kind === "hydrate" ? "snap" : "reset", value})),
-    replace: (value) => state.replace(BACKGROUND_CONTEXT, value),
-    change: (mutate) => state.change(BACKGROUND_CONTEXT, mutate),
+    async watch() {
+      const watch: Watch<T> = new Watch(
+        value,
+        () => watches.delete(watch),
+        () => undefined
+      );
+      watches.add(watch);
+      return watch;
+    },
+    replace: publish,
+    change: (mutate) => {
+      const draft = structuredClone(value) as Draft<T>;
+      mutate(draft);
+      return publish(draft as T);
+    },
   };
 }

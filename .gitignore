@@ -5,6 +5,8 @@ node_modules
 out
 dist
 *.tgz
+# Temporary Pi build pinned to a main commit (scripts/pi-main/pack.ts); committed so clean installs resolve it.
+!vendor/pi/*.tgz
 
 # code coverage
 coverage

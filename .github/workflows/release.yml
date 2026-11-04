@@ -110,7 +110,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: "24.22"
 
       - name: Install system dependencies
         run: |
@@ -309,7 +309,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: "24.22"
 
       - name: Cache Bun and Turbo
         uses: actions/cache@v4

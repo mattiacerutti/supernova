@@ -8,7 +8,6 @@ import type {AssistantMessage} from "@earendil-works/pi-ai";
 import {afterEach, describe, expect, it} from "vitest";
 import {FileCheckpointStore} from "@supernova/agent-runtime/features/session-runtime/checkpoints/checkpoint-store";
 import type {CheckpointStore} from "@supernova/agent-runtime/features/session-runtime/checkpoints/checkpoint-store";
-import type {SessionRuntime} from "@supernova/agent-runtime/features/session-runtime/session-runtime";
 import type {ModelReference, Session} from "@supernova/contracts/services/sessions/schemas";
 import {
   assistantTexts,
@@ -109,7 +108,7 @@ function assistantWithUsage(text: string, totalTokens: number, stopReason: Assis
 type TestRuntime = Awaited<ReturnType<typeof createPiTestRuntime>>;
 
 /** Observes a session while `run` executes; the observation keeps what was published and reported. */
-async function observeCommand(pi: TestRuntime, sessionId: string, run: () => Promise<void>): Promise<CommandObservation & {readonly cause: unknown}> {
+async function observeCommand(pi: TestRuntime, sessionId: string, run: () => Promise<unknown>): Promise<CommandObservation & {readonly cause: unknown}> {
   const observation = await pi.observe(sessionId);
   let cause: unknown;
   try {
@@ -129,7 +128,7 @@ async function observeCommand(pi: TestRuntime, sessionId: string, run: () => Pro
 async function runSessionCommand(input: {
   readonly pi: TestRuntime;
   readonly sessionId: string;
-  readonly run: (runtime: SessionRuntime) => Promise<void>;
+  readonly run: (runtime: TestRuntime["sessionRuntime"]) => Promise<unknown>;
 }): Promise<CommandObservation & {readonly session: Session}> {
   const {cause, ...observation} = await observeCommand(input.pi, input.sessionId, async () => {
     await input.run(input.pi.sessionRuntime);
@@ -142,7 +141,7 @@ async function runSessionCommand(input: {
 async function runRejectedSessionCommand(input: {
   readonly pi: TestRuntime;
   readonly sessionId: string;
-  readonly run: (runtime: SessionRuntime) => Promise<void>;
+  readonly run: (runtime: TestRuntime["sessionRuntime"]) => Promise<unknown>;
 }): Promise<CommandObservation & {readonly cause: unknown}> {
   return observeCommand(input.pi, input.sessionId, () => input.run(input.pi.sessionRuntime));
 }
@@ -919,8 +918,9 @@ describe("checkpoint navigation", () => {
     const firstTurnId = turnIds(firstEvents.session).at(-1)!;
 
     const fork = await pi.sessions.fork({sessionId: source.id, turnId: firstTurnId});
-    const copiedTurnId = turnIds(fork).at(-1);
-    expect(fork.lastCopiedTurnId).toBe(copiedTurnId);
+    const forked = await pi.sessions.get({sessionId: fork.id});
+    const copiedTurnId = turnIds(forked).at(-1);
+    expect(forked.lastCopiedTurnId).toBe(copiedTurnId);
     const undo = await runRejectedSessionCommand({pi, sessionId: fork.id, run: (runtime) => runtime.undoCheckpoint({sessionId: fork.id})});
 
     expect(undo.cause).toMatchObject({_tag: "CheckpointInheritedError"});

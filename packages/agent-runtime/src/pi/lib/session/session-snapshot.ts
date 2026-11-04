@@ -109,8 +109,7 @@ export function buildSession(input: {
   readonly context: Session["context"];
 }): Session {
   const {context, record, runStart, turns} = input;
-  const forked = record.forkedFrom !== undefined;
-  const copiedTurnId = forked ? lastCopiedTurnId(input.history, turns, record.id) : undefined;
+  const copiedTurnId = record.forkedFrom !== undefined ? lastCopiedTurnId(input.history, turns, record.id) : undefined;
   const entries = entriesPage({side: "entries", entries: input.history, turns});
   const undone = entriesPage({side: "undone", entries: input.undone, turns, precedingEntryId: input.history.at(-1)?.id});
   // Activity stops at the live turn's user message so a running session does not keep climbing the sidebar.
@@ -119,12 +118,7 @@ export function buildSession(input: {
   const lastTimestamp = settled.findLast((entry) => entry.model?.[0]?.timestamp !== undefined)?.model?.[0]?.timestamp;
   return {
     id: record.id,
-    title: record.title ?? "Untitled session",
-    forked,
     ...(copiedTurnId ? {lastCopiedTurnId: copiedTurnId} : {}),
-    pinned: record.pinned,
-    projectPath: record.projectPath,
-    ...(record.worktree ? {worktree: record.worktree} : {}),
     updatedAt: lastTimestamp !== undefined && new Date(lastTimestamp).toISOString() > record.updatedAt ? new Date(lastTimestamp).toISOString() : record.updatedAt,
     entries,
     undone,

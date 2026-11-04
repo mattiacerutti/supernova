@@ -2,15 +2,15 @@ import {mkdir, mkdtemp, rm, writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {CONFIG_DIR_NAME} from "@earendil-works/pi-coding-agent";
-import {RUNTIME_HOST} from "@supernova/contracts/lib/protocol";
+import {BACKGROUND_CONTEXT as context} from "@earendil-works/chord/context";
 import {ListComposerSuggestionsResult} from "@supernova/contracts/services/sessions/procedures";
 import {SessionsService} from "@supernova/contracts/services/sessions/services";
 import {afterEach, beforeEach, describe, expect, it} from "vitest";
 import {ExtensionsService} from "@supernova/contracts/services/extensions/services";
 import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";
 import {createPiSdk} from "@supernova/agent-runtime/pi/sdk";
-import {createAgentRuntime} from "@supernova/agent-runtime/runtime";
-import {startRuntimeServer} from "@tests/support/runtime-server";
+import {createAgentRuntime} from "@supernova/agent-runtime/composition/runtime";
+import {startTestServerHost} from "@tests/support/server-host";
 
 async function writeSkill(root: string, name: string, description: string): Promise<void> {
   await mkdir(join(root, ".agents", "skills", name), {recursive: true});
@@ -50,11 +50,12 @@ describe("composer suggestions", () => {
       },
     };
     const runtime = await createAgentRuntime({sdk: {...counted, updatePackages: async () => undefined}});
-    const server = startRuntimeServer(runtime);
-    const service = server.client.get(SessionsService, {}, {at: RUNTIME_HOST});
-    const extensions = server.client.get(ExtensionsService, {}, {at: RUNTIME_HOST});
+    const server = await startTestServerHost(runtime);
+    const service = await server.client.get(SessionsService, {clientId: "composer"}, context);
+    const extensions = await server.client.get(ExtensionsService, {}, context);
+    if (service.variant !== "owner" || extensions.variant !== "owner") throw new Error("The owner's variants did not bind.");
     return {
-      updateExtensions: async () => expect(await extensions.update(null)).toEqual({ok: true, value: null}),
+      updateExtensions: async () => expect(await extensions.update(context)).toEqual({ok: true, value: null}),
       close: async () => {
         await server.close();
         await runtime.dispose();
@@ -65,7 +66,7 @@ describe("composer suggestions", () => {
       },
       // Prompt templates are not loaded, so every suggestion is a skill.
       suggestions: async (projectPath = project) => {
-        const result = await service.listComposerSuggestions({projectPath});
+        const result = await service.listComposerSuggestions({projectPath}, context);
         if (!result.ok) throw new Error(result.error.message);
         return ListComposerSuggestionsResult.parse(result.value).items.map((item) => {
           if (item.kind !== "skill") throw new Error(`Unexpected ${item.kind} suggestion.`);
@@ -118,7 +119,7 @@ describe("composer suggestions", () => {
     const runtime = await connect();
     try {
       runtime.breakLoads("Broken resource configuration");
-      expect(await runtime.service.listComposerSuggestions({projectPath: project})).toEqual({
+      expect(await runtime.service.listComposerSuggestions({projectPath: project}, context)).toEqual({
         ok: false,
         error: {code: "GenericError", message: "Broken resource configuration"},
       });
@@ -137,7 +138,7 @@ describe("composer suggestions", () => {
     await writeFile(join(project, CONFIG_DIR_NAME, "extensions", "broken.ts"), "export default function() { throw new Error('extension exploded'); }\n");
     const runtime = await connect();
     try {
-      const result = await runtime.service.listComposerSuggestions({projectPath: project});
+      const result = await runtime.service.listComposerSuggestions({projectPath: project}, context);
       expect(result).toMatchObject({ok: false, error: {code: "GenericError"}});
       expect(!result.ok && result.error.message).toContain("broken.ts");
     } finally {

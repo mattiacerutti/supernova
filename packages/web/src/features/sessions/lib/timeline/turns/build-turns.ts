@@ -141,7 +141,7 @@ function addLive(draft: TurnDraft, live: LiveState): void {
   }
   // Background compactions never block the answer; only blocking ones and a manual one show.
   for (const compaction of live.compactions ?? []) {
-    if (compaction.blocking || compaction.reason === "manual") draft.addCompaction(new Date().toISOString(), undefined);
+    if (compaction.blocking || compaction.trigger === "manual") draft.addCompaction(new Date().toISOString(), undefined);
   }
   const partial = live.generation?.message as AssistantMessage | undefined;
   if (partial) draft.addAssistant(partial, true);

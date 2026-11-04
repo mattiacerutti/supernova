@@ -1,7 +1,7 @@
-import type {SessionSetupStep} from "@supernova/contracts/services/session-runtime/procedures";
-import {sessionActivityOf} from "@supernova/contracts/services/session-runtime/procedures";
-import type {Session, SessionSummary} from "@supernova/contracts/services/sessions/schemas";
-import type {SessionDirectoryEntry} from "@supernova/contracts/services/sessions/services";
+import type {SessionSetupStep} from "@supernova/contracts/services/sessions/procedures";
+import {sessionActivityOf} from "@supernova/contracts/services/sessions/procedures";
+import type {ListedSession, SessionStatusEntry} from "@supernova/contracts/services/sessions/services";
+import type {Session} from "@supernova/contracts/services/sessions/schemas";
 import {buildSessionTurns} from "@/features/sessions/lib/timeline/turns/build-turns";
 import type {PendingMessage, SessionOptimism} from "@/features/sessions/stores/sessions-store";
 import type {SessionTurn} from "@/features/sessions/types/session-turn";
@@ -16,6 +16,7 @@ export interface SessionStatus {
 
 export interface SessionView extends SessionStatus {
   readonly session: Session | undefined;
+  readonly record: ListedSession | undefined;
   readonly title: string | undefined;
   readonly pinned: boolean;
   readonly turns: readonly SessionTurn[];
@@ -23,7 +24,7 @@ export interface SessionView extends SessionStatus {
   readonly liveTurn: SessionTurn | undefined;
 }
 
-function statusOf(activity: SessionDirectoryEntry["activity"], optimism: SessionOptimism): SessionStatusKind {
+function statusOf(activity: SessionStatusEntry["activity"], optimism: SessionOptimism): SessionStatusKind {
   if (optimism.navigation) return "checkpoint-navigating";
   if (optimism.stopping) return "stopping";
   if (optimism.compacting || activity === "compacting") return "compacting";
@@ -44,17 +45,12 @@ function navigated(turns: readonly SessionTurn[], undoneTurns: readonly SessionT
   return {turns: all.slice(0, shown), undoneTurns: all.slice(shown)};
 }
 
-function sessionSummary(listed: SessionSummary, entry: SessionDirectoryEntry | undefined, optimism: SessionOptimism = {}): SessionSummary {
-  const summary = entry?.summary ?? listed;
-  return {...summary, title: optimism.title ?? summary.title, pinned: optimism.pinned ?? summary.pinned};
-}
-
-function listingOrder(left: SessionSummary, right: SessionSummary): number {
+function listingOrder(left: ListedSession, right: ListedSession): number {
   return Number(right.pinned) - Number(left.pinned) || right.updatedAt.localeCompare(left.updatedAt) || right.id.localeCompare(left.id);
 }
 
-/** The document's `live` wins: the directory's activity replicates separately and can lag it by a frame. */
-export function sessionStatus(entry: SessionDirectoryEntry | undefined, optimism: SessionOptimism = {}, session?: Pick<Session, "live">): SessionStatus {
+/** The document's `live` wins: status replicates separately and can lag it by a frame. */
+export function sessionStatus(entry: SessionStatusEntry | undefined, optimism: SessionOptimism = {}, session?: Pick<Session, "live">): SessionStatus {
   const activity = session ? sessionActivityOf(session.live) : (entry?.activity ?? "idle");
   return {
     status: statusOf(activity, optimism),
@@ -64,23 +60,29 @@ export function sessionStatus(entry: SessionDirectoryEntry | undefined, optimism
   };
 }
 
-export function projectSessions(input: {
-  readonly loaded: readonly SessionSummary[];
+/** A session this client is starting shows until the listing has it. */
+export function listedSessions(input: {
+  readonly items: readonly ListedSession[];
   readonly projectPath: string;
-  readonly entries: Readonly<Record<string, SessionDirectoryEntry>>;
+  readonly starting: readonly ListedSession[];
   readonly optimism: Readonly<Record<string, SessionOptimism>>;
-}): SessionSummary[] {
-  const {entries, loaded, optimism, projectPath} = input;
-  const loadedIds = new Set(loaded.map((session) => session.id));
-  const added = Object.values(entries).flatMap((entry) => (entry.projectPath === projectPath && entry.summary && !loadedIds.has(entry.summary.id) ? [entry.summary] : []));
-  return [...added, ...loaded]
-    .filter((summary) => !optimism[summary.id]?.archived)
-    .map((summary) => sessionSummary(summary, entries[summary.id], optimism[summary.id]))
+}): ListedSession[] {
+  const {items, optimism, projectPath, starting} = input;
+  const listed = new Set(items.map((session) => session.id));
+  const added = starting.filter((session) => !listed.has(session.id) && session.projectPath === projectPath && optimism[session.id]?.message !== undefined);
+  return [...added, ...items]
+    .filter((session) => !optimism[session.id]?.archived)
+    .map((session) => ({...session, title: optimism[session.id]?.title ?? session.title, pinned: optimism[session.id]?.pinned ?? session.pinned}))
     .toSorted(listingOrder);
 }
 
-export function sessionView(input: {readonly session: Session | undefined; readonly entry: SessionDirectoryEntry | undefined; readonly optimism?: SessionOptimism}): SessionView {
-  const {entry, optimism = {}, session} = input;
+export function sessionView(input: {
+  readonly session: Session | undefined;
+  readonly record: ListedSession | undefined;
+  readonly entry: SessionStatusEntry | undefined;
+  readonly optimism?: SessionOptimism;
+}): SessionView {
+  const {entry, optimism = {}, record, session} = input;
   const projected = session ? buildSessionTurns(session) : undefined;
   const undone = session && !optimism.message ? buildSessionTurns({entries: session.undone, live: {}}).turns : [];
   const shown = projected?.turns ?? [];
@@ -88,8 +90,9 @@ export function sessionView(input: {readonly session: Session | undefined; reado
   return {
     ...sessionStatus(entry, optimism, session),
     session,
-    title: optimism.title ?? entry?.summary?.title ?? session?.title,
-    pinned: optimism.pinned ?? entry?.summary?.pinned ?? session?.pinned ?? false,
+    record,
+    title: optimism.title ?? record?.title,
+    pinned: optimism.pinned ?? record?.pinned ?? false,
     turns,
     undoneTurns,
     liveTurn: projected?.liveTurn ?? (optimism.message && pendingTurn(optimism.message)),

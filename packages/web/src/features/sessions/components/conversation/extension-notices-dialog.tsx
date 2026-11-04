@@ -15,7 +15,7 @@ export default function ExtensionNoticesDialog() {
   // The session stays set while the dialog closes, so its content does not vanish mid-animation.
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
-  const notices = useSessionsStore((state) => (sessionId === null ? undefined : state.entries[sessionId]?.notices));
+  const notices = useSessionsStore((state) => (sessionId === null ? undefined : state.statuses[sessionId]?.notices));
 
   useMountEffect(() =>
     onOpenExtensionNotices((id) => {

@@ -26,11 +26,7 @@ export async function sendMessage(runtime: SessionWorker, input: SendMessagePayl
       generateSessionTitle({payload: input, model, titleGenerator: runtime.titleGenerator}).then(async (title) => {
         // A user rename that lands first wins.
         if (!title) return;
-        const current = await store.find(sessionId);
-        if (!current) throw new Error("Session not found.");
-        if (current.title !== undefined) return;
-        await store.update(sessionId, (current) => ({...current, title}));
-        await runtime.refresh();
+        await runtime.ports.report({kind: "title", title});
       })
     );
   }
@@ -49,7 +45,7 @@ export async function sendMessage(runtime: SessionWorker, input: SendMessagePayl
       model: {provider: model.provider, modelId: model.id, thinkingLevel: toPiThinkingLevel(input.modelReference.thinkingLevel)},
     })
   );
-  await store.update(sessionId, (current) => ({...current, updatedAt: new Date().toISOString()}));
+  await runtime.ports.report({kind: "sent"});
 
   void submitted.wait().then(
     (settled) => {

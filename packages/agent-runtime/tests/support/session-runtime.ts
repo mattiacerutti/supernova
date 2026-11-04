@@ -1,6 +1,7 @@
 import {mkdtempSync, rmSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {join, sep} from "node:path";
+import {isDeepStrictEqual} from "node:util";
 import type {PromptTemplate, Skill} from "@earendil-works/pi-coding-agent";
 import {discoverAndLoadExtensions, ModelRuntime, SettingsManager} from "@earendil-works/pi-coding-agent";
 import type {Api, FauxProviderRegistration} from "@earendil-works/pi-ai/compat";
@@ -9,24 +10,59 @@ import type {ResourceCache} from "@supernova/agent-runtime/pi/resource-cache";
 import type {TitleGenerator} from "@supernova/agent-runtime/features/session-runtime/worker/title-generator";
 import {FileCheckpointStore} from "@supernova/agent-runtime/features/session-runtime/checkpoints/checkpoint-store";
 import type {CheckpointStore} from "@supernova/agent-runtime/features/session-runtime/checkpoints/checkpoint-store";
-import {SessionRuntime} from "@supernova/agent-runtime/features/session-runtime/session-runtime";
-import {Sessions} from "@supernova/agent-runtime/features/sessions/sessions";
-import {Projects} from "@supernova/agent-runtime/features/projects/projects";
-import {SessionStore} from "@supernova/agent-runtime/pi/session-store";
-import {SupernovaTools} from "@supernova/agent-runtime/features/session-runtime/tools/web-fetch";
-import type {SendMessagePayload} from "@supernova/contracts/services/session-runtime/procedures";
+import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
+import type {Watchable} from "@earendil-works/chord";
+import type {ServiceResult} from "@supernova/contracts/lib/protocol";
+import {SessionRuntime} from "@supernova/agent-runtime/features/session-runtime/facet";
+import {createAgentRuntime} from "@supernova/agent-runtime/composition/runtime";
+import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";
+import type {
+  CompactSessionPayload,
+  LoadHistoryPayload,
+  RedoCheckpointPayload,
+  RevertToMessagePayload,
+  SendMessagePayload,
+  UndoCheckpointPayload,
+} from "@supernova/contracts/services/session-runtime/procedures";
+import type {ChatOwner} from "@supernova/contracts/services/session-runtime/services";
+import type {ListedSession, SessionStatuses} from "@supernova/contracts/services/sessions/services";
+import {ChatService} from "@supernova/contracts/services/session-runtime/services";
+import {SessionsService, SessionStatusService} from "@supernova/contracts/services/sessions/services";
+import type {
+  ArchiveSessionPayload,
+  CreateSessionPayload,
+  ForkSessionPayload,
+  SessionIdPayload,
+  ListComposerSuggestionsPayload,
+  ListModelsPayload,
+  PinSessionPayload,
+  RenameSessionPayload,
+  SearchSessionsPayload,
+} from "@supernova/contracts/services/sessions/procedures";
 import type {AssistantMessage, ModelReference, Session} from "@supernova/contracts/services/sessions/schemas";
-import type {SessionDirectoryState} from "@supernova/contracts/services/sessions/services";
 import {waitUntil} from "@tests/support/async";
+import {startTestServerHost} from "@tests/support/server-host";
 
 export {fauxAssistantMessage, fauxText, fauxThinking, fauxToolCall, waitUntil};
 
-/** What one observer of a session saw: every transcript value delivered to it, and every directory value. */
+/**
+ * Follows a watchable as a client does: its value when the watch was acquired, then each delivered call. Resolves once
+ * the watch is started, so no change made after it is missed.
+ */
+async function follow<T>(source: Watchable<T>, listener: (value: T) => void): Promise<() => void> {
+  const watch = await source.watch(BACKGROUND_CONTEXT);
+  listener(watch.value);
+  watch.start(async (call) => {
+    if (call.kind === "value") listener(call.value);
+  });
+  return () => void watch.stop();
+}
+
+/** What one observer of a session saw: every transcript value delivered to it, and every status value. */
 export interface Observation {
   /** Transcript values in delivery order, starting with its value when observing began. */
   readonly versions: Session[];
-  /** Directory values in delivery order, starting with its value when observing began. */
-  readonly board: SessionDirectoryState[];
+  readonly board: SessionStatuses[];
   readonly stop: () => void;
 }
 
@@ -114,6 +150,7 @@ export async function createPiTestRuntime(input?: {
   readonly sessionStorageRoot?: string;
   /** Old-SDK extension files to load into every session through Pi's loader, as a user's `extensions` setting would. */
   readonly extensionPaths?: readonly string[];
+  readonly worktreeStorageRoot?: string;
 }) {
   const checkpointStorageRoot = mkdtempSync(join(tmpdir(), "supernova-checkpoint-storage-"));
   const sessionStorageRoot = input?.sessionStorageRoot ?? mkdtempSync(join(tmpdir(), "supernova-session-storage-"));
@@ -176,39 +213,128 @@ export async function createPiTestRuntime(input?: {
   // One settings object for every session, so a test can change it between turns as a user edits settings.json.
   const settings = SettingsManager.inMemory(input?.settings);
   const checkpointStore = input?.checkpointStore ?? new FileCheckpointStore(checkpointStorageRoot);
-  /** Every problem the store reported that did not fail a command, in order: extension diagnostics and engine reports. */
-  const reports: string[] = [];
-  const store = new SessionStore({
-    sdk,
+  const runtime = await createAgentRuntime({
+    sdk: sdk as unknown as PiSdk,
+    sessionStorageRoot,
+    checkpointStore,
     resourceCache,
-    extensions: [SupernovaTools],
-    root: sessionStorageRoot,
+    titleGenerator,
     settings: () => settings,
-    onReport: (sessionId, notice) => {
-      reports.push(notice.extensionPath ? `Extension ${notice.extensionPath} ${notice.message}` : notice.message);
-      runtime.notify(sessionId, notice);
-    },
+    ...(input?.worktreeStorageRoot ? {worktreeStorageRoot: input.worktreeStorageRoot} : {}),
   });
-  const runtime: SessionRuntime = new SessionRuntime({checkpointStore, resourceCache, sdk, store, titleGenerator});
-  const sessionsFeature = new Sessions({documents: runtime, resourceCache, sdk, store});
-  const projects = new Projects({store});
+  const {store} = runtime;
+  /** Every notice sessions got, in order: extension diagnostics, engine reports and run failures. */
+  const reports: string[] = [];
+  const seen = new Set<string>();
+  runtime.status.onChange((_sessionId, entry) => {
+    for (const notice of entry?.notices ?? []) {
+      if (seen.has(notice.id)) continue;
+      seen.add(notice.id);
+      reports.push(notice.extensionPath ? `Extension ${notice.extensionPath} ${notice.message}` : notice.message);
+    }
+  });
+  const server = await startTestServerHost(runtime);
+  const ctx = BACKGROUND_CONTEXT;
+  const owner = server.client;
+  const sessionsOwner = await owner.get(SessionsService, {clientId: "tests"}, ctx);
+  const statusOwner = await owner.get(SessionStatusService, {}, ctx);
+  if (sessionsOwner.variant !== "owner" || statusOwner.variant !== "owner") throw new Error("The owner's variants did not bind.");
+
+  /** A declared failure comes back as its tagged error, as the feature threw it. */
+  const settle = async <T>(result: Promise<ServiceResult<T, {readonly _tag: string}>>): Promise<T> => {
+    const outcome = await result;
+    if (outcome.ok) return outcome.value;
+    throw Object.assign(new Error(outcome.error.message), {_tag: outcome.error.code});
+  };
+
+  /** An unknown session's route waits instead of failing, so this checks the catalog first. */
+  const withChat = async <T>(sessionId: string, call: (chat: ChatOwner) => Promise<T>): Promise<T> => {
+    if (!(await runtime.sessions.exists({sessionId}))) throw new Error("Session not found.");
+    const chat = await owner.get(ChatService, {sessionId}, ctx);
+    try {
+      if (chat.variant !== "owner") throw new Error("The owner's chat variant did not bind.");
+      return await call(chat);
+    } finally {
+      chat.release();
+    }
+  };
+  const runtimeOf = async (sessionId: string) => {
+    // Holding its chat starts the session's host, as a page opening it does.
+    await withChat(sessionId, async () => undefined);
+    const host = await server.serverHost.hosts.startedHost(sessionId);
+    if (!host) throw new Error(`Session ${sessionId} has no running host.`);
+    return host.get(SessionRuntime, {}, ctx);
+  };
+
+  const sessionRuntime = {
+    sendMessage: ({sessionId, ...input}: SendMessagePayload) => withChat(sessionId, (chat) => settle(chat.sendMessage(input, ctx))),
+    compact: ({sessionId, ...input}: CompactSessionPayload) => withChat(sessionId, (chat) => settle(chat.compact(input, ctx))),
+    abort: ({sessionId}: {readonly sessionId: string}) => withChat(sessionId, (chat) => settle(chat.abort(ctx))),
+    undoCheckpoint: ({sessionId, ...input}: UndoCheckpointPayload) => withChat(sessionId, (chat) => settle(chat.undoCheckpoint(input, ctx))),
+    redoCheckpoint: ({sessionId, ...input}: RedoCheckpointPayload) => withChat(sessionId, (chat) => settle(chat.redoCheckpoint(input, ctx))),
+    revertToMessage: ({sessionId, ...input}: RevertToMessagePayload) => withChat(sessionId, (chat) => settle(chat.revertToMessage(input, ctx))),
+    loadHistory: ({sessionId, ...input}: LoadHistoryPayload) => withChat(sessionId, (chat) => settle(chat.loadHistory(input, ctx))),
+    current: async (sessionId: string): Promise<Session> => (await runtimeOf(sessionId)).current(ctx),
+    /** Reloads every open session's extensions, as Settings → Extensions → Update does after installing. */
+    reloadExtensions: () => store.reload(),
+    release: async (input: {readonly sessionId: string; readonly workspacePath: string}) => {
+      await server.serverHost.hosts.release(input.sessionId);
+      await store.release(input.sessionId);
+      await checkpointStore.deleteSession({projectRoot: input.workspacePath, sessionId: input.sessionId});
+    },
+    dispose: () => server.close(),
+  };
+
+  const sessionsFeature = {
+    create: (payload: CreateSessionPayload) => settle(sessionsOwner.create(payload, ctx)),
+    fork: (payload: ForkSessionPayload) => settle(sessionsOwner.fork(payload, ctx)),
+    rename: (payload: RenameSessionPayload) => settle(sessionsOwner.rename(payload, ctx)),
+    get: ({sessionId}: SessionIdPayload) => sessionRuntime.current(sessionId),
+    record: ({sessionId}: SessionIdPayload) => runtime.sessions.record({sessionId}),
+    pin: (payload: PinSessionPayload) => settle(sessionsOwner.pin(payload, ctx)),
+    archive: (payload: ArchiveSessionPayload) => settle(sessionsOwner.archive(payload, ctx)),
+    listModels: (payload: ListModelsPayload) => settle(sessionsOwner.listModels(payload, ctx)),
+    listComposerSuggestions: (payload: ListComposerSuggestionsPayload) => settle(sessionsOwner.listComposerSuggestions(payload, ctx)),
+    exists: (payload: SessionIdPayload) => runtime.sessions.exists(payload),
+    delete: (payload: SessionIdPayload) => runtime.sessions.delete(payload),
+  };
+
+  const list = async (projectPath: string, depth = 100): Promise<ListedSession[]> => {
+    const view = await owner.get(SessionsService, {clientId: `list:${crypto.randomUUID()}`}, ctx);
+    try {
+      if (view.variant !== "owner") throw new Error("The owner's sessions variant did not bind.");
+      await settle(view.showProject({projectPath, depth}, ctx));
+      // The view's state reaches this client after the call's result.
+      await waitUntil(() => {
+        if (view.view.value.projects[projectPath]?.loading !== false) throw new Error("The window has not arrived yet.");
+      });
+      return [...view.view.value.projects[projectPath]!.items];
+    } finally {
+      view.release();
+    }
+  };
+
+  const search = async (payload: SearchSessionsPayload) => (await settle(sessionsOwner.search(payload, ctx))).sessions;
 
   /**
-   * Observes a session as a client following it does: its transcript's replicated state, whose subscribers receive
-   * each revision, and the session board.
+   * Observes a session as a client following it does: its published document as Chord delivers it, and the live
+   * status of every session.
    */
   const observe = async (sessionId: string): Promise<Observation> => {
+    if (!(await runtime.sessions.exists({sessionId}))) throw new Error("Session not found.");
     const versions: Session[] = [];
-    const board: SessionDirectoryState[] = [];
-    const transcript = await runtime.transcript(sessionId);
-    const stopTranscript = transcript.subscribe((value) => void versions.push(value));
-    const stopBoard = runtime.board.state.subscribe((value) => void board.push(value));
+    const board: SessionStatuses[] = [];
+    const chat = await owner.get(ChatService, {sessionId}, ctx);
+    if (chat.variant !== "owner") throw new Error("The owner's chat variant did not bind.");
+    const stopTranscript = await follow(chat.session, (value) => void versions.push(value));
+    const stopBoard = await follow(statusOwner.statuses, (value) => void board.push(value));
     return {
       versions,
       board,
       stop: () => {
         stopTranscript();
         stopBoard();
+        chat.release();
       },
     };
   };
@@ -229,7 +355,7 @@ export async function createPiTestRuntime(input?: {
   const settled = async (sessionId: string, timeoutMs?: number): Promise<void> => {
     await waitUntil(
       async () => {
-        if ((await runtime.current(sessionId)).live.run !== undefined) throw new Error("Session is still running.");
+        if ((await sessionRuntime.current(sessionId)).live.run !== undefined) throw new Error("Session is still running.");
         const turns = await (await store.file(sessionId)).turnRecords();
         if (Object.values(turns).some((record) => record.after === undefined)) throw new Error("A turn has no after-turn checkpoint yet.");
       },
@@ -237,8 +363,7 @@ export async function createPiTestRuntime(input?: {
     );
   };
 
-  /** The board's newest error notice for a session, or null. */
-  const lastError = (sessionId: string) => runtime.board.state.value.sessions[sessionId]?.notices.findLast((notice) => notice.level === "error")?.message ?? null;
+  const lastError = (sessionId: string) => statusOwner.statuses.value.sessions[sessionId]?.notices.findLast((notice) => notice.level === "error")?.message ?? null;
 
   /**
    * Sends a message and waits for its run to settle. Returns every transcript value an attached client received, and
@@ -249,13 +374,15 @@ export async function createPiTestRuntime(input?: {
     const observation = await observeWhile(
       payload.sessionId,
       async () => {
-        await runtime.sendMessage({contentParts: message ? [{text: message, type: "text"}] : [], ...payload});
+        await sessionRuntime.sendMessage({contentParts: message ? [{text: message, type: "text"}] : [], ...payload});
         await settled(payload.sessionId);
       },
       async (seen) => {
-        if (seen.versions.at(-1) !== (await runtime.current(payload.sessionId))) throw new Error("The final value was not delivered yet.");
+        if (!isDeepStrictEqual(seen.versions.at(-1), await sessionRuntime.current(payload.sessionId))) throw new Error("The final value was not delivered yet.");
       }
     );
+    // A status entry leaves once idle with nothing to show; the last error is read once its notice landed.
+    await new Promise((resolve) => setTimeout(resolve, 0));
     return {versions: observation.versions, board: observation.board, session: observation.versions.at(-1)!, error: lastError(payload.sessionId)};
   };
 
@@ -279,6 +406,7 @@ export async function createPiTestRuntime(input?: {
   };
 
   return {
+    statuses: () => statusOwner.statuses.value,
     reports,
     appendConversation,
     createSession,
@@ -292,13 +420,16 @@ export async function createPiTestRuntime(input?: {
       return loadCount;
     },
     modelRuntime,
-    projects,
+    list,
+    search,
+    runtime,
+    server,
     get refreshCount() {
       return refreshCount;
     },
     resourceCache,
     sdk,
-    sessionRuntime: runtime,
+    sessionRuntime,
     sessionStorageRoot,
     sendMessage,
     settled,
@@ -307,6 +438,9 @@ export async function createPiTestRuntime(input?: {
     titleGenerator,
     turnRecords,
     unregister: async () => {
+      sessionsOwner.release();
+      statusOwner.release();
+      await server.close();
       await runtime.dispose();
       faux.unregister();
       rmSync(checkpointStorageRoot, {force: true, recursive: true});

@@ -1,6 +1,7 @@
-import type {ImageContent, Model, TextContent, TSchema} from "@earendil-works/pi-ai";
+import type {ImageContent, Model, TextContent} from "@earendil-works/pi-ai";
 import type {AgentToolResult, ExtensionToolContext, ModelRuntime, ToolDefinition} from "@earendil-works/pi-coding-agent";
-import type {JsonValue} from "@earendil-works/chord";
+import type {JsonValue} from "@earendil-works/chord/json";
+import type {TSchema} from "typebox";
 import type {ToolExecutionApi} from "@earendil-works/pi-durable";
 import type {PromptedTool} from "@supernova/agent-runtime/pi/lib/tools/coding-tools";
 import {extensionContext} from "@supernova/agent-runtime/pi/extensions/legacy/extension-context";

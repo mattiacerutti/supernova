@@ -14,7 +14,7 @@ export function usePinSession() {
   const runtime = useRuntime();
 
   return useMutation({
-    mutationFn: (input: PinSessionInput) => unwrap(runtime.projects.pinSession(input)),
+    mutationFn: (input: PinSessionInput) => unwrap(runtime.sessions.pin(input)),
     onMutate: (input) => patchOptimism(input.sessionId, {pinned: input.pinned}),
     onSettled: (_result, _error, input) => patchOptimism(input.sessionId, {pinned: undefined}),
   });

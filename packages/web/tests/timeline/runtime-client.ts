@@ -1,17 +1,15 @@
-import type {SessionActivity} from "@supernova/contracts/services/session-runtime/procedures";
-import type {CreateSessionPayload} from "@supernova/contracts/services/sessions/procedures";
+import type {CreateSessionPayload, SessionActivity} from "@supernova/contracts/services/sessions/procedures";
 import type {LiveState, Session, UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
 import type {ProviderLoginsState} from "@supernova/contracts/services/providers/services";
 import type {ServiceResult} from "@supernova/contracts/lib/protocol";
-import type {SessionRuntimeService} from "@supernova/contracts/services/session-runtime/services";
-import type {SessionDirectoryState, SessionsService} from "@supernova/contracts/services/sessions/services";
+import type {ListedSession, SessionStatuses, SessionsView} from "@supernova/contracts/services/sessions/services";
 import type {TerminalsState} from "@supernova/contracts/services/workspace/services";
 import type {TerminalOutput} from "@supernova/contracts/services/workspace/schemas";
-import type {RuntimeClient} from "@/runtime/transport/runtime-client";
+import type {ChatOwner, RuntimeClient, SessionsOwner} from "@/runtime/transport/runtime-client";
 import type {FakeState} from "@tests/support/fake-state";
 import {fakeState} from "@tests/support/fake-state";
 import {assistantEntry, page, runningLive, transcript, userEntry} from "@tests/support/session";
-import {createTimelineSessions, timelineModelDetails, timelineSessionSummary, timelineStreamContent, TIMELINE_PROJECT_PATH, TIMELINE_SESSION_ID} from "@tests/timeline/data";
+import {createTimelineSessions, timelineModelDetails, timelineStreamContent, TIMELINE_PROJECT_PATH, TIMELINE_SESSION_ID} from "@tests/timeline/data";
 import type {TimelineMockState} from "@tests/timeline/test-api";
 
 export type {RuntimeClient} from "@/runtime/transport/runtime-client";
@@ -27,9 +25,13 @@ const value = async <T>(result: T): Promise<ServiceResult<T>> => ({ok: true, val
  * runtime client interface the app uses with the real server.
  */
 class TimelineServer {
-  private readonly sessions = createTimelineSessions();
+  private readonly timeline = createTimelineSessions();
+  private readonly records = new Map([...this.timeline.values()].map(({record}) => [record.id, record]));
+  private readonly sessions = new Map([...this.timeline.values()].map(({session}) => [session.id, session]));
   private readonly documents = new Map<string, FakeState<Session>>();
-  private readonly directory = fakeState<SessionDirectoryState>({sessions: {}});
+  private readonly statuses = fakeState<SessionStatuses>({sessions: {}});
+  private readonly view = fakeState<SessionsView>({projects: {}, open: null});
+  private openId: string | null = null;
   private activeSessionId = TIMELINE_SESSION_ID;
   private lineCount = 0;
   private reasoningBreaks: number[] = [];
@@ -54,8 +56,8 @@ class TimelineServer {
   public client(): RuntimeClient {
     // As on the server, a session runtime service is one session's, and holding an unknown one fails: its `ready`
     // rejects and its document never arrives.
-    const missing = {value: undefined, subscribe: () => () => undefined, events: () => () => undefined};
-    const sessionRuntime = (sessionId: string): SessionRuntimeService => ({
+    const missing = fakeState({} as Session);
+    const chat = (sessionId: string): ChatOwner => ({
       session: this.sessions.has(sessionId) ? this.document(sessionId) : missing,
       abort: async () => (this.settleStream("aborted"), ok),
       compact: async () => ok,
@@ -66,22 +68,31 @@ class TimelineServer {
       sendMessage: async ({contentParts}) => (this.startStream(sessionId, contentParts), ok),
       undoCheckpoint: async () => (this.undoCheckpoint(sessionId), ok),
     });
-    const sessions: SessionsService = {
-      directory: this.directory,
+    // One page holds every timeline session; paging is the server's and covered by its tests.
+    const sessions: SessionsOwner = {
+      view: this.view,
+      showProject: async ({depth, projectPath}) => (await this.view.change((draft) => void (draft.projects[projectPath] = this.window(projectPath, depth))), ok),
+      hideProject: async ({projectPath}) => (await this.view.change((draft) => void delete draft.projects[projectPath]), ok),
+      loadMore: () => value(null),
+      openSession: async ({sessionId}) => ((this.openId = sessionId), this.refreshView(), ok),
+      closeSession: async () => ((this.openId = null), this.refreshView(), ok),
       create: async (payload) => ({ok: true, value: this.createSession(payload)}),
-      fork: async ({sessionId}) => ({ok: true, value: this.session(sessionId)}),
-      get: async ({sessionId}) => ({ok: true, value: this.session(sessionId)}),
+      fork: async ({sessionId}) => ({ok: true, value: this.record(sessionId)}),
+      rename: async ({sessionId, title}) => (this.writeRecord({...this.record(sessionId), title}), ok),
+      pin: async ({pinned, sessionId}) => (this.writeRecord({...this.record(sessionId), pinned}), ok),
+      archive: ({projectPath, sessionId}) => value({projectPath, sessionId}),
+      search: async ({text}) => ({ok: true, value: {sessions: this.matching((session) => session.title.toLowerCase().includes(text.toLowerCase())), nextCursor: null}}),
       listComposerSuggestions: () => value({items: []}),
       listModels: () => value([timelineModelDetails]),
-      rename: async ({sessionId}) => ({ok: true, value: this.session(sessionId)}),
     };
     return {
       sessions,
-      holdSession: (sessionId) => ({
-        service: sessionRuntime(sessionId),
-        ready: this.sessions.has(sessionId) ? Promise.resolve() : Promise.reject(new Error("Session not found.")),
-        release: () => undefined,
-      }),
+      status: {statuses: this.statuses},
+      holdChat: (sessionId) => {
+        const ready = this.sessions.has(sessionId) ? Promise.resolve() : Promise.reject(new Error("Session not found."));
+        ready.catch(() => undefined);
+        return {service: chat(sessionId), ready, onGone: () => () => undefined, release: () => undefined};
+      },
       holdTerminal: () => ({
         service: {
           output: fakeState<TerminalOutput>({output: "", dropped: 0, closed: true}),
@@ -98,22 +109,6 @@ class TimelineServer {
         create: ({path}) => value({path}),
         listFiles: ({query}) => value({items: [], query}),
         listSuggestions: ({query}) => value({homePath: TIMELINE_PROJECT_PATH, query, queryPath: query || TIMELINE_PROJECT_PATH, queryPathType: "directory", suggestions: []}),
-      },
-      projects: {
-        archiveSession: ({projectPath, sessionId}) => value({projectPath, sessionId}),
-        // One page holds every timeline session; paging is the server's and covered by its tests.
-        listSessions: () => value({projectPath: TIMELINE_PROJECT_PATH, sessions: [...this.sessions.values()].map(timelineSessionSummary), nextCursor: null}),
-        searchSessions: ({query}) =>
-          value({
-            sessions: [...this.sessions.values()]
-              .filter((session) => session.title.toLowerCase().includes(query.toLowerCase()))
-              .map((session) => ({...timelineSessionSummary(session), projectPath: session.projectPath})),
-            nextCursor: null,
-          }),
-        pinSession: async ({pinned, sessionId}) => {
-          this.commit({...this.session(sessionId), pinned}, "idle");
-          return ok;
-        },
       },
       providers: {
         logins: fakeState<ProviderLoginsState>({logins: {}}),
@@ -150,6 +145,24 @@ class TimelineServer {
     return document;
   }
 
+  private record(sessionId: string): ListedSession {
+    const record = this.records.get(sessionId);
+    if (!record) throw new Error(`Unknown timeline test session: ${sessionId}`);
+    return record;
+  }
+
+  private writeRecord(record: ListedSession): void {
+    this.records.set(record.id, record);
+    this.refreshView();
+  }
+
+  private refreshView(): void {
+    void this.view.change((draft) => {
+      for (const [projectPath, window] of Object.entries(draft.projects)) draft.projects[projectPath] = this.window(projectPath, window.depth);
+      draft.open = (this.openId === null ? null : (this.records.get(this.openId) ?? null)) as typeof draft.open;
+    });
+  }
+
   /** Returns the current session snapshot for a valid test session. */
   private session(sessionId: string): Session {
     const session = this.sessions.get(sessionId);
@@ -159,13 +172,11 @@ class TimelineServer {
 
   /** Mirrors the server: the client's id names the session, and a first message starts its turn. */
   private createSession({id, message, projectPath}: CreateSessionPayload): Session {
+    const updatedAt = new Date().toISOString();
+    this.writeRecord({id, title: "Untitled session", forked: false, pinned: false, projectPath, updatedAt});
     const session: Session = {
       id,
-      title: "Untitled session",
-      forked: false,
-      pinned: false,
-      projectPath,
-      updatedAt: new Date().toISOString(),
+      updatedAt,
       entries: page([]),
       undone: page([]),
       agent: {},
@@ -178,13 +189,27 @@ class TimelineServer {
     return this.session(session.id);
   }
 
-  /** Replaces a session and publishes it to its state and the directory, as the server does. */
+  /** Replaces a session and publishes it to its state, its status and the listings, as the server does. */
   private commit(session: Session, activity: SessionActivity): void {
     this.sessions.set(session.id, session);
-    this.document(session.id).replace(session);
-    this.directory.change((draft) => {
-      draft.sessions[session.id] = {activity, notices: [], projectPath: session.projectPath, setupStep: null, summary: timelineSessionSummary(session)};
+    void this.document(session.id).replace(session);
+    void this.statuses.change((draft) => {
+      if (activity === "idle") delete draft.sessions[session.id];
+      else draft.sessions[session.id] = {activity, notices: [], setupStep: null};
     });
+    this.refreshView();
+  }
+
+  private matching(include: (record: ListedSession) => boolean): ListedSession[] {
+    // A session's activity is its conversation's, as the catalog's `touch` keeps it.
+    return [...this.records.values()]
+      .filter(include)
+      .map((record) => ({...record, updatedAt: this.sessions.get(record.id)?.updatedAt ?? record.updatedAt}))
+      .toSorted((left, right) => Number(right.pinned) - Number(left.pinned) || right.updatedAt.localeCompare(left.updatedAt));
+  }
+
+  private window(projectPath: string, depth: number) {
+    return {depth, loading: false, items: this.matching((session) => session.projectPath === projectPath), hasMore: false};
   }
 
   /** Index into `entries` of each turn's user entry. */

@@ -2,7 +2,7 @@
 
 Temporary handoff for implementation agents. Keep this file current as decisions are resolved and work is completed; it is not a permanent architecture guide. The boundaries and guarantees below are agreed. Exact files, helper APIs and class decomposition are implementation choices unless stated otherwise.
 
-**Status:** planning, not implemented or test-validated. Work on Phase 1 first. Later phases record direction, not authorization to build them now.
+**Status:** Phase 1 implemented locally, uncommitted; see "Phase 1 outcome" below for what was verified and what remains. Later phases record direction, not authorization to build them now.
 
 ## Direction and upstream baseline
 
@@ -14,14 +14,14 @@ Temporary handoff for implementation agents. Keep this file current as decisions
 
 Useful upstream starting points, relative to `.context/pi`:
 
-| Question | Reference |
-| --- | --- |
-| Host identity, placement and lifetime | `packages/chord/src/host/README.md` |
-| Session-host routing and liveness | `apps/p2/src/hosts/{server,session-workers,worker}.ts`, `src/runtime/worker.ts` |
-| Catalog and owner/worker interfaces | `apps/p2/plugins/sessions/{contract,server}.ts` |
-| Status reporting and stale-worker protection | `apps/p2/plugins/status/{contract,server,worker}.ts` |
-| Sidebar composition | `apps/p2/plugins/sessions/web.tsx` |
-| Backend plugin loading and extension composition | `apps/p2/src/hosts/plugins.ts`, `src/runtime/durable.ts`, `src/api/v1/` |
+| Question                                         | Reference                                                                       |
+| ------------------------------------------------ | ------------------------------------------------------------------------------- |
+| Host identity, placement and lifetime            | `packages/chord/src/host/README.md`                                             |
+| Session-host routing and liveness                | `apps/p2/src/hosts/{server,session-workers,worker}.ts`, `src/runtime/worker.ts` |
+| Catalog and owner/worker interfaces              | `apps/p2/plugins/sessions/{contract,server}.ts`                                 |
+| Status reporting and stale-worker protection     | `apps/p2/plugins/status/{contract,server,worker}.ts`                            |
+| Sidebar composition                              | `apps/p2/plugins/sessions/web.tsx`                                              |
+| Backend plugin loading and extension composition | `apps/p2/src/hosts/plugins.ts`, `src/runtime/durable.ts`, `src/api/v1/`         |
 
 ## Phase 1: coherent Pi upgrade and Chord v2 migration
 
@@ -119,12 +119,36 @@ Move followed state/resource ownership into Chord without rewriting behavior unn
 ### Implementation order
 
 1. **Establish reproducible dependencies.** Select and record one exact upstream main commit containing the required APIs; build all required Pi packages from that commit, not a floating `main` reference or mixed runtime/context versions. Use a small local script to build/pack tarballs, rewrite internal Pi dependencies to those tarballs, and pin them with `file:` paths. **This is disposable release-gap tooling: keep it simple, with no generic packaging framework, custom registry or automated upstream-update system.** Include required transitive Pi packages and ensure a clean checkout can obtain the pinned artifacts and install/build in CI and Desktop. Once a published release contains the required APIs, switch to normal package versions and remove the script/tarball workaround. Target Node 24 (`24.22` was selected), matching the desktop runtime and updating types/tooling coherently.
+   - _Done locally:_ `scripts/pi-main/pack.ts` builds the 10 packages from `1bc7076b2` on Node 24 into `vendor/pi/*.tgz` (13 MB, committed; `COMMIT` records the SHA). Pi packages are pinned with `file:` in each workspace, and the root `overrides` points every internal Pi dependency at the same tarballs. A `file:` path inside a tarball resolves against the installing project, so rewriting dependencies inside the tarballs does not work with Bun. `undici` went from 8.10.2 to 8.12.3 to match pi-coding-agent, so a single copy of pi-ai resolves. Node is `24.22` in `mise.toml` and CI, and `@types/node` is `^24.19.2`. A project `.npmrc` points at the public npm registry. A clean `bun install --frozen-lockfile` passes, with one copy of each Pi package.
+   - _Verified:_ an unpacked `electron-builder` build packages the server bundle and web assets. The packaged app's Electron binary (Node 24.21) runs the server, which creates, lists, routes `Chat` to its session host, reports status and archives. CI jobs all use node `24.22`. CI itself has not run on this branch.
 2. **Adapt the Pi integration.** Start with `pi/session-file.ts`, session state definitions, tool schemas and watch adapters. Known break areas: removed `viewState`, windowed history, `defineDoc` checkpoint settings, TypeBox removal from pi-ai, new watch callback shapes, contexts, and retained `runFailure` (not a running-state indicator). Confirm exact APIs against the selected pin.
 3. **Port contracts and host composition.** Replace v1 `input`/`MembersOf`/cells/listeners/resources with v2 params/placement/references/state/resource APIs. Port client reference/reconnect handling and the existing bounded socket adapter. Introduce session-host routing, worker identity/generation handling, and `Chat → SessionRuntime`; remove coordinator forwarding.
 4. **Implement catalog/status separation and update callers together.** Add local owners and owner/worker variants, move session operations into `Sessions`, connect cross-host reports, and replace sidebar summary overlays with progressively loaded live views. Wire view acquisition/release and query/depth restoration on reconnect. Port remaining followed-state owners after their focused review.
 5. **Verify behavior and finish migration docs.** Update compatibility/architecture/contracts/runtime guidance and release notes to match implemented behavior, not illustrative plan filenames.
 
 The session-file migration is accepted as **one-way**, with a release note that downgrade is unsupported. No automatic backup feature is planned. Use disposable 1.2.0 fixtures for migration tests, never live user/dev sessions.
+
+### Phase 1 outcome
+
+Steps 2–5 are done. Where they landed, for review:
+
+- **Contracts:** `lib/protocol.ts` (`ServerHost`/`SessionHost`, `RuntimePrincipal` = owner | server | worker{sessionId, generation}). Every remote contract ends in `Service`. Sessions use three, as p2 does: `SessionsService {clientId}` (one per browser tab: its `view`, a window per shown sidebar project and its open session's record, plus the operations and a one-shot paged search), `SessionStatusService {}` (live status; session hosts' one reporting channel, including generated titles), and `ChatService {sessionId}` on the session host (the conversation; its `server` variant serves `create`). `services/projects` is gone.
+- **Layout (agent-runtime):** `composition/` (`runtime.ts`, `server-host.ts`, `session-hosts.ts`, `session-workflows.ts`) is the only code that knows every feature. Each feature's Chord objects live in its `facet.ts`; cross-feature work is passed in (`SessionWorkflows`, `isCurrent`). ESLint rejects loose source files and imports of `composition/` from features.
+- **The catalog is the record's one source:** the conversation document carries no title, pin, project or worktree, and no session host keeps the record. The page reads it from its tab's `SessionsService.view.open`. `rename` and `pin` are catalog writes; `fork` returns the record. Removed on the way: `SessionsService.get` and its worker variant, `SessionListService`, `ChatService.refresh`/`stopWork`/`record`, `recordChanged`, `touch` and `proposeTitle` (now `SessionStatusService` reports). `create` stays one step with rollback. Archive aborts the run as part of releasing the host; a server shutdown does not, so interrupted turns resume.
+- **Live status:** the `SessionStatus` class in `features/sessions/status/` (map, notice cap, change events); `SessionStatusService` mirrors it per browser and takes session hosts' reports. Workflows and the server host call the class directly; there is no status store.
+- **Followed state:** classes own it (`SessionStatus`, `Terminals` with its 256 KB scrollback trimmed to 192 KB, `LoginSessions`, the catalog); each remote object publishes it with Chord's `self.writable` + `self.derive` (`published` in `lib/chord/state`), and Chord diffs each value. No local stores, no document edits, no `applySession`. `SessionRuntime` (it owns the session's worker) is the only local object.
+- **Decisions taken here:** the catalog stays in SQLite, never in a Chord document. Each tab's `SessionsService` view subscribes to the store's catalog change callback and re-queries its shown projects' windows and its open record on every catalog write, one refresh at a time, committing nothing for a window that did not change. This replaces the plan's `Sessions {viewId}` (one listing object per sidebar section, search and operations): operations, the sidebar and search changed on different schedules, so they are separate. Search is a one-shot request again. Status holds only sessions that are running, being set up or have notices; absent means idle. A session list lingers 10 s after its last release, so a reconnect within that time reuses it.
+- **History:** `SessionFile` caches the branch and reads only the gap before `view.before` from storage.
+- **Docs:** agent-runtime, architecture, contracts, session-runtime, web guides, `docs/pi-compatibility.md` and the changelog are updated.
+
+Verified: typecheck, lint, prettier, all unit and integration suites (agent-runtime 198 integration tests, web 160, desktop 51, server 4), e2e 30/30, and the packaged Desktop smoke above. New tests: a disposable Pi 1.2.0 session file (`tests/support/fixtures`) migrates, keeps history and turns, continues and undoes; 60 turns with a compaction keep every turn across the Durable window after a reopen, and revert across the compaction. The long-history test fails when the gap read is removed.
+
+Not verified:
+
+- CI on this branch.
+- A signed or notarized package. Local `package:mac` needs Xcode 26's `actool` for `icon.icon`; the smoke used `-c.mac.icon=icons/icon.icns`.
+- Frame timing on long streams, and query costs under realistic multi-client load.
+- `test:timeline` "sending a message scrolls it to the top…" fails intermittently. It fails on the unchanged base too, so it is not caused by this migration.
 
 ### Implementation follow-through
 

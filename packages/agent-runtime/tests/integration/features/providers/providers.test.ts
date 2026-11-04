@@ -1,16 +1,15 @@
 import type {AuthInteraction, OAuthCredential, ProviderAuthInteraction} from "@earendil-works/pi-ai";
 import {InMemoryCredentialStore} from "@earendil-works/pi-ai";
 import {ModelRuntime} from "@earendil-works/pi-coding-agent";
-import {RUNTIME_HOST} from "@supernova/contracts/lib/protocol";
+import {BACKGROUND_CONTEXT as context} from "@earendil-works/chord/context";
 import type {ProviderLoginStep} from "@supernova/contracts/services/providers/schemas";
 import {ProviderLoginSession as ProviderLoginSessionSchema} from "@supernova/contracts/services/providers/schemas";
 import {ProvidersService} from "@supernova/contracts/services/providers/services";
 import {afterEach, describe, expect, it} from "vitest";
-import {LoginSessions} from "@supernova/agent-runtime/features/providers/login/login-sessions";
-import {Providers} from "@supernova/agent-runtime/features/providers/providers";
-import type {AgentRuntime} from "@supernova/agent-runtime/runtime";
+import {createAgentRuntime} from "@supernova/agent-runtime/composition/runtime";
+import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";
 import {waitUntil} from "@tests/support/async";
-import {startRuntimeServer} from "@tests/support/runtime-server";
+import {startTestServerHost} from "@tests/support/server-host";
 
 type LoginScript = (interaction: ProviderAuthInteraction) => Promise<string>;
 
@@ -71,21 +70,35 @@ describe("provider authentication over the wire", () => {
 
   async function connect(scripts: Parameters<typeof acmeRuntime>[0] = {}) {
     const modelRuntime = await acmeRuntime(scripts);
-    const providers = new Providers({loginSessions: new LoginSessions(), sdk: {modelRuntime}});
-    const server = startRuntimeServer({providers} as AgentRuntime);
-    cleanups.push(server.close);
-    const service = server.client.get(ProvidersService, {}, {at: RUNTIME_HOST});
+    // The runtime as the server composes it; only providers are reached.
+    const runtime = await createAgentRuntime({sdk: {modelRuntime} as unknown as PiSdk});
+    const server = await startTestServerHost(runtime);
+    cleanups.push(() => runtime.dispose(), server.close);
+    const held = await server.client.get(ProvidersService, {}, context);
+    if (held.variant !== "owner") throw new Error("The owner's providers variant did not bind.");
+    // Calls take their context last; the client adds it.
+    const service = {
+      list: () => held.list(context),
+      logout: (payload: Parameters<typeof held.logout>[0]) => held.logout(payload, context),
+      startLogin: (payload: Parameters<typeof held.startLogin>[0]) => held.startLogin(payload, context),
+      submitLoginInput: (payload: Parameters<typeof held.submitLoginInput>[0]) => held.submitLoginInput(payload, context),
+      cancelLogin: (payload: Parameters<typeof held.cancelLogin>[0]) => held.cancelLogin(payload, context),
+    };
     const steps: ProviderLoginStep[] = [];
-    const stop = service.logins.subscribe((state) => {
-      for (const session of Object.values(state?.logins ?? {})) {
+    const watch = await held.logins.watch(context);
+    const record = (state: typeof watch.value) => {
+      for (const session of Object.values(state.logins)) {
         // The client parses nothing, so contract drift would only show as a broken settings page.
         ProviderLoginSessionSchema.parse(session);
         // Chord sends only the latest value: steps a tick apart can merge, so only steps a login waits on are certain.
         if (JSON.stringify(steps.at(-1)) !== JSON.stringify(session.step)) steps.push(session.step);
       }
+    };
+    record(watch.value);
+    watch.start(async (call) => {
+      if (call.kind === "value") record(call.value);
     });
-    cleanups.push(stop);
-    await service.ready;
+    cleanups.push(() => void watch.stop());
     const unwrap = async <T>(call: Promise<{ok: true; value: T} | {ok: false; error: {code: string; message: string}}>): Promise<T> => {
       const result = await call;
       if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`);
@@ -100,7 +113,7 @@ describe("provider authentication over the wire", () => {
     const {modelRuntime, service, unwrap} = await connect();
     await modelRuntime.login("acme", "oauth", {prompt: async () => "", notify: () => undefined} satisfies AuthInteraction);
 
-    const listed = await unwrap(service.list(null));
+    const listed = await unwrap(service.list());
 
     expect(listed.find((provider) => provider.id === "acme")).toEqual({
       authTypes: ["api_key", "oauth"],
@@ -132,7 +145,7 @@ describe("provider authentication over the wire", () => {
     expect(await unwrap(service.submitLoginInput({input: "abc123", loginSessionId: started.loginSessionId}))).toMatchObject({step: {type: "authenticating"}});
     await waitForStep("succeeded");
 
-    expect((await unwrap(service.list(null))).find((provider) => provider.id === "acme")).toMatchObject({connected: true, disconnectable: true});
+    expect((await unwrap(service.list())).find((provider) => provider.id === "acme")).toMatchObject({connected: true, disconnectable: true});
   });
 
   it("walks a selector and a device code, then an API key prompted in two steps", async () => {
@@ -221,7 +234,7 @@ describe("provider authentication over the wire", () => {
 
     expect(await unwrap(service.logout({providerId: "acme"}))).toEqual({providerId: "acme"});
 
-    expect((await unwrap(service.list(null))).find((provider) => provider.id === "acme")).toMatchObject({connected: false, disconnectable: false});
+    expect((await unwrap(service.list())).find((provider) => provider.id === "acme")).toMatchObject({connected: false, disconnectable: false});
     expect(await modelRuntime.listCredentials()).toEqual([]);
   });
 });

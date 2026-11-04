@@ -1,4 +1,4 @@
-import type {MembersOf} from "@earendil-works/chord";
+import type {Reference} from "@earendil-works/chord";
 import {method, remote} from "@earendil-works/chord";
 import type {
   FolderCreatePayload,
@@ -8,13 +8,14 @@ import type {
   FolderSuggestionsListPayload,
   FolderSuggestionsListResult,
 } from "@supernova/contracts/services/folders/procedures";
-import {json, result, SERVER_WIDE} from "@supernova/contracts/lib/protocol";
+import {json, result, serverHost} from "@supernova/contracts/lib/protocol";
 
 export const FoldersService = remote("supernova.folders", {
   version: 1,
-  input: SERVER_WIDE,
+  params: {},
+  hostAddress: serverHost,
   variants: {
-    default: {
+    owner: {
       methods: {
         create: method(json<FolderCreatePayload>(), result<FolderCreateResult>()),
         listSuggestions: method(json<FolderSuggestionsListPayload>(), result<FolderSuggestionsListResult>()),
@@ -24,4 +25,4 @@ export const FoldersService = remote("supernova.folders", {
   },
 });
 
-export type FoldersService = MembersOf<typeof FoldersService>;
+export type FoldersService = Reference<typeof FoldersService>;

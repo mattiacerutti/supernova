@@ -43,6 +43,8 @@ export const SessionStateDoc = defineDoc<SessionState & JsonObject>({
   version: 1,
   scope: "session",
   initial: () => ({branch: 1, turns: {}}),
+  // Each turn adds a record: a periodic base bounds replay without rewriting every turn on every change.
+  checkpointWhen: (_value, _ops, {deltasSinceBase}) => deltasSinceBase >= 64,
 });
 
 export interface TurnPosition {

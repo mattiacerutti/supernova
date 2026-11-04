@@ -6,18 +6,18 @@ import {useRuntime} from "@/runtime/use-runtime";
 
 const SEARCH_PAGE_SIZE = 30;
 
-function searchSessionsQueryOptions(runtime: RuntimeClient, query: string, projectPaths: readonly string[]) {
+function searchSessionsQueryOptions(runtime: RuntimeClient, text: string, projectPaths: readonly string[]) {
   return infiniteQueryOptions({
-    queryKey: sessionKeys.search(query, projectPaths),
-    queryFn: ({pageParam}) => unwrap(runtime.projects.searchSessions({query, projectPaths: [...projectPaths], limit: SEARCH_PAGE_SIZE, ...(pageParam ? {cursor: pageParam} : {})})),
+    queryKey: sessionKeys.search(text, projectPaths),
+    queryFn: ({pageParam}) => unwrap(runtime.sessions.search({text, projectPaths: [...projectPaths], limit: SEARCH_PAGE_SIZE, ...(pageParam ? {cursor: pageParam} : {})})),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page) => page.nextCursor ?? undefined,
     placeholderData: keepPreviousData,
   });
 }
 
-export function useSearchSessions(query: string, projectPaths: readonly string[]) {
-  const search = useInfiniteQuery(searchSessionsQueryOptions(useRuntime(), query, projectPaths));
+export function useSearchSessions(text: string, projectPaths: readonly string[]) {
+  const search = useInfiniteQuery(searchSessionsQueryOptions(useRuntime(), text, projectPaths));
   return {
     sessions: search.data?.pages.flatMap((page) => page.sessions) ?? [],
     // Placeholder data is the previous query's results, so the current query is still being searched.

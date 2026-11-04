@@ -28,5 +28,5 @@ export async function navigateToTurn(runtime: SessionWorker, input: {readonly ta
     await runtime.restoreCheckpoint({checkpointId: target.checkpointId, force: input.force, fromCheckpointId: currentCaptured ? current.checkpointId : undefined});
   }
   await file.show(navigation.turns, count, target);
-  await runtime.refresh();
+  await runtime.republish();
 }

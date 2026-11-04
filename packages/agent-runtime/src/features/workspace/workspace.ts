@@ -93,12 +93,8 @@ export class Workspace {
     return this.deps.terminals.close(input);
   }
 
-  public get terminals() {
-    return this.deps.terminals.state;
-  }
-
-  public terminalOutput(id: string) {
-    return this.deps.terminals.output(id);
+  public hasTerminal(id: string): boolean {
+    return this.deps.terminals.has(id);
   }
 
   public closeSessionTerminals(sessionId: string): Promise<void> {

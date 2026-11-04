@@ -77,7 +77,7 @@ A helper earns a place in `lib/` when several features use it. Something used by
 - Obtain the connection with `useRuntime()`, or pass `RuntimeClient` into query-options builders. Keep calls behind the feature API boundary.
 - Use `unwrap()` and the typed `runtimeError`/`FailureCode` helpers for result handling. Branch on declared codes, not message strings; keep exhaustive client handling aligned with contract changes.
 - Subscribe where changing state is needed. The initial `undefined` is loading, not an authoritative empty result; reconnect delivers a fresh value. Hidden terminals should not keep receiving output.
-- Reuse `followSession` and `withSessionRuntime` from `api/sessions-sync` to share and release holds. Components read the sessions store, not remote session state directly.
+- Reuse `followSession` and `withChat` from `api/sessions-sync` to share and release holds. Components read the sessions store, not remote session state directly.
 - Build query keys through the feature's `xKeys`, shaped `[feature, ...scope]`. Reuse `queryOptions().queryKey` and invalidate parent keys, never literal arrays.
 - Prefetch data a component will need with `usePrefetchQuery`, not an effect. Use `queryClient.prefetchQuery` only from event handlers. A prefetch that nothing reads yet is dropped after the default `gcTime`, so set a longer `gcTime` on the prefetch when the page may open much later.
 
@@ -96,11 +96,11 @@ See [Testing](testing.md).
 - Derive values from store state when possible instead of duplicating derived state.
 - Store actions take data and change state. They do not take callbacks, navigate, show toasts, or otherwise reach into the UI; a component reads store state and reacts to it.
 - Live session state has one home, `stores/sessions-store`, and one way in, `api/sessions-sync`:
-  - Share session subscriptions rather than opening a separate hold for every component. Directory summaries remain available for sessions whose full document is not being followed.
+  - Share session subscriptions rather than opening a separate hold for every component. Status remains available for sessions whose full document is not being followed.
   - Keep authoritative updates separate from optimism: what the user did that the runtime does not show yet. Commands own the lifecycle of their pending intent and must reconcile it on success or failure.
   - Apply optimism only in `lib/session-view`, so pages, sidebar rows, and listings agree. Components consume those projections rather than reconstructing session state independently.
-- React Query holds what is fetched on request: listings, models, suggestions, workspace data. Live session state is never written into it.
-- Preserve server-side paging for listings and search; never load every session to filter or slice it. Already loaded rows reconcile against live state and pending intent.
+- React Query holds what is fetched on request: models, suggestions, workspace data. Live session state is never written into it.
+- The sidebar reads the tab's one live session list (`api/sidebar/session-list`): each project row shows its project while mounted and grows its window with `loadMore`. Search is a paged request through React Query. Never load every session to filter or slice it. Already loaded rows reconcile against live state and pending intent.
 - Put app-wide reactions in providers: refresh stale queries after reconnect and workspace data after runs end.
 - Scope notices about a session's work to that session; retain them while another route is shown rather than losing or misattributing them. Composer and project failures stay app-wide.
 

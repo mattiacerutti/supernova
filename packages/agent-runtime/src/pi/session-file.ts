@@ -30,6 +30,9 @@ import {createCodingTools} from "@supernova/agent-runtime/pi/lib/tools/coding-to
 
 const context = BACKGROUND_CONTEXT;
 
+/** For a one-off read of a view: attached and detached at once, so it sees no change. */
+const IGNORED = {advance: () => undefined, end: () => undefined};
+
 export interface SessionFileSetup {
   readonly cwd: string;
   readonly modelRuntime: ModelRuntime;
@@ -65,13 +68,19 @@ function shownHistory(history: readonly EntryRecord[], leaf: number | null | und
   return leaf === undefined ? history : history.filter((entry) => leaf !== null && entry.id <= leaf);
 }
 
+interface FollowedView {
+  readonly branch: number;
+  value: ConversationView;
+  readonly detach: () => void;
+}
+
 /**
  * Undo, redo, and revert only move `leaf`; the next send or compaction from an undone leaf forks there, and that fork
  * becomes the branch.
  */
 export class SessionFile {
   private readonly listeners = new Set<() => void>();
-  private followed: {readonly branch: number; readonly stop: () => void} | undefined;
+  private followed: FollowedView | undefined;
   private cache: {readonly branch: number; readonly entries: readonly EntryRecord[]} | undefined;
 
   private constructor(
@@ -277,7 +286,7 @@ export class SessionFile {
   }
 
   public async close(): Promise<void> {
-    this.followed?.stop();
+    this.followed?.detach();
     this.followed = undefined;
     await this.harness.close(context);
     await this.env.cleanup(context);
@@ -295,12 +304,10 @@ export class SessionFile {
   }
 
   private async view(conversationId: number): Promise<ConversationView> {
-    const state = await (await this.conversation(conversationId)).viewState(context);
-    try {
-      return state.value!;
-    } finally {
-      state.dispose();
-    }
+    if (this.followed?.branch === conversationId) return this.followed.value;
+    const observation = await this.harness.observeConversation(conversationId as ConversationId, IGNORED, context);
+    observation.detach();
+    return observation.value;
   }
 
   private async history(conversationId: number, range: {readonly after?: number; readonly through?: number} = {}): Promise<EntryRecord[]> {
@@ -321,7 +328,7 @@ export class SessionFile {
 
   /**
    * Entries are append-only, so only entries after the cached ones are read; a fork of the cached branch reuses its
-   * entries through the fork point.
+   * entries through the fork point. Entry IDs are session-wide, so the gap uses `view.before`, never the next ID.
    */
   private async branchHistory(branch: number, view?: ConversationView): Promise<readonly EntryRecord[]> {
     const cached = this.cache?.branch === branch ? this.cache.entries : undefined;
@@ -329,16 +336,14 @@ export class SessionFile {
       if (cached) return cached;
       view = await this.view(branch);
     }
-    const through = view.entries.reduce((newest, entry) => Math.max(newest, entry.id), 0);
     const parent = view.conversation.parent;
     const inherited = !cached && parent && this.cache?.branch === parent.conversationId ? this.cache.entries.filter((entry) => entry.id <= parent.at) : undefined;
     const known = cached ?? inherited ?? [];
-    const after = known.at(-1)?.id ?? 0;
-    if (cached && through <= after) return cached;
-    // The view starts at its compaction head, so it extends what is known only when that head is already known.
-    const head = view.entries.find((entry) => entry.head !== undefined);
-    const extendsKnown = (cached ?? inherited) !== undefined && (head === undefined || known.some((entry) => entry.id === head.id));
-    const added = timelineEntries(extendsKnown ? view.entries.filter((entry) => entry.id > after) : await this.history(branch, {after, through}));
+    const tail = known.at(-1)?.id ?? 0;
+    const newest = view.entries.at(-1)?.id ?? view.before ?? 0;
+    if (cached && newest <= tail) return cached;
+    const missing = view.before !== undefined && view.before > tail ? await this.history(branch, {after: tail, through: view.before}) : [];
+    const added = timelineEntries([...missing, ...view.entries.filter((entry) => entry.id > tail)]);
     const entries = added.length > 0 ? [...known, ...added] : known;
     this.cache = {branch, entries};
     return entries;
@@ -398,21 +403,30 @@ export class SessionFile {
     );
   }
 
+  /** `advance` only records (Durable's rule); one arriving before the observation resolves applies over its value. */
   private async follow(branch: number): Promise<void> {
     if (this.followed?.branch === branch) return;
-    const state = await (await this.conversation(branch)).viewState(context);
-    const unsubscribe = state.subscribe(() => {
+    const notify = () => {
       for (const listener of this.listeners) listener();
-    });
-    this.followed?.stop();
-    this.followed = {
-      branch,
-      stop: () => {
-        unsubscribe();
-        state.dispose();
-      },
     };
-    for (const listener of this.listeners) listener();
+    const target: {current: FollowedView | undefined; early: ConversationView | undefined} = {current: undefined, early: undefined};
+    const observation = await this.harness.observeConversation(
+      branch as ConversationId,
+      {
+        advance: (call) => {
+          if (call.kind !== "value") return;
+          if (target.current) target.current.value = call.value;
+          else target.early = call.value;
+          queueMicrotask(notify);
+        },
+        end: () => undefined,
+      },
+      context
+    );
+    target.current = {branch, value: target.early ?? observation.value, detach: () => observation.detach()};
+    this.followed?.detach();
+    this.followed = target.current;
+    notify();
   }
 
   private async conversation(id: number): Promise<Conversation> {

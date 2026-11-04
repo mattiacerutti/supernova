@@ -22,10 +22,6 @@ export interface ProvidersDeps {
 export class Providers {
   public constructor(private readonly deps: ProvidersDeps) {}
 
-  public get logins() {
-    return this.deps.loginSessions.logins;
-  }
-
   public async list(): Promise<ProvidersListResult> {
     const {modelRuntime} = this.deps.sdk;
     await modelRuntime.refresh({allowNetwork: false});

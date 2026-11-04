@@ -1,9 +1,5 @@
-import type {MutableReplicatedState} from "@earendil-works/chord";
-import {copyJson, replicatedState} from "@earendil-works/chord";
-import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import {ProviderLoginError} from "@supernova/contracts/services/providers/procedures";
 import type {ProviderLoginSession, ProviderLoginStep} from "@supernova/contracts/services/providers/schemas";
-import type {ProviderLoginsState} from "@supernova/contracts/services/providers/services";
 
 interface LoginWaiter {
   readonly cleanup: () => void;
@@ -25,18 +21,23 @@ interface WaitForInputOptions {
   readonly step: ProviderLoginStep;
 }
 
-/** The session as strict JSON: providers leave optional step fields undefined, which replicated state rejects. */
+/** The session as strict JSON: providers leave optional step fields undefined, which documents reject. */
 function toLoginSession(state: LoginSessionState): ProviderLoginSession {
-  return copyJson(
-    {loginSessionId: state.loginSessionId, progress: state.progress, providerId: state.providerId, step: state.step},
-    {omitUndefinedProperties: true}
-  ) as ProviderLoginSession;
+  return JSON.parse(JSON.stringify({loginSessionId: state.loginSessionId, progress: state.progress, providerId: state.providerId, step: state.step})) as ProviderLoginSession;
 }
 
 export class LoginSessions {
-  public readonly logins: MutableReplicatedState<ProviderLoginsState> = replicatedState<ProviderLoginsState>({logins: {}});
   private readonly sessions = new Map<string, LoginSessionState>();
   private readonly listeners = new Set<(session: ProviderLoginSession) => void>();
+
+  public all(): ProviderLoginSession[] {
+    return [...this.sessions.values()].map(toLoginSession);
+  }
+
+  public onAnyChange(listener: (session: ProviderLoginSession) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
 
   public create(input: {readonly loginSessionId: string; readonly providerId: string}): ProviderLoginSession {
     const state: LoginSessionState = {abortController: new AbortController(), loginSessionId: input.loginSessionId, providerId: input.providerId, step: {type: "starting"}};
@@ -143,9 +144,6 @@ export class LoginSessions {
 
   private publish(state: LoginSessionState): ProviderLoginSession {
     const session = toLoginSession(state);
-    this.logins.change(BACKGROUND_CONTEXT, (draft) => {
-      draft.logins[session.loginSessionId] = session as (typeof draft.logins)[string];
-    });
     for (const listener of [...this.listeners]) listener(session);
     return session;
   }

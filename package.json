@@ -29,7 +29,7 @@
     "test:timeline": "bun run --filter @supernova/web test:timeline"
   },
   "devDependencies": {
-    "@types/node": "^22.19.1",
+    "@types/node": "^24.19.2",
     "eslint": "^10.3.0",
     "husky": "^9.1.7",
     "prettier": "^3.8.3",
@@ -48,5 +48,17 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "overrides": {
+    "@earendil-works/chord": "file:./vendor/pi/earendil-works-chord.tgz",
+    "@earendil-works/pi-agent-core": "file:./vendor/pi/earendil-works-pi-agent-core.tgz",
+    "@earendil-works/pi-ai": "file:./vendor/pi/earendil-works-pi-ai.tgz",
+    "@earendil-works/pi-codemode": "file:./vendor/pi/earendil-works-pi-codemode.tgz",
+    "@earendil-works/pi-coding-agent": "file:./vendor/pi/earendil-works-pi-coding-agent.tgz",
+    "@earendil-works/pi-durable": "file:./vendor/pi/earendil-works-pi-durable.tgz",
+    "@earendil-works/pi-mcp": "file:./vendor/pi/earendil-works-pi-mcp.tgz",
+    "@earendil-works/pi-schema": "file:./vendor/pi/earendil-works-pi-schema.tgz",
+    "@earendil-works/pi-telemetry": "file:./vendor/pi/earendil-works-pi-telemetry.tgz",
+    "@earendil-works/pi-tui": "file:./vendor/pi/earendil-works-pi-tui.tgz"
+  }
 }

@@ -1,13 +1,14 @@
-import type {MembersOf} from "@earendil-works/chord";
+import type {Reference} from "@earendil-works/chord";
 import {method, remote} from "@earendil-works/chord";
 import type {GetConfigurationPayload, GetConfigurationResult} from "@supernova/contracts/services/configuration/procedures";
-import {json, result, SERVER_WIDE} from "@supernova/contracts/lib/protocol";
+import {json, result, serverHost} from "@supernova/contracts/lib/protocol";
 
 export const ConfigurationService = remote("supernova.configuration", {
   version: 1,
-  input: SERVER_WIDE,
+  params: {},
+  hostAddress: serverHost,
   variants: {
-    default: {
+    owner: {
       methods: {
         get: method(json<GetConfigurationPayload>(), result<GetConfigurationResult>()),
       },
@@ -15,4 +16,4 @@ export const ConfigurationService = remote("supernova.configuration", {
   },
 });
 
-export type ConfigurationService = MembersOf<typeof ConfigurationService>;
+export type ConfigurationService = Reference<typeof ConfigurationService>;

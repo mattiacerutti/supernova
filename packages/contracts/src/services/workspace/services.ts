@@ -1,7 +1,6 @@
-import type {MembersOf} from "@earendil-works/chord";
-import {method, remote} from "@earendil-works/chord";
-import {Type} from "typebox";
-import {json, result, SERVER_WIDE} from "@supernova/contracts/lib/protocol";
+import type {Reference} from "@earendil-works/chord";
+import {method, remote, str} from "@earendil-works/chord";
+import {json, result, serverHost} from "@supernova/contracts/lib/protocol";
 import type {
   TerminalClosePayload,
   TerminalOpenPayload,
@@ -29,9 +28,10 @@ export interface TerminalsState {
 
 export const WorkspaceService = remote("supernova.workspace", {
   version: 1,
-  input: SERVER_WIDE,
+  params: {},
+  hostAddress: serverHost,
   variants: {
-    default: {
+    owner: {
       state: {
         terminals: json<TerminalsState>(),
       },
@@ -49,14 +49,15 @@ export const WorkspaceService = remote("supernova.workspace", {
   },
 });
 
-export type WorkspaceService = MembersOf<typeof WorkspaceService>;
+export type WorkspaceService = Reference<typeof WorkspaceService>;
 
 /** Held while a tab shows it; only subscribers receive output. Whoever resizes last sets the shell's size. */
 export const TerminalService = remote("supernova.terminal", {
   version: 1,
-  input: Type.Object({terminalId: Type.String()}),
+  params: {terminalId: str()},
+  hostAddress: serverHost,
   variants: {
-    default: {
+    owner: {
       state: {
         output: json<TerminalOutput>(),
       },
@@ -69,4 +70,4 @@ export const TerminalService = remote("supernova.terminal", {
   },
 });
 
-export type TerminalService = MembersOf<typeof TerminalService>;
+export type TerminalService = Reference<typeof TerminalService>;

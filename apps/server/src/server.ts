@@ -1,10 +1,9 @@
 import {createServer} from "node:http";
 import type {ServerResponse} from "node:http";
 import type {AddressInfo, Socket} from "node:net";
-import type {Host} from "@earendil-works/chord";
-import {createHost} from "@earendil-works/chord";
-import {RUNTIME_HOST, RUNTIME_SOCKET_PATH} from "@supernova/contracts/lib/protocol";
-import {createAgentRuntime, serveRuntime} from "@supernova/agent-runtime";
+import {RUNTIME_SOCKET_PATH} from "@supernova/contracts/lib/protocol";
+import type {ServerHostHandle} from "@supernova/agent-runtime";
+import {createAgentRuntime, startServerHost} from "@supernova/agent-runtime";
 import {acceptRuntimeSockets} from "@/runtime-socket";
 
 export const DEFAULT_HOST = "127.0.0.1";
@@ -54,7 +53,7 @@ export async function startServer({host, port}: StartServerOptions): Promise<Run
   });
 
   let runtime: Awaited<ReturnType<typeof createAgentRuntime>> | undefined;
-  let services: Host | undefined;
+  let services: ServerHostHandle | undefined;
   let closeSockets: (() => Promise<void>) | undefined;
 
   const close = (): Promise<void> => {
@@ -80,9 +79,8 @@ export async function startServer({host, port}: StartServerOptions): Promise<Run
 
     runtime = await createAgentRuntime();
 
-    services = createHost({name: RUNTIME_HOST, onError: (error) => console.error("[runtime]", error)});
-    serveRuntime(services, runtime);
-    closeSockets = acceptRuntimeSockets(listener, RUNTIME_SOCKET_PATH, services);
+    services = await startServerHost(runtime);
+    closeSockets = acceptRuntimeSockets(listener, RUNTIME_SOCKET_PATH, services.host);
 
     const address = listener.address() as AddressInfo;
     const hostname = host.includes(":") ? `[${host}]` : host;

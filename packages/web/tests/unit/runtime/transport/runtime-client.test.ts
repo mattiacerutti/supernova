@@ -1,82 +1,124 @@
-import type {Host} from "@earendil-works/chord";
-import {cell, createHost, memoryLinkPair, method, remote} from "@earendil-works/chord";
-import {Type} from "typebox";
+import type {Host, Link} from "@earendil-works/chord";
+import {createHost, defineFacet, defineState, local, memoryLinkPair, method, num, obj, remote, unknown} from "@earendil-works/chord";
+import type {Schema} from "@earendil-works/chord";
+import {BACKGROUND_CONTEXT as context} from "@earendil-works/chord/context";
 import {describe, expect, it, onTestFinished} from "vitest";
+import {follow} from "@/runtime/transport/follow";
 import {strictJsonMembers} from "@/runtime/transport/runtime-client";
+
+type P = {readonly kind: string};
 
 const Echo = remote("test.echo", {
   version: 1,
-  input: Type.Object({}),
+  params: {},
+  hostAddress: () => ({kind: "server", params: {}, key: "server"}),
   variants: {
-    default: {
-      state: {count: Type.Number()},
-      methods: {echo: method(Type.Unsafe<Record<string, unknown> | null>({}), Type.Unknown()), bump: method(Type.Null(), Type.Null())},
+    owner: {
+      state: {count: num()},
+      methods: {echo: method(unknown() as Schema<Record<string, unknown> | null>, unknown()), bump: method()},
     },
   },
 });
 
-/** A server serving `Echo` and a browser-kind host connected to it over a memory link, as the app's client is. */
-function connect(): {server: Host; browser: Host; reconnect: () => void} {
-  const server = createHost({name: "server", onError: () => undefined});
-  server.serve(Echo, (_input, _principal, self) => {
-    const state = self.state({count: cell(Type.Number(), 0)});
-    return {
-      kind: "default",
-      count: state.count,
-      echo: (payload) => payload,
-      bump: (_payload, ctx) => {
-        state.count.change(ctx, (count) => count + 1);
-        return null;
+const Count = defineState("test.count", {schema: obj({count: num()}), version: 1, initial: () => ({count: 0})});
+
+const Counter = local("test.counter", {version: 1, params: {}, members: {count: obj({count: num()}), bump: method()}});
+
+async function connect(): Promise<{browser: Host<P>; reconnect: () => void}> {
+  const server = createHost<P>({address: {kind: "server", params: {}, key: "server"}, principal: {kind: "server"}, onError: () => undefined});
+  await server.load(
+    [
+      {
+        name: "test",
+        facet: defineFacet<P>((host) => {
+          host.serve(Counter, (_params, self) => {
+            const count = self.state(Count);
+            return {
+              count,
+              bump: async (ctx) => {
+                await count.change((draft) => void (draft.count += 1), ctx);
+                return null;
+              },
+            };
+          });
+          host.serve(Echo, (_params, _principal, self) => {
+            const counter = self.get(Counter, {});
+            return {
+              variant: "owner",
+              members: {
+                count: self.derive([counter.count], ([value]) => value.count),
+                echo: async (payload) => payload,
+                bump: (ctx) => counter.bump(ctx),
+              },
+            };
+          });
+        }),
       },
-    };
-  });
-  // The runtime's state lives in its features, which outlive every connection; a hold as the client keeps this record.
-  const kept = server.get(Echo, {}, {principal: "owner"});
-  const link = () => {
+    ],
+    context
+  );
+  let current: Link | undefined;
+  const link = (): Link => {
     const [down, up] = memoryLinkPair();
-    server.accept(down, {principal: "owner", kind: "client"});
-    return {down, up};
+    server.accept(down, {principal: {kind: "owner"}}, context);
+    current = down;
+    return up;
   };
-  let current = link();
-  const browser = createHost({name: "browser", kind: "client", upstream: current.up, onError: () => undefined});
+  const browser = createHost<P>({onError: () => undefined});
+  browser.connect(link(), {principal: {kind: "server"}}, context);
+  await browser.load([], context);
   onTestFinished(async () => {
-    kept.release();
-    await browser.close();
-    await server.close();
+    await browser.close(context);
+    await server.close(context);
   });
   return {
-    server,
     browser,
+    // As the app's client does: a new link once the old one's close reached the host.
     reconnect: () => {
-      current.down.close();
-      current = link();
-      browser.connect(current.up);
+      current?.close();
+      queueMicrotask(() => browser.connect(link(), {principal: {kind: "server"}}, context));
     },
   };
 }
 
-describe("the runtime client's handles", () => {
-  it("send payloads with undefined fields as strict JSON, and no payload as null", async () => {
-    const {browser} = connect();
-    const echo = strictJsonMembers(browser.get(Echo, {}, {at: "server"}), "echo");
+describe("the runtime client's references", () => {
+  it("send payloads with undefined fields as strict JSON, and call a method without arguments with only a context", async () => {
+    const {browser} = await connect();
+    const held = await browser.get(Echo, {}, context);
+    const echo = strictJsonMembers(held, "echo") as unknown as {echo(payload: unknown): Promise<unknown>; bump(): Promise<null>};
 
     expect(await echo.echo({kept: 1, dropped: undefined, nested: {dropped: undefined}})).toEqual({kept: 1, nested: {}});
-    expect(await echo.echo(undefined as never)).toBeNull();
+    expect(await echo.echo(undefined)).toBeNull();
+    expect(await echo.bump()).toBeNull();
   });
 
-  it("follow state across a reconnect: Chord holds the service again and its value arrives anew", async () => {
-    const {browser, reconnect} = connect();
-    const echo = strictJsonMembers(browser.get(Echo, {}, {at: "server"}), "echo");
-    const seen: unknown[] = [];
-    const stop = echo.count.subscribe((count) => seen.push(count));
+  it("follow state across a reconnect: Chord holds the object again and its value arrives anew", async () => {
+    const {browser, reconnect} = await connect();
+    const held = await browser.get(Echo, {}, context);
+    const seen: number[] = [];
+    const stop = follow(held.count, (count) => seen.push(count));
     onTestFinished(stop);
 
-    await echo.bump(null);
-    await expect.poll(() => echo.count.value).toBe(1);
+    await held.bump(context);
+    await expect.poll(() => held.count.value).toBe(1);
     reconnect();
-    await echo.bump(null);
-    await expect.poll(() => echo.count.value).toBe(2);
-    expect(seen[0]).toBeUndefined();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await held.bump(context);
+    await expect.poll(() => held.count.value).toBe(2);
+    expect(seen[0]).toBe(0);
     expect(seen.at(-1)).toBe(2);
+  });
+
+  it("deliver a value that lands while the watch is acquired, once", async () => {
+    const {browser} = await connect();
+    const held = await browser.get(Echo, {}, context);
+    const seen: number[] = [];
+    const stop = follow(held.count, (count) => seen.push(count));
+    onTestFinished(stop);
+    // Before the watch resolves: its starting value already holds the change.
+    await held.bump(context);
+
+    await expect.poll(() => seen.at(-1)).toBe(1);
+    expect(seen).toEqual([0, 1]);
   });
 });

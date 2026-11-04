@@ -6,7 +6,7 @@ import {registerBunOAuthFlows} from "@earendil-works/pi-ai/bun-oauth";
 const PI_RUNTIME_PACKAGE_DIR = join(tmpdir(), "pi-runtime-package");
 const PI_RUNTIME_PACKAGE_JSON = {
   // Must match @earendil-works/pi-coding-agent in agent-runtime: the remote model catalog rejects unknown versions.
-  version: "1.2.0",
+  version: "1.5.0",
   piConfig: {
     configDir: ".supernova",
   },

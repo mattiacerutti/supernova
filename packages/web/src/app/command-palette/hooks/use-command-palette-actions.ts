@@ -10,8 +10,7 @@ export type CommandPalettePageId = "new-session" | "open-project" | "open-sessio
 
 function useOpenSessionProject(projects: readonly Project[]): Project | undefined {
   const sessionId = useParams({select: (params) => params.sessionId, strict: false});
-  // The runtime's directory names every open session's project; the session page already follows the open one.
-  const projectPath = useSessionsStore((state) => (sessionId === undefined ? undefined : state.entries[sessionId]?.projectPath));
+  const projectPath = useSessionsStore((state) => (sessionId === undefined ? undefined : state.records[sessionId]?.projectPath));
 
   return projectPath === undefined ? undefined : projects.find((project) => project.path === projectPath);
 }
@@ -20,7 +19,7 @@ export function useOpenSessionWorkspacePath(): string | undefined {
   const sessionId = useParams({select: (params) => params.sessionId, strict: false});
 
   return useSessionsStore((state) => {
-    const session = sessionId === undefined ? undefined : state.documents[sessionId];
+    const session = sessionId === undefined ? undefined : state.records[sessionId];
     return session && (session.worktree?.path ?? session.projectPath);
   });
 }

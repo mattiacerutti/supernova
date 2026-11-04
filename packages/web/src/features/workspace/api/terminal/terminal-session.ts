@@ -1,9 +1,10 @@
-import type {Readable} from "@earendil-works/chord";
+import type {Watchable} from "@earendil-works/chord";
 import type {Terminal, TerminalOutput} from "@supernova/contracts/services/workspace/schemas";
 import type {TerminalsState} from "@supernova/contracts/services/workspace/services";
 import {useSyncExternalStore} from "react";
 import {unwrap} from "@/runtime/runtime-result";
 import type {RuntimeClient} from "@/runtime/transport/runtime-client";
+import {follow as followValue} from "@/runtime/transport/follow";
 import {useRuntime} from "@/runtime/use-runtime";
 
 interface AttachTerminalInput {
@@ -71,7 +72,7 @@ function attachTerminal(runtime: RuntimeClient, input: AttachTerminalInput): Ter
     held.ready.then(
       () => {
         if (detached) return;
-        cleanups.push(held.service.output.subscribe(follow(emit)));
+        cleanups.push(followValue(held.service.output, follow(emit)));
         void held.service.resize(size).catch(() => undefined);
       },
       // An unknown terminal fails the hold: closed while this client was away.
@@ -116,18 +117,27 @@ export function useCloseTerminal(): (id: string) => void {
   return (id) => void runtime.workspace.closeTerminal({id}).catch(() => undefined);
 }
 
-/** One subscribe function per readable, so `useSyncExternalStore` keeps its subscription across renders. */
-const subscribers = new WeakMap<Readable<unknown>, (onChange: () => void) => () => void>();
-function subscriberOf(readable: Readable<unknown>): (onChange: () => void) => () => void {
-  let subscribe = subscribers.get(readable);
+/** One subscribe function per watchable, so `useSyncExternalStore` keeps its subscription across renders. */
+const subscribers = new WeakMap<Watchable<unknown>, (onChange: () => void) => () => void>();
+function subscriberOf(watchable: Watchable<unknown>): (onChange: () => void) => () => void {
+  let subscribe = subscribers.get(watchable);
   if (!subscribe) {
-    subscribe = (onChange) => readable.subscribe(onChange);
-    subscribers.set(readable, subscribe);
+    subscribe = (onChange) => followValue(watchable, onChange);
+    subscribers.set(watchable, subscribe);
   }
   return subscribe;
 }
 
 export function useServerTerminals(): TerminalsState | undefined {
   const {terminals} = useRuntime().workspace;
-  return useSyncExternalStore(subscriberOf(terminals), () => terminals.value);
+  return useSyncExternalStore(subscriberOf(terminals), () => valueOf(terminals));
+}
+
+/** Reading a held member before its first value throws. */
+function valueOf<T>(watchable: Watchable<T>): T | undefined {
+  try {
+    return watchable.value;
+  } catch {
+    return undefined;
+  }
 }

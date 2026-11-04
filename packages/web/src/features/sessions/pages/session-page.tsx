@@ -107,15 +107,15 @@ export default function SessionPage(props: SessionPageProps) {
   const [creatingWorkspace, setCreatingWorkspace] = useState<SessionWorkspaceSelection | null>(null);
   const creatingSession = creatingWorkspace !== null;
   const view = useSession(sessionId);
-  const {session} = view;
+  const {record, session} = view;
   // The document is replaced on every streamed frame; only the parts read below are passed on, so everything that
   // does not show the timeline keeps its props and skips those renders.
   const hasSession = session !== undefined;
   const agent = session?.agent;
   const sessionContext = session?.context;
-  const sessionProjectPath = session?.projectPath;
-  const sessionTitle = session?.title;
-  const worktree = session?.worktree;
+  const sessionProjectPath = record?.projectPath;
+  const sessionTitle = record?.title;
+  const worktree = record?.worktree;
   const entriesRemaining = session?.entries.remaining ?? 0;
   const undoneRemaining = session?.undone.remaining ?? 0;
   const newSessionProjectPath = target.kind === "new" ? target.projectPath : undefined;

@@ -91,8 +91,8 @@ describe("importing the old SDK's sessions", () => {
     const root = oldSessionsDir({[`${PROJECT_DIR}/2026-01-01T00-00-00-000Z_old-1.jsonl`]: toolSession("old-1")});
     const pi = await createPiTestRuntime({sessionStorageRoot: root});
     try {
-      const page = await pi.projects.listSessions({projectPath: PROJECT, limit: 5});
-      expect(page.sessions.map((session) => [session.id, session.title])).toEqual([["old-1", "Read the readme"]]);
+      const listed = await pi.list(PROJECT, 5);
+      expect(listed.map((session) => [session.id, session.title])).toEqual([["old-1", "Read the readme"]]);
 
       const session = await pi.sessionRuntime.current("old-1");
       expect(session.entries.items.map((entry) => entry.kind)).toEqual(["pi.user", "pi.assistant", "pi.tool-result", "pi.assistant"]);
@@ -142,8 +142,8 @@ describe("importing the old SDK's sessions", () => {
     });
     const pi = await createPiTestRuntime({sessionStorageRoot: root});
     try {
-      expect((await pi.projects.listSessions({projectPath, limit: 5})).sessions.map((session) => session.id)).toEqual(["windows"]);
-      expect((await pi.projects.searchSessions({projectPaths: [projectPath], query: "Old question", limit: 5})).sessions.map((session) => session.id)).toEqual(["windows"]);
+      expect((await pi.list(projectPath, 5)).map((session) => session.id)).toEqual(["windows"]);
+      expect((await pi.search({text: "Old question", projectPaths: [projectPath], limit: 5})).map((session) => session.id)).toEqual(["windows"]);
       expect(turnContents(await pi.sessionRuntime.current("windows"))).toEqual([[{type: "text", text: "Old question"}]]);
       expect(existsSync(join(root, "legacy", projectDir, "2026-01-01T00-00-00-000Z_windows.jsonl"))).toBe(true);
     } finally {
@@ -169,7 +169,7 @@ describe("importing the old SDK's sessions", () => {
     const pi = await createPiTestRuntime({sessionStorageRoot: root});
     try {
       const session = await pi.sessionRuntime.current("old-2");
-      expect(session.title).toBe("Old question");
+      expect(await pi.sessions.record({sessionId: "old-2"})).toMatchObject({title: "Old question"});
       expect(turnContents(session).map((contentParts) => contentParts[0])).toEqual([
         {type: "text", text: "Old question"},
         {type: "text", text: "Kept question"},
@@ -206,7 +206,7 @@ describe("importing the old SDK's sessions", () => {
     try {
       expect(await first.store.find("archived")).toBeUndefined();
       expect(await first.sessions.exists({sessionId: "archived"})).toBe(false);
-      expect((await first.projects.listSessions({projectPath: PROJECT, limit: 5})).sessions.map((session) => session.id)).toEqual(["old-1"]);
+      expect((await first.list(PROJECT, 5)).map((session) => session.id)).toEqual(["old-1"]);
       expect(
         readdirSync(root)
           .filter((name) => !name.startsWith("catalog.sqlite"))

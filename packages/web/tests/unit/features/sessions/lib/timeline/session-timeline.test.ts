@@ -27,7 +27,7 @@ function outline(items: readonly SessionTimelineItem[]): unknown[] {
 }
 
 function shown(session: Session) {
-  const view = sessionView({entry: undefined, session});
+  const view = sessionView({entry: undefined, record: undefined, session});
   return {
     committed: outline(buildCommittedTimelineItems(view.turns)),
     live: outline(buildLiveTimelineItems({live: view.liveTurn !== undefined, liveTurn: view.liveTurn ?? null})),
@@ -97,7 +97,9 @@ describe("a session document as the timeline shows it", () => {
     const image = {id: "image-1", kind: "image", mime: "image/png", name: "a.png", size: 1, type: "attachment"} as const;
     const entries = transcript([userEntry({parts: [image], content: [{data: "BASE64", mimeType: "image/png", type: "image"}]}), assistantEntry("A chart.")]);
 
-    expect(sessionView({entry: undefined, session: sessionDocument({entries})}).turns[0]?.userMessage.contentParts).toEqual([{...image, contentBase64: "BASE64"}]);
+    expect(sessionView({entry: undefined, record: undefined, session: sessionDocument({entries})}).turns[0]?.userMessage.contentParts).toEqual([
+      {...image, contentBase64: "BASE64"},
+    ]);
   });
 
   it("keeps undone turns out of the timeline and offers them to redo", () => {
@@ -122,7 +124,7 @@ describe("a session document as the timeline shows it", () => {
     });
     const session = sessionDocument({entries, live, runStart: entries[2]!.id});
 
-    const view = sessionView({entry: undefined, session});
+    const view = sessionView({entry: undefined, record: undefined, session});
     expect(view.turns.map((turn) => turn.userMessage.contentParts)).toEqual([[text("First")]]);
     expect(view.liveTurn).toMatchObject({
       events: [

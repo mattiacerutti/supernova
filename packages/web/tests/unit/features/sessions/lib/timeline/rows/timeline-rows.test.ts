@@ -15,7 +15,7 @@ function timeline(live: boolean) {
     userEntry("Second"),
   ]);
   const session = live ? sessionDocument({entries, live: runningLive({partial: [{text: "Streaming", type: "text"}]}), runStart: entries[4]!.id}) : sessionDocument({entries});
-  const view = sessionView({entry: undefined, session});
+  const view = sessionView({entry: undefined, record: undefined, session});
   return {history: buildCommittedTimelineItems(view.turns), live: buildLiveTimelineItems({live, liveTurn: view.liveTurn ?? null})};
 }
 

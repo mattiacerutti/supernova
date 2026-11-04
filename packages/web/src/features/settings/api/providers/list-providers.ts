@@ -7,7 +7,7 @@ export function useListProviders() {
   const runtime = useRuntime();
   return useQuery(
     queryOptions({
-      queryFn: () => unwrap(runtime.providers.list(null)),
+      queryFn: () => unwrap(runtime.providers.list()),
       queryKey: settingsKeys.providers(),
     })
   );

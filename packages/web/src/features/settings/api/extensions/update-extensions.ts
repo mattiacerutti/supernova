@@ -5,6 +5,6 @@ import {useRuntime} from "@/runtime/use-runtime";
 export function useUpdateExtensions() {
   const runtime = useRuntime();
   return useMutation({
-    mutationFn: () => unwrap(runtime.extensions.update(null)),
+    mutationFn: () => unwrap(runtime.extensions.update()),
   });
 }

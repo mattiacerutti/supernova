@@ -1,3 +1,4 @@
+import type {ListedSession} from "@supernova/contracts/services/sessions/services";
 import type {
   AssistantMessage,
   CompactionStatus,
@@ -134,9 +135,9 @@ export function runningLive(options: {readonly partial?: LivePartial["content"];
     usage: ZERO_USAGE,
   };
   return {
-    run: {inputs: [], taskId: 1 as RunTaskId},
+    run: {inputs: [], taskId: 1 as RunTaskId, turns: 0},
     ...(message === undefined ? {} : {generation: {attempt: 0, message}}),
-    ...(options.compacting ? {compactions: [{attempt: 1, blocking: true, reason: "threshold", taskId: 2 as CompactionTaskId}]} : {}),
+    ...(options.compacting ? {compactions: [{attempt: 1, blocking: true, trigger: "threshold", taskId: 2 as CompactionTaskId}]} : {}),
   };
 }
 
@@ -147,10 +148,6 @@ export function sessionDocument(
   const {entries = [], undone = [], ...rest} = input;
   return {
     id: "session-1",
-    title: "Session",
-    forked: false,
-    pinned: false,
-    projectPath: "/workspace",
     updatedAt: new Date(Date.UTC(2026, 0, 1)).toISOString(),
     agent: {},
     live: {},
@@ -164,4 +161,9 @@ export function sessionDocument(
 
 export function page(items: readonly SessionEntry[], precedingEntryId: number | null = null, remaining = 0): SessionEntries {
   return {items, remaining, precedingEntryId: precedingEntryId === null ? null : entryId(precedingEntryId)};
+}
+
+/** A session's catalog record, as lists and its page read it. */
+export function sessionRecord(input: Partial<ListedSession> = {}): ListedSession {
+  return {id: "session-1", title: "Session", forked: false, pinned: false, projectPath: "/workspace", updatedAt: new Date(Date.UTC(2026, 0, 1)).toISOString(), ...input};
 }

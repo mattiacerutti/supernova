@@ -24,7 +24,8 @@ function connectApp(runtime: RuntimeClient, queryClient: QueryClient): () => voi
     void queryClient.invalidateQueries();
   });
   const stopRunsEnding = useSessionsStore.subscribe((state, previous) => {
-    const runEnded = Object.entries(state.entries).some(([sessionId, entry]) => entry.activity === "idle" && (previous.entries[sessionId]?.activity ?? "idle") !== "idle");
+    // An idle session leaves status, so a run ended where a session was busy and now is absent.
+    const runEnded = Object.entries(previous.statuses).some(([sessionId, entry]) => entry.activity !== "idle" && (state.statuses[sessionId]?.activity ?? "idle") === "idle");
     if (runEnded) void queryClient.invalidateQueries({queryKey: workspaceKeys.all});
   });
   return () => {

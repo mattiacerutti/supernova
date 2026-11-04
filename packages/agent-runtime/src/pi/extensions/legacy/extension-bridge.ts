@@ -1,6 +1,5 @@
 import {readFileSync} from "node:fs";
 import {join} from "node:path";
-import type {TSchema} from "@earendil-works/pi-ai";
 import type {Extension as PiExtension, LoadExtensionsResult, ModelRuntime, ToolDefinition} from "@earendil-works/pi-coding-agent";
 import {defineExtension} from "@earendil-works/pi-durable";
 import {extensionContext} from "@supernova/agent-runtime/pi/extensions/legacy/extension-context";
@@ -8,6 +7,7 @@ import type {Emit, Handler} from "@supernova/agent-runtime/pi/extensions/legacy/
 import {DELIVERED_EVENTS, eventHooks} from "@supernova/agent-runtime/pi/extensions/legacy/extension-events";
 import type {SessionExtension} from "@supernova/agent-runtime/pi/lib/tools/coding-tools";
 import {fromToolDefinition} from "@supernova/agent-runtime/pi/lib/tools/tool-definition";
+import type {TSchema} from "typebox";
 
 const UNSUPPORTED_REGISTRATIONS = ["commands", "shortcuts", "flags", "messageRenderers"] as const;
 const REGISTRATION_LABELS: Record<(typeof UNSUPPORTED_REGISTRATIONS)[number], string> = {

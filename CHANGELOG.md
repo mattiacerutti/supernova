@@ -6,6 +6,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Breaking Changes
 
+- Supernova now runs on Pi 1.5.0. Opening a session upgrades its file to Pi 1.5.0's storage format, and earlier Supernova versions cannot open an upgraded session. Downgrading Supernova after opening sessions is not supported, so back up `~/.supernova/userdata/agent/sessions` first if you may need to go back.
+
 ### Added
 
 - Added a divider in forked sessions where the copied conversation ends and the fork's own messages begin.

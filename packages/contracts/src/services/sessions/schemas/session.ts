@@ -23,15 +23,12 @@ export const SessionEntries = z.object({
   precedingEntryId: z.number().int().nonnegative().nullable(),
 });
 
+/** The catalog is the record's one source, so title, pin, project and worktree are not here. */
 export const Session = z.object({
   id: z.string(),
-  title: z.string(),
-  forked: z.boolean(),
   /** In a fork, the last shown turn copied from its source; the fork's own turns follow it. */
   lastCopiedTurnId: z.string().optional(),
-  pinned: z.boolean(),
-  projectPath: z.string(),
-  worktree: SessionWorktree.optional(),
+  /** When the conversation was last active: its newest settled answer, else its catalog time. */
   updatedAt: z.string(),
   /** Newest whole turns; `remaining` counts the earlier ones, read with `loadHistory`. */
   entries: SessionEntries,

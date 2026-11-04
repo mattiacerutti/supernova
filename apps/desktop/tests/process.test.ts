@@ -6,7 +6,7 @@ import {tmpdir} from "node:os";
 import {join, resolve} from "node:path";
 import type {WebSocketLike} from "@earendil-works/chord";
 import {createHost, webSocketLink} from "@earendil-works/chord";
-import {RUNTIME_HOST} from "@supernova/contracts/lib/protocol";
+import {BACKGROUND_CONTEXT as context} from "@earendil-works/chord/context";
 import {ConfigurationService} from "@supernova/contracts/services/configuration/services";
 import {startServerProcess} from "@supernova/server/process";
 
@@ -33,12 +33,15 @@ test("Electron's Node mode starts and stops the bundled headless API", async () 
       // A call over Chord's WebSocket link proves the bundled runtime serves its services.
       const socket = new WebSocket(`${server.url.replace("http:", "ws:")}/ws`);
       const closed = new Promise<void>((resolve) => socket.addEventListener("close", () => resolve()));
-      const client = createHost({name: "browser", kind: "client", upstream: webSocketLink(socket as unknown as WebSocketLike), onError: () => undefined});
-      const configuration = client.get(ConfigurationService, {}, {at: RUNTIME_HOST});
-      expect(await configuration.get({})).toMatchObject({ok: true});
+      const client = createHost({onError: () => undefined});
+      client.connect(webSocketLink(socket as unknown as WebSocketLike), {principal: {kind: "server"}}, context);
+      await client.load([], context);
+      const configuration = await client.get(ConfigurationService, {}, context);
+      if (configuration.variant !== "owner") throw new Error("The owner's configuration variant did not bind.");
+      expect(await configuration.get({}, context)).toMatchObject({ok: true});
       await server.close();
       await closed;
-      await client.close();
+      await client.close(context);
     } finally {
       await server.close();
     }

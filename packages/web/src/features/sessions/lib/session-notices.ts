@@ -1,4 +1,4 @@
-import type {SessionDirectoryEntry} from "@supernova/contracts/services/sessions/services";
+import type {SessionStatusEntry} from "@supernova/contracts/services/sessions/services";
 import {sessionToastManager} from "@/lib/toast";
 
 const openListeners = new Set<(sessionId: string) => void>();
@@ -20,8 +20,8 @@ export class NoticeToasts {
   private readonly shown = new Set<string>();
   private readonly extensionToasts = new Map<string, string>();
 
-  public show(entries: Readonly<Record<string, SessionDirectoryEntry>>): void {
-    for (const [sessionId, entry] of Object.entries(entries)) {
+  public show(statuses: Readonly<Record<string, SessionStatusEntry>>): void {
+    for (const [sessionId, entry] of Object.entries(statuses)) {
       for (const notice of entry.notices) {
         if (this.shown.has(notice.id)) continue;
         this.shown.add(notice.id);

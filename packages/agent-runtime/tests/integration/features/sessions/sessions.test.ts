@@ -17,10 +17,11 @@ describe("sessions", () => {
     const projectPath = pi.defaultProjectRoot;
     const session = await pi.sessions.create({id: "client-chosen-id", projectPath: `${projectPath}/child/..`});
 
-    expect(session).toMatchObject({id: "client-chosen-id", projectPath, title: "Untitled session", entries: {items: []}});
+    expect(session).toMatchObject({id: "client-chosen-id", entries: {items: []}});
+    expect(await pi.sessions.record({sessionId: "client-chosen-id"})).toMatchObject({projectPath, title: "Untitled session"});
     expect(existsSync(join(pi.sessionStorageRoot, "client-chosen-id", "session.sqlite"))).toBe(true);
     expect(await pi.store.find("client-chosen-id")).toMatchObject({projectPath});
-    expect((await pi.projects.listSessions({projectPath: join(projectPath, "."), limit: 5})).sessions.map((item) => item.id)).toEqual(["client-chosen-id"]);
+    expect((await pi.list(join(projectPath, "."), 5)).map((item) => item.id)).toEqual(["client-chosen-id"]);
     await expect(pi.sessions.create({id: "client-chosen-id", projectPath})).rejects.toMatchObject({
       _tag: "CreateSessionError",
       message: "A session with this id already exists.",
@@ -43,11 +44,10 @@ describe("sessions", () => {
     runtimes.push(pi);
     const {info} = await pi.createSession();
 
-    const session = await pi.sessions.rename({sessionId: info.id, title: "Investigate flaky tests"});
+    await pi.sessions.rename({sessionId: info.id, title: "Investigate flaky tests"});
     await pi.appendConversation(info.id);
 
-    expect(session).toMatchObject({id: info.id, title: "Investigate flaky tests"});
-    expect(await pi.sessions.get({sessionId: info.id})).toMatchObject({title: "Investigate flaky tests"});
+    expect(await pi.sessions.record({sessionId: info.id})).toMatchObject({id: info.id, title: "Investigate flaky tests"});
     await expect(pi.sessions.rename({sessionId: info.id, title: "  "})).rejects.toMatchObject({_tag: "RenameSessionError"});
   });
 
@@ -63,7 +63,7 @@ describe("sessions", () => {
 
     const session = await pi.sessions.get({sessionId: info.id});
 
-    expect(session.title).toBe("Generated title");
+    expect(await pi.sessions.record({sessionId: info.id})).toMatchObject({title: "Generated title"});
     expect(turnContents(session).map((parts) => parts[0])).toEqual([
       {text: "Before compaction", type: "text"},
       {text: "x".repeat(selectedPiModel.contextWindow * 4), type: "text"},
@@ -72,6 +72,54 @@ describe("sessions", () => {
     expect(session.entries.items.map((entry) => entry.kind)).toEqual(["pi.user", "pi.assistant", "pi.user", "pi.assistant", "pi.compaction", "pi.user", "pi.assistant"]);
     expect(JSON.stringify(session.entries.items[4])).toContain("Summary of the work");
     expect(assistantTexts(session)).toEqual(["Original answer", "Large answer", "Recent answer"]);
+  });
+
+  it("keeps every committed turn of a history longer than the engine's window, across compaction and revert", async () => {
+    // Each turn commits a user and an assistant entry, so 60 turns overflow the engine's window (50 to 100 entries) and
+    // make it drop its oldest entries in one splice; the session's history must still have them all.
+    const pi = await createPiTestRuntime({settings: {compaction: {enabled: false}}});
+    runtimes.push(pi);
+    const {info} = await pi.createSession();
+    // Turn 30 is larger than the context window, so compaction has older turns to summarize.
+    const turns = Array.from({length: 60}, (_, index) => (index === 29 ? "x".repeat(selectedPiModel.contextWindow * 4) : `Request ${index + 1}`));
+    for (const [index, requestText] of turns.slice(0, 30).entries()) await pi.appendConversation(info.id, {requestText, assistantText: `Answer ${index + 1}`});
+    pi.faux.setResponses([fauxAssistantMessage("Summary of thirty turns")]);
+    await pi.sessionRuntime.compact({modelReference: selectedModelReference, sessionId: info.id});
+    for (const [index, requestText] of turns.slice(30).entries()) await pi.appendConversation(info.id, {requestText, assistantText: `Answer ${index + 31}`});
+
+    // Pages back through the shown turns from the published page, as a client scrolling up does.
+    const everyTurn = async () => {
+      const session = await pi.sessions.get({sessionId: info.id});
+      let page = session.entries;
+      const items = [...page.items];
+      while (page.remaining > 0) {
+        page = await pi.sessionRuntime.loadHistory({sessionId: info.id, side: "entries", edge: items[0]!.id});
+        items.unshift(...page.items);
+      }
+      return {session, history: {entries: {...page, items}}};
+    };
+    const texts = (strings: readonly string[]) => strings.map((text) => ({text, type: "text"}));
+
+    // Reopened, the session reads what lies before the engine's window from storage.
+    await pi.server.serverHost.hosts.release(info.id);
+    await pi.store.release(info.id);
+    const {session, history} = await everyTurn();
+    expect(session.entries.remaining).toBeGreaterThan(0);
+    expect(turnContents(history).map((parts) => parts[0])).toEqual(texts(turns));
+    expect(history.entries.items.filter((entry) => entry.kind === "pi.compaction")).toHaveLength(1);
+    expect(new Set(history.entries.items.map((entry) => entry.id)).size).toBe(history.entries.items.length);
+
+    // A revert to turn 20, before the compaction, keeps the turns before it and undoes it and the rest, compaction included.
+    await pi.sessionRuntime.revertToMessage({sessionId: info.id, turnId: turnIds(history)[19]!});
+    const afterRevert = await everyTurn();
+    expect(turnContents(afterRevert.history).map((parts) => parts[0])).toEqual(texts(turns.slice(0, 19)));
+    expect(afterRevert.history.entries.items.some((entry) => entry.kind === "pi.compaction")).toBe(false);
+    expect(afterRevert.session.undone.items.length).toBeGreaterThan(0);
+
+    // Continuing after the revert extends the shortened branch.
+    await pi.appendConversation(info.id, {requestText: "After revert", assistantText: "New branch"});
+    const continued = await everyTurn();
+    expect(turnContents(continued.history).map((parts) => parts[0])).toEqual(texts([...turns.slice(0, 19), "After revert"]));
   });
 
   it("refreshes credentials and model metadata before listing models", async () => {
@@ -108,15 +156,16 @@ describe("forking a session", () => {
     const fork = await pi.sessions.fork({sessionId, turnId: turnIds[0]!});
 
     expect(fork.id).not.toBe(sessionId);
-    expect(fork).toMatchObject({
-      forked: true,
-      title: "Original title",
+    // The fork's record comes back; its conversation is its own host's, opened as any session's.
+    expect(fork).toMatchObject({forked: true, title: "Original title", projectPath: pi.defaultProjectRoot});
+    const forked = await pi.sessions.get({sessionId: fork.id});
+    expect(forked).toMatchObject({
       undone: {items: []},
       agent: {model: {modelId: selectedModelReference.id, provider: selectedModelReference.providerId}, thinkingLevel: "high"},
     });
-    expect(turnContents(fork)).toEqual([[{text: "First", type: "text"}]]);
+    expect(turnContents(forked)).toEqual([[{text: "First", type: "text"}]]);
     expect(turnContents(await pi.sessions.get({sessionId}))).toHaveLength(2);
-    expect((await pi.projects.listSessions({projectPath: pi.defaultProjectRoot, limit: 10})).sessions.map((session) => session.id)).toContain(fork.id);
+    expect((await pi.list(pi.defaultProjectRoot, 10)).map((session) => session.id)).toContain(fork.id);
 
     // The fork continues on its own with the copied history as context.
     let providerTexts: string[] = [];
