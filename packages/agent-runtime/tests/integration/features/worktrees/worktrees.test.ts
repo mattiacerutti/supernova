@@ -7,7 +7,7 @@ import {promisify} from "node:util";
 import {afterEach, describe, expect, it} from "vitest";
 import {Workspace} from "@supernova/agent-runtime/features/workspace/workspace";
 import type {WorkspaceDeps} from "@supernova/agent-runtime/features/workspace/workspace";
-import {Worktrees} from "@supernova/agent-runtime/features/worktrees/worktrees";
+import {Worktrees} from "@/features/worktrees/worktrees";
 import {cleanupTempDirs} from "@tests/support/async";
 
 const exec = promisify(execFile);

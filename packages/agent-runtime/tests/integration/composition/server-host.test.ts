@@ -6,7 +6,7 @@ import {SessionsService, SessionStatusService} from "@supernova/contracts/servic
 import type {Session} from "@supernova/contracts/services/sessions/schemas";
 import type {SessionsView} from "@supernova/contracts/services/sessions/services";
 import {TerminalService, WorkspaceService} from "@supernova/contracts/services/workspace/services";
-import {afterEach, beforeEach, describe, expect, it} from "vitest";
+import {afterEach, beforeEach, describe, expect, it, vi} from "vitest";
 import {assistantTexts, createPiTestRuntime, fauxAssistantMessage, selectedModelReference, turnContents, waitUntil} from "@tests/support/session-runtime";
 import {shellCommand, testShell} from "@tests/support/terminal";
 
@@ -80,6 +80,53 @@ describe("the server host over the wire", () => {
     await waitUntil(async () => expect(chat.session.value).toEqual(await pi.sessions.get({sessionId: "wire-session"})));
     expect(assistantTexts(chat.session.value)).toEqual(["Hello!", "Again."]);
     expect(seen.values.some((value) => value.live?.run !== undefined)).toBe(true);
+  });
+
+  it("finishes creation and submits the first message after the creating browser disconnects", async () => {
+    const {pi, server, tab} = await connect();
+    const browser = await server.connectClient();
+    const sessions = await tab(browser.host);
+    let loaded!: () => void;
+    let resume!: () => void;
+    const loading = new Promise<void>((resolve) => {
+      loaded = resolve;
+    });
+    const paused = new Promise<void>((resolve) => {
+      resume = resolve;
+    });
+    const load = pi.resourceCache.load.bind(pi.resourceCache);
+    const gate = vi.spyOn(pi.resourceCache, "load").mockImplementation(async (cwd) => {
+      loaded();
+      await paused;
+      return load(cwd);
+    });
+    pi.faux.setResponses([fauxAssistantMessage("Finished without the browser.")]);
+    try {
+      const creation = sessions.create({id: "disconnected-creator", message: firstMessage, projectPath: pi.defaultProjectRoot}, context);
+      const disconnected = expect(creation).rejects.toMatchObject({code: "unavailable"});
+      await loading;
+      browser.disconnect();
+      await disconnected;
+      resume();
+
+      await waitUntil(async () => {
+        const record = await pi.runtime.store.find("disconnected-creator");
+        if (!record) throw new Error("The created session disappeared.");
+        const file = await pi.runtime.store.file("disconnected-creator");
+        expect(turnContents(await file.snapshot(record))).toEqual([firstMessage.contentParts]);
+      });
+      await pi.settled("disconnected-creator");
+      const returning = await server.connectClient();
+      const chat = await returning.host.get(ChatService, {sessionId: "disconnected-creator"}, context);
+      cleanups.push(async () => chat.release());
+      if (chat.variant !== "owner") throw new Error("Expected the owner's chat.");
+      expect(turnContents(chat.session.value)).toEqual([firstMessage.contentParts]);
+      expect(assistantTexts(chat.session.value)).toEqual(["Finished without the browser."]);
+      expect(await pi.sessions.exists({sessionId: "disconnected-creator"})).toBe(true);
+    } finally {
+      resume();
+      gate.mockRestore();
+    }
   });
 
   it("streams a session's document as edits: appends while it grows, never a whole replacement per partial", async () => {

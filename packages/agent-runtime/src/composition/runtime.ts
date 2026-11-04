@@ -1,3 +1,8 @@
+import type {Host} from "@earendil-works/chord";
+import {createHost} from "@earendil-works/chord";
+import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
+import type {RuntimePrincipal} from "@supernova/contracts/lib/protocol";
+import {ServerHost} from "@supernova/contracts/lib/protocol";
 import {Configuration} from "@supernova/agent-runtime/features/configuration/configuration";
 import {Extensions} from "@supernova/agent-runtime/features/extensions/extensions";
 import {Folders} from "@supernova/agent-runtime/features/folders/folders";
@@ -19,11 +24,14 @@ import type {ResourceCache} from "@supernova/agent-runtime/pi/resource-cache";
 import {createResourceCache} from "@supernova/agent-runtime/pi/resource-cache";
 import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";
 import {createPiSdk} from "@supernova/agent-runtime/pi/sdk";
+import {SessionHosts} from "@supernova/agent-runtime/composition/session-hosts";
 
 export interface AgentRuntime {
   readonly checkpointStore: CheckpointStore;
   readonly configuration: Configuration;
   readonly extensions: Extensions;
+  readonly host: Host<RuntimePrincipal>;
+  readonly sessionHosts: SessionHosts;
   readonly folders: Folders;
   readonly loginSessions: LoginSessions;
   readonly providers: Providers;
@@ -68,7 +76,31 @@ export async function createAgentRuntime(options: CreateAgentRuntimeOptions = {}
   const terminals = new Terminals({spawnPty});
   const loginSessions = new LoginSessions();
 
-  const runtime: AgentRuntime = {
+  const titleGenerator = options.titleGenerator ?? createTitleGenerator(sdk);
+
+  const host = createHost<RuntimePrincipal>({
+    address: ServerHost(),
+    principal: {kind: "server"},
+    onError: (error) => console.error("[runtime]", error),
+  });
+
+  const sessionHosts = new SessionHosts({
+    checkpointStore,
+    resourceCache,
+    sdk,
+    store,
+    titleGenerator,
+    // Archived sessions keep their record but have no running host.
+    exists: async (sessionId) => {
+      const record = await store.find(sessionId);
+      return record !== undefined && record.archivedAt === undefined;
+    },
+    stopped: (sessionId) => status.change(sessionId, {kind: "unavailable"}),
+  });
+
+  return {
+    host,
+    sessionHosts,
     checkpointStore,
     configuration: new Configuration(),
     extensions: new Extensions({resourceCache, sdk}),
@@ -81,12 +113,13 @@ export async function createAgentRuntime(options: CreateAgentRuntimeOptions = {}
     status,
     store,
     terminals,
-    titleGenerator: options.titleGenerator ?? createTitleGenerator(sdk),
+    titleGenerator,
     workspace: new Workspace({terminals}),
     worktrees: new Worktrees(options.worktreeStorageRoot),
     dispose: async () => {
+      await sessionHosts.dispose();
+      await host.close(BACKGROUND_CONTEXT);
       await Promise.all([terminals.dispose(), store.dispose()]);
     },
   };
-  return runtime;
 }

@@ -4,25 +4,26 @@ Conventions for `packages/agent-runtime`. See [Coding standards](coding-standard
 
 ## Boundaries
 
-Logic lives in plain TypeScript classes; state that clients follow, and how long it lives, lives in Chord objects. Each feature's Chord side is its `facet.ts`: local objects that hold its documents and outlive every client, and remote objects that are thin client views over them (they check the principal, parse payloads, and hand documents to the client). Keep transport concerns there, not inside product operations.
+Logic lives in plain TypeScript classes; state that clients follow, and how long it lives, lives in Chord objects. Each feature's Chord side is its `facet.ts`: local objects that hold its documents and outlive every client, and remote objects that are thin client views over them (they check the principal, parse payloads, and hand documents to the client). Application operations may use Chord directly when coordinating a remote session; do not add a wrapper class merely to hide those calls.
 
 ```
 src/
   index.ts        the package entry: createAgentRuntime, startServerHost
-  composition/    the only code that knows every feature
+  composition/    constructs the runtime and owns host infrastructure
   features/       product logic and each feature's Chord objects
   lib/            helpers without Pi knowledge; lib/chord/ for Chord helpers
   pi/             Pi integration
 ```
 
-Dependencies flow one way: `lib/` ← `pi/` ← `features/` ← `composition/`. A feature never depends on another feature, by import or by injection: it does not import one, and its `Deps` does not name one or declare an interface another feature's class happens to satisfy. When a feature's object needs work that spans features (a session's archive closes terminals and removes a worktree), the feature declares the function it needs and `composition/` passes it in (`SessionWorkflows`). `pi/` and `lib/` never import a feature or composition. ESLint enforces the import half, and rejects source files outside these four folders; the injection half is on you.
+Feature classes depend on `pi/`, `lib/`, and their own feature, not on other feature classes. Application operations are different: their job is to coordinate the runtime, so they accept `AgentRuntime` and call its existing objects directly. Do not replace those objects with a callback for every method. Facets may also receive the runtime to bind operations. Import its type only; composition constructs the runtime, not the feature.
+
+Keep each operation in the feature that owns the user action, not in a composition-level workflow factory. `pi/` and `lib/` never import a feature or composition. ESLint enforces implementation import boundaries and rejects source files outside these four folders.
 
 ## Composition
 
-- `runtime.ts` builds every feature class once and wires their dependencies (`new Workspace({terminals})`). No Chord.
-- `server-host.ts` starts the server's Chord host: it loads every feature's facet except `session-runtime`'s, routes session hosts, and hands status the reports no session can send (a host that stopped, Pi's warnings).
+- `runtime.ts` builds the feature classes, server host and session-host manager once. Operations use `runtime.host` and `runtime.sessionHosts` directly. Disposing the runtime closes hosts before storage.
+- `server-host.ts` registers routes and loads feature facets on the runtime's server host. Each session host loads `session-runtime`'s facet instead.
 - `session-hosts.ts` keeps one Chord host per session: starts it on the first hold routed to it, stamps its worker principal and generation, and releases it. No idle eviction: accepted work belongs to the session, not to whoever holds it.
-- `session-workflows.ts` holds product operations across features (create with a worktree and first message, fork, archive). They reach a session through `ChatService`'s server variant over the route, never its host's objects.
 
 Shared serializable contracts belong in `@supernova/contracts`. UI and HTTP routing belong outside this package.
 
@@ -34,7 +35,7 @@ Where a file goes:
 - Wraps or maps Pi, regardless of how many features use it → `pi/`.
 - Used by one feature → that feature, even if it looks generic.
 - Used by exactly one file → that file.
-- Orchestrates several features (archive a session across `session-runtime`, `workspace` and `worktrees`, create a session and send its first message) → `composition/session-workflows.ts`.
+- Sequences an application operation, including rollback → the owning feature's `operations/`, one file per operation. Accept the runtime and write the steps directly, including Chord calls when needed. Handle wire results explicitly and release acquired references in `finally`; no workflow factory or execution wrapper.
 
 There is no catch-all `shared/`. Establish ownership before adding a new shared stateful layer.
 
@@ -45,6 +46,7 @@ features/<name>/
   <name>.ts     the feature class: one public method per service member
   facet.ts      its Chord objects: local stores and remote services
   lib/          pure helpers used by several methods
+  operations/   plain functions for multi-step application operations
   <region>/     a stateful class with everything that serves it
 ```
 
@@ -52,7 +54,7 @@ Nothing else sits at a feature root.
 
 **The feature class** is named for the feature (`Sessions`, `Workspace`) and constructed once in `runtime.ts`. Dependencies arrive through the constructor as one `Deps` object: `new Providers({loginSessions, sdk})`. Methods take the contracts payload, return the contracts result, and throw the contracts error classes directly; no wrapping, no reclassification. Method names drop the feature noun: `sessions.create`, not `sessions.createSession`. A feature with no dependencies has no constructor.
 
-**`Deps`** is an interface naming what the class needs from `pi/`, `lib/`, and its own regions. Narrow the SDK with `Pick<PiSdk, "modelRuntime">` so tests construct the class with only the methods it calls. The tripwire: if a feature's test has to construct another feature to run, the boundary is wrong.
+**`Deps`** is an interface naming what the class needs from `pi/`, `lib/`, and its own regions. Narrow the SDK with `Pick<PiSdk, "modelRuntime">` so tests construct the class with only the methods it calls. The tripwire: if a feature class's test has to construct another feature to run, the boundary is wrong. Application operations intentionally span features and are tested over the real runtime.
 
 **A region** exists only when the feature owns a second stateful class. Helpers alone go in `lib/`, not a region. Inside a region:
 
@@ -69,7 +71,7 @@ Chord objects carry their kind in their name, so a class and its object never sh
 
 - A remote contract ends in `Service` (`SessionsService`, `ChatService`, `TerminalService`). It lives in `@supernova/contracts` and is served in the feature's `facet.ts`.
 - A local object exists only to own running work, and is named for that role: `SessionRuntime` owns the session's worker. Followed state is never a local object: a class owns it, and each remote object publishes it (below). Add a local object only to own work the same way.
-- A facet function is named for its feature (`workspaceFacet`); a facet's dependencies are `<Feature>FacetDeps`.
+- A facet function is named for its feature (`workspaceFacet`). Pass the objects it binds, or the runtime when it binds application operations; do not introduce an interface just to rename those dependencies.
 
 ## Errors
 
@@ -79,7 +81,7 @@ Throw a contract error where the failure is detected, not by classifying causes 
 
 ## Streams
 
-Anything clients follow over time is owned by a class (`SessionStatus`, `Terminals`, `LoginSessions`, the catalog), so it outlives every client. A remote object publishes it with `published` from `lib/chord/state`: Chord's `self.writable` holding the class's current value, and `self.derive` making it a JSON state member. Set the whole value from the class's change event; do not edit documents or queue writes. Chord diffs each new value against the last, so a grown string goes out as an append and a grown list as inserts, and a new hold starts from the current value. Do not add a parallel replication protocol.
+Anything clients follow over time is owned by a class (`SessionStatus`, `Terminals`, `LoginSessions`, the catalog), so it outlives every client. A remote object publishes it with Chord's `self.writable` holding the class's current value and `self.derive` making it a JSON state member. Set the whole value from the class's change event; do not edit documents or queue writes. Chord diffs each new value against the last, so a grown string goes out as an append and a grown list as inserts, and a new hold starts from the current value. Do not add a parallel replication protocol.
 
 A derive diffs, so it does not know a string lost its front: a trimmed terminal buffer goes out whole, once per 64 KiB of output (the slack between the cap and the trim). Keep values whose every change is large out of a derive.
 
@@ -87,9 +89,13 @@ Keep high-volume state separate from summaries. A client that needs the terminal
 
 ### Serving a feature
 
-A feature's `facet.ts` serves its remote services (and, on a session host, `SessionRuntime`). Remote members use `method` and `action` from `lib/chord/methods`, which parse the payload and turn throws into `ServiceResult` failures, `forbidden` from `lib/chord/principals` to refuse other principals, and `published` for state; keep them thin. State that must survive belongs in a class, not in a remote object or a closure.
+A feature's `facet.ts` serves its remote services (and, on a session host, `SessionRuntime`). Remote members use `method` and `action` from `lib/chord/methods`, which parse the payload and turn throws into `ServiceResult` failures, and `forbidden` from `lib/chord/principals` to refuse other principals; keep them thin. State that must survive belongs in a class, not in a remote object or a closure.
 
-A session host acts with a `worker` principal naming its session and start generation; the server drops what an older generation sends (`isCurrent`, passed in by composition).
+Keep method bodies direct: assign the new view selection, then refresh it. Avoid higher-order wrappers around a mutation. Separate declarations, subscriptions, and method bindings with blank lines; expand handlers whose control flow would be hidden in a one-liner.
+
+A session host acts with a `worker` principal naming its session and start generation; the server checks that generation against the runtime's session-host manager before accepting reports.
+
+Accepted session creation is server-owned. The creation operation uses a server-owned context for both obtaining its chat reference and invoking methods; a background context on `get()` does not detach later calls from the browser's cancellation. It releases the reference in `finally`, without stopping accepted work.
 
 The built-in features are facets that ship and update with the app; nothing reloads or removes them while the server runs. Revisit that when a built-in feature must be switched on and off live; do not add plugin machinery in anticipation.
 

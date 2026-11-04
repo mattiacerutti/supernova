@@ -11,10 +11,7 @@ const features = readdirSync(new URL("src/features", import.meta.url), {withFile
   .filter((entry) => entry.isDirectory())
   .map((entry) => entry.name);
 
-/**
- * A feature depends on `pi/`, `lib/`, and itself. Features never import each other or `composition/`; composition
- * coordinates them and passes what one needs from another as a dependency.
- */
+/** Feature implementations stay independent; facets and application operations may use the runtime's type. */
 const featureBoundaryRules = features.map((feature) => ({
   files: [`src/features/${feature}/**/*.ts`],
   rules: {
@@ -28,7 +25,8 @@ const featureBoundaryRules = features.map((feature) => ({
           },
           {
             group: ["@supernova/agent-runtime/composition/*"],
-            message: "Features do not import composition/; it imports them.",
+            allowTypeImports: true,
+            message: "Features may import composition types, not implementations. Operations and facets receive the runtime.",
           },
         ],
       },

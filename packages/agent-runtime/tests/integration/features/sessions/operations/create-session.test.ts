@@ -5,6 +5,7 @@ import {tmpdir} from "node:os";
 import {join, sep} from "node:path";
 import {promisify} from "node:util";
 import type {CreateSessionPayload} from "@supernova/contracts/services/sessions/procedures";
+import {createSession as createSessionOperation} from "@supernova/agent-runtime/features/sessions/operations/create-session";
 import {afterEach, describe, expect, it} from "vitest";
 import type {Reference} from "@earendil-works/chord";
 import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
@@ -36,13 +37,13 @@ describe("creating a session with its first turn", () => {
     cleanupTempDirs(tempDirs);
   });
 
-  /** Runs the workflow as the owner calls it, over a test runtime whose sessions live on disk, as in production. */
+  /** Exercises the plain operation over real storage, Git and session execution. */
   async function setup() {
     const worktreeStorageRoot = await mkdtemp(join(tmpdir(), "supernova-workflow-worktrees-"));
     tempDirs.push(worktreeStorageRoot);
     const pi = await createPiTestRuntime({worktreeStorageRoot});
     runtimes.push(pi);
-    const createSession = (payload: CreateSessionPayload) => pi.sessions.create(payload);
+    const createSession = (payload: CreateSessionPayload) => createSessionOperation(payload, pi.runtime);
     return {createSession, pi};
   }
 
