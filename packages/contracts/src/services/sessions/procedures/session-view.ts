@@ -1,17 +1,18 @@
 import {z} from "zod";
 
-export const PROJECT_WINDOW_LIMIT = 500;
+export const PROJECT_WINDOW_INCREMENT_LIMIT = 500;
 
 export const ShowProjectPayload = z.object({
   projectPath: z.string().min(1),
-  depth: z.number().int().min(1).max(PROJECT_WINDOW_LIMIT),
+  // Reconnect restores the accumulated depth, which can exceed a single increment.
+  depth: z.number().int().min(1),
 });
 
 export const HideProjectPayload = z.object({projectPath: z.string().min(1)});
 
 export const LoadMoreProjectPayload = z.object({
   projectPath: z.string().min(1),
-  by: z.number().int().min(1).max(PROJECT_WINDOW_LIMIT),
+  by: z.number().int().min(1).max(PROJECT_WINDOW_INCREMENT_LIMIT),
 });
 
 export const OpenSessionPayload = z.object({sessionId: z.string().min(1)});

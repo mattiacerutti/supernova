@@ -15,7 +15,6 @@ import {
   LoadMoreProjectPayload,
   PinSessionPayload,
   OpenSessionPayload,
-  PROJECT_WINDOW_LIMIT,
   RenameSessionError,
   RenameSessionPayload,
   SearchSessionsPayload,
@@ -135,7 +134,7 @@ export function sessionsFacet(runtime: AgentRuntime): Facet<RuntimePrincipal> {
                 const depth = projects[projectPath];
 
                 if (depth !== undefined) {
-                  projects[projectPath] = Math.min(PROJECT_WINDOW_LIMIT, depth + by);
+                  projects[projectPath] = depth + by;
                 }
 
                 refreshView();
