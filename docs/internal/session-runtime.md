@@ -91,7 +91,7 @@ Similarly, background compaction needs a timeline design before enabling it. Kee
 - **User abort:** end the run through its normal settlement path, retaining what was produced.
 - **Browser disconnect:** release that connection's holds only. Reestablish subscriptions and refresh stale query data on reconnect.
 - **Server shutdown or crash:** close storage without converting work into user cancellation. On reopening, let the engine resume from committed state and decide replay safety; non-replay-safe tools must not be blindly rerun.
-- **Archival:** deliberately stop work and release its resources before checkpoint cleanup. This is not equivalent to closing storage for shutdown.
+- **Archival:** mark the catalog record archived before cleanup so new session hosts are refused, including automatic retries from existing references after host release. This is not equivalent to closing storage for shutdown.
 - **Extension reload:** replace future behavior in place; running calls finish on the code they took.
 
 Notices report problems that did not reject a command. Distinguish session work failures from extension compatibility warnings, and retain enough context to attribute them correctly. Starting another run must not erase a notice raised during startup; switching routes must not discard an unseen session failure. Client presentation belongs in the web guide, not in the engine lifecycle.

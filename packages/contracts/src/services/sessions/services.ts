@@ -65,7 +65,6 @@ export const SessionsService = remote("supernova.sessions", {
         fork: method(json<ForkSessionPayload>(), result<ListedSession, ForkSessionError>()),
         rename: method(json<RenameSessionPayload>(), result<null, RenameSessionError>()),
         pin: method(json<PinSessionPayload>(), result<null>()),
-        /** Closes its shells and stops its work first; removes its worktree when asked. */
         archive: method(json<ArchiveSessionPayload>(), result<ArchiveSessionResult, ArchiveSessionError>()),
         search: method(json<SearchSessionsPayload>(), result<SearchSessionsResult>()),
         listModels: method(json<ListModelsPayload>(), result<ListModelsResult>()),

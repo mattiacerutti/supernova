@@ -5,13 +5,15 @@ export async function archiveSession(input: ArchiveSessionPayload, runtime: Agen
   const {sessions, workspace, worktrees, status, sessionHosts, store, checkpointStore} = runtime;
   const worktree = await sessions.getWorktree(input);
 
-  // Shells must close before their cwd can be removed; work must settle before the catalog forgets it.
+  // The catalog refuses future starts, including retries from existing chat references.
+  const result = await sessions.archive(input);
+
+  // Shells must close before their cwd can be removed, and work must settle before checkpoint cleanup.
   await workspace.closeSessionTerminals(input.sessionId);
   await sessionHosts.release(input.sessionId, {abort: true});
   await store.release(input.sessionId);
   await checkpointStore.deleteSession({projectRoot: worktree?.path ?? input.projectPath, sessionId: input.sessionId});
 
-  const result = await sessions.archive(input);
   status.forget(input.sessionId);
 
   if (worktree && input.removeWorktree) {

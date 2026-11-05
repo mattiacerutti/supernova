@@ -81,6 +81,10 @@ export class SessionHosts {
   }
 
   private start(sessionId: string): Promise<StartedHost> {
+    if (this.releasing.has(sessionId)) {
+      return Promise.reject(new Error("The session is unavailable."));
+    }
+
     let pending = this.started.get(sessionId);
     if (!pending) {
       const generation = ++this.generation;
@@ -98,8 +102,13 @@ export class SessionHosts {
   }
 
   private async open(sessionId: string, generation: number): Promise<StartedHost> {
-    if (this.releasing.has(sessionId)) throw new Error("The session was released.");
     if (!(await this.deps.exists(sessionId))) throw new Error("Session not found.");
+
+    // Release can begin while the catalog lookup is in flight.
+    if (this.releasing.has(sessionId)) {
+      throw new Error("The session is unavailable.");
+    }
+
     const [up, down] = memoryLinkPair();
     const principal = workerPrincipal(sessionId, generation);
     const host = createHost<RuntimePrincipal>({

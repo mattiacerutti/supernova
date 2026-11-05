@@ -87,13 +87,15 @@ export class Sessions {
     await this.deps.store.update(input.sessionId, (record) => ({...record, pinned: input.pinned}));
   }
 
-  /** Only the catalog write; the archive workflow closes the session's shells and work first. */
+  /** Marks the catalog first so new hosts are refused while the archive operation cleans up. */
   public async archive(input: ArchiveSessionPayload): Promise<ArchiveSessionResult> {
     const {projectPath, sessionId} = input;
     const record = await this.deps.store.find(sessionId);
     if (!record) throw new ArchiveSessionError({message: "Session not found."});
-    if (record.archivedAt !== undefined) throw new ArchiveSessionError({message: "Session is already archived."});
-    await this.deps.store.update(sessionId, (current) => ({...current, archivedAt: new Date().toISOString()}));
+    await this.deps.store.update(sessionId, (current) => {
+      if (current.archivedAt !== undefined) throw new ArchiveSessionError({message: "Session is already archived."});
+      return {...current, archivedAt: new Date().toISOString()};
+    });
     return {projectPath, sessionId};
   }
 
