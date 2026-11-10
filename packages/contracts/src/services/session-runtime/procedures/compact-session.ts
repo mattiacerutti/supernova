@@ -1,9 +1,8 @@
-import {z} from "zod";
+import {obj, type Static} from "@earendil-works/chord";
 import {ModelReference} from "@supernova/contracts/services/sessions/schemas";
 
-export const CompactSessionPayload = z.object({
+export const CompactSessionPayload = obj({
   modelReference: ModelReference,
-  sessionId: z.string(),
 });
 
-export type CompactSessionPayload = z.infer<typeof CompactSessionPayload>;
+export type CompactSessionPayload = Static<typeof CompactSessionPayload>;

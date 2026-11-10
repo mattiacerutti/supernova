@@ -1,16 +1,15 @@
-import {z} from "zod";
+import {obj, type Static, str} from "@earendil-works/chord";
 
-export const WorkspaceDiffContentsGetPayload = z.object({
-  path: z.string(),
-  projectPath: z.string(),
-  repositoryRoot: z.string(),
+export const WorkspaceDiffContentsGetPayload = obj({
+  path: str(),
+  projectPath: str(),
+  repositoryRoot: str(),
 });
 
-/** Both sides in full so the client can show unchanged context on demand. A missing side (added or deleted file) is empty. */
-export const WorkspaceDiffContentsGetResult = z.object({
-  newContents: z.string(),
-  oldContents: z.string(),
+export const WorkspaceDiffContentsGetResult = obj({
+  newContents: str(),
+  oldContents: str(),
 });
 
-export type WorkspaceDiffContentsGetPayload = z.infer<typeof WorkspaceDiffContentsGetPayload>;
-export type WorkspaceDiffContentsGetResult = z.infer<typeof WorkspaceDiffContentsGetResult>;
+export type WorkspaceDiffContentsGetPayload = Static<typeof WorkspaceDiffContentsGetPayload>;
+export type WorkspaceDiffContentsGetResult = Static<typeof WorkspaceDiffContentsGetResult>;

@@ -1,13 +1,12 @@
-import {z} from "zod";
-import type {ErrorOf} from "@supernova/contracts/lib/errors";
+import {num, obj, oneOf, type Static, str} from "@earendil-works/chord";
 import {errorUnion, TaggedError} from "@supernova/contracts/lib/errors";
 
-export const WorkspaceChangeStatus = z.enum(["added", "deleted", "modified", "renamed", "untracked"]);
+export const WorkspaceChangeStatus = oneOf("added", "deleted", "modified", "renamed", "untracked");
 
-export const WorkspaceChangeEntry = z.object({
-  additions: z.number(),
-  deletions: z.number(),
-  path: z.string(),
+export const WorkspaceChangeEntry = obj({
+  additions: num(),
+  deletions: num(),
+  path: str(),
   status: WorkspaceChangeStatus,
 });
 
@@ -23,7 +22,5 @@ export const WorkspaceGitError = WorkspaceNotARepositoryError;
 
 export const WorkspaceFileError = errorUnion(WorkspaceGitError, WorkspaceFileNotFoundError, WorkspaceBinaryFileError, WorkspaceFileTooLargeError);
 
-export type WorkspaceChangeStatus = z.infer<typeof WorkspaceChangeStatus>;
-export type WorkspaceChangeEntry = z.infer<typeof WorkspaceChangeEntry>;
-export type WorkspaceGitError = ErrorOf<typeof WorkspaceGitError>;
-export type WorkspaceFileError = ErrorOf<typeof WorkspaceFileError>;
+export type WorkspaceChangeStatus = Static<typeof WorkspaceChangeStatus>;
+export type WorkspaceChangeEntry = Static<typeof WorkspaceChangeEntry>;

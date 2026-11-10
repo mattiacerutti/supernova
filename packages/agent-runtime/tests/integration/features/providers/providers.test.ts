@@ -1,16 +1,16 @@
 import type {AuthInteraction, OAuthCredential, ProviderAuthInteraction} from "@earendil-works/pi-ai";
 import {InMemoryCredentialStore} from "@earendil-works/pi-ai";
 import {ModelRuntime} from "@earendil-works/pi-coding-agent";
-import {RUNTIME_HOST} from "@supernova/contracts/lib/protocol";
+import {BACKGROUND_CONTEXT as context} from "@earendil-works/chord/context";
 import type {ProviderLoginStep} from "@supernova/contracts/services/providers/schemas";
+import {compile} from "@earendil-works/pi-schema";
 import {ProviderLoginSession as ProviderLoginSessionSchema} from "@supernova/contracts/services/providers/schemas";
 import {ProvidersService} from "@supernova/contracts/services/providers/services";
 import {afterEach, describe, expect, it} from "vitest";
-import {LoginSessions} from "@supernova/agent-runtime/features/providers/login/login-sessions";
-import {Providers} from "@supernova/agent-runtime/features/providers/providers";
-import type {AgentRuntime} from "@supernova/agent-runtime/runtime";
+import {createAgentRuntime} from "@supernova/agent-runtime/composition/runtime";
+import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";
 import {waitUntil} from "@tests/support/async";
-import {startRuntimeServer} from "@tests/support/runtime-server";
+import {startTestServerHost} from "@tests/support/server-host";
 
 type LoginScript = (interaction: ProviderAuthInteraction) => Promise<string>;
 
@@ -23,7 +23,6 @@ const noStreaming = {
   },
 };
 
-/** Pi's real runtime with two providers: "Acme", whose logins the test scripts, and "Ambient", configured only from outside Pi. */
 async function acmeRuntime(scripts: {readonly apiKey?: LoginScript; readonly oauth?: LoginScript}) {
   const modelRuntime = await ModelRuntime.create({credentials: new InMemoryCredentialStore(), modelsPath: null, refreshOnCreate: false});
   modelRuntime.registerNativeProvider({
@@ -71,36 +70,44 @@ describe("provider authentication over the wire", () => {
 
   async function connect(scripts: Parameters<typeof acmeRuntime>[0] = {}) {
     const modelRuntime = await acmeRuntime(scripts);
-    const providers = new Providers({loginSessions: new LoginSessions(), sdk: {modelRuntime}});
-    const server = startRuntimeServer({providers} as AgentRuntime);
-    cleanups.push(server.close);
-    const service = server.client.get(ProvidersService, {}, {at: RUNTIME_HOST});
+    // The runtime as the server composes it; only providers are reached.
+    const runtime = await createAgentRuntime({sdk: {modelRuntime} as unknown as PiSdk});
+    const server = await startTestServerHost(runtime);
+    cleanups.push(() => runtime.dispose(), server.close);
+    const held = await server.client.get(ProvidersService, {}, context);
+    if (held.variant !== "owner") throw new Error("The owner's providers variant did not bind.");
+    const service = {
+      list: () => held.list(context),
+      logout: (payload: Parameters<typeof held.logout>[0]) => held.logout(payload, context),
+      startLogin: (payload: Parameters<typeof held.startLogin>[0]) => held.startLogin(payload, context),
+      submitLoginInput: (payload: Parameters<typeof held.submitLoginInput>[0]) => held.submitLoginInput(payload, context),
+      cancelLogin: (payload: Parameters<typeof held.cancelLogin>[0]) => held.cancelLogin(payload, context),
+    };
     const steps: ProviderLoginStep[] = [];
-    const stop = service.logins.subscribe((state) => {
-      for (const session of Object.values(state?.logins ?? {})) {
+    const watch = await held.logins.watch(context);
+    const record = (state: typeof watch.value) => {
+      for (const session of Object.values(state.logins)) {
         // The client parses nothing, so contract drift would only show as a broken settings page.
-        ProviderLoginSessionSchema.parse(session);
+        expect(compile(ProviderLoginSessionSchema).errors(session)).toEqual([]);
         // Chord sends only the latest value: steps a tick apart can merge, so only steps a login waits on are certain.
         if (JSON.stringify(steps.at(-1)) !== JSON.stringify(session.step)) steps.push(session.step);
       }
-    });
-    cleanups.push(stop);
-    await service.ready;
-    const unwrap = async <T>(call: Promise<{ok: true; value: T} | {ok: false; error: {code: string; message: string}}>): Promise<T> => {
-      const result = await call;
-      if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`);
-      return result.value;
     };
+    record(watch.value);
+    watch.start(async (call) => {
+      if (call.kind === "value") record(call.value);
+    });
+    cleanups.push(() => void watch.stop());
     const waitForStep = (type: ProviderLoginStep["type"]) => waitUntil(() => expect(steps.at(-1)?.type).toBe(type));
-    return {modelRuntime, service, steps, unwrap, waitForStep};
+    return {modelRuntime, service, steps, waitForStep};
   }
 
   it("lists each provider's login methods and where its credential comes from", async () => {
     process.env.OPENAI_API_KEY = "sk-env";
-    const {modelRuntime, service, unwrap} = await connect();
+    const {modelRuntime, service} = await connect();
     await modelRuntime.login("acme", "oauth", {prompt: async () => "", notify: () => undefined} satisfies AuthInteraction);
 
-    const listed = await unwrap(service.list(null));
+    const listed = await service.list();
 
     expect(listed.find((provider) => provider.id === "acme")).toEqual({
       authTypes: ["api_key", "oauth"],
@@ -117,7 +124,7 @@ describe("provider authentication over the wire", () => {
   });
 
   it("runs a browser login with a pasted code to success, and the provider is then connected", async () => {
-    const {service, steps, unwrap, waitForStep} = await connect({
+    const {service, steps, waitForStep} = await connect({
       oauth: async (interaction) => {
         interaction.notify({type: "auth_url", url: "https://acme.example/login", instructions: "Open this URL"});
         interaction.notify({type: "progress", message: "Waiting for the browser"});
@@ -125,20 +132,20 @@ describe("provider authentication over the wire", () => {
       },
     });
 
-    const started = await unwrap(service.startLogin({authType: "oauth", providerId: "acme"}));
+    const started = await service.startLogin({authType: "oauth", providerId: "acme"});
     expect(started.step).toEqual({authUrl: "https://acme.example/login", instructions: "Open this URL", type: "browser_auth"});
     await waitUntil(() => expect(steps.at(-1)).toMatchObject({manualInput: {message: "Paste the code", placeholder: "code"}, type: "browser_auth"}));
 
-    expect(await unwrap(service.submitLoginInput({input: "abc123", loginSessionId: started.loginSessionId}))).toMatchObject({step: {type: "authenticating"}});
+    expect(await service.submitLoginInput({input: "abc123", loginSessionId: started.loginSessionId})).toMatchObject({step: {type: "authenticating"}});
     await waitForStep("succeeded");
 
-    expect((await unwrap(service.list(null))).find((provider) => provider.id === "acme")).toMatchObject({connected: true, disconnectable: true});
+    expect((await service.list()).find((provider) => provider.id === "acme")).toMatchObject({connected: true, disconnectable: true});
   });
 
   it("walks a selector and a device code, then an API key prompted in two steps", async () => {
     let approve!: () => void;
     const approved = new Promise<void>((resolve) => (approve = resolve));
-    const {service, steps, unwrap, waitForStep} = await connect({
+    const {service, steps, waitForStep} = await connect({
       oauth: async (interaction) => {
         interaction.notify({type: "info", message: "Choose a method", links: [{url: "https://acme.example/help"}]});
         const method = await interaction.prompt({type: "select", message: "Login method", options: [{id: "device", label: "Device code"}]});
@@ -153,50 +160,50 @@ describe("provider authentication over the wire", () => {
       },
     });
 
-    const oauth = await unwrap(service.startLogin({authType: "oauth", providerId: "acme"}));
+    const oauth = await service.startLogin({authType: "oauth", providerId: "acme"});
     expect(oauth.step).toEqual({links: [{url: "https://acme.example/help"}], message: "Choose a method", type: "info"});
     await waitUntil(() => expect(steps.at(-1)).toEqual({message: "Login method", options: [{id: "device", label: "Device code"}], type: "select"}));
-    await unwrap(service.submitLoginInput({input: "device", loginSessionId: oauth.loginSessionId}));
+    await service.submitLoginInput({input: "device", loginSessionId: oauth.loginSessionId});
     await waitUntil(() => expect(steps.at(-1)).toEqual({type: "device_code", userCode: "ABCD-1234", verificationUri: "https://acme.example/device"}));
     approve();
     await waitForStep("succeeded");
 
-    const apiKey = await unwrap(service.startLogin({authType: "api_key", providerId: "acme"}));
+    const apiKey = await service.startLogin({authType: "api_key", providerId: "acme"});
     expect(apiKey.step).toEqual({input: {message: "API key", secret: true}, type: "prompt"});
-    await unwrap(service.submitLoginInput({input: "sk-test", loginSessionId: apiKey.loginSessionId}));
+    await service.submitLoginInput({input: "sk-test", loginSessionId: apiKey.loginSessionId});
     await waitUntil(() => expect(steps.at(-1)).toEqual({input: {message: "Account ID", secret: false}, type: "prompt"}));
-    await unwrap(service.submitLoginInput({input: "account-1", loginSessionId: apiKey.loginSessionId}));
+    await service.submitLoginInput({input: "account-1", loginSessionId: apiKey.loginSessionId});
     await waitForStep("succeeded");
   });
 
   it("cancels a login waiting for input, aborting the provider's flow", async () => {
     let signal: AbortSignal | undefined;
-    const {service, unwrap, waitForStep} = await connect({
+    const {service, waitForStep} = await connect({
       oauth: async (interaction) => {
         signal = interaction.signal;
         return interaction.prompt({type: "manual_code", message: "Paste the code"});
       },
     });
-    const started = await unwrap(service.startLogin({authType: "oauth", providerId: "acme"}));
+    const started = await service.startLogin({authType: "oauth", providerId: "acme"});
     expect(started.step).toMatchObject({type: "browser_auth", manualInput: {message: "Paste the code"}});
 
-    expect(await unwrap(service.cancelLogin({loginSessionId: started.loginSessionId}))).toMatchObject({step: {type: "cancelled"}});
+    expect(await service.cancelLogin({loginSessionId: started.loginSessionId})).toMatchObject({step: {type: "cancelled"}});
     await waitForStep("cancelled");
     expect(signal?.aborted).toBe(true);
-    expect(await service.submitLoginInput({input: "late", loginSessionId: started.loginSessionId})).toEqual({
-      ok: false,
-      error: {code: "ProviderLoginError", message: "Login session is not waiting for input."},
+    await expect(service.submitLoginInput({input: "late", loginSessionId: started.loginSessionId})).rejects.toMatchObject({
+      code: "ProviderLoginError",
+      message: "Login session is not waiting for input.",
     });
   });
 
   it("shows a provider's login failure with its message", async () => {
-    const {service, steps, unwrap, waitForStep} = await connect({
+    const {service, steps, waitForStep} = await connect({
       apiKey: async () => {
         throw new Error("Acme rejected the key.");
       },
     });
 
-    await unwrap(service.startLogin({authType: "api_key", providerId: "acme"}));
+    await service.startLogin({authType: "api_key", providerId: "acme"});
     await waitForStep("failed");
 
     expect(steps.at(-1)).toEqual({error: "Acme rejected the key.", type: "failed"});
@@ -205,23 +212,23 @@ describe("provider authentication over the wire", () => {
   it("refuses a login method the provider does not offer", async () => {
     const {service} = await connect();
 
-    expect(await service.startLogin({authType: "oauth", providerId: "ambient"})).toEqual({
-      ok: false,
-      error: {code: "ProviderLoginError", message: "Provider does not support OAuth login."},
+    await expect(service.startLogin({authType: "oauth", providerId: "ambient"})).rejects.toMatchObject({
+      code: "ProviderLoginError",
+      message: "Provider does not support OAuth login.",
     });
-    expect(await service.startLogin({authType: "api_key", providerId: "ambient"})).toEqual({
-      ok: false,
-      error: {code: "ProviderLoginError", message: "Provider does not support API key login."},
+    await expect(service.startLogin({authType: "api_key", providerId: "ambient"})).rejects.toMatchObject({
+      code: "ProviderLoginError",
+      message: "Provider does not support API key login.",
     });
   });
 
   it("logs out a stored credential, leaving the provider disconnected", async () => {
-    const {modelRuntime, service, unwrap} = await connect();
+    const {modelRuntime, service} = await connect();
     await modelRuntime.login("acme", "api_key", {prompt: async () => "sk-stored", notify: () => undefined});
 
-    expect(await unwrap(service.logout({providerId: "acme"}))).toEqual({providerId: "acme"});
+    expect(await service.logout({providerId: "acme"})).toEqual({providerId: "acme"});
 
-    expect((await unwrap(service.list(null))).find((provider) => provider.id === "acme")).toMatchObject({connected: false, disconnectable: false});
+    expect((await service.list()).find((provider) => provider.id === "acme")).toMatchObject({connected: false, disconnectable: false});
     expect(await modelRuntime.listCredentials()).toEqual([]);
   });
 });

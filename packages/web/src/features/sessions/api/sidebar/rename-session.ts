@@ -1,7 +1,7 @@
+import {BACKGROUND_CONTEXT as context} from "@earendil-works/chord/context";
 import {useMutation} from "@tanstack/react-query";
 import {useSessionsStore} from "@/features/sessions/stores/sessions-store";
-import {unwrap} from "@/runtime/runtime-result";
-import {useRuntime} from "@/runtime/use-runtime";
+import {useRuntime} from "@/runtime/hooks/use-runtime";
 
 interface RenameSessionInput {
   readonly sessionId: string;
@@ -14,7 +14,7 @@ export function useRenameSession() {
   const runtime = useRuntime();
 
   return useMutation({
-    mutationFn: (input: RenameSessionInput) => unwrap(runtime.sessions.rename(input)),
+    mutationFn: (input: RenameSessionInput) => runtime.sessions.rename(input, context),
     onMutate: (input) => patchOptimism(input.sessionId, {title: input.title.trim()}),
     onSettled: (_result, _error, input) => patchOptimism(input.sessionId, {title: undefined}),
   });

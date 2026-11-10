@@ -1,6 +1,6 @@
+import {BACKGROUND_CONTEXT as context} from "@earendil-works/chord/context";
 import {useMutation} from "@tanstack/react-query";
-import {unwrap} from "@/runtime/runtime-result";
-import {useRuntime} from "@/runtime/use-runtime";
+import {useRuntime} from "@/runtime/hooks/use-runtime";
 
 interface CancelProviderLoginInput {
   readonly loginSessionId: string;
@@ -9,6 +9,6 @@ interface CancelProviderLoginInput {
 export function useCancelProviderLogin() {
   const runtime = useRuntime();
   return useMutation({
-    mutationFn: (input: CancelProviderLoginInput) => unwrap(runtime.providers.cancelLogin(input)),
+    mutationFn: (input: CancelProviderLoginInput) => runtime.providers.cancelLogin(input, context),
   });
 }

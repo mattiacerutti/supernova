@@ -75,30 +75,30 @@ function parseWorktreeBranches(output: string): Map<string, string> {
 }
 
 export class Workspace {
-  public constructor(private readonly deps: WorkspaceDeps) {}
+  private readonly deps: WorkspaceDeps;
+
+  public constructor(deps: WorkspaceDeps) {
+    this.deps = deps;
+  }
 
   public openTerminal(input: TerminalOpenPayload): Promise<TerminalOpenResult> {
     return this.deps.terminals.open(input);
   }
 
-  public writeTerminal(input: TerminalWritePayload): Promise<void> {
-    return this.deps.terminals.write(input);
+  public writeTerminal(id: string, input: TerminalWritePayload): Promise<void> {
+    return this.deps.terminals.write(id, input);
   }
 
-  public resizeTerminal(input: TerminalResizePayload): Promise<void> {
-    return this.deps.terminals.resize(input);
+  public resizeTerminal(id: string, input: TerminalResizePayload): Promise<void> {
+    return this.deps.terminals.resize(id, input);
   }
 
   public closeTerminal(input: TerminalClosePayload): Promise<void> {
     return this.deps.terminals.close(input);
   }
 
-  public get terminals() {
-    return this.deps.terminals.state;
-  }
-
-  public terminalOutput(id: string) {
-    return this.deps.terminals.output(id);
+  public hasTerminal(id: string): boolean {
+    return this.deps.terminals.has(id);
   }
 
   public closeSessionTerminals(sessionId: string): Promise<void> {
@@ -147,7 +147,7 @@ export class Workspace {
 
   public async getDiffContents(input: WorkspaceDiffContentsGetPayload): Promise<WorkspaceDiffContentsGetResult> {
     const repository = await repositoryPath(input.projectPath, input.repositoryRoot);
-    // Probing the repository first keeps the not-a-repository reason consistent with the other operations.
+    // First, so the not-a-repository error matches the other operations.
     await workspaceGit(repository, ["rev-parse", "--verify", "HEAD"]);
     const [oldContents, newContents] = await Promise.all([blobAt(repository, "HEAD", input.path), workingFile(repository, input.path)]);
     return {newContents, oldContents};

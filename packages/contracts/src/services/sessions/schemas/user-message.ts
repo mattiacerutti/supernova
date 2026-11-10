@@ -1,38 +1,38 @@
-import {z} from "zod";
+import {lit, num, obj, oneOf, opt, type Static, str, union} from "@earendil-works/chord";
 
-export const UserMessageAttachmentKind = z.union([z.literal("image"), z.literal("text")]);
+export const UserMessageAttachmentKind = oneOf("image", "text");
 
-export const UserMessageAttachmentPart = z.object({
+export const UserMessageAttachmentPart = obj({
   /** Sent with the message; absent in the stored turn, whose image lives in Pi's user entry. */
-  contentBase64: z.string().optional(),
-  id: z.string(),
+  contentBase64: opt(str()),
+  id: str(),
   kind: UserMessageAttachmentKind,
-  name: z.string(),
-  mime: z.string(),
-  size: z.number(),
-  type: z.literal("attachment"),
+  name: str(),
+  mime: str(),
+  size: num(),
+  type: lit("attachment"),
 });
 
-export const UserMessageTextPart = z.object({
-  text: z.string(),
-  type: z.literal("text"),
+export const UserMessageTextPart = obj({
+  text: str(),
+  type: lit("text"),
 });
 
-export const UserMessageReferenceKind = z.union([z.literal("file"), z.literal("skill")]);
+export const UserMessageReferenceKind = oneOf("file", "skill");
 
-export const UserMessageReferencePart = z.object({
-  id: z.string(),
+export const UserMessageReferencePart = obj({
+  id: str(),
   kind: UserMessageReferenceKind,
-  name: z.string(),
-  type: z.literal("reference"),
-  value: z.string(),
+  name: str(),
+  type: lit("reference"),
+  value: str(),
 });
 
-export const UserMessageContentPart = z.union([UserMessageTextPart, UserMessageReferencePart, UserMessageAttachmentPart]);
+export const UserMessageContentPart = union([UserMessageTextPart, UserMessageReferencePart, UserMessageAttachmentPart]);
 
-export type UserMessageAttachmentKind = z.infer<typeof UserMessageAttachmentKind>;
-export type UserMessageAttachmentPart = z.infer<typeof UserMessageAttachmentPart>;
-export type UserMessageTextPart = z.infer<typeof UserMessageTextPart>;
-export type UserMessageReferenceKind = z.infer<typeof UserMessageReferenceKind>;
-export type UserMessageReferencePart = z.infer<typeof UserMessageReferencePart>;
-export type UserMessageContentPart = z.infer<typeof UserMessageContentPart>;
+export type UserMessageAttachmentKind = Static<typeof UserMessageAttachmentKind>;
+export type UserMessageAttachmentPart = Static<typeof UserMessageAttachmentPart>;
+export type UserMessageTextPart = Static<typeof UserMessageTextPart>;
+export type UserMessageReferenceKind = Static<typeof UserMessageReferenceKind>;
+export type UserMessageReferencePart = Static<typeof UserMessageReferencePart>;
+export type UserMessageContentPart = Static<typeof UserMessageContentPart>;

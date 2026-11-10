@@ -1,15 +1,15 @@
+import {BACKGROUND_CONTEXT as context} from "@earendil-works/chord/context";
 import {queryOptions, useQuery} from "@tanstack/react-query";
 import {workspaceKeys} from "@/features/workspace/api/query-keys";
-import {unwrap} from "@/runtime/runtime-result";
-import {useRuntime} from "@/runtime/use-runtime";
+import {useRuntime} from "@/runtime/hooks/use-runtime";
 
 export function useWorkspaceRepositories(projectPath: string) {
   const runtime = useRuntime();
   return useQuery(
     queryOptions({
-      queryFn: () => unwrap(runtime.workspace.listRepositories({projectPath})),
+      queryFn: () => runtime.workspace.listRepositories({projectPath}, context),
       queryKey: workspaceKeys.repositories(projectPath),
-      // Git and filesystem failures are deterministic; retrying only delays the message.
+      // Git and filesystem failures are deterministic.
       retry: false,
     })
   );

@@ -1,6 +1,7 @@
-import type {ImageContent, Model, TextContent, TSchema} from "@earendil-works/pi-ai";
+import type {ImageContent, Model, TextContent} from "@earendil-works/pi-ai";
 import type {AgentToolResult, ExtensionToolContext, ModelRuntime, ToolDefinition} from "@earendil-works/pi-coding-agent";
-import type {JsonValue} from "@earendil-works/chord";
+import type {JsonValue} from "@earendil-works/chord/json";
+import type {TSchema} from "typebox";
 import type {ToolExecutionApi} from "@earendil-works/pi-durable";
 import type {PromptedTool} from "@supernova/agent-runtime/pi/lib/tools/coding-tools";
 import {extensionContext} from "@supernova/agent-runtime/pi/extensions/legacy/extension-context";
@@ -9,7 +10,7 @@ async function toolContext(api: ToolExecutionApi, modelRuntime: ModelRuntime, si
   const agent = await api.agent({abortSignal: signal} as never);
   const model = agent.model ? (modelRuntime.getModel(agent.model.provider, agent.model.modelId) as Model<never> | undefined) : undefined;
   const ctx = extensionContext({cwd: api.env?.cwd ?? agent.cwd ?? process.cwd(), model, modelRuntime, signal, thinkingLevel: agent.thinkingLevel});
-  // Assigned rather than spread: a spread would read the members that throw when the engine has no equivalent.
+  // A spread would read members that throw where the engine has no equivalent.
   return Object.assign(ctx, {
     tools: [],
     executeTool: () => {

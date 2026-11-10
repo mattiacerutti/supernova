@@ -1,5 +1,5 @@
 import {useMessageScroller, useMessageScrollerScrollable} from "@shadcn/react/message-scroller";
-import type {SessionSetupStep} from "@supernova/contracts/services/session-runtime/procedures";
+import type {SessionSetupStep} from "@supernova/contracts/services/sessions/procedures";
 import {defaultRangeExtractor, elementScroll, observeElementOffset, useVirtualizer} from "@tanstack/react-virtual";
 import type {VirtualItem} from "@tanstack/react-virtual";
 import {useReducedMotion} from "framer-motion";
@@ -49,7 +49,6 @@ interface SessionTimelineProps {
   readonly bottomOverlayHeight?: number;
   readonly earlierHistory: TimelineEarlierHistory;
   readonly compacting: boolean;
-  /** In a fork, where its copied history ends. */
   readonly lastCopiedTurnId?: string;
   readonly isStreaming: boolean;
   readonly items: readonly SessionTimelineItem[];

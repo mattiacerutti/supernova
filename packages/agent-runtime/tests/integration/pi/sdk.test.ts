@@ -9,7 +9,7 @@ import type {Message} from "@earendil-works/pi-ai";
 import {getSystemMessageText} from "@earendil-works/pi-ai";
 import {createReadTool} from "@earendil-works/pi-durable/tools";
 import {createPiTestRuntime, fauxAssistantMessage, selectedModelReference} from "@tests/support/session-runtime";
-import type {TSchema} from "@earendil-works/pi-ai";
+import type {TSchema} from "typebox";
 import type {ToolDefinition} from "@earendil-works/pi-coding-agent";
 import {webFetchTool} from "@supernova/agent-runtime/features/session-runtime/tools/web-fetch";
 import {CustomPiResourceLoader} from "@supernova/agent-runtime/pi/config/resource-loader";
@@ -372,7 +372,8 @@ export default function(pi) {
     expect(offered.get("read")?.description).toBe(createReadTool().description);
     for (const name of ["read", "write", "edit", "web_fetch"]) {
       if (name !== "read") expect(offered.get(name)?.description).toBe(oldDefinitions.get(name)?.description);
-      expect(JSON.stringify(offered.get(name)?.parameters)).toBe(JSON.stringify(oldDefinitions.get(name)?.parameters));
+      // The same JSON Schema; pi-schema writes its keys in another order than TypeBox.
+      expect(offered.get(name)?.parameters).toEqual(oldDefinitions.get(name)?.parameters);
     }
     expect(newPrompt.trim()).toBe(expectedPrompt.trim());
   });

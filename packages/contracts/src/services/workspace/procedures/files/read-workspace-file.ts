@@ -1,13 +1,13 @@
-import {z} from "zod";
+import {obj, type Static, str} from "@earendil-works/chord";
 
-export const WorkspaceFileReadPayload = z.object({
-  path: z.string(),
-  projectPath: z.string(),
+export const WorkspaceFileReadPayload = obj({
+  path: str(),
+  projectPath: str(),
 });
 
-export const WorkspaceFileReadResult = z.object({
-  content: z.string(),
+export const WorkspaceFileReadResult = obj({
+  content: str(),
 });
 
-export type WorkspaceFileReadPayload = z.infer<typeof WorkspaceFileReadPayload>;
-export type WorkspaceFileReadResult = z.infer<typeof WorkspaceFileReadResult>;
+export type WorkspaceFileReadPayload = Static<typeof WorkspaceFileReadPayload>;
+export type WorkspaceFileReadResult = Static<typeof WorkspaceFileReadResult>;

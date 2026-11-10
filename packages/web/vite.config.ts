@@ -46,8 +46,8 @@ export default defineConfig(({mode}) => ({
       ...(mode === "timeline"
         ? [
             {
-              find: /^@\/runtime\/transport\/runtime-client$/,
-              replacement: resolve(__dirname, "tests/timeline/runtime-client.ts"),
+              find: /^@\/runtime\/connection$/,
+              replacement: resolve(__dirname, "tests/timeline/connection.ts"),
             },
           ]
         : []),

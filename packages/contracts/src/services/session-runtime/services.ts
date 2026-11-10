@@ -1,12 +1,14 @@
-import type {MembersOf} from "@earendil-works/chord";
-import {method, remote} from "@earendil-works/chord";
-import {Type} from "typebox";
-import {json, NO_PAYLOAD, result} from "@supernova/contracts/lib/protocol";
-import type {
-  CheckpointNavigationError,
+import type {Reference} from "@earendil-works/chord";
+import {method, nul, remote, str} from "@earendil-works/chord";
+import type {Errors} from "@supernova/contracts/lib/errors";
+import {json, sessionHost} from "@supernova/contracts/lib/protocol";
+import type {LoadHistoryResult} from "@supernova/contracts/services/session-runtime/procedures";
+import {CheckpointNavigationError} from "@supernova/contracts/services/session-runtime/procedures";
+import {
   CompactSessionPayload,
+  ForkSeed,
+  ForkSeedPayload,
   LoadHistoryPayload,
-  LoadHistoryResult,
   RedoCheckpointPayload,
   RevertToMessagePayload,
   SendMessagePayload,
@@ -14,27 +16,42 @@ import type {
 } from "@supernova/contracts/services/session-runtime/procedures";
 import type {Session} from "@supernova/contracts/services/sessions/schemas";
 
-/** One object per session; holding an unknown session fails. Payloads leave out `sessionId`. */
-export const SessionRuntimeService = remote("supernova.session-runtime", {
-  version: 1,
-  input: Type.Object({sessionId: Type.String()}),
+export const ChatService = remote("supernova.chat", {
+  version: 5,
+  params: {sessionId: str()},
+  hostAddress: sessionHost,
   variants: {
-    default: {
+    owner: {
       state: {
         session: json<Session>(),
       },
       methods: {
-        // Fails when `edge` is no longer on that side of the leaf.
-        loadHistory: method(json<Omit<LoadHistoryPayload, "sessionId">>(), result<LoadHistoryResult>()),
-        sendMessage: method(json<Omit<SendMessagePayload, "sessionId">>(), result<null>()),
-        compact: method(json<Omit<CompactSessionPayload, "sessionId">>(), result<null>()),
-        abort: method(NO_PAYLOAD, result<null>()),
-        undoCheckpoint: method(json<Omit<UndoCheckpointPayload, "sessionId">>(), result<null, CheckpointNavigationError>()),
-        redoCheckpoint: method(json<Omit<RedoCheckpointPayload, "sessionId">>(), result<null, CheckpointNavigationError>()),
-        revertToMessage: method(json<Omit<RevertToMessagePayload, "sessionId">>(), result<null, CheckpointNavigationError>()),
+        loadHistory: method(LoadHistoryPayload, json<LoadHistoryResult>()),
+        sendMessage: method(SendMessagePayload, nul()),
+        compact: method(CompactSessionPayload, nul()),
+        abort: method(undefined, nul()),
+        undoCheckpoint: method(UndoCheckpointPayload, nul()),
+        redoCheckpoint: method(RedoCheckpointPayload, nul()),
+        revertToMessage: method(RevertToMessagePayload, nul()),
+      },
+    },
+    server: {
+      methods: {
+        sendMessage: method(SendMessagePayload, nul()),
+        forkSeed: method(ForkSeedPayload, json<ForkSeed>()),
+        seed: method(ForkSeed, nul()),
+        reload: method(undefined, nul()),
+        abort: method(undefined, nul()),
       },
     },
   },
 });
 
-export type SessionRuntimeService = MembersOf<typeof SessionRuntimeService>;
+export const ChatErrors = {
+  undoCheckpoint: CheckpointNavigationError,
+  redoCheckpoint: CheckpointNavigationError,
+  revertToMessage: CheckpointNavigationError,
+} satisfies Errors<typeof ChatService>;
+
+export type ChatOwner = Extract<Reference<typeof ChatService>, {readonly variant: "owner"}>;
+export type ChatServer = Extract<Reference<typeof ChatService>, {readonly variant: "server"}>;

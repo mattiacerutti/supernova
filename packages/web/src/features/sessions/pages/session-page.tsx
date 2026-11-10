@@ -23,6 +23,9 @@ import SessionTitleText from "@/features/sessions/components/session-title-text"
 import SessionTimeline from "@/features/sessions/components/timeline/session-timeline";
 import {ComposerContext, useComposer} from "@/features/sessions/hooks/composer/use-composer";
 import {useFollowSession} from "@/features/sessions/api/sessions-sync";
+import {ChatService} from "@supernova/contracts/services/session-runtime/services";
+import type {OwnerOf} from "@/runtime/references";
+import {useObject} from "@/runtime/hooks/use-object";
 import {readSessionView, useSession} from "@/features/sessions/hooks/use-session";
 import type {SessionView} from "@/features/sessions/lib/session-view";
 import {buildCommittedTimelineItems, buildLiveTimelineItems} from "@/features/sessions/lib/timeline/rows/build-session-timeline";
@@ -80,14 +83,14 @@ function LoadingTitle(props: LoadingTitleProps) {
 
 interface FollowSessionProps {
   readonly sessionId: string;
+  readonly chat: OwnerOf<typeof ChatService>;
 }
 
 function FollowSession(props: FollowSessionProps) {
-  useFollowSession(props.sessionId);
+  useFollowSession(props.sessionId, props.chat);
   return null;
 }
 
-/** A new session already has its future id, so draft and model choice carry over when its first message creates it. */
 export type SessionPageTarget =
   | {readonly kind: "new"; readonly projectName: string; readonly projectPath: string; readonly sessionId: string}
   | {readonly kind: "session"; readonly sessionId: string};
@@ -96,26 +99,23 @@ interface SessionPageProps {
   readonly target: SessionPageTarget;
 }
 
-/** The first message turns the new-session screen into a session without remounting; the composer docks in place. */
 export default function SessionPage(props: SessionPageProps) {
   const {target} = props;
   const {sessionId} = target;
   const navigate = useNavigate();
   const setNewSessionId = useComposerDraftsStore((state) => state.setNewSessionId);
 
-  // Kept here because the draft is cleared on submit, before the runtime has the session.
   const [creatingWorkspace, setCreatingWorkspace] = useState<SessionWorkspaceSelection | null>(null);
   const creatingSession = creatingWorkspace !== null;
   const view = useSession(sessionId);
-  const {session} = view;
-  // The document is replaced on every streamed frame; only the parts read below are passed on, so everything that
-  // does not show the timeline keeps its props and skips those renders.
+  const {record, session} = view;
+  // The document is replaced on every streamed frame; passing only these parts spares everything but the timeline.
   const hasSession = session !== undefined;
   const agent = session?.agent;
   const sessionContext = session?.context;
-  const sessionProjectPath = session?.projectPath;
-  const sessionTitle = session?.title;
-  const worktree = session?.worktree;
+  const sessionProjectPath = record?.projectPath;
+  const sessionTitle = record?.title;
+  const worktree = record?.worktree;
   const entriesRemaining = session?.entries.remaining ?? 0;
   const undoneRemaining = session?.undone.remaining ?? 0;
   const newSessionProjectPath = target.kind === "new" ? target.projectPath : undefined;
@@ -130,9 +130,11 @@ export default function SessionPage(props: SessionPageProps) {
     sessionId,
   });
   const {replaceContentParts} = composer.draft;
-  const commands = useSessionCommands({modelReference: composer.models.modelReference, sessionId});
-  const earlierHistory = useLoadHistory(sessionId, "entries");
-  const laterUndone = useLoadHistory(sessionId, "undone");
+  // The server starts no host for a session it has not created.
+  const chat = useObject(ChatService, target.kind === "session" && !creatingSession ? {sessionId} : undefined);
+  const commands = useSessionCommands({chat, modelReference: composer.models.modelReference, sessionId});
+  const earlierHistory = useLoadHistory(chat, sessionId, "entries");
+  const laterUndone = useLoadHistory(chat, sessionId, "undone");
   const [undoneDrawerHeight, setUndoneDrawerHeight] = useState(0);
   const [forkTurnId, setForkTurnId] = useState<string | null>(null);
 
@@ -157,7 +159,6 @@ export default function SessionPage(props: SessionPageProps) {
     setCreatingWorkspace(null);
     if (outcome.status === "started") return;
 
-    // Not scoped to the session: it no longer exists, and the user is back on the new-session screen.
     showToast("Unable to start the session", outcome.message, {type: "error"});
     setNewSessionId(target.projectPath, sessionId);
     composer.draft.replaceContentParts(contentParts);
@@ -169,7 +170,6 @@ export default function SessionPage(props: SessionPageProps) {
     replaceContentParts(turn?.userMessage.contentParts ?? []);
   };
 
-  // These read the view when they run, so the timeline and composer keep the same handlers while a response streams.
   const idleView = (): SessionView | undefined => {
     const current = readSessionView(sessionId);
     return current.session && current.status === "idle" ? current : undefined;
@@ -310,7 +310,7 @@ export default function SessionPage(props: SessionPageProps) {
         />
       </SessionLayout>
 
-      {target.kind === "session" && !creatingSession && <FollowSession key={sessionId} sessionId={sessionId} />}
+      {chat && <FollowSession chat={chat} key={sessionId} sessionId={sessionId} />}
       {hasSession && <ForkSessionDialog onClose={() => setForkTurnId(null)} sessionId={sessionId} turnId={forkTurnId} />}
       <CheckpointConflictDialog
         onCancel={commands.checkpointConflict.cancel}

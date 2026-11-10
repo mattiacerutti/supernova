@@ -6,10 +6,7 @@ import type {SessionRecord} from "@supernova/agent-runtime/pi/lib/session/sessio
 
 const BUSY_TIMEOUT_MS = 5_000;
 
-/**
- * Append-only: a schema change is a new entry, never an edit. `user_version` records how many ran; a newer catalog is
- * refused.
- */
+/** Append-only: a schema change is a new entry. `user_version` counts those applied. */
 const MIGRATIONS: readonly string[] = [
   `
   CREATE TABLE sessions (
@@ -80,9 +77,13 @@ function toValues(record: SessionRecord): (string | number | null)[] {
   ];
 }
 
-/** Calls are synchronous, so a read-modify-write cannot interleave. */
 export class SessionCatalog {
-  private constructor(private readonly database: DatabaseSync) {}
+  private readonly database: DatabaseSync;
+  private readonly listeners = new Set<() => void>();
+
+  private constructor(database: DatabaseSync) {
+    this.database = database;
+  }
 
   public static async open(path: string): Promise<SessionCatalog> {
     await mkdir(dirname(path), {recursive: true});
@@ -93,7 +94,7 @@ export class SessionCatalog {
       const {user_version: version} = database.prepare("PRAGMA user_version").get() as {user_version: number};
       if (version > MIGRATIONS.length) throw new Error(`The session catalog at ${path} was written by a newer version of Supernova.`);
       database.function("resolve_project_path", (path) => resolveProjectPath(String(path)));
-      // Each migration commits on its own, so a crash between two leaves a catalog a later open finishes.
+      // One commit each, so a crash between two leaves a catalog the next open finishes.
       for (let next = version; next < MIGRATIONS.length; next++) {
         database.exec("BEGIN IMMEDIATE");
         database.exec(MIGRATIONS[next]!);
@@ -105,6 +106,11 @@ export class SessionCatalog {
       throw error;
     }
     return new SessionCatalog(database);
+  }
+
+  public onChange(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
   }
 
   public find(sessionId: string): SessionRecord | undefined {
@@ -141,6 +147,7 @@ export class SessionCatalog {
           .join(", ")})`
       )
       .run(...toValues(record));
+    this.changed();
   }
 
   public update(sessionId: string, change: (record: SessionRecord) => SessionRecord): SessionRecord {
@@ -154,16 +161,24 @@ export class SessionCatalog {
         "UPDATE sessions SET project_path = ?, worktree_branch = ?, worktree_path = ?, title = ?, forked_from = ?, pinned = ?, archived_at = ?, created_at = ?, updated_at = ? WHERE id = ?"
       )
       .run(...values, sessionId);
+    this.changed();
     return {...next, projectPath: resolveProjectPath(next.projectPath)};
   }
 
   public delete(sessionId: string): boolean {
     const existed = this.find(sessionId) !== undefined;
-    if (existed) this.database.prepare("DELETE FROM sessions WHERE id = ?").run(sessionId);
+    if (existed) {
+      this.database.prepare("DELETE FROM sessions WHERE id = ?").run(sessionId);
+      this.changed();
+    }
     return existed;
   }
 
   public close(): void {
     this.database.close();
+  }
+
+  private changed(): void {
+    for (const listener of [...this.listeners]) listener();
   }
 }

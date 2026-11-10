@@ -9,9 +9,12 @@ export interface ExtensionsDeps {
 }
 
 export class Extensions {
+  private readonly deps: ExtensionsDeps;
   private pendingUpdate: Promise<void> | undefined;
 
-  public constructor(private readonly deps: ExtensionsDeps) {}
+  public constructor(deps: ExtensionsDeps) {
+    this.deps = deps;
+  }
 
   public update(): Promise<void> {
     this.pendingUpdate ??= this.runUpdate().finally(() => {
@@ -26,7 +29,7 @@ export class Extensions {
     } catch (cause) {
       throw new UpdateExtensionsError({cause, message: errorMessage(cause, "Failed to update extensions.")});
     } finally {
-      // Even a partial failure may have replaced some packages on disk; drop the cached composer skills and prompts.
+      // Even a partial failure may have replaced packages on disk.
       this.deps.resourceCache.invalidate();
     }
   }

@@ -19,7 +19,7 @@ Client-owned execution, durable client replay of every stream event, and multi-c
 
 ## Ownership and storage
 
-Start with [SessionFile](../../packages/agent-runtime/src/pi/session-file.ts) for the engine boundary and [SessionWorker](../../packages/agent-runtime/src/features/session-runtime/worker/session-worker.ts) for product coordination.
+Start with [SessionFile](../../packages/agent-runtime/src/pi/session-file.ts) for the engine boundary and [Chat](../../packages/agent-runtime/src/features/session-runtime/chat.ts) for product coordination. A session's host owns its file: `SessionRuntime` opens `Chat` (file and extensions) and closes it with the host, and reads the catalog only when the host starts. [SessionStore](../../packages/agent-runtime/src/pi/session-store.ts) holds the catalog and the session folders, nothing open.
 
 | State                                 | Owner                           | Lifetime       |
 | ------------------------------------- | ------------------------------- | -------------- |
@@ -45,9 +45,17 @@ Legacy JSONL imports remain isolated in `pi/lib/session/legacy/`. Preserve origi
 
 ## Observation and publication
 
-The shared sessions service exposes lifecycle operations and directory summaries. Per-session runtime services expose documents and commands, bound to a session id. A route change must never redirect an already-issued command to another session.
+A browser tab holds three kinds of object:
 
-Directory activity must be available without following every full transcript. A subscription observes feature-owned state; releasing it does not stop work. A later hold begins from the current document. Follow [Agent runtime](agent-runtime.md#streams) for state ownership and [Contracts](contracts.md#errors) for wire failures.
+- `SessionsService {clientId}`: the tab's sessions. Its `view` holds a window per sidebar project the tab shows, and the record of the session the tab has open (`open`), whether or not a window has it. Its methods are the operations on any session (create, fork, rename, pin, archive) and a one-shot, paged title search. The view re-reads its windows and its open record after each catalog write.
+- `SessionStatusService {}`: what every live session is doing, and its notices. Session hosts report into it, as their worker principal: activity, notices, a message they accepted (activity time), and a generated title. It is the one channel a session host tells the server about its session.
+- `ChatService {sessionId}`, served by the session's own host: its conversation and commands.
+
+A route change must never redirect an already-issued command to another session.
+
+The catalog is the one source of a session's record: title, pin, project, worktree. The conversation document never copies it, and no session host keeps it: a rename or pin is a catalog write, which the tab's view follows. Operations on a record return the record (`fork`) or nothing (`rename`, `pin`); only `create` returns a conversation, the first message already in it.
+
+Status must be available without following every full transcript. A subscription observes feature-owned state; releasing it does not stop work. A later hold begins from the current document. Follow [Agent runtime](agent-runtime.md#streams) for state ownership and [Contracts](contracts.md#errors) for wire failures.
 
 Chord owns snapshot/delta synchronization. Reconnect from a new authoritative snapshot rather than maintaining hand-written replay counters. A slow client can be disconnected and resynchronize; do not retain unbounded output for it or assume clients saw every intermediate transition.
 
@@ -83,7 +91,7 @@ Similarly, background compaction needs a timeline design before enabling it. Kee
 - **User abort:** end the run through its normal settlement path, retaining what was produced.
 - **Browser disconnect:** release that connection's holds only. Reestablish subscriptions and refresh stale query data on reconnect.
 - **Server shutdown or crash:** close storage without converting work into user cancellation. On reopening, let the engine resume from committed state and decide replay safety; non-replay-safe tools must not be blindly rerun.
-- **Archival:** deliberately stop work and release its resources before checkpoint cleanup. This is not equivalent to closing storage for shutdown.
+- **Archival:** mark the catalog record archived before cleanup so new session hosts are refused, including automatic retries from existing references after host release. This is not equivalent to closing storage for shutdown.
 - **Extension reload:** replace future behavior in place; running calls finish on the code they took.
 
 Notices report problems that did not reject a command. Distinguish session work failures from extension compatibility warnings, and retain enough context to attribute them correctly. Starting another run must not erase a notice raised during startup; switching routes must not discard an unseen session failure. Client presentation belongs in the web guide, not in the engine lifecycle.

@@ -9,7 +9,7 @@ import {turnPositions} from "@supernova/agent-runtime/pi/lib/session/session-sta
 type ContextMessage = Parameters<typeof estimateTokens>[0];
 
 const PAGE_TURNS = 20;
-/** A page always holds at least one whole turn; one over the 16 MiB frame limit still cannot be sent. */
+/** A page holds at least one whole turn, so a turn over the 16 MiB frame limit still fails. */
 const PAGE_SIZE = 2 * 1024 * 1024;
 
 const entrySizes = new WeakMap<EntryRecord, number>();
@@ -34,11 +34,11 @@ function authoredEntries(entries: readonly EntryRecord[], turns: Readonly<Record
   });
 }
 
-/** `unknown` after a compaction: every older usage measured the pre-compaction context. */
 export function buildSessionContextUsage(input: {readonly contextWindow: number; readonly messages: readonly Message[]; readonly unknown: boolean}): SessionContextUsage {
   const {contextWindow} = input;
-  // The old SDK's context had no system prompt; estimates keep leaving it out so the displayed usage is unchanged.
+  // The old SDK left the system prompt out of its estimate.
   const messages = input.messages.filter((message) => message.role !== "system");
+  // After a compaction, every older usage measured the larger context.
   if (input.unknown) return {contextWindow, usedTokens: null};
   const index = messages.findLastIndex(hasValidAssistantUsage);
   const estimate = (from: number) => messages.slice(from).reduce((total, message) => total + estimateTokens(message as ContextMessage), 0);
@@ -55,7 +55,6 @@ export function contextUsageOf(input: {readonly entries: readonly EntryRecord[];
   return buildSessionContextUsage({contextWindow, messages, unknown: startsAtCompaction && !respondedAfter});
 }
 
-/** Read from the leaf outwards. The page reaching the far end also holds what precedes the first turn. */
 export function entriesPage(input: {
   readonly side: HistorySide;
   readonly entries: readonly EntryRecord[];
@@ -87,7 +86,6 @@ export function entriesPage(input: {
   return {items: authoredEntries(items, turns), remaining, precedingEntryId};
 }
 
-/** A copied turn keeps the source's checkpoints, and copied turns precede the fork's own. */
 function lastCopiedTurnId(history: readonly EntryRecord[], turns: Readonly<Record<string, TurnRecord>>, sessionId: string): string | undefined {
   return turnPositions(history, turns).findLast((turn) => turn.record.before.sessionId !== sessionId)?.turnId;
 }
@@ -96,9 +94,8 @@ export function timelineEntries(history: readonly EntryRecord[]): EntryRecord[] 
   return history.filter((entry) => entry.kind !== "pi.system");
 }
 
-/** Strict JSON: the session is diffed into Chord deltas, so optional fields are left out, never `undefined`. */
 export function buildSession(input: {
-  readonly record: SessionRecord;
+  readonly record: Pick<SessionRecord, "id" | "forkedFrom" | "updatedAt">;
   readonly history: readonly EntryRecord[];
   readonly undone: readonly EntryRecord[];
   readonly agent: AgentState | undefined;
@@ -109,22 +106,16 @@ export function buildSession(input: {
   readonly context: Session["context"];
 }): Session {
   const {context, record, runStart, turns} = input;
-  const forked = record.forkedFrom !== undefined;
-  const copiedTurnId = forked ? lastCopiedTurnId(input.history, turns, record.id) : undefined;
+  const copiedTurnId = record.forkedFrom !== undefined ? lastCopiedTurnId(input.history, turns, record.id) : undefined;
   const entries = entriesPage({side: "entries", entries: input.history, turns});
   const undone = entriesPage({side: "undone", entries: input.undone, turns, precedingEntryId: input.history.at(-1)?.id});
-  // Activity stops at the live turn's user message so a running session does not keep climbing the sidebar.
+  // A running session does not keep climbing the sidebar.
   const liveStart = runStart === undefined ? -1 : entries.items.findIndex((entry) => entry.id >= runStart);
   const settled = liveStart === -1 ? entries.items : entries.items.slice(0, liveStart + 1);
   const lastTimestamp = settled.findLast((entry) => entry.model?.[0]?.timestamp !== undefined)?.model?.[0]?.timestamp;
   return {
     id: record.id,
-    title: record.title ?? "Untitled session",
-    forked,
     ...(copiedTurnId ? {lastCopiedTurnId: copiedTurnId} : {}),
-    pinned: record.pinned,
-    projectPath: record.projectPath,
-    ...(record.worktree ? {worktree: record.worktree} : {}),
     updatedAt: lastTimestamp !== undefined && new Date(lastTimestamp).toISOString() > record.updatedAt ? new Date(lastTimestamp).toISOString() : record.updatedAt,
     entries,
     undone,

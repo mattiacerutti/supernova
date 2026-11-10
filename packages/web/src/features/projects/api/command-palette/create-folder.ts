@@ -1,7 +1,7 @@
+import {BACKGROUND_CONTEXT as context} from "@earendil-works/chord/context";
 import {useMutation, useQueryClient} from "@tanstack/react-query";
 import {projectKeys} from "@/features/projects/api/query-keys";
-import {unwrap} from "@/runtime/runtime-result";
-import {useRuntime} from "@/runtime/use-runtime";
+import {useRuntime} from "@/runtime/hooks/use-runtime";
 
 interface CreateFolderInput {
   readonly path: string;
@@ -12,7 +12,7 @@ export function useCreateFolder() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (input: CreateFolderInput) => unwrap(runtime.folders.create(input)),
+    mutationFn: (input: CreateFolderInput) => runtime.folders.create(input, context),
     onSuccess: async () => {
       await queryClient.invalidateQueries({queryKey: projectKeys.folderSuggestions()});
     },

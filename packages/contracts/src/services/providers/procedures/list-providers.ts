@@ -1,6 +1,6 @@
-import {z} from "zod";
-import {Provider} from "../schemas";
+import {arr, type Static} from "@earendil-works/chord";
+import {Provider} from "@supernova/contracts/services/providers/schemas";
 
-export const ProvidersListResult = z.array(Provider);
+export const ProvidersListResult = arr(Provider);
 
-export type ProvidersListResult = z.infer<typeof ProvidersListResult>;
+export type ProvidersListResult = Static<typeof ProvidersListResult>;

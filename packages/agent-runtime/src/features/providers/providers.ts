@@ -20,10 +20,10 @@ export interface ProvidersDeps {
 }
 
 export class Providers {
-  public constructor(private readonly deps: ProvidersDeps) {}
+  private readonly deps: ProvidersDeps;
 
-  public get logins() {
-    return this.deps.loginSessions.logins;
+  public constructor(deps: ProvidersDeps) {
+    this.deps = deps;
   }
 
   public async list(): Promise<ProvidersListResult> {
@@ -66,14 +66,13 @@ export class Providers {
 
     const loginSessionId = randomUUID();
     this.deps.loginSessions.create({loginSessionId, providerId});
-    // Listen before the login runs so no step published synchronously by the provider is missed.
+    // Before the login: a provider may publish its first step synchronously.
     let stop: () => void = () => undefined;
     const visible = new Promise<ProviderLoginSession>((resolve) => {
       stop = this.deps.loginSessions.onChange(loginSessionId, (session) => {
         if (session.step.type !== "starting" && session.step.type !== "authenticating") resolve(session);
       });
     });
-    // The login ends on a visible step (succeeded, failed, cancelled) even when it shows none before.
     void runProviderLogin(this.deps.sdk, this.deps.loginSessions, loginSessionId, providerId, authType);
     try {
       return await visible;

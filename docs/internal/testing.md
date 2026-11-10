@@ -19,6 +19,7 @@ A user-facing feature needs a behavior test for its main flow and for each failu
 - Use Pi's real `ModelRuntime` with an `InMemoryCredentialStore` and a provider the test defines, and `createAgentRuntime` with the real SDK for resource loading. Do not rebuild them from `vi.fn()` or `{} as`.
 - Seed history by running turns against the model, not by writing entries.
 - Client tests build session documents with `packages/web/tests/support/session.ts`, never with cast literals.
+- Client tests and the timeline suite talk to the server they need through `packages/web/tests/support/test-server.ts`: a real Chord server host and session hosts, over memory links, serving the contracts from test facets. `Published` is a value the test changes and the facets serve. Do not fake references or the runtime client.
 - Do not commit recorded output such as snapshots or golden files.
 
 ## Behavior E2E

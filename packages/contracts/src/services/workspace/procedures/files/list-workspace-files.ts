@@ -1,12 +1,12 @@
-import {z} from "zod";
+import {arr, obj, type Static, str} from "@earendil-works/chord";
 
-export const WorkspaceFilesListPayload = z.object({
-  projectPath: z.string(),
+export const WorkspaceFilesListPayload = obj({
+  projectPath: str(),
 });
 
-export const WorkspaceFilesListResult = z.object({
-  files: z.array(z.string()),
+export const WorkspaceFilesListResult = obj({
+  files: arr(str()),
 });
 
-export type WorkspaceFilesListPayload = z.infer<typeof WorkspaceFilesListPayload>;
-export type WorkspaceFilesListResult = z.infer<typeof WorkspaceFilesListResult>;
+export type WorkspaceFilesListPayload = Static<typeof WorkspaceFilesListPayload>;
+export type WorkspaceFilesListResult = Static<typeof WorkspaceFilesListResult>;

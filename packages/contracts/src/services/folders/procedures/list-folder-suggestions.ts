@@ -1,17 +1,17 @@
-import {z} from "zod";
-import {FolderQueryPathType, FolderSuggestion} from "../schemas";
+import {arr, obj, type Static, str} from "@earendil-works/chord";
+import {FolderQueryPathType, FolderSuggestion} from "@supernova/contracts/services/folders/schemas";
 
-export const FolderSuggestionsListPayload = z.object({
-  query: z.string(),
+export const FolderSuggestionsListPayload = obj({
+  query: str(),
 });
 
-export const FolderSuggestionsListResult = z.object({
-  homePath: z.string(),
-  query: z.string(),
-  queryPath: z.string(),
+export const FolderSuggestionsListResult = obj({
+  homePath: str(),
+  query: str(),
+  queryPath: str(),
   queryPathType: FolderQueryPathType,
-  suggestions: z.array(FolderSuggestion),
+  suggestions: arr(FolderSuggestion),
 });
 
-export type FolderSuggestionsListPayload = z.infer<typeof FolderSuggestionsListPayload>;
-export type FolderSuggestionsListResult = z.infer<typeof FolderSuggestionsListResult>;
+export type FolderSuggestionsListPayload = Static<typeof FolderSuggestionsListPayload>;
+export type FolderSuggestionsListResult = Static<typeof FolderSuggestionsListResult>;

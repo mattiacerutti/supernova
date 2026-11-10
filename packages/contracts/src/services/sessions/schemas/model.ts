@@ -1,32 +1,31 @@
-import {z} from "zod";
+import {arr, bool, obj, opt, type Static, str} from "@earendil-works/chord";
 
-export const ModelReference = z.object({
-  id: z.string(),
-  providerId: z.string(),
-  thinkingLevel: z.string().optional(),
+export const ModelReference = obj({
+  id: str(),
+  providerId: str(),
+  thinkingLevel: opt(str()),
 });
 
-export const ThinkingLevelOption = z.object({
-  value: z.string(),
-  label: z.string(),
+export const ThinkingLevelOption = obj({
+  value: str(),
+  label: str(),
 });
 
-export const ModelCapabilities = z.object({
-  /** Without it, image attachments are refused; text attachments become prompt context either way. */
-  images: z.boolean(),
-  reasoning: z.boolean(),
+export const ModelCapabilities = obj({
+  images: bool(),
+  reasoning: bool(),
 });
 
-export const ModelDetails = z.object({
-  id: z.string(),
-  name: z.string(),
+export const ModelDetails = obj({
+  id: str(),
+  name: str(),
   capabilities: ModelCapabilities,
-  providerId: z.string(),
-  providerName: z.string(),
-  thinkingLevels: z.array(ThinkingLevelOption),
+  providerId: str(),
+  providerName: str(),
+  thinkingLevels: arr(ThinkingLevelOption),
 });
 
-export type ModelReference = z.infer<typeof ModelReference>;
-export type ThinkingLevelOption = z.infer<typeof ThinkingLevelOption>;
-export type ModelCapabilities = z.infer<typeof ModelCapabilities>;
-export type ModelDetails = z.infer<typeof ModelDetails>;
+export type ModelReference = Static<typeof ModelReference>;
+export type ThinkingLevelOption = Static<typeof ThinkingLevelOption>;
+export type ModelCapabilities = Static<typeof ModelCapabilities>;
+export type ModelDetails = Static<typeof ModelDetails>;

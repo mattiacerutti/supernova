@@ -8,7 +8,6 @@ import type {AssistantMessage} from "@earendil-works/pi-ai";
 import {afterEach, describe, expect, it} from "vitest";
 import {FileCheckpointStore} from "@supernova/agent-runtime/features/session-runtime/checkpoints/checkpoint-store";
 import type {CheckpointStore} from "@supernova/agent-runtime/features/session-runtime/checkpoints/checkpoint-store";
-import type {SessionRuntime} from "@supernova/agent-runtime/features/session-runtime/session-runtime";
 import type {ModelReference, Session} from "@supernova/contracts/services/sessions/schemas";
 import {
   assistantTexts,
@@ -83,15 +82,12 @@ const unavailableChildRepositoryCases = [
   },
 ] as const;
 
-/** The model and thinking level the session's next send starts from, as the composer names them. */
 function modelReferenceOf(session: Session): ModelReference | undefined {
   const {model, thinkingLevel} = session.agent;
   return model ? {id: model.modelId, providerId: model.provider, thinkingLevel: thinkingLevel ?? "off"} : undefined;
 }
 
-/** Values an observer received for a session during a command, and the problems the board reported for it. */
 interface CommandObservation {
-  /** Transcript values received after the command started, its starting value excluded. */
   readonly published: readonly Session[];
   readonly errors: readonly string[];
 }
@@ -108,8 +104,7 @@ function assistantWithUsage(text: string, totalTokens: number, stopReason: Assis
 
 type TestRuntime = Awaited<ReturnType<typeof createPiTestRuntime>>;
 
-/** Observes a session while `run` executes; the observation keeps what was published and reported. */
-async function observeCommand(pi: TestRuntime, sessionId: string, run: () => Promise<void>): Promise<CommandObservation & {readonly cause: unknown}> {
+async function observeCommand(pi: TestRuntime, sessionId: string, run: () => Promise<unknown>): Promise<CommandObservation & {readonly cause: unknown}> {
   const observation = await pi.observe(sessionId);
   let cause: unknown;
   try {
@@ -125,11 +120,10 @@ async function observeCommand(pi: TestRuntime, sessionId: string, run: () => Pro
   return {cause, published: observation.versions.slice(1), errors};
 }
 
-/** Runs a command, waits for any run it started to settle, and returns what it published and the document after it. */
 async function runSessionCommand(input: {
   readonly pi: TestRuntime;
   readonly sessionId: string;
-  readonly run: (runtime: SessionRuntime) => Promise<void>;
+  readonly run: (runtime: TestRuntime["sessionRuntime"]) => Promise<unknown>;
 }): Promise<CommandObservation & {readonly session: Session}> {
   const {cause, ...observation} = await observeCommand(input.pi, input.sessionId, async () => {
     await input.run(input.pi.sessionRuntime);
@@ -142,7 +136,7 @@ async function runSessionCommand(input: {
 async function runRejectedSessionCommand(input: {
   readonly pi: TestRuntime;
   readonly sessionId: string;
-  readonly run: (runtime: SessionRuntime) => Promise<void>;
+  readonly run: (runtime: TestRuntime["sessionRuntime"]) => Promise<unknown>;
 }): Promise<CommandObservation & {readonly cause: unknown}> {
   return observeCommand(input.pi, input.sessionId, () => input.run(input.pi.sessionRuntime));
 }
@@ -391,7 +385,7 @@ describe("checkpoint navigation", () => {
     const {cause, errors, published} = await runRejectedSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.undoCheckpoint({sessionId: info.id})});
     const loaded = await pi.sessions.get({sessionId: info.id});
 
-    expect(cause).toMatchObject({_tag: "CheckpointConflictError", message: "Restoring this checkpoint would discard changes made after it."});
+    expect(cause).toMatchObject({code: "CheckpointConflictError", message: "Restoring this checkpoint would discard changes made after it."});
     expect(errors).toEqual([]);
     expect(published).toEqual([]);
     expect(turnContents(loaded).map((parts) => parts[0])).toEqual([
@@ -877,7 +871,7 @@ describe("checkpoint navigation", () => {
     const turnId = turnIds(firstEvents.session)[0]!;
     const turnsBefore = turnContents(await pi.sessions.get({sessionId: info.id}));
     const rejected = await runRejectedSessionCommand({pi, sessionId: info.id, run: (runtime) => runtime.revertToMessage({sessionId: info.id, turnId})});
-    expect(rejected.cause).toMatchObject({_tag: "CheckpointUncapturedError"});
+    expect(rejected.cause).toMatchObject({code: "CheckpointUncapturedError"});
     expect(rejected.published).toEqual([]);
     expect(turnContents(await pi.sessions.get({sessionId: info.id}))).toEqual(turnsBefore);
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("two\n");
@@ -919,11 +913,12 @@ describe("checkpoint navigation", () => {
     const firstTurnId = turnIds(firstEvents.session).at(-1)!;
 
     const fork = await pi.sessions.fork({sessionId: source.id, turnId: firstTurnId});
-    const copiedTurnId = turnIds(fork).at(-1);
-    expect(fork.lastCopiedTurnId).toBe(copiedTurnId);
+    const forked = await pi.sessions.get({sessionId: fork.id});
+    const copiedTurnId = turnIds(forked).at(-1);
+    expect(forked.lastCopiedTurnId).toBe(copiedTurnId);
     const undo = await runRejectedSessionCommand({pi, sessionId: fork.id, run: (runtime) => runtime.undoCheckpoint({sessionId: fork.id})});
 
-    expect(undo.cause).toMatchObject({_tag: "CheckpointInheritedError"});
+    expect(undo.cause).toMatchObject({code: "CheckpointInheritedError"});
     await expect(readFile(join(projectPath, "file.txt"), "utf8")).resolves.toBe("one\n");
 
     // The fork's own turn keeps its snapshot, so undoing it still restores files.

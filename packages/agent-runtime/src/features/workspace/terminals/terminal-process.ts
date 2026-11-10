@@ -1,10 +1,12 @@
 import type {Pty, SpawnPty} from "@supernova/agent-runtime/features/workspace/terminals/pty";
 import {userProcessEnv} from "@supernova/agent-runtime/lib/user-process-env";
 
-/** Output kept for clients that attach later. Enough for a few screens of scrollback without holding a build log forever. */
+/** A few screens of scrollback, not a whole build log. */
 const HISTORY_LIMIT_CHARS = 256 * 1024;
+/** Slack, because a trim resends the whole buffer. */
+const HISTORY_TRIMMED_CHARS = 192 * 1024;
 const KILL_GRACE_MS = 1_000;
-/** A busy PTY delivers hundreds of reads per second; each published alone is a revision, a frame, and a redraw. */
+/** A busy PTY delivers hundreds of reads per second. */
 const OUTPUT_COALESCE_MS = 8;
 const OUTPUT_COALESCE_CHARS = 32 * 1024;
 
@@ -51,7 +53,7 @@ export class TerminalProcess {
       },
       onExit: (exitCode) => {
         if (process.exitCode !== undefined) return;
-        // The last output must land before the exit code, or the client draws the exit notice above it.
+        // Else the client draws the exit notice above the last output.
         flush();
         process.exitCode = exitCode;
         process.resolveExit();
@@ -91,5 +93,5 @@ export class TerminalProcess {
 }
 
 export function overflow(output: string): number {
-  return Math.max(0, output.length - HISTORY_LIMIT_CHARS);
+  return output.length > HISTORY_LIMIT_CHARS ? output.length - HISTORY_TRIMMED_CHARS : 0;
 }

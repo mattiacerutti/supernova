@@ -1,3 +1,4 @@
+import {compile} from "@earendil-works/pi-schema";
 import {estimateTokens} from "@earendil-works/pi-coding-agent";
 import type {AssistantMessage, Message, Usage} from "@earendil-works/pi-ai";
 import type {EntryRecord} from "@earendil-works/pi-durable";
@@ -37,7 +38,7 @@ describe("session entries", () => {
       "3": {contentParts: [], capture: false, before: {checkpointId: "undone", sessionId: "s", status: "disabled"}},
     };
     const session = buildSession({
-      record: {id: "s", projectPath: "/project", pinned: false, createdAt: new Date(0).toISOString(), updatedAt: new Date(0).toISOString()},
+      record: {id: "s", updatedAt: new Date(0).toISOString()},
       history: [authored, continuation],
       undone: [undone],
       agent: undefined,
@@ -56,9 +57,8 @@ describe("session entries", () => {
     expect(session.entries.items[0]).not.toHaveProperty("before");
     expect(authored).not.toHaveProperty("contentParts");
     expect(undone).not.toHaveProperty("contentParts");
-    expect(session.title).toBe("Untitled session");
-    expect(Session.parse(session)).toEqual(session);
-    expect(Session.safeParse({...session, entries: {...session.entries, items: [{...authored, contentParts: [{type: "text", text: 1}]}]}}).success).toBe(false);
+    expect(session).not.toHaveProperty("title");
+    expect(compile(Session).errors(session)).toEqual([]);
   });
 });
 
@@ -72,7 +72,7 @@ describe("session activity", () => {
   const history = [entry(1, "pi.user", 1_000), entry(2, "pi.assistant", 2_000), entry(3, "pi.user", 3_000), entry(4, "pi.assistant", 4_000)];
   const session = (runStart: number | undefined) =>
     buildSession({
-      record: {id: "s", projectPath: "/project", pinned: false, createdAt: new Date(0).toISOString(), updatedAt: new Date(0).toISOString()},
+      record: {id: "s", updatedAt: new Date(0).toISOString()},
       history,
       undone: [],
       agent: undefined,
@@ -96,7 +96,6 @@ describe("history pages", () => {
   const record = (): TurnRecord => ({contentParts: [], capture: false, before: {checkpointId: "c", sessionId: "s", status: "disabled"}});
   const entry = (id: number, kind: string, text = ""): EntryRecord =>
     ({id, conversationId: 1, kind, model: [{role: kind === "pi.user" ? "user" : "assistant", content: text, timestamp: id}]}) as unknown as EntryRecord;
-  /** A history of `count` turns: a user entry with a turn record and an answer each, after a leading compaction. */
   const history = (count: number, answer = "") => {
     const entries = [entry(1, "pi.compaction")];
     const turns: Record<string, TurnRecord> = {};

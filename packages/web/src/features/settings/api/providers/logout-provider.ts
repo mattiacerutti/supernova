@@ -1,7 +1,7 @@
+import {BACKGROUND_CONTEXT as context} from "@earendil-works/chord/context";
 import {useMutation, useQueryClient} from "@tanstack/react-query";
 import {settingsKeys} from "@/features/settings/api/query-keys";
-import {unwrap} from "@/runtime/runtime-result";
-import {useRuntime} from "@/runtime/use-runtime";
+import {useRuntime} from "@/runtime/hooks/use-runtime";
 
 interface LogoutProviderInput {
   readonly providerId: string;
@@ -12,7 +12,7 @@ export function useLogoutProvider() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (input: LogoutProviderInput) => unwrap(runtime.providers.logout(input)),
+    mutationFn: (input: LogoutProviderInput) => runtime.providers.logout(input, context),
     onSuccess: async () => {
       await queryClient.invalidateQueries({queryKey: settingsKeys.providers()});
     },

@@ -1,6 +1,6 @@
 # Pi compatibility
 
-Supernova uses **Pi 1.1.0** as its coding engine, with its own interface and configuration directories. This page describes compatibility; for usage, formats, and configuration rules, see [Pi's documentation](https://pi.dev/docs).
+Supernova uses **Pi 1.5.0** (built from Pi's `main` branch at commit `1bc7076b2`) as its coding engine, with its own interface and configuration directories. This page describes compatibility; for usage, formats, and configuration rules, see [Pi's documentation](https://pi.dev/docs).
 
 ## Feature compatibility
 

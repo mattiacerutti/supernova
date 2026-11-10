@@ -3,7 +3,8 @@ import {existsSync} from "node:fs";
 import {mkdir, readdir, readFile, rename, rm} from "node:fs/promises";
 import {join} from "node:path";
 import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
-import type {Models, ModelThinkingLevel} from "@earendil-works/pi-ai";
+import type {ModelThinkingLevel} from "@earendil-works/pi-ai";
+import {createModels} from "@earendil-works/pi-ai/models";
 import type {ConversationId, EntryId} from "@earendil-works/pi-durable";
 import {configure, createRegistry, Harness, ROOT_CONVERSATION_ID} from "@earendil-works/pi-durable";
 import {openNodeSqliteStorage} from "@earendil-works/pi-durable/storage/sqlite/node";
@@ -27,7 +28,8 @@ function uncapturedTurn(sessionId: string, contentParts: readonly TurnRecord["co
 }
 
 async function writeSessionFile(path: string, session: LegacySession): Promise<void> {
-  const harness = await Harness.open(await openNodeSqliteStorage(path), {models: {} as Models, registry: createRegistry()}, context);
+  // Writing entries calls no model; the Harness still wraps the registry it is given.
+  const harness = await Harness.open(await openNodeSqliteStorage(path), {models: createModels(), registry: createRegistry()}, context);
   try {
     await harness.root(context, {agent: {cwd: session.cwd}});
     await harness.commit(async (tx) => {
@@ -49,7 +51,7 @@ async function writeSessionFile(path: string, session: LegacySession): Promise<v
   }
 }
 
-/** The catalog record is written last, so a session file without one is a crashed import and is written again. */
+/** The record is written last: a file without one is a crashed import. */
 async function importSession(input: {readonly root: string; readonly catalog: SessionCatalog; readonly path: string}): Promise<void> {
   const session = readLegacySession(await readFile(input.path, "utf8"));
   if (!session) throw new Error("Not a Pi session file.");
@@ -67,12 +69,12 @@ async function importSession(input: {readonly root: string; readonly catalog: Se
   input.catalog.insert(session.record);
 }
 
-/** A folder moves only after all its sessions were tried, so a crash resumes. Nothing deletes an old file. */
+/** A folder moves only after all its sessions were tried, so a crash resumes. */
 export async function importLegacySessions(input: {readonly root: string; readonly catalog: SessionCatalog; readonly report: (message: string) => void}): Promise<void> {
   const {root} = input;
   if (!existsSync(root)) return;
   const projects = (await readdir(root, {withFileTypes: true})).filter(
-    // Session ids are client-chosen, so a session's own folder could match the pattern; the catalog tells them apart.
+    // Session ids are client-chosen, so a session's own folder could match the pattern.
     (entry) => entry.isDirectory() && isLegacyProjectDir(entry.name) && !input.catalog.find(entry.name)
   );
   if (projects.length === 0) return;
@@ -87,7 +89,7 @@ export async function importLegacySessions(input: {readonly root: string; readon
       );
     }
     const target = join(root, LEGACY_DIR, project.name);
-    // An old Supernova run after this import can write the folder again; its later import moves it beside the first.
+    // An older Supernova may write the folder again after this import.
     await rename(projectDir, existsSync(target) ? `${target}-${randomUUID()}` : target);
   }
 }

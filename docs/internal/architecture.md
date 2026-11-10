@@ -7,12 +7,12 @@ Supernova uses Pi's durable engine (`@earendil-works/pi-durable`) for execution 
 - `apps/server` is the authority for native capabilities: Pi runtime composition, workspace filesystem access, subprocesses, shell/Git, credentials, sessions, and API/WebSocket routing. It never hosts or bundles the UI.
 - `packages/agent-runtime` provides the Node-only runtime: feature modules over the Pi SDK, composed once by the server. Keep UI and server routing outside this package. See [Agent runtime](agent-runtime.md).
 - `packages/web` is an independently hosted React/Vite client. It communicates through server APIs and cannot assume browser-local filesystem or native access. See [Web](web.md).
-- `packages/contracts` defines shared Zod schemas, the Chord remote contracts, and serializable domain types. It owns no runtime resources and remains environment-neutral. See [Contracts](contracts.md).
+- `packages/contracts` defines shared schemas, the Chord remote contracts, and serializable domain types. It owns no runtime resources and remains environment-neutral. See [Contracts](contracts.md).
 - `apps/desktop` owns the Electron shell, bundled renderer asset loading, and OS integration. It starts a local API child rather than owning Pi runtime logic.
 
 Bun manages packages and scripts; Turborepo coordinates workspace tasks. The server runs on Node.
 
-Clients talk to the runtime through Chord (`@earendil-works/chord`) over WebSocket. Feature contracts expose commands and reads as methods, and changing state as subscriptions that start with a snapshot and continue with deltas. Keep this remote boundary separate from feature ownership: subscriptions observe work but do not own its lifetime. See [Contracts](contracts.md) for contract conventions and [Agent runtime](agent-runtime.md) for state ownership.
+Clients talk to the runtime through Chord (`@earendil-works/chord`) over WebSocket. Feature contracts expose commands and reads as methods, and changing state as documents that start with a snapshot and continue with deltas. Keep this remote boundary separate from feature ownership: holding a document observes work but does not own its lifetime. The server is one Chord host; each session runs in its own in-process host, reached through the server's route, so a browser holding a session's `ChatService` talks to that session's host. See [Contracts](contracts.md) for contract conventions and [Agent runtime](agent-runtime.md) for state ownership.
 
 The socket has no authentication: every client acts as the owner, so the server must only be reachable by its owner. Remote-capable does not mean safe to expose publicly or on an untrusted network. Runtime code is plain TypeScript; there is no Effect.
 

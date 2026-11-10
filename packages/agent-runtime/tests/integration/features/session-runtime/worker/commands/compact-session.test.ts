@@ -20,7 +20,7 @@ describe("manual Pi session compaction", () => {
       info.id,
       () => pi.sessionRuntime.compact({modelReference: selectedModelReference, sessionId: info.id}),
       (seen) => {
-        const activities = seen.board.map((value) => value.sessions[info.id]?.activity);
+        const activities = seen.board.map((value) => value.sessions[info.id]?.activity ?? "idle");
         if (activities.at(-1) !== "idle" || !activities.includes("compacting")) throw new Error("Compaction has not settled.");
       }
     );

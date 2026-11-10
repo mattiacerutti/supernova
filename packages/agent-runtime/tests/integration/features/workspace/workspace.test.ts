@@ -92,7 +92,7 @@ describe("workspace git operations", () => {
   });
 
   it("reports a plain folder as not a repository", async () => {
-    await expect(workspace.listFiles({projectPath: plainFolder})).rejects.toMatchObject({_tag: "WorkspaceNotARepositoryError"});
+    await expect(workspace.listFiles({projectPath: plainFolder})).rejects.toMatchObject({code: "WorkspaceNotARepositoryError"});
   });
 
   it("lists the files of every discovered repository, without ignored ones or deeper repositories", async () => {
@@ -136,6 +136,6 @@ describe("workspace git operations", () => {
   ])("$name", async ({expected, path}) => {
     const result = workspace.readFile({path, projectPath: repo});
     if ("content" in expected) await expect(result).resolves.toEqual(expected);
-    else await expect(result).rejects.toMatchObject({_tag: expected.tag});
+    else await expect(result).rejects.toMatchObject({code: expected.tag});
   });
 });

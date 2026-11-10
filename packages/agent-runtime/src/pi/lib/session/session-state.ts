@@ -31,7 +31,7 @@ export interface TurnRecord {
 
 export type SessionState = {
   branch: number;
-  /** Last shown entry of the branch: absent when at its end, null when nothing is shown. The next send forks here. */
+  /** The last shown entry: absent at the branch's end, null when nothing is shown. */
   leaf?: number | null;
   current?: CheckpointRef;
   turns: Record<string, TurnRecord>;
@@ -43,6 +43,8 @@ export const SessionStateDoc = defineDoc<SessionState & JsonObject>({
   version: 1,
   scope: "session",
   initial: () => ({branch: 1, turns: {}}),
+  // Bounds replay without rewriting every turn record on each change.
+  checkpointWhen: (_value, _ops, {deltasSinceBase}) => deltasSinceBase >= 64,
 });
 
 export interface TurnPosition {

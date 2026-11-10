@@ -1,11 +1,11 @@
-import {z} from "zod";
+import {obj, type Static, str} from "@earendil-works/chord";
 import {TaggedError} from "@supernova/contracts/lib/errors";
 
-export const RenameSessionPayload = z.object({
-  sessionId: z.string(),
-  title: z.string(),
+export const RenameSessionPayload = obj({
+  sessionId: str(),
+  title: str(),
 });
 
 export class RenameSessionError extends TaggedError("RenameSessionError") {}
 
-export type RenameSessionPayload = z.infer<typeof RenameSessionPayload>;
+export type RenameSessionPayload = Static<typeof RenameSessionPayload>;

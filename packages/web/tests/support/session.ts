@@ -1,3 +1,4 @@
+import type {ListedSession} from "@supernova/contracts/services/sessions/services";
 import type {
   AssistantMessage,
   CompactionStatus,
@@ -14,14 +15,12 @@ import type {
 
 // Typed by the contracts and Pi: a change to what the server sends stops these compiling, not passing on a stale shape.
 
-/** Pi brands its ids; this and the task-id casts below are the only casts in the builders. */
 export function entryId(id: number): EntryRecord["id"] {
   return id as EntryRecord["id"];
 }
 
 const CONVERSATION = 1 as EntryRecord["conversationId"];
 
-/** pi-durable's `UserEntry.kind` and so on; the client does not depend on the engine, so it matches the strings. */
 const KIND = {user: "pi.user", assistant: "pi.assistant", toolResult: "pi.tool-result", compaction: "pi.compaction"} as const;
 
 const SUMMARY_PREFIX = "The conversation history before this point was compacted into the following summary:\n\n<summary>\n";
@@ -46,7 +45,6 @@ export function toolCall(id: string, name: string, args: ToolCall["arguments"] =
   return {arguments: args, id, name, type: "toolCall"};
 }
 
-/** `authored: false` is an extension's continuation, which belongs to the turn before it. */
 export function userEntry(
   input: string | {readonly parts?: readonly UserMessageContentPart[]; readonly content?: PiUserMessage["content"]; readonly authored?: boolean}
 ): EntryDraft {
@@ -134,23 +132,18 @@ export function runningLive(options: {readonly partial?: LivePartial["content"];
     usage: ZERO_USAGE,
   };
   return {
-    run: {inputs: [], taskId: 1 as RunTaskId},
+    run: {inputs: [], taskId: 1 as RunTaskId, turns: 0},
     ...(message === undefined ? {} : {generation: {attempt: 0, message}}),
-    ...(options.compacting ? {compactions: [{attempt: 1, blocking: true, reason: "threshold", taskId: 2 as CompactionTaskId}]} : {}),
+    ...(options.compacting ? {compactions: [{attempt: 1, blocking: true, trigger: "threshold", taskId: 2 as CompactionTaskId}]} : {}),
   };
 }
 
-/** Both pages complete; the undone page follows the last visible entry, as the server's does. */
 export function sessionDocument(
   input: Partial<Omit<Session, "entries" | "undone">> & {readonly entries?: readonly SessionEntry[]; readonly undone?: readonly SessionEntry[]} = {}
 ): Session {
   const {entries = [], undone = [], ...rest} = input;
   return {
     id: "session-1",
-    title: "Session",
-    forked: false,
-    pinned: false,
-    projectPath: "/workspace",
     updatedAt: new Date(Date.UTC(2026, 0, 1)).toISOString(),
     agent: {},
     live: {},
@@ -163,5 +156,9 @@ export function sessionDocument(
 }
 
 export function page(items: readonly SessionEntry[], precedingEntryId: number | null = null, remaining = 0): SessionEntries {
-  return {items, remaining, precedingEntryId: precedingEntryId === null ? null : entryId(precedingEntryId)};
+  return {items: [...items], remaining, precedingEntryId: precedingEntryId === null ? null : entryId(precedingEntryId)};
+}
+
+export function sessionRecord(input: Partial<ListedSession> = {}): ListedSession {
+  return {id: "session-1", title: "Session", forked: false, pinned: false, projectPath: "/workspace", updatedAt: new Date(Date.UTC(2026, 0, 1)).toISOString(), ...input};
 }

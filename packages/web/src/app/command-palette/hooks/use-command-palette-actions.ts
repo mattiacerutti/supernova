@@ -10,8 +10,7 @@ export type CommandPalettePageId = "new-session" | "open-project" | "open-sessio
 
 function useOpenSessionProject(projects: readonly Project[]): Project | undefined {
   const sessionId = useParams({select: (params) => params.sessionId, strict: false});
-  // The runtime's directory names every open session's project; the session page already follows the open one.
-  const projectPath = useSessionsStore((state) => (sessionId === undefined ? undefined : state.entries[sessionId]?.projectPath));
+  const projectPath = useSessionsStore((state) => (sessionId === undefined ? undefined : state.records[sessionId]?.projectPath));
 
   return projectPath === undefined ? undefined : projects.find((project) => project.path === projectPath);
 }
@@ -20,7 +19,7 @@ export function useOpenSessionWorkspacePath(): string | undefined {
   const sessionId = useParams({select: (params) => params.sessionId, strict: false});
 
   return useSessionsStore((state) => {
-    const session = sessionId === undefined ? undefined : state.documents[sessionId];
+    const session = sessionId === undefined ? undefined : state.records[sessionId];
     return session && (session.worktree?.path ?? session.projectPath);
   });
 }
@@ -32,7 +31,7 @@ export function useCommandPaletteActions(): readonly CommandPaletteAction[] {
   const workspacePath = useOpenSessionWorkspacePath();
   const actions: CommandPaletteAction[] = [];
 
-  // Inside a session, a new one starts in the same project; elsewhere there is no project to assume, so it is picked.
+  // Outside a session there is no project to assume.
   if (openSessionProject) {
     actions.push({
       detail: openSessionProject.name,
@@ -57,7 +56,7 @@ export function useCommandPaletteActions(): readonly CommandPaletteAction[] {
     });
   }
 
-  // Desktop only: the path is on the server, which is this machine only when the desktop app runs its own API.
+  // The path is on the server, which is this machine only in the desktop app.
   if (window.desktopApi && workspacePath !== undefined) {
     actions.push({
       icon: "code",

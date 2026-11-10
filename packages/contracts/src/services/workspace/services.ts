@@ -1,72 +1,89 @@
-import type {MembersOf} from "@earendil-works/chord";
-import {method, remote} from "@earendil-works/chord";
-import {Type} from "typebox";
-import {json, result, SERVER_WIDE} from "@supernova/contracts/lib/protocol";
+import type {Reference} from "@earendil-works/chord";
+import {method, nul, remote, str} from "@earendil-works/chord";
+import type {Errors} from "@supernova/contracts/lib/errors";
+import {json, serverHost} from "@supernova/contracts/lib/protocol";
 import type {
+  TerminalOpenResult,
+  WorkspaceBranchesListResult,
+  WorkspaceChangesGetResult,
+  WorkspaceDiffContentsGetResult,
+  WorkspaceFileReadResult,
+  WorkspaceFilesListResult,
+  WorkspaceRepositoriesListResult,
+} from "@supernova/contracts/services/workspace/procedures";
+import {
   TerminalClosePayload,
   TerminalOpenPayload,
-  TerminalOpenResult,
   TerminalResizePayload,
   TerminalWritePayload,
   WorkspaceBranchesListPayload,
-  WorkspaceBranchesListResult,
   WorkspaceChangesGetPayload,
-  WorkspaceChangesGetResult,
   WorkspaceDiffContentsGetPayload,
-  WorkspaceDiffContentsGetResult,
   WorkspaceFileReadPayload,
-  WorkspaceFileReadResult,
   WorkspaceFilesListPayload,
-  WorkspaceFilesListResult,
   WorkspaceRepositoriesListPayload,
-  WorkspaceRepositoriesListResult,
 } from "@supernova/contracts/services/workspace/procedures";
-import type {Terminal, TerminalError, TerminalNotFoundError, TerminalOutput, WorkspaceFileError, WorkspaceGitError} from "@supernova/contracts/services/workspace/schemas";
+import type {Terminal, TerminalOutput} from "@supernova/contracts/services/workspace/schemas";
+import {TerminalError, TerminalNotFoundError, WorkspaceFileError, WorkspaceGitError} from "@supernova/contracts/services/workspace/schemas";
 
 export interface TerminalsState {
   readonly terminals: Readonly<Record<string, Terminal>>;
 }
 
 export const WorkspaceService = remote("supernova.workspace", {
-  version: 1,
-  input: SERVER_WIDE,
+  version: 3,
+  params: {},
+  hostAddress: serverHost,
   variants: {
-    default: {
+    owner: {
       state: {
         terminals: json<TerminalsState>(),
       },
       methods: {
-        openTerminal: method(json<TerminalOpenPayload>(), result<TerminalOpenResult, TerminalError>()),
-        closeTerminal: method(json<TerminalClosePayload>(), result<null>()),
-        listBranches: method(json<WorkspaceBranchesListPayload>(), result<WorkspaceBranchesListResult, WorkspaceGitError>()),
-        getChanges: method(json<WorkspaceChangesGetPayload>(), result<WorkspaceChangesGetResult, WorkspaceGitError>()),
-        getDiffContents: method(json<WorkspaceDiffContentsGetPayload>(), result<WorkspaceDiffContentsGetResult, WorkspaceFileError>()),
-        listRepositories: method(json<WorkspaceRepositoriesListPayload>(), result<WorkspaceRepositoriesListResult>()),
-        listFiles: method(json<WorkspaceFilesListPayload>(), result<WorkspaceFilesListResult, WorkspaceGitError>()),
-        readFile: method(json<WorkspaceFileReadPayload>(), result<WorkspaceFileReadResult, WorkspaceFileError>()),
+        openTerminal: method(TerminalOpenPayload, json<TerminalOpenResult>()),
+        closeTerminal: method(TerminalClosePayload, nul()),
+        listBranches: method(WorkspaceBranchesListPayload, json<WorkspaceBranchesListResult>()),
+        getChanges: method(WorkspaceChangesGetPayload, json<WorkspaceChangesGetResult>()),
+        getDiffContents: method(WorkspaceDiffContentsGetPayload, json<WorkspaceDiffContentsGetResult>()),
+        listRepositories: method(WorkspaceRepositoriesListPayload, json<WorkspaceRepositoriesListResult>()),
+        listFiles: method(WorkspaceFilesListPayload, json<WorkspaceFilesListResult>()),
+        readFile: method(WorkspaceFileReadPayload, json<WorkspaceFileReadResult>()),
       },
     },
   },
 });
 
-export type WorkspaceService = MembersOf<typeof WorkspaceService>;
+export const WorkspaceErrors = {
+  openTerminal: TerminalError,
+  listBranches: WorkspaceGitError,
+  getChanges: WorkspaceGitError,
+  getDiffContents: WorkspaceFileError,
+  listFiles: WorkspaceGitError,
+  readFile: WorkspaceFileError,
+} satisfies Errors<typeof WorkspaceService>;
 
-/** Held while a tab shows it; only subscribers receive output. Whoever resizes last sets the shell's size. */
+export type WorkspaceService = Reference<typeof WorkspaceService>;
+
 export const TerminalService = remote("supernova.terminal", {
-  version: 1,
-  input: Type.Object({terminalId: Type.String()}),
+  version: 3,
+  params: {terminalId: str()},
+  hostAddress: serverHost,
   variants: {
-    default: {
+    owner: {
       state: {
         output: json<TerminalOutput>(),
       },
       methods: {
-        /** Sends input to the shell; dropped once it has exited. Fails once the terminal is closed. */
-        write: method(json<Omit<TerminalWritePayload, "id">>(), result<null, TerminalNotFoundError>()),
-        resize: method(json<Omit<TerminalResizePayload, "id">>(), result<null, TerminalNotFoundError>()),
+        write: method(TerminalWritePayload, nul()),
+        resize: method(TerminalResizePayload, nul()),
       },
     },
   },
 });
 
-export type TerminalService = MembersOf<typeof TerminalService>;
+export const TerminalErrors = {
+  write: TerminalNotFoundError,
+  resize: TerminalNotFoundError,
+} satisfies Errors<typeof TerminalService>;
+
+export type TerminalService = Reference<typeof TerminalService>;

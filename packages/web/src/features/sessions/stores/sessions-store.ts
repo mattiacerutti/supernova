@@ -1,6 +1,7 @@
-import type {HistorySide, SessionSetupStep} from "@supernova/contracts/services/session-runtime/procedures";
+import type {HistorySide} from "@supernova/contracts/services/session-runtime/procedures";
+import type {SessionSetupStep} from "@supernova/contracts/services/sessions/procedures";
 import type {Session, SessionEntries, UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
-import type {SessionDirectoryEntry} from "@supernova/contracts/services/sessions/services";
+import type {ListedSession, SessionStatusEntry} from "@supernova/contracts/services/sessions/services";
 import {create} from "zustand";
 
 export interface PendingMessage {
@@ -11,7 +12,6 @@ export interface PendingMessage {
 
 export interface SessionOptimism {
   readonly message?: PendingMessage;
-  /** Turns through `lastTurnId` shown, the rest undone; `null` shows none. */
   readonly navigation?: {readonly lastTurnId: string | null};
   readonly stopping?: boolean;
   readonly compacting?: boolean;
@@ -23,13 +23,14 @@ export interface SessionOptimism {
 }
 
 interface SessionsStoreState {
-  readonly entries: Readonly<Record<string, SessionDirectoryEntry>>;
+  readonly statuses: Readonly<Record<string, SessionStatusEntry>>;
   readonly documents: Readonly<Record<string, Session>>;
+  readonly records: Readonly<Record<string, ListedSession>>;
   readonly loadErrors: Readonly<Record<string, string>>;
   readonly optimism: Readonly<Record<string, SessionOptimism>>;
-  readonly setEntries: (entries: Readonly<Record<string, SessionDirectoryEntry>>) => void;
+  readonly setStatuses: (statuses: Readonly<Record<string, SessionStatusEntry>>) => void;
   readonly setDocument: (session: Session) => void;
-  /** A page whose edge the document no longer has is dropped. */
+  readonly setRecord: (record: ListedSession) => void;
   readonly addHistoryPage: (sessionId: string, side: HistorySide, edge: number, page: SessionEntries) => void;
   readonly setLoadError: (sessionId: string, message: string) => void;
   readonly patchOptimism: (sessionId: string, change: SessionOptimism) => void;
@@ -50,10 +51,6 @@ function reuseEntries(known: SessionEntries, next: SessionEntries): SessionEntri
     : next;
 }
 
-/**
- * Navigation only moves the leaf, so entries this client has stay part of the branch and are kept around the new
- * window. A window with nothing outside it replaces everything.
- */
 function withKnownBranch(known: Session | undefined, next: Session): Session {
   if (!known) return next;
   const branch = [...known.entries.items, ...known.undone.items];
@@ -71,13 +68,15 @@ function withKnownBranch(known: Session | undefined, next: Session): Session {
 }
 
 export const useSessionsStore = create<SessionsStoreState>()((set) => ({
-  entries: {},
+  statuses: {},
   documents: {},
+  records: {},
   loadErrors: {},
   optimism: {},
-  setEntries: (entries) => set({entries}),
+  setStatuses: (statuses) => set({statuses}),
   setDocument: (session) =>
     set((state) => ({documents: {...state.documents, [session.id]: withKnownBranch(state.documents[session.id], session)}, loadErrors: without(state.loadErrors, session.id)})),
+  setRecord: (record) => set((state) => (JSON.stringify(state.records[record.id]) === JSON.stringify(record) ? state : {records: {...state.records, [record.id]: record}})),
   addHistoryPage: (sessionId, side, edge, page) =>
     set((state) => {
       const session = state.documents[sessionId];
@@ -91,5 +90,10 @@ export const useSessionsStore = create<SessionsStoreState>()((set) => ({
   setLoadError: (sessionId, message) => set((state) => ({loadErrors: {...state.loadErrors, [sessionId]: message}})),
   patchOptimism: (sessionId, change) => set((state) => ({optimism: {...state.optimism, [sessionId]: {...state.optimism[sessionId], ...change}}})),
   forget: (sessionId) =>
-    set((state) => ({documents: without(state.documents, sessionId), loadErrors: without(state.loadErrors, sessionId), optimism: without(state.optimism, sessionId)})),
+    set((state) => ({
+      documents: without(state.documents, sessionId),
+      records: without(state.records, sessionId),
+      loadErrors: without(state.loadErrors, sessionId),
+      optimism: without(state.optimism, sessionId),
+    })),
 }));

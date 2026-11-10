@@ -1,13 +1,13 @@
-import {z} from "zod";
+import {arr, obj, type Static, str} from "@earendil-works/chord";
 
-export const WorkspaceRepositoriesListPayload = z.object({
-  projectPath: z.string(),
+export const WorkspaceRepositoriesListPayload = obj({
+  projectPath: str(),
 });
 
-/** Root and immediate children only, sorted; `"."` is the project. Mirrors checkpoint discovery. */
-export const WorkspaceRepositoriesListResult = z.object({
-  repositories: z.array(z.string()),
+/** `"."` is the project. */
+export const WorkspaceRepositoriesListResult = obj({
+  repositories: arr(str()),
 });
 
-export type WorkspaceRepositoriesListPayload = z.infer<typeof WorkspaceRepositoriesListPayload>;
-export type WorkspaceRepositoriesListResult = z.infer<typeof WorkspaceRepositoriesListResult>;
+export type WorkspaceRepositoriesListPayload = Static<typeof WorkspaceRepositoriesListPayload>;
+export type WorkspaceRepositoriesListResult = Static<typeof WorkspaceRepositoriesListResult>;

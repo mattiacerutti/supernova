@@ -57,14 +57,12 @@ function runCheckpoint<A>(storageRoot: string, run: (store: FileCheckpointStore)
 
 const CONCURRENCY_FIXTURE_FILES = 40;
 
-/** Writes enough tracked content that a restore holds the worktree for a measurable window. */
 async function writeConcurrencyFixture(repo: string, marker: string): Promise<void> {
   await Promise.all(
     Array.from({length: CONCURRENCY_FIXTURE_FILES}, (_unused, index) => writeFile(join(repo, `concurrent-${index}.txt`), `${marker}\n${`${marker} line ${index}\n`.repeat(512)}`))
   );
 }
 
-/** Returns the tree recorded for the project root repository in a checkpoint manifest. */
 async function rootTreeId(storageRoot: string, projectRoot: string, checkpointId: string): Promise<string> {
   const manifestPath = join(storageRoot, "projects", hash(await realpath(projectRoot)), "manifests", hash(sessionId), `${hash(checkpointId)}.json`);
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
@@ -158,7 +156,7 @@ describe("checkpoint store", () => {
     await writeFile(join(repo, "tracked.txt"), "manual\n");
 
     await expect(restore(storageRoot, repo, "after", "before")).rejects.toMatchObject({
-      _tag: "CheckpointConflictError",
+      code: "CheckpointConflictError",
       message: "Restoring this checkpoint would discard changes made after it.",
     });
     await expect(readFile(join(repo, "tracked.txt"), "utf8")).resolves.toBe("manual\n");

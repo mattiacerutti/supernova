@@ -1,6 +1,6 @@
+import {BACKGROUND_CONTEXT as context} from "@earendil-works/chord/context";
 import {useMutation} from "@tanstack/react-query";
-import {unwrap} from "@/runtime/runtime-result";
-import {useRuntime} from "@/runtime/use-runtime";
+import {useRuntime} from "@/runtime/hooks/use-runtime";
 
 interface SubmitProviderLoginInputInput {
   readonly input: string;
@@ -10,6 +10,6 @@ interface SubmitProviderLoginInputInput {
 export function useSubmitProviderLoginInput() {
   const runtime = useRuntime();
   return useMutation({
-    mutationFn: (input: SubmitProviderLoginInputInput) => unwrap(runtime.providers.submitLoginInput(input)),
+    mutationFn: (input: SubmitProviderLoginInputInput) => runtime.providers.submitLoginInput(input, context),
   });
 }

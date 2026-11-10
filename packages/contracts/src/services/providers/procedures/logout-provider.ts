@@ -1,12 +1,12 @@
-import {z} from "zod";
+import {obj, type Static, str} from "@earendil-works/chord";
 
-export const ProviderLogoutPayload = z.object({
-  providerId: z.string(),
+export const ProviderLogoutPayload = obj({
+  providerId: str(),
 });
 
-export const ProviderLogoutResult = z.object({
-  providerId: z.string(),
+export const ProviderLogoutResult = obj({
+  providerId: str(),
 });
 
-export type ProviderLogoutPayload = z.infer<typeof ProviderLogoutPayload>;
-export type ProviderLogoutResult = z.infer<typeof ProviderLogoutResult>;
+export type ProviderLogoutPayload = Static<typeof ProviderLogoutPayload>;
+export type ProviderLogoutResult = Static<typeof ProviderLogoutResult>;

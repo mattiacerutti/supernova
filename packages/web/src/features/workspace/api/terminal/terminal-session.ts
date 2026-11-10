@@ -1,10 +1,12 @@
-import type {Readable} from "@earendil-works/chord";
+import {BACKGROUND_CONTEXT as context} from "@earendil-works/chord/context";
+import {useWatch} from "@earendil-works/chord/react";
 import type {Terminal, TerminalOutput} from "@supernova/contracts/services/workspace/schemas";
 import type {TerminalsState} from "@supernova/contracts/services/workspace/services";
-import {useSyncExternalStore} from "react";
-import {unwrap} from "@/runtime/runtime-result";
-import type {RuntimeClient} from "@/runtime/transport/runtime-client";
-import {useRuntime} from "@/runtime/use-runtime";
+import type {RuntimeClient} from "@/runtime/client";
+import {TerminalService} from "@supernova/contracts/services/workspace/services";
+import type {OwnerOf} from "@/runtime/references";
+import {asOwner, follow as followValue, whenLive} from "@/runtime/references";
+import {useRuntime} from "@/runtime/hooks/use-runtime";
 
 interface AttachTerminalInput {
   readonly cols: number;
@@ -30,7 +32,6 @@ interface TerminalSession {
   readonly detach: () => void;
 }
 
-/** `dropped` gives the absolute position: append what follows what was drawn, or redraw if the cap passed it. */
 function follow(onChange: (change: TerminalChange) => void): (output: TerminalOutput | undefined) => void {
   let drawnTo: number | undefined;
   let exited = false;
@@ -58,29 +59,28 @@ function attachTerminal(runtime: RuntimeClient, input: AttachTerminalInput): Ter
   const {id, onChange} = input;
   let detached = false;
   let size = {cols: input.cols, rows: input.rows};
-  let hold: ReturnType<RuntimeClient["holdTerminal"]> | undefined;
+  let hold: OwnerOf<typeof TerminalService> | undefined;
   const cleanups: Array<() => void> = [];
   const emit = (change: TerminalChange): void => {
     if (!detached) onChange(change);
   };
 
   const holdOutput = (): void => {
-    const held = runtime.holdTerminal(id);
+    const held: OwnerOf<typeof TerminalService> = asOwner(runtime.host.hold(TerminalService, {terminalId: id}, context));
     hold = held;
-    cleanups.push(held.onGone(() => emit({type: "terminal.closed"})));
-    held.ready.then(
+    cleanups.push(followValue(held.state, (state) => state.kind === "ended" && emit({type: "terminal.closed"})));
+    whenLive(held).then(
       () => {
         if (detached) return;
-        cleanups.push(held.service.output.subscribe(follow(emit)));
-        void held.service.resize(size).catch(() => undefined);
+        cleanups.push(followValue(held.output, follow(emit)));
+        void held.resize(size, context).catch(() => undefined);
       },
-      // An unknown terminal fails the hold: closed while this client was away.
       () => emit({type: "terminal.closed"})
     );
   };
 
   if (input.start) {
-    void unwrap(runtime.workspace.openTerminal({cols: input.cols, cwd: input.cwd, id, rows: input.rows, sessionId: input.sessionId})).then(
+    void runtime.workspace.openTerminal({cols: input.cols, cwd: input.cwd, id, rows: input.rows, sessionId: input.sessionId}, context).then(
       (terminal) => {
         if (detached) return;
         input.onStarted?.(terminal);
@@ -100,9 +100,9 @@ function attachTerminal(runtime: RuntimeClient, input: AttachTerminalInput): Ter
     },
     resize: (cols, rows) => {
       size = {cols, rows};
-      void hold?.service.resize({cols, rows}).catch(() => undefined);
+      void hold?.resize({cols, rows}, context).catch(() => undefined);
     },
-    write: (data) => void hold?.service.write({data}).catch(() => undefined),
+    write: (data) => void hold?.write({data}, context).catch(() => undefined),
   };
 }
 
@@ -113,21 +113,9 @@ export function useAttachTerminal(): (input: AttachTerminalInput) => TerminalSes
 
 export function useCloseTerminal(): (id: string) => void {
   const runtime = useRuntime();
-  return (id) => void runtime.workspace.closeTerminal({id}).catch(() => undefined);
-}
-
-/** One subscribe function per readable, so `useSyncExternalStore` keeps its subscription across renders. */
-const subscribers = new WeakMap<Readable<unknown>, (onChange: () => void) => () => void>();
-function subscriberOf(readable: Readable<unknown>): (onChange: () => void) => () => void {
-  let subscribe = subscribers.get(readable);
-  if (!subscribe) {
-    subscribe = (onChange) => readable.subscribe(onChange);
-    subscribers.set(readable, subscribe);
-  }
-  return subscribe;
+  return (id) => void runtime.workspace.closeTerminal({id}, context).catch(() => undefined);
 }
 
 export function useServerTerminals(): TerminalsState | undefined {
-  const {terminals} = useRuntime().workspace;
-  return useSyncExternalStore(subscriberOf(terminals), () => terminals.value);
+  return useWatch(useRuntime().workspace.terminals);
 }

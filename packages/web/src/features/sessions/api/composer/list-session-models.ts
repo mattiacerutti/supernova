@@ -1,8 +1,8 @@
+import {BACKGROUND_CONTEXT as context} from "@earendil-works/chord/context";
 import {queryOptions, useQuery, useQueryClient} from "@tanstack/react-query";
 import {showToast} from "@/lib/toast";
 import {sessionKeys} from "@/features/sessions/api/query-keys";
-import {unwrap} from "@/runtime/runtime-result";
-import {useRuntime} from "@/runtime/use-runtime";
+import {useRuntime} from "@/runtime/hooks/use-runtime";
 
 export function useSessionModels(projectPath: string) {
   const runtime = useRuntime();
@@ -12,7 +12,7 @@ export function useSessionModels(projectPath: string) {
   return useQuery(
     queryOptions({
       queryFn: () =>
-        unwrap(runtime.sessions.listModels({projectPath})).catch((error: unknown) => {
+        runtime.sessions.listModels({projectPath}, context).catch((error: unknown) => {
           showToast("Unable to load models", "Check your settings and extensions, then retry.", {
             id: `models-load-error:${projectPath}`,
             actionProps: {children: "Retry", onClick: () => void queryClient.invalidateQueries({queryKey})},

@@ -1,5 +1,5 @@
 import type {ModelRuntime} from "@earendil-works/pi-coding-agent";
-import type {SessionNotice} from "@supernova/contracts/services/session-runtime/procedures";
+import type {SessionNotice} from "@supernova/contracts/services/sessions/procedures";
 import {bridgeExtensions} from "@supernova/agent-runtime/pi/extensions/legacy/extension-bridge";
 import type {SessionExtension} from "@supernova/agent-runtime/pi/lib/tools/coding-tools";
 import type {ProjectResources} from "@supernova/agent-runtime/pi/resource-cache";

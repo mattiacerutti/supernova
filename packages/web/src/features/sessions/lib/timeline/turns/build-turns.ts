@@ -20,10 +20,6 @@ const historyCache = new WeakMap<readonly SessionEntry[], {runStart: number | un
 // Keyed by the first settled entry, which keeps its identity while a run appends entries after it.
 const settledCache = new WeakMap<SessionEntry, {settled: readonly SessionEntry[]; turns: SessionTurn[]}>();
 
-/**
- * Each entry a run commits replaces the entries array, but the history before the run keeps its entries, so its turns
- * are reused; rebuilding them would walk the whole loaded transcript and re-render every row on each tool result.
- */
 function settledTurns(settled: readonly SessionEntry[]): SessionTurn[] {
   const first = settled[0];
   if (!first) return buildTurns({entries: settled});
@@ -139,9 +135,8 @@ function addLive(draft: TurnDraft, live: LiveState): void {
   for (const slot of live.tools ?? []) {
     if (slot.status === "running" && slot.output !== undefined) draft.addToolOutput(slot.callId, slot.output);
   }
-  // Background compactions never block the answer; only blocking ones and a manual one show.
   for (const compaction of live.compactions ?? []) {
-    if (compaction.blocking || compaction.reason === "manual") draft.addCompaction(new Date().toISOString(), undefined);
+    if (compaction.blocking || compaction.trigger === "manual") draft.addCompaction(new Date().toISOString(), undefined);
   }
   const partial = live.generation?.message as AssistantMessage | undefined;
   if (partial) draft.addAssistant(partial, true);
@@ -152,7 +147,6 @@ interface BuildTurnsInput {
   readonly live?: LiveState;
 }
 
-/** A user entry without authored content (an extension's continuation) folds into the current turn. */
 export function buildTurns(input: BuildTurnsInput): SessionTurn[] {
   const {entries, live} = input;
   const result: SessionTurn[] = [];
