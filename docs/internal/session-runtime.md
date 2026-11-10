@@ -2,7 +2,7 @@
 
 ## Design and goals
 
-Pi's durable engine owns execution and persisted session state. Supernova adds turn records, workspace checkpoints, project/session metadata, and product recovery policy. The browser receives the server's session document and builds the timeline; it does not maintain a competing execution model.
+Pi's durable engine owns execution and persisted session state. Supernova adds turn records, workspace checkpoints, project/session metadata, and product recovery policy. The browser receives the server's chat document (`ChatDocument`) and builds the timeline; it does not maintain a competing execution model.
 
 The active run is part of the durable engine view, not a separate uncommitted browser stream. Published engine output has already been committed, so reopening a session can recover interrupted work rather than treating it as lost.
 
@@ -19,7 +19,7 @@ Client-owned execution, durable client replay of every stream event, and multi-c
 
 ## Ownership and storage
 
-Start with [SessionFile](../../packages/agent-runtime/src/pi/session-file.ts) for the engine boundary and [Chat](../../packages/agent-runtime/src/features/session-runtime/chat.ts) for product coordination. A session's host owns its file: `SessionRuntime` opens `Chat` (file and extensions) and closes it with the host, and reads the catalog only when the host starts. [SessionStore](../../packages/agent-runtime/src/pi/session-store.ts) holds the catalog and the session folders, nothing open.
+Start with [Chat](../../packages/agent-runtime/src/features/chat/natives/chat.ts) for product coordination and [SessionFile](../../packages/agent-runtime/src/features/chat/natives/session-file.ts) for the engine boundary: it is the only writer of the Durable harness and our turn records, and its [Transcript](../../packages/agent-runtime/src/features/chat/natives/transcript.ts) reads what the timeline shows. A session's host owns its file: `ChatStore` opens `Chat` (file and extensions) and closes it with the host, and the host gets its catalog record once, when it starts. [Sessions](../../packages/agent-runtime/src/features/sessions/natives/sessions.ts) holds the catalog and the session folders, nothing open.
 
 | State                                 | Owner                           | Lifetime       |
 | ------------------------------------- | ------------------------------- | -------------- |
@@ -31,7 +31,7 @@ Start with [SessionFile](../../packages/agent-runtime/src/pi/session-file.ts) fo
 
 Each session has its own SQLite file. This isolates storage failures and commit contention and allows idle sessions to close. The separate catalog exists because Pi cannot list sessions by project; lookup, listings, and search must not open every session file.
 
-Page listings and searches on the server, using opaque cursors and deterministic ordering including ties. Do not load the whole catalog to filter or slice a page. The queries and migrations live in [session-catalog.ts](../../packages/agent-runtime/src/pi/lib/session/session-catalog.ts).
+Page listings and searches on the server, using opaque cursors and deterministic ordering including ties. Do not load the whole catalog to filter or slice a page. The queries and migrations live in [session-catalog.ts](../../packages/agent-runtime/src/features/sessions/natives/session-catalog.ts).
 
 ### Persistence changes
 
@@ -41,7 +41,7 @@ These stores are user data across releases. Migrate in place; never require dele
 - Version changes to the persisted Supernova document. Its migration must be pure and return a complete current value.
 - Refuse unsupported newer formats rather than guessing; downgrades are not supported.
 
-Legacy JSONL imports remain isolated in `pi/lib/session/legacy/`. Preserve original files and tolerate interrupted imports. The imported conversation is the branch the user last saw, not every abandoned or undone branch; model context must retain compaction meaning. Imported turns have no workspace snapshots, and unfinished tool calls need interrupted outcomes rather than invented success. Archived sessions remain archived. Read the importer for conversion details rather than reproducing its file traversal here.
+Legacy JSONL imports remain isolated in `features/sessions/lib/legacy/`. Preserve original files and tolerate interrupted imports. The imported conversation is the branch the user last saw, not every abandoned or undone branch; model context must retain compaction meaning. Imported turns have no workspace snapshots, and unfinished tool calls need interrupted outcomes rather than invented success. Archived sessions remain archived. Read the importer for conversion details rather than reproducing its file traversal here.
 
 ## Observation and publication
 
@@ -59,20 +59,22 @@ Status must be available without following every full transcript. A subscription
 
 Chord owns snapshot/delta synchronization. Reconnect from a new authoritative snapshot rather than maintaining hand-written replay counters. A slow client can be disconnected and resynchronize; do not retain unbounded output for it or assume clients saw every intermediate transition.
 
+`ChatStore` follows Durable instead of rebuilding on demand: one `self.follow` over the state document and the view of its current branch, and a synchronous derive over it builds the document for each commit. Routines only read what a commit cannot give: entries Durable's view dropped before they were cached, and the agent and context usage at the undo point. Context usage therefore settles a moment after the commit that changed it.
+
 Publication must preserve coherence:
 
 - Build from the current engine view, so delayed notifications cannot move state backwards.
-- Publish the user entry and authored turn metadata together. The engine places the input and Supernova records its turn separately; no intermediate revision should expose an entry without the metadata needed to interpret it.
+- Publish the user entry and authored turn metadata together. The engine places the input and Supernova records its turn separately; no intermediate revision should expose an entry without the metadata needed to interpret it. While a send places its input, the document holds its last value until the state carries that entry's turn record.
 - Make the accepted message visible before its optimistic placeholder disappears. A successful send response must not briefly erase the user's message.
 - Never combine newer final transcript entries with older live partials. Partial tool arguments may be incomplete; do not present them as a finished invocation.
 
 ## History and presentation
 
-The document combines shown and undone history, agent state at the navigation point, and live state. Authored content stays attached on both sides; durable workspace checkpoint records stay server-side.
+The document combines the history before and after the undo point, agent state at the undo point, and live state. Authored content stays attached on both sides; durable workspace checkpoint records stay server-side.
 
-Keep the replicated history bounded around the navigation point, preserving whole turns. Repeated undo/revert must not grow it without bound. Additional pages must still belong to the requested side of the current branch when they arrive; a stale page cannot merge into a different conversation after navigation. Retain previously loaded history only while it continues that branch. A single turn larger than the transport frame limit remains a limitation.
+Keep the replicated history bounded around the undo point, preserving whole turns. Repeated undo/revert must not grow it without bound. Additional pages must still belong to the requested side of the current branch when they arrive; a stale page cannot merge into a different conversation after navigation. Retain previously loaded history only while it continues that branch. A single turn larger than the transport frame limit remains a limitation.
 
-Reuse append-only history instead of rereading and rebuilding it on every stream update. The live-turn boundary must identify the user entry being answered, not merely the latest entry or input submission id. The projection and paging policy live in [session-snapshot.ts](../../packages/agent-runtime/src/pi/lib/session/session-snapshot.ts).
+Reuse append-only history instead of rereading and rebuilding it on every stream update. The live-turn boundary must identify the user entry being answered, not merely the latest entry or input submission id. The projection lives in [chat-document.ts](../../packages/agent-runtime/src/features/chat/lib/transcript/chat-document.ts) and the paging policy in [history-page.ts](../../packages/agent-runtime/src/features/chat/lib/transcript/history-page.ts).
 
 Keep server truth separate from pending client intent; apply optimism in one shared client projection. See [Web](web.md#state-management) for stores and UI integration.
 

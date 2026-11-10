@@ -1,13 +1,13 @@
 import type {Reference, Watchable} from "@earendil-works/chord";
 import {BACKGROUND_CONTEXT as context} from "@earendil-works/chord/context";
 import {FoldersService} from "@supernova/contracts/services/folders/services";
-import {ChatService} from "@supernova/contracts/services/session-runtime/services";
+import {ChatService} from "@supernova/contracts/services/chat/services";
 import {SessionsService, SessionStatusService} from "@supernova/contracts/services/sessions/services";
-import type {Session} from "@supernova/contracts/services/sessions/schemas";
+import type {ChatDocument} from "@supernova/contracts/services/chat/schemas";
 import type {SessionsView} from "@supernova/contracts/services/sessions/services";
 import {TerminalService, WorkspaceService} from "@supernova/contracts/services/workspace/services";
 import {afterEach, beforeEach, describe, expect, it, vi} from "vitest";
-import {assistantTexts, createPiTestRuntime, fauxAssistantMessage, selectedModelReference, turnContents, waitUntil} from "@tests/support/session-runtime";
+import {assistantTexts, createPiTestRuntime, fauxAssistantMessage, selectedModelReference, turnContents, waitUntil} from "@tests/support/test-runtime";
 import {shellCommand, testShell} from "@tests/support/terminal";
 
 const firstMessage = {contentParts: [{text: "Hi", type: "text" as const}], modelReference: selectedModelReference};
@@ -65,19 +65,19 @@ describe("the server host over the wire", () => {
     expect(created).toBeNull();
 
     const chat = await get(ChatService, {sessionId: "wire-session"});
-    const seen = await record<Session>(chat.session);
+    const seen = await record<ChatDocument>(chat.document);
     cleanups.push(seen.stop);
     await pi.settled("wire-session");
-    await waitUntil(async () => expect(chat.session.value).toEqual(await pi.sessions.get({sessionId: "wire-session"})));
-    expect(assistantTexts(chat.session.value)).toEqual(["Hello!"]);
+    await waitUntil(async () => expect(chat.document.value).toEqual(await pi.sessions.get({sessionId: "wire-session"})));
+    expect(assistantTexts(chat.document.value)).toEqual(["Hello!"]);
 
     // A command streams back through the same document, and its turn arrives before the send resolves: the client
     // shows a sent message until then.
     expect(await chat.sendMessage({contentParts: [{text: "More", type: "text"}], modelReference: selectedModelReference}, context)).toBeNull();
-    await waitUntil(() => expect(turnContents(chat.session.value)).toEqual([firstMessage.contentParts, [{text: "More", type: "text"}]]));
+    await waitUntil(() => expect(turnContents(chat.document.value)).toEqual([firstMessage.contentParts, [{text: "More", type: "text"}]]));
     await pi.settled("wire-session");
-    await waitUntil(async () => expect(chat.session.value).toEqual(await pi.sessions.get({sessionId: "wire-session"})));
-    expect(assistantTexts(chat.session.value)).toEqual(["Hello!", "Again."]);
+    await waitUntil(async () => expect(chat.document.value).toEqual(await pi.sessions.get({sessionId: "wire-session"})));
+    expect(assistantTexts(chat.document.value)).toEqual(["Hello!", "Again."]);
     expect(seen.values.some((value) => value.live?.run !== undefined)).toBe(true);
   });
 
@@ -109,16 +109,16 @@ describe("the server host over the wire", () => {
       resume();
 
       await waitUntil(async () => {
-        if (!pi.runtime.store.find("disconnected-creator")) throw new Error("The created session disappeared.");
-        expect(turnContents(await pi.sessionRuntime.current("disconnected-creator"))).toEqual([firstMessage.contentParts]);
+        if (!(await pi.store.find("disconnected-creator"))) throw new Error("The created session disappeared.");
+        expect(turnContents(await pi.chat.current("disconnected-creator"))).toEqual([firstMessage.contentParts]);
       });
       await pi.settled("disconnected-creator");
       const returning = await server.connectClient();
       const chat = await returning.host.get(ChatService, {sessionId: "disconnected-creator"}, context);
       cleanups.push(async () => chat.release());
       if (chat.variant !== "owner") throw new Error("Expected the owner's chat.");
-      expect(turnContents(chat.session.value)).toEqual([firstMessage.contentParts]);
-      expect(assistantTexts(chat.session.value)).toEqual(["Finished without the browser."]);
+      expect(turnContents(chat.document.value)).toEqual([firstMessage.contentParts]);
+      expect(assistantTexts(chat.document.value)).toEqual(["Finished without the browser."]);
       expect(await pi.sessions.exists({sessionId: "disconnected-creator"})).toBe(true);
     } finally {
       resume();
@@ -131,7 +131,7 @@ describe("the server host over the wire", () => {
     const {info} = await pi.createSession();
     await pi.appendConversation(info.id);
     const chat = await get(ChatService, {sessionId: info.id});
-    const watch = await chat.session.watch(context);
+    const watch = await chat.document.watch(context);
     const ops: (readonly unknown[])[] = [];
     watch.start(async (call) => {
       if (call.kind === "value") ops.push(...call.ops);
@@ -139,9 +139,9 @@ describe("the server host over the wire", () => {
     cleanups.push(() => watch.stop());
     pi.faux.setResponses([fauxAssistantMessage(`Streamed. ${"word ".repeat(100)}`)]);
 
-    await pi.sessionRuntime.sendMessage({contentParts: [{text: "Go", type: "text"}], modelReference: selectedModelReference, sessionId: info.id});
+    await pi.chat.sendMessage({contentParts: [{text: "Go", type: "text"}], modelReference: selectedModelReference, sessionId: info.id});
     await pi.settled(info.id);
-    await waitUntil(async () => expect(chat.session.value).toEqual(await pi.sessions.get({sessionId: info.id})));
+    await waitUntil(async () => expect(chat.document.value).toEqual(await pi.sessions.get({sessionId: info.id})));
 
     expect(ops.length).toBeGreaterThan(0);
     // No root replacement, and the history pages were not sent again whole.
@@ -156,7 +156,7 @@ describe("the server host over the wire", () => {
     const chat = await get(ChatService, {sessionId: info.id});
     expect(await sessions.openSession({sessionId: info.id}, context)).toBeNull();
     await waitUntil(() => expect(sessions.view.value.open).toMatchObject({id: info.id, title: "Generated title", pinned: false}));
-    const conversation = await chat.session.watch(context);
+    const conversation = await chat.document.watch(context);
     const published: unknown[] = [];
     conversation.start(async (call) => {
       if (call.kind === "value") published.push(call.ops);
@@ -168,7 +168,7 @@ describe("the server host over the wire", () => {
     await waitUntil(() => expect(sessions.view.value.open).toMatchObject({title: "Fix login", pinned: true, projectPath: pi.defaultProjectRoot}));
     // The conversation carries no copy of the record, so nothing about it changed.
     expect(published.filter((ops) => (ops as readonly unknown[]).length > 0)).toEqual([]);
-    expect(chat.session.value).not.toHaveProperty("title");
+    expect(chat.document.value).not.toHaveProperty("title");
 
     // Archived, the record is gone for the page too; closing clears the slot.
     expect(await sessions.archive({projectPath: pi.defaultProjectRoot, sessionId: info.id}, context)).toBeDefined();
@@ -189,8 +189,8 @@ describe("the server host over the wire", () => {
     await pi.settled("released");
 
     const chat = await get(ChatService, {sessionId: "released"});
-    await waitUntil(async () => expect(chat.session.value).toEqual(await pi.sessions.get({sessionId: "released"})));
-    expect(assistantTexts(chat.session.value)).toEqual(["First.", "Second."]);
+    await waitUntil(async () => expect(chat.document.value).toEqual(await pi.sessions.get({sessionId: "released"})));
+    expect(assistantTexts(chat.document.value)).toEqual(["First.", "Second."]);
   });
 
   it("runs two sessions on independent hosts", async () => {
@@ -203,7 +203,7 @@ describe("the server host over the wire", () => {
 
     const one = await get(ChatService, {sessionId: "one"});
     const two = await get(ChatService, {sessionId: "two"});
-    await waitUntil(() => expect([assistantTexts(one.session.value), assistantTexts(two.session.value)]).toEqual([["One."], ["Two."]]));
+    await waitUntil(() => expect([assistantTexts(one.document.value), assistantTexts(two.document.value)]).toEqual([["One."], ["Two."]]));
   });
 
   it("keeps a shown project's window current: creates, renames, pins and archives, without skipping after a reorder", async () => {
@@ -286,7 +286,7 @@ describe("the server host over the wire", () => {
     cleanups.push(seen.stop);
     pi.faux.setResponses([fauxAssistantMessage("Done.")]);
 
-    await pi.sessionRuntime.sendMessage({contentParts: [{text: "Go", type: "text"}], modelReference: selectedModelReference, sessionId: info.id});
+    await pi.chat.sendMessage({contentParts: [{text: "Go", type: "text"}], modelReference: selectedModelReference, sessionId: info.id});
     await pi.settled(info.id);
 
     await waitUntil(() => expect(seen.values.some((value) => value.sessions[info.id]?.activity === "running")).toBe(true));

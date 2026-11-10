@@ -1,14 +1,14 @@
+import type {ChatDocument} from "@supernova/contracts/services/chat/schemas";
 import type {
   AssistantMessage,
   EntryRecord,
   ImageContent,
   LiveState,
   PiUserMessage,
-  Session,
-  SessionEntry,
+  ChatEntry,
   ToolResultMessage,
   UserMessageContentPart,
-} from "@supernova/contracts/services/sessions/schemas";
+} from "@supernova/contracts/services/chat/schemas";
 import type {SessionToolCall, SessionTurn, SessionTurnEvent, SessionUserMessage} from "@/features/sessions/types/session-turn";
 
 /** Pi wraps compaction summaries for the model; the timeline shows the summary itself. */
@@ -16,11 +16,11 @@ const SUMMARY_PREFIX = "The conversation history before this point was compacted
 const SUMMARY_SUFFIX = "\n</summary>";
 
 // Replicated entry arrays are immutable; streaming changes `live`, not the settled history.
-const historyCache = new WeakMap<readonly SessionEntry[], {runStart: number | undefined; turns: SessionTurn[]; liveEntries: readonly SessionEntry[] | undefined}>();
+const historyCache = new WeakMap<readonly ChatEntry[], {runStart: number | undefined; turns: SessionTurn[]; liveEntries: readonly ChatEntry[] | undefined}>();
 // Keyed by the first settled entry, which keeps its identity while a run appends entries after it.
-const settledCache = new WeakMap<SessionEntry, {settled: readonly SessionEntry[]; turns: SessionTurn[]}>();
+const settledCache = new WeakMap<ChatEntry, {settled: readonly ChatEntry[]; turns: SessionTurn[]}>();
 
-function settledTurns(settled: readonly SessionEntry[]): SessionTurn[] {
+function settledTurns(settled: readonly ChatEntry[]): SessionTurn[] {
   const first = settled[0];
   if (!first) return buildTurns({entries: settled});
   const known = settledCache.get(first);
@@ -143,7 +143,7 @@ function addLive(draft: TurnDraft, live: LiveState): void {
 }
 
 interface BuildTurnsInput {
-  readonly entries: readonly SessionEntry[];
+  readonly entries: readonly ChatEntry[];
   readonly live?: LiveState;
 }
 
@@ -175,7 +175,7 @@ export function buildTurns(input: BuildTurnsInput): SessionTurn[] {
   return result;
 }
 
-export function buildSessionTurns(session: Pick<Session, "entries" | "live" | "runStart">): {readonly turns: SessionTurn[]; readonly liveTurn: SessionTurn | undefined} {
+export function buildSessionTurns(session: Pick<ChatDocument, "entries" | "live" | "runStart">): {readonly turns: SessionTurn[]; readonly liveTurn: SessionTurn | undefined} {
   const {live, runStart} = session;
   const entries = session.entries.items;
   let history = historyCache.get(entries);

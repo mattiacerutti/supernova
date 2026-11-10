@@ -1,4 +1,4 @@
-import type {UserMessageAttachmentPart, UserMessageContentPart, UserMessageReferencePart} from "@supernova/contracts/services/sessions/schemas";
+import type {UserMessageAttachmentPart, UserMessageContentPart, UserMessageReferencePart} from "@supernova/contracts/services/chat/schemas";
 import type {Editor, JSONContent} from "@tiptap/react";
 import {Slice, type ResolvedPos} from "@tiptap/pm/model";
 

@@ -1,6 +1,7 @@
 import {obj, opt, type Static, str} from "@earendil-works/chord";
 import {TaggedError} from "@supernova/contracts/lib/errors";
-import {OutgoingMessage, SessionWorkspaceSelection} from "@supernova/contracts/services/sessions/schemas";
+import {SessionWorkspaceSelection} from "@supernova/contracts/services/sessions/schemas";
+import {OutgoingMessage} from "@supernova/contracts/services/chat/schemas";
 
 export const CreateSessionPayload = obj({
   /** Minted by the client. */

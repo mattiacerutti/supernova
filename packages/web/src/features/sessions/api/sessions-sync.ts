@@ -1,5 +1,5 @@
 import {BACKGROUND_CONTEXT as context} from "@earendil-works/chord/context";
-import {ChatService} from "@supernova/contracts/services/session-runtime/services";
+import {ChatService} from "@supernova/contracts/services/chat/services";
 import {useSessionsStore} from "@/features/sessions/stores/sessions-store";
 import {useSessionVisitsStore} from "@/features/sessions/stores/sidebar/session-visits-store";
 import {useMountEffect} from "@/hooks/use-mount-effect";
@@ -12,7 +12,7 @@ import {useRuntime} from "@/runtime/hooks/use-runtime";
 const {forget, setDocument, setLoadError, setRecord, setStatuses} = useSessionsStore.getState();
 
 function mirror(sessionId: string, chat: ChatOwner): () => void {
-  return follow(chat.session, (session) => {
+  return follow(chat.document, (session) => {
     if (session?.id === sessionId) setDocument(session);
   });
 }

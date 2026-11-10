@@ -1,5 +1,5 @@
 import type {ListedSession} from "@supernova/contracts/services/sessions/services";
-import type {SessionRecord} from "@supernova/agent-runtime/pi/lib/session/session-state";
+import type {SessionRecord} from "@supernova/agent-runtime/core/session-state";
 
 export function toListedSession(record: SessionRecord): ListedSession {
   return {

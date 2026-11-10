@@ -1,15 +1,13 @@
-import type {Host, Link, RouteHandle} from "@earendil-works/chord";
+import type {Host, Link, PluginFacet, RouteHandle} from "@earendil-works/chord";
 import {createHost, memoryLinkPair} from "@earendil-works/chord";
 import type {Context} from "@earendil-works/chord/context";
 import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import type {RuntimePrincipal} from "@supernova/contracts/lib/protocol";
 import {SessionHost as SessionHostKind} from "@supernova/contracts/lib/protocol";
-import type {ChatServer} from "@supernova/contracts/services/session-runtime/services";
-import {ChatService} from "@supernova/contracts/services/session-runtime/services";
+import type {ChatServer} from "@supernova/contracts/services/chat/services";
+import {ChatService} from "@supernova/contracts/services/chat/services";
 import {expectVariant} from "@supernova/agent-runtime/lib/chord/principals";
-import type {SessionRecord} from "@supernova/agent-runtime/pi/lib/session/session-state";
-import type {ChatDeps} from "@supernova/agent-runtime/features/session-runtime/chat";
-import {sessionRuntimeFacet} from "@supernova/agent-runtime/features/session-runtime/facet";
+import type {SessionRecord} from "@supernova/agent-runtime/core/session-state";
 
 interface SessionHost {
   readonly generation: number;
@@ -17,8 +15,10 @@ interface SessionHost {
   readonly link: Link;
 }
 
-export interface SessionHostsDeps extends Omit<ChatDeps, "record"> {
-  readonly find: (sessionId: string) => SessionRecord | undefined;
+export interface SessionHostsDeps {
+  readonly server: Host<RuntimePrincipal>;
+  readonly find: (sessionId: string, context: Context) => Promise<SessionRecord | undefined>;
+  readonly facets: (record: SessionRecord) => readonly PluginFacet<RuntimePrincipal>[];
   readonly onHostClosed: (sessionId: string) => void;
 }
 
@@ -28,22 +28,18 @@ const ABORT_READY_MS = 1_000;
 export class SessionHosts {
   private readonly deps: SessionHostsDeps;
   private readonly hosts = new Map<string, SessionHost>();
-  private route: RouteHandle<typeof SessionHostKind> | undefined;
-  private server: Host<RuntimePrincipal> | undefined;
+  private readonly route: RouteHandle<typeof SessionHostKind>;
   private generation = 0;
 
-  public constructor(deps: SessionHostsDeps) {
+  // Before the server host loads: Chord takes routes only then.
+  public constructor(deps: SessionHostsDeps, context: Context) {
     this.deps = deps;
-  }
-
-  public routeOn(server: Host<RuntimePrincipal>, context: Context): void {
-    this.server = server;
-    this.route = server.route(
+    this.route = deps.server.route(
       SessionHostKind,
       {
         authorize: (principal, address) => principal.kind === "owner" || principal.kind === "server" || (principal.kind === "worker" && principal.sessionId === address.params.id),
-        resolve: async (address) => {
-          const {generation, link} = this.hostOf(address.params.id);
+        resolve: async (address, resolving) => {
+          const {generation, link} = await this.hostOf(address.params.id, resolving);
           return {link, principal: workerPrincipal(address.params.id, generation), trusted: true};
         },
       },
@@ -56,7 +52,7 @@ export class SessionHosts {
 
     // Before the suspension, which would hold the abort back with every other call.
     if (running && options?.abort) await this.withChat(sessionId, (chat) => chat.abort(BACKGROUND_CONTEXT), ABORT_READY_MS).catch(() => undefined);
-    this.route?.suspend(SessionHostKind({id: sessionId}));
+    this.route.suspend(SessionHostKind({id: sessionId}));
     if (!running) return;
 
     this.hosts.delete(sessionId);
@@ -68,10 +64,16 @@ export class SessionHosts {
     return this.hosts.get(sessionId)?.generation === generation;
   }
 
-  public async withChat<T>(sessionId: string, call: (chat: ChatServer) => Promise<T>, readyTimeout?: number): Promise<T> {
-    if (!this.server) throw new Error("Session hosts are not routed yet.");
+  public async reload(): Promise<void> {
+    await Promise.all([...this.hosts.keys()].map((sessionId) => this.withChat(sessionId, (chat) => chat.reload(BACKGROUND_CONTEXT), RELOAD_READY_MS).catch(() => undefined)));
+  }
 
-    const chat = await this.server.get(ChatService, {sessionId}, BACKGROUND_CONTEXT, {readyTimeout});
+  public async close(): Promise<void> {
+    await Promise.all([...this.hosts.keys()].map((sessionId) => this.release(sessionId)));
+  }
+
+  private async withChat<T>(sessionId: string, call: (chat: ChatServer) => Promise<T>, readyTimeout: number): Promise<T> {
+    const chat = await this.deps.server.get(ChatService, {sessionId}, BACKGROUND_CONTEXT, {readyTimeout});
     try {
       return await call(expectVariant(chat, "server"));
     } finally {
@@ -79,20 +81,16 @@ export class SessionHosts {
     }
   }
 
-  public async reload(): Promise<void> {
-    await Promise.all([...this.hosts.keys()].map((sessionId) => this.withChat(sessionId, (chat) => chat.reload(BACKGROUND_CONTEXT), RELOAD_READY_MS).catch(() => undefined)));
-  }
-
-  public async dispose(): Promise<void> {
-    await Promise.all([...this.hosts.keys()].map((sessionId) => this.release(sessionId)));
-  }
-
-  private hostOf(sessionId: string): SessionHost {
+  private async hostOf(sessionId: string, context: Context): Promise<SessionHost> {
     const existing = this.hosts.get(sessionId);
     if (existing) return existing;
 
-    const record = this.deps.find(sessionId);
+    const record = await this.deps.find(sessionId, context);
     if (!record || record.archivedAt !== undefined) throw new Error("Session not found.");
+
+    // A resolve that raced another for the same session keeps the first host.
+    const raced = this.hosts.get(sessionId);
+    if (raced) return raced;
 
     const generation = ++this.generation;
     const [up, down] = memoryLinkPair();
@@ -106,8 +104,8 @@ export class SessionHosts {
     const running: SessionHost = {generation, host, link: up};
     this.hosts.set(sessionId, running);
 
-    // A session that fails to open fails `SessionRuntime`; only an undeclarable facet rejects here.
-    void host.load([{name: "@supernova/session", facet: sessionRuntimeFacet({...this.deps, record})}], BACKGROUND_CONTEXT).catch((error: unknown) => {
+    // A session that fails to open fails its chat; only an undeclarable facet rejects here.
+    void host.load(this.deps.facets(record), BACKGROUND_CONTEXT).catch((error: unknown) => {
       console.error(`[session ${sessionId}]`, error);
       if (this.hosts.get(sessionId) === running) void this.release(sessionId);
     });

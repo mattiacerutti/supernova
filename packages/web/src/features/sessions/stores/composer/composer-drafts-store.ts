@@ -1,4 +1,5 @@
-import type {SessionWorkspaceSelection, UserMessageAttachmentPart, UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
+import type {SessionWorkspaceSelection} from "@supernova/contracts/services/sessions/schemas";
+import type {UserMessageAttachmentPart, UserMessageContentPart} from "@supernova/contracts/services/chat/schemas";
 import {create} from "zustand";
 import type {ComposerAttachmentsUpdate} from "@/features/sessions/hooks/composer/use-composer-attachments";
 import {attachmentComposerContentParts, editableComposerContentParts} from "@/features/sessions/lib/composer/editor/composer-content-parts";

@@ -1,9 +1,7 @@
 import {afterEach, describe, expect, it, vi} from "vitest";
 import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
-import {ChatService} from "@supernova/contracts/services/session-runtime/services";
-import {archiveSession} from "@supernova/agent-runtime/features/sessions/operations/archive-session";
-import {createSession} from "@supernova/agent-runtime/features/sessions/operations/create-session";
-import {createPiTestRuntime, waitUntil} from "@tests/support/session-runtime";
+import {ChatService} from "@supernova/contracts/services/chat/services";
+import {createPiTestRuntime, waitUntil} from "@tests/support/test-runtime";
 
 describe("archiving a session", () => {
   const cleanups: Array<() => Promise<void>> = [];
@@ -16,19 +14,19 @@ describe("archiving a session", () => {
     const pi = await createPiTestRuntime();
     cleanups.push(() => pi.unregister());
 
-    const {runtime, defaultProjectRoot: projectPath} = pi;
+    const {operations, defaultProjectRoot: projectPath} = pi;
     const session = {id: "archived"};
-    await createSession({id: session.id, projectPath}, runtime);
-    runtime.status.change(session.id, {kind: "notice", notice: {level: "warning", message: "A retained notice"}});
+    await operations.create({id: session.id, projectPath});
+    await pi.store.changeStatus(session.id, {kind: "notice", notice: {level: "warning", message: "A retained notice"}});
     (await pi.server.client.get(ChatService, {sessionId: session.id}, BACKGROUND_CONTEXT, {readyTimeout: 500})).release();
 
-    const result = await archiveSession({sessionId: session.id, projectPath}, runtime);
+    const result = await operations.archive({sessionId: session.id, projectPath});
 
     expect(result).toEqual({sessionId: session.id, projectPath});
     await expect(pi.server.client.get(ChatService, {sessionId: session.id}, BACKGROUND_CONTEXT, {readyTimeout: 500})).rejects.toMatchObject({code: "unavailable"});
-    expect(runtime.status.all().sessions[session.id]).toBeUndefined();
-    expect(await runtime.sessions.record({sessionId: session.id})).toBeNull();
-    expect(await runtime.store.find(session.id)).toMatchObject({id: session.id, archivedAt: expect.any(String)});
+    expect(pi.statuses().sessions[session.id]).toBeUndefined();
+    expect(await pi.store.record(session.id)).toBeNull();
+    expect(await pi.store.find(session.id)).toMatchObject({id: session.id, archivedAt: expect.any(String)});
   });
 
   it.each([
@@ -40,12 +38,12 @@ describe("archiving a session", () => {
     const pi = await createPiTestRuntime();
     cleanups.push(() => pi.unregister());
 
-    const {runtime, defaultProjectRoot: projectPath} = pi;
+    const {operations, defaultProjectRoot: projectPath} = pi;
     const sessionId = "archiving";
-    await createSession({id: sessionId, projectPath}, runtime);
+    await operations.create({id: sessionId, projectPath});
 
     if (!running) {
-      await pi.sessionRuntime.stop(sessionId);
+      await pi.chat.stop(sessionId);
     }
 
     const held = running ? await pi.server.client.get(ChatService, {sessionId}, BACKGROUND_CONTEXT) : undefined;
@@ -59,8 +57,8 @@ describe("archiving a session", () => {
     const paused = new Promise<void>((resolve) => {
       resume = resolve;
     });
-    const deleteSession = runtime.checkpointStore.deleteSession.bind(runtime.checkpointStore);
-    const gate = vi.spyOn(runtime.checkpointStore, "deleteSession").mockImplementation(async (input) => {
+    const deleteSession = pi.checkpointStore.deleteSession.bind(pi.checkpointStore);
+    const gate = vi.spyOn(pi.checkpointStore, "deleteSession").mockImplementation(async (input) => {
       entered();
       await paused;
 
@@ -68,13 +66,13 @@ describe("archiving a session", () => {
       await deleteSession(input);
     });
 
-    const archiving = archiveSession({sessionId, projectPath}, runtime);
+    const archiving = operations.archive({sessionId, projectPath});
     const completed = fails ? expect(archiving).rejects.toThrow("Checkpoint cleanup failed.") : expect(archiving).resolves.toEqual({sessionId, projectPath});
 
     try {
       await deleting;
-      expect(await runtime.sessions.record({sessionId})).toBeNull();
-      await expect(archiveSession({sessionId, projectPath}, runtime)).rejects.toThrow("Session is already archived.");
+      expect(await pi.store.record(sessionId)).toBeNull();
+      await expect(operations.archive({sessionId, projectPath})).rejects.toThrow("Session is already archived.");
 
       if (held) {
         await waitUntil(() =>
@@ -85,8 +83,8 @@ describe("archiving a session", () => {
         );
       }
 
-      await createSession({id: "other", projectPath}, runtime);
-      expect(runtime.store.find("other")).toBeDefined();
+      await operations.create({id: "other", projectPath});
+      expect(await pi.store.find("other")).toBeDefined();
 
       const browser = await pi.server.connectClient();
       await expect(browser.host.get(ChatService, {sessionId}, BACKGROUND_CONTEXT, {readyTimeout: 500})).rejects.toMatchObject({code: "unavailable"});
@@ -107,7 +105,7 @@ describe("archiving a session", () => {
       );
     }
 
-    expect(await runtime.sessions.record({sessionId})).toBeNull();
+    expect(await pi.store.record(sessionId)).toBeNull();
     await expect(returning.host.get(ChatService, {sessionId}, BACKGROUND_CONTEXT, {readyTimeout: 500})).rejects.toMatchObject({code: "unavailable"});
   });
 
@@ -115,11 +113,11 @@ describe("archiving a session", () => {
     const pi = await createPiTestRuntime();
     cleanups.push(() => pi.unregister());
 
-    const {runtime, defaultProjectRoot: projectPath} = pi;
+    const {operations, defaultProjectRoot: projectPath} = pi;
     const sessionId = "concurrent";
-    await createSession({id: sessionId, projectPath}, runtime);
+    await operations.create({id: sessionId, projectPath});
 
-    const results = await Promise.allSettled([archiveSession({sessionId, projectPath}, runtime), archiveSession({sessionId, projectPath}, runtime)]);
+    const results = await Promise.allSettled([operations.archive({sessionId, projectPath}), operations.archive({sessionId, projectPath})]);
 
     expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
     expect(results.find((result) => result.status === "rejected")).toMatchObject({
@@ -132,7 +130,7 @@ describe("archiving a session", () => {
     const pi = await createPiTestRuntime();
     cleanups.push(() => pi.unregister());
 
-    await expect(archiveSession({sessionId: "missing", projectPath: pi.defaultProjectRoot}, pi.runtime)).rejects.toMatchObject({
+    await expect(pi.operations.archive({sessionId: "missing", projectPath: pi.defaultProjectRoot})).rejects.toMatchObject({
       code: "ArchiveSessionError",
       message: "Session not found.",
     });

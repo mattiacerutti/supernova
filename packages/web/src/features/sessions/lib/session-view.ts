@@ -1,7 +1,7 @@
 import type {SessionSetupStep} from "@supernova/contracts/services/sessions/procedures";
 import {sessionActivityOf} from "@supernova/contracts/services/sessions/procedures";
 import type {ListedSession, SessionStatusEntry} from "@supernova/contracts/services/sessions/services";
-import type {Session} from "@supernova/contracts/services/sessions/schemas";
+import type {ChatDocument} from "@supernova/contracts/services/chat/schemas";
 import {buildSessionTurns} from "@/features/sessions/lib/timeline/turns/build-turns";
 import type {PendingMessage, SessionOptimism} from "@/features/sessions/stores/sessions-store";
 import type {SessionTurn} from "@/features/sessions/types/session-turn";
@@ -15,7 +15,7 @@ export interface SessionStatus {
 }
 
 export interface SessionView extends SessionStatus {
-  readonly session: Session | undefined;
+  readonly session: ChatDocument | undefined;
   readonly record: ListedSession | undefined;
   readonly title: string | undefined;
   readonly pinned: boolean;
@@ -48,7 +48,7 @@ function listingOrder(left: ListedSession, right: ListedSession): number {
   return Number(right.pinned) - Number(left.pinned) || right.updatedAt.localeCompare(left.updatedAt) || right.id.localeCompare(left.id);
 }
 
-export function sessionStatus(entry: SessionStatusEntry | undefined, optimism: SessionOptimism = {}, session?: Pick<Session, "live">): SessionStatus {
+export function sessionStatus(entry: SessionStatusEntry | undefined, optimism: SessionOptimism = {}, session?: Pick<ChatDocument, "live">): SessionStatus {
   // The document's `live` wins: status can lag it by a frame.
   const activity = session ? sessionActivityOf(session.live) : (entry?.activity ?? "idle");
   return {
@@ -75,7 +75,7 @@ export function listedSessions(input: {
 }
 
 export function sessionView(input: {
-  readonly session: Session | undefined;
+  readonly session: ChatDocument | undefined;
   readonly record: ListedSession | undefined;
   readonly entry: SessionStatusEntry | undefined;
   readonly optimism?: SessionOptimism;

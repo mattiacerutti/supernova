@@ -3,7 +3,7 @@ import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {CONFIG_DIR_NAME} from "@earendil-works/pi-coding-agent";
 import {afterEach, beforeEach, describe, expect, it, vi} from "vitest";
-import {Configuration} from "@supernova/agent-runtime/features/configuration/configuration";
+import {getConfiguration} from "@supernova/agent-runtime/features/configuration/configuration";
 
 let root: string;
 let projectPath: string;
@@ -27,10 +27,8 @@ afterEach(async () => {
   await rm(root, {recursive: true, force: true});
 });
 
-const settings = new Configuration();
-
 function configuration(path?: string) {
-  return settings.get({projectPath: path});
+  return getConfiguration({projectPath: path});
 }
 
 describe("client-safe configuration", () => {

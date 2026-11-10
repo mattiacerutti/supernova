@@ -2,28 +2,41 @@ import type {Facet} from "@earendil-works/chord";
 import {defineFacet} from "@earendil-works/chord";
 import type {RuntimePrincipal} from "@supernova/contracts/lib/protocol";
 import {ExtensionsService} from "@supernova/contracts/services/extensions/services";
+import {RuntimeNative, SessionHostsNative} from "@supernova/agent-runtime/core/contract";
+import {ExtensionsStore} from "@supernova/agent-runtime/features/extensions/contract";
+import {Extensions} from "@supernova/agent-runtime/features/extensions/natives/extensions";
 import {action} from "@supernova/agent-runtime/lib/chord/methods";
+import {nativeOf} from "@supernova/agent-runtime/lib/chord/natives";
 import {forbidden, isOwner} from "@supernova/agent-runtime/lib/chord/principals";
-import type {Extensions} from "@supernova/agent-runtime/features/extensions/extensions";
 
-export function extensionsFacet(extensions: Extensions, reloadSessions: () => Promise<void>): Facet<RuntimePrincipal> {
-  return defineFacet<RuntimePrincipal>((host) => {
-    host.serve(ExtensionsService, (_params, principal) => {
-      if (!isOwner(principal)) throw forbidden("Only the owner manages extensions.");
+export const extensionsFacet: Facet<RuntimePrincipal> = defineFacet<RuntimePrincipal>((host) => {
+  host.serve(ExtensionsStore, (_params, self) => {
+    const natives = nativeOf(self, RuntimeNative);
+    const hosts = nativeOf(self, SessionHostsNative);
 
-      return {
-        variant: "owner",
-        members: {
-          update: action(async () => {
-            try {
-              await extensions.update();
-            } finally {
-              // Even a partial failure may have replaced packages on disk.
-              await reloadSessions();
-            }
-          }),
-        },
-      };
-    });
+    const extensions = self.open(
+      async () => new Extensions(natives()),
+      () => undefined
+    );
+
+    return {
+      update: async () => {
+        try {
+          await extensions.value.update();
+        } finally {
+          // Even a partial failure may have replaced packages on disk.
+          await hosts().reload();
+        }
+        return null;
+      },
+    };
   });
-}
+
+  host.serve(ExtensionsService, (_params, principal, self) => {
+    if (!isOwner(principal)) throw forbidden("Only the owner manages extensions.");
+
+    const extensions = self.get(ExtensionsStore, {});
+
+    return {variant: "owner", members: {update: action((ctx) => extensions.update(ctx))}};
+  });
+});

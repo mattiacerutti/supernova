@@ -6,8 +6,10 @@ import type {ProviderLoginStep} from "@supernova/contracts/services/providers/sc
 import {compile} from "@earendil-works/pi-schema";
 import {ProviderLoginSession as ProviderLoginSessionSchema} from "@supernova/contracts/services/providers/schemas";
 import {ProvidersService} from "@supernova/contracts/services/providers/services";
+import {mkdtemp, rm} from "node:fs/promises";
+import {tmpdir} from "node:os";
+import {join} from "node:path";
 import {afterEach, describe, expect, it} from "vitest";
-import {createAgentRuntime} from "@supernova/agent-runtime/composition/runtime";
 import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";
 import {waitUntil} from "@tests/support/async";
 import {startTestServerHost} from "@tests/support/server-host";
@@ -70,10 +72,10 @@ describe("provider authentication over the wire", () => {
 
   async function connect(scripts: Parameters<typeof acmeRuntime>[0] = {}) {
     const modelRuntime = await acmeRuntime(scripts);
-    // The runtime as the server composes it; only providers are reached.
-    const runtime = await createAgentRuntime({sdk: {modelRuntime} as unknown as PiSdk});
-    const server = await startTestServerHost(runtime);
-    cleanups.push(() => runtime.dispose(), server.close);
+    // The server as it composes itself; only providers are reached.
+    const sessionStorageRoot = await mkdtemp(join(tmpdir(), "supernova-providers-"));
+    const server = await startTestServerHost({sdk: {modelRuntime} as unknown as PiSdk, sessionStorageRoot});
+    cleanups.push(() => rm(sessionStorageRoot, {force: true, recursive: true}), server.close);
     const held = await server.client.get(ProvidersService, {}, context);
     if (held.variant !== "owner") throw new Error("The owner's providers variant did not bind.");
     const service = {

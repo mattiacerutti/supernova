@@ -1,7 +1,6 @@
 import {afterEach, describe, expect, it} from "vitest";
-import {Folders} from "@supernova/agent-runtime/features/folders/folders";
+import {listFolderFiles} from "@supernova/agent-runtime/features/folders/folders";
 
-const folders = new Folders();
 import {createProjectFixture} from "@tests/support/folders";
 import {cleanupTempDirs} from "@tests/support/async";
 
@@ -21,7 +20,7 @@ describe("listing workspace file references", () => {
   it("returns fuzzy-ranked file reference suggestions", async () => {
     const tempDir = await createTrackedProjectFixture();
 
-    const result = await folders.listFiles({projectPath: tempDir, query: "button"});
+    const result = await listFolderFiles({projectPath: tempDir, query: "button"});
 
     expect(result.query).toBe("button");
     expect(result.items).toEqual([
@@ -32,13 +31,13 @@ describe("listing workspace file references", () => {
       },
     ]);
 
-    await expect(folders.listFiles({projectPath: tempDir, query: "ignored"})).resolves.toMatchObject({items: []});
+    await expect(listFolderFiles({projectPath: tempDir, query: "ignored"})).resolves.toMatchObject({items: []});
   });
 
   it("returns directory suggestions with trailing slashes", async () => {
     const tempDir = await createTrackedProjectFixture();
 
-    const result = await folders.listFiles({projectPath: tempDir, query: "components"});
+    const result = await listFolderFiles({projectPath: tempDir, query: "components"});
 
     expect(result.items[0]).toEqual({
       path: "@src/components/",
@@ -50,7 +49,7 @@ describe("listing workspace file references", () => {
   it("scopes slash queries to the typed directory prefix", async () => {
     const tempDir = await createTrackedProjectFixture();
 
-    const result = await folders.listFiles({projectPath: tempDir, query: "src/but"});
+    const result = await listFolderFiles({projectPath: tempDir, query: "src/but"});
 
     expect(result.items).toEqual([
       {
@@ -64,7 +63,7 @@ describe("listing workspace file references", () => {
   it("accepts backslash-delimited file reference queries", async () => {
     const tempDir = await createTrackedProjectFixture();
 
-    const result = await folders.listFiles({projectPath: tempDir, query: String.raw`src\but`});
+    const result = await listFolderFiles({projectPath: tempDir, query: String.raw`src\but`});
 
     expect(result.items).toEqual([
       {
@@ -78,7 +77,7 @@ describe("listing workspace file references", () => {
   it("falls back to full-path search when a slash query does not start with an existing directory", async () => {
     const tempDir = await createTrackedProjectFixture();
 
-    const result = await folders.listFiles({projectPath: tempDir, query: "feature-one/"});
+    const result = await listFolderFiles({projectPath: tempDir, query: "feature-one/"});
 
     expect(result.items).toContainEqual({
       path: "@features/feature-one/operations/",
@@ -90,7 +89,7 @@ describe("listing workspace file references", () => {
   it("includes hidden paths while still respecting gitignore", async () => {
     const tempDir = await createTrackedProjectFixture();
 
-    await expect(folders.listFiles({projectPath: tempDir, query: ".env"})).resolves.toMatchObject({
+    await expect(listFolderFiles({projectPath: tempDir, query: ".env"})).resolves.toMatchObject({
       items: [
         {
           path: "@.env",
@@ -99,6 +98,6 @@ describe("listing workspace file references", () => {
         },
       ],
     });
-    await expect(folders.listFiles({projectPath: tempDir, query: "ignored"})).resolves.toMatchObject({items: []});
+    await expect(listFolderFiles({projectPath: tempDir, query: "ignored"})).resolves.toMatchObject({items: []});
   });
 });

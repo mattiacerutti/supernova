@@ -1,41 +1,42 @@
-import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
+import type {Ctx} from "@earendil-works/chord";
+import {ChatService} from "@supernova/contracts/services/chat/services";
 import type {CreateSessionPayload} from "@supernova/contracts/services/sessions/procedures";
 import {CreateSessionError} from "@supernova/contracts/services/sessions/procedures";
 import type {SessionWorktree} from "@supernova/contracts/services/sessions/schemas";
-import type {AgentRuntime} from "@supernova/agent-runtime/composition/runtime";
-import {errorMessage} from "@supernova/agent-runtime/lib/errors";
+import type {OperationDeps} from "@supernova/agent-runtime/features/sessions/operations/deps";
 import {releaseSession} from "@supernova/agent-runtime/features/sessions/operations/release-session";
+import {Worktrees} from "@supernova/agent-runtime/features/worktrees/contract";
+import {expectVariant} from "@supernova/agent-runtime/lib/chord/principals";
+import {errorMessage} from "@supernova/agent-runtime/lib/errors";
 
-export async function createSession(payload: CreateSessionPayload, runtime: AgentRuntime): Promise<void> {
-  const {sessions, worktrees, status, sessionHosts} = runtime;
+export async function createSession(payload: CreateSessionPayload, deps: OperationDeps, ctx: Ctx): Promise<void> {
   const {id, message, projectPath, workspace: selection} = payload;
-  const undos: Array<() => Promise<void>> = [];
+  const undos: Array<() => Promise<unknown>> = [];
 
   try {
     let worktree: SessionWorktree | undefined;
 
     if (selection?.mode === "worktree") {
-      status.change(id, {kind: "setup", step: "worktree"});
+      const worktrees = await ctx.get(Worktrees, {});
+      deps.status().change(id, {kind: "setup", step: "worktree"});
 
       try {
-        worktree = await worktrees.create({baseRef: selection.baseRef, projectPath});
+        worktree = await worktrees.create({baseRef: selection.baseRef, projectPath}, ctx);
       } finally {
-        status.change(id, {kind: "setup", step: null});
+        deps.status().change(id, {kind: "setup", step: null});
       }
 
       const created = worktree;
-      undos.push(() => worktrees.remove({projectPath, worktree: created}));
+      undos.push(() => worktrees.remove({projectPath, worktree: created}, ctx));
     }
 
-    await sessions.create({id, projectPath, worktree});
-    undos.push(() => sessions.delete({sessionId: id}));
-    undos.push(() => releaseSession({sessionId: id, projectRoot: worktree?.path ?? projectPath}, runtime));
+    await deps.sessions().create({id, projectPath, ...(worktree ? {worktree} : {})});
+    undos.push(() => deps.sessions().delete({sessionId: id}));
+    undos.push(() => releaseSession({sessionId: id, projectRoot: worktree?.path ?? projectPath}, deps));
 
     try {
-      // As the server, so the creation outlives the browser's call.
-      await sessionHosts.withChat(id, async (chat) => {
-        if (message) await chat.sendMessage(message, BACKGROUND_CONTEXT);
-      });
+      const chat = expectVariant(await ctx.get(ChatService, {sessionId: id}), "server");
+      if (message) await chat.sendMessage(message, ctx);
     } catch (cause) {
       throw new CreateSessionError({cause, message: errorMessage(cause, "Failed to start the session.")});
     }

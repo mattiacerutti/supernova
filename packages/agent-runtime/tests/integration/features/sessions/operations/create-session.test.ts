@@ -5,13 +5,12 @@ import {tmpdir} from "node:os";
 import {join, sep} from "node:path";
 import {promisify} from "node:util";
 import type {CreateSessionPayload} from "@supernova/contracts/services/sessions/procedures";
-import {createSession as createSessionOperation} from "@supernova/agent-runtime/features/sessions/operations/create-session";
 import {afterEach, describe, expect, it} from "vitest";
 import type {Reference} from "@earendil-works/chord";
 import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import {SessionStatusService} from "@supernova/contracts/services/sessions/services";
 import {cleanupTempDirs} from "@tests/support/async";
-import {assistantTexts, createPiTestRuntime, fauxAssistantMessage, selectedModelReference, turnContents} from "@tests/support/session-runtime";
+import {assistantTexts, createPiTestRuntime, fauxAssistantMessage, selectedModelReference, turnContents} from "@tests/support/test-runtime";
 
 const firstMessage = {contentParts: [{text: "Hi", type: "text" as const}], modelReference: selectedModelReference};
 
@@ -43,7 +42,7 @@ describe("creating a session with its first turn", () => {
     tempDirs.push(worktreeStorageRoot);
     const pi = await createPiTestRuntime({worktreeStorageRoot});
     runtimes.push(pi);
-    const createSession = (payload: CreateSessionPayload) => createSessionOperation(payload, pi.runtime);
+    const createSession = (payload: CreateSessionPayload) => pi.operations.create(payload);
     return {createSession, pi};
   }
 
@@ -54,7 +53,7 @@ describe("creating a session with its first turn", () => {
     await createSession({id: "first-send", message: firstMessage, projectPath: "/workspace"});
 
     // The first turn is placed before creation returns.
-    expect(turnContents(await pi.sessionRuntime.current("first-send"))).toEqual([firstMessage.contentParts]);
+    expect(turnContents(await pi.chat.current("first-send"))).toEqual([firstMessage.contentParts]);
     await pi.settled("first-send");
     expect(assistantTexts(await pi.sessions.get({sessionId: "first-send"}))).toEqual(["Hello!"]);
   });
@@ -97,7 +96,7 @@ describe("creating a session with its first turn", () => {
     expect(record).toMatchObject({projectPath: repo.split(sep).join("/"), title: "Generated title", worktree: {branch: expect.stringMatching(/^supernova\/[a-z]+-[a-z]+$/)}});
     const worktreePath = record?.worktree?.path;
     expect(worktreePath && existsSync(join(worktreePath, "a.txt"))).toBe(true);
-    expect(pi.store.find("in-worktree")?.worktree?.path).toBe(worktreePath);
+    expect((await pi.store.find("in-worktree"))?.worktree?.path).toBe(worktreePath);
     // Shown while the worktree is set up, cleared before the first turn.
     expect(setupSteps).toEqual(["worktree", null]);
   });
@@ -122,7 +121,7 @@ describe("creating a session with its first turn", () => {
 
     await createSession({id: "empty", projectPath: "/workspace"});
 
-    expect(await pi.sessionRuntime.current("empty")).toMatchObject({id: "empty", entries: {items: []}});
+    expect(await pi.chat.current("empty")).toMatchObject({id: "empty", entries: {items: []}});
     expect(existsSync(join(pi.sessionStorageRoot, "empty", "session.sqlite"))).toBe(true);
   });
 });

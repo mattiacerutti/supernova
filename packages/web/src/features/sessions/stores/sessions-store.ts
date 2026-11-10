@@ -1,6 +1,7 @@
-import type {HistorySide} from "@supernova/contracts/services/session-runtime/procedures";
+import type {HistorySide} from "@supernova/contracts/services/chat/procedures";
 import type {SessionSetupStep} from "@supernova/contracts/services/sessions/procedures";
-import type {Session, SessionEntries, UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
+import type {ChatDocument} from "@supernova/contracts/services/chat/schemas";
+import type {ChatEntries, UserMessageContentPart} from "@supernova/contracts/services/chat/schemas";
 import type {ListedSession, SessionStatusEntry} from "@supernova/contracts/services/sessions/services";
 import {create} from "zustand";
 
@@ -24,14 +25,14 @@ export interface SessionOptimism {
 
 interface SessionsStoreState {
   readonly statuses: Readonly<Record<string, SessionStatusEntry>>;
-  readonly documents: Readonly<Record<string, Session>>;
+  readonly documents: Readonly<Record<string, ChatDocument>>;
   readonly records: Readonly<Record<string, ListedSession>>;
   readonly loadErrors: Readonly<Record<string, string>>;
   readonly optimism: Readonly<Record<string, SessionOptimism>>;
   readonly setStatuses: (statuses: Readonly<Record<string, SessionStatusEntry>>) => void;
-  readonly setDocument: (session: Session) => void;
+  readonly setDocument: (session: ChatDocument) => void;
   readonly setRecord: (record: ListedSession) => void;
-  readonly addHistoryPage: (sessionId: string, side: HistorySide, edge: number, page: SessionEntries) => void;
+  readonly addHistoryPage: (sessionId: string, side: HistorySide, edge: number, page: ChatEntries) => void;
   readonly setLoadError: (sessionId: string, message: string) => void;
   readonly patchOptimism: (sessionId: string, change: SessionOptimism) => void;
   readonly forget: (sessionId: string) => void;
@@ -41,7 +42,7 @@ function without<T>(record: Readonly<Record<string, T>>, key: string): Record<st
   return Object.fromEntries(Object.entries(record).filter(([recordKey]) => recordKey !== key));
 }
 
-function reuseEntries(known: SessionEntries, next: SessionEntries): SessionEntries {
+function reuseEntries(known: ChatEntries, next: ChatEntries): ChatEntries {
   // Merging a paged window must not make every streaming partial rebuild the loaded transcript.
   return known.remaining === next.remaining &&
     known.precedingEntryId === next.precedingEntryId &&
@@ -51,7 +52,7 @@ function reuseEntries(known: SessionEntries, next: SessionEntries): SessionEntri
     : next;
 }
 
-function withKnownBranch(known: Session | undefined, next: Session): Session {
+function withKnownBranch(known: ChatDocument | undefined, next: ChatDocument): ChatDocument {
   if (!known) return next;
   const branch = [...known.entries.items, ...known.undone.items];
   let {entries, undone} = next;

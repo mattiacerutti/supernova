@@ -4,10 +4,7 @@ import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {promisify} from "node:util";
 import {afterAll, beforeAll, describe, expect, it} from "vitest";
-import {Workspace} from "@supernova/agent-runtime/features/workspace/workspace";
-import type {WorkspaceDeps} from "@supernova/agent-runtime/features/workspace/workspace";
-
-const workspace = new Workspace({terminals: {} as WorkspaceDeps["terminals"]});
+import * as workspace from "@supernova/agent-runtime/features/workspace/workspace";
 
 const exec = promisify(execFile);
 

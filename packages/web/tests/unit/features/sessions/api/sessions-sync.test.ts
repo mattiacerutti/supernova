@@ -1,4 +1,6 @@
-import type {ModelReference, Session, UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
+import type {ModelReference} from "@supernova/contracts/services/sessions/schemas";
+import type {ChatDocument} from "@supernova/contracts/services/chat/schemas";
+import type {UserMessageContentPart} from "@supernova/contracts/services/chat/schemas";
 import type {ListedSession, SessionStatusEntry, SessionStatuses, SessionsView} from "@supernova/contracts/services/sessions/services";
 import {afterEach, beforeEach, describe, expect, it, vi} from "vitest";
 import {sessionActions} from "@/features/sessions/api/conversation/session-commands";
@@ -12,7 +14,7 @@ import {assistantEntry, page, runningLive, sessionDocument, text, transcript, tu
 import {defineFacet, PluginError} from "@earendil-works/chord";
 import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import type {RuntimePrincipal} from "@supernova/contracts/lib/protocol";
-import {ChatService} from "@supernova/contracts/services/session-runtime/services";
+import {ChatService} from "@supernova/contracts/services/chat/services";
 import {SessionsService, SessionStatusService} from "@supernova/contracts/services/sessions/services";
 import type {OwnerOf} from "@/runtime/references";
 import {asOwner} from "@/runtime/references";
@@ -28,21 +30,21 @@ const contentParts = [{text: "Fix this", type: "text"}] satisfies readonly UserM
 const ok = null;
 const NAVIGATION_METHODS = {redo: "redoCheckpoint", revert: "revertToMessage", undo: "undoCheckpoint"} as const;
 
-function live(sessionId = "session-1", document: Session | null = session({id: sessionId})) {
+function live(sessionId = "session-1", document: ChatDocument | null = session({id: sessionId})) {
   const {optimism, records, statuses} = useSessionsStore.getState();
   const view = sessionView({entry: statuses[sessionId], optimism: optimism[sessionId], record: records[sessionId], session: document ?? undefined});
   return {...view, liveMessage: view.liveTurn?.userMessage?.contentParts, turnIds: view.turns.map((turn) => turn.id)};
 }
 
-function session(input?: Partial<Session>): Session {
+function session(input?: Partial<ChatDocument>): ChatDocument {
   return {...sessionDocument(), updatedAt: "2026-01-01T00:00:00.000Z", ...input};
 }
 
-function twoTurns(): Session {
+function twoTurns(): ChatDocument {
   return session({entries: page([turnAt(1), turnAt(3)])});
 }
 
-function undoneLast(document: Session): Session {
+function undoneLast(document: ChatDocument): ChatDocument {
   return {...document, entries: page(document.entries.items.slice(0, 1)), undone: page(document.entries.items.slice(1), document.entries.items[0]!.id)};
 }
 
@@ -77,10 +79,10 @@ interface FakeServices {
   readonly client: RuntimeClient;
   readonly close: () => Promise<void>;
   readonly statuses: Published<SessionStatuses>;
-  readonly documents: Map<string, Published<Session>>;
+  readonly documents: Map<string, Published<ChatDocument>>;
   readonly records: Map<string, ListedSession>;
   readonly view: Published<SessionsView>;
-  readonly chat: {-readonly [K in keyof Omit<ChatOwner, "session">]: ChatOwner[K]};
+  readonly chat: {-readonly [K in keyof Omit<ChatOwner, "document">]: ChatOwner[K]};
   readonly sessions: {-readonly [K in keyof Omit<SessionsOwner, "view">]: SessionsOwner[K]};
   readonly held: string[];
 }
@@ -94,7 +96,7 @@ function current<T extends object>(target: T): T {
 
 function fakeServices(): FakeServices {
   const statuses = new Published<SessionStatuses>({sessions: {}});
-  const documents = new Map<string, Published<Session>>();
+  const documents = new Map<string, Published<ChatDocument>>();
   const held: string[] = [];
   const documentOf = (sessionId: string) => {
     let document = documents.get(sessionId);
@@ -140,7 +142,7 @@ function fakeServices(): FakeServices {
     session: (sessionId) =>
       defineFacet<RuntimePrincipal>((host) => {
         held.push(sessionId);
-        host.serve(ChatService, (_params, _principal, self) => ({variant: "owner", members: {session: documentOf(sessionId).member(self), ...current(chat)}}));
+        host.serve(ChatService, (_params, _principal, self) => ({variant: "owner", members: {document: documentOf(sessionId).member(self), ...current(chat)}}));
       }),
   });
   return {client, close, statuses, documents, records, view, held, chat, sessions};

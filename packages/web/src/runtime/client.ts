@@ -6,7 +6,7 @@ import {ConfigurationService} from "@supernova/contracts/services/configuration/
 import {ExtensionsService} from "@supernova/contracts/services/extensions/services";
 import {FoldersService} from "@supernova/contracts/services/folders/services";
 import {ProvidersService} from "@supernova/contracts/services/providers/services";
-import {ChatService} from "@supernova/contracts/services/session-runtime/services";
+import {ChatService} from "@supernova/contracts/services/chat/services";
 import {SessionsService, SessionStatusService} from "@supernova/contracts/services/sessions/services";
 import {TerminalService, WorkspaceService} from "@supernova/contracts/services/workspace/services";
 import type {OwnerOf} from "@/runtime/references";

@@ -1,17 +1,17 @@
 import type {ListedSession} from "@supernova/contracts/services/sessions/services";
+import type {ChatDocument} from "@supernova/contracts/services/chat/schemas";
 import type {
   AssistantMessage,
   CompactionStatus,
   EntryRecord,
   LiveState,
   PiUserMessage,
-  Session,
-  SessionEntries,
-  SessionEntry,
+  ChatEntries,
+  ChatEntry,
   ToolCall,
   ToolResultMessage,
   UserMessageContentPart,
-} from "@supernova/contracts/services/sessions/schemas";
+} from "@supernova/contracts/services/chat/schemas";
 
 // Typed by the contracts and Pi: a change to what the server sends stops these compiling, not passing on a stale shape.
 
@@ -35,7 +35,7 @@ const ZERO_USAGE: AssistantMessage["usage"] = {
   cost: {input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0},
 };
 
-export type EntryDraft = Omit<SessionEntry, "conversationId" | "id">;
+export type EntryDraft = Omit<ChatEntry, "conversationId" | "id">;
 
 export function text(value: string): UserMessageContentPart {
   return {text: value, type: "text"};
@@ -101,7 +101,7 @@ export function compactionEntry(summary: string): EntryDraft {
   return {kind: KIND.compaction, model: [{content: `${SUMMARY_PREFIX}${summary}${SUMMARY_SUFFIX}`, role: "user", timestamp: 0}], data: {reason: "manual"}};
 }
 
-export function transcript(drafts: readonly EntryDraft[], options: {readonly firstId?: number; readonly startMs?: number} = {}): SessionEntry[] {
+export function transcript(drafts: readonly EntryDraft[], options: {readonly firstId?: number; readonly startMs?: number} = {}): ChatEntry[] {
   const {firstId = 1, startMs = Date.UTC(2026, 0, 1)} = options;
   return drafts.map((draft, index) => {
     const id = firstId + index;
@@ -111,7 +111,7 @@ export function transcript(drafts: readonly EntryDraft[], options: {readonly fir
   });
 }
 
-export function turnAt(id: number, label = `Turn ${id}`): SessionEntry {
+export function turnAt(id: number, label = `Turn ${id}`): ChatEntry {
   return transcript([userEntry(label)], {firstId: id})[0]!;
 }
 
@@ -139,8 +139,8 @@ export function runningLive(options: {readonly partial?: LivePartial["content"];
 }
 
 export function sessionDocument(
-  input: Partial<Omit<Session, "entries" | "undone">> & {readonly entries?: readonly SessionEntry[]; readonly undone?: readonly SessionEntry[]} = {}
-): Session {
+  input: Partial<Omit<ChatDocument, "entries" | "undone">> & {readonly entries?: readonly ChatEntry[]; readonly undone?: readonly ChatEntry[]} = {}
+): ChatDocument {
   const {entries = [], undone = [], ...rest} = input;
   return {
     id: "session-1",
@@ -155,7 +155,7 @@ export function sessionDocument(
   };
 }
 
-export function page(items: readonly SessionEntry[], precedingEntryId: number | null = null, remaining = 0): SessionEntries {
+export function page(items: readonly ChatEntry[], precedingEntryId: number | null = null, remaining = 0): ChatEntries {
   return {items: [...items], remaining, precedingEntryId: precedingEntryId === null ? null : entryId(precedingEntryId)};
 }
 

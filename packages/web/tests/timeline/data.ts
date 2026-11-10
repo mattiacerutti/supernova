@@ -1,5 +1,7 @@
 import type {ListedSession} from "@supernova/contracts/services/sessions/services";
-import type {ModelDetails, ModelReference, Session, TextContent, ThinkingContent} from "@supernova/contracts/services/sessions/schemas";
+import type {ModelDetails, ModelReference} from "@supernova/contracts/services/sessions/schemas";
+import type {ChatDocument} from "@supernova/contracts/services/chat/schemas";
+import type {TextContent, ThinkingContent} from "@supernova/contracts/services/chat/schemas";
 import type {EntryDraft} from "@tests/support/session";
 import {assistantEntry, sessionDocument, transcript, userEntry} from "@tests/support/session";
 
@@ -33,7 +35,7 @@ function timestamp(offsetMs: number): string {
 
 export interface TimelineSession {
   readonly record: ListedSession;
-  readonly session: Session;
+  readonly session: ChatDocument;
 }
 
 function historySession(input: {readonly historyTurnCount: number; readonly id: string; readonly title: string}): TimelineSession {

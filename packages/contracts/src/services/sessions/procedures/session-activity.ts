@@ -1,5 +1,5 @@
 import {lit, obj, oneOf, opt, type Static, str, union} from "@earendil-works/chord";
-import type {LiveState} from "@supernova/contracts/services/sessions/schemas";
+import type {LiveState} from "@supernova/contracts/services/chat/schemas";
 
 export const SessionSetupStep = oneOf("worktree");
 

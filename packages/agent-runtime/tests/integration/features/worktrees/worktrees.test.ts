@@ -5,9 +5,8 @@ import {tmpdir} from "node:os";
 import {join, sep} from "node:path";
 import {promisify} from "node:util";
 import {afterEach, describe, expect, it} from "vitest";
-import {Workspace} from "@supernova/agent-runtime/features/workspace/workspace";
-import type {WorkspaceDeps} from "@supernova/agent-runtime/features/workspace/workspace";
-import {Worktrees} from "@supernova/agent-runtime/features/worktrees/worktrees";
+import {listBranches} from "@supernova/agent-runtime/features/workspace/workspace";
+import {createWorktree, removeWorktree} from "@supernova/agent-runtime/features/worktrees/worktrees";
 import {cleanupTempDirs} from "@tests/support/async";
 
 const exec = promisify(execFile);
@@ -36,16 +35,15 @@ describe("Worktrees", () => {
     const repo = await createRepo(tempDirs);
     const storage = await mkdtemp(join(tmpdir(), "supernova-worktrees-"));
     tempDirs.push(storage);
-    const worktrees = new Worktrees(storage);
 
-    const worktree = await worktrees.create({baseRef: "main", projectPath: repo});
+    const worktree = await createWorktree({baseRef: "main", projectPath: repo, storageRoot: storage});
 
     expect(worktree.branch).toMatch(/^supernova\/[a-z]+-[a-z]+$/);
     expect(worktree.path.startsWith((await realpath(storage)).split(sep).join("/"))).toBe(true);
     expect(await git(worktree.path, "rev-parse", "--abbrev-ref", "HEAD")).toBe(worktree.branch);
     expect(existsSync(join(worktree.path, "a.txt"))).toBe(true);
 
-    const branches = await new Workspace({terminals: {} as WorkspaceDeps["terminals"]}).listBranches({projectPath: repo});
+    const branches = await listBranches({projectPath: repo});
     expect(branches.current).toBe("main");
     expect(branches.branches).toContainEqual({name: worktree.branch, remote: false, worktreePath: worktree.path});
     expect(branches.branches.find((branch) => branch.name === "main")).toMatchObject({remote: false, worktreePath: (await realpath(repo)).split(sep).join("/")});
@@ -55,15 +53,14 @@ describe("Worktrees", () => {
     const repo = await createRepo(tempDirs);
     const storage = await mkdtemp(join(tmpdir(), "supernova-worktrees-"));
     tempDirs.push(storage);
-    const worktrees = new Worktrees(storage);
-    const worktree = await worktrees.create({baseRef: "main", projectPath: repo});
+    const worktree = await createWorktree({baseRef: "main", projectPath: repo, storageRoot: storage});
     await writeFile(join(worktree.path, "dirty.txt"), "x\n");
 
-    await worktrees.remove({projectPath: repo, worktree});
+    await removeWorktree({projectPath: repo, worktree});
 
     expect(existsSync(worktree.path)).toBe(false);
     expect(await git(repo, "branch", "--list", worktree.branch)).toBe("");
-    await expect(worktrees.remove({projectPath: repo, worktree})).resolves.toBeUndefined();
+    await expect(removeWorktree({projectPath: repo, worktree})).resolves.toBeUndefined();
   });
 
   it("fails on an unknown base ref", async () => {
@@ -71,6 +68,6 @@ describe("Worktrees", () => {
     const storage = await mkdtemp(join(tmpdir(), "supernova-worktrees-"));
     tempDirs.push(storage);
 
-    await expect(new Worktrees(storage).create({baseRef: "nope", projectPath: repo})).rejects.toThrow(/Git command failed/);
+    await expect(createWorktree({baseRef: "nope", projectPath: repo, storageRoot: storage})).rejects.toThrow(/Git command failed/);
   });
 });

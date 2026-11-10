@@ -2,8 +2,7 @@ import type {Host, Link} from "@earendil-works/chord";
 import {createHost, memoryLinkPair} from "@earendil-works/chord";
 import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import type {RuntimePrincipal} from "@supernova/contracts/lib/protocol";
-import type {AgentRuntime} from "@supernova/agent-runtime/composition/runtime";
-import type {ServerHostHandle} from "@supernova/agent-runtime/composition/server-host";
+import type {ServerHostHandle, ServerHostOptions} from "@supernova/agent-runtime/composition/server-host";
 import {startServerHost} from "@supernova/agent-runtime/composition/server-host";
 
 export interface TestClient {
@@ -24,13 +23,13 @@ function recording(link: Link, received: Uint8Array[]): Link {
   };
 }
 
-export async function startTestServerHost(runtime: AgentRuntime): Promise<{
+export async function startTestServerHost(options: ServerHostOptions): Promise<{
   readonly serverHost: ServerHostHandle;
   readonly client: Host<RuntimePrincipal>;
   readonly connectClient: (principal?: RuntimePrincipal) => Promise<TestClient>;
   readonly close: () => Promise<void>;
 }> {
-  const serverHost = await startServerHost(runtime);
+  const serverHost = await startServerHost(options);
   const clients: Host<RuntimePrincipal>[] = [];
   const connectClient = async (principal: RuntimePrincipal = {kind: "owner"}): Promise<TestClient> => {
     const received: Uint8Array[] = [];
@@ -42,13 +41,16 @@ export async function startTestServerHost(runtime: AgentRuntime): Promise<{
     clients.push(host);
     return {host, received, disconnect: () => down.close()};
   };
+
+  let closing: Promise<void> | undefined;
   return {
     serverHost,
     client: (await connectClient()).host,
     connectClient,
-    close: async () => {
-      for (const client of clients) await client.close(BACKGROUND_CONTEXT);
-      await serverHost.close();
-    },
+    close: () =>
+      (closing ??= (async () => {
+        for (const client of clients) await client.close(BACKGROUND_CONTEXT);
+        await serverHost.close();
+      })()),
   };
 }

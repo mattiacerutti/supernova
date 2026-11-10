@@ -1,6 +1,8 @@
 import {BACKGROUND_CONTEXT as context} from "@earendil-works/chord/context";
 import {useRef, useState} from "react";
-import type {ModelReference, Session, SessionWorkspaceSelection, UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
+import type {ModelReference, SessionWorkspaceSelection} from "@supernova/contracts/services/sessions/schemas";
+import type {ChatDocument} from "@supernova/contracts/services/chat/schemas";
+import type {UserMessageContentPart} from "@supernova/contracts/services/chat/schemas";
 import type {ListedSession} from "@supernova/contracts/services/sessions/services";
 import {forgetSession} from "@/features/sessions/api/sessions-sync";
 import {readSessionView} from "@/features/sessions/hooks/use-session";
@@ -12,7 +14,7 @@ import {showToast} from "@/lib/toast";
 import {useSettingsStore} from "@/stores/settings-store";
 import type {CodeOf} from "@supernova/contracts/lib/errors";
 import {failureOf} from "@supernova/contracts/lib/errors";
-import {ChatErrors} from "@supernova/contracts/services/session-runtime/services";
+import {ChatErrors} from "@supernova/contracts/services/chat/services";
 import type {ChatOwner, RuntimeClient} from "@/runtime/client";
 import {useRuntime} from "@/runtime/hooks/use-runtime";
 
@@ -42,7 +44,7 @@ function errorMessage(cause: unknown, fallback: string): string {
   return cause instanceof Error && cause.message.length > 0 ? cause.message : fallback;
 }
 
-function emptySession(projectPath: string, sessionId: string): {readonly record: ListedSession; readonly session: Session} {
+function emptySession(projectPath: string, sessionId: string): {readonly record: ListedSession; readonly session: ChatDocument} {
   const updatedAt = new Date().toISOString();
   return {
     record: {id: sessionId, title: "Untitled session", forked: false, pinned: false, projectPath, updatedAt},
@@ -50,7 +52,7 @@ function emptySession(projectPath: string, sessionId: string): {readonly record:
   };
 }
 
-function emptyConversation(sessionId: string, updatedAt: string): Session {
+function emptyConversation(sessionId: string, updatedAt: string): ChatDocument {
   return {
     id: sessionId,
     updatedAt,

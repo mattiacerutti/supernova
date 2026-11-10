@@ -1,4 +1,5 @@
-import type {SessionWorkspaceSelection, UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
+import type {SessionWorkspaceSelection} from "@supernova/contracts/services/sessions/schemas";
+import type {UserMessageContentPart} from "@supernova/contracts/services/chat/schemas";
 import {useNavigate} from "@tanstack/react-router";
 import {useState} from "react";
 import {useConfiguration} from "@/api/configuration";
@@ -23,7 +24,7 @@ import SessionTitleText from "@/features/sessions/components/session-title-text"
 import SessionTimeline from "@/features/sessions/components/timeline/session-timeline";
 import {ComposerContext, useComposer} from "@/features/sessions/hooks/composer/use-composer";
 import {useFollowSession} from "@/features/sessions/api/sessions-sync";
-import {ChatService} from "@supernova/contracts/services/session-runtime/services";
+import {ChatService} from "@supernova/contracts/services/chat/services";
 import type {OwnerOf} from "@/runtime/references";
 import {useObject} from "@/runtime/hooks/use-object";
 import {readSessionView, useSession} from "@/features/sessions/hooks/use-session";

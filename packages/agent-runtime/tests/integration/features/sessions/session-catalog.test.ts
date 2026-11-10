@@ -2,10 +2,9 @@ import {mkdir, mkdtemp} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join, resolve, sep} from "node:path";
 import {afterEach, describe, expect, it} from "vitest";
-import {Sessions} from "@supernova/agent-runtime/features/sessions/sessions";
-import type {SessionRecord} from "@supernova/agent-runtime/pi/lib/session/session-state";
-import {SessionCatalog} from "@supernova/agent-runtime/pi/lib/session/session-catalog";
-import {SessionStore} from "@supernova/agent-runtime/pi/session-store";
+import {Sessions} from "@supernova/agent-runtime/features/sessions/natives/sessions";
+import type {SessionRecord} from "@supernova/agent-runtime/core/session-state";
+import {SessionCatalog} from "@supernova/agent-runtime/features/sessions/natives/session-catalog";
 import {cleanupTempDirs} from "@tests/support/async";
 
 function record(overrides: Partial<SessionRecord>): SessionRecord {
@@ -16,23 +15,24 @@ const workspace = resolve("/workspace").split(sep).join("/");
 
 describe("listing, searching, pinning, and archiving saved sessions", () => {
   const tempDirs: string[] = [];
-  const stores: SessionStore[] = [];
+  const opened: Sessions[] = [];
 
   afterEach(async () => {
-    while (stores.length > 0) stores.pop()!.close();
+    while (opened.length > 0) opened.pop()!.close();
     cleanupTempDirs(tempDirs);
   });
 
-  async function sessionsWith(records: readonly SessionRecord[]): Promise<{sessions: Sessions; store: SessionStore}> {
+  async function sessionsWith(records: readonly SessionRecord[]) {
     const root = join(await mkdtemp(join(tmpdir(), "supernova-sessions-")), "sessions-v2");
     tempDirs.push(root);
     await mkdir(root, {recursive: true});
     const catalog = await SessionCatalog.open(join(root, "catalog.sqlite"));
     for (const item of records) catalog.insert(item);
     catalog.close();
-    const store = await SessionStore.open(root);
-    stores.push(store);
-    return {sessions: new Sessions({store, sdk: {} as never, resourceCache: {} as never}), store};
+    const revision = {value: 0, set: (next: number) => void (revision.value = next)};
+    const sessions = await Sessions.open({root, revision, sdk: {} as never, resourceCache: {} as never});
+    opened.push(sessions);
+    return {sessions, store: {find: async (sessionId: string) => sessions.find(sessionId)}, revision};
   }
 
   async function listProject(sessions: Sessions, projectPath: string, depth: number) {
@@ -145,17 +145,13 @@ describe("listing, searching, pinning, and archiving saved sessions", () => {
     });
   });
 
-  it("tells listening views after every catalog write", async () => {
-    const {sessions, store} = await sessionsWith([record({id: "session-1"})]);
-    let writes = 0;
-    const stop = store.onChange(() => void writes++);
+  it("moves the revision views follow on every catalog write", async () => {
+    const {sessions, revision} = await sessionsWith([record({id: "session-1"})]);
 
     await sessions.rename({sessionId: "session-1", title: "Renamed"});
     await sessions.pin({sessionId: "session-1", pinned: true});
     await sessions.archive({projectPath: "/workspace", sessionId: "session-1"});
-    stop();
-    await sessions.touch({sessionId: "session-1", at: new Date().toISOString()});
 
-    expect(writes).toBe(3);
+    expect(revision.value).toBe(3);
   });
 });

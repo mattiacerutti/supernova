@@ -2,9 +2,8 @@ import {mkdir, mkdtemp, writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join, sep} from "node:path";
 import {afterEach, describe, expect, it} from "vitest";
-import {Folders} from "@supernova/agent-runtime/features/folders/folders";
+import {listFolderSuggestions} from "@supernova/agent-runtime/features/folders/folders";
 
-const folders = new Folders();
 import {cleanupTempDirs} from "@tests/support/async";
 
 describe("suggesting local folders", () => {
@@ -22,13 +21,13 @@ describe("suggesting local folders", () => {
     await mkdir(join(tempDir, ".alpha-hidden"));
     await writeFile(join(tempDir, "alpha.txt"), "not a directory");
 
-    const result = await folders.listSuggestions({query: join(tempDir, "al")});
+    const result = await listFolderSuggestions({query: join(tempDir, "al")});
 
     expect(result.query).toBe(join(tempDir, "al"));
     expect(result.queryPathType).toBe("missing");
     expect(result.suggestions).toEqual([{name: "alpha", path: join(tempDir, "alpha").split(sep).join("/")}]);
 
-    const directoryResult = await folders.listSuggestions({query: `${tempDir}/`});
+    const directoryResult = await listFolderSuggestions({query: `${tempDir}/`});
     expect(directoryResult.suggestions.map((suggestion) => suggestion.name)).toEqual([".alpha-hidden", "alpha", "beta"]);
   });
 
@@ -40,8 +39,8 @@ describe("suggesting local folders", () => {
     await writeFile(filePath, "not a directory");
     await mkdir(folderPath);
 
-    await expect(folders.listSuggestions({query: join(tempDir, "missing")})).resolves.toMatchObject({queryPathType: "missing"});
-    await expect(folders.listSuggestions({query: filePath})).resolves.toMatchObject({queryPathType: "file"});
-    await expect(folders.listSuggestions({query: folderPath})).resolves.toMatchObject({queryPathType: "directory"});
+    await expect(listFolderSuggestions({query: join(tempDir, "missing")})).resolves.toMatchObject({queryPathType: "missing"});
+    await expect(listFolderSuggestions({query: filePath})).resolves.toMatchObject({queryPathType: "file"});
+    await expect(listFolderSuggestions({query: folderPath})).resolves.toMatchObject({queryPathType: "directory"});
   });
 });

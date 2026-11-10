@@ -1,6 +1,6 @@
 import {BACKGROUND_CONTEXT as context} from "@earendil-works/chord/context";
 import {useMutation} from "@tanstack/react-query";
-import type {HistorySide} from "@supernova/contracts/services/session-runtime/procedures";
+import type {HistorySide} from "@supernova/contracts/services/chat/procedures";
 import {useSessionsStore} from "@/features/sessions/stores/sessions-store";
 import type {ChatOwner} from "@/runtime/client";
 

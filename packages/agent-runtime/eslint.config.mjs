@@ -11,7 +11,7 @@ const features = readdirSync(new URL("src/features", import.meta.url), {withFile
   .filter((entry) => entry.isDirectory())
   .map((entry) => entry.name);
 
-/** Feature implementations stay independent; facets and application operations may use the runtime's type. */
+/** A feature reaches another only through its contract.ts: the objects it serves. */
 const featureBoundaryRules = features.map((feature) => ({
   files: [`src/features/${feature}/**/*.ts`],
   rules: {
@@ -20,13 +20,14 @@ const featureBoundaryRules = features.map((feature) => ({
       {
         patterns: [
           {
-            group: features.filter((other) => other !== feature).map((other) => `@supernova/agent-runtime/features/${other}/*`),
-            message: "Features do not import each other. Shared Pi integration belongs in pi/, plain helpers in lib/; composition/ passes the rest in.",
+            group: features
+              .filter((other) => other !== feature)
+              .flatMap((other) => [`@supernova/agent-runtime/features/${other}/*`, `!@supernova/agent-runtime/features/${other}/contract`]),
+            message: "Features reach each other through contract.ts. Shared Pi integration belongs in pi/, plain helpers in lib/.",
           },
           {
             group: ["@supernova/agent-runtime/composition/*"],
-            allowTypeImports: true,
-            message: "Features may import composition types, not implementations. Operations and facets receive the runtime.",
+            message: "Features do not know composition; they reach what it provides through core/.",
           },
         ],
       },
@@ -55,8 +56,8 @@ export default defineConfig(
   // Every source file lives in one of the four layers; nothing is loose at the root but the package entry.
   {
     files: ["src/**/*.ts"],
-    ignores: ["src/index.ts", "src/{composition,features,lib,pi}/**/*.ts"],
-    rules: {"no-restricted-syntax": ["error", {selector: "Program", message: "Put this file in composition/, features/, lib/ or pi/."}]},
+    ignores: ["src/index.ts", "src/{composition,core,features,lib,pi}/**/*.ts"],
+    rules: {"no-restricted-syntax": ["error", {selector: "Program", message: "Put this file in composition/, core/, features/, lib/ or pi/."}]},
   },
   // pi/ and lib/ are the foundation; they depend on nothing above them.
   {
@@ -67,8 +68,8 @@ export default defineConfig(
         {
           patterns: [
             {
-              group: ["@supernova/agent-runtime/features/*", "@supernova/agent-runtime/composition/*"],
-              message: "pi/ and lib/ must not depend on features or composition/.",
+              group: ["@supernova/agent-runtime/features/*", "@supernova/agent-runtime/composition/*", "@supernova/agent-runtime/core/*"],
+              message: "pi/ and lib/ must not depend on features, core/ or composition/.",
             },
           ],
         },

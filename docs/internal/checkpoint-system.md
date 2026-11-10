@@ -7,8 +7,8 @@ Supernova checkpoints coordinate conversation navigation with workspace recovery
 The boundaries are deliberate:
 
 - Session orchestration chooses turn boundaries and commits conversation navigation.
-- The [checkpoint store](../../packages/agent-runtime/src/features/session-runtime/checkpoints/checkpoint-store.ts) coordinates repository discovery, manifests, capture, restore, and cleanup.
-- The [shadow repository](../../packages/agent-runtime/src/features/session-runtime/checkpoints/shadow-repository.ts) owns Git snapshots, conflict detection, selective restoration, and verification for one worktree.
+- The [checkpoint store](../../packages/agent-runtime/src/features/chat/natives/checkpoint-store.ts) coordinates repository discovery, manifests, capture, restore, and cleanup.
+- The [shadow repository](../../packages/agent-runtime/src/features/chat/lib/checkpoints/shadow-repository.ts) owns Git snapshots, conflict detection, selective restoration, and verification for one worktree.
 
 Read those implementations for formats and Git plumbing. This guide owns preservation guarantees, recovery policy, and the limits contributors must not overlook.
 
@@ -27,7 +27,7 @@ Read those implementations for formats and Git plumbing. This guide owns preserv
 
 Checkpoint boundaries belong to turns, not individual transcript entries. Undo, redo, and revert move the shown position while retaining later turns for redo. Sending or compacting from an undone position forks there and replaces the redo path; merely navigating does not fork.
 
-Undo targets the first hidden turn's **before** checkpoint, preserving manual edits made before that turn was sent. Redo and forward revert target the last shown turn's **after** checkpoint. Keep all three commands on the shared [navigation path](../../packages/agent-runtime/src/features/session-runtime/worker/lib/navigate-to-turn.ts), so they cannot acquire different restore checks.
+Undo targets the first hidden turn's **before** checkpoint, preserving manual edits made before that turn was sent. Redo and forward revert target the last shown turn's **after** checkpoint. Keep all three commands on the shared navigation path (`Chat.navigate` in [chat.ts](../../packages/agent-runtime/src/features/chat/natives/chat.ts)), so they cannot acquire different restore checks.
 
 Navigation also restores the model and thinking state associated with the shown conversation. A later send must fork from that state, not silently reuse the abandoned branch's settings.
 

@@ -8,10 +8,10 @@ import {createPiSdk} from "@supernova/agent-runtime/pi/sdk";
 import type {Message} from "@earendil-works/pi-ai";
 import {getSystemMessageText} from "@earendil-works/pi-ai";
 import {createReadTool} from "@earendil-works/pi-durable/tools";
-import {createPiTestRuntime, fauxAssistantMessage, selectedModelReference} from "@tests/support/session-runtime";
+import {createPiTestRuntime, fauxAssistantMessage, selectedModelReference} from "@tests/support/test-runtime";
 import type {TSchema} from "typebox";
 import type {ToolDefinition} from "@earendil-works/pi-coding-agent";
-import {webFetchTool} from "@supernova/agent-runtime/features/session-runtime/tools/web-fetch";
+import {webFetchTool} from "@supernova/agent-runtime/features/chat/tools/web-fetch";
 import {CustomPiResourceLoader} from "@supernova/agent-runtime/pi/config/resource-loader";
 import {cleanupTempDirs} from "@tests/support/async";
 

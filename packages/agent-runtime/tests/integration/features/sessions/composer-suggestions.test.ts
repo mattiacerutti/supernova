@@ -10,7 +10,6 @@ import {afterEach, beforeEach, describe, expect, it} from "vitest";
 import {ExtensionsService} from "@supernova/contracts/services/extensions/services";
 import type {PiSdk} from "@supernova/agent-runtime/pi/sdk";
 import {createPiSdk} from "@supernova/agent-runtime/pi/sdk";
-import {createAgentRuntime} from "@supernova/agent-runtime/composition/runtime";
 import {startTestServerHost} from "@tests/support/server-host";
 
 async function writeSkill(root: string, name: string, description: string): Promise<void> {
@@ -50,8 +49,7 @@ describe("composer suggestions", () => {
         return sdk.loadResourceLoader(input);
       },
     };
-    const runtime = await createAgentRuntime({sdk: {...counted, updatePackages: async () => undefined}});
-    const server = await startTestServerHost(runtime);
+    const server = await startTestServerHost({sdk: {...counted, updatePackages: async () => undefined}, sessionStorageRoot: join(home, "sessions")});
     const service = await server.client.get(SessionsService, {clientId: "composer"}, context);
     const extensions = await server.client.get(ExtensionsService, {}, context);
     if (service.variant !== "owner" || extensions.variant !== "owner") throw new Error("The owner's variants did not bind.");
@@ -59,7 +57,6 @@ describe("composer suggestions", () => {
       updateExtensions: async () => expect(await extensions.update(context)).toBeNull(),
       close: async () => {
         await server.close();
-        await runtime.dispose();
       },
       loads: () => loads,
       breakLoads: (message: string | undefined) => {

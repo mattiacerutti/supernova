@@ -1,11 +1,6 @@
-import {readFile} from "node:fs/promises";
+import {readFile as readBytes} from "node:fs/promises";
 import {join} from "node:path";
 import type {
-  TerminalClosePayload,
-  TerminalOpenPayload,
-  TerminalOpenResult,
-  TerminalResizePayload,
-  TerminalWritePayload,
   WorkspaceBranch,
   WorkspaceBranchesListPayload,
   WorkspaceBranchesListResult,
@@ -27,11 +22,6 @@ import {decodeWorkspaceFile, workspaceGit} from "@supernova/agent-runtime/featur
 import {pathInProject} from "@supernova/agent-runtime/features/workspace/lib/paths";
 import {discoverWorkspaceRepositories, repositoryPath} from "@supernova/agent-runtime/features/workspace/lib/repositories";
 import {runGitResult} from "@supernova/agent-runtime/lib/git-process";
-import type {Terminals} from "@supernova/agent-runtime/features/workspace/terminals/terminals";
-
-export interface WorkspaceDeps {
-  readonly terminals: Terminals;
-}
 
 async function untrackedEntry(repository: string, path: string): Promise<WorkspaceChangeEntry> {
   const output = await workspaceGit(repository, ["diff", "--no-index", "--numstat", "-z", "--", "/dev/null", path], [0, 1]);
@@ -45,7 +35,7 @@ async function blobAt(repository: string, revision: string, path: string): Promi
 
 async function workingFile(repository: string, path: string): Promise<string> {
   const target = await pathInProject(repository, path);
-  return target ? decodeWorkspaceFile(await readFile(target)) : "";
+  return target ? decodeWorkspaceFile(await readBytes(target)) : "";
 }
 
 async function repositoryFiles(projectPath: string, root: string): Promise<string[]> {
@@ -74,99 +64,67 @@ function parseWorktreeBranches(output: string): Map<string, string> {
   return result;
 }
 
-export class Workspace {
-  private readonly deps: WorkspaceDeps;
-
-  public constructor(deps: WorkspaceDeps) {
-    this.deps = deps;
-  }
-
-  public openTerminal(input: TerminalOpenPayload): Promise<TerminalOpenResult> {
-    return this.deps.terminals.open(input);
-  }
-
-  public writeTerminal(id: string, input: TerminalWritePayload): Promise<void> {
-    return this.deps.terminals.write(id, input);
-  }
-
-  public resizeTerminal(id: string, input: TerminalResizePayload): Promise<void> {
-    return this.deps.terminals.resize(id, input);
-  }
-
-  public closeTerminal(input: TerminalClosePayload): Promise<void> {
-    return this.deps.terminals.close(input);
-  }
-
-  public hasTerminal(id: string): boolean {
-    return this.deps.terminals.has(id);
-  }
-
-  public closeSessionTerminals(sessionId: string): Promise<void> {
-    return this.deps.terminals.closeSession(sessionId);
-  }
-
-  public async listBranches(input: WorkspaceBranchesListPayload): Promise<WorkspaceBranchesListResult> {
-    const {projectPath} = input;
-    const commands = [
-      workspaceGit(projectPath, ["for-each-ref", "--sort=-committerdate", "--format=%(refname)", "refs/heads", "refs/remotes"]),
-      workspaceGit(projectPath, ["worktree", "list", "--porcelain"]),
-      workspaceGit(projectPath, ["symbolic-ref", "--quiet", "--short", "HEAD"], [0, 1]),
-    ] as const;
-    // Drain every process before reporting a failure; a running Git process locks its cwd on Windows.
-    await Promise.allSettled(commands);
-    const [refs, worktrees, head] = await Promise.all(commands);
-    const worktreeByBranch = parseWorktreeBranches(worktrees);
-    const local: WorkspaceBranch[] = [];
-    const remote: WorkspaceBranch[] = [];
-    for (const ref of refs.split("\n")) {
-      if (ref.startsWith("refs/heads/")) {
-        const name = ref.slice("refs/heads/".length);
-        const worktreePath = worktreeByBranch.get(name);
-        local.push({name, remote: false, ...(worktreePath ? {worktreePath} : {})});
-      } else if (ref.startsWith("refs/remotes/") && !ref.endsWith("/HEAD")) {
-        remote.push({name: ref.slice("refs/remotes/".length), remote: true});
-      }
+export async function listBranches(input: WorkspaceBranchesListPayload): Promise<WorkspaceBranchesListResult> {
+  const {projectPath} = input;
+  const commands = [
+    workspaceGit(projectPath, ["for-each-ref", "--sort=-committerdate", "--format=%(refname)", "refs/heads", "refs/remotes"]),
+    workspaceGit(projectPath, ["worktree", "list", "--porcelain"]),
+    workspaceGit(projectPath, ["symbolic-ref", "--quiet", "--short", "HEAD"], [0, 1]),
+  ] as const;
+  // Drain every process before reporting a failure; a running Git process locks its cwd on Windows.
+  await Promise.allSettled(commands);
+  const [refs, worktrees, head] = await Promise.all(commands);
+  const worktreeByBranch = parseWorktreeBranches(worktrees);
+  const local: WorkspaceBranch[] = [];
+  const remote: WorkspaceBranch[] = [];
+  for (const ref of refs.split("\n")) {
+    if (ref.startsWith("refs/heads/")) {
+      const name = ref.slice("refs/heads/".length);
+      const worktreePath = worktreeByBranch.get(name);
+      local.push({name, remote: false, ...(worktreePath ? {worktreePath} : {})});
+    } else if (ref.startsWith("refs/remotes/") && !ref.endsWith("/HEAD")) {
+      remote.push({name: ref.slice("refs/remotes/".length), remote: true});
     }
-    const current = head.trim();
-    return {branches: [...local, ...remote], ...(current ? {current} : {})};
   }
+  const current = head.trim();
+  return {branches: [...local, ...remote], ...(current ? {current} : {})};
+}
 
-  public async getChanges(input: WorkspaceChangesGetPayload): Promise<WorkspaceChangesGetResult> {
-    const repository = await repositoryPath(input.projectPath, input.repositoryRoot);
-    const [nameStatus, numstat, untracked] = await Promise.all([
-      workspaceGit(repository, ["diff", "HEAD", "--name-status", "-z", "-M"]),
-      workspaceGit(repository, ["diff", "HEAD", "--numstat", "-z", "-M"]),
-      workspaceGit(repository, ["ls-files", "-z", "--others", "--exclude-standard"]),
-    ]);
-    const tracked = parseNameStatus(nameStatus, parseNumstat(numstat));
-    // A nested repository is listed as `dir/`; it has its own change list.
-    const untrackedPaths = untracked.split("\0").filter((path) => path.length > 0 && !path.endsWith("/"));
-    const untrackedEntries = await Promise.all(untrackedPaths.map((path) => untrackedEntry(repository, path)));
-    return {uncommitted: [...tracked, ...untrackedEntries]};
-  }
+export async function getChanges(input: WorkspaceChangesGetPayload): Promise<WorkspaceChangesGetResult> {
+  const repository = await repositoryPath(input.projectPath, input.repositoryRoot);
+  const [nameStatus, numstat, untracked] = await Promise.all([
+    workspaceGit(repository, ["diff", "HEAD", "--name-status", "-z", "-M"]),
+    workspaceGit(repository, ["diff", "HEAD", "--numstat", "-z", "-M"]),
+    workspaceGit(repository, ["ls-files", "-z", "--others", "--exclude-standard"]),
+  ]);
+  const tracked = parseNameStatus(nameStatus, parseNumstat(numstat));
+  // A nested repository is listed as `dir/`; it has its own change list.
+  const untrackedPaths = untracked.split("\0").filter((path) => path.length > 0 && !path.endsWith("/"));
+  const untrackedEntries = await Promise.all(untrackedPaths.map((path) => untrackedEntry(repository, path)));
+  return {uncommitted: [...tracked, ...untrackedEntries]};
+}
 
-  public async getDiffContents(input: WorkspaceDiffContentsGetPayload): Promise<WorkspaceDiffContentsGetResult> {
-    const repository = await repositoryPath(input.projectPath, input.repositoryRoot);
-    // First, so the not-a-repository error matches the other operations.
-    await workspaceGit(repository, ["rev-parse", "--verify", "HEAD"]);
-    const [oldContents, newContents] = await Promise.all([blobAt(repository, "HEAD", input.path), workingFile(repository, input.path)]);
-    return {newContents, oldContents};
-  }
+export async function getDiffContents(input: WorkspaceDiffContentsGetPayload): Promise<WorkspaceDiffContentsGetResult> {
+  const repository = await repositoryPath(input.projectPath, input.repositoryRoot);
+  // First, so the not-a-repository error matches the other operations.
+  await workspaceGit(repository, ["rev-parse", "--verify", "HEAD"]);
+  const [oldContents, newContents] = await Promise.all([blobAt(repository, "HEAD", input.path), workingFile(repository, input.path)]);
+  return {newContents, oldContents};
+}
 
-  public async listRepositories(input: WorkspaceRepositoriesListPayload): Promise<WorkspaceRepositoriesListResult> {
-    return {repositories: await discoverWorkspaceRepositories(input.projectPath)};
-  }
+export async function listRepositories(input: WorkspaceRepositoriesListPayload): Promise<WorkspaceRepositoriesListResult> {
+  return {repositories: await discoverWorkspaceRepositories(input.projectPath)};
+}
 
-  public async listFiles(input: WorkspaceFilesListPayload): Promise<WorkspaceFilesListResult> {
-    const roots = await discoverWorkspaceRepositories(input.projectPath);
-    if (roots.length === 0) throw new WorkspaceNotARepositoryError({message: "Not a Git repository."});
-    const files = await Promise.all(roots.map((root) => repositoryFiles(input.projectPath, root)));
-    return {files: files.flat()};
-  }
+export async function listFiles(input: WorkspaceFilesListPayload): Promise<WorkspaceFilesListResult> {
+  const roots = await discoverWorkspaceRepositories(input.projectPath);
+  if (roots.length === 0) throw new WorkspaceNotARepositoryError({message: "Not a Git repository."});
+  const files = await Promise.all(roots.map((root) => repositoryFiles(input.projectPath, root)));
+  return {files: files.flat()};
+}
 
-  public async readFile(input: WorkspaceFileReadPayload): Promise<WorkspaceFileReadResult> {
-    const target = await pathInProject(input.projectPath, input.path);
-    if (!target) throw new WorkspaceFileNotFoundError({message: "File not found."});
-    return {content: decodeWorkspaceFile(await readFile(target))};
-  }
+export async function readFile(input: WorkspaceFileReadPayload): Promise<WorkspaceFileReadResult> {
+  const target = await pathInProject(input.projectPath, input.path);
+  if (!target) throw new WorkspaceFileNotFoundError({message: "File not found."});
+  return {content: decodeWorkspaceFile(await readBytes(target))};
 }

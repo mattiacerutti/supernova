@@ -1,4 +1,4 @@
-import type {Session} from "@supernova/contracts/services/sessions/schemas";
+import type {ChatDocument} from "@supernova/contracts/services/chat/schemas";
 import {describe, expect, it} from "vitest";
 import {sessionView} from "@/features/sessions/lib/session-view";
 import {buildCommittedTimelineItems, buildLiveTimelineItems} from "@/features/sessions/lib/timeline/rows/build-session-timeline";
@@ -26,7 +26,7 @@ function outline(items: readonly SessionTimelineItem[]): unknown[] {
   });
 }
 
-function shown(session: Session) {
+function shown(session: ChatDocument) {
   const view = sessionView({entry: undefined, record: undefined, session});
   return {
     committed: outline(buildCommittedTimelineItems(view.turns)),

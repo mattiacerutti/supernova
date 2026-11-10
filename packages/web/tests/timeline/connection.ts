@@ -1,5 +1,6 @@
 import type {CreateSessionPayload, SessionActivity} from "@supernova/contracts/services/sessions/procedures";
-import type {LiveState, Session, UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
+import type {ChatDocument} from "@supernova/contracts/services/chat/schemas";
+import type {LiveState, UserMessageContentPart} from "@supernova/contracts/services/chat/schemas";
 import type {ProviderLoginsState} from "@supernova/contracts/services/providers/services";
 import type {ListedSession, SessionStatuses, SessionsView} from "@supernova/contracts/services/sessions/services";
 import type {TerminalsState} from "@supernova/contracts/services/workspace/services";
@@ -10,7 +11,7 @@ import {ConfigurationService} from "@supernova/contracts/services/configuration/
 import {ExtensionsService} from "@supernova/contracts/services/extensions/services";
 import {FoldersService} from "@supernova/contracts/services/folders/services";
 import {ProvidersService} from "@supernova/contracts/services/providers/services";
-import {ChatService} from "@supernova/contracts/services/session-runtime/services";
+import {ChatService} from "@supernova/contracts/services/chat/services";
 import {SessionsService, SessionStatusService} from "@supernova/contracts/services/sessions/services";
 import {TerminalService, WorkspaceService} from "@supernova/contracts/services/workspace/services";
 import type {RuntimeClient} from "@/runtime/client";
@@ -28,7 +29,7 @@ class TimelineServer {
   private readonly timeline = createTimelineSessions();
   private readonly records = new Map([...this.timeline.values()].map(({record}) => [record.id, record]));
   private readonly sessions = new Map([...this.timeline.values()].map(({session}) => [session.id, session]));
-  private readonly documents = new Map<string, Published<Session>>();
+  private readonly documents = new Map<string, Published<ChatDocument>>();
   private readonly statuses = new Published<SessionStatuses>({sessions: {}});
   private readonly view = new Published<SessionsView>({projects: {}, open: null});
   private readonly logins = new Published<ProviderLoginsState>({logins: {}});
@@ -48,7 +49,7 @@ class TimelineServer {
       emitLines: (lineCount) => this.emitLines(lineCount),
       getState: () => {
         const session = this.session(TIMELINE_SESSION_ID);
-        const count = (entries: Session["entries"]) => entries.items.filter((entry) => entry.contentParts !== undefined).length;
+        const count = (entries: ChatDocument["entries"]) => entries.items.filter((entry) => entry.contentParts !== undefined).length;
         return {lineCount: this.lineCount, status: this.status, turnCount: count(session.entries), undoneTurnCount: count(session.undone)};
       },
     };
@@ -127,7 +128,7 @@ class TimelineServer {
           return {
             variant: "owner",
             members: {
-              session: this.document(sessionId).member(self),
+              document: this.document(sessionId).member(self),
               abort: async () => (this.settleStream("aborted"), ok),
               compact: async () => ok,
               // Timeline sessions are one page; paging is the server's and covered by its tests.
@@ -143,7 +144,7 @@ class TimelineServer {
     return {server, session};
   }
 
-  private document(sessionId: string): Published<Session> {
+  private document(sessionId: string): Published<ChatDocument> {
     let document = this.documents.get(sessionId);
     if (!document) {
       document = new Published(this.session(sessionId));
@@ -170,16 +171,16 @@ class TimelineServer {
     });
   }
 
-  private session(sessionId: string): Session {
+  private session(sessionId: string): ChatDocument {
     const session = this.sessions.get(sessionId);
     if (!session) throw new Error(`Unknown timeline test session: ${sessionId}`);
     return session;
   }
 
-  private createSession({id, message, projectPath}: CreateSessionPayload): Session {
+  private createSession({id, message, projectPath}: CreateSessionPayload): ChatDocument {
     const updatedAt = new Date().toISOString();
     this.writeRecord({id, title: "Untitled session", forked: false, pinned: false, projectPath, updatedAt});
-    const session: Session = {
+    const session: ChatDocument = {
       id,
       updatedAt,
       entries: page([]),
@@ -194,7 +195,7 @@ class TimelineServer {
     return this.session(session.id);
   }
 
-  private commit(session: Session, activity: SessionActivity): void {
+  private commit(session: ChatDocument, activity: SessionActivity): void {
     this.sessions.set(session.id, session);
     this.document(session.id).set(session);
     this.statuses.change((draft) => {
@@ -216,7 +217,7 @@ class TimelineServer {
     return {depth, loading: false, items: this.matching((session) => session.projectPath === projectPath), hasMore: false};
   }
 
-  private turnStarts(entries: Session["entries"]["items"]): number[] {
+  private turnStarts(entries: ChatDocument["entries"]["items"]): number[] {
     return entries.flatMap((entry, index) => (entry.contentParts === undefined ? [] : [index]));
   }
 
@@ -236,7 +237,7 @@ class TimelineServer {
     );
   }
 
-  private visibleTurnCount(session: Session): number {
+  private visibleTurnCount(session: ChatDocument): number {
     return this.turnStarts(session.entries.items).length;
   }
 
@@ -281,7 +282,7 @@ class TimelineServer {
     );
   }
 
-  private nextEntryId(session: Session): number {
+  private nextEntryId(session: ChatDocument): number {
     return Math.max(0, ...[...session.entries.items, ...session.undone.items].map((entry) => entry.id)) + 1;
   }
 

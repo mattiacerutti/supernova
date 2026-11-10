@@ -1,7 +1,7 @@
 import {existsSync} from "node:fs";
 import {join} from "node:path";
 import {afterEach, describe, expect, it} from "vitest";
-import {assistantTexts, createPiTestRuntime, fauxAssistantMessage, selectedModelReference, selectedPiModel, turnContents, turnIds} from "@tests/support/session-runtime";
+import {assistantTexts, createPiTestRuntime, fauxAssistantMessage, selectedModelReference, selectedPiModel, turnContents, turnIds} from "@tests/support/test-runtime";
 
 describe("sessions", () => {
   const runtimes: Array<{unregister: () => Promise<void>}> = [];
@@ -58,7 +58,7 @@ describe("sessions", () => {
     await pi.appendConversation(info.id, {assistantText: "Original answer", requestText: "Before compaction"});
     await pi.appendConversation(info.id, {assistantText: "Large answer", requestText: "x".repeat(selectedPiModel.contextWindow * 4)});
     pi.faux.setResponses([fauxAssistantMessage("Summary of the work")]);
-    await pi.sessionRuntime.compact({modelReference: selectedModelReference, sessionId: info.id});
+    await pi.chat.compact({modelReference: selectedModelReference, sessionId: info.id});
     await pi.appendConversation(info.id, {assistantText: "Recent answer", requestText: "After compaction"});
 
     const session = await pi.sessions.get({sessionId: info.id});
@@ -84,7 +84,7 @@ describe("sessions", () => {
     const turns = Array.from({length: 60}, (_, index) => (index === 29 ? "x".repeat(selectedPiModel.contextWindow * 4) : `Request ${index + 1}`));
     for (const [index, requestText] of turns.slice(0, 30).entries()) await pi.appendConversation(info.id, {requestText, assistantText: `Answer ${index + 1}`});
     pi.faux.setResponses([fauxAssistantMessage("Summary of thirty turns")]);
-    await pi.sessionRuntime.compact({modelReference: selectedModelReference, sessionId: info.id});
+    await pi.chat.compact({modelReference: selectedModelReference, sessionId: info.id});
     for (const [index, requestText] of turns.slice(30).entries()) await pi.appendConversation(info.id, {requestText, assistantText: `Answer ${index + 31}`});
 
     // Pages back through the shown turns from the published page, as a client scrolling up does.
@@ -93,7 +93,7 @@ describe("sessions", () => {
       let page = session.entries;
       const items = [...page.items];
       while (page.remaining > 0) {
-        page = await pi.sessionRuntime.loadHistory({sessionId: info.id, side: "entries", edge: items[0]!.id});
+        page = await pi.chat.loadHistory({sessionId: info.id, side: "entries", edge: items[0]!.id});
         items.unshift(...page.items);
       }
       return {session, history: {entries: {...page, items}}};
@@ -101,7 +101,7 @@ describe("sessions", () => {
     const texts = (strings: readonly string[]) => strings.map((text) => ({text, type: "text"}));
 
     // Reopened, the session reads what lies before the engine's window from storage.
-    await pi.sessionRuntime.stop(info.id);
+    await pi.chat.stop(info.id);
     const {session, history} = await everyTurn();
     expect(session.entries.remaining).toBeGreaterThan(0);
     expect(turnContents(history).map((parts) => parts[0])).toEqual(texts(turns));
@@ -109,7 +109,7 @@ describe("sessions", () => {
     expect(new Set(history.entries.items.map((entry) => entry.id)).size).toBe(history.entries.items.length);
 
     // A revert to turn 20, before the compaction, keeps the turns before it and undoes it and the rest, compaction included.
-    await pi.sessionRuntime.revertToMessage({sessionId: info.id, turnId: turnIds(history)[19]!});
+    await pi.chat.revertToMessage({sessionId: info.id, turnId: turnIds(history)[19]!});
     const afterRevert = await everyTurn();
     expect(turnContents(afterRevert.history).map((parts) => parts[0])).toEqual(texts(turns.slice(0, 19)));
     expect(afterRevert.history.entries.items.some((entry) => entry.kind === "pi.compaction")).toBe(false);

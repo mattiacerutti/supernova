@@ -1,23 +1,18 @@
-import type {Self, Watchable} from "@earendil-works/chord";
+import type {Self, Watchable, Writable} from "@earendil-works/chord";
+import {constant} from "@earendil-works/chord";
+import type {NativeWatchable} from "@earendil-works/chord/watch";
 
-export interface Published<T> {
-  readonly member: Watchable<T>;
-  set(value: T): void;
+// What a class sets for its object to publish: the object passes in a `self.writable`, tests a plain holder.
+export type Published<T> = Pick<Writable<T>, "value" | "set">;
+
+type Sources = readonly (Watchable<unknown> | NativeWatchable<unknown>)[];
+type ValuesOf<S extends Sources> = {readonly [I in keyof S]: S[I] extends Watchable<infer V> ? V : S[I] extends NativeWatchable<infer V> ? V : never};
+
+// The casts: interfaces and Pi's types fail Chord's `JsonValue` although their values are JSON.
+export function derivedState<const S extends Sources, T>(self: Pick<Self, "derive">, sources: S, compute: (values: ValuesOf<S>) => T): Watchable<T> {
+  return (self.derive as (sources: S, compute: (values: ValuesOf<S>) => T) => Watchable<T>)(sources, compute);
 }
 
-export function published<T>(self: Pick<Self, "writable" | "derive">, initial: T): Published<T> {
-  // A writable is never a member, so a derive exposes it; cast because interfaces and Pi's types fail `JsonValue`.
-  const writable = self.writable(initial);
-  const member = (self.derive as (sources: readonly unknown[], compute: (values: readonly [T]) => T) => Watchable<T>)([writable], ([value]) => value);
-  return {member, set: (value) => writable.set(value)};
-}
-
-export function following<T>(self: Pick<Self, "writable" | "derive" | "open">, read: () => T, subscribe: (changed: () => void) => () => void): Published<T> & {refresh(): void} {
-  const value = published(self, read());
-  const refresh = () => value.set(read());
-  self.open(
-    async () => subscribe(refresh),
-    (stop) => stop()
-  );
-  return {...value, refresh};
+export function constantState<T>(value: T): Watchable<T> {
+  return (constant as (value: T) => Watchable<T>)(value);
 }
