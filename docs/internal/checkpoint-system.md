@@ -25,11 +25,11 @@ Read those implementations for formats and Git plumbing. This guide owns preserv
 
 ## Conversation navigation
 
-Checkpoint boundaries belong to turns, not individual transcript entries. Undo, redo, and revert move the shown position while retaining later turns for redo. Sending or compacting from an undone position forks there and replaces the redo path; merely navigating does not fork.
+Checkpoint boundaries belong to turns, not individual transcript entries. Undo, redo, and revert move the session to a conversation that ends at the shown turns, as p2's `/tree` does: a fork navigation already made for that point (`SessionState.forks`), else a new fork of the conversation the turns are on. That conversation is kept as `SessionState.redoConversation`, so the later turns stay for redo. Sending or compacting from an undone position continues the shown conversation and drops `redoConversation` and its turn records. `SessionState.workspaceCheckpoint` is the checkpoint the workspace matches, which the next restore starts from: undo and redo can reach the same turns at different checkpoints, so it is recorded, not derived.
 
-Undo targets the first hidden turn's **before** checkpoint, preserving manual edits made before that turn was sent. Redo and forward revert target the last shown turn's **after** checkpoint. Keep all three commands on the shared navigation path (`Chat.navigate` in [chat.ts](../../packages/agent-runtime/src/features/chat/natives/chat.ts)), so they cannot acquire different restore checks.
+Undo targets the first hidden turn's **before** checkpoint, preserving manual edits made before that turn was sent. Redo and forward revert target the last shown turn's **after** checkpoint. Keep all three commands on the shared navigation path (`SessionFile.navigate` in [session-file.ts](../../packages/agent-runtime/src/features/chat/natives/session-file.ts)), so they cannot acquire different restore checks.
 
-Navigation also restores the model and thinking state associated with the shown conversation. A later send must fork from that state, not silently reuse the abandoned branch's settings.
+Navigation also restores the model and thinking state associated with the shown conversation: a fork takes Durable's `pi.agent` as of its fork point. Undoing every turn has no entry to fork at, so it starts an empty conversation with the agent the first turn began with.
 
 A fork inherits conversation history, not ownership of its source session's workspace snapshots. Checkpoint references retain their capturing session's identity; inherited captured boundaries cannot restore files, even with force.
 

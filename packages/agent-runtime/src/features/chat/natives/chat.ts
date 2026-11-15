@@ -1,4 +1,6 @@
 import {join} from "node:path";
+import type {Context} from "@earendil-works/chord/context";
+import {withoutAbortSignal} from "@earendil-works/chord/context";
 import type {LiveState} from "@earendil-works/pi-durable";
 import type {SettingsManager} from "@earendil-works/pi-coding-agent";
 import type {
@@ -57,7 +59,7 @@ export class Chat {
   private titled: boolean;
   private activity: SessionActivity | undefined;
 
-  // A busy flag. We cannot infer it yet only from durable because it has no knowledge of checkpoint navigation
+  // Durable knows nothing of checkpoint navigation, so it cannot say this session is busy with one.
   private commandRunning = false;
   private cancelled = false;
 
@@ -78,25 +80,28 @@ export class Chat {
     this.titled = input.deps.record.title !== undefined;
   }
 
-  public static async open(deps: ChatDeps, ports: ChatPorts): Promise<Chat> {
+  public static async open(deps: ChatDeps, ports: ChatPorts, context: Context): Promise<Chat> {
     const {id} = deps.record;
 
     const settings = deps.settings(cwdOf(deps.record));
     const {extensions, setup} = await Chat.prepare(deps, ports, settings);
 
-    const file = await SessionFile.open({
-      ...setup,
-      sessionId: id,
-      path: join(deps.sessionsRoot, id, "session.sqlite"),
-      checkpoints: deps.checkpointStore,
-      onReport: (error) => void ports.report({kind: "notice", notice: {level: "warning", message: errorMessage(error, String(error))}}).catch(() => undefined),
-    });
+    const file = await SessionFile.open(
+      {
+        ...setup,
+        sessionId: id,
+        path: join(deps.sessionsRoot, id, "session.sqlite"),
+        checkpoints: deps.checkpointStore,
+        onReport: (error) => void ports.report({kind: "notice", notice: {level: "warning", message: errorMessage(error, String(error))}}).catch(() => undefined),
+      },
+      context
+    );
 
     try {
       await extensions.start();
       return new Chat({deps, ports, file, extensions, settings});
     } catch (error) {
-      await file.close();
+      await file.close(withoutAbortSignal(context));
       throw error;
     }
   }
@@ -133,39 +138,39 @@ export class Chat {
     await extensions.start();
   }
 
-  public async close(): Promise<void> {
+  public async close(context: Context): Promise<void> {
     await this.extensions.stop("quit");
-    await this.file.close();
+    await this.file.close(context);
   }
 
-  public async updateActivity(frame: TranscriptFrame): Promise<void> {
+  public async updateActivity(frame: TranscriptFrame, context: Context): Promise<void> {
     const activity = sessionActivityOf((frame.view.docs["pi.live"] ?? {}) as LiveState);
     if (activity !== this.activity) {
       this.activity = activity;
       await this.ports.report({kind: "activity", activity}).catch(() => undefined);
     }
 
-    if (activity === "idle") await this.file.recordAfterTurnCheckpoints();
+    if (activity === "idle") await this.file.recordAfterTurnCheckpoints(context);
   }
 
-  public loadHistory(input: LoadHistoryPayload): Promise<LoadHistoryResult> {
-    return this.transcript.loadHistory(input);
+  public loadHistory(input: LoadHistoryPayload, context: Context): Promise<LoadHistoryResult> {
+    return this.transcript.loadHistory(input, context);
   }
 
-  public async abort(): Promise<void> {
+  public async abort(context: Context): Promise<void> {
     this.cancelled = true;
-    await this.file.stop();
+    await this.file.stop(context);
   }
 
-  public forkSeed(turnId: string): Promise<ForkSeed> {
-    return this.file.forkSeed(turnId);
+  public forkSeed(turnId: string, context: Context): Promise<ForkSeed> {
+    return this.file.forkSeed(turnId, context);
   }
 
-  public seed(seed: ForkSeed): Promise<void> {
-    return this.file.seed(seed);
+  public seed(seed: ForkSeed, context: Context): Promise<void> {
+    return this.file.seed(seed, context);
   }
 
-  public async sendMessage(input: SendMessagePayload): Promise<void> {
+  public async sendMessage(input: SendMessagePayload, context: Context): Promise<void> {
     if (this.commandRunning) throw new Error(BUSY);
     this.cancelled = false;
 
@@ -185,12 +190,16 @@ export class Chat {
 
     if (this.cancelled) throw new Error("Session was cancelled.");
 
-    const sent = await this.file.send({
-      content: images.length > 0 ? [{type: "text", text}, ...images] : text,
-      contentParts: message.contentParts,
-      captureCheckpoint: input.captureCheckpoints ?? true,
-      model: {provider: model.provider, modelId: model.id, thinkingLevel: toPiThinkingLevel(input.modelReference.thinkingLevel)},
-    });
+    // Once the message is being placed, its turn record must land even if the caller leaves.
+    const sent = await this.file.send(
+      {
+        content: images.length > 0 ? [{type: "text", text}, ...images] : text,
+        contentParts: message.contentParts,
+        captureCheckpoint: input.captureCheckpoints ?? true,
+        model: {provider: model.provider, modelId: model.id, thinkingLevel: toPiThinkingLevel(input.modelReference.thinkingLevel)},
+      },
+      withoutAbortSignal(context)
+    );
 
     await this.ports.report({kind: "sent", at: sent.at});
 
@@ -206,51 +215,64 @@ export class Chat {
     );
   }
 
-  public compact(input: CompactSessionPayload): Promise<void> {
-    return this.command(async () => {
+  public compact(input: CompactSessionPayload, context: Context): Promise<void> {
+    return this.command(context, async (commandContext) => {
       try {
-        await this.file.compact(this.model(input.modelReference));
+        await this.file.compact(this.model(input.modelReference), commandContext);
       } catch (cause) {
         this.reportError(errorMessage(cause, "Failed to compact session."));
       }
     });
   }
 
-  public undoCheckpoint(input: UndoCheckpointPayload): Promise<void> {
-    return this.command(() =>
-      this.file.moveLeaf(input.force ?? false, ({active}) => {
-        if (active === 0) throw new Error("No checkpoint is available to undo.");
-        return active - 1;
-      })
+  public undoCheckpoint(input: UndoCheckpointPayload, context: Context): Promise<void> {
+    return this.command(context, (commandContext) =>
+      this.file.navigate(
+        input.force ?? false,
+        ({active}) => {
+          if (active === 0) throw new Error("No checkpoint is available to undo.");
+          return active - 1;
+        },
+        commandContext
+      )
     );
   }
 
-  public redoCheckpoint(input: RedoCheckpointPayload): Promise<void> {
-    return this.command(() =>
-      this.file.moveLeaf(input.force ?? false, ({turns, active}) => {
-        if (active >= turns.length) throw new Error("No checkpoint is available to redo.");
-        return active + 1;
-      })
+  public redoCheckpoint(input: RedoCheckpointPayload, context: Context): Promise<void> {
+    return this.command(context, (commandContext) =>
+      this.file.navigate(
+        input.force ?? false,
+        ({turns, active}) => {
+          if (active >= turns.length) throw new Error("No checkpoint is available to redo.");
+          return active + 1;
+        },
+        commandContext
+      )
     );
   }
 
-  public revertToMessage(input: RevertToMessagePayload): Promise<void> {
-    return this.command(() =>
-      this.file.moveLeaf(input.force ?? false, ({turns, active}) => {
-        const index = turns.findIndex((turn) => turn.turnId === input.turnId);
-        if (index === -1) throw new Error("Checkpoint target was not found.");
-        return index < active ? index : index + 1;
-      })
+  public revertToMessage(input: RevertToMessagePayload, context: Context): Promise<void> {
+    return this.command(context, (commandContext) =>
+      this.file.navigate(
+        input.force ?? false,
+        ({turns, active}) => {
+          const index = turns.findIndex((turn) => turn.turnId === input.turnId);
+          if (index === -1) throw new Error("Checkpoint target was not found.");
+          return index < active ? index : index + 1;
+        },
+        commandContext
+      )
     );
   }
 
-  private async command(run: () => Promise<void>): Promise<void> {
+  private async command(context: Context, run: (context: Context) => Promise<void>): Promise<void> {
     if (this.commandRunning) throw new Error(BUSY);
     this.commandRunning = true;
     this.cancelled = false;
     try {
-      if (await this.file.isRunning()) throw new Error(BUSY);
-      await run();
+      if (await this.file.isRunning(context)) throw new Error(BUSY);
+      // A restore or compaction must not stop halfway because the caller left.
+      await run(withoutAbortSignal(context));
     } finally {
       this.commandRunning = false;
     }

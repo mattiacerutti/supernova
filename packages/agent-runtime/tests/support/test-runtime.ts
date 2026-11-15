@@ -12,6 +12,7 @@ import type {CheckpointStore} from "@supernova/agent-runtime/features/chat/nativ
 import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import type {Watchable} from "@earendil-works/chord";
 import {createModels} from "@earendil-works/pi-ai/models";
+import type {ConversationId} from "@earendil-works/pi-durable";
 import {createRegistry, Harness} from "@earendil-works/pi-durable";
 import {openNodeSqliteStorage} from "@earendil-works/pi-durable/storage/sqlite/node";
 import type {SessionState, TurnRecord} from "@supernova/agent-runtime/core/session-state";
@@ -270,11 +271,23 @@ export async function createPiTestRuntime(input?: {
       chat.release();
     }
   };
-  const committedTurns = async (sessionId: string): Promise<Readonly<Record<string, TurnRecord>>> => {
+  const committedState = async (sessionId: string): Promise<SessionState | undefined> => {
     const storage = await openNodeSqliteStorage(join(sessionStorageRoot, sessionId, "session.sqlite"));
     const viewer = await Harness.open(storage, {models: createModels(), registry: createRegistry(), readOnly: true}, ctx);
     try {
-      return ((await viewer.snapshot(SessionStateDoc, ctx)) as SessionState | undefined)?.turns ?? {};
+      return (await viewer.snapshot(SessionStateDoc, ctx)) as SessionState | undefined;
+    } finally {
+      await viewer.close(ctx);
+    }
+  };
+  const committedTurns = async (sessionId: string): Promise<Readonly<Record<string, TurnRecord>>> => (await committedState(sessionId))?.turns ?? {};
+  const committedLastEntryId = async (sessionId: string, conversationId: ConversationId): Promise<number | undefined> => {
+    const storage = await openNodeSqliteStorage(join(sessionStorageRoot, sessionId, "session.sqlite"));
+    const viewer = await Harness.open(storage, {models: createModels(), registry: createRegistry(), readOnly: true}, ctx);
+    try {
+      const conversation = await viewer.conversation(conversationId, ctx);
+      const [last] = (await conversation?.entries({}, 8, undefined, ctx))?.items.filter((entry) => entry.kind !== "pi.system") ?? [];
+      return last?.id;
     } finally {
       await viewer.close(ctx);
     }
@@ -284,9 +297,22 @@ export async function createPiTestRuntime(input?: {
     sendMessage: ({sessionId, ...input}: SendMessagePayload & {readonly sessionId: string}) => withChat(sessionId, (chat) => chat.sendMessage(input, ctx)),
     compact: ({sessionId, ...input}: CompactSessionPayload & {readonly sessionId: string}) => withChat(sessionId, (chat) => chat.compact(input, ctx)),
     abort: ({sessionId}: {readonly sessionId: string}) => withChat(sessionId, (chat) => chat.abort(ctx)),
-    undoCheckpoint: ({sessionId, ...input}: UndoCheckpointPayload & {readonly sessionId: string}) => withChat(sessionId, (chat) => chat.undoCheckpoint(input, ctx)),
-    redoCheckpoint: ({sessionId, ...input}: RedoCheckpointPayload & {readonly sessionId: string}) => withChat(sessionId, (chat) => chat.redoCheckpoint(input, ctx)),
-    revertToMessage: ({sessionId, ...input}: RevertToMessagePayload & {readonly sessionId: string}) => withChat(sessionId, (chat) => chat.revertToMessage(input, ctx)),
+    // A navigation's document follows its reply, once the conversation it moved to is attached.
+    undoCheckpoint: ({sessionId, ...input}: UndoCheckpointPayload & {readonly sessionId: string}) =>
+      navigated(
+        sessionId,
+        withChat(sessionId, (chat) => chat.undoCheckpoint(input, ctx))
+      ),
+    redoCheckpoint: ({sessionId, ...input}: RedoCheckpointPayload & {readonly sessionId: string}) =>
+      navigated(
+        sessionId,
+        withChat(sessionId, (chat) => chat.redoCheckpoint(input, ctx))
+      ),
+    revertToMessage: ({sessionId, ...input}: RevertToMessagePayload & {readonly sessionId: string}) =>
+      navigated(
+        sessionId,
+        withChat(sessionId, (chat) => chat.revertToMessage(input, ctx))
+      ),
     loadHistory: ({sessionId, ...input}: LoadHistoryPayload & {readonly sessionId: string}) => withChat(sessionId, (chat) => chat.loadHistory(input, ctx)),
     current: (sessionId: string): Promise<ChatDocument> => withChat(sessionId, async (chat) => chat.document.value),
     reloadExtensions: async () => {
@@ -368,11 +394,23 @@ export async function createPiTestRuntime(input?: {
     await waitUntil(
       async () => {
         if ((await chat.current(sessionId)).live.run !== undefined) throw new Error("Session is still running.");
-        const turns = await committedTurns(sessionId);
-        if (Object.values(turns).some((record) => record.after === undefined)) throw new Error("A turn has no after-turn checkpoint yet.");
+        const state = await committedState(sessionId);
+        if (Object.values(state?.turns ?? {}).some((record) => record.after === undefined)) throw new Error("A turn has no after-turn checkpoint yet.");
+        await showsCurrentConversation(sessionId, state);
       },
       {timeoutMs}
     );
+  };
+
+  const showsCurrentConversation = async (sessionId: string, state: SessionState | undefined) => {
+    const lastShown = (await chat.current(sessionId)).entries.items.at(-1)?.id;
+    if (state && lastShown !== (await committedLastEntryId(sessionId, state.conversation))) throw new Error("The document does not show the current conversation yet.");
+  };
+
+  const navigated = async <T>(sessionId: string, command: Promise<T>): Promise<T> => {
+    const result = await command;
+    await waitUntil(async () => showsCurrentConversation(sessionId, await committedState(sessionId)));
+    return result;
   };
 
   const lastError = (sessionId: string) => statusOwner.statuses.value.sessions[sessionId]?.notices.findLast((notice) => notice.level === "error")?.message ?? null;

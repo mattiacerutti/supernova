@@ -5,13 +5,13 @@ import type {EntryRecord} from "@earendil-works/pi-durable";
 import type {TurnRecord} from "@supernova/agent-runtime/core/session-state";
 import {ChatDocument} from "@supernova/contracts/services/chat/schemas";
 import {describe, expect, it} from "vitest";
-import type {ConversationView} from "@earendil-works/pi-durable";
+import type {ConversationId, ConversationView} from "@earendil-works/pi-durable";
 import type {SessionState} from "@supernova/agent-runtime/core/session-state";
 import {chatDocument} from "@supernova/agent-runtime/features/chat/lib/transcript/chat-document";
 import {estimateContextUsage} from "@supernova/agent-runtime/features/chat/lib/transcript/context-usage";
 import {historyPage} from "@supernova/agent-runtime/features/chat/lib/transcript/history-page";
 
-/** The document of a branch whose entries before the undo point are `history` and after it `undone`, with a run from `runStart`. */
+/** The document of a conversation whose entries before the undo point are `history` and after it `undone`, with a run from `runStart`. */
 function buildSession(input: {
   readonly record: {readonly id: string; readonly updatedAt: string};
   readonly history: readonly EntryRecord[];
@@ -19,12 +19,12 @@ function buildSession(input: {
   readonly runStart: number | undefined;
   readonly turns: Record<string, TurnRecord>;
 }) {
-  const entries = [...input.history, ...input.undone];
-  const leaf = input.undone.length === 0 ? undefined : (input.history.at(-1)?.id ?? null);
   const live = input.runStart === undefined ? {} : {run: {first: input.runStart}};
-  const view = {conversation: {id: 1}, entries, docs: {"pi.live": live}} as unknown as ConversationView;
-  const state: SessionState = {branch: 1, turns: input.turns, ...(leaf === undefined ? {} : {leaf})};
-  return chatDocument({record: input.record, view, branchEntries: {branch: 1, entries}, state, agentState: undefined, contextUsage: {contextWindow: 0, usedTokens: 0}});
+  // With undone turns, the current conversation (2) ends at the last shown entry, and they are on conversation 1.
+  const undone = input.undone.length > 0;
+  const view = {conversation: {id: undone ? 2 : 1}, entries: input.history, docs: {"pi.live": live}} as unknown as ConversationView;
+  const state: SessionState = {conversation: (undone ? 2 : 1) as ConversationId, ...(undone ? {redoConversation: 1 as ConversationId} : {}), forks: {}, turns: input.turns};
+  return chatDocument({record: input.record, view, undone: input.undone, state, contextUsage: {contextWindow: 0, usedTokens: 0}});
 }
 
 function usage(totalTokens: number): Usage {
@@ -166,7 +166,7 @@ describe("history pages", () => {
     expect(after).toMatchObject({remaining: 1, precedingEntryId: entries.at(-1)!.id});
   });
 
-  it("pages undone turns from the leaf forward, with the continuation before the first", () => {
+  it("pages undone turns from the undo point forward, with the continuation before the first", () => {
     const {history: entries, turns} = history(25);
     // Undone from the second turn on; the first turn's trailing continuation (no record) leads the undone entries.
     const undone = entries.slice(3);

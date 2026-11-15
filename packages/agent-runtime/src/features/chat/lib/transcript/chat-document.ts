@@ -1,69 +1,49 @@
 import type {AgentState, ConversationView, EntryRecord, LiveState, UsageState} from "@earendil-works/pi-durable";
 import type {ChatContextUsage, ChatDocument} from "@supernova/contracts/services/chat/schemas";
-import type {SessionRecord, SessionState, TurnRecord} from "@supernova/agent-runtime/core/session-state";
-import {turnPositions} from "@supernova/agent-runtime/core/session-state";
-import {historyPage} from "@supernova/agent-runtime/features/chat/lib/transcript/history-page";
+import type {SessionRecord, SessionState} from "@supernova/agent-runtime/core/session-state";
+import type {Turns} from "@supernova/agent-runtime/features/chat/lib/transcript/history-page";
+import {historyPage, withoutSystemEntries} from "@supernova/agent-runtime/features/chat/lib/transcript/history-page";
 
-export interface BranchEntries {
-  readonly branch: number;
-  readonly entries: readonly EntryRecord[];
+const copiedTurnIds = new WeakMap<Turns, readonly number[]>();
+
+// Changes when the conversation moves or grows: then its context usage is stale.
+export function contextKey(frame: {readonly state: SessionState; readonly view: ConversationView}): string {
+  const {state, view} = frame;
+  return `${state.conversation}:${view.entries.at(-1)?.id ?? view.before}`;
 }
 
-export function undoPointKey(state: SessionState, branchEntries: BranchEntries): string {
-  // With nothing undone, the undo point is the newest entry, so it moves as the branch grows.
-  return `${state.branch}:${state.leaf}:${branchEntries.entries.at(-1)?.id}`;
-}
-
-export function entriesUpToUndoPoint(entries: readonly EntryRecord[], leaf: number | null | undefined): readonly EntryRecord[] {
-  return leaf === undefined ? entries : entries.filter((entry) => leaf !== null && entry.id <= leaf);
-}
-
-export function withoutSystemEntries(entries: readonly EntryRecord[]): EntryRecord[] {
-  return entries.filter((entry) => entry.kind !== "pi.system");
-}
-
-export function appendViewEntries(cached: BranchEntries | undefined, view: ConversationView): BranchEntries | undefined {
-  const branch = view.conversation.id;
-  const inherited = cachedEntriesFor(cached, view);
-
-  const lastId = inherited?.at(-1)?.id ?? 0;
-  // Durable's view starts past the cache: the entries between need a storage read.
-  if (view.before !== undefined && (!inherited || view.before > lastId)) return undefined;
-
-  const added = withoutSystemEntries(view.entries.filter((entry) => entry.id > lastId));
-  if (added.length === 0) return cached?.branch === branch ? cached : {branch, entries: inherited ?? []};
-  return {branch, entries: [...(inherited ?? []), ...added]};
-}
-
-export function cachedEntriesFor(cached: BranchEntries | undefined, view: ConversationView): readonly EntryRecord[] | undefined {
-  const parent = view.conversation.parent;
-  if (cached?.branch === view.conversation.id) return cached.entries;
-  // A fork starts with its parent's entries up to the fork point.
-  if (cached && parent?.conversationId === cached.branch) return cached.entries.filter((entry) => entry.id <= parent.at);
-  return undefined;
-}
-
-function lastCopiedTurnId(entries: readonly EntryRecord[], turns: Readonly<Record<string, TurnRecord>>, sessionId: string): string | undefined {
-  return turnPositions(entries, turns).findLast((turn) => turn.record.before.sessionId !== sessionId)?.turnId;
+// From the turn records: in a fork, the copied turns may lie before the view.
+function lastCopiedTurnId(turns: Turns, sessionId: string, lastShownEntryId: number | null | undefined): string | undefined {
+  let ids = copiedTurnIds.get(turns);
+  if (!ids) {
+    ids = Object.entries(turns)
+      .filter(([, record]) => record.before.sessionId !== sessionId)
+      .map(([turnId]) => Number(turnId))
+      .toSorted((left, right) => left - right);
+    copiedTurnIds.set(turns, ids);
+  }
+  const last = ids.findLast((turnId) => lastShownEntryId === undefined || (lastShownEntryId !== null && turnId <= lastShownEntryId));
+  return last === undefined ? undefined : String(last);
 }
 
 export function chatDocument(input: {
   readonly record: Pick<SessionRecord, "id" | "forkedFrom" | "updatedAt">;
   readonly view: ConversationView;
-  readonly branchEntries: BranchEntries;
+  readonly undone: readonly EntryRecord[];
   readonly state: SessionState;
-  readonly agentState: AgentState | undefined;
   readonly contextUsage: ChatContextUsage;
 }): ChatDocument {
-  const {agentState, branchEntries, contextUsage, record, state, view} = input;
+  const {contextUsage, record, state, view} = input;
   const {turns} = state;
-  const active = entriesUpToUndoPoint(branchEntries.entries, state.leaf);
+  const active = withoutSystemEntries(view.entries);
+  // The current conversation ends at the undo point.
+  const lastShownEntryId = state.redoConversation === undefined ? undefined : (active.at(-1)?.id ?? null);
   const live = view.docs["pi.live"] as LiveState | undefined;
   const runStart = live?.run?.first;
 
   const entries = historyPage({side: "entries", entries: active, turns});
-  const undone = historyPage({side: "undone", entries: branchEntries.entries.slice(active.length), turns, precedingEntryId: active.at(-1)?.id});
-  const copiedTurnId = record.forkedFrom !== undefined ? lastCopiedTurnId(active, turns, record.id) : undefined;
+  const undone = historyPage({side: "undone", entries: input.undone, turns, precedingEntryId: active.at(-1)?.id});
+  const copiedTurnId = record.forkedFrom !== undefined ? lastCopiedTurnId(turns, record.id, lastShownEntryId) : undefined;
 
   // A running session does not keep climbing the sidebar.
   const liveStart = runStart === undefined ? -1 : entries.items.findIndex((entry) => entry.id >= runStart);
@@ -77,8 +57,8 @@ export function chatDocument(input: {
     updatedAt: lastActivity !== undefined && lastActivity > record.updatedAt ? lastActivity : record.updatedAt,
     entries,
     undone,
-    // With nothing undone, the view's agent state is from this commit; the one read for the undo point may lag.
-    agent: (state.leaf === undefined ? (view.docs["pi.agent"] as AgentState | undefined) : agentState) ?? {},
+    // A fork takes the agent as it was at its fork point, so after an undo too it is the shown turns'.
+    agent: (view.docs["pi.agent"] as AgentState | undefined) ?? {},
     live: live ?? {},
     usage: (view.docs["pi.usage"] as UsageState | undefined) ?? {models: {}, tools: {}},
     ...(runStart === undefined ? {} : {runStart}),

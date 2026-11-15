@@ -1,32 +1,27 @@
 import type {Facet} from "@earendil-works/chord";
+import type {Context} from "@earendil-works/chord/context";
 import {defineFacet} from "@earendil-works/chord";
 import type {RuntimePrincipal} from "@supernova/contracts/lib/protocol";
 import {ChatService} from "@supernova/contracts/services/chat/services";
 import {SessionStatusService} from "@supernova/contracts/services/sessions/services";
-import type {AgentState} from "@earendil-works/pi-durable";
 import type {ChatContextUsage} from "@supernova/contracts/services/chat/schemas";
-import type {BranchEntries} from "@supernova/agent-runtime/features/chat/lib/transcript/chat-document";
-import {appendViewEntries, chatDocument, undoPointKey} from "@supernova/agent-runtime/features/chat/lib/transcript/chat-document";
+import {chatDocument, contextKey} from "@supernova/agent-runtime/features/chat/lib/transcript/chat-document";
 import {RuntimeConfig, RuntimeNative, SessionInfo} from "@supernova/agent-runtime/core/contract";
 import {ChatNative, ChatStore} from "@supernova/agent-runtime/features/chat/contract";
 import {Chat} from "@supernova/agent-runtime/features/chat/natives/chat";
-import type {Transcript} from "@supernova/agent-runtime/features/chat/natives/transcript";
-import type {SessionState} from "@supernova/agent-runtime/core/session-state";
+import type {Transcript, TranscriptFrame} from "@supernova/agent-runtime/features/chat/natives/transcript";
 import {action, method} from "@supernova/agent-runtime/lib/chord/methods";
 import {nativeOf, serveNative} from "@supernova/agent-runtime/lib/chord/natives";
 import {expectVariant, forbidden} from "@supernova/agent-runtime/lib/chord/principals";
 import {derivedState} from "@supernova/agent-runtime/lib/chord/state";
 
-interface UndoPointReads {
+interface ContextRead {
   readonly key: string;
-  readonly agentState: AgentState | undefined;
   readonly contextUsage: ChatContextUsage;
 }
 
-async function readUndoPoint(transcript: Transcript, state: SessionState, branchEntries: BranchEntries): Promise<UndoPointReads> {
-  const {branch, leaf} = state;
-  const [agentState, contextUsage] = await Promise.all([transcript.agentStateAt(branch, leaf), transcript.contextUsageAt(branch, leaf)]);
-  return {key: undoPointKey(state, branchEntries), agentState, contextUsage};
+async function readContext(transcript: Transcript, frame: Pick<TranscriptFrame, "state" | "view">, context: Context): Promise<ContextRead> {
+  return {key: contextKey(frame), contextUsage: await transcript.contextUsage(frame.state.conversation, frame.view, context)};
 }
 
 export const chatFacet: Facet<RuntimePrincipal> = defineFacet<RuntimePrincipal>((host) => {
@@ -47,52 +42,34 @@ export const chatFacet: Facet<RuntimePrincipal> = defineFacet<RuntimePrincipal>(
             report: async (report) => {
               await expectVariant(status, "worker").report(report, context);
             },
-          }
+          },
+          context
         ),
-      (opened) => opened.close()
+      (opened, _reason, context) => opened.close(context)
     );
     self.contribute(ChatNative, chat);
 
-    // Read before the follow attaches, so the first document already holds the branch's entries and the agent.
+    // Read before the follow attaches, so the first document already holds its context usage.
     const initial = self.open(
-      async () => {
-        const {transcript} = chat.value;
-        const {state, view} = await transcript.currentFrame();
-        const branchEntries = await transcript.branchEntries(view);
-        return {branchEntries, undoPoint: await readUndoPoint(transcript, state, branchEntries)};
-      },
+      async (context) => readContext(chat.value.transcript, await chat.value.transcript.currentFrame(context), context),
       () => undefined
     );
-    const branchEntries = self.writable<BranchEntries | undefined>(undefined);
-    const undoPoint = self.writable<UndoPointReads | undefined>(undefined);
+    const context = self.writable<ContextRead | undefined>(undefined);
 
-    const frame = self.follow((observer, context) => chat.value.transcript.follow(observer, context));
+    const frame = self.follow((observer, attaching) => chat.value.transcript.follow(observer, attaching));
 
-    // A frame whose view continues the cached entries applies at once; one with a gap waits for `branchEntries`.
-    const document = derivedState(self, [frame, branchEntries, undoPoint], ([value, cached, read]) => {
-      const entries = cached ?? initial.value.branchEntries;
-      const {agentState, contextUsage} = read ?? initial.value.undoPoint;
-      return chatDocument({
-        record: info.record.value,
-        view: value.view,
-        branchEntries: appendViewEntries(entries, value.view) ?? entries,
-        state: value.state,
-        agentState,
-        contextUsage,
-      });
+    const document = derivedState(self, [frame, context], ([value, read]) => {
+      const {contextUsage} = read ?? initial.value;
+      return chatDocument({record: info.record.value, ...value, contextUsage});
     });
 
-    self.on(frame, async ({value}) => {
-      const {transcript} = chat.value;
-      const entries = await transcript.branchEntries(value.view);
-      branchEntries.set(entries);
-
-      const {key} = undoPoint.value ?? initial.value.undoPoint;
-      if (key !== undoPointKey(value.state, entries)) undoPoint.set(await readUndoPoint(transcript, value.state, entries));
+    self.on(frame, async ({value}, ctx) => {
+      const {key} = context.value ?? initial.value;
+      if (key !== contextKey(value)) context.set(await readContext(chat.value.transcript, value, ctx));
     });
 
-    self.on(frame, async ({value}) => {
-      await chat.value.updateActivity(value);
+    self.on(frame, async ({value}, ctx) => {
+      await chat.value.updateActivity(value, ctx);
     });
 
     return {document};
@@ -108,11 +85,11 @@ export const chatFacet: Facet<RuntimePrincipal> = defineFacet<RuntimePrincipal>(
       return {
         variant: "server",
         members: {
-          sendMessage: method((input) => chat().sendMessage(input)),
-          forkSeed: method(({turnId}) => chat().forkSeed(turnId)),
-          seed: method((seed) => chat().seed(seed)),
+          sendMessage: method((input, ctx) => chat().sendMessage(input, ctx)),
+          forkSeed: method(({turnId}, ctx) => chat().forkSeed(turnId, ctx)),
+          seed: method((seed, ctx) => chat().seed(seed, ctx)),
           reload: action(() => chat().reload()),
-          abort: action(() => chat().abort()),
+          abort: action((ctx) => chat().abort(ctx)),
         },
       };
     }
@@ -121,13 +98,13 @@ export const chatFacet: Facet<RuntimePrincipal> = defineFacet<RuntimePrincipal>(
       variant: "owner",
       members: {
         document: store.document,
-        loadHistory: method((input) => chat().loadHistory(input)),
-        sendMessage: method((input) => chat().sendMessage(input)),
-        compact: method((input) => chat().compact(input)),
-        undoCheckpoint: method((input) => chat().undoCheckpoint(input)),
-        redoCheckpoint: method((input) => chat().redoCheckpoint(input)),
-        revertToMessage: method((input) => chat().revertToMessage(input)),
-        abort: action(() => chat().abort()),
+        loadHistory: method((input, ctx) => chat().loadHistory(input, ctx)),
+        sendMessage: method((input, ctx) => chat().sendMessage(input, ctx)),
+        compact: method((input, ctx) => chat().compact(input, ctx)),
+        undoCheckpoint: method((input, ctx) => chat().undoCheckpoint(input, ctx)),
+        redoCheckpoint: method((input, ctx) => chat().redoCheckpoint(input, ctx)),
+        revertToMessage: method((input, ctx) => chat().revertToMessage(input, ctx)),
+        abort: action((ctx) => chat().abort(ctx)),
       },
     };
   });

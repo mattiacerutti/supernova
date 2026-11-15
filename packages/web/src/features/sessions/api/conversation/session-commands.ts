@@ -6,7 +6,7 @@ import type {UserMessageContentPart} from "@supernova/contracts/services/chat/sc
 import type {ListedSession} from "@supernova/contracts/services/sessions/services";
 import {forgetSession} from "@/features/sessions/api/sessions-sync";
 import {readSessionView} from "@/features/sessions/hooks/use-session";
-import {sessionStatus} from "@/features/sessions/lib/session-view";
+import {sessionStatus, sessionView} from "@/features/sessions/lib/session-view";
 import type {SessionOptimism} from "@/features/sessions/stores/sessions-store";
 import {useSessionsStore} from "@/features/sessions/stores/sessions-store";
 import {useMountEffect} from "@/hooks/use-mount-effect";
@@ -84,6 +84,28 @@ function whenHasTurn(sessionId: string, run: () => void): void {
   if (hasTurn()) return run();
   const stop = useSessionsStore.subscribe(() => {
     if (!hasTurn()) return;
+    stop();
+    run();
+  });
+}
+
+function shownLastTurnId(sessionId: string): string | null {
+  const {documents, records, statuses} = useSessionsStore.getState();
+  return sessionView({entry: statuses[sessionId], record: records[sessionId], session: documents[sessionId]}).turns.at(-1)?.id ?? null;
+}
+
+// The reply can come before the document that shows it, which the server publishes once it has read the turns.
+function whenNavigated(sessionId: string, lastTurnId: string | null, run: () => void): void {
+  const replied = useSessionsStore.getState().documents[sessionId];
+  // Any change of turns also ends the wait: the server may have landed elsewhere than predicted.
+  const settled = () => {
+    const current = useSessionsStore.getState().documents[sessionId];
+    return shownLastTurnId(sessionId) === lastTurnId || current?.entries !== replied?.entries || current?.undone !== replied?.undone;
+  };
+  // Without a followed document, nothing will arrive to wait for.
+  if (!replied || shownLastTurnId(sessionId) === lastTurnId) return run();
+  const stop = useSessionsStore.subscribe(() => {
+    if (!settled()) return;
     stop();
     run();
   });
@@ -169,7 +191,7 @@ export function sessionActions(runtime: RuntimeClient, chat: (sessionId: string)
       begin(sessionId, {navigation: {lastTurnId: input.lastTurnId}});
       try {
         await navigate(chat(sessionId), input, force);
-        patch(sessionId, {navigation: undefined});
+        whenNavigated(sessionId, input.lastTurnId, () => patch(sessionId, {navigation: undefined}));
         return {status: "applied"};
       } catch (cause) {
         const code = failureOf(cause, ChatErrors.undoCheckpoint);

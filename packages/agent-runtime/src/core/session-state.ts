@@ -1,5 +1,5 @@
-import type {EntryRecord, JsonObject} from "@earendil-works/pi-durable";
-import {defineDoc} from "@earendil-works/pi-durable";
+import type {ConversationId, EntryRecord, JsonObject} from "@earendil-works/pi-durable";
+import {defineDoc, ROOT_CONVERSATION_ID} from "@earendil-works/pi-durable";
 import type {SessionWorktree} from "@supernova/contracts/services/sessions/schemas";
 import type {UserMessageContentPart} from "@supernova/contracts/services/chat/schemas";
 
@@ -31,19 +31,30 @@ export interface TurnRecord {
 }
 
 export type SessionState = {
-  branch: number;
-  /** The undo point: the last entry not undone. Absent when nothing is undone, null when everything is. */
-  leaf?: number | null;
-  current?: CheckpointRef;
+  // Ends at the undo point: undo, redo and revert move to a conversation that ends there.
+  conversation: ConversationId;
+  /** Holds the undone turns after `conversation`'s end; `conversation` is a prefix of it. Absent when nothing is undone. */
+  redoConversation?: ConversationId;
+  /** Navigation's forks, by the entry they end at (`"null"`: none), so a return reuses one. */
+  forks: Record<string, ConversationId>;
+  /** The checkpoint the workspace matches, which the next restore starts from. */
+  workspaceCheckpoint?: CheckpointRef;
+  // Of `conversation` and `redoConversation`, keyed by their user entry.
   turns: Record<string, TurnRecord>;
 };
 
 /** A change to `SessionState` bumps `version` and extends `migrate`, which must return a complete value. */
 export const SessionStateDoc = defineDoc<SessionState & JsonObject>({
   kind: "supernova.session",
-  version: 1,
+  version: 2,
   scope: "session",
-  initial: () => ({branch: 1, turns: {}}),
+  initial: () => ({conversation: ROOT_CONVERSATION_ID, forks: {}, turns: {}}),
+  // 2: navigation forks. Version 1's `leaf` is dropped, so its undone turns show again.
+  migrate: (value) => {
+    const {branch, current, ...rest} = value as JsonObject & {branch?: ConversationId; current?: CheckpointRef};
+    delete rest.leaf;
+    return {...rest, conversation: branch ?? ROOT_CONVERSATION_ID, forks: {}, ...(current === undefined ? {} : {workspaceCheckpoint: current})} as SessionState & JsonObject;
+  },
   // Bounds replay without rewriting every turn record on each change.
   checkpointWhen: (_value, _ops, {deltasSinceBase}) => deltasSinceBase >= 64,
 });

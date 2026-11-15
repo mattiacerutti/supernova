@@ -216,6 +216,26 @@ describe("session commands and views", () => {
     expect(document("session-1")).toEqual(session());
   });
 
+  it("drops the loaded history of the oldest sessions past four that nothing follows", async () => {
+    const {chatOf, document, services} = setup();
+    const ids = ["a", "b", "c", "d", "e", "f"];
+    const follows = ids.map((id) => followSession(services.client, id, chatOf(id)));
+    await waitUntil(() => expect(ids.every((id) => document(id))).toBe(true));
+
+    // Still followed: kept however many there are.
+    follows.slice(0, 5).forEach((stop) => stop());
+    expect(document("a")).toBeUndefined();
+    expect(["b", "c", "d", "e", "f"].every((id) => document(id))).toBe(true);
+
+    // Followed again, a session leaves the unfollowed ones and loses nothing when the next one goes.
+    const again = followSession(services.client, "b", chatOf("b"));
+    follows[5]!();
+    expect(["b", "c", "d", "e", "f"].every((id) => document(id))).toBe(true);
+    again();
+    expect(document("c")).toBeUndefined();
+    expect(["b", "d", "e", "f"].every((id) => document(id))).toBe(true);
+  });
+
   it("opens one session at a time: the next page's open replaces it, and the old page leaving does not clear it", async () => {
     const {chatOf, services} = setup();
     const first = followSession(services.client, "session-1", chatOf("session-1"));
@@ -272,6 +292,34 @@ describe("session commands and views", () => {
     // A window starting the history (a send after undoing every turn) replaces it.
     setDocument(session({entries: page([turnAt(20)])}));
     expect(shown()).toEqual([20]);
+  });
+
+  it("joins the window of an undo past the loaded pages where they meet, and starts from it where they do not", () => {
+    const {setDocument, addHistoryPage} = useSessionsStore.getState();
+    const document = () => useSessionsStore.getState().documents["session-1"]!;
+    const shown = () => document().entries.items.map((item) => item.id);
+    const undone = () => document().undone.items.map((item) => item.id);
+    setDocument(session({entries: page([turnAt(9), turnAt(11)], 7, 4)}));
+    addHistoryPage("session-1", "entries", 9, page([turnAt(5), turnAt(7)], 3, 2));
+
+    // An undo to turn 7 stays in what the client holds.
+    setDocument(session({entries: page([turnAt(7)], 5, 3), undone: page([turnAt(9), turnAt(11)], 7)}));
+    expect(shown()).toEqual([5, 7]);
+    expect(undone()).toEqual([9, 11]);
+
+    // An undo to turn 1: its undone page ends at turn 5, which the client holds, so what it loaded after follows.
+    setDocument(session({entries: page([turnAt(1)]), undone: page([turnAt(3), turnAt(5)], 1, 3)}));
+    expect(shown()).toEqual([1]);
+    expect(undone()).toEqual([3, 5, 7, 9, 11]);
+    expect(document().undone.remaining).toBe(0);
+
+    // Holding only the newest turns, the same undo's window meets nothing it holds and replaces it.
+    useSessionsStore.setState({documents: {}});
+    setDocument(session({entries: page([turnAt(9), turnAt(11)], 7, 4)}));
+    setDocument(session({entries: page([turnAt(1)]), undone: page([turnAt(3), turnAt(5)], 1, 3)}));
+    expect(shown()).toEqual([1]);
+    expect(undone()).toEqual([3, 5]);
+    expect(document().undone.remaining).toBe(3);
   });
 
   it.each([0, 2])("keeps a loaded oversized turn when a new window starts after it (%i earlier turns)", (remaining) => {
@@ -522,6 +570,26 @@ describe("session commands and views", () => {
     expect(live("session-1", document("session-1"))).toMatchObject({turnIds: shown});
     reply();
     await expect(outcome).resolves.toEqual({status: "applied"});
+    expect(live("session-1", document("session-1"))).toMatchObject({status: "idle", turnIds: shown});
+  });
+
+  it.each([
+    {name: "the document showing it", after: undoneLast(twoTurns()), shown: ["1"]},
+    {name: "a document showing elsewhere", after: session({entries: page([turnAt(1), turnAt(3), turnAt(5)])}), shown: ["1", "3", "5"]},
+  ])("keeps an undo shown after its reply until $name arrives", async ({after, shown}) => {
+    const {actions, document, open, services} = setup();
+    services.documents.set("session-1", new Published(twoTurns()));
+    open("session-1");
+    await waitUntil(() => expect(document("session-1")).toEqual(twoTurns()));
+
+    await expect(actions.navigateCheckpoint({action: "undo", lastTurnId: "1", sessionId: "session-1"})).resolves.toEqual({status: "applied"});
+    expect(live("session-1", document("session-1"))).toMatchObject({status: "checkpoint-navigating", turnIds: ["1"]});
+
+    // A document that changes no turns, such as a new context usage, does not end the wait.
+    await publish(services.documents.get("session-1")!, {...twoTurns(), context: {usedTokens: 10, contextWindow: 200_000}});
+    expect(live("session-1", document("session-1"))).toMatchObject({status: "checkpoint-navigating", turnIds: ["1"]});
+
+    await publish(services.documents.get("session-1")!, after);
     expect(live("session-1", document("session-1"))).toMatchObject({status: "idle", turnIds: shown});
   });
 

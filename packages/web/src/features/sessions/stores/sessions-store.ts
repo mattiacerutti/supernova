@@ -33,6 +33,7 @@ interface SessionsStoreState {
   readonly setDocument: (session: ChatDocument) => void;
   readonly setRecord: (record: ListedSession) => void;
   readonly addHistoryPage: (sessionId: string, side: HistorySide, edge: number, page: ChatEntries) => void;
+  readonly dropDocument: (sessionId: string) => void;
   readonly setLoadError: (sessionId: string, message: string) => void;
   readonly patchOptimism: (sessionId: string, change: SessionOptimism) => void;
   readonly forget: (sessionId: string) => void;
@@ -88,6 +89,7 @@ export const useSessionsStore = create<SessionsStoreState>()((set) => ({
           : session.undone.items.at(-1)?.id === edge && {...session, undone: {...session.undone, items: [...session.undone.items, ...page.items], remaining: page.remaining}};
       return extended ? {documents: {...state.documents, [sessionId]: extended}} : state;
     }),
+  dropDocument: (sessionId) => set((state) => (state.documents[sessionId] ? {documents: without(state.documents, sessionId)} : state)),
   setLoadError: (sessionId, message) => set((state) => ({loadErrors: {...state.loadErrors, [sessionId]: message}})),
   patchOptimism: (sessionId, change) => set((state) => ({optimism: {...state.optimism, [sessionId]: {...state.optimism[sessionId], ...change}}})),
   forget: (sessionId) =>

@@ -9,12 +9,33 @@ import type {OwnerOf} from "@/runtime/references";
 import {asOwner, follow, whenLive} from "@/runtime/references";
 import {useRuntime} from "@/runtime/hooks/use-runtime";
 
-const {forget, setDocument, setLoadError, setRecord, setStatuses} = useSessionsStore.getState();
+const {dropDocument, forget, setDocument, setLoadError, setRecord, setStatuses} = useSessionsStore.getState();
+
+// Sessions nothing follows keep their loaded history, so going back finds its pages; past this many, the oldest drop it.
+const KEPT_UNFOLLOWED = 4;
+const followers = new Map<string, number>();
+// Oldest first.
+let unfollowed: string[] = [];
 
 function mirror(sessionId: string, chat: ChatOwner): () => void {
-  return follow(chat.document, (session) => {
+  followers.set(sessionId, (followers.get(sessionId) ?? 0) + 1);
+  unfollowed = unfollowed.filter((id) => id !== sessionId);
+  const stop = follow(chat.document, (session) => {
     if (session?.id === sessionId) setDocument(session);
   });
+
+  return () => {
+    stop();
+    const remaining = (followers.get(sessionId) ?? 1) - 1;
+    if (remaining > 0) {
+      followers.set(sessionId, remaining);
+      return;
+    }
+
+    followers.delete(sessionId);
+    unfollowed.push(sessionId);
+    while (unfollowed.length > KEPT_UNFOLLOWED) dropDocument(unfollowed.shift()!);
+  };
 }
 
 const openSessions = new WeakMap<RuntimeClient, string>();

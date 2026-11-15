@@ -263,9 +263,10 @@ describe("checkpoint navigation", () => {
       const deliveredBeforeRevert = observation.versions.length;
 
       await pi.chat.revertToMessage({sessionId: info.id, turnId: secondTurnId});
+      // The revert moves to another conversation, whose view attaches after the reply; it reaches observers as a new value.
+      await waitUntil(() => expect(observation.versions.length).toBeGreaterThan(deliveredBeforeRevert));
+      await waitUntil(async () => expect(observation.versions.at(-1)).toEqual(await pi.sessions.get({sessionId: info.id})));
       const session = await pi.sessions.get({sessionId: info.id});
-      // The revert reaches observers as a new value after the aborted run's.
-      expect(observation.versions.length).toBeGreaterThan(deliveredBeforeRevert);
       expect(observation.versions.at(-1)).toEqual(session);
       expect(turnContents(session).map((parts) => parts[0])).toEqual([{text: "one", type: "text"}]);
       expect(undoneContents(session).map((parts) => parts[0])).toEqual([

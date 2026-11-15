@@ -1,7 +1,7 @@
 import {existsSync} from "node:fs";
 import {join} from "node:path";
 import {afterEach, describe, expect, it} from "vitest";
-import {assistantTexts, createPiTestRuntime, fauxAssistantMessage, selectedModelReference, selectedPiModel, turnContents, turnIds} from "@tests/support/test-runtime";
+import {assistantTexts, createPiTestRuntime, fauxAssistantMessage, selectedModelReference, selectedPiModel, turnContents, turnIds, waitUntil} from "@tests/support/test-runtime";
 
 describe("sessions", () => {
   const runtimes: Array<{unregister: () => Promise<void>}> = [];
@@ -110,6 +110,8 @@ describe("sessions", () => {
 
     // A revert to turn 20, before the compaction, keeps the turns before it and undoes it and the rest, compaction included.
     await pi.chat.revertToMessage({sessionId: info.id, turnId: turnIds(history)[19]!});
+    // The reverted document follows the reply once its conversation is observed.
+    await waitUntil(async () => expect((await pi.sessions.get({sessionId: info.id})).undone.items.length).toBeGreaterThan(0));
     const afterRevert = await everyTurn();
     expect(turnContents(afterRevert.history).map((parts) => parts[0])).toEqual(texts(turns.slice(0, 19)));
     expect(afterRevert.history.entries.items.some((entry) => entry.kind === "pi.compaction")).toBe(false);
