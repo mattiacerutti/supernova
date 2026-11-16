@@ -73,7 +73,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@playwright/test": "^1.60.0",
+    "@playwright/test": "^1.65.1",
     "@rolldown/plugin-babel": "^0.2.3",
     "@supernova/server": "workspace:*",
     "@tailwindcss/vite": "^4.2.4",
