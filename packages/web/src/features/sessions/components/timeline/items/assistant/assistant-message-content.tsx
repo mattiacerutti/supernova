@@ -125,7 +125,7 @@ export default function AssistantMessageContent(props: AssistantMessageContentPr
   }
 
   return (
-    <div className={cn("session-markdown min-w-0 max-w-full text-sm leading-7 text-ink", className)}>
+    <div className={cn("session-markdown min-w-0 max-w-full text-sm leading-7 wrap-break-word text-ink", className)}>
       {mode === "text" && <div className="whitespace-pre-wrap">{fadeNewText ? <StreamingFadeText>{children}</StreamingFadeText> : children}</div>}
       {mode === "markdown" && renderMarkdown(children)}
     </div>
