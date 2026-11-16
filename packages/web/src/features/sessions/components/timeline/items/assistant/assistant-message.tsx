@@ -18,7 +18,7 @@ export default function AssistantMessage(props: AssistantMessageProps) {
 
   return (
     <article className="group/message">
-      <div className="max-w-3xl">
+      <div className="max-w-conversation">
         {event.content.length > 0 && <AssistantMessageContent streaming={live}>{event.content}</AssistantMessageContent>}
         {final && <MessageActions copyText={event.content} onFork={onForkFromTurn && (() => onForkFromTurn(turnId))} timestamp={event.timestamp} />}
       </div>

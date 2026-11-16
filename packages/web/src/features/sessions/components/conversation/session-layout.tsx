@@ -90,7 +90,7 @@ export function SessionBody(props: SessionBodyProps) {
         {centered && (
           <motion.div
             animate={{opacity: 1, transition: ENTER_TRANSITION, y: 0}}
-            className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col justify-end px-4 md:px-6"
+            className="mx-auto flex min-h-0 w-full max-w-conversation flex-1 flex-col justify-end px-4 md:px-6"
             exit={reduceMotion ? undefined : {opacity: 0, y: -8, transition: HERO_EXIT_TRANSITION}}
             initial={enter ? ENTER_FROM : false}
             key="hero"

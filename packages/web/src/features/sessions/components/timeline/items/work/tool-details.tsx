@@ -40,9 +40,9 @@ function DefaultToolDetails(props: DefaultToolDetailsProps) {
 
   return (
     <div className="space-y-2">
-      {tool.arguments && <ContentPanel className="font-mono">{formatJson(tool.arguments)}</ContentPanel>}
-      {output && <ContentPanel className="font-mono">{output}</ContentPanel>}
-      {details !== undefined && <ContentPanel className="font-mono">{formatJson(details)}</ContentPanel>}
+      {tool.arguments && <ContentPanel className="font-mono text-code">{formatJson(tool.arguments)}</ContentPanel>}
+      {output && <ContentPanel className="font-mono text-code">{output}</ContentPanel>}
+      {details !== undefined && <ContentPanel className="font-mono text-code">{formatJson(details)}</ContentPanel>}
       {error && <DetailText className="text-danger-ink">{error}</DetailText>}
     </div>
   );
@@ -64,7 +64,7 @@ function CommandToolDetails(props: CommandToolDetailsProps) {
   const hasOutput = output !== undefined && output.length > 0;
 
   return (
-    <ContentPanel className="p-0 text-sm font-mono" scrollable={false}>
+    <ContentPanel className="p-0 font-mono text-code" scrollable={false}>
       <div className="flex items-center justify-between px-2.5 pb-1.5 pt-2.5 font-sans text-sm text-ink-muted">
         <span>Shell</span>
       </div>

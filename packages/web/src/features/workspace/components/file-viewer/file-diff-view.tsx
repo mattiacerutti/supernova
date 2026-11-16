@@ -1,7 +1,7 @@
-import {parseDiffFromFile} from "@pierre/diffs";
+import {DEFAULT_VIRTUAL_FILE_METRICS, parseDiffFromFile} from "@pierre/diffs";
 import {FileDiff, Virtualizer} from "@pierre/diffs/react";
 import {useSettingsStore} from "@/stores/settings-store";
-import {generateDiffOptions} from "@/lib/diffs/options";
+import {generateDiffOptions, getDiffLineHeight} from "@/lib/diffs/options";
 
 const VIRTUALIZER_CONFIG = {intersectionObserverMargin: 1200, overscrollSize: 600};
 
@@ -16,6 +16,7 @@ interface FileDiffViewProps {
 export default function FileDiffView(props: FileDiffViewProps) {
   const {expanded, newContents, oldContents, path, split} = props;
   const mode = useSettingsStore((state) => state.resolvedMode);
+  const lineHeight = useSettingsStore((state) => getDiffLineHeight(state.fontSizes.code));
   // Diffing both full sides lets Pierre reveal unchanged context on demand, which a patch alone cannot.
   const fileDiff = parseDiffFromFile({contents: oldContents, name: path}, {contents: newContents, name: path});
 
@@ -24,6 +25,7 @@ export default function FileDiffView(props: FileDiffViewProps) {
       <FileDiff
         className="min-h-full"
         fileDiff={fileDiff}
+        metrics={{...DEFAULT_VIRTUAL_FILE_METRICS, lineHeight}}
         options={{...generateDiffOptions(mode), diffStyle: split ? "split" : "unified", expandUnchanged: expanded, hunkSeparators: "line-info", overflow: "scroll"}}
       />
     </Virtualizer>

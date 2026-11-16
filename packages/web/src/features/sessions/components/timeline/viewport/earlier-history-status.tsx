@@ -13,7 +13,7 @@ export default function EarlierHistoryStatus(props: EarlierHistoryStatusProps) {
   const {failed, height, onRetry, top} = props;
 
   return (
-    <div className="absolute inset-x-0 mx-auto flex w-full max-w-3xl items-center justify-center px-5 md:px-8" data-timeline-earlier-history style={{height, top}}>
+    <div className="absolute inset-x-0 mx-auto flex w-full max-w-conversation items-center justify-center px-5 md:px-8" data-timeline-earlier-history style={{height, top}}>
       {failed ? (
         <p className="flex items-center gap-2 text-sm text-ink-faint" role="alert">
           Unable to load earlier messages.

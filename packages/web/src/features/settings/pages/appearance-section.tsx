@@ -1,11 +1,19 @@
+import Button from "@/components/ui/button";
+import Icon from "@/components/ui/icon";
 import Input from "@/components/ui/input";
+import Menu, {MenuItem} from "@/components/ui/menu";
 import Switch from "@/components/ui/switch";
+import FontSizePicker from "@/features/settings/components/appearance/font-size-picker";
 import ModePicker from "@/features/settings/components/appearance/mode-picker";
 import ThemeLibrary from "@/features/settings/components/appearance/theme-library";
 import {SettingsGroup, SettingsRow} from "@/features/settings/components/settings-group";
-import {DEFAULT_CODE_FONT, DEFAULT_UI_FONT, useSettingsStore} from "@/stores/settings-store";
+import {CONVERSATION_WIDTHS, DEFAULT_CODE_FONT, DEFAULT_UI_FONT, useSettingsStore} from "@/stores/settings-store";
+
+const WIDTH_LABELS = {comfortable: "Comfortable", wide: "Wide", full: "Full width"} as const;
 
 export default function AppearanceSection() {
+  const conversationWidth = useSettingsStore((state) => state.conversationWidth);
+  const setConversationWidth = useSettingsStore((state) => state.setConversationWidth);
   const codeFont = useSettingsStore((state) => state.codeFont);
   const fontSmoothing = useSettingsStore((state) => state.fontSmoothing);
   const setCodeFont = useSettingsStore((state) => state.setCodeFont);
@@ -31,6 +39,17 @@ export default function AppearanceSection() {
       </SettingsGroup>
 
       <SettingsGroup title="Typography">
+        <SettingsRow
+          control={<FontSizePicker label="Interface font size" target="interface" />}
+          description="Make text and controls smaller or larger throughout the app."
+          title="Interface font size"
+        />
+        <SettingsRow
+          control={<FontSizePicker label="Code and diff font size" target="code" />}
+          description="Adjust text size in code blocks, files, diffs, and tool output."
+          title="Code and diff font size"
+        />
+        <SettingsRow control={<FontSizePicker label="Terminal font size" target="terminal" />} description="Adjust the text size in terminals." title="Terminal font size" />
         <SettingsRow
           control={
             <Input
@@ -67,6 +86,27 @@ export default function AppearanceSection() {
       </SettingsGroup>
 
       <SettingsGroup title="Interface">
+        <SettingsRow
+          control={
+            <Menu
+              trigger={(triggerProps) => (
+                <Button {...triggerProps} className="w-auto shrink-0 px-3 py-1.5 text-xs" size="sm" variant="filled">
+                  {WIDTH_LABELS[conversationWidth]}
+                  <Icon name="chevron-down" size="xs" />
+                </Button>
+              )}
+              triggerLabel="Conversation width"
+            >
+              {(Object.keys(CONVERSATION_WIDTHS) as Array<keyof typeof CONVERSATION_WIDTHS>).map((width) => (
+                <MenuItem key={width} onClick={() => setConversationWidth(width)} trailing={conversationWidth === width && <Icon name="check" size="xs" />}>
+                  {WIDTH_LABELS[width]}
+                </MenuItem>
+              ))}
+            </Menu>
+          }
+          description="Keep conversations narrow or use more of the available space."
+          title="Conversation width"
+        />
         <SettingsRow
           control={<Switch aria-label="Translucent sidebar" checked={translucentSidebar} onCheckedChange={setTranslucentSidebar} />}
           description="Let the desktop window material show through the sidebar."
