@@ -12,7 +12,6 @@ import type {CheckpointStore} from "@supernova/agent-runtime/features/chat/nativ
 import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import type {Watchable} from "@earendil-works/chord";
 import {createModels} from "@earendil-works/pi-ai/models";
-import type {ConversationId} from "@earendil-works/pi-durable";
 import {createRegistry, Harness} from "@earendil-works/pi-durable";
 import {openNodeSqliteStorage} from "@earendil-works/pi-durable/storage/sqlite/node";
 import type {SessionState, TurnRecord} from "@supernova/agent-runtime/core/session-state";
@@ -214,10 +213,22 @@ export async function createPiTestRuntime(input?: {
   // One settings object for every session, so a test can change it between turns as a user edits settings.json.
   const settings = SettingsManager.inMemory(input?.settings);
   const checkpointStore = input?.checkpointStore ?? new FileCheckpointStore(checkpointStorageRoot);
+  // `settled` waits on running captures instead of reading the session file while git snapshots the project.
+  const capturing = new Set<Promise<void>>();
+  const countedStore: CheckpointStore = {
+    capture: (capture) => {
+      const running = checkpointStore.capture(capture);
+      const tracked = running.finally(() => capturing.delete(tracked)).catch(() => undefined);
+      capturing.add(tracked);
+      return running;
+    },
+    deleteSession: (session) => checkpointStore.deleteSession(session),
+    restore: (restore) => checkpointStore.restore(restore),
+  };
   const server = await startTestServerHost({
     sdk: sdk as unknown as PiSdk,
     sessionStorageRoot,
-    checkpointStore,
+    checkpointStore: countedStore,
     resourceCache,
     settings: () => settings,
     ...(input?.worktreeStorageRoot ? {worktreeStorageRoot: input.worktreeStorageRoot} : {}),
@@ -271,27 +282,29 @@ export async function createPiTestRuntime(input?: {
       chat.release();
     }
   };
-  const committedState = async (sessionId: string): Promise<SessionState | undefined> => {
-    const storage = await openNodeSqliteStorage(join(sessionStorageRoot, sessionId, "session.sqlite"));
+  const committed = async (sessionId: string): Promise<{readonly state: SessionState; readonly lastEntryId: number | undefined} | undefined> => {
+    // Without a lock wait: SQLite's wait is synchronous and would hold the session's own commits on this thread.
+    const storage = await openNodeSqliteStorage(join(sessionStorageRoot, sessionId, "session.sqlite"), {busyTimeoutMs: 0});
     const viewer = await Harness.open(storage, {models: createModels(), registry: createRegistry(), readOnly: true}, ctx);
     try {
-      return (await viewer.snapshot(SessionStateDoc, ctx)) as SessionState | undefined;
-    } finally {
-      await viewer.close(ctx);
-    }
-  };
-  const committedTurns = async (sessionId: string): Promise<Readonly<Record<string, TurnRecord>>> => (await committedState(sessionId))?.turns ?? {};
-  const committedLastEntryId = async (sessionId: string, conversationId: ConversationId): Promise<number | undefined> => {
-    const storage = await openNodeSqliteStorage(join(sessionStorageRoot, sessionId, "session.sqlite"));
-    const viewer = await Harness.open(storage, {models: createModels(), registry: createRegistry(), readOnly: true}, ctx);
-    try {
-      const conversation = await viewer.conversation(conversationId, ctx);
+      const state = (await viewer.snapshot(SessionStateDoc, ctx)) as SessionState | undefined;
+      if (!state) return undefined;
+      const conversation = await viewer.conversation(state.conversation, ctx);
       const [last] = (await conversation?.entries({}, 8, undefined, ctx))?.items.filter((entry) => entry.kind !== "pi.system") ?? [];
-      return last?.id;
+      return {state, lastEntryId: last?.id};
     } finally {
       await viewer.close(ctx);
     }
   };
+  // A read that meets the session's write lock fails at once; the next one runs after the commit.
+  const readCommitted = async (sessionId: string) => {
+    let read: Awaited<ReturnType<typeof committed>>;
+    await waitUntil(async () => {
+      read = await committed(sessionId);
+    });
+    return read;
+  };
+  const committedTurns = async (sessionId: string): Promise<Readonly<Record<string, TurnRecord>>> => (await readCommitted(sessionId))?.state.turns ?? {};
 
   const chat = {
     sendMessage: ({sessionId, ...input}: SendMessagePayload & {readonly sessionId: string}) => withChat(sessionId, (chat) => chat.sendMessage(input, ctx)),
@@ -394,22 +407,37 @@ export async function createPiTestRuntime(input?: {
     await waitUntil(
       async () => {
         if ((await chat.current(sessionId)).live.run !== undefined) throw new Error("Session is still running.");
-        const state = await committedState(sessionId);
-        if (Object.values(state?.turns ?? {}).some((record) => record.after === undefined)) throw new Error("A turn has no after-turn checkpoint yet.");
-        await showsCurrentConversation(sessionId, state);
       },
       {timeoutMs}
     );
+    const recorded = async () => {
+      const files = await committed(sessionId);
+      if (Object.values(files?.state.turns ?? {}).some((record) => record.after === undefined)) throw new Error("A turn has no after-turn checkpoint yet.");
+      await showsCurrentConversation(sessionId, files?.lastEntryId);
+    };
+    // A capture takes as long as git does on the machine: the wait for its record starts once it finished.
+    let done = false;
+    while (!done) {
+      while (capturing.size > 0) await Promise.all(capturing);
+      await waitUntil(
+        async () => {
+          // A capture that started meanwhile ends this wait; the next one starts after it.
+          if (capturing.size === 0) await recorded();
+          done = capturing.size === 0;
+        },
+        {timeoutMs, intervalMs: 25}
+      );
+    }
   };
 
-  const showsCurrentConversation = async (sessionId: string, state: SessionState | undefined) => {
-    const lastShown = (await chat.current(sessionId)).entries.items.at(-1)?.id;
-    if (state && lastShown !== (await committedLastEntryId(sessionId, state.conversation))) throw new Error("The document does not show the current conversation yet.");
+  const showsCurrentConversation = async (sessionId: string, lastEntryId: number | undefined) => {
+    if ((await chat.current(sessionId)).entries.items.at(-1)?.id !== lastEntryId) throw new Error("The document does not show the current conversation yet.");
   };
 
   const navigated = async <T>(sessionId: string, command: Promise<T>): Promise<T> => {
     const result = await command;
-    await waitUntil(async () => showsCurrentConversation(sessionId, await committedState(sessionId)));
+    const lastEntryId = (await readCommitted(sessionId))?.lastEntryId;
+    await waitUntil(() => showsCurrentConversation(sessionId, lastEntryId));
     return result;
   };
 
