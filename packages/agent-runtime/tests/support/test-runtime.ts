@@ -355,7 +355,11 @@ export async function createPiTestRuntime(input?: {
     listModels: (payload: ListModelsPayload) => sessionsOwner.listModels(payload, ctx),
     listComposerSuggestions: (payload: ListComposerSuggestionsPayload) => sessionsOwner.listComposerSuggestions(payload, ctx),
     exists: ({sessionId}: SessionIdPayload) => store.exists(sessionId),
-    delete: ({sessionId}: SessionIdPayload) => store.delete(sessionId),
+    // The open session file must close first: Windows refuses to delete it.
+    delete: async ({sessionId}: SessionIdPayload) => {
+      await sessionHosts.release(sessionId, {abort: false});
+      await store.delete(sessionId);
+    },
   };
 
   const list = async (projectPath: string, depth = 100): Promise<ListedSession[]> => {
