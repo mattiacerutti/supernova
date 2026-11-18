@@ -4,11 +4,12 @@ import type {ModelReference, SessionWorkspaceSelection} from "@supernova/contrac
 import type {ChatDocument} from "@supernova/contracts/services/chat/schemas";
 import type {UserMessageContentPart} from "@supernova/contracts/services/chat/schemas";
 import type {ListedSession} from "@supernova/contracts/services/sessions/services";
+import {historyOf} from "@/features/sessions/api/chat-history";
 import {forgetSession} from "@/features/sessions/api/sessions-sync";
 import {readSessionView} from "@/features/sessions/hooks/use-session";
 import {sessionStatus, sessionView} from "@/features/sessions/lib/session-view";
-import type {SessionOptimism} from "@/features/sessions/stores/sessions-store";
-import {useSessionsStore} from "@/features/sessions/stores/sessions-store";
+import type {SessionOptimism} from "@/features/sessions/stores/session-optimism-store";
+import {useSessionOptimismStore} from "@/features/sessions/stores/session-optimism-store";
 import {useMountEffect} from "@/hooks/use-mount-effect";
 import {showToast} from "@/lib/toast";
 import {useSettingsStore} from "@/stores/settings-store";
@@ -16,6 +17,7 @@ import type {CodeOf} from "@supernova/contracts/lib/errors";
 import {failureOf} from "@supernova/contracts/lib/errors";
 import {ChatErrors} from "@supernova/contracts/services/chat/services";
 import type {ChatOwner, RuntimeClient} from "@/runtime/client";
+import {currentValue, follow} from "@/runtime/references";
 import {useRuntime} from "@/runtime/hooks/use-runtime";
 
 interface SendMessageInput {
@@ -38,17 +40,17 @@ type CheckpointNavigationOutcome =
   | {readonly status: "refused"; readonly reason: "conflict" | "uncaptured"}
   | {readonly status: "failed"; readonly code: CodeOf<typeof ChatErrors.undoCheckpoint> | undefined; readonly message: string};
 
-const {patchOptimism: patch, setDocument, setRecord} = useSessionsStore.getState();
+const {patchOptimism: patch} = useSessionOptimismStore.getState();
 
 function errorMessage(cause: unknown, fallback: string): string {
   return cause instanceof Error && cause.message.length > 0 ? cause.message : fallback;
 }
 
-function emptySession(projectPath: string, sessionId: string): {readonly record: ListedSession; readonly session: ChatDocument} {
+function emptySession(projectPath: string, sessionId: string): {readonly record: ListedSession; readonly document: ChatDocument} {
   const updatedAt = new Date().toISOString();
   return {
     record: {id: sessionId, title: "Untitled session", forked: false, pinned: false, projectPath, updatedAt},
-    session: emptyConversation(sessionId, updatedAt),
+    document: emptyConversation(sessionId, updatedAt),
   };
 }
 
@@ -65,46 +67,45 @@ function emptyConversation(sessionId: string, updatedAt: string): ChatDocument {
   };
 }
 
-const isRunning = (sessionId: string): boolean => useSessionsStore.getState().statuses[sessionId]?.activity === "running";
+function isRunning(runtime: RuntimeClient, sessionId: string): boolean {
+  return currentValue(runtime.status.statuses)?.sessions[sessionId]?.activity === "running";
+}
 
-function whenNotRunning(sessionId: string, run: () => void): void {
-  if (!isRunning(sessionId)) return run();
-  const stop = useSessionsStore.subscribe(() => {
-    if (isRunning(sessionId)) return;
-    stop();
+function whenNotRunning(runtime: RuntimeClient, sessionId: string, run: () => void): void {
+  if (!isRunning(runtime, sessionId)) return run();
+  const stop = follow(runtime.status.statuses, () => {
+    if (isRunning(runtime, sessionId)) return;
+    // `stop` does not exist yet when `follow` calls back at once.
+    queueMicrotask(() => stop());
     run();
   });
 }
 
-function whenHasTurn(sessionId: string, run: () => void): void {
-  const hasTurn = () => {
-    const {documents, optimism} = useSessionsStore.getState();
-    return !optimism[sessionId]?.message || (documents[sessionId]?.entries.items.length ?? 0) > 0;
-  };
+function whenHasTurn(runtime: RuntimeClient, sessionId: string, run: () => void): void {
+  const history = historyOf(runtime, sessionId);
+  const hasTurn = () => !useSessionOptimismStore.getState().optimism[sessionId]?.message || (history.read().document?.entries.items.length ?? 0) > 0;
   if (hasTurn()) return run();
-  const stop = useSessionsStore.subscribe(() => {
+  const stop = history.subscribe(() => {
     if (!hasTurn()) return;
     stop();
     run();
   });
 }
 
-function shownLastTurnId(sessionId: string): string | null {
-  const {documents, records, statuses} = useSessionsStore.getState();
-  return sessionView({entry: statuses[sessionId], record: records[sessionId], session: documents[sessionId]}).turns.at(-1)?.id ?? null;
-}
-
 // The reply can come before the document that shows it, which the server publishes once it has read the turns.
-function whenNavigated(sessionId: string, lastTurnId: string | null, run: () => void): void {
-  const replied = useSessionsStore.getState().documents[sessionId];
+function whenNavigated(runtime: RuntimeClient, sessionId: string, lastTurnId: string | null, run: () => void): void {
+  const history = historyOf(runtime, sessionId);
+  const replied = history.read().document;
+  // The document's own turns, without the navigation being waited for.
+  const shownLastTurnId = () => sessionView({entry: undefined, record: undefined, session: history.read().document}).turns.at(-1)?.id ?? null;
   // Any change of turns also ends the wait: the server may have landed elsewhere than predicted.
   const settled = () => {
-    const current = useSessionsStore.getState().documents[sessionId];
-    return shownLastTurnId(sessionId) === lastTurnId || current?.entries !== replied?.entries || current?.undone !== replied?.undone;
+    const current = history.read().document;
+    return shownLastTurnId() === lastTurnId || current?.entries !== replied?.entries || current?.undone !== replied?.undone;
   };
   // Without a followed document, nothing will arrive to wait for.
-  if (!replied || shownLastTurnId(sessionId) === lastTurnId) return run();
-  const stop = useSessionsStore.subscribe(() => {
+  if (!replied || shownLastTurnId() === lastTurnId) return run();
+  const stop = history.subscribe(() => {
     if (!settled()) return;
     stop();
     run();
@@ -118,10 +119,9 @@ function navigate(chat: ChatOwner, navigation: CheckpointNavigation, force: bool
 }
 
 export function sessionActions(runtime: RuntimeClient, chat: (sessionId: string) => ChatOwner) {
-  const status = (sessionId: string) => {
-    const {documents, optimism, statuses} = useSessionsStore.getState();
-    return sessionStatus(statuses[sessionId], optimism[sessionId], documents[sessionId]).status;
-  };
+  const status = (sessionId: string) =>
+    sessionStatus(currentValue(runtime.status.statuses)?.sessions[sessionId], useSessionOptimismStore.getState().optimism[sessionId], historyOf(runtime, sessionId).read().document)
+      .status;
 
   const begin = (sessionId: string, optimism: SessionOptimism): void => patch(sessionId, {error: undefined, ...optimism});
 
@@ -149,17 +149,16 @@ export function sessionActions(runtime: RuntimeClient, chat: (sessionId: string)
     async startSession(input: StartSessionInput): Promise<StartSessionOutcome> {
       const {projectPath, sessionId, workspace} = input;
       const started = emptySession(projectPath, sessionId);
-      setRecord(started.record);
-      setDocument(started.session);
+      historyOf(runtime, sessionId).seed(started.document);
       // The runtime reports worktree creation only once it has started.
-      begin(sessionId, {message: pendingMessage(input), setupStep: workspace.mode === "worktree" ? "worktree" : undefined});
+      begin(sessionId, {created: started.record, message: pendingMessage(input), setupStep: workspace.mode === "worktree" ? "worktree" : undefined});
       try {
         await runtime.sessions.create({id: sessionId, message: outgoingMessage(input), projectPath, workspace}, context);
         patch(sessionId, {setupStep: undefined});
-        whenHasTurn(sessionId, () => patch(sessionId, {message: undefined}));
+        whenHasTurn(runtime, sessionId, () => patch(sessionId, {message: undefined}));
         return {status: "started"};
       } catch (cause) {
-        forgetSession(sessionId);
+        forgetSession(runtime, sessionId);
         return {status: "failed", message: errorMessage(cause, "Failed to start the session.")};
       }
     },
@@ -170,7 +169,7 @@ export function sessionActions(runtime: RuntimeClient, chat: (sessionId: string)
       const settle = () => patch(sessionId, {stopping: undefined});
       void chat(sessionId)
         .abort(context)
-        .then(() => whenNotRunning(sessionId, settle), settle);
+        .then(() => whenNotRunning(runtime, sessionId, settle), settle);
     },
 
     compactSession(input: {readonly sessionId: string; readonly modelReference: ModelReference}): void {
@@ -191,7 +190,7 @@ export function sessionActions(runtime: RuntimeClient, chat: (sessionId: string)
       begin(sessionId, {navigation: {lastTurnId: input.lastTurnId}});
       try {
         await navigate(chat(sessionId), input, force);
-        whenNavigated(sessionId, input.lastTurnId, () => patch(sessionId, {navigation: undefined}));
+        whenNavigated(runtime, sessionId, input.lastTurnId, () => patch(sessionId, {navigation: undefined}));
         return {status: "applied"};
       } catch (cause) {
         const code = failureOf(cause, ChatErrors.undoCheckpoint);
@@ -222,7 +221,8 @@ interface UseSessionCommandsOptions {
 
 export function useSessionCommands(options: UseSessionCommandsOptions) {
   const {chat, modelReference, sessionId} = options;
-  const actions = sessionActions(useRuntime(), () => {
+  const runtime = useRuntime();
+  const actions = sessionActions(runtime, () => {
     if (!chat) throw new Error("The session is not open.");
     return chat;
   });
@@ -276,13 +276,13 @@ export function useSessionCommands(options: UseSessionCommandsOptions) {
     compact: (): void => {
       if (modelReference) actions.compactSession({modelReference, sessionId});
     },
-    undo: (): void => void navigate({action: "undo", lastTurnId: readSessionView(sessionId).turns.at(-2)?.id ?? null}),
+    undo: (): void => void navigate({action: "undo", lastTurnId: readSessionView(runtime, sessionId).turns.at(-2)?.id ?? null}),
     redo: (): void => {
-      const {turns, undoneTurns} = readSessionView(sessionId);
+      const {turns, undoneTurns} = readSessionView(runtime, sessionId);
       void navigate({action: "redo", lastTurnId: undoneTurns[0]?.id ?? turns.at(-1)?.id ?? null});
     },
     revertToMessage: (turnId: string): void => {
-      const {turns} = readSessionView(sessionId);
+      const {turns} = readSessionView(runtime, sessionId);
       const shownIndex = turns.findIndex((turn) => turn.id === turnId);
       const lastTurnId = shownIndex >= 0 ? (turns[shownIndex - 1]?.id ?? null) : turnId;
       void navigate({action: "revert", lastTurnId, turnId});

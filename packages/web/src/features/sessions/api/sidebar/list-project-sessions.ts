@@ -1,15 +1,14 @@
 import {listedSessions} from "@/features/sessions/lib/session-view";
 import {useProjectList} from "@/features/sessions/api/sidebar/session-list";
-import {useSessionsStore} from "@/features/sessions/stores/sessions-store";
+import {useSessionOptimismStore} from "@/features/sessions/stores/session-optimism-store";
 
 const SESSION_PAGE_SIZE = 5;
 
 export function useListProjectSessions(projectPath: string) {
   const listing = useProjectList(projectPath, SESSION_PAGE_SIZE);
-  const optimism = useSessionsStore((state) => state.optimism);
-  const records = useSessionsStore((state) => state.records);
+  const optimism = useSessionOptimismStore((state) => state.optimism);
   return {
-    sessions: listing.pending ? undefined : listedSessions({items: listing.items, projectPath, starting: Object.values(records), optimism}),
+    sessions: listing.pending ? undefined : listedSessions({items: listing.items, projectPath, optimism}),
     error: listing.error,
     isPending: listing.pending,
     hasMore: listing.hasMore,

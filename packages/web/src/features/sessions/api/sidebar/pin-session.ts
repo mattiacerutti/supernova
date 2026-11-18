@@ -1,6 +1,6 @@
 import {BACKGROUND_CONTEXT as context} from "@earendil-works/chord/context";
 import {useMutation} from "@tanstack/react-query";
-import {useSessionsStore} from "@/features/sessions/stores/sessions-store";
+import {useSessionOptimismStore} from "@/features/sessions/stores/session-optimism-store";
 import {useRuntime} from "@/runtime/hooks/use-runtime";
 
 interface PinSessionInput {
@@ -8,7 +8,7 @@ interface PinSessionInput {
   readonly pinned: boolean;
 }
 
-const {patchOptimism} = useSessionsStore.getState();
+const {patchOptimism} = useSessionOptimismStore.getState();
 
 export function usePinSession() {
   const runtime = useRuntime();

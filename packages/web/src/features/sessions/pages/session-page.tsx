@@ -27,6 +27,7 @@ import {useFollowSession} from "@/features/sessions/api/sessions-sync";
 import {ChatService} from "@supernova/contracts/services/chat/services";
 import type {OwnerOf} from "@/runtime/references";
 import {useObject} from "@/runtime/hooks/use-object";
+import {useRuntime} from "@/runtime/hooks/use-runtime";
 import {readSessionView, useSession} from "@/features/sessions/hooks/use-session";
 import type {SessionView} from "@/features/sessions/lib/session-view";
 import {buildCommittedTimelineItems, buildLiveTimelineItems} from "@/features/sessions/lib/timeline/rows/build-session-timeline";
@@ -104,6 +105,7 @@ export default function SessionPage(props: SessionPageProps) {
   const {target} = props;
   const {sessionId} = target;
   const navigate = useNavigate();
+  const runtime = useRuntime();
   const setNewSessionId = useComposerDraftsStore((state) => state.setNewSessionId);
 
   const [creatingWorkspace, setCreatingWorkspace] = useState<SessionWorkspaceSelection | null>(null);
@@ -172,7 +174,7 @@ export default function SessionPage(props: SessionPageProps) {
   };
 
   const idleView = (): SessionView | undefined => {
-    const current = readSessionView(sessionId);
+    const current = readSessionView(runtime, sessionId);
     return current.session && current.status === "idle" ? current : undefined;
   };
 

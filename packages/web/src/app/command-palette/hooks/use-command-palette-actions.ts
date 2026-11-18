@@ -2,7 +2,7 @@ import {useNavigate, useParams} from "@tanstack/react-router";
 import type {CommandPaletteAction} from "@/features/command-palette/types/command-palette";
 import {useProjectsStore} from "@/features/projects/stores/projects-store";
 import type {Project} from "@/features/projects/types/project";
-import {useSessionsStore} from "@/features/sessions/stores/sessions-store";
+import {useSessionRecord} from "@/features/sessions/hooks/use-session";
 
 const GENERAL_SECTION = "Actions";
 
@@ -10,7 +10,7 @@ export type CommandPalettePageId = "new-session" | "open-project" | "open-sessio
 
 function useOpenSessionProject(projects: readonly Project[]): Project | undefined {
   const sessionId = useParams({select: (params) => params.sessionId, strict: false});
-  const projectPath = useSessionsStore((state) => (sessionId === undefined ? undefined : state.records[sessionId]?.projectPath));
+  const projectPath = useSessionRecord(sessionId)?.projectPath;
 
   return projectPath === undefined ? undefined : projects.find((project) => project.path === projectPath);
 }
@@ -18,10 +18,8 @@ function useOpenSessionProject(projects: readonly Project[]): Project | undefine
 export function useOpenSessionWorkspacePath(): string | undefined {
   const sessionId = useParams({select: (params) => params.sessionId, strict: false});
 
-  return useSessionsStore((state) => {
-    const session = sessionId === undefined ? undefined : state.records[sessionId];
-    return session && (session.worktree?.path ?? session.projectPath);
-  });
+  const session = useSessionRecord(sessionId);
+  return session && (session.worktree?.path ?? session.projectPath);
 }
 
 export function useCommandPaletteActions(): readonly CommandPaletteAction[] {

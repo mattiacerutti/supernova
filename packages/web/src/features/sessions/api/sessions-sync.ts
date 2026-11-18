@@ -1,53 +1,22 @@
 import {BACKGROUND_CONTEXT as context} from "@earendil-works/chord/context";
 import {ChatService} from "@supernova/contracts/services/chat/services";
-import {useSessionsStore} from "@/features/sessions/stores/sessions-store";
+import type {SessionStatusEntry} from "@supernova/contracts/services/sessions/services";
+import {historyOf} from "@/features/sessions/api/chat-history";
+import {NoticeToasts} from "@/features/sessions/lib/session-notices";
+import {useSessionOptimismStore} from "@/features/sessions/stores/session-optimism-store";
 import {useSessionVisitsStore} from "@/features/sessions/stores/sidebar/session-visits-store";
 import {useMountEffect} from "@/hooks/use-mount-effect";
-import {NoticeToasts} from "@/features/sessions/lib/session-notices";
-import type {ChatOwner, RuntimeClient} from "@/runtime/client";
+import type {RuntimeClient} from "@/runtime/client";
 import type {OwnerOf} from "@/runtime/references";
 import {asOwner, follow, whenLive} from "@/runtime/references";
 import {useRuntime} from "@/runtime/hooks/use-runtime";
-
-const {dropDocument, forget, setDocument, setLoadError, setRecord, setStatuses} = useSessionsStore.getState();
-
-// Sessions nothing follows keep their loaded history, so going back finds its pages; past this many, the oldest drop it.
-const KEPT_UNFOLLOWED = 4;
-const followers = new Map<string, number>();
-// Oldest first.
-let unfollowed: string[] = [];
-
-function mirror(sessionId: string, chat: ChatOwner): () => void {
-  followers.set(sessionId, (followers.get(sessionId) ?? 0) + 1);
-  unfollowed = unfollowed.filter((id) => id !== sessionId);
-  const stop = follow(chat.document, (session) => {
-    if (session?.id === sessionId) setDocument(session);
-  });
-
-  return () => {
-    stop();
-    const remaining = (followers.get(sessionId) ?? 1) - 1;
-    if (remaining > 0) {
-      followers.set(sessionId, remaining);
-      return;
-    }
-
-    followers.delete(sessionId);
-    unfollowed.push(sessionId);
-    while (unfollowed.length > KEPT_UNFOLLOWED) dropDocument(unfollowed.shift()!);
-  };
-}
 
 const openSessions = new WeakMap<RuntimeClient, string>();
 
 function openRecord(runtime: RuntimeClient, sessionId: string): () => void {
   openSessions.set(runtime, sessionId);
   void runtime.sessions.openSession({sessionId}, context).catch(() => undefined);
-  const stop = follow(runtime.sessions.view, ({open}) => {
-    if (open?.id === sessionId) setRecord(open);
-  });
   return () => {
-    stop();
     // The next page mounts before this one unmounts.
     if (openSessions.get(runtime) !== sessionId) return;
     openSessions.delete(runtime);
@@ -55,24 +24,21 @@ function openRecord(runtime: RuntimeClient, sessionId: string): () => void {
   };
 }
 
-export function syncSessions(runtime: RuntimeClient): () => void {
+export function syncSessions(runtime: RuntimeClient, onRunEnded: () => void): () => void {
   const notices = new NoticeToasts();
-  return follow(runtime.status.statuses, (statuses) => {
-    setStatuses(statuses.sessions);
-    notices.show(statuses.sessions);
+  let previous: Readonly<Record<string, SessionStatusEntry>> = {};
+  return follow(runtime.status.statuses, ({sessions}) => {
+    notices.show(sessions);
+    if (Object.entries(previous).some(([sessionId, entry]) => entry.activity !== "idle" && (sessions[sessionId]?.activity ?? "idle") === "idle")) onRunEnded();
+    previous = sessions;
   });
 }
 
 export function followSession(runtime: RuntimeClient, sessionId: string, chat: OwnerOf<typeof ChatService>): () => void {
-  let following = true;
-  whenLive(chat).catch((cause: unknown) => {
-    if (following) setLoadError(sessionId, cause instanceof Error ? cause.message : "Unable to load this session.");
-  });
-  const stop = mirror(sessionId, chat);
+  const stopHistory = historyOf(runtime, sessionId).follow(chat);
   const stopRecord = openRecord(runtime, sessionId);
   return () => {
-    following = false;
-    stop();
+    stopHistory();
     stopRecord();
   };
 }
@@ -82,9 +48,10 @@ const PREFETCH_HOLD_MS = 5_000;
 export function usePrefetchSession(): (sessionId: string) => void {
   const runtime = useRuntime();
   return (sessionId) => {
-    if (useSessionsStore.getState().documents[sessionId] !== undefined) return;
+    const history = historyOf(runtime, sessionId);
+    if (history.read().document !== undefined) return;
     const held = runtime.host.hold(ChatService, {sessionId}, context);
-    const stop = mirror(sessionId, asOwner(held));
+    const stop = history.follow(asOwner(held));
     const end = () => {
       stop();
       held.release();
@@ -93,16 +60,22 @@ export function usePrefetchSession(): (sessionId: string) => void {
   };
 }
 
-export function forgetSession(sessionId: string): void {
-  forget(sessionId);
+export function forgetSession(runtime: RuntimeClient, sessionId: string): void {
+  useSessionOptimismStore.getState().forgetOptimism(sessionId);
+  historyOf(runtime, sessionId).clear();
 }
 
-export function markSeenAsItChanges(sessionId: string): () => void {
+export function markSeenAsItChanges(runtime: RuntimeClient, sessionId: string): () => void {
+  const history = historyOf(runtime, sessionId);
+  let seen = history.read().document;
   // At the session's activity time: stamping now would hide a later completion.
-  const markSeen = (session: {readonly updatedAt: string} | undefined) => session && useSessionVisitsStore.getState().markSessionVisited(sessionId, session.updatedAt);
-  markSeen(useSessionsStore.getState().documents[sessionId]);
-  return useSessionsStore.subscribe((state, previous) => {
-    if (state.documents[sessionId] !== previous.documents[sessionId]) markSeen(state.documents[sessionId]);
+  const markSeen = () => seen && useSessionVisitsStore.getState().markSessionVisited(sessionId, seen.updatedAt);
+  markSeen();
+  return history.subscribe(() => {
+    const {document} = history.read();
+    if (document === seen) return;
+    seen = document;
+    markSeen();
   });
 }
 
@@ -110,7 +83,7 @@ export function useFollowSession(sessionId: string, chat: OwnerOf<typeof ChatSer
   const runtime = useRuntime();
   useMountEffect(() => {
     const stopFollowing = followSession(runtime, sessionId, chat);
-    const stopMarking = markSeenAsItChanges(sessionId);
+    const stopMarking = markSeenAsItChanges(runtime, sessionId);
     return () => {
       stopFollowing();
       stopMarking();

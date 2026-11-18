@@ -43,6 +43,15 @@ export function follow<T>(source: Watchable<T> | NativeWatchable<T>, listener: (
   };
 }
 
+// A member read before its first value throws.
+export function currentValue<T>(source: Watchable<T> | NativeWatchable<T>): T | undefined {
+  try {
+    return source.value;
+  } catch {
+    return undefined;
+  }
+}
+
 export function whenLive(ref: HeldRef): Promise<void> {
   return new Promise((resolve, reject) => {
     const stop = follow(ref.state, (state) => {

@@ -1,9 +1,9 @@
 import type {SessionSetupStep} from "@supernova/contracts/services/sessions/procedures";
 import {sessionActivityOf} from "@supernova/contracts/services/sessions/procedures";
-import type {ListedSession, SessionStatusEntry} from "@supernova/contracts/services/sessions/services";
+import type {ListedSession, SessionsView, SessionStatusEntry} from "@supernova/contracts/services/sessions/services";
 import type {ChatDocument} from "@supernova/contracts/services/chat/schemas";
 import {buildSessionTurns} from "@/features/sessions/lib/timeline/turns/build-turns";
-import type {PendingMessage, SessionOptimism} from "@/features/sessions/stores/sessions-store";
+import type {PendingMessage, SessionOptimism} from "@/features/sessions/stores/session-optimism-store";
 import type {SessionTurn} from "@/features/sessions/types/session-turn";
 
 export type SessionStatusKind = "checkpoint-navigating" | "compacting" | "idle" | "stopping" | "streaming";
@@ -59,15 +59,24 @@ export function sessionStatus(entry: SessionStatusEntry | undefined, optimism: S
   };
 }
 
+// The tab's view has the open session's record and every one its project lists show.
+export function recordIn(view: SessionsView | undefined, sessionId: string): ListedSession | undefined {
+  if (view?.open?.id === sessionId) return view.open;
+  for (const project of Object.values(view?.projects ?? {})) {
+    const record = project.items.find((item) => item.id === sessionId);
+    if (record) return record;
+  }
+  return undefined;
+}
+
 export function listedSessions(input: {
   readonly items: readonly ListedSession[];
   readonly projectPath: string;
-  readonly starting: readonly ListedSession[];
   readonly optimism: Readonly<Record<string, SessionOptimism>>;
 }): ListedSession[] {
-  const {items, optimism, projectPath, starting} = input;
+  const {items, optimism, projectPath} = input;
   const listed = new Set(items.map((session) => session.id));
-  const added = starting.filter((session) => !listed.has(session.id) && session.projectPath === projectPath && optimism[session.id]?.message !== undefined);
+  const added = Object.values(optimism).flatMap(({created, message}) => (created && message && !listed.has(created.id) && created.projectPath === projectPath ? [created] : []));
   return [...added, ...items]
     .filter((session) => !optimism[session.id]?.archived)
     .map((session) => ({...session, title: optimism[session.id]?.title ?? session.title, pinned: optimism[session.id]?.pinned ?? session.pinned}))

@@ -3,7 +3,6 @@ import {MutationCache, QueryCache, QueryClient, QueryClientProvider} from "@tans
 import {useState} from "react";
 import {TooltipProvider} from "@/components/ui/tooltip";
 import {syncSessions} from "@/features/sessions/api/sessions-sync";
-import {useSessionsStore} from "@/features/sessions/stores/sessions-store";
 import {workspaceKeys} from "@/features/workspace/api/query-keys";
 import {useMountEffect} from "@/hooks/use-mount-effect";
 import type {RuntimeClient} from "@/runtime/client";
@@ -15,7 +14,7 @@ interface AppProvidersProps {
 }
 
 function connectApp(runtime: RuntimeClient, queryClient: QueryClient): () => void {
-  const stopSessions = syncSessions(runtime);
+  const stopSessions = syncSessions(runtime, () => void queryClient.invalidateQueries({queryKey: workspaceKeys.all}));
   let disconnected = false;
   const stopConnection = runtime.onConnectionChange((state) => {
     if (state !== "connected") disconnected = true;
@@ -23,14 +22,9 @@ function connectApp(runtime: RuntimeClient, queryClient: QueryClient): () => voi
     disconnected = false;
     void queryClient.invalidateQueries();
   });
-  const stopRunsEnding = useSessionsStore.subscribe((state, previous) => {
-    const runEnded = Object.entries(previous.statuses).some(([sessionId, entry]) => entry.activity !== "idle" && (state.statuses[sessionId]?.activity ?? "idle") === "idle");
-    if (runEnded) void queryClient.invalidateQueries({queryKey: workspaceKeys.all});
-  });
   return () => {
     stopSessions();
     stopConnection();
-    stopRunsEnding();
   };
 }
 

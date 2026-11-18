@@ -2,7 +2,7 @@ import {BACKGROUND_CONTEXT as context} from "@earendil-works/chord/context";
 import {useMutation, useQueryClient} from "@tanstack/react-query";
 import {forgetSession} from "@/features/sessions/api/sessions-sync";
 import {sessionKeys} from "@/features/sessions/api/query-keys";
-import {useSessionsStore} from "@/features/sessions/stores/sessions-store";
+import {useSessionOptimismStore} from "@/features/sessions/stores/session-optimism-store";
 import {useRuntime} from "@/runtime/hooks/use-runtime";
 
 interface ArchiveSessionInput {
@@ -11,7 +11,7 @@ interface ArchiveSessionInput {
   readonly sessionId: string;
 }
 
-const {patchOptimism} = useSessionsStore.getState();
+const {patchOptimism} = useSessionOptimismStore.getState();
 
 export function useArchiveSession() {
   const runtime = useRuntime();
@@ -22,7 +22,7 @@ export function useArchiveSession() {
     onMutate: (input) => patchOptimism(input.sessionId, {archived: true}),
     onError: (_error, input) => patchOptimism(input.sessionId, {archived: undefined}),
     onSuccess: async (result) => {
-      forgetSession(result.sessionId);
+      forgetSession(runtime, result.sessionId);
       await queryClient.invalidateQueries({queryKey: sessionKeys.branches(result.projectPath)});
     },
   });
