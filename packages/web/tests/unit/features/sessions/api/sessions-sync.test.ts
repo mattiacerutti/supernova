@@ -350,7 +350,7 @@ describe("session commands and views", () => {
     expect(live("session-1", document("session-1"))).toMatchObject({liveMessage: contentParts, turnIds: ["1"]});
     expect(useSessionOptimismStore.getState().optimism["session-1"]?.message).toBeDefined();
 
-    await publish(served, session({entries: page([...served.current.entries.items, {...turnAt(7), contentParts}]), runStart: 7}));
+    await publish(served, session({entries: page([...served.current.entries.items, transcript([userEntry({parts: contentParts})], {firstId: 7})[0]!]), runStart: 7}));
     expect(live("session-1", document("session-1"))).toMatchObject({liveMessage: contentParts, liveTurn: {id: "7"}, turnIds: ["1"], undoneTurns: []});
     accept();
     await waitUntil(() => expect(useSessionOptimismStore.getState().optimism["session-1"]?.message).toBeUndefined());
@@ -517,7 +517,7 @@ describe("session commands and views", () => {
     await expect(pending).resolves.toEqual({status: "started"});
     // The pending message stays until the chat delivers the turn, so the turn never disappears in between.
     expect(live("new-session")).toMatchObject({liveMessage: contentParts, setupStep: null});
-    await publish(services.documents.get("new-session")!, session({id: "new-session", entries: page([{...turnAt(1), contentParts}])}));
+    await publish(services.documents.get("new-session")!, session({id: "new-session", entries: page(transcript([userEntry({parts: contentParts})]))}));
     await waitUntil(() => expect(live("new-session")).toMatchObject({liveMessage: undefined, setupStep: null}));
   });
 

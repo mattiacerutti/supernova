@@ -153,7 +153,7 @@ describe("history merge", () => {
     const {document, setDocument} = held();
     const window = session({[side]: page([turnAt(5)])});
     setDocument(window);
-    const changed = {...window[side].items[0]!, contentParts: [{type: "text", text: "Changed"}] as const};
+    const changed = {...window[side].items[0]!, data: {contentParts: [{type: "text", text: "Changed"}], turnIndex: 0}};
 
     setDocument({...window, [side]: page([changed])});
 

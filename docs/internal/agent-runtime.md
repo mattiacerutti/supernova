@@ -115,7 +115,7 @@ A session is the container: its record (title, project, worktree, pin), its life
 
 The chat has three natives, split by who writes:
 
-- `SessionFile` owns the session's file: its Durable harness and our turn records beside Durable's entries. It is their only writer, and each public method is one whole action: `send` (captures the before-turn checkpoint, places the message and records its turn), `compact`, `stop`, `navigate` (undo, redo and revert: restores the workspace, then moves to a conversation that ends at the shown turns), `recordAfterTurnCheckpoints`, `forkSeed` and `seed`.
+- `SessionFile` owns the session's file: its Durable harness and our turn checkpoints beside Durable's entries. It is their only writer, and each public method is one whole action: `send` (captures the before-turn checkpoint, places the message as its turn's entry and records the checkpoint), `compact`, `stop`, `navigate` (undo, redo and revert: restores the workspace, then moves to a conversation that ends at the shown turns), `recordAfterTurnCheckpoints`, `forkSeed` and `seed`.
 - `Transcript` reads what the timeline shows and writes nothing. It `follow`s the state with Durable's view of the current conversation from its newest turns and the drawer's first page of undone turns, reads the context usage at the conversation's end (`contextUsage`), and older pages from storage (`loadHistory`). `SessionFile` creates it with a read-only harness.
 - `Chat` is the user's commands: each is one `SessionFile` action plus what lies outside the file (the busy guard, the title, message preparation, extensions, reports to the server).
 

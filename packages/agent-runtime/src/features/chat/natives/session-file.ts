@@ -1,5 +1,6 @@
 import {randomUUID} from "node:crypto";
 import type {Context} from "@earendil-works/chord/context";
+import {withoutAbortSignal} from "@earendil-works/chord/context";
 import type {ImageContent, TextContent} from "@earendil-works/pi-ai";
 import type {ModelRuntime, SettingsManager} from "@earendil-works/pi-coding-agent";
 import type {AgentState, CompactionResult, Conversation, ConversationId, EntryId, Harness, Registry} from "@earendil-works/pi-durable";
@@ -8,15 +9,17 @@ import {NodeExecutionEnv} from "@earendil-works/pi-durable/env/node";
 import {openNodeSqliteStorage} from "@earendil-works/pi-durable/storage/sqlite/node";
 import type {ForkSeed} from "@supernova/contracts/services/chat/procedures";
 import {CheckpointConflictError, CheckpointInheritedError, CheckpointUncapturedError} from "@supernova/contracts/services/chat/procedures";
-import type {CheckpointRef, CheckpointStatus, SessionState, TurnPosition, TurnRecord} from "@supernova/agent-runtime/core/session-state";
+import type {UserEntryData, UserMessageContentPart} from "@supernova/contracts/services/chat/schemas";
+import {USER_ENTRY_KIND, userEntryData} from "@supernova/contracts/services/chat/schemas";
+import type {CheckpointRef, CheckpointStatus, SessionState, TurnCheckpoints, TurnPosition} from "@supernova/agent-runtime/core/session-state";
 import {SessionStateDoc, turnPositions} from "@supernova/agent-runtime/core/session-state";
 import type {SessionExtension} from "@supernova/agent-runtime/features/chat/durable/coding-tools";
 import {createCodingTools} from "@supernova/agent-runtime/features/chat/durable/coding-tools";
 import {harnessModels, harnessSettings} from "@supernova/agent-runtime/features/chat/durable/harness-settings";
-import {getConversation, getConversationView, getEntries, getFirstEntryId, getLastEntryId, getState} from "@supernova/agent-runtime/features/chat/durable/reads";
+import {migrateToTurnEntries} from "@supernova/agent-runtime/features/chat/durable/migrations/turn-entries";
+import {getConversation, getConversationView, getEntries, getFirstEntryId, getLastEntryId, getLastTurn, getState} from "@supernova/agent-runtime/features/chat/durable/reads";
 import type {PromptResources} from "@supernova/agent-runtime/features/chat/durable/system-prompt";
 import {createPromptSections} from "@supernova/agent-runtime/features/chat/durable/system-prompt";
-import type {PendingSend} from "@supernova/agent-runtime/features/chat/natives/transcript";
 import {Transcript} from "@supernova/agent-runtime/features/chat/natives/transcript";
 import type {CheckpointStore} from "@supernova/agent-runtime/features/chat/natives/checkpoint-store";
 
@@ -52,7 +55,6 @@ export class SessionFile {
   private readonly registry: Registry;
   private readonly env: NodeExecutionEnv;
   private readonly checkpoints: CheckpointStore;
-  private pending: PendingSend | undefined;
 
   private constructor(input: {
     readonly sessionId: string;
@@ -69,13 +71,15 @@ export class SessionFile {
     this.registry = input.registry;
     this.env = input.env;
     this.checkpoints = input.checkpoints;
-    this.transcript = new Transcript({harness: input.harness, modelRuntime: input.modelRuntime, pending: () => this.pending});
+    this.transcript = new Transcript({harness: input.harness, modelRuntime: input.modelRuntime});
   }
 
   public static async open(
     input: SessionFileSetup & {readonly sessionId: string; readonly path: string; readonly checkpoints: CheckpointStore; readonly onReport: (error: unknown) => void},
     context: Context
   ): Promise<SessionFile> {
+    // Once begun, the migration finishes even if the caller leaves.
+    await migrateToTurnEntries(input.path, withoutAbortSignal(context));
     const env = new NodeExecutionEnv({cwd: input.cwd, shellPath: input.settings().getShellPath()});
     const registry = createRegistry();
     const harness = await HarnessFactory.open(
@@ -117,38 +121,36 @@ export class SessionFile {
     }
   }
 
-  // TODO(queue): with `whenBusy: "steer" | "followUp"` the turn record must be written when the engine places the input.
+  // TODO(queue): with `whenBusy: "steer" | "followUp"`, record the turn's checkpoints when the engine places the input.
   public async send(
     input: {
       readonly content: string | (TextContent | ImageContent)[];
-      readonly contentParts: readonly TurnRecord["contentParts"][number][];
+      readonly contentParts: readonly UserMessageContentPart[];
       readonly captureCheckpoint: boolean;
       readonly model: SessionModel;
     },
     context: Context
   ): Promise<SentMessage> {
-    const turn: TurnRecord = {contentParts: [...input.contentParts], capture: input.captureCheckpoint, before: await this.checkpoint(input.captureCheckpoint)};
+    const checkpoints: TurnCheckpoints = {capture: input.captureCheckpoint, before: await this.checkpoint(input.captureCheckpoint)};
     const conversation = await this.conversationFor(input.model, context);
+    const previous = userEntryData(await getLastTurn(this.harness, conversation.id, undefined, context));
+    const data: UserEntryData = {contentParts: [...input.contentParts], turnIndex: (previous?.turnIndex ?? -1) + 1};
 
-    this.pending = {kind: "submitting"};
     let submission;
     let entryId;
     try {
-      submission = await conversation.submit({type: "input", content: input.content, whenBusy: "reject"}, context);
+      submission = await conversation.submit({type: "input", content: input.content, whenBusy: "reject", entry: {kind: USER_ENTRY_KIND, data: strictJson(data) as never}}, context);
       const placed = await submission.status(context);
       if (placed.type !== "input" || placed.entry === undefined) throw new Error("The message was not placed.");
       entryId = placed.entry;
     } catch (error) {
-      this.pending = undefined;
       throw error instanceof ConversationBusy ? new Error("Session already has active work.") : error;
     }
 
-    this.pending = {kind: "placed", entryId};
     await this.update((state) => {
-      state.turns[String(entryId)] = strictJson(turn);
-      state.workspaceCheckpoint = turn.before;
+      state.checkpoints[String(entryId)] = strictJson(checkpoints);
+      state.workspaceCheckpoint = checkpoints.before;
     }, context);
-    this.pending = undefined;
 
     const [entry] = await getEntries(this.harness, conversation.id, {after: entryId - 1, through: entryId}, context);
     return {at: new Date(entry?.model?.[0]?.timestamp ?? Date.now()).toISOString(), answered: () => submission.wait(context)};
@@ -182,11 +184,11 @@ export class SessionFile {
     const state = await getState(this.harness, context);
     const fullConversation = state.redoConversation ?? state.conversation;
     const end = await getLastEntryId(this.harness, state.conversation, context);
-    const turns = turnPositions(await getEntries(this.harness, fullConversation, {}, context), state.turns);
+    const turns = turnPositions(await getEntries(this.harness, fullConversation, {}, context), state.checkpoints);
     const active = turns.filter((turn) => end !== undefined && Number(turn.turnId) <= end).length;
 
     const count = target({turns, active});
-    const boundary = count < active ? turns[count]?.record.before : turns[count - 1]?.record.after;
+    const boundary = count < active ? turns[count]?.checkpoints?.before : turns[count - 1]?.checkpoints?.after;
     // Restore first: a failed restore leaves the session where it was.
     if (boundary?.status === "captured") await this.restore(boundary, state.workspaceCheckpoint, force);
 
@@ -206,14 +208,14 @@ export class SessionFile {
 
   public async recordAfterTurnCheckpoints(context: Context): Promise<void> {
     // Every open record, so turns whose run ended while the host was down get one too.
-    const open = Object.entries((await getState(this.harness, context)).turns).filter(([, record]) => record.after === undefined);
+    const open = Object.entries((await getState(this.harness, context)).checkpoints).filter(([, record]) => record.after === undefined);
     if (open.length === 0) return;
 
     const after = await this.checkpoint(open.some(([, record]) => record.capture));
     await this.update((state) => {
       for (const [turnId] of open) {
-        const record = state.turns[turnId];
-        if (record) state.turns[turnId] = {...record, after: record.capture ? after : {...after, status: "disabled"}};
+        const record = state.checkpoints[turnId];
+        if (record) state.checkpoints[turnId] = {...record, after: record.capture ? after : {...after, status: "disabled"}};
       }
       state.workspaceCheckpoint = after;
     }, context);
@@ -222,21 +224,21 @@ export class SessionFile {
   public async forkSeed(turnId: string, context: Context): Promise<ForkSeed> {
     const state = await getState(this.harness, context);
     const shown = await getEntries(this.harness, state.conversation, {}, context);
-    const turn = turnPositions(shown, state.turns).find((candidate) => candidate.turnId === turnId);
+    const turn = turnPositions(shown, state.checkpoints).find((candidate) => candidate.turnId === turnId);
     if (!turn) throw new Error("This message cannot be forked.");
 
     const agent = (await getConversationView(this.harness, state.conversation, context)).docs["pi.agent"] as AgentState | undefined;
     const entries = shown.filter((entry) => entry.id <= turn.endId && entry.kind !== "pi.system");
-    const turns = Object.fromEntries(entries.flatMap((entry) => (state.turns[String(entry.id)] ? [[String(entry.id), state.turns[String(entry.id)]!]] : [])));
+    const checkpoints = Object.fromEntries(entries.flatMap((entry) => (state.checkpoints[String(entry.id)] ? [[String(entry.id), state.checkpoints[String(entry.id)]!]] : [])));
     const model = agent?.model ? {provider: agent.model.provider, modelId: agent.model.modelId, thinkingLevel: agent.thinkingLevel ?? "off"} : undefined;
-    return strictJson({entries: [...entries], turns, ...(model ? {model} : {})});
+    return strictJson({entries: [...entries], checkpoints, ...(model ? {model} : {})});
   }
 
   public async seed(seed: ForkSeed, context: Context): Promise<void> {
     const root = await getConversation(this.harness, ROOT_CONVERSATION_ID, context);
     const ids = new Map<number, number>();
     await root.commit(async (tx) => {
-      const turns: Record<string, TurnRecord> = {};
+      const checkpoints: Record<string, TurnCheckpoints> = {};
       for (const entry of seed.entries) {
         const head = entry.head === undefined ? undefined : entry.head === entry.id ? "self" : ids.get(entry.head);
         const copied = await tx.appendEntry(root.id, {
@@ -246,10 +248,10 @@ export class SessionFile {
           ...(head === undefined ? {} : {head: head as EntryId | "self"}),
         });
         ids.set(entry.id, copied.id);
-        const record = seed.turns[String(entry.id)] as TurnRecord | undefined;
-        if (record) turns[String(copied.id)] = record;
+        const record = seed.checkpoints[String(entry.id)] as TurnCheckpoints | undefined;
+        if (record) checkpoints[String(copied.id)] = record;
       }
-      Object.assign(((await tx.doc(SessionStateDoc)) as unknown as SessionState).turns, turns);
+      Object.assign(((await tx.doc(SessionStateDoc)) as unknown as SessionState).checkpoints, checkpoints);
     }, context);
 
     if (seed.model) await this.configure(root, seed.model, context);
@@ -308,11 +310,11 @@ export class SessionFile {
 
   private async conversationFor(model: SessionModel, context: Context): Promise<Conversation> {
     const {conversation, redoConversation} = await getState(this.harness, context);
-    // Acting on the shown turns drops the undone ones, and their records: nothing reaches them again.
+    // Acting on the shown turns drops the undone ones and their checkpoints: nothing reaches them again.
     if (redoConversation !== undefined) {
       const end = await getLastEntryId(this.harness, conversation, context);
       await this.update((state) => {
-        for (const turnId of Object.keys(state.turns)) if (end === undefined || Number(turnId) > end) delete state.turns[turnId];
+        for (const turnId of Object.keys(state.checkpoints)) if (end === undefined || Number(turnId) > end) delete state.checkpoints[turnId];
         delete state.redoConversation;
       }, context);
     }

@@ -4,7 +4,7 @@ import type {EntryRecord} from "@supernova/contracts/services/chat/schemas";
 
 export const ForkSeed = obj({
   entries: arr(json<EntryRecord>()),
-  turns: map(unknown()),
+  checkpoints: map(unknown()),
   model: opt(obj({provider: str(), modelId: str(), thinkingLevel: str()})),
 });
 

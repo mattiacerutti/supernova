@@ -9,7 +9,10 @@ export const ChatContextUsage = obj({
   contextWindow: num(),
 });
 
-export const ChatEntry = json<EntryRecord & {readonly contentParts?: readonly UserMessageContentPart[]}>();
+/** Pi's user message, with `UserEntryData`. */
+export const USER_ENTRY_KIND = "supernova.user";
+
+export const ChatEntry = json<EntryRecord>();
 
 export const ChatEntries = obj({
   items: arr(ChatEntry),
@@ -37,3 +40,14 @@ export type ChatDocument = Static<typeof ChatDocument>;
 export type ChatContextUsage = Static<typeof ChatContextUsage>;
 export type ChatEntry = Static<typeof ChatEntry>;
 export type ChatEntries = Static<typeof ChatEntries>;
+
+/** Pi's own user entries, such as an extension's continuation, are not turns: they belong to the turn before them. */
+export interface UserEntryData {
+  readonly contentParts: readonly UserMessageContentPart[];
+  /** Turns before this one in its conversation, so a page knows its position without counting. */
+  readonly turnIndex: number;
+}
+
+export function userEntryData(entry: EntryRecord | undefined): UserEntryData | undefined {
+  return entry?.kind === USER_ENTRY_KIND ? (entry.data as unknown as UserEntryData) : undefined;
+}

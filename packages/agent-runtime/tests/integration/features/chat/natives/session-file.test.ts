@@ -13,7 +13,7 @@ import {BACKGROUND_CONTEXT, withAbortSignal} from "@earendil-works/chord/context
 
 const ctx = BACKGROUND_CONTEXT;
 import type {EntryRecord} from "@earendil-works/pi-durable";
-import type {TurnRecord} from "@supernova/agent-runtime/core/session-state";
+import {USER_ENTRY_KIND, userEntryData} from "@supernova/contracts/services/chat/schemas";
 import type {TranscriptFrame} from "@supernova/agent-runtime/features/chat/natives/transcript";
 import {createPiTestRuntime, selectedPiModel, waitUntil} from "@tests/support/test-runtime";
 
@@ -56,13 +56,13 @@ describe("a session file", () => {
         expect((await sent.answered()).status).toBe("done");
       };
       const userTexts = (entries: readonly {readonly kind: string; readonly model?: readonly unknown[]}[]) =>
-        entries.filter((entry) => entry.kind === "pi.user").map((entry) => (entry.model?.[0] as {content?: unknown} | undefined)?.content);
+        entries.filter((entry) => entry.kind === USER_ENTRY_KIND).map((entry) => (entry.model?.[0] as {content?: unknown} | undefined)?.content);
       await send("First");
       await send("Second");
       const full = await documentOf(file, record);
       // A cancelled call stops its reads.
       const cancelled = withAbortSignal(AbortSignal.abort(), ctx);
-      const secondTurn = full.entries.items.findLast((entry) => entry.kind === "pi.user")!.id;
+      const secondTurn = full.entries.items.findLast((entry) => entry.kind === USER_ENTRY_KIND)!.id;
       await expect(file.transcript.loadHistory({side: "entries", edge: secondTurn}, cancelled)).rejects.toThrow("This operation was aborted");
       const stateOf = async () => (await file.transcript.currentFrame(ctx)).state;
       const documentAfter = async (activeCount: number) => {
@@ -90,7 +90,7 @@ describe("a session file", () => {
       await documentAfter(1);
       expect((await stateOf()).conversation).toBe(afterFirst.conversation);
 
-      // Sending from undone turns continues the shown conversation and drops the undone turn's record.
+      // Sending from undone turns continues the shown conversation and drops the undone turn's checkpoints.
       const second = undone.undone.items[0]!.id;
       await send("Branch");
       const branched = await documentOf(file, record);
@@ -99,8 +99,8 @@ describe("a session file", () => {
       const state = await stateOf();
       expect(state).toMatchObject({conversation: afterFirst.conversation});
       expect(state.redoConversation).toBeUndefined();
-      expect(state.turns[String(second)]).toBeUndefined();
-      expect(Object.keys(state.turns)).toHaveLength(2);
+      expect(state.checkpoints[String(second)]).toBeUndefined();
+      expect(Object.keys(state.checkpoints)).toHaveLength(2);
 
       // The fork has grown past where it was made, so undoing the new turn forks again instead of reusing it.
       await documentAfter(1);
@@ -140,21 +140,20 @@ describe("a session file", () => {
     try {
       // 40 turns in the one commit a fork's seed writes: 80 entries, past the 50 a default view starts with.
       const entries: EntryRecord[] = [];
-      const turns: Record<string, TurnRecord> = {};
       for (let turn = 1; turn <= 40; turn++) {
         const id = 2 * turn - 1;
+        const data = {contentParts: [{type: "text", text: `Request ${turn}`}], turnIndex: turn - 1};
         entries.push(
-          {id, conversationId: 1, kind: "pi.user", model: [{role: "user", content: `Request ${turn}`, timestamp: 0}]} as unknown as EntryRecord,
+          {id, conversationId: 1, kind: USER_ENTRY_KIND, model: [{role: "user", content: `Request ${turn}`, timestamp: 0}], data} as unknown as EntryRecord,
           {id: id + 1, conversationId: 1, kind: "pi.assistant", model: [fauxAssistantMessage(`Answer ${turn}`)]} as unknown as EntryRecord
         );
-        turns[String(id)] = {contentParts: [{type: "text", text: `Request ${turn}`}], capture: false, before: {checkpointId: "c", sessionId: "s0", status: "disabled"}};
       }
-      await file.seed({entries, turns}, ctx);
+      await file.seed({entries, checkpoints: {}}, ctx);
 
-      const userCount = (entries: readonly EntryRecord[]) => entries.filter((entry) => entry.kind === "pi.user").length;
+      const userCount = (entries: readonly EntryRecord[]) => entries.filter((entry) => entry.kind === USER_ENTRY_KIND).length;
       // Each page of new turns attaches the view again, from the newest page and the turn before it.
       await waitUntil(() => expect(userCount(frames.at(-1)?.view.entries ?? [])).toBe(21));
-      expect(frames.at(-1)!.view.entries[0]?.kind).toBe("pi.user");
+      expect(frames.at(-1)!.view.entries[0]?.kind).toBe(USER_ENTRY_KIND);
       await send("Forty-one");
       await waitUntil(() => expect(userCount(frames.at(-1)!.view.entries)).toBe(22));
 
@@ -226,13 +225,13 @@ describe("a session file", () => {
     expect((await sent.answered()).status).toBe("done");
     const snapshot = await documentOf(file, record);
     const [user] = snapshot.entries.items;
-    expect(snapshot.entries.items.map((entry) => entry.kind)).toEqual(["pi.user", "pi.assistant", "pi.tool-result", "pi.assistant"]);
-    expect(user?.contentParts).toEqual([{type: "text", text: "What does hello.txt say?"}]);
+    expect(snapshot.entries.items.map((entry) => entry.kind)).toEqual([USER_ENTRY_KIND, "pi.assistant", "pi.tool-result", "pi.assistant"]);
+    expect(userEntryData(user)).toEqual({contentParts: [{type: "text", text: "What does hello.txt say?"}], turnIndex: 0});
     expect(snapshot).not.toHaveProperty("turns");
     expect(snapshot.entries.items[2]?.model?.[0]).toMatchObject({role: "toolResult", toolName: "read", content: [{type: "text", text: "hi there\n"}]});
     expect(systemPrompt).toContain("read: Read file contents");
     await file.recordAfterTurnCheckpoints(ctx);
-    expect((await file.transcript.currentFrame(ctx)).state.turns[String(user!.id)]?.after).toMatchObject({status: "disabled"});
+    expect((await file.transcript.currentFrame(ctx)).state.checkpoints[String(user!.id)]?.after).toMatchObject({status: "disabled"});
     await file.close(ctx);
     faux.unregister();
   });

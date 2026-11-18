@@ -17,7 +17,7 @@ import {
 import type {ChatDocument} from "@supernova/contracts/services/chat/schemas";
 
 export const ChatService = remote("supernova.chat", {
-  version: 6,
+  version: 7,
   params: {sessionId: str()},
   hostAddress: sessionHost,
   variants: {

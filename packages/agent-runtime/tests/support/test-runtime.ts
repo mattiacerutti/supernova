@@ -14,7 +14,8 @@ import type {Watchable} from "@earendil-works/chord";
 import {createModels} from "@earendil-works/pi-ai/models";
 import {createRegistry, Harness} from "@earendil-works/pi-durable";
 import {openNodeSqliteStorage} from "@earendil-works/pi-durable/storage/sqlite/node";
-import type {SessionState, TurnRecord} from "@supernova/agent-runtime/core/session-state";
+import type {SessionState, TurnCheckpoints} from "@supernova/agent-runtime/core/session-state";
+import {userEntryData} from "@supernova/contracts/services/chat/schemas";
 import {SessionStateDoc} from "@supernova/agent-runtime/core/session-state";
 import {expectVariant} from "@supernova/agent-runtime/lib/chord/principals";
 import {SessionHostsNative} from "@supernova/agent-runtime/core/contract";
@@ -69,7 +70,10 @@ export interface Observation {
 }
 
 export function turnContents(session: Pick<ChatDocument, "entries">) {
-  return session.entries.items.flatMap((entry) => (entry.contentParts === undefined ? [] : [entry.contentParts]));
+  return session.entries.items.flatMap((entry) => {
+    const user = userEntryData(entry);
+    return user ? [user.contentParts] : [];
+  });
 }
 
 export function undoneContents(session: Pick<ChatDocument, "undone">) {
@@ -77,7 +81,7 @@ export function undoneContents(session: Pick<ChatDocument, "undone">) {
 }
 
 export function turnIds(session: Pick<ChatDocument, "entries">): string[] {
-  return session.entries.items.flatMap((entry) => (entry.contentParts === undefined ? [] : [String(entry.id)]));
+  return session.entries.items.flatMap((entry) => (userEntryData(entry) ? [String(entry.id)] : []));
 }
 
 export function assistantTexts(session: Pick<ChatDocument, "entries">): string[] {
@@ -304,7 +308,7 @@ export async function createPiTestRuntime(input?: {
     });
     return read;
   };
-  const committedTurns = async (sessionId: string): Promise<Readonly<Record<string, TurnRecord>>> => (await readCommitted(sessionId))?.state.turns ?? {};
+  const committedTurns = async (sessionId: string): Promise<Readonly<Record<string, TurnCheckpoints>>> => (await readCommitted(sessionId))?.state.checkpoints ?? {};
 
   const chat = {
     sendMessage: ({sessionId, ...input}: SendMessagePayload & {readonly sessionId: string}) => withChat(sessionId, (chat) => chat.sendMessage(input, ctx)),
@@ -416,7 +420,7 @@ export async function createPiTestRuntime(input?: {
     );
     const recorded = async () => {
       const files = await committed(sessionId);
-      if (Object.values(files?.state.turns ?? {}).some((record) => record.after === undefined)) throw new Error("A turn has no after-turn checkpoint yet.");
+      if (Object.values(files?.state.checkpoints ?? {}).some((record) => record.after === undefined)) throw new Error("A turn has no after-turn checkpoint yet.");
       await showsCurrentConversation(sessionId, files?.lastEntryId);
     };
     // A capture takes as long as git does on the machine: the wait for its record starts once it finished.

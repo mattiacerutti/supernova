@@ -92,7 +92,7 @@ describe("importing the old SDK's sessions", () => {
       expect(listed.map((session) => [session.id, session.title])).toEqual([["old-1", "Read the readme"]]);
 
       const session = await pi.chat.current("old-1");
-      expect(session.entries.items.map((entry) => entry.kind)).toEqual(["pi.user", "pi.assistant", "pi.tool-result", "pi.assistant"]);
+      expect(session.entries.items.map((entry) => entry.kind)).toEqual(["supernova.user", "pi.assistant", "pi.tool-result", "pi.assistant"]);
       expect(turnContents(session)).toEqual([[{type: "text", text: "What does the readme say?"}]]);
       expect(session.undone.items).toEqual([]);
       expect(session.agent.model).toEqual({provider: "anthropic", modelId: "claude-sonnet"});

@@ -7,6 +7,7 @@ All notable changes to Supernova are documented in this file.
 ### Breaking Changes
 
 - Supernova now runs on Pi 1.5.1. Opening a session upgrades its file to Pi 1.5.1's storage format, and earlier Supernova versions cannot open an upgraded session. Downgrading Supernova after opening sessions is not supported, so back up `~/.supernova/userdata/agent/sessions` first if you may need to go back.
+- Opening a session from an earlier version rewrites its file once, so each message you sent is stored with the message itself. The original file stays beside it as `session.pre-migration.sqlite`. The rewritten session keeps its shown and undone messages. It forgets which model each earlier message used, so undoing to before a model change keeps the session's current model.
 
 ### Added
 
@@ -20,6 +21,7 @@ All notable changes to Supernova are documented in this file.
 
 ### Fixed
 
+- A session that had been reverted to its first message no longer shows "Loading earlier messages" for a moment when opened.
 - Screen readers now announce the message composer and the sidebar's pinned, forked, and worktree session markers.
 - Fixed OpenAI subscription login failing because an installation device ID was missing.
 - Session times in the sidebar and command palette now keep counting while the app is open. Before, a session showed the time it had when it last changed or when the app started, so it could read "now" days later.

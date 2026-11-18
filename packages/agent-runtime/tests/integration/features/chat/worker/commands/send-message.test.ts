@@ -9,6 +9,7 @@ import {Transcript} from "@supernova/agent-runtime/features/chat/natives/transcr
 import {afterEach, describe, expect, it, vi} from "vitest";
 import type {CheckpointStore} from "@supernova/agent-runtime/features/chat/natives/checkpoint-store";
 import type {ChatDocument} from "@supernova/contracts/services/chat/schemas";
+import {userEntryData} from "@supernova/contracts/services/chat/schemas";
 import type {SessionStatuses} from "@supernova/contracts/services/sessions/services";
 import {
   assistantTexts,
@@ -81,9 +82,8 @@ describe("sending messages through Pi sessions", () => {
     expect(session.agent).toMatchObject({model: {modelId: "claude-sonnet", provider: "anthropic"}, thinkingLevel: "high"});
     expect(activities(board, info.id)).toEqual(["idle", "running", "idle"]);
     expect(session).toEqual(await pi.sessions.get({sessionId: info.id}));
-    // The run's user entry and its turn record arrive in the same version.
     const running = versions.find((version) => version.runStart !== undefined);
-    expect(running?.entries.items.find((entry) => entry.id === running.runStart)?.contentParts).toEqual([{text: "Fix it", type: "text"}]);
+    expect(userEntryData(running?.entries.items.find((entry) => entry.id === running.runStart))?.contentParts).toEqual([{text: "Fix it", type: "text"}]);
     expect(turnContents(session)).toEqual([[{text: "Existing request", type: "text"}], [{text: "Fix it", type: "text"}]]);
     expect(assistantTexts(session)).toEqual(["Existing response", "Done."]);
     const answer = session.entries.items.at(-1)?.model?.[0];
@@ -260,7 +260,9 @@ describe("sending messages through Pi sessions", () => {
 
     const {session, versions} = await pi.sendMessage({message: "Continue after pre-prompt compaction", modelReference: selectedModelReference, sessionId: info.id});
     const seen = compactionsSeen(versions);
-    const userIndex = session.entries.items.findIndex((entry) => entry.contentParts?.some((part) => part.type === "text" && part.text === "Continue after pre-prompt compaction"));
+    const userIndex = session.entries.items.findIndex((entry) =>
+      userEntryData(entry)?.contentParts.some((part) => part.type === "text" && part.text === "Continue after pre-prompt compaction")
+    );
     const summaryIndex = session.entries.items.findIndex((entry, index) => index > userIndex && entry.kind === "pi.compaction");
 
     expect(seen.pending).toBe(true);
@@ -394,14 +396,14 @@ describe("sending messages through Pi sessions", () => {
     ]);
 
     const {session, versions} = await pi.sendMessage({message: "Fix overflow", modelReference: selectedModelReference, sessionId: info.id});
-    const userIndex = session.entries.items.findIndex((entry) => entry.contentParts?.some((part) => part.type === "text" && part.text === "Fix overflow"));
+    const userIndex = session.entries.items.findIndex((entry) => userEntryData(entry)?.contentParts.some((part) => part.type === "text" && part.text === "Fix overflow"));
     const after = session.entries.items.slice(userIndex + 1);
 
     expect(compactionsSeen(versions).pending).toBe(true);
     // The summary and the continuation both follow the turn's user entry, with no other turn between.
     expect(after.some((entry) => entry.kind === "pi.compaction" && JSON.stringify(entry).includes("Compacted overflow summary."))).toBe(true);
     expect(assistantTexts({entries: {items: after, remaining: 0, precedingEntryId: session.entries.items[userIndex]!.id}}).at(-1)).toBe("Continued after compaction.");
-    expect(after.some((entry) => entry.contentParts !== undefined)).toBe(false);
+    expect(after.some((entry) => userEntryData(entry) !== undefined)).toBe(false);
   });
 
   it("rejects an unavailable model without leaving the session locked", async () => {

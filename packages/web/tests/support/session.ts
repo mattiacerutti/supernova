@@ -1,5 +1,6 @@
 import type {ListedSession} from "@supernova/contracts/services/sessions/services";
 import type {ChatDocument} from "@supernova/contracts/services/chat/schemas";
+import {USER_ENTRY_KIND, userEntryData} from "@supernova/contracts/services/chat/schemas";
 import type {
   AssistantMessage,
   CompactionStatus,
@@ -21,7 +22,7 @@ export function entryId(id: number): EntryRecord["id"] {
 
 const CONVERSATION = 1 as EntryRecord["conversationId"];
 
-const KIND = {user: "pi.user", assistant: "pi.assistant", toolResult: "pi.tool-result", compaction: "pi.compaction"} as const;
+const KIND = {user: USER_ENTRY_KIND, continuation: "pi.user", assistant: "pi.assistant", toolResult: "pi.tool-result", compaction: "pi.compaction"} as const;
 
 const SUMMARY_PREFIX = "The conversation history before this point was compacted into the following summary:\n\n<summary>\n";
 const SUMMARY_SUFFIX = "\n</summary>";
@@ -45,17 +46,20 @@ export function toolCall(id: string, name: string, args: ToolCall["arguments"] =
   return {arguments: args, id, name, type: "toolCall"};
 }
 
+/** A turn's user entry; `authored: false` is Pi's own user entry, such as an extension's continuation. */
 export function userEntry(
   input: string | {readonly parts?: readonly UserMessageContentPart[]; readonly content?: PiUserMessage["content"]; readonly authored?: boolean}
 ): EntryDraft {
   const options = typeof input === "string" ? {parts: [text(input)]} : input;
   const parts = options.parts ?? [];
   const content = options.content ?? parts.map((part) => (part.type === "text" ? part.text : part.type === "reference" ? part.value : "")).join("");
-  return {
-    kind: KIND.user,
-    model: [{content, role: "user", timestamp: 0}],
-    ...(options.authored === false ? {} : {contentParts: parts}),
-  };
+  const model = [{content, role: "user", timestamp: 0}] as const;
+  // The client never reads the turn's index.
+  return options.authored === false ? {kind: KIND.continuation, model} : {kind: KIND.user, model, data: {contentParts: [...parts], turnIndex: 0}};
+}
+
+export function isTurnEntry(entry: ChatEntry): boolean {
+  return userEntryData(entry) !== undefined;
 }
 
 export function assistantMessage(

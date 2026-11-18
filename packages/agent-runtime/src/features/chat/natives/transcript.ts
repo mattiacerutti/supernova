@@ -7,47 +7,55 @@ import type {ChatContextUsage, ChatEntries} from "@supernova/contracts/services/
 import type {SessionState} from "@supernova/agent-runtime/core/session-state";
 import {SessionStateDoc} from "@supernova/agent-runtime/core/session-state";
 import type {HarnessReader} from "@supernova/agent-runtime/features/chat/durable/reads";
-import {getConversation, getEntries, getLastEntryId, getState} from "@supernova/agent-runtime/features/chat/durable/reads";
+import {getConversation, getEntries, getLastEntryId, getLastTurn, getState, readEntries} from "@supernova/agent-runtime/features/chat/durable/reads";
 import {contextUsage} from "@supernova/agent-runtime/features/chat/lib/transcript/context-usage";
-import type {Turns} from "@supernova/agent-runtime/features/chat/lib/transcript/history-page";
-import {entriesSize, historyPage, joinsPage, PAGE_TURNS, turnIds, withoutSystemEntries} from "@supernova/agent-runtime/features/chat/lib/transcript/history-page";
+import {entriesSize, historyPage, isTurnStart, joinsPage, PAGE_TURNS, turnsThrough} from "@supernova/agent-runtime/features/chat/lib/transcript/history-page";
+import {userEntryData} from "@supernova/contracts/services/chat/schemas";
 
 export interface TranscriptFrame {
   readonly state: SessionState;
   readonly view: ConversationView;
   readonly undone: readonly EntryRecord[];
+  readonly lastUndoneTurnIndex?: number;
 }
 
 interface ConversationObservation {
   readonly conversation: ConversationId;
   readonly undone: readonly EntryRecord[];
+  readonly lastUndoneTurnIndex: number | undefined;
   view(): ConversationView;
   detach(): void;
 }
 
 // Changes on a navigation, and once per page of new turns.
-function observationKey(state: SessionState): string {
-  // With turns undone the conversation cannot grow; without, every turn record is the conversation's.
+function observationKey(state: SessionState, turns: number): string {
+  // With turns undone the conversation cannot grow.
   if (state.redoConversation !== undefined) return `${state.conversation}:${state.redoConversation}`;
-  return `${state.conversation}:${Math.floor(turnIds(state.turns).length / PAGE_TURNS)}`;
+  return `${state.conversation}:${Math.floor(turns / PAGE_TURNS)}`;
+}
+
+function turnsOf(observation: ConversationObservation): number {
+  return turnsThrough(observation.view().entries);
 }
 
 function frameOf(state: SessionState, observation: ConversationObservation): TranscriptFrame {
-  return {state, view: observation.view(), undone: state.redoConversation === undefined ? [] : observation.undone};
+  if (state.redoConversation === undefined) return {state, view: observation.view(), undone: []};
+  return {
+    state,
+    view: observation.view(),
+    undone: observation.undone,
+    ...(observation.lastUndoneTurnIndex === undefined ? {} : {lastUndoneTurnIndex: observation.lastUndoneTurnIndex}),
+  };
 }
-
-export type PendingSend = {readonly kind: "submitting"} | {readonly kind: "placed"; readonly entryId: number};
 
 export class Transcript {
   private readonly harness: HarnessReader;
   private readonly modelRuntime: ModelRuntime;
-  private readonly pending: () => PendingSend | undefined;
   private latest: TranscriptFrame | undefined;
 
-  public constructor(input: {readonly harness: HarnessReader; readonly modelRuntime: ModelRuntime; readonly pending: () => PendingSend | undefined}) {
+  public constructor(input: {readonly harness: HarnessReader; readonly modelRuntime: ModelRuntime}) {
     this.harness = input.harness;
     this.modelRuntime = input.modelRuntime;
-    this.pending = input.pending;
   }
 
   public async follow(observer: Observer<TranscriptFrame>, attaching: Context): Promise<Observation<TranscriptFrame>> {
@@ -59,7 +67,7 @@ export class Transcript {
     const following = withoutAbortSignal(attaching);
 
     const emit = (at: Context) => {
-      if (detached || !conversationObservation || conversationObservation.conversation !== state!.conversation || this.awaitsTurnRecord(state!)) return;
+      if (detached || !conversationObservation || conversationObservation.conversation !== state!.conversation) return;
       this.latest = frameOf(state!, conversationObservation);
       observer.advance({kind: "value", value: this.latest, ops: [["r", this.latest as never]], retired: false}, at);
     };
@@ -77,11 +85,13 @@ export class Transcript {
       observer.end(end);
     };
 
-    const replaceObservation = async (target: SessionState) => {
-      const next = await this.observeCurrentConversation(target, {changed: emit, end: fail}, following);
-      if (detached || requestedKey !== observationKey(target)) return next.detach();
+    const replaceObservation = async (target: SessionState, key: string) => {
+      const next = await this.observeCurrentConversation(target, {changed: step, end: fail}, following);
+      if (detached || requestedKey !== key) return next.detach();
       conversationObservation?.detach();
       conversationObservation = next;
+      // From the new view's turns: the request's key may predate turns it already has.
+      requestedKey = observationKey(target, turnsOf(next));
       emit(following);
     };
 
@@ -90,13 +100,14 @@ export class Transcript {
 
       emit(at);
 
-      const key = observationKey(state!);
+      const observed = conversationObservation.conversation === state!.conversation;
+      const key = observationKey(state!, observed ? turnsOf(conversationObservation) : 0);
       if (key === requestedKey) return;
       requestedKey = key;
       const target = state!;
 
       // Durable's rule: an observer only records, so the read starts after `advance` returns.
-      queueMicrotask(() => void replaceObservation(target).catch((error: unknown) => fail({kind: "failed", error: error as Error})));
+      queueMicrotask(() => void replaceObservation(target, key).catch((error: unknown) => fail({kind: "failed", error: error as Error})));
     };
 
     const stateObservation = await this.harness.observeDoc(
@@ -117,9 +128,8 @@ export class Transcript {
     const initialState = state ?? (stateObservation.value as SessionState);
     state = initialState;
 
-    requestedKey = observationKey(initialState);
-
-    conversationObservation = await this.observeCurrentConversation(initialState, {changed: emit, end: fail}, attaching);
+    conversationObservation = await this.observeCurrentConversation(initialState, {changed: step, end: fail}, attaching);
+    requestedKey = observationKey(initialState, turnsOf(conversationObservation));
 
     const firstFrame = frameOf(initialState, conversationObservation);
     this.latest = firstFrame;
@@ -138,25 +148,17 @@ export class Transcript {
     return frameOf(state, observation);
   }
 
-  private awaitsTurnRecord(state: SessionState): boolean {
-    // A send's message lands a commit before its turn record; the frames in between would show it without one.
-    const pending = this.pending();
-    return !!pending && (pending.kind === "submitting" || !state.turns[String(pending.entryId)]);
-  }
-
   private async observeCurrentConversation(
     state: SessionState,
     events: {readonly changed: (at: Context) => void; readonly end: Observer<unknown>["end"]},
     at: Context
   ): Promise<ConversationObservation> {
-    const {conversation, redoConversation, turns} = state;
-    // Records after the conversation's end are the undone turns'.
+    const {conversation, redoConversation} = state;
+    // Entries after the conversation's end are the undone turns'.
     const end = redoConversation === undefined ? undefined : ((await getLastEntryId(this.harness, conversation, at)) ?? null);
-    const undone = redoConversation === undefined ? [] : (await this.readPage(redoConversation, turns, "undone", end!, at)).entries;
-    // The turn before the newest page shows the page is whole.
-    const from = turnIds(turns)
-      .filter((id) => end === undefined || (end !== null && id <= end))
-      .at(-(PAGE_TURNS + 1));
+    const undone = redoConversation === undefined ? [] : await this.readPage(redoConversation, "undone", end!, at);
+    const lastUndoneTurnIndex = redoConversation === undefined ? undefined : userEntryData(await getLastTurn(this.harness, redoConversation, undefined, at))?.turnIndex;
+    const from = await this.windowStart(conversation, at);
 
     let view: ConversationView | undefined;
     const observed = await this.harness.observeConversation(
@@ -176,6 +178,7 @@ export class Transcript {
     return {
       conversation,
       undone,
+      lastUndoneTurnIndex,
       // Commits during the attachment advanced it past its value.
       view: () => view ?? observed.value,
       detach: () => observed.detach(),
@@ -192,64 +195,64 @@ export class Transcript {
 
   public async loadHistory(input: {readonly side: HistorySide; readonly edge: number}, context: Context): Promise<ChatEntries> {
     const {side, edge} = input;
-    const {conversation, redoConversation, turns} = await getState(this.harness, context);
+    const {conversation, redoConversation} = await getState(this.harness, context);
     const lastShownEntryId = redoConversation === undefined ? undefined : ((await getLastEntryId(this.harness, conversation, context)) ?? null);
     // A stale edge (another conversation, or the other side of a moved undo point) has no page here.
     const onSide =
       side === "entries"
-        ? turns[String(edge)] !== undefined && (lastShownEntryId === undefined || (lastShownEntryId !== null && edge <= lastShownEntryId))
+        ? (lastShownEntryId === undefined || (lastShownEntryId !== null && edge <= lastShownEntryId)) &&
+          (await getEntries(this.harness, conversation, {after: edge - 1, through: edge}, context)).some(isTurnStart)
         : lastShownEntryId !== undefined && (lastShownEntryId === null || edge > lastShownEntryId);
     if (!onSide) throw new Error(`This part of the conversation is no longer ${side === "entries" ? "shown" : "undone"}.`);
 
-    const {entries} = await this.readPage(redoConversation ?? conversation, turns, side, side === "entries" ? edge - 1 : edge, context);
-    return historyPage({side, entries, turns, ...(side === "undone" ? {precedingEntryId: edge} : {})});
+    if (side === "entries") return historyPage({side, entries: await this.readPage(conversation, side, edge - 1, context)});
+    const entries = await this.readPage(redoConversation!, side, edge, context);
+    const lastTurnIndex = userEntryData(await getLastTurn(this.harness, redoConversation!, undefined, context))?.turnIndex;
+    return historyPage({side, entries, precedingEntryId: edge, ...(lastTurnIndex === undefined ? {} : {lastTurnIndex})});
+  }
+
+  /** The turn before the newest page, which shows the page is whole. */
+  private async windowStart(conversation: ConversationId, context: Context): Promise<number | undefined> {
+    let turns = 0;
+    for await (const entry of readEntries(this.harness, conversation, {order: "descending"}, context)) {
+      if (isTurnStart(entry) && ++turns === PAGE_TURNS + 1) return entry.id;
+    }
+    return undefined;
   }
 
   /**
    * Reads `side`'s page a turn at a time: back through `edge` on `"entries"`, forward after it on `"undone"` (`null`:
-   * nothing is shown). `ended`: the reads reached the conversation's start or end before the page filled.
+   * nothing is shown). The turn past the page is read too: it shows the page is whole.
    */
-  private async readPage(
-    conversation: ConversationId,
-    turns: Turns,
-    side: HistorySide,
-    edge: number | null,
-    context: Context
-  ): Promise<{readonly entries: EntryRecord[]; readonly ended: boolean}> {
+  private async readPage(conversation: ConversationId, side: HistorySide, edge: number | null, context: Context): Promise<EntryRecord[]> {
     const back = side === "entries";
     const at = edge ?? 0;
-    const ranges = turnRanges(turns).flatMap((range) => {
-      if (back) return range.after < at ? [{after: range.after, through: Math.min(range.through ?? at, at)}] : [];
-      return range.through === undefined || range.through > at ? [{...range, after: Math.max(range.after, at)}] : [];
-    });
-
-    const read: EntryRecord[][] = [];
+    const range = back ? {through: at, order: "descending" as const} : {after: at, order: "ascending" as const};
+    const turns: EntryRecord[][] = [];
+    let turn: EntryRecord[] = [];
+    let turnStarted = false;
     let size = 0;
-    let ended = true;
-    for (const range of back ? ranges.toReversed() : ranges) {
-      const turn = withoutSystemEntries(await getEntries(this.harness, conversation, range, context));
-      read.push(turn);
-      // The turn past the page is read too: it shows the page is whole.
+    const pageTakes = (): boolean => {
       const turnSize = entriesSize(turn);
-      if (!joinsPage(read.length - 1, size, turnSize)) {
-        ended = false;
-        break;
-      }
+      const joins = joinsPage(turns.length, size, turnSize);
+      turns.push(turn);
+      turn = [];
+      turnStarted = false;
       size += turnSize;
-    }
-    return {entries: (back ? read.toReversed() : read).flat(), ended};
-  }
-}
+      return joins;
+    };
 
-/**
- * Each turn's stored range, oldest first: from its user entry to the entry before the next turn's. The first turn also
- * holds the entries before it (a leading compaction); without turns, the conversation is one range.
- */
-function turnRanges(turns: Turns): {readonly after: number; readonly through?: number}[] {
-  const ids = turnIds(turns);
-  if (ids.length === 0) return [{after: 0}];
-  return ids.map((id, index) => {
-    const next = ids[index + 1];
-    return {after: index === 0 ? 0 : id - 1, ...(next === undefined ? {} : {through: next - 1})};
-  });
+    for await (const entry of readEntries(this.harness, conversation, range, context)) {
+      if (entry.kind === "pi.system") continue;
+      // Forwards, the entries before the first turn (a leading continuation) belong to it.
+      if (!back && isTurnStart(entry) && turnStarted && !pageTakes()) return turns.flat();
+      turn.push(entry);
+      if (isTurnStart(entry)) turnStarted = true;
+      if (back && turnStarted && !pageTakes()) return turns.flat().toReversed();
+    }
+    // Backwards, the entries before the first turn (a leading compaction) belong to it.
+    if (back && turn.length > 0 && turns.length > 0) turns.at(-1)!.push(...turn);
+    else if (turn.length > 0) turns.push(turn);
+    return back ? turns.flat().toReversed() : turns.flat();
+  }
 }

@@ -1,4 +1,5 @@
 import type {ChatDocument} from "@supernova/contracts/services/chat/schemas";
+import {userEntryData} from "@supernova/contracts/services/chat/schemas";
 import type {
   AssistantMessage,
   EntryRecord,
@@ -155,10 +156,10 @@ export function buildTurns(input: BuildTurnsInput): SessionTurn[] {
 
   for (const entry of entries) {
     const message = entry.model?.[0];
-    if (entry.kind === "pi.user" && message?.role === "user") {
-      if (entry.contentParts === undefined) continue;
+    const user = userEntryData(entry);
+    if (user && message?.role === "user") {
       if (current) result.push(current.toTurn(false));
-      current = new TurnDraft({id: String(entry.id), contentParts: withImages(entry.contentParts, message), timestamp: isoTimestamp(message.timestamp)});
+      current = new TurnDraft({id: String(entry.id), contentParts: withImages(user.contentParts, message), timestamp: isoTimestamp(message.timestamp)});
       for (const compaction of pendingCompactions.splice(0)) current.addCompaction(isoTimestamp(compaction.model?.[0]?.timestamp), compactionSummary(compaction));
     } else if (entry.kind === "pi.compaction") {
       if (current) current.addCompaction(isoTimestamp(message?.timestamp), compactionSummary(entry));

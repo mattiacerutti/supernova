@@ -16,7 +16,7 @@ import {SessionsService, SessionStatusService} from "@supernova/contracts/servic
 import {TerminalService, WorkspaceService} from "@supernova/contracts/services/workspace/services";
 import type {RuntimeClient} from "@/runtime/client";
 import {Published, testRuntimeClient} from "@tests/support/test-server";
-import {assistantEntry, page, runningLive, transcript, userEntry} from "@tests/support/session";
+import {assistantEntry, isTurnEntry, page, runningLive, transcript, userEntry} from "@tests/support/session";
 import {createTimelineSessions, timelineModelDetails, timelineStreamContent, TIMELINE_PROJECT_PATH, TIMELINE_SESSION_ID} from "@tests/timeline/data";
 import type {TimelineMockState} from "@tests/timeline/test-api";
 
@@ -49,7 +49,7 @@ class TimelineServer {
       emitLines: (lineCount) => this.emitLines(lineCount),
       getState: () => {
         const session = this.session(TIMELINE_SESSION_ID);
-        const count = (entries: ChatDocument["entries"]) => entries.items.filter((entry) => entry.contentParts !== undefined).length;
+        const count = (entries: ChatDocument["entries"]) => entries.items.filter(isTurnEntry).length;
         return {lineCount: this.lineCount, status: this.status, turnCount: count(session.entries), undoneTurnCount: count(session.undone)};
       },
     };
@@ -218,7 +218,7 @@ class TimelineServer {
   }
 
   private turnStarts(entries: ChatDocument["entries"]["items"]): number[] {
-    return entries.flatMap((entry, index) => (entry.contentParts === undefined ? [] : [index]));
+    return entries.flatMap((entry, index) => (isTurnEntry(entry) ? [index] : []));
   }
 
   private showTurns(sessionId: string, count: number): void {
@@ -253,7 +253,7 @@ class TimelineServer {
 
   private revertToMessage(sessionId: string, turnId: string): void {
     const session = this.session(sessionId);
-    const ids = [...session.entries.items, ...session.undone.items].filter((entry) => entry.contentParts !== undefined).map((entry) => String(entry.id));
+    const ids = [...session.entries.items, ...session.undone.items].filter(isTurnEntry).map((entry) => String(entry.id));
     const index = ids.indexOf(turnId);
     if (index < 0) return;
     const visible = this.visibleTurnCount(session);

@@ -69,7 +69,15 @@ describe("sessions", () => {
       {text: "x".repeat(selectedPiModel.contextWindow * 4), type: "text"},
       {text: "After compaction", type: "text"},
     ]);
-    expect(session.entries.items.map((entry) => entry.kind)).toEqual(["pi.user", "pi.assistant", "pi.user", "pi.assistant", "pi.compaction", "pi.user", "pi.assistant"]);
+    expect(session.entries.items.map((entry) => entry.kind)).toEqual([
+      "supernova.user",
+      "pi.assistant",
+      "supernova.user",
+      "pi.assistant",
+      "pi.compaction",
+      "supernova.user",
+      "pi.assistant",
+    ]);
     expect(JSON.stringify(session.entries.items[4])).toContain("Summary of the work");
     expect(assistantTexts(session)).toEqual(["Original answer", "Large answer", "Recent answer"]);
   });

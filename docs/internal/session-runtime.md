@@ -2,7 +2,7 @@
 
 ## Design and goals
 
-Pi's durable engine owns execution and persisted session state. Supernova adds turn records, workspace checkpoints, project/session metadata, and product recovery policy. The browser receives the server's chat document (`ChatDocument`) and builds the timeline; it does not maintain a competing execution model.
+Pi's durable engine owns execution and persisted session state. Supernova adds turn entries, workspace checkpoints, project/session metadata, and product recovery policy. The browser receives the server's chat document (`ChatDocument`) and builds the timeline; it does not maintain a competing execution model.
 
 The active run is part of the durable engine view, not a separate uncommitted browser stream. Published engine output has already been committed, so reopening a session can recover interrupted work rather than treating it as lost.
 
@@ -24,7 +24,7 @@ Start with [Chat](../../packages/agent-runtime/src/features/chat/natives/chat.ts
 | State                                 | Owner                           | Lifetime       |
 | ------------------------------------- | ------------------------------- | -------------- |
 | Transcript, runs, tasks               | Engine session file             | Durable        |
-| Turn records and navigation           | Supernova document in that file | Durable        |
+| Turn checkpoints and navigation       | Supernova document in that file | Durable        |
 | Project/session metadata              | Session catalog                 | Durable        |
 | Published document, activity, notices | Server runtime                  | Server process |
 | Loaded history and optimistic intent  | Client `ChatHistory`, optimism  | Client process |
@@ -38,7 +38,7 @@ Page listings and searches on the server, using opaque cursors and deterministic
 These stores are user data across releases. Migrate in place; never require deletion of session files to upgrade.
 
 - Append catalog migrations rather than editing applied ones. Keep them transactional and restartable, and test that records built by earlier migrations survive.
-- Version changes to the persisted Supernova document. Its migration must be pure and return a complete current value.
+- Version changes to the persisted Supernova document. Its migration must be pure and return a complete current value. A change that also needs the entries rewritten bumps the version without a `migrate` and rewrites the file when it opens, keeping the old one beside it (`chat/durable/migrations/`): version 2 made each turn's user entry a `supernova.user` entry.
 - Refuse unsupported newer formats rather than guessing; downgrades are not supported.
 
 Legacy JSONL imports remain isolated in `features/sessions/lib/legacy/`. Preserve original files and tolerate interrupted imports. The imported conversation is the branch the user last saw, not every abandoned or undone branch; model context must retain compaction meaning. Imported turns have no workspace snapshots, and unfinished tool calls need interrupted outcomes rather than invented success. Archived sessions remain archived. Read the importer for conversion details rather than reproducing its file traversal here.
@@ -64,17 +64,17 @@ Chord owns snapshot/delta synchronization. Reconnect from a new authoritative sn
 Publication must preserve coherence:
 
 - Build from the current engine view, so delayed notifications cannot move state backwards.
-- Publish the user entry and authored turn metadata together. The engine places the input and Supernova records its turn separately; no intermediate revision should expose an entry without the metadata needed to interpret it. While a send places its input, the document holds its last value until the state carries that entry's turn record.
+- A turn is its user entry: a `supernova.user` entry holding what the user wrote and the turn's index, placed by the engine with the input, so no revision shows a message without what it needs. Pi's own user entries, such as an extension's continuation, belong to the turn before them.
 - Make the accepted message visible before its optimistic placeholder disappears. A successful send response must not briefly erase the user's message.
 - Never combine newer final transcript entries with older live partials. Partial tool arguments may be incomplete; do not present them as a finished invocation.
 
 ## History and presentation
 
-The document combines the history before and after the undo point, the agent state, and live state. The current conversation ends at the undo point, so Durable's view carries its agent state; the undone turns are on `redoConversation`. Authored content stays attached on both sides; durable workspace checkpoint records stay server-side.
+The document combines the history before and after the undo point, the agent state, and live state. The current conversation ends at the undo point, so Durable's view carries its agent state; the undone turns are on `redoConversation`. Workspace checkpoint records stay server-side.
 
 Keep the replicated history bounded around the undo point, preserving whole turns. Repeated undo/revert must not grow it without bound.
 
-The server holds no copy of the conversation. The follow attaches Durable's view of the current conversation from the start of the turn before the newest page, which shows the page is complete, and never lets Durable trim it, so a commit of any size (a fork's seed) arrives whole. Each page of new turns, the follow attaches it again from the newest page, and keeps building frames from the old view until the new one is attached. The drawer's first page is read once from `redoConversation`, which cannot change while its turns are undone. Navigation and turn starts commit to the state document, so only the state observer checks whether the conversation needs observing again (`observationKey`); a stream's commits are emitted as they come. After a navigation, frames wait until the new conversation's view and the drawer page are in, so a navigation's reply can arrive before its document; the client keeps its optimistic view until the document's turns change. `remaining` is counted from the turn records, which hold only the turns of the current conversation and `redoConversation`: a send after an undo drops the undone turns' records. Older pages are read from storage on request. Each client keeps the pages it has seen (`chat-history.ts`), and drops them for the oldest sessions past four that nothing uses. Additional pages must still belong to the requested side of the current conversation when they arrive; a stale page cannot merge into a different conversation after navigation. Retain previously loaded history only while it continues that conversation. A single turn larger than the transport frame limit remains a limitation.
+The server holds no copy of the conversation. The follow attaches Durable's view of the current conversation from the start of the turn before the newest page, which shows the page is complete, and never lets Durable trim it, so a commit of any size (a fork's seed) arrives whole. Each page of new turns, the follow attaches it again from the newest page, and keeps building frames from the old view until the new one is attached. The drawer's first page is read once from `redoConversation`, which cannot change while its turns are undone. Navigation and turn starts commit to the state document, so only the state observer checks whether the conversation needs observing again (`observationKey`); a stream's commits are emitted as they come. After a navigation, frames wait until the new conversation's view and the drawer page are in, so a navigation's reply can arrive before its document; the client keeps its optimistic view until the document's turns change. `remaining` comes from the turns' indexes, so nothing counts entries: before the page, its first turn's index; after it, the index of `redoConversation`'s last turn minus the page's last. Older pages are read from storage on request. Each client keeps the pages it has seen (`chat-history.ts`), and drops them for the oldest sessions past four that nothing uses. Additional pages must still belong to the requested side of the current conversation when they arrive; a stale page cannot merge into a different conversation after navigation. Retain previously loaded history only while it continues that conversation. A single turn larger than the transport frame limit remains a limitation.
 
 Reuse append-only history instead of rereading and rebuilding it on every stream update. The live-turn boundary must identify the user entry being answered, not merely the latest entry or input submission id. The projection lives in [chat-document.ts](../../packages/agent-runtime/src/features/chat/lib/transcript/chat-document.ts) and the paging policy in [history-page.ts](../../packages/agent-runtime/src/features/chat/lib/transcript/history-page.ts).
 
