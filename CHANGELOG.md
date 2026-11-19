@@ -6,8 +6,7 @@ All notable changes to Supernova are documented in this file.
 
 ### Breaking Changes
 
-- Supernova now runs on Pi 1.5.1. Opening a session upgrades its file to Pi 1.5.1's storage format, and earlier Supernova versions cannot open an upgraded session. Downgrading Supernova after opening sessions is not supported, so back up `~/.supernova/userdata/agent/sessions` first if you may need to go back.
-- Opening a session from an earlier version rewrites its file once, so each message you sent is stored with the message itself. The original file stays beside it as `session.pre-migration.sqlite`. The rewritten session keeps its shown and undone messages. It forgets which model each earlier message used, so undoing to before a model change keeps the session's current model.
+- Changed Supernova to run on Pi 1.5.1, which migrates a session's file to its storage format the first time the session opens.
 
 ### Added
 
@@ -16,13 +15,13 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
-- Provider logins now end when you close the providers screen, on every window, or after 10 minutes without finishing, so an abandoned login no longer blocks the next one. Only one login runs at a time, and the provider list updates in every open window after you connect or disconnect a provider.
+- Changed the providers list to update in every open window when a provider is connected or disconnected, and to allow one provider login at a time.
 - Sidebars now use a smooth ease-out when opening and a faster ease-in when closing.
 - The sidebar's leading icon now only marks pinned sessions. Worktree and forked sessions show small markers after their title instead. Hovering or focusing a worktree or forked session opens a card beside it with its full title, status, and worktree branch.
 
 ### Fixed
 
-- A session that had been reverted to its first message no longer shows "Loading earlier messages" for a moment when opened.
+- Fixed a provider login continuing on the server after its window was closed or reloaded. An unfinished login now also ends after 10 minutes.
 - Screen readers now announce the message composer and the sidebar's pinned, forked, and worktree session markers.
 - Fixed OpenAI subscription login failing because an installation device ID was missing.
 - Session times in the sidebar and command palette now keep counting while the app is open. Before, a session showed the time it had when it last changed or when the app started, so it could read "now" days later.
