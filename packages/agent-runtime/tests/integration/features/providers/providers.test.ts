@@ -245,9 +245,19 @@ describe("provider authentication over the wire", () => {
     expect(current()).toBeNull();
   });
 
+  it("keeps a working login when it is dismissed", async () => {
+    const {service, current, waitForPrompt} = await connect({oauth: waitingLogin().script});
+    const {attemptId} = await service.start({authType: "oauth", providerId: "acme"});
+    await waitForPrompt();
+
+    await service.dismiss({attemptId});
+
+    expect(current()).toMatchObject({attemptId, status: "working"});
+  });
+
   it("runs one login at a time, and starts another once it has ended", async () => {
     const login = waitingLogin();
-    const {service, current, waitForPrompt} = await connect({oauth: login.script});
+    const {service, waitForPrompt} = await connect({oauth: login.script});
     const {attemptId} = await service.start({authType: "oauth", providerId: "acme"});
     await waitForPrompt();
 
@@ -259,8 +269,6 @@ describe("provider authentication over the wire", () => {
       code: "ProviderLoginError",
       message: "Cancel the login in progress before removing a credential.",
     });
-    await service.dismiss({attemptId});
-    expect(current()).toMatchObject({attemptId, status: "working"});
 
     await service.cancel({attemptId});
     expect((await service.start({authType: "api_key", providerId: "acme"})).attemptId).not.toBe(attemptId);

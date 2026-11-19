@@ -155,15 +155,10 @@ function fakeServices(): FakeServices {
   return {client, close, statuses, documents, records, view, held, chat, sessions};
 }
 
-async function publish<T>(published: Published<T>, value: T): Promise<void> {
-  published.set(value);
-  // Memory links deliver on later tasks.
-  await new Promise((resolve) => setTimeout(resolve, 10));
-}
-
-async function change<T>(published: Published<T>, mutate: Parameters<Published<T>["change"]>[0]): Promise<void> {
-  published.change(mutate);
-  await new Promise((resolve) => setTimeout(resolve, 10));
+// Waits until the page's history holds what the server published: memory links deliver on later tasks.
+async function publish(services: FakeServices, sessionId: string, value: ChatDocument): Promise<void> {
+  services.documents.get(sessionId)!.set(value);
+  await waitUntil(() => expect(historyOf(services.client, sessionId).read().document).toEqual(value));
 }
 
 async function setStatuses(services: FakeServices, sessions: Record<string, SessionStatusEntry>): Promise<void> {
@@ -216,7 +211,7 @@ describe("session commands and views", () => {
     const record = () => readSessionView(services.client, "session-1").record;
 
     // A record a project's list shows is there before the session is opened.
-    await change(services.view, (draft) => void (draft.projects["/workspace"] = {depth: 5, loading: false, hasMore: false, items: [listed("session-1", "Listed", "t1")]}));
+    services.view.change((draft) => void (draft.projects["/workspace"] = {depth: 5, loading: false, hasMore: false, items: [listed("session-1", "Listed", "t1")]}));
     await waitUntil(() => expect(record()?.title).toBe("Listed"));
 
     open("session-1");
@@ -259,7 +254,6 @@ describe("session commands and views", () => {
     const second = followSession(services.client, "session-2", chatOf("session-2"));
     await waitUntil(() => expect(services.view.current.open?.id).toBe("session-2"));
     first();
-    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(services.sessions.closeSession).not.toHaveBeenCalled();
     expect(services.view.current.open?.id).toBe("session-2");
 
@@ -346,11 +340,15 @@ describe("session commands and views", () => {
     const served = services.documents.get("session-1")!;
     // An extension's continuation: a user entry with nothing authored, so it belongs to the turn before it.
     const continuation = transcript([userEntry({parts: [text("Continuation")], authored: false})], {firstId: 6});
-    await publish(served, {...initial, entries: page([...initial.entries.items, ...continuation])});
+    await publish(services, "session-1", {...initial, entries: page([...initial.entries.items, ...continuation])});
     expect(live("session-1", document("session-1"))).toMatchObject({liveMessage: contentParts, turnIds: ["1"]});
     expect(useSessionOptimismStore.getState().optimism["session-1"]?.message).toBeDefined();
 
-    await publish(served, session({entries: page([...served.current.entries.items, transcript([userEntry({parts: contentParts})], {firstId: 7})[0]!]), runStart: 7}));
+    await publish(
+      services,
+      "session-1",
+      session({entries: page([...served.current.entries.items, transcript([userEntry({parts: contentParts})], {firstId: 7})[0]!]), runStart: 7})
+    );
     expect(live("session-1", document("session-1"))).toMatchObject({liveMessage: contentParts, liveTurn: {id: "7"}, turnIds: ["1"], undoneTurns: []});
     accept();
     await waitUntil(() => expect(useSessionOptimismStore.getState().optimism["session-1"]?.message).toBeUndefined());
@@ -452,7 +450,7 @@ describe("session commands and views", () => {
 
     // The runtime publishes the navigated document first; the reply follows.
     await waitUntil(() => expect(services.chat[NAVIGATION_METHODS[navigation.action]]).toHaveBeenCalledOnce());
-    await publish(services.documents.get("session-1")!, after);
+    await publish(services, "session-1", after);
     expect(live("session-1", document("session-1"))).toMatchObject({turnIds: shown});
     reply();
     await expect(outcome).resolves.toEqual({status: "applied"});
@@ -472,10 +470,10 @@ describe("session commands and views", () => {
     expect(live("session-1", document("session-1"))).toMatchObject({status: "checkpoint-navigating", turnIds: ["1"]});
 
     // A document that changes no turns, such as a new context usage, does not end the wait.
-    await publish(services.documents.get("session-1")!, {...twoTurns(), context: {usedTokens: 10, contextWindow: 200_000}});
+    await publish(services, "session-1", {...twoTurns(), context: {usedTokens: 10, contextWindow: 200_000}});
     expect(live("session-1", document("session-1"))).toMatchObject({status: "checkpoint-navigating", turnIds: ["1"]});
 
-    await publish(services.documents.get("session-1")!, after);
+    await publish(services, "session-1", after);
     expect(live("session-1", document("session-1"))).toMatchObject({status: "idle", turnIds: shown});
   });
 
@@ -517,7 +515,7 @@ describe("session commands and views", () => {
     await expect(pending).resolves.toEqual({status: "started"});
     // The pending message stays until the chat delivers the turn, so the turn never disappears in between.
     expect(live("new-session")).toMatchObject({liveMessage: contentParts, setupStep: null});
-    await publish(services.documents.get("new-session")!, session({id: "new-session", entries: page(transcript([userEntry({parts: contentParts})]))}));
+    await publish(services, "new-session", session({id: "new-session", entries: page(transcript([userEntry({parts: contentParts})]))}));
     await waitUntil(() => expect(live("new-session")).toMatchObject({liveMessage: undefined, setupStep: null}));
   });
 
@@ -551,8 +549,8 @@ describe("session commands and views", () => {
 
     expect(live()).toMatchObject({status: "stopping"});
     await waitUntil(() => expect(services.chat.abort).toHaveBeenCalledOnce());
-    // The abort answered, but the directory still says running: the stop stays shown.
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    // The abort answered, but the status still says running: a later status the client has seen proves the stop stays.
+    await setStatuses(services, {"session-1": entry({activity: "running"}), other: entry({activity: "running"})});
     expect(live()).toMatchObject({status: "stopping"});
     await setStatuses(services, {"session-1": entry({activity: "idle"})});
     await waitUntil(() => expect(live()).toMatchObject({status: "idle"}));
@@ -578,11 +576,9 @@ describe("session commands and views", () => {
     const stopMarking = markSeenAsItChanges(services.client, "session-1");
     await waitUntil(() => expect(document("session-1")).toBeDefined());
 
-    await change(services.documents.get("session-1")!, (draft) => {
-      draft.updatedAt = "2026-01-01T00:05:00.000Z";
-    });
+    await publish(services, "session-1", {...services.documents.get("session-1")!.current, updatedAt: "2026-01-01T00:05:00.000Z"});
 
-    expect(useSessionVisitsStore.getState().visits["session-1"]).toBe("2026-01-01T00:05:00.000Z");
+    await waitUntil(() => expect(useSessionVisitsStore.getState().visits["session-1"]).toBe("2026-01-01T00:05:00.000Z"));
     expect(hasUnseenActivity({activityAtMs: Date.parse("2026-01-01T00:09:00.000Z"), visitedAt: useSessionVisitsStore.getState().visits["session-1"]})).toBe(true);
     stopMarking();
   });

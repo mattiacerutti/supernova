@@ -6,6 +6,7 @@ import {Sessions} from "@supernova/agent-runtime/features/sessions/natives/sessi
 import type {SessionRecord} from "@supernova/agent-runtime/core/session-state";
 import {SessionCatalog} from "@supernova/agent-runtime/features/sessions/natives/session-catalog";
 import {cleanupTempDirs} from "@tests/support/async";
+import {createPiTestRuntime} from "@tests/support/test-runtime";
 
 function record(overrides: Partial<SessionRecord>): SessionRecord {
   return {id: "session-1", projectPath: "/workspace", pinned: false, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", ...overrides};
@@ -16,9 +17,11 @@ const workspace = resolve("/workspace").split(sep).join("/");
 describe("listing, searching, pinning, and archiving saved sessions", () => {
   const tempDirs: string[] = [];
   const opened: Sessions[] = [];
+  const runtimes: {readonly unregister: () => Promise<void>}[] = [];
 
   afterEach(async () => {
     while (opened.length > 0) opened.pop()!.close();
+    while (runtimes.length > 0) await runtimes.pop()!.unregister();
     cleanupTempDirs(tempDirs);
   });
 
@@ -30,7 +33,9 @@ describe("listing, searching, pinning, and archiving saved sessions", () => {
     for (const item of records) catalog.insert(item);
     catalog.close();
     const revision = {value: 0, set: (next: number) => void (revision.value = next)};
-    const sessions = await Sessions.open({root, revision, sdk: {} as never, resourceCache: {} as never});
+    const pi = await createPiTestRuntime();
+    runtimes.push(pi);
+    const sessions = await Sessions.open({root, revision, sdk: pi.sdk, resourceCache: pi.resourceCache});
     opened.push(sessions);
     return {sessions, store: {find: async (sessionId: string) => sessions.find(sessionId)}, revision};
   }

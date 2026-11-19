@@ -18,7 +18,6 @@ export interface LoginsDeps {
   readonly sdk: Pick<PiSdk, "modelRuntime">;
   readonly login: Published<LoginState | null>;
   readonly credentialsChanged: () => Promise<void>;
-  readonly timeoutMs?: number;
 }
 
 export class Logins {
@@ -82,7 +81,7 @@ export class Logins {
   }
 
   private async run(attempt: Attempt, providerId: string, authType: ProviderLoginAuthType): Promise<void> {
-    const signal = AbortSignal.any([attempt.controller.signal, AbortSignal.timeout(this.deps.timeoutMs ?? 600_000)]);
+    const signal = AbortSignal.any([attempt.controller.signal, AbortSignal.timeout(600_000)]);
     try {
       await this.deps.sdk.modelRuntime.login(
         providerId,

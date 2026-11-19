@@ -327,10 +327,10 @@ describe("the server host over the wire", () => {
     const reporter = await stale.host.get(SessionStatusService, {}, context);
     if (reporter.variant !== "worker") throw new Error("Expected the worker variant.");
 
-    await reporter.report({kind: "activity", activity: "running"}, context).catch(() => undefined);
-
     const status = await get(SessionStatusService, {});
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    // Chord delivers what a call changed before its answer, so the report's answer means it changed nothing.
+    await reporter.report({kind: "activity", activity: "running"}, context);
+
     expect(status.statuses.value.sessions[info.id]?.activity ?? "idle").toBe("idle");
   });
 

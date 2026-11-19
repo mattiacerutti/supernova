@@ -122,7 +122,8 @@ describe("the runtime client's references", () => {
     await held.bump(context);
     await expect.poll(() => held.count.value).toBe(1);
     reconnect();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await expect.poll(() => held.state.value.kind).not.toBe("live");
+    await expect.poll(() => held.state.value.kind).toBe("live");
     await held.bump(context);
     await expect.poll(() => held.count.value).toBe(2);
     expect(seen[0]).toBe(0);
