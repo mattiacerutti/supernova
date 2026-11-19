@@ -1,4 +1,4 @@
-import type {SessionSetupStep} from "@supernova/contracts/services/session-runtime/procedures";
+import type {SessionSetupStep} from "@supernova/contracts/services/sessions/procedures";
 import type {Ref} from "react";
 import ShimmerText from "@/components/ui/shimmer-text";
 import {Marker, MarkerContent} from "@/features/sessions/components/timeline/marker";

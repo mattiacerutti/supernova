@@ -1,14 +1,15 @@
+import type {ChatDocument} from "@supernova/contracts/services/chat/schemas";
+import {userEntryData} from "@supernova/contracts/services/chat/schemas";
 import type {
   AssistantMessage,
   EntryRecord,
   ImageContent,
   LiveState,
   PiUserMessage,
-  Session,
-  SessionEntry,
+  ChatEntry,
   ToolResultMessage,
   UserMessageContentPart,
-} from "@supernova/contracts/services/sessions/schemas";
+} from "@supernova/contracts/services/chat/schemas";
 import type {SessionToolCall, SessionTurn, SessionTurnEvent, SessionUserMessage} from "@/features/sessions/types/session-turn";
 
 /** Pi wraps compaction summaries for the model; the timeline shows the summary itself. */
@@ -16,15 +17,11 @@ const SUMMARY_PREFIX = "The conversation history before this point was compacted
 const SUMMARY_SUFFIX = "\n</summary>";
 
 // Replicated entry arrays are immutable; streaming changes `live`, not the settled history.
-const historyCache = new WeakMap<readonly SessionEntry[], {runStart: number | undefined; turns: SessionTurn[]; liveEntries: readonly SessionEntry[] | undefined}>();
+const historyCache = new WeakMap<readonly ChatEntry[], {runStart: number | undefined; turns: SessionTurn[]; liveEntries: readonly ChatEntry[] | undefined}>();
 // Keyed by the first settled entry, which keeps its identity while a run appends entries after it.
-const settledCache = new WeakMap<SessionEntry, {settled: readonly SessionEntry[]; turns: SessionTurn[]}>();
+const settledCache = new WeakMap<ChatEntry, {settled: readonly ChatEntry[]; turns: SessionTurn[]}>();
 
-/**
- * Each entry a run commits replaces the entries array, but the history before the run keeps its entries, so its turns
- * are reused; rebuilding them would walk the whole loaded transcript and re-render every row on each tool result.
- */
-function settledTurns(settled: readonly SessionEntry[]): SessionTurn[] {
+function settledTurns(settled: readonly ChatEntry[]): SessionTurn[] {
   const first = settled[0];
   if (!first) return buildTurns({entries: settled});
   const known = settledCache.get(first);
@@ -139,20 +136,18 @@ function addLive(draft: TurnDraft, live: LiveState): void {
   for (const slot of live.tools ?? []) {
     if (slot.status === "running" && slot.output !== undefined) draft.addToolOutput(slot.callId, slot.output);
   }
-  // Background compactions never block the answer; only blocking ones and a manual one show.
   for (const compaction of live.compactions ?? []) {
-    if (compaction.blocking || compaction.reason === "manual") draft.addCompaction(new Date().toISOString(), undefined);
+    if (compaction.blocking || compaction.trigger === "manual") draft.addCompaction(new Date().toISOString(), undefined);
   }
   const partial = live.generation?.message as AssistantMessage | undefined;
   if (partial) draft.addAssistant(partial, true);
 }
 
 interface BuildTurnsInput {
-  readonly entries: readonly SessionEntry[];
+  readonly entries: readonly ChatEntry[];
   readonly live?: LiveState;
 }
 
-/** A user entry without authored content (an extension's continuation) folds into the current turn. */
 export function buildTurns(input: BuildTurnsInput): SessionTurn[] {
   const {entries, live} = input;
   const result: SessionTurn[] = [];
@@ -161,10 +156,10 @@ export function buildTurns(input: BuildTurnsInput): SessionTurn[] {
 
   for (const entry of entries) {
     const message = entry.model?.[0];
-    if (entry.kind === "pi.user" && message?.role === "user") {
-      if (entry.contentParts === undefined) continue;
+    const user = userEntryData(entry);
+    if (user && message?.role === "user") {
       if (current) result.push(current.toTurn(false));
-      current = new TurnDraft({id: String(entry.id), contentParts: withImages(entry.contentParts, message), timestamp: isoTimestamp(message.timestamp)});
+      current = new TurnDraft({id: String(entry.id), contentParts: withImages(user.contentParts, message), timestamp: isoTimestamp(message.timestamp)});
       for (const compaction of pendingCompactions.splice(0)) current.addCompaction(isoTimestamp(compaction.model?.[0]?.timestamp), compactionSummary(compaction));
     } else if (entry.kind === "pi.compaction") {
       if (current) current.addCompaction(isoTimestamp(message?.timestamp), compactionSummary(entry));
@@ -181,7 +176,7 @@ export function buildTurns(input: BuildTurnsInput): SessionTurn[] {
   return result;
 }
 
-export function buildSessionTurns(session: Pick<Session, "entries" | "live" | "runStart">): {readonly turns: SessionTurn[]; readonly liveTurn: SessionTurn | undefined} {
+export function buildSessionTurns(session: Pick<ChatDocument, "entries" | "live" | "runStart">): {readonly turns: SessionTurn[]; readonly liveTurn: SessionTurn | undefined} {
   const {live, runStart} = session;
   const entries = session.entries.items;
   let history = historyCache.get(entries);

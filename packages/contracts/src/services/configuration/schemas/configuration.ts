@@ -1,18 +1,17 @@
-import {z} from "zod";
+import {map, obj, oneOf, opt, type Static, str} from "@earendil-works/chord";
 
-const thinkingLevel = z.enum(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
+const thinkingLevel = oneOf("off", "minimal", "low", "medium", "high", "xhigh", "max");
 
-/** Startup preferences for a new session; explicit selections and resumed sessions take precedence. */
-export const ModelDefaults = z.object({
-  providerId: z.string().optional(),
-  modelId: z.string().optional(),
-  thinkingLevel: thinkingLevel.optional(),
-  modelThinkingLevels: z.record(z.string(), thinkingLevel).optional(),
+export const ModelDefaults = obj({
+  providerId: opt(str()),
+  modelId: opt(str()),
+  thinkingLevel: opt(thinkingLevel),
+  modelThinkingLevels: opt(map(thinkingLevel)),
 });
 
-export const Configuration = z.object({
+export const Configuration = obj({
   modelDefaults: ModelDefaults,
 });
 
-export type ModelDefaults = z.infer<typeof ModelDefaults>;
-export type Configuration = z.infer<typeof Configuration>;
+export type ModelDefaults = Static<typeof ModelDefaults>;
+export type Configuration = Static<typeof Configuration>;

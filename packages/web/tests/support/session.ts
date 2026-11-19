@@ -1,28 +1,28 @@
+import type {ListedSession} from "@supernova/contracts/services/sessions/services";
+import type {ChatDocument} from "@supernova/contracts/services/chat/schemas";
+import {USER_ENTRY_KIND, userEntryData} from "@supernova/contracts/services/chat/schemas";
 import type {
   AssistantMessage,
   CompactionStatus,
   EntryRecord,
   LiveState,
   PiUserMessage,
-  Session,
-  SessionEntries,
-  SessionEntry,
+  ChatEntries,
+  ChatEntry,
   ToolCall,
   ToolResultMessage,
   UserMessageContentPart,
-} from "@supernova/contracts/services/sessions/schemas";
+} from "@supernova/contracts/services/chat/schemas";
 
 // Typed by the contracts and Pi: a change to what the server sends stops these compiling, not passing on a stale shape.
 
-/** Pi brands its ids; this and the task-id casts below are the only casts in the builders. */
 export function entryId(id: number): EntryRecord["id"] {
   return id as EntryRecord["id"];
 }
 
 const CONVERSATION = 1 as EntryRecord["conversationId"];
 
-/** pi-durable's `UserEntry.kind` and so on; the client does not depend on the engine, so it matches the strings. */
-const KIND = {user: "pi.user", assistant: "pi.assistant", toolResult: "pi.tool-result", compaction: "pi.compaction"} as const;
+const KIND = {user: USER_ENTRY_KIND, continuation: "pi.user", assistant: "pi.assistant", toolResult: "pi.tool-result", compaction: "pi.compaction"} as const;
 
 const SUMMARY_PREFIX = "The conversation history before this point was compacted into the following summary:\n\n<summary>\n";
 const SUMMARY_SUFFIX = "\n</summary>";
@@ -36,7 +36,7 @@ const ZERO_USAGE: AssistantMessage["usage"] = {
   cost: {input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0},
 };
 
-export type EntryDraft = Omit<SessionEntry, "conversationId" | "id">;
+export type EntryDraft = Omit<ChatEntry, "conversationId" | "id">;
 
 export function text(value: string): UserMessageContentPart {
   return {text: value, type: "text"};
@@ -46,18 +46,20 @@ export function toolCall(id: string, name: string, args: ToolCall["arguments"] =
   return {arguments: args, id, name, type: "toolCall"};
 }
 
-/** `authored: false` is an extension's continuation, which belongs to the turn before it. */
+/** A turn's user entry; `authored: false` is Pi's own user entry, such as an extension's continuation. */
 export function userEntry(
   input: string | {readonly parts?: readonly UserMessageContentPart[]; readonly content?: PiUserMessage["content"]; readonly authored?: boolean}
 ): EntryDraft {
   const options = typeof input === "string" ? {parts: [text(input)]} : input;
   const parts = options.parts ?? [];
   const content = options.content ?? parts.map((part) => (part.type === "text" ? part.text : part.type === "reference" ? part.value : "")).join("");
-  return {
-    kind: KIND.user,
-    model: [{content, role: "user", timestamp: 0}],
-    ...(options.authored === false ? {} : {contentParts: parts}),
-  };
+  const model = [{content, role: "user", timestamp: 0}] as const;
+  // The client never reads the turn's index.
+  return options.authored === false ? {kind: KIND.continuation, model} : {kind: KIND.user, model, data: {contentParts: [...parts], turnIndex: 0}};
+}
+
+export function isTurnEntry(entry: ChatEntry): boolean {
+  return userEntryData(entry) !== undefined;
 }
 
 export function assistantMessage(
@@ -103,7 +105,7 @@ export function compactionEntry(summary: string): EntryDraft {
   return {kind: KIND.compaction, model: [{content: `${SUMMARY_PREFIX}${summary}${SUMMARY_SUFFIX}`, role: "user", timestamp: 0}], data: {reason: "manual"}};
 }
 
-export function transcript(drafts: readonly EntryDraft[], options: {readonly firstId?: number; readonly startMs?: number} = {}): SessionEntry[] {
+export function transcript(drafts: readonly EntryDraft[], options: {readonly firstId?: number; readonly startMs?: number} = {}): ChatEntry[] {
   const {firstId = 1, startMs = Date.UTC(2026, 0, 1)} = options;
   return drafts.map((draft, index) => {
     const id = firstId + index;
@@ -113,7 +115,7 @@ export function transcript(drafts: readonly EntryDraft[], options: {readonly fir
   });
 }
 
-export function turnAt(id: number, label = `Turn ${id}`): SessionEntry {
+export function turnAt(id: number, label = `Turn ${id}`): ChatEntry {
   return transcript([userEntry(label)], {firstId: id})[0]!;
 }
 
@@ -134,23 +136,18 @@ export function runningLive(options: {readonly partial?: LivePartial["content"];
     usage: ZERO_USAGE,
   };
   return {
-    run: {inputs: [], taskId: 1 as RunTaskId},
+    run: {inputs: [], taskId: 1 as RunTaskId, turns: 0},
     ...(message === undefined ? {} : {generation: {attempt: 0, message}}),
-    ...(options.compacting ? {compactions: [{attempt: 1, blocking: true, reason: "threshold", taskId: 2 as CompactionTaskId}]} : {}),
+    ...(options.compacting ? {compactions: [{attempt: 1, blocking: true, trigger: "threshold", taskId: 2 as CompactionTaskId}]} : {}),
   };
 }
 
-/** Both pages complete; the undone page follows the last visible entry, as the server's does. */
 export function sessionDocument(
-  input: Partial<Omit<Session, "entries" | "undone">> & {readonly entries?: readonly SessionEntry[]; readonly undone?: readonly SessionEntry[]} = {}
-): Session {
+  input: Partial<Omit<ChatDocument, "entries" | "undone">> & {readonly entries?: readonly ChatEntry[]; readonly undone?: readonly ChatEntry[]} = {}
+): ChatDocument {
   const {entries = [], undone = [], ...rest} = input;
   return {
     id: "session-1",
-    title: "Session",
-    forked: false,
-    pinned: false,
-    projectPath: "/workspace",
     updatedAt: new Date(Date.UTC(2026, 0, 1)).toISOString(),
     agent: {},
     live: {},
@@ -162,6 +159,10 @@ export function sessionDocument(
   };
 }
 
-export function page(items: readonly SessionEntry[], precedingEntryId: number | null = null, remaining = 0): SessionEntries {
-  return {items, remaining, precedingEntryId: precedingEntryId === null ? null : entryId(precedingEntryId)};
+export function page(items: readonly ChatEntry[], precedingEntryId: number | null = null, remaining = 0): ChatEntries {
+  return {items: [...items], remaining, precedingEntryId: precedingEntryId === null ? null : entryId(precedingEntryId)};
+}
+
+export function sessionRecord(input: Partial<ListedSession> = {}): ListedSession {
+  return {id: "session-1", title: "Session", forked: false, pinned: false, projectPath: "/workspace", updatedAt: new Date(Date.UTC(2026, 0, 1)).toISOString(), ...input};
 }

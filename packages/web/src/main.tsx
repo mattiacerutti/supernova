@@ -4,13 +4,13 @@ import App from "@/app/app";
 import AppProviders from "@/app/providers/providers";
 import {initializeAppearance} from "@/stores/settings-store";
 import {appEnvironment} from "@/config/app-environment";
-import {getRuntimeClient} from "@/runtime/transport/runtime-client";
+import {getRuntimeClient} from "@/runtime/connection";
 import "@/app/styles.css";
 
 document.documentElement.dataset.appEnvironment = appEnvironment;
 initializeAppearance();
 
-const runtime = await getRuntimeClient();
+const runtime = getRuntimeClient();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

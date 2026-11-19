@@ -46,7 +46,7 @@ export default function ProviderRow(props: ProviderRowProps) {
       };
 
   return (
-    <div className="flex items-center gap-3 px-3 py-2.5 sm:px-4">
+    <div aria-label={provider.name} className="flex items-center gap-3 px-3 py-2.5 sm:px-4" role="group">
       <div className="grid size-8 shrink-0 place-items-center rounded-lg corner-superellipse/1.3 bg-surface-control text-sm font-medium text-ink-muted">
         {provider.name.charAt(0).toUpperCase()}
       </div>

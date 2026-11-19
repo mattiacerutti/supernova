@@ -1,12 +1,12 @@
-import {z} from "zod";
+import {obj, type Static, str} from "@earendil-works/chord";
 
-export const FolderCreatePayload = z.object({
-  path: z.string(),
+export const FolderCreatePayload = obj({
+  path: str(),
 });
 
-export const FolderCreateResult = z.object({
-  path: z.string(),
+export const FolderCreateResult = obj({
+  path: str(),
 });
 
-export type FolderCreatePayload = z.infer<typeof FolderCreatePayload>;
-export type FolderCreateResult = z.infer<typeof FolderCreateResult>;
+export type FolderCreatePayload = Static<typeof FolderCreatePayload>;
+export type FolderCreateResult = Static<typeof FolderCreateResult>;

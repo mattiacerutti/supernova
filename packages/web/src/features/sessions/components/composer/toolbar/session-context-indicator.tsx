@@ -1,4 +1,4 @@
-import type {SessionContextUsage} from "@supernova/contracts/services/sessions/schemas";
+import type {ChatContextUsage} from "@supernova/contracts/services/chat/schemas";
 import Button from "@/components/ui/button";
 import Menu, {MenuLabel} from "@/components/ui/menu";
 
@@ -65,7 +65,7 @@ function ContextUsageCircle(props: ContextUsageCircleProps) {
 }
 
 interface SessionContextIndicatorProps {
-  readonly context: SessionContextUsage;
+  readonly context: ChatContextUsage;
 }
 
 export default function SessionContextIndicator(props: SessionContextIndicatorProps) {

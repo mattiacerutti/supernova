@@ -1,7 +1,7 @@
+import {BACKGROUND_CONTEXT as context} from "@earendil-works/chord/context";
 import {queryOptions, useQuery} from "@tanstack/react-query";
 import {showToast} from "@/lib/toast";
-import {unwrap} from "@/runtime/runtime-result";
-import {useRuntime} from "@/runtime/use-runtime";
+import {useRuntime} from "@/runtime/hooks/use-runtime";
 
 export const configurationKeys = {
   all: ["configuration"] as const,
@@ -13,7 +13,7 @@ export function useConfiguration(projectPath?: string) {
   return useQuery(
     queryOptions({
       queryFn: () =>
-        unwrap(runtime.configuration.get({projectPath})).catch((error: unknown) => {
+        runtime.configuration.get({projectPath}, context).catch((error: unknown) => {
           showToast("Unable to load configuration", "Check your settings.json files.", {id: "configuration-load-error"});
           throw error;
         }),

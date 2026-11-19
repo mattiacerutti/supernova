@@ -1,27 +1,22 @@
-import type {MembersOf} from "@earendil-works/chord";
+import type {Reference} from "@earendil-works/chord";
 import {method, remote} from "@earendil-works/chord";
-import type {
-  FolderCreatePayload,
-  FolderCreateResult,
-  FolderFilesListPayload,
-  FolderFilesListResult,
-  FolderSuggestionsListPayload,
-  FolderSuggestionsListResult,
-} from "@supernova/contracts/services/folders/procedures";
-import {json, result, SERVER_WIDE} from "@supernova/contracts/lib/protocol";
+import type {FolderCreateResult, FolderFilesListResult, FolderSuggestionsListResult} from "@supernova/contracts/services/folders/procedures";
+import {FolderCreatePayload, FolderFilesListPayload, FolderSuggestionsListPayload} from "@supernova/contracts/services/folders/procedures";
+import {json, serverHost} from "@supernova/contracts/lib/protocol";
 
 export const FoldersService = remote("supernova.folders", {
-  version: 1,
-  input: SERVER_WIDE,
+  version: 3,
+  params: {},
+  hostAddress: serverHost,
   variants: {
-    default: {
+    owner: {
       methods: {
-        create: method(json<FolderCreatePayload>(), result<FolderCreateResult>()),
-        listSuggestions: method(json<FolderSuggestionsListPayload>(), result<FolderSuggestionsListResult>()),
-        listFiles: method(json<FolderFilesListPayload>(), result<FolderFilesListResult>()),
+        create: method(FolderCreatePayload, json<FolderCreateResult>()),
+        listSuggestions: method(FolderSuggestionsListPayload, json<FolderSuggestionsListResult>()),
+        listFiles: method(FolderFilesListPayload, json<FolderFilesListResult>()),
       },
     },
   },
 });
 
-export type FoldersService = MembersOf<typeof FoldersService>;
+export type FoldersService = Reference<typeof FoldersService>;

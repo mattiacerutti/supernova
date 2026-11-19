@@ -1,18 +1,24 @@
+import {BACKGROUND_CONTEXT as context} from "@earendil-works/chord/context";
 import {useRef, useState} from "react";
-import type {SessionRuntimeService} from "@supernova/contracts/services/session-runtime/services";
-import type {ModelReference, Session, SessionWorkspaceSelection, UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
-import {forgetSession, withSessionRuntime} from "@/features/sessions/api/sessions-sync";
+import type {ModelReference, SessionWorkspaceSelection} from "@supernova/contracts/services/sessions/schemas";
+import type {ChatDocument} from "@supernova/contracts/services/chat/schemas";
+import type {UserMessageContentPart} from "@supernova/contracts/services/chat/schemas";
+import type {ListedSession} from "@supernova/contracts/services/sessions/services";
+import {historyOf} from "@/features/sessions/api/chat-history";
+import {forgetSession} from "@/features/sessions/api/sessions-sync";
 import {readSessionView} from "@/features/sessions/hooks/use-session";
-import {sessionStatus} from "@/features/sessions/lib/session-view";
-import type {SessionOptimism} from "@/features/sessions/stores/sessions-store";
-import {useSessionsStore} from "@/features/sessions/stores/sessions-store";
+import {sessionStatus, sessionView} from "@/features/sessions/lib/session-view";
+import type {SessionOptimism} from "@/features/sessions/stores/session-optimism-store";
+import {useSessionOptimismStore} from "@/features/sessions/stores/session-optimism-store";
 import {useMountEffect} from "@/hooks/use-mount-effect";
 import {showToast} from "@/lib/toast";
 import {useSettingsStore} from "@/stores/settings-store";
-import type {FailureCode} from "@/runtime/runtime-result";
-import {runtimeError, unwrap} from "@/runtime/runtime-result";
-import type {RuntimeClient} from "@/runtime/transport/runtime-client";
-import {useRuntime} from "@/runtime/use-runtime";
+import type {CodeOf} from "@supernova/contracts/lib/errors";
+import {failureOf} from "@supernova/contracts/lib/errors";
+import {ChatErrors} from "@supernova/contracts/services/chat/services";
+import type {ChatOwner, RuntimeClient} from "@/runtime/client";
+import {currentValue, follow} from "@/runtime/references";
+import {useRuntime} from "@/runtime/hooks/use-runtime";
 
 interface SendMessageInput {
   readonly sessionId: string;
@@ -27,28 +33,31 @@ interface StartSessionInput extends SendMessageInput {
 
 type StartSessionOutcome = {readonly status: "started"} | {readonly status: "failed"; readonly message: string};
 
-/** `lastTurnId` is the last turn the timeline shows once applied; `null` when it shows none. */
 type CheckpointNavigation = ({readonly action: "redo" | "undo"} | {readonly action: "revert"; readonly turnId: string}) & {readonly lastTurnId: string | null};
 
 type CheckpointNavigationOutcome =
   | {readonly status: "applied"}
   | {readonly status: "refused"; readonly reason: "conflict" | "uncaptured"}
-  | {readonly status: "failed"; readonly code: FailureCode<SessionRuntimeService["undoCheckpoint"]> | undefined; readonly message: string};
+  | {readonly status: "failed"; readonly code: CodeOf<typeof ChatErrors.undoCheckpoint> | undefined; readonly message: string};
 
-const {patchOptimism: patch, setDocument} = useSessionsStore.getState();
+const {patchOptimism: patch} = useSessionOptimismStore.getState();
 
 function errorMessage(cause: unknown, fallback: string): string {
   return cause instanceof Error && cause.message.length > 0 ? cause.message : fallback;
 }
 
-function emptySession(projectPath: string, sessionId: string): Session {
+function emptySession(projectPath: string, sessionId: string): {readonly record: ListedSession; readonly document: ChatDocument} {
+  const updatedAt = new Date().toISOString();
+  return {
+    record: {id: sessionId, title: "Untitled session", forked: false, pinned: false, projectPath, updatedAt},
+    document: emptyConversation(sessionId, updatedAt),
+  };
+}
+
+function emptyConversation(sessionId: string, updatedAt: string): ChatDocument {
   return {
     id: sessionId,
-    title: "Untitled session",
-    forked: false,
-    pinned: false,
-    projectPath,
-    updatedAt: new Date().toISOString(),
+    updatedAt,
     entries: {items: [], remaining: 0, precedingEntryId: null},
     undone: {items: [], remaining: 0, precedingEntryId: null},
     agent: {},
@@ -58,28 +67,61 @@ function emptySession(projectPath: string, sessionId: string): Session {
   };
 }
 
-const isRunning = (sessionId: string): boolean => useSessionsStore.getState().entries[sessionId]?.activity === "running";
+function isRunning(runtime: RuntimeClient, sessionId: string): boolean {
+  return currentValue(runtime.status.statuses)?.sessions[sessionId]?.activity === "running";
+}
 
-function whenNotRunning(sessionId: string, run: () => void): void {
-  if (!isRunning(sessionId)) return run();
-  const stop = useSessionsStore.subscribe(() => {
-    if (isRunning(sessionId)) return;
+function whenNotRunning(runtime: RuntimeClient, sessionId: string, run: () => void): void {
+  if (!isRunning(runtime, sessionId)) return run();
+  const stop = follow(runtime.status.statuses, () => {
+    if (isRunning(runtime, sessionId)) return;
+    // `stop` does not exist yet when `follow` calls back at once.
+    queueMicrotask(() => stop());
+    run();
+  });
+}
+
+function whenHasTurn(runtime: RuntimeClient, sessionId: string, run: () => void): void {
+  const history = historyOf(runtime, sessionId);
+  const hasTurn = () => !useSessionOptimismStore.getState().optimism[sessionId]?.message || (history.read().document?.entries.items.length ?? 0) > 0;
+  if (hasTurn()) return run();
+  const stop = history.subscribe(() => {
+    if (!hasTurn()) return;
     stop();
     run();
   });
 }
 
-function navigate(sessionRuntime: SessionRuntimeService, navigation: CheckpointNavigation, force: boolean) {
-  if (navigation.action === "revert") return sessionRuntime.revertToMessage({force, turnId: navigation.turnId});
-  if (navigation.action === "redo") return sessionRuntime.redoCheckpoint({force});
-  return sessionRuntime.undoCheckpoint({force});
+// The reply can come before the document that shows it, which the server publishes once it has read the turns.
+function whenNavigated(runtime: RuntimeClient, sessionId: string, lastTurnId: string | null, run: () => void): void {
+  const history = historyOf(runtime, sessionId);
+  const replied = history.read().document;
+  // The document's own turns, without the navigation being waited for.
+  const shownLastTurnId = () => sessionView({entry: undefined, record: undefined, session: history.read().document}).turns.at(-1)?.id ?? null;
+  // Any change of turns also ends the wait: the server may have landed elsewhere than predicted.
+  const settled = () => {
+    const current = history.read().document;
+    return shownLastTurnId() === lastTurnId || current?.entries !== replied?.entries || current?.undone !== replied?.undone;
+  };
+  // Without a followed document, nothing will arrive to wait for.
+  if (!replied || shownLastTurnId() === lastTurnId) return run();
+  const stop = history.subscribe(() => {
+    if (!settled()) return;
+    stop();
+    run();
+  });
 }
 
-export function sessionActions(runtime: RuntimeClient) {
-  const status = (sessionId: string) => {
-    const {documents, entries, optimism} = useSessionsStore.getState();
-    return sessionStatus(entries[sessionId], optimism[sessionId], documents[sessionId]).status;
-  };
+function navigate(chat: ChatOwner, navigation: CheckpointNavigation, force: boolean) {
+  if (navigation.action === "revert") return chat.revertToMessage({force, turnId: navigation.turnId}, context);
+  if (navigation.action === "redo") return chat.redoCheckpoint({force}, context);
+  return chat.undoCheckpoint({force}, context);
+}
+
+export function sessionActions(runtime: RuntimeClient, chat: (sessionId: string) => ChatOwner) {
+  const status = (sessionId: string) =>
+    sessionStatus(currentValue(runtime.status.statuses)?.sessions[sessionId], useSessionOptimismStore.getState().optimism[sessionId], historyOf(runtime, sessionId).read().document)
+      .status;
 
   const begin = (sessionId: string, optimism: SessionOptimism): void => patch(sessionId, {error: undefined, ...optimism});
 
@@ -98,22 +140,25 @@ export function sessionActions(runtime: RuntimeClient) {
       const {sessionId} = input;
       if (status(sessionId) !== "idle") return;
       begin(sessionId, {message: pendingMessage(input)});
-      void withSessionRuntime(runtime, sessionId, (service) => unwrap(service.sendMessage(outgoingMessage(input))))
+      void chat(sessionId)
+        .sendMessage(outgoingMessage(input), context)
         .catch((cause: unknown) => fail(sessionId, cause, "Failed to send message."))
         .finally(() => patch(sessionId, {message: undefined}));
     },
 
     async startSession(input: StartSessionInput): Promise<StartSessionOutcome> {
       const {projectPath, sessionId, workspace} = input;
-      setDocument(emptySession(projectPath, sessionId));
-      // Worktree creation starts before the runtime can report it; showing it now keeps the thinking label from flashing first.
-      begin(sessionId, {message: pendingMessage(input), setupStep: workspace.mode === "worktree" ? "worktree" : undefined});
+      const started = emptySession(projectPath, sessionId);
+      historyOf(runtime, sessionId).seed(started.document);
+      // The runtime reports worktree creation only once it has started.
+      begin(sessionId, {created: started.record, message: pendingMessage(input), setupStep: workspace.mode === "worktree" ? "worktree" : undefined});
       try {
-        setDocument(await unwrap(runtime.sessions.create({id: sessionId, message: outgoingMessage(input), projectPath, workspace})));
-        patch(sessionId, {message: undefined, setupStep: undefined});
+        await runtime.sessions.create({id: sessionId, message: outgoingMessage(input), projectPath, workspace}, context);
+        patch(sessionId, {setupStep: undefined});
+        whenHasTurn(runtime, sessionId, () => patch(sessionId, {message: undefined}));
         return {status: "started"};
       } catch (cause) {
-        forgetSession(sessionId);
+        forgetSession(runtime, sessionId);
         return {status: "failed", message: errorMessage(cause, "Failed to start the session.")};
       }
     },
@@ -122,14 +167,17 @@ export function sessionActions(runtime: RuntimeClient) {
       if (status(sessionId) !== "streaming") return;
       patch(sessionId, {stopping: true});
       const settle = () => patch(sessionId, {stopping: undefined});
-      void withSessionRuntime(runtime, sessionId, (service) => service.abort(null)).then((result) => (result.ok ? whenNotRunning(sessionId, settle) : settle()), settle);
+      void chat(sessionId)
+        .abort(context)
+        .then(() => whenNotRunning(runtime, sessionId, settle), settle);
     },
 
     compactSession(input: {readonly sessionId: string; readonly modelReference: ModelReference}): void {
       const {modelReference, sessionId} = input;
       if (status(sessionId) !== "idle") return;
       begin(sessionId, {compacting: true});
-      void withSessionRuntime(runtime, sessionId, (service) => unwrap(service.compact({modelReference})))
+      void chat(sessionId)
+        .compact({modelReference}, context)
         .catch((cause: unknown) => fail(sessionId, cause, "Failed to compact session."))
         .finally(() => patch(sessionId, {compacting: undefined}));
     },
@@ -137,15 +185,15 @@ export function sessionActions(runtime: RuntimeClient) {
     async navigateCheckpoint(input: CheckpointNavigation & {readonly sessionId: string; readonly force?: boolean}): Promise<CheckpointNavigationOutcome> {
       const {force = false, sessionId} = input;
       const current = status(sessionId);
-      // Only a forced retry may start while a refused restore holds the timeline.
+      // A refused restore holds the timeline until its forced retry.
       if (current !== "idle" && !(force && current === "checkpoint-navigating")) return {status: "failed", code: undefined, message: "The session is busy."};
       begin(sessionId, {navigation: {lastTurnId: input.lastTurnId}});
       try {
-        await withSessionRuntime(runtime, sessionId, (service) => unwrap(navigate(service, input, force)));
-        patch(sessionId, {navigation: undefined});
+        await navigate(chat(sessionId), input, force);
+        whenNavigated(runtime, sessionId, input.lastTurnId, () => patch(sessionId, {navigation: undefined}));
         return {status: "applied"};
       } catch (cause) {
-        const code = runtimeError<SessionRuntimeService["undoCheckpoint"]>(cause)?.code;
+        const code = failureOf(cause, ChatErrors.undoCheckpoint);
         if (!force && code === "CheckpointConflictError") return {status: "refused", reason: "conflict"};
         if (!force && code === "CheckpointUncapturedError") return {status: "refused", reason: "uncaptured"};
         patch(sessionId, {navigation: undefined});
@@ -167,13 +215,17 @@ const NAVIGATION_FAILURE_TITLES: Readonly<Record<CheckpointNavigation["action"],
 
 interface UseSessionCommandsOptions {
   readonly sessionId: string;
+  readonly chat: ChatOwner | undefined;
   readonly modelReference: ModelReference | undefined;
 }
 
-/** A refused restore keeps the timeline moved until the user confirms (forced retry) or cancels. */
 export function useSessionCommands(options: UseSessionCommandsOptions) {
-  const {modelReference, sessionId} = options;
-  const actions = sessionActions(useRuntime());
+  const {chat, modelReference, sessionId} = options;
+  const runtime = useRuntime();
+  const actions = sessionActions(runtime, () => {
+    if (!chat) throw new Error("The session is not open.");
+    return chat;
+  });
   const [confirmation, setConfirmation] = useState<{readonly open: boolean; readonly reason: "conflict" | "uncaptured"}>({open: false, reason: "conflict"});
   const refused = useRef<CheckpointNavigation | null>(null);
   const mounted = useRef(true);
@@ -215,7 +267,6 @@ export function useSessionCommands(options: UseSessionCommandsOptions) {
 
   const closeConfirmation = (): void => setConfirmation((current) => ({...current, open: false}));
 
-  // Navigation targets are read when the command runs, so the commands keep their identity while a response streams.
   return {
     startSession: (input: Omit<StartSessionInput, "sessionId">): Promise<StartSessionOutcome> => actions.startSession({...input, sessionId}),
     sendMessage: (contentParts: readonly UserMessageContentPart[]): void => {
@@ -225,13 +276,13 @@ export function useSessionCommands(options: UseSessionCommandsOptions) {
     compact: (): void => {
       if (modelReference) actions.compactSession({modelReference, sessionId});
     },
-    undo: (): void => void navigate({action: "undo", lastTurnId: readSessionView(sessionId).turns.at(-2)?.id ?? null}),
+    undo: (): void => void navigate({action: "undo", lastTurnId: readSessionView(runtime, sessionId).turns.at(-2)?.id ?? null}),
     redo: (): void => {
-      const {turns, undoneTurns} = readSessionView(sessionId);
+      const {turns, undoneTurns} = readSessionView(runtime, sessionId);
       void navigate({action: "redo", lastTurnId: undoneTurns[0]?.id ?? turns.at(-1)?.id ?? null});
     },
     revertToMessage: (turnId: string): void => {
-      const {turns} = readSessionView(sessionId);
+      const {turns} = readSessionView(runtime, sessionId);
       const shownIndex = turns.findIndex((turn) => turn.id === turnId);
       const lastTurnId = shownIndex >= 0 ? (turns[shownIndex - 1]?.id ?? null) : turnId;
       void navigate({action: "revert", lastTurnId, turnId});

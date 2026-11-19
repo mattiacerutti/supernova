@@ -1,36 +1,36 @@
-import {z} from "zod";
+import {arr, lit, obj, oneOf, opt, type Static, str, union} from "@earendil-works/chord";
 
-export const ComposerSuggestionTriggerKind = z.union([z.literal("skill"), z.literal("slash")]);
+export const ComposerSuggestionTriggerKind = oneOf("skill", "slash");
 
-export const ComposerSkillSuggestionItem = z.object({
-  id: z.string(),
-  kind: z.literal("skill"),
-  name: z.string(),
-  subtitle: z.string().optional(),
-  title: z.string(),
+export const ComposerSkillSuggestionItem = obj({
+  id: str(),
+  kind: lit("skill"),
+  name: str(),
+  subtitle: opt(str()),
+  title: str(),
 });
 
-export const ComposerPromptTemplateSuggestionItem = z.object({
-  id: z.string(),
-  kind: z.literal("prompt-template"),
-  prompt: z.string(),
-  subtitle: z.string().optional(),
-  title: z.string(),
+export const ComposerPromptTemplateSuggestionItem = obj({
+  id: str(),
+  kind: lit("prompt-template"),
+  prompt: str(),
+  subtitle: opt(str()),
+  title: str(),
 });
 
-export const ComposerSuggestionItem = z.union([ComposerPromptTemplateSuggestionItem, ComposerSkillSuggestionItem]);
+export const ComposerSuggestionItem = union([ComposerPromptTemplateSuggestionItem, ComposerSkillSuggestionItem]);
 
-export const ListComposerSuggestionsPayload = z.object({
-  projectPath: z.string(),
+export const ListComposerSuggestionsPayload = obj({
+  projectPath: str(),
 });
 
-export const ListComposerSuggestionsResult = z.object({
-  items: z.array(ComposerSuggestionItem),
+export const ListComposerSuggestionsResult = obj({
+  items: arr(ComposerSuggestionItem),
 });
 
-export type ComposerSuggestionTriggerKind = z.infer<typeof ComposerSuggestionTriggerKind>;
-export type ComposerSkillSuggestionItem = z.infer<typeof ComposerSkillSuggestionItem>;
-export type ComposerPromptTemplateSuggestionItem = z.infer<typeof ComposerPromptTemplateSuggestionItem>;
-export type ComposerSuggestionItem = z.infer<typeof ComposerSuggestionItem>;
-export type ListComposerSuggestionsPayload = z.infer<typeof ListComposerSuggestionsPayload>;
-export type ListComposerSuggestionsResult = z.infer<typeof ListComposerSuggestionsResult>;
+export type ComposerSuggestionTriggerKind = Static<typeof ComposerSuggestionTriggerKind>;
+export type ComposerSkillSuggestionItem = Static<typeof ComposerSkillSuggestionItem>;
+export type ComposerPromptTemplateSuggestionItem = Static<typeof ComposerPromptTemplateSuggestionItem>;
+export type ComposerSuggestionItem = Static<typeof ComposerSuggestionItem>;
+export type ListComposerSuggestionsPayload = Static<typeof ListComposerSuggestionsPayload>;
+export type ListComposerSuggestionsResult = Static<typeof ListComposerSuggestionsResult>;

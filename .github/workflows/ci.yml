@@ -27,7 +27,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: "24.22"
 
       - name: Cache Bun and Turbo
         uses: actions/cache@v4
@@ -74,7 +74,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: "24.22"
 
       - name: Install fd (Linux)
         if: runner.os == 'Linux'
@@ -126,7 +126,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: "24.22"
 
       - name: Cache Bun
         uses: actions/cache@v4

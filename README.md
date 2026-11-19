@@ -32,7 +32,7 @@ Download the latest desktop app for macOS, Linux, or Windows from [GitHub Releas
 
 ### From source
 
-Requires [Bun](https://bun.sh) 1.3.13 and Git.
+Requires [Bun](https://bun.sh) 1.4.4 and Git.
 
 ```bash
 git clone https://github.com/mattiacerutti/supernova.git

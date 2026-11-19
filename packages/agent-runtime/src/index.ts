@@ -1,3 +1,2 @@
-export {createAgentRuntime} from "@supernova/agent-runtime/runtime";
-export type {AgentRuntime} from "@supernova/agent-runtime/runtime";
-export {serveRuntime} from "@supernova/agent-runtime/runtime-services";
+export {startServerHost} from "@supernova/agent-runtime/composition/server-host";
+export type {ServerHostHandle, ServerHostOptions} from "@supernova/agent-runtime/composition/server-host";

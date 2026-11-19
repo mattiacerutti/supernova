@@ -1,19 +1,24 @@
-import type {MembersOf} from "@earendil-works/chord";
-import {method, remote} from "@earendil-works/chord";
-import type {UpdateExtensionsError} from "@supernova/contracts/services/extensions/procedures";
-import {NO_PAYLOAD, result, SERVER_WIDE} from "@supernova/contracts/lib/protocol";
+import type {Reference} from "@earendil-works/chord";
+import {method, nul, remote} from "@earendil-works/chord";
+import {UpdateExtensionsError} from "@supernova/contracts/services/extensions/procedures";
+import type {Errors} from "@supernova/contracts/lib/errors";
+import {serverHost} from "@supernova/contracts/lib/protocol";
 
 export const ExtensionsService = remote("supernova.extensions", {
-  version: 1,
-  input: SERVER_WIDE,
+  version: 2,
+  params: {},
+  hostAddress: serverHost,
   variants: {
-    default: {
+    owner: {
       methods: {
-        /** Updates every package and reloads them in open sessions; a running call finishes on the code it took. */
-        update: method(NO_PAYLOAD, result<null, UpdateExtensionsError>()),
+        update: method(undefined, nul()),
       },
     },
   },
 });
 
-export type ExtensionsService = MembersOf<typeof ExtensionsService>;
+export const ExtensionsErrors = {
+  update: UpdateExtensionsError,
+} satisfies Errors<typeof ExtensionsService>;
+
+export type ExtensionsService = Reference<typeof ExtensionsService>;

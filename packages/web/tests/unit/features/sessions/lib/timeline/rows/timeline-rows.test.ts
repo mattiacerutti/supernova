@@ -15,7 +15,7 @@ function timeline(live: boolean) {
     userEntry("Second"),
   ]);
   const session = live ? sessionDocument({entries, live: runningLive({partial: [{text: "Streaming", type: "text"}]}), runStart: entries[4]!.id}) : sessionDocument({entries});
-  const view = sessionView({entry: undefined, session});
+  const view = sessionView({entry: undefined, record: undefined, session});
   return {history: buildCommittedTimelineItems(view.turns), live: buildLiveTimelineItems({live, liveTurn: view.liveTurn ?? null})};
 }
 
@@ -38,7 +38,6 @@ describe("timeline row keys", () => {
 });
 
 describe("the fork divider", () => {
-  /** Each row as the turn it belongs to, the divider as "|", with runs of the same turn collapsed. */
   const layout = (rows: readonly {readonly type: string; readonly turnId: string}[], turnIds: readonly string[]) =>
     rows.map((row) => (row.type === "fork-divider" ? "|" : String(turnIds.indexOf(row.turnId)))).filter((label, index, labels) => label !== labels[index - 1]);
 

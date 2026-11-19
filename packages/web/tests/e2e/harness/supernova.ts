@@ -35,8 +35,17 @@ export async function startSupernova(): Promise<Supernova> {
     const server = await startServerProcess({
       entry: join(REPO, "apps/server/dist/cli.js"),
       execPath: "node",
-      // Offline, and without the developer's shell config: the only network the server sees is the model.
-      env: {HOME: home, USERPROFILE: home, SUPERNOVA_HOME: join(home, ".supernova"), PI_OFFLINE: "1", SHELL: "/bin/sh"},
+      // Offline, without the developer's shell config or Anthropic keys: the specs connect Anthropic themselves.
+      env: {
+        HOME: home,
+        USERPROFILE: home,
+        SUPERNOVA_HOME: join(home, ".supernova"),
+        PI_OFFLINE: "1",
+        SHELL: "/bin/sh",
+        ANTHROPIC_API_KEY: "",
+        ANTHROPIC_AUTH_TOKEN: "",
+        ANTHROPIC_OAUTH_TOKEN: "",
+      },
       onOutput: (chunk) => (output += chunk),
     });
     resources.push(server);

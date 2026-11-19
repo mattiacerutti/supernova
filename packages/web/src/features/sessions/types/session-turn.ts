@@ -1,4 +1,4 @@
-import type {ToolResultMessage, UserMessageContentPart} from "@supernova/contracts/services/sessions/schemas";
+import type {ToolResultMessage, UserMessageContentPart} from "@supernova/contracts/services/chat/schemas";
 
 export interface SessionToolCall {
   readonly callId: string;

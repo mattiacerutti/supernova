@@ -16,9 +16,10 @@ A user-facing feature needs a behavior test for its main flow and for each failu
 ## Fakes and data
 
 - The model is the only fake: Pi's faux provider in integration tests, the scripted HTTP model in the behavior suite.
-- Use Pi's real `ModelRuntime` with an `InMemoryCredentialStore` and a provider the test defines, and `createAgentRuntime` with the real SDK for resource loading. Do not rebuild them from `vi.fn()` or `{} as`.
+- Use Pi's real `ModelRuntime` with an `InMemoryCredentialStore` and a provider the test defines, and `startServerHost` with the real SDK for resource loading. Do not rebuild them from `vi.fn()` or `{} as`.
 - Seed history by running turns against the model, not by writing entries.
-- Client tests build session documents with `packages/web/tests/support/session.ts`, never with cast literals.
+- Client tests build chat documents with `packages/web/tests/support/session.ts`, never with cast literals.
+- Client tests and the timeline suite talk to the server they need through `packages/web/tests/support/test-server.ts`: a real Chord server host and session hosts, over memory links, serving the contracts from test facets. `Published` is a value the test changes and the facets serve. Do not fake references or the runtime client.
 - Do not commit recorded output such as snapshots or golden files.
 
 ## Behavior E2E
@@ -34,7 +35,7 @@ A user-facing feature needs a behavior test for its main flow and for each failu
 
 ## Integration
 
-- Build the runtime with `tests/support/session-runtime.ts` and observe it with `observe()`.
+- Start the server host with `tests/support/test-runtime.ts` and observe it with `observe()`. Its `store` and `operations` reach the server's own objects, as the services do.
 - Use `tests/support/runtime-server.ts` when payload parsing, error tags, or replication are part of the behavior. A remote state member holds a value only while subscribed, so subscribe before reading it.
 
 ## When to run

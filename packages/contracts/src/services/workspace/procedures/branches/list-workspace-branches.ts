@@ -1,22 +1,20 @@
-import {z} from "zod";
+import {arr, bool, obj, opt, type Static, str} from "@earendil-works/chord";
 
-export const WorkspaceBranchesListPayload = z.object({
-  projectPath: z.string(),
+export const WorkspaceBranchesListPayload = obj({
+  projectPath: str(),
 });
 
-export const WorkspaceBranch = z.object({
-  /** Branch name; remote-tracking branches keep their `origin/` prefix. */
-  name: z.string(),
-  remote: z.boolean(),
-  worktreePath: z.string().optional(),
+export const WorkspaceBranch = obj({
+  name: str(),
+  remote: bool(),
+  worktreePath: opt(str()),
 });
 
-export const WorkspaceBranchesListResult = z.object({
-  branches: z.array(WorkspaceBranch),
-  /** Branch checked out in the project, or undefined on a detached HEAD. */
-  current: z.string().optional(),
+export const WorkspaceBranchesListResult = obj({
+  branches: arr(WorkspaceBranch),
+  current: opt(str()),
 });
 
-export type WorkspaceBranch = z.infer<typeof WorkspaceBranch>;
-export type WorkspaceBranchesListPayload = z.infer<typeof WorkspaceBranchesListPayload>;
-export type WorkspaceBranchesListResult = z.infer<typeof WorkspaceBranchesListResult>;
+export type WorkspaceBranch = Static<typeof WorkspaceBranch>;
+export type WorkspaceBranchesListPayload = Static<typeof WorkspaceBranchesListPayload>;
+export type WorkspaceBranchesListResult = Static<typeof WorkspaceBranchesListResult>;

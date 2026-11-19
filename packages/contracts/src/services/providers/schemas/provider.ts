@@ -1,22 +1,54 @@
-import {z} from "zod";
+import {arr, bool, int, lit, nul, obj, oneOf, opt, type Static, str, union} from "@earendil-works/chord";
 
-/** `external` means credentials are managed outside Pi (environment, config, or a provider SDK) and cannot be entered here. */
-export const ProviderAuthType = z.union([z.literal("api_key"), z.literal("oauth"), z.literal("external")]);
+/** `external`: managed outside Pi, never entered here. */
+export const ProviderAuthType = oneOf("api_key", "oauth", "external");
 
-export const ProviderAuthSource = z.union([z.literal("stored"), z.literal("environment"), z.literal("config"), z.literal("runtime"), z.literal("external"), z.literal("unknown")]);
+export const ProviderAuthSource = oneOf("stored", "environment", "config", "runtime", "external", "unknown");
 
-export const Provider = z.object({
-  id: z.string(),
-  name: z.string(),
-  source: ProviderAuthSource.optional(),
-  /** Where the credential comes from, for display: an environment variable name, "OAuth token", … */
-  sourceLabel: z.string().optional(),
-  authTypes: z.array(ProviderAuthType),
-  connected: z.boolean(),
-  /** Only credentials Pi stores can be removed; environment and config ones cannot. */
-  disconnectable: z.boolean(),
+export const Provider = obj({
+  id: str(),
+  name: str(),
+  source: opt(ProviderAuthSource),
+  sourceLabel: opt(str()),
+  authTypes: arr(ProviderAuthType),
+  connected: bool(),
+  disconnectable: bool(),
 });
 
-export type ProviderAuthType = z.infer<typeof ProviderAuthType>;
-export type ProviderAuthSource = z.infer<typeof ProviderAuthSource>;
-export type Provider = z.infer<typeof Provider>;
+export const ProviderLoginAuthType = oneOf("api_key", "oauth");
+
+const LoginOption = obj({id: str(), label: str(), description: opt(str())});
+
+/** Answering closes it; the next question has a new `id`. */
+export const LoginPrompt = union([
+  obj({id: str(), type: lit("text"), message: str(), placeholder: opt(str())}),
+  obj({id: str(), type: lit("secret"), message: str(), placeholder: opt(str())}),
+  obj({id: str(), type: lit("select"), message: str(), options: arr(LoginOption)}),
+  obj({id: str(), type: lit("manual_code"), message: str(), placeholder: opt(str())}),
+]);
+
+export const LoginNotice = union([
+  obj({type: lit("info"), message: str(), links: opt(arr(obj({url: str(), label: opt(str())})))}),
+  obj({type: lit("auth_url"), url: str(), instructions: opt(str())}),
+  obj({type: lit("device_code"), userCode: str(), verificationUri: str(), expiresInSeconds: opt(int())}),
+  obj({type: lit("progress"), message: str()}),
+]);
+
+/** Credentials never appear here. */
+export const LoginState = obj({
+  attemptId: str(),
+  providerId: str(),
+  authType: ProviderLoginAuthType,
+  status: oneOf("working", "success", "cancelled", "error"),
+  prompt: union([LoginPrompt, nul()]),
+  notices: arr(LoginNotice),
+  message: opt(str()),
+});
+
+export type ProviderAuthType = Static<typeof ProviderAuthType>;
+export type ProviderAuthSource = Static<typeof ProviderAuthSource>;
+export type Provider = Static<typeof Provider>;
+export type ProviderLoginAuthType = Static<typeof ProviderLoginAuthType>;
+export type LoginPrompt = Static<typeof LoginPrompt>;
+export type LoginNotice = Static<typeof LoginNotice>;
+export type LoginState = Static<typeof LoginState>;

@@ -2,7 +2,7 @@ import {useNavigate, useParams} from "@tanstack/react-router";
 import type {CommandPaletteAction} from "@/features/command-palette/types/command-palette";
 import {useProjectsStore} from "@/features/projects/stores/projects-store";
 import type {Project} from "@/features/projects/types/project";
-import {useSessionsStore} from "@/features/sessions/stores/sessions-store";
+import {useSessionRecord} from "@/features/sessions/hooks/use-session";
 
 const GENERAL_SECTION = "Actions";
 
@@ -10,8 +10,7 @@ export type CommandPalettePageId = "new-session" | "open-project" | "open-sessio
 
 function useOpenSessionProject(projects: readonly Project[]): Project | undefined {
   const sessionId = useParams({select: (params) => params.sessionId, strict: false});
-  // The runtime's directory names every open session's project; the session page already follows the open one.
-  const projectPath = useSessionsStore((state) => (sessionId === undefined ? undefined : state.entries[sessionId]?.projectPath));
+  const projectPath = useSessionRecord(sessionId)?.projectPath;
 
   return projectPath === undefined ? undefined : projects.find((project) => project.path === projectPath);
 }
@@ -19,10 +18,8 @@ function useOpenSessionProject(projects: readonly Project[]): Project | undefine
 export function useOpenSessionWorkspacePath(): string | undefined {
   const sessionId = useParams({select: (params) => params.sessionId, strict: false});
 
-  return useSessionsStore((state) => {
-    const session = sessionId === undefined ? undefined : state.documents[sessionId];
-    return session && (session.worktree?.path ?? session.projectPath);
-  });
+  const session = useSessionRecord(sessionId);
+  return session && (session.worktree?.path ?? session.projectPath);
 }
 
 export function useCommandPaletteActions(): readonly CommandPaletteAction[] {
@@ -32,7 +29,7 @@ export function useCommandPaletteActions(): readonly CommandPaletteAction[] {
   const workspacePath = useOpenSessionWorkspacePath();
   const actions: CommandPaletteAction[] = [];
 
-  // Inside a session, a new one starts in the same project; elsewhere there is no project to assume, so it is picked.
+  // Outside a session there is no project to assume.
   if (openSessionProject) {
     actions.push({
       detail: openSessionProject.name,
@@ -57,7 +54,7 @@ export function useCommandPaletteActions(): readonly CommandPaletteAction[] {
     });
   }
 
-  // Desktop only: the path is on the server, which is this machine only when the desktop app runs its own API.
+  // The path is on the server, which is this machine only in the desktop app.
   if (window.desktopApi && workspacePath !== undefined) {
     actions.push({
       icon: "code",

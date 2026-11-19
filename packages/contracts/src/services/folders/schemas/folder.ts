@@ -1,18 +1,18 @@
-import {z} from "zod";
+import {obj, oneOf, opt, type Static, str} from "@earendil-works/chord";
 
-export const FolderSuggestion = z.object({
-  name: z.string(),
-  path: z.string(),
+export const FolderSuggestion = obj({
+  name: str(),
+  path: str(),
 });
 
-export const FolderFile = z.object({
-  path: z.string(),
-  title: z.string(),
-  subtitle: z.string().optional(),
+export const FolderFile = obj({
+  path: str(),
+  title: str(),
+  subtitle: opt(str()),
 });
 
-export const FolderQueryPathType = z.union([z.literal("directory"), z.literal("file"), z.literal("missing")]);
+export const FolderQueryPathType = oneOf("directory", "file", "missing");
 
-export type FolderSuggestion = z.infer<typeof FolderSuggestion>;
-export type FolderFile = z.infer<typeof FolderFile>;
-export type FolderQueryPathType = z.infer<typeof FolderQueryPathType>;
+export type FolderSuggestion = Static<typeof FolderSuggestion>;
+export type FolderFile = Static<typeof FolderFile>;
+export type FolderQueryPathType = Static<typeof FolderQueryPathType>;

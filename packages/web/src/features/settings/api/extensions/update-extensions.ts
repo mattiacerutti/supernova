@@ -1,10 +1,10 @@
+import {BACKGROUND_CONTEXT as context} from "@earendil-works/chord/context";
 import {useMutation} from "@tanstack/react-query";
-import {unwrap} from "@/runtime/runtime-result";
-import {useRuntime} from "@/runtime/use-runtime";
+import {useRuntime} from "@/runtime/hooks/use-runtime";
 
 export function useUpdateExtensions() {
   const runtime = useRuntime();
   return useMutation({
-    mutationFn: () => unwrap(runtime.extensions.update(null)),
+    mutationFn: () => runtime.extensions.update(context),
   });
 }

@@ -1,8 +1,9 @@
 import {useState} from "react";
 import Dialog from "@/components/ui/dialog";
 import {onOpenExtensionNotices} from "@/features/sessions/lib/session-notices";
-import {useSessionsStore} from "@/features/sessions/stores/sessions-store";
 import {useMountEffect} from "@/hooks/use-mount-effect";
+import {useRuntime} from "@/runtime/hooks/use-runtime";
+import {useWatched} from "@/runtime/hooks/use-watched";
 
 function extensionName(path: string): string {
   const segments = path.split(/[\\/]/).filter(Boolean);
@@ -12,10 +13,9 @@ function extensionName(path: string): string {
 }
 
 export default function ExtensionNoticesDialog() {
-  // The session stays set while the dialog closes, so its content does not vanish mid-animation.
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
-  const notices = useSessionsStore((state) => (sessionId === null ? undefined : state.entries[sessionId]?.notices));
+  const notices = useWatched(useRuntime().status.statuses, (statuses) => (sessionId === null ? undefined : statuses?.sessions[sessionId]?.notices));
 
   useMountEffect(() =>
     onOpenExtensionNotices((id) => {

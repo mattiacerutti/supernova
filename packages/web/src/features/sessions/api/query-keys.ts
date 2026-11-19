@@ -1,9 +1,7 @@
 export const sessionKeys = {
   all: ["sessions"] as const,
-  lists: () => [...sessionKeys.all, "list"] as const,
-  list: (projectPath: string) => [...sessionKeys.lists(), projectPath] as const,
   searches: () => [...sessionKeys.all, "search"] as const,
-  search: (query: string, projectPaths: readonly string[]) => [...sessionKeys.searches(), query, projectPaths] as const,
+  search: (text: string, projectPaths: readonly string[]) => [...sessionKeys.searches(), text, projectPaths] as const,
   models: (projectPath: string) => [...sessionKeys.all, "models", projectPath] as const,
   composerResources: (projectPath: string) => [...sessionKeys.all, "composer-resources", projectPath] as const,
   branches: (projectPath: string) => [...sessionKeys.all, "branches", projectPath] as const,

@@ -1,11 +1,11 @@
-import {z} from "zod";
+import {obj, type Static, str} from "@earendil-works/chord";
 import {TaggedError} from "@supernova/contracts/lib/errors";
 
-export const ForkSessionPayload = z.object({
-  sessionId: z.string(),
-  turnId: z.string(),
+export const ForkSessionPayload = obj({
+  sessionId: str(),
+  turnId: str(),
 });
 
 export class ForkSessionError extends TaggedError("ForkSessionError") {}
 
-export type ForkSessionPayload = z.infer<typeof ForkSessionPayload>;
+export type ForkSessionPayload = Static<typeof ForkSessionPayload>;

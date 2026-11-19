@@ -1,15 +1,15 @@
-import {z} from "zod";
+import {arr, obj, type Static, str} from "@earendil-works/chord";
 import {FolderFile} from "@supernova/contracts/services/folders/schemas";
 
-export const FolderFilesListPayload = z.object({
-  projectPath: z.string(),
-  query: z.string(),
+export const FolderFilesListPayload = obj({
+  projectPath: str(),
+  query: str(),
 });
 
-export const FolderFilesListResult = z.object({
-  items: z.array(FolderFile),
-  query: z.string(),
+export const FolderFilesListResult = obj({
+  items: arr(FolderFile),
+  query: str(),
 });
 
-export type FolderFilesListPayload = z.infer<typeof FolderFilesListPayload>;
-export type FolderFilesListResult = z.infer<typeof FolderFilesListResult>;
+export type FolderFilesListPayload = Static<typeof FolderFilesListPayload>;
+export type FolderFilesListResult = Static<typeof FolderFilesListResult>;

@@ -1,11 +1,11 @@
+import {BACKGROUND_CONTEXT as context} from "@earendil-works/chord/context";
 import {queryOptions, useQuery} from "@tanstack/react-query";
 import type {ComposerSuggestionItem, ComposerSuggestionMatch} from "@/features/sessions/types/composer-suggestion";
 import {clientSlashCommandSuggestions} from "@/features/sessions/lib/composer/editor/client-slash-commands";
 import {filterComposerSuggestions} from "@/features/sessions/lib/composer/editor/composer-suggestions";
 import type {ClientSlashCommandActions} from "@/features/sessions/lib/composer/editor/client-slash-commands";
 import {sessionKeys} from "@/features/sessions/api/query-keys";
-import {unwrap} from "@/runtime/runtime-result";
-import {useRuntime} from "@/runtime/use-runtime";
+import {useRuntime} from "@/runtime/hooks/use-runtime";
 
 export function useComposerSuggestions(projectPath: string, match: ComposerSuggestionMatch | null, input: {readonly slashCommandActions?: ClientSlashCommandActions} = {}) {
   const runtime = useRuntime();
@@ -15,7 +15,7 @@ export function useComposerSuggestions(projectPath: string, match: ComposerSugge
       enabled: !!projectPath,
       staleTime: Infinity,
       gcTime: Infinity,
-      queryFn: () => unwrap(runtime.sessions.listComposerSuggestions({projectPath})),
+      queryFn: () => runtime.sessions.listComposerSuggestions({projectPath}, context),
     }),
     select: (result): ComposerSuggestionItem[] => {
       if (!match || match.kind === "file") return [];
@@ -28,7 +28,7 @@ export function useComposerSuggestions(projectPath: string, match: ComposerSugge
       queryKey: sessionKeys.composerFiles(projectPath, match?.kind === "file" ? match.query : null),
       enabled: match?.kind === "file",
       placeholderData: (previousData, previousQuery) => (previousQuery?.queryKey[2] === projectPath ? previousData : undefined),
-      queryFn: () => unwrap(runtime.folders.listFiles({projectPath, query: match?.query ?? ""})),
+      queryFn: () => runtime.folders.listFiles({projectPath, query: match?.query ?? ""}, context),
     }),
     select: (result): ComposerSuggestionItem[] => result.items.map((item) => ({id: item.path, kind: "file", path: item.path, subtitle: item.subtitle, title: item.title})),
   });

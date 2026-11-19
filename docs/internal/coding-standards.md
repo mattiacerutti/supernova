@@ -34,6 +34,6 @@ Code is the memory. A name, a type, and a body say what something does; a commen
 - Do not comment by default. Most functions, classes, interfaces, props, and schema fields need nothing. Write a comment only when a reader would otherwise get something wrong.
 - Keep it to one line where possible, two at most. If the reason needs a paragraph, the code probably needs a better shape.
 - Use `/** */` when the comment sits above a declaration (function, class, member, schema field), so it shows on hover at call sites. Use `//` inside bodies.
-- A `TODO` names the condition that resolves it: `TODO(queue): write the turn record when the engine places it`. A bare `TODO: clean up` is not allowed.
+- A `TODO` names the condition that resolves it: `TODO(queue): record the turn's checkpoints when the engine places it`. A bare `TODO: clean up` is not allowed.
 - Never commit commented-out code; Git has it.
 - Do not trust a stale comment over executable behavior. Fix or delete stale descriptions in the same change. If the mismatch concerns an intended safety guarantee, investigate rather than deleting the guarantee to match a bug.

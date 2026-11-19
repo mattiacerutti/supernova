@@ -6,6 +6,8 @@ All notable changes to Supernova are documented in this file.
 
 ### Breaking Changes
 
+- Changed Supernova to run on Pi 1.5.1, which migrates a session's file to its storage format the first time the session opens.
+
 ### Added
 
 - Added a divider in forked sessions where the copied conversation ends and the fork's own messages begin.
@@ -13,11 +15,13 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+- Changed the providers list to update in every open window when a provider is connected or disconnected, and to allow one provider login at a time.
 - Sidebars now use a smooth ease-out when opening and a faster ease-in when closing.
 - The sidebar's leading icon now only marks pinned sessions. Worktree and forked sessions show small markers after their title instead. Hovering or focusing a worktree or forked session opens a card beside it with its full title, status, and worktree branch.
 
 ### Fixed
 
+- Fixed a provider login continuing on the server after its window was closed or reloaded. An unfinished login now also ends after 10 minutes.
 - Screen readers now announce the message composer and the sidebar's pinned, forked, and worktree session markers.
 - Fixed OpenAI subscription login failing because an installation device ID was missing.
 - Session times in the sidebar and command palette now keep counting while the app is open. Before, a session showed the time it had when it last changed or when the app started, so it could read "now" days later.

@@ -1,14 +1,14 @@
-import {z} from "zod";
+import {arr, obj, type Static, str} from "@earendil-works/chord";
 import {WorkspaceChangeEntry} from "@supernova/contracts/services/workspace/schemas";
 
-export const WorkspaceChangesGetPayload = z.object({
-  projectPath: z.string(),
-  repositoryRoot: z.string(),
+export const WorkspaceChangesGetPayload = obj({
+  projectPath: str(),
+  repositoryRoot: str(),
 });
 
-export const WorkspaceChangesGetResult = z.object({
-  uncommitted: z.array(WorkspaceChangeEntry),
+export const WorkspaceChangesGetResult = obj({
+  uncommitted: arr(WorkspaceChangeEntry),
 });
 
-export type WorkspaceChangesGetPayload = z.infer<typeof WorkspaceChangesGetPayload>;
-export type WorkspaceChangesGetResult = z.infer<typeof WorkspaceChangesGetResult>;
+export type WorkspaceChangesGetPayload = Static<typeof WorkspaceChangesGetPayload>;
+export type WorkspaceChangesGetResult = Static<typeof WorkspaceChangesGetResult>;

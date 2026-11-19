@@ -1,4 +1,4 @@
-import type {UserMessageAttachmentPart} from "@supernova/contracts/services/sessions/schemas";
+import type {UserMessageAttachmentPart} from "@supernova/contracts/services/chat/schemas";
 import Icon from "@/components/ui/icon";
 import {formatAttachmentType} from "@/features/sessions/lib/composer/attachments/session-attachments";
 

@@ -1,12 +1,12 @@
-import {z} from "zod";
+import {obj, opt, type Static, str} from "@earendil-works/chord";
 import {Configuration} from "@supernova/contracts/services/configuration/schemas";
 
-/** Omit projectPath to read global configuration only, regardless of the server's working directory. */
-export const GetConfigurationPayload = z.object({
-  projectPath: z.string().min(1).optional(),
+export const GetConfigurationPayload = obj({
+  /** Absent: global configuration only, whatever the server's working directory. */
+  projectPath: opt(str({min: 1})),
 });
 
 export const GetConfigurationResult = Configuration;
 
-export type GetConfigurationPayload = z.infer<typeof GetConfigurationPayload>;
-export type GetConfigurationResult = z.infer<typeof GetConfigurationResult>;
+export type GetConfigurationPayload = Static<typeof GetConfigurationPayload>;
+export type GetConfigurationResult = Static<typeof GetConfigurationResult>;

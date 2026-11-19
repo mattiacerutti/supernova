@@ -1,54 +1,102 @@
-import type {MembersOf} from "@earendil-works/chord";
-import {method, remote} from "@earendil-works/chord";
-import type {SessionActivity, SessionNotice, SessionSetupStep} from "@supernova/contracts/services/session-runtime/procedures";
-import {json, result, SERVER_WIDE} from "@supernova/contracts/lib/protocol";
+import {method, nul, remote, str} from "@earendil-works/chord";
+import type {Errors} from "@supernova/contracts/lib/errors";
+import {json, serverHost} from "@supernova/contracts/lib/protocol";
 import type {
-  CreateSessionError,
-  CreateSessionPayload,
-  ForkSessionError,
-  ForkSessionPayload,
-  GetSessionPayload,
-  ListComposerSuggestionsPayload,
+  ArchiveSessionResult,
   ListComposerSuggestionsResult,
-  ListModelsPayload,
   ListModelsResult,
-  RenameSessionError,
-  RenameSessionPayload,
+  SearchSessionsResult,
+  SessionActivity,
+  SessionNotice,
+  SessionSetupStep,
 } from "@supernova/contracts/services/sessions/procedures";
-import type {Session, SessionSummary} from "@supernova/contracts/services/sessions/schemas";
+import {ArchiveSessionError, CreateSessionError, ForkSessionError, RenameSessionError} from "@supernova/contracts/services/sessions/procedures";
+import {
+  ArchiveSessionPayload,
+  CreateSessionPayload,
+  ForkSessionPayload,
+  HideProjectPayload,
+  OpenSessionPayload,
+  ListComposerSuggestionsPayload,
+  ListModelsPayload,
+  LoadMoreProjectPayload,
+  RenameSessionPayload,
+  SearchSessionsPayload,
+  PinSessionPayload,
+  SessionReport,
+  ShowProjectPayload,
+} from "@supernova/contracts/services/sessions/procedures";
+import type {SessionSummary} from "@supernova/contracts/services/sessions/schemas";
 
-export interface SessionDirectoryEntry {
-  readonly projectPath: string;
-  readonly summary: SessionSummary | null;
-  readonly activity: SessionActivity;
-  readonly setupStep: SessionSetupStep | null;
-  /** Problems that did not fail a command, newest last; capped, never cleared by a run. */
-  readonly notices: SessionNotice[];
+export type ListedSession = SessionSummary & {readonly projectPath: string};
+
+export interface ProjectWindow {
+  readonly depth: number;
+  /** Not yet queried at this depth: `items` are the previous depth's. */
+  readonly loading: boolean;
+  readonly items: readonly ListedSession[];
+  readonly hasMore: boolean;
 }
 
-export interface SessionDirectoryState {
-  readonly sessions: Readonly<Record<string, SessionDirectoryEntry>>;
+export interface SessionsView {
+  readonly projects: Readonly<Record<string, ProjectWindow>>;
+  readonly open: ListedSession | null;
 }
 
+/** Every browser shares the owner principal, so `clientId` keeps one tab's view from another's. */
 export const SessionsService = remote("supernova.sessions", {
-  version: 1,
-  input: SERVER_WIDE,
+  version: 6,
+  params: {clientId: str()},
+  hostAddress: serverHost,
   variants: {
-    default: {
-      state: {
-        // Written by session runtime, served here because a client reads it before following any session.
-        directory: json<SessionDirectoryState>(),
-      },
+    owner: {
+      state: {view: json<SessionsView>()},
       methods: {
-        create: method(json<CreateSessionPayload>(), result<Session, CreateSessionError>()),
-        fork: method(json<ForkSessionPayload>(), result<Session, ForkSessionError>()),
-        rename: method(json<RenameSessionPayload>(), result<Session, RenameSessionError>()),
-        get: method(json<GetSessionPayload>(), result<Session>()),
-        listModels: method(json<ListModelsPayload>(), result<ListModelsResult>()),
-        listComposerSuggestions: method(json<ListComposerSuggestionsPayload>(), result<ListComposerSuggestionsResult>()),
+        showProject: method(ShowProjectPayload, nul()),
+        hideProject: method(HideProjectPayload, nul()),
+        loadMore: method(LoadMoreProjectPayload, nul()),
+        openSession: method(OpenSessionPayload, nul()),
+        closeSession: method(undefined, nul()),
+        create: method(CreateSessionPayload, nul()),
+        fork: method(ForkSessionPayload, json<ListedSession>()),
+        rename: method(RenameSessionPayload, nul()),
+        pin: method(PinSessionPayload, nul()),
+        archive: method(ArchiveSessionPayload, json<ArchiveSessionResult>()),
+        search: method(SearchSessionsPayload, json<SearchSessionsResult>()),
+        listModels: method(ListModelsPayload, json<ListModelsResult>()),
+        listComposerSuggestions: method(ListComposerSuggestionsPayload, json<ListComposerSuggestionsResult>()),
       },
     },
   },
 });
 
-export type SessionsService = MembersOf<typeof SessionsService>;
+export const SessionsErrors = {
+  create: CreateSessionError,
+  fork: ForkSessionError,
+  rename: RenameSessionError,
+  archive: ArchiveSessionError,
+} satisfies Errors<typeof SessionsService>;
+
+export interface SessionStatusEntry {
+  readonly activity: SessionActivity;
+  readonly setupStep: SessionSetupStep | null;
+  readonly notices: readonly SessionNotice[];
+}
+
+export interface SessionStatuses {
+  readonly sessions: Readonly<Record<string, SessionStatusEntry>>;
+}
+
+export const SessionStatusService = remote("supernova.session-status", {
+  version: 3,
+  params: {},
+  hostAddress: serverHost,
+  variants: {
+    owner: {
+      state: {statuses: json<SessionStatuses>()},
+    },
+    worker: {
+      methods: {report: method(SessionReport, nul())},
+    },
+  },
+});

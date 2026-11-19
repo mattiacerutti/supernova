@@ -1,29 +1,34 @@
-import {z} from "zod";
+import {obj, type Static, str} from "@earendil-works/chord";
 import {TaggedError} from "@supernova/contracts/lib/errors";
-import {ProviderLoginSession} from "../schemas";
+import {ProviderLoginAuthType} from "@supernova/contracts/services/providers/schemas";
 
-export const ProviderLoginAuthType = z.union([z.literal("api_key"), z.literal("oauth")]);
-
-export const ProviderLoginStartPayload = z.object({
+export const ProviderLoginStartPayload = obj({
   authType: ProviderLoginAuthType,
-  providerId: z.string(),
+  providerId: str(),
 });
 
-export const ProviderLoginInputSubmitPayload = z.object({
-  input: z.string(),
-  loginSessionId: z.string(),
+export const ProviderLoginStartResult = obj({
+  attemptId: str(),
 });
 
-export const ProviderLoginCancelPayload = z.object({
-  loginSessionId: z.string(),
+export const ProviderLoginAnswerPayload = obj({
+  attemptId: str(),
+  promptId: str(),
+  value: str({max: 100_000}),
 });
 
-export const ProviderLoginResult = ProviderLoginSession;
+export const ProviderLoginAttemptPayload = obj({
+  attemptId: str(),
+});
+
+export const ProviderLogoutPayload = obj({
+  providerId: str(),
+});
 
 export class ProviderLoginError extends TaggedError("ProviderLoginError") {}
 
-export type ProviderLoginAuthType = z.infer<typeof ProviderLoginAuthType>;
-export type ProviderLoginStartPayload = z.infer<typeof ProviderLoginStartPayload>;
-export type ProviderLoginInputSubmitPayload = z.infer<typeof ProviderLoginInputSubmitPayload>;
-export type ProviderLoginCancelPayload = z.infer<typeof ProviderLoginCancelPayload>;
-export type ProviderLoginResult = z.infer<typeof ProviderLoginResult>;
+export type ProviderLoginStartPayload = Static<typeof ProviderLoginStartPayload>;
+export type ProviderLoginStartResult = Static<typeof ProviderLoginStartResult>;
+export type ProviderLoginAnswerPayload = Static<typeof ProviderLoginAnswerPayload>;
+export type ProviderLoginAttemptPayload = Static<typeof ProviderLoginAttemptPayload>;
+export type ProviderLogoutPayload = Static<typeof ProviderLogoutPayload>;
