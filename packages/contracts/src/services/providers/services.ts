@@ -1,40 +1,45 @@
 import type {Reference} from "@earendil-works/chord";
 import {method, remote} from "@earendil-works/chord";
-import type {ProviderLoginResult, ProviderLogoutResult, ProvidersListResult} from "@supernova/contracts/services/providers/procedures";
-import {ProviderLoginError} from "@supernova/contracts/services/providers/procedures";
-import {ProviderLoginCancelPayload, ProviderLoginInputSubmitPayload, ProviderLoginStartPayload, ProviderLogoutPayload} from "@supernova/contracts/services/providers/procedures";
-import type {ProviderLoginSession} from "@supernova/contracts/services/providers/schemas";
+import {
+  ProviderLoginAnswerPayload,
+  ProviderLoginAttemptPayload,
+  ProviderLoginError,
+  ProviderLoginStartPayload,
+  ProviderLoginStartResult,
+  ProviderLogoutPayload,
+} from "@supernova/contracts/services/providers/procedures";
+import type {LoginState, Provider} from "@supernova/contracts/services/providers/schemas";
 import type {Errors} from "@supernova/contracts/lib/errors";
 import {json, serverHost} from "@supernova/contracts/lib/protocol";
 
-export interface ProviderLoginsState {
-  readonly logins: Readonly<Record<string, ProviderLoginSession>>;
-}
-
+/** Its end cancels a running login, so hold it only while a screen can answer the login. */
 export const ProvidersService = remote("supernova.providers", {
-  version: 3,
+  version: 4,
   params: {},
   hostAddress: serverHost,
   variants: {
     owner: {
       state: {
-        logins: json<ProviderLoginsState>(),
+        providers: json<readonly Provider[]>(),
+        login: json<LoginState | null>(),
       },
       methods: {
-        list: method(undefined, json<ProvidersListResult>()),
-        logout: method(ProviderLogoutPayload, json<ProviderLogoutResult>()),
-        startLogin: method(ProviderLoginStartPayload, json<ProviderLoginResult>()),
-        submitLoginInput: method(ProviderLoginInputSubmitPayload, json<ProviderLoginResult>()),
-        cancelLogin: method(ProviderLoginCancelPayload, json<ProviderLoginResult>()),
+        start: method(ProviderLoginStartPayload, ProviderLoginStartResult),
+        answer: method(ProviderLoginAnswerPayload),
+        /** A login that finished first keeps its result. */
+        cancel: method(ProviderLoginAttemptPayload),
+        /** A working login stays; cancel it first. */
+        dismiss: method(ProviderLoginAttemptPayload),
+        logout: method(ProviderLogoutPayload),
       },
     },
   },
 });
 
 export const ProvidersErrors = {
-  startLogin: ProviderLoginError,
-  submitLoginInput: ProviderLoginError,
-  cancelLogin: ProviderLoginError,
+  start: ProviderLoginError,
+  answer: ProviderLoginError,
+  logout: ProviderLoginError,
 } satisfies Errors<typeof ProvidersService>;
 
 export type ProvidersService = Reference<typeof ProvidersService>;

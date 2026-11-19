@@ -16,6 +16,7 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
+- Provider logins now end when you close the providers screen, on every window, or after 10 minutes without finishing, so an abandoned login no longer blocks the next one. Only one login runs at a time, and the provider list updates in every open window after you connect or disconnect a provider.
 - Sidebars now use a smooth ease-out when opening and a faster ease-in when closing.
 - The sidebar's leading icon now only marks pinned sessions. Worktree and forked sessions show small markers after their title instead. Hovering or focusing a worktree or forked session opens a card beside it with its full title, status, and worktree branch.
 

@@ -5,7 +5,6 @@ import type {RuntimePrincipal} from "@supernova/contracts/lib/protocol";
 import {ConfigurationService} from "@supernova/contracts/services/configuration/services";
 import {ExtensionsService} from "@supernova/contracts/services/extensions/services";
 import {FoldersService} from "@supernova/contracts/services/folders/services";
-import {ProvidersService} from "@supernova/contracts/services/providers/services";
 import {ChatService} from "@supernova/contracts/services/chat/services";
 import {SessionsService, SessionStatusService} from "@supernova/contracts/services/sessions/services";
 import {TerminalService, WorkspaceService} from "@supernova/contracts/services/workspace/services";
@@ -19,7 +18,6 @@ type Members<C extends Contract> = Omit<OwnerOf<C>, "variant" | "state" | "retry
 export type ConfigurationOwner = Members<typeof ConfigurationService>;
 export type ExtensionsOwner = Members<typeof ExtensionsService>;
 export type FoldersOwner = Members<typeof FoldersService>;
-export type ProvidersOwner = Members<typeof ProvidersService>;
 export type WorkspaceOwner = Members<typeof WorkspaceService>;
 export type SessionStatusOwner = Members<typeof SessionStatusService>;
 export type SessionsOwner = Members<typeof SessionsService>;
@@ -31,7 +29,6 @@ export interface RuntimeClient {
   readonly configuration: ConfigurationOwner;
   readonly extensions: ExtensionsOwner;
   readonly folders: FoldersOwner;
-  readonly providers: ProvidersOwner;
   readonly workspace: WorkspaceOwner;
   readonly status: SessionStatusOwner;
   readonly sessions: SessionsOwner;
@@ -67,9 +64,6 @@ export function runtimeClient(host: Host<RuntimePrincipal>, connect: (onState: (
     },
     get folders() {
       return service(FoldersService, {});
-    },
-    get providers() {
-      return service(ProvidersService, {});
     },
     get workspace() {
       return service(WorkspaceService, {});

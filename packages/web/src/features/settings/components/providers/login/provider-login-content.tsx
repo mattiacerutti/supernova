@@ -1,222 +1,62 @@
 import type {FormEvent} from "react";
-import {useRef, useState} from "react";
-import type {ProviderLoginSession} from "@supernova/contracts/services/providers/schemas";
+import {useState} from "react";
+import type {LoginNotice, LoginPrompt, LoginState} from "@supernova/contracts/services/providers/schemas";
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import Input from "@/components/ui/input";
 import AuthLink from "@/features/settings/components/providers/login/auth-link";
-import {useSubmitProviderLoginInput} from "@/features/settings/api/providers/login/submit-provider-login-input";
-import {useMountEffect} from "@/hooks/use-mount-effect";
-import {useWatchProviderLoginSession} from "@/features/settings/api/providers/login/watch-provider-login-session";
 
 interface ProviderLoginContentProps {
-  readonly initialSession?: ProviderLoginSession;
-  readonly loginSessionId?: string;
-  readonly onClose: (cancelLogin: boolean) => void;
+  readonly login: LoginState;
+  readonly onAnswer: (prompt: LoginPrompt, value: string) => void;
+  readonly onClose: () => void;
 }
 
 export default function ProviderLoginContent(props: ProviderLoginContentProps) {
-  const {initialSession, loginSessionId, onClose} = props;
-  const watchProviderLoginSession = useWatchProviderLoginSession();
-  const submitInputMutation = useSubmitProviderLoginInput();
-  const [session, setSession] = useState<ProviderLoginSession | undefined>(initialSession);
-  const [input, setInput] = useState("");
-  const [copiedCode, setCopiedCode] = useState(false);
-  const [pendingOptionId, setPendingOptionId] = useState<string | undefined>();
-  const [waitingForNextStep, setWaitingForNextStep] = useState(false);
-  const pendingStepKeyRef = useRef<string | undefined>(undefined);
-
-  useMountEffect(() => {
-    if (!loginSessionId) return;
-
-    return watchProviderLoginSession(loginSessionId, (nextSession) => {
-      if (nextSession.step.type === "authenticating") return;
-
-      // A step that matches the one we are waiting on is the echo of our own submission; anything else ends the wait.
-      const pendingStepKey = pendingStepKeyRef.current;
-      if (pendingStepKey && JSON.stringify(nextSession.step) !== pendingStepKey) {
-        pendingStepKeyRef.current = undefined;
-        setPendingOptionId(undefined);
-        setWaitingForNextStep(false);
-        setInput("");
-      }
-      setSession(nextSession);
-    });
-  });
-
-  const textInput = session?.step.type === "prompt" ? session.step.input : session?.step.type === "browser_auth" ? session.step.manualInput : undefined;
-  const complete = session?.step.type === "succeeded" || session?.step.type === "failed" || session?.step.type === "cancelled";
-  const canSubmitTextInput = !!loginSessionId && !!textInput && input.trim().length > 0;
-  const waitingForAuthorization = !waitingForNextStep && !complete && (session?.step.type === "browser_auth" || session?.step.type === "device_code");
-
-  const handleClose = (): void => {
-    onClose(!complete);
-  };
-
-  const submitLoginInput = (value: string, optionId?: string): void => {
-    if (!loginSessionId || !session) return;
-
-    pendingStepKeyRef.current = JSON.stringify(session.step);
-    setPendingOptionId(optionId);
-    setWaitingForNextStep(true);
-    submitInputMutation.mutate(
-      {input: value, loginSessionId},
-      {
-        onError: () => {
-          pendingStepKeyRef.current = undefined;
-          setPendingOptionId(undefined);
-          setWaitingForNextStep(false);
-        },
-      }
-    );
-  };
-
-  const handleSubmit = (event: FormEvent<HTMLFormElement>): void => {
-    event.preventDefault();
-    if (!canSubmitTextInput) return;
-    submitLoginInput(input);
-  };
-
-  const handleCopyDeviceCode = (): void => {
-    if (session?.step.type !== "device_code") return;
-
-    void navigator.clipboard.writeText(session.step.userCode).then(() => {
-      setCopiedCode(true);
-    });
-  };
+  const {login, onAnswer, onClose} = props;
+  const [draft, setDraft] = useState({promptId: "", value: ""});
+  const prompt = login.prompt;
+  const value = draft.promptId === prompt?.id ? draft.value : "";
+  const working = login.status === "working";
+  const instruction = login.notices.findLast((notice) => notice.type !== "progress");
+  const progress = login.notices.at(-1)?.type === "progress" ? login.notices.at(-1) : undefined;
 
   return (
     <div className="space-y-2 pb-4 pt-1">
-      {(!session || session.step.type === "starting") && (
+      {instruction && <Notice notice={instruction} />}
+      {prompt && <PromptForm onAnswer={onAnswer} onChange={(changed) => setDraft({promptId: prompt.id, value: changed})} prompt={prompt} value={value} />}
+
+      {working && !prompt && (
         <div className="flex items-center gap-2 py-2 text-sm text-ink-muted">
           <Icon className="animate-spin text-ink-faint" name="loader" size="sm" />
-          <span>Starting login...</span>
+          <span>{progress?.type === "progress" ? progress.message : instruction ? "Waiting for authorization..." : "Starting login..."}</span>
         </div>
       )}
 
-      {session?.step.type === "select" && (
-        <div className="space-y-3">
-          <p className="text-sm text-ink-muted">{session.step.message}</p>
-          <div className="-ml-3 -mr-3 space-y-0.5">
-            {session.step.options.map((option) => (
-              <Button
-                className="flex w-full items-center justify-between rounded-xl corner-superellipse/1.3 px-3 py-2 text-left hover:bg-overlay-hover"
-                disabled={waitingForNextStep}
-                key={option.id}
-                onClick={() => submitLoginInput(option.id, option.id)}
-                variant="bare"
-              >
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm text-ink">{option.label}</span>
-                  {option.description && <span className="block truncate text-xs text-ink-faint">{option.description}</span>}
-                </span>
-                <Icon
-                  className={pendingOptionId === option.id ? "animate-spin text-ink-muted" : "text-ink-muted"}
-                  name={pendingOptionId === option.id ? "loader" : "arrow-right"}
-                  size="xs"
-                />
-              </Button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {session?.step.type === "info" && (
-        <div className="space-y-2">
-          <p className="text-sm text-ink-muted">{session.step.message}</p>
-          {session.step.links.map((link) => (
-            <AuthLink href={link.url} key={link.url} label={link.label} />
-          ))}
-        </div>
-      )}
-
-      {session?.step.type === "browser_auth" && (
-        <div className="space-y-2">
-          <div className="space-y-1">
-            {session.step.instructions && <p className="text-sm text-ink-muted">{session.step.instructions}</p>}
-            {session.step.authUrl && <AuthLink href={session.step.authUrl} />}
-          </div>
-        </div>
-      )}
-
-      {textInput && (
-        <form className="space-y-2 pt-3" id="provider-login-input-form" onSubmit={handleSubmit}>
-          <label className="block text-sm text-ink" htmlFor="provider-login-input">
-            {textInput.message}
-          </label>
-          <Input
-            autoFocus
-            disabled={waitingForNextStep}
-            id="provider-login-input"
-            onChange={(event) => setInput(event.target.value)}
-            placeholder={textInput.placeholder}
-            type={textInput.secret ? "password" : "text"}
-            value={input}
-          />
-        </form>
-      )}
-
-      {session?.step.type === "device_code" && (
-        <div className="space-y-2">
-          <div className="space-y-1">
-            <p className="text-sm text-ink-muted">Open the verification page and enter this code.</p>
-            <AuthLink href={session.step.verificationUri} label="Open verification page" />
-          </div>
-          <div className="space-y-1 pt-3">
-            <div className="flex items-center gap-3">
-              <code className="select-all whitespace-nowrap font-mono text-lg font-semibold tracking-widest text-ink-strong">{session.step.userCode}</code>
-              <Button
-                className="w-auto shrink-0 rounded-xl bg-overlay-pressed px-2.5 py-1 text-xs text-ink hover:bg-overlay-strong hover:text-ink-strong"
-                onClick={handleCopyDeviceCode}
-                size="sm"
-                variant="primary"
-              >
-                {copiedCode ? "Copied" : "Copy"}
-              </Button>
-            </div>
-            {session.step.expiresInSeconds && <p className="text-xs text-ink-faint">This code expires in about {Math.ceil(session.step.expiresInSeconds / 60)} minutes.</p>}
-          </div>
-        </div>
-      )}
-
-      {session?.progress && !complete && !waitingForNextStep && (
-        <div className="flex items-center gap-2 text-sm text-ink-muted">
-          <Icon className="animate-spin text-ink-faint" name="loader" size="sm" />
-          <span>{session.progress}</span>
-        </div>
-      )}
-
-      {waitingForAuthorization && (
-        <div className="flex items-center gap-2">
-          <Icon className="animate-spin text-ink-muted" name="loader" size="sm" />
-          <span className="text-sm text-ink-muted">Waiting for authorization...</span>
-        </div>
-      )}
-
-      {session?.step.type === "succeeded" && (
+      {login.status === "success" && (
         <div className="flex items-center gap-2 py-2">
           <Icon className="text-diff-added" name="check" size="sm" />
           <p className="text-sm text-diff-added">Provider configuration saved.</p>
         </div>
       )}
 
-      {session?.step.type === "failed" && (
+      {login.status === "error" && (
         <div className="flex items-center gap-2">
           <Icon className="text-danger-ink" name="x" size="sm" />
-          <p className="text-sm text-danger-ink">{session.step.error}</p>
+          <p className="text-sm text-danger-ink">{login.message}</p>
         </div>
       )}
 
-      {session?.step.type === "cancelled" && <p className="text-sm text-ink-muted">Login cancelled.</p>}
+      {login.status === "cancelled" && <p className="text-sm text-ink-muted">Login cancelled.</p>}
 
       <div className="flex justify-end gap-2 pt-2">
-        <Button className="rounded-xl corner-superellipse/1.3 px-3 py-2 text-sm text-ink-muted hover:bg-overlay-hover hover:text-ink-strong" onClick={handleClose} variant="bare">
-          {complete ? "Close" : "Cancel"}
+        <Button className="rounded-xl corner-superellipse/1.3 px-3 py-2 text-sm text-ink-muted hover:bg-overlay-hover hover:text-ink-strong" onClick={onClose} variant="bare">
+          {working ? "Cancel" : "Close"}
         </Button>
-        {textInput && (
+        {prompt && prompt.type !== "select" && (
           <Button
             className="rounded-xl corner-superellipse/1.3 bg-overlay-pressed px-3 py-2 text-sm text-ink-strong hover:bg-overlay-strong disabled:hover:bg-overlay-pressed"
-            disabled={waitingForNextStep || !canSubmitTextInput}
+            disabled={value.trim().length === 0}
             form="provider-login-input-form"
             type="submit"
             variant="bare"
@@ -226,5 +66,110 @@ export default function ProviderLoginContent(props: ProviderLoginContentProps) {
         )}
       </div>
     </div>
+  );
+}
+
+function Notice(props: {readonly notice: LoginNotice}) {
+  const {notice} = props;
+  const [copied, setCopied] = useState(false);
+
+  switch (notice.type) {
+    case "info":
+      return (
+        <div className="space-y-2">
+          <p className="text-sm text-ink-muted">{notice.message}</p>
+          {notice.links?.map((link) => (
+            <AuthLink href={link.url} key={link.url} label={link.label} />
+          ))}
+        </div>
+      );
+    case "auth_url":
+      return (
+        <div className="space-y-1">
+          {notice.instructions && <p className="text-sm text-ink-muted">{notice.instructions}</p>}
+          <AuthLink href={notice.url} />
+        </div>
+      );
+    case "device_code":
+      return (
+        <div className="space-y-2">
+          <div className="space-y-1">
+            <p className="text-sm text-ink-muted">Open the verification page and enter this code.</p>
+            <AuthLink href={notice.verificationUri} label="Open verification page" />
+          </div>
+          <div className="space-y-1 pt-3">
+            <div className="flex items-center gap-3">
+              <code className="select-all whitespace-nowrap font-mono text-lg font-semibold tracking-widest text-ink-strong">{notice.userCode}</code>
+              <Button
+                className="w-auto shrink-0 rounded-xl bg-overlay-pressed px-2.5 py-1 text-xs text-ink hover:bg-overlay-strong hover:text-ink-strong"
+                onClick={() => void navigator.clipboard.writeText(notice.userCode).then(() => setCopied(true))}
+                size="sm"
+                variant="primary"
+              >
+                {copied ? "Copied" : "Copy"}
+              </Button>
+            </div>
+            {notice.expiresInSeconds && <p className="text-xs text-ink-faint">This code expires in about {Math.ceil(notice.expiresInSeconds / 60)} minutes.</p>}
+          </div>
+        </div>
+      );
+    case "progress":
+      return null;
+  }
+}
+
+interface PromptFormProps {
+  readonly prompt: LoginPrompt;
+  readonly value: string;
+  readonly onChange: (value: string) => void;
+  readonly onAnswer: (prompt: LoginPrompt, value: string) => void;
+}
+
+function PromptForm(props: PromptFormProps) {
+  const {onAnswer, onChange, prompt, value} = props;
+
+  if (prompt.type === "select") {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm text-ink-muted">{prompt.message}</p>
+        <div className="-ml-3 -mr-3 space-y-0.5">
+          {prompt.options.map((option) => (
+            <Button
+              className="flex w-full items-center justify-between rounded-xl corner-superellipse/1.3 px-3 py-2 text-left hover:bg-overlay-hover"
+              key={option.id}
+              onClick={() => onAnswer(prompt, option.id)}
+              variant="bare"
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm text-ink">{option.label}</span>
+                {option.description && <span className="block truncate text-xs text-ink-faint">{option.description}</span>}
+              </span>
+              <Icon className="text-ink-muted" name="arrow-right" size="xs" />
+            </Button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>): void => {
+    event.preventDefault();
+    if (value.trim()) onAnswer(prompt, value);
+  };
+
+  return (
+    <form className="space-y-2 pt-3" id="provider-login-input-form" onSubmit={handleSubmit}>
+      <label className="block text-sm text-ink" htmlFor="provider-login-input">
+        {prompt.message}
+      </label>
+      <Input
+        autoFocus
+        id="provider-login-input"
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={prompt.placeholder}
+        type={prompt.type === "secret" ? "password" : "text"}
+        value={value}
+      />
+    </form>
   );
 }

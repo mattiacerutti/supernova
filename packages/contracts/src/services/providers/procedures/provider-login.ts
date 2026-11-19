@@ -1,29 +1,34 @@
-import {obj, oneOf, type Static, str} from "@earendil-works/chord";
+import {obj, type Static, str} from "@earendil-works/chord";
 import {TaggedError} from "@supernova/contracts/lib/errors";
-import {ProviderLoginSession} from "@supernova/contracts/services/providers/schemas";
-
-export const ProviderLoginAuthType = oneOf("api_key", "oauth");
+import {ProviderLoginAuthType} from "@supernova/contracts/services/providers/schemas";
 
 export const ProviderLoginStartPayload = obj({
   authType: ProviderLoginAuthType,
   providerId: str(),
 });
 
-export const ProviderLoginInputSubmitPayload = obj({
-  input: str(),
-  loginSessionId: str(),
+export const ProviderLoginStartResult = obj({
+  attemptId: str(),
 });
 
-export const ProviderLoginCancelPayload = obj({
-  loginSessionId: str(),
+export const ProviderLoginAnswerPayload = obj({
+  attemptId: str(),
+  promptId: str(),
+  value: str({max: 100_000}),
 });
 
-export const ProviderLoginResult = ProviderLoginSession;
+export const ProviderLoginAttemptPayload = obj({
+  attemptId: str(),
+});
+
+export const ProviderLogoutPayload = obj({
+  providerId: str(),
+});
 
 export class ProviderLoginError extends TaggedError("ProviderLoginError") {}
 
-export type ProviderLoginAuthType = Static<typeof ProviderLoginAuthType>;
 export type ProviderLoginStartPayload = Static<typeof ProviderLoginStartPayload>;
-export type ProviderLoginInputSubmitPayload = Static<typeof ProviderLoginInputSubmitPayload>;
-export type ProviderLoginCancelPayload = Static<typeof ProviderLoginCancelPayload>;
-export type ProviderLoginResult = Static<typeof ProviderLoginResult>;
+export type ProviderLoginStartResult = Static<typeof ProviderLoginStartResult>;
+export type ProviderLoginAnswerPayload = Static<typeof ProviderLoginAnswerPayload>;
+export type ProviderLoginAttemptPayload = Static<typeof ProviderLoginAttemptPayload>;
+export type ProviderLogoutPayload = Static<typeof ProviderLogoutPayload>;

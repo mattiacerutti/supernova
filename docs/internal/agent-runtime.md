@@ -53,7 +53,7 @@ features/<name>/
 
 Nothing else sits at a feature root.
 
-**A native** is a stateful class: `Sessions`, `SessionStatus`, `Chat`, `FileCheckpointStore`, `Terminals`, `TerminalProcess`, `LoginSessions`, `Providers`, `Extensions`. Exactly one store opens each with `self.open` and closes it; nobody else calls `new` on it. A feature without state is plain functions (`Workspace`, `Folders`, `Configuration` are). The store passes the class what it needs from other objects, as `self.get` references or values from `core`. Methods take the contracts payload, return the contracts result, and throw the contracts error classes directly; no wrapping, no reclassification. Method names drop the feature noun: `sessions.create`, not `sessions.createSession`.
+**A native** is a stateful class: `Sessions`, `SessionStatus`, `Chat`, `FileCheckpointStore`, `Terminals`, `TerminalProcess`, `Logins`, `Extensions`. Exactly one store opens each with `self.open` and closes it; nobody else calls `new` on it. A feature without state is plain functions (`Workspace`, `Folders`, `Configuration` are). The store passes the class what it needs from other objects, as `self.get` references or values from `core`. Methods take the contracts payload, return the contracts result, and throw the contracts error classes directly; no wrapping, no reclassification. Method names drop the feature noun: `sessions.create`, not `sessions.createSession`.
 
 **`Deps`** is an interface naming what the class needs. Narrow the SDK with `Pick<PiSdk, "modelRuntime">` so tests construct the class with only the methods it calls. The tripwire: if a feature class's test has to construct another feature to run, the boundary is wrong. Operations intentionally span features and are tested over the real server host.
 
@@ -79,7 +79,7 @@ Throw a contract error where the failure is detected, not by classifying causes 
 
 ## Streams
 
-Anything clients follow over time is owned by a class (`SessionStatus`, `Terminals`, `LoginSessions`, the catalog) inside its store, so it outlives every client. The store passes the class a `self.writable` and exposes it with `self.derive` as a JSON state member; remote objects hand that member on or derive from it. The class sets the whole value; do not edit documents or queue writes. Chord diffs each new value against the last, so a grown string goes out as an append and a grown list as inserts, and a new hold starts from the current value. Do not add a parallel replication protocol.
+Anything clients follow over time is owned by a class (`SessionStatus`, `Terminals`, the catalog) inside its store, so it outlives every client. A provider login is the exception: `ProvidersService` opens `Logins` itself, so the login ends with the last screen that could answer it. The store passes the class a `self.writable` and exposes it with `self.derive` as a JSON state member; remote objects hand that member on or derive from it. The class sets the whole value; do not edit documents or queue writes. Chord diffs each new value against the last, so a grown string goes out as an append and a grown list as inserts, and a new hold starts from the current value. Do not add a parallel replication protocol.
 
 A derive diffs, so it does not know a string lost its front: a trimmed terminal buffer goes out whole, once per 64 KiB of output (the slack between the cap and the trim). Keep values whose every change is large out of a derive.
 

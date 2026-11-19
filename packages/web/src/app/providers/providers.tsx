@@ -1,4 +1,5 @@
 import {PluginError} from "@earendil-works/chord";
+import {HostProvider} from "@earendil-works/chord/react";
 import {MutationCache, QueryCache, QueryClient, QueryClientProvider} from "@tanstack/react-query";
 import {useState} from "react";
 import {TooltipProvider} from "@/components/ui/tooltip";
@@ -39,9 +40,11 @@ export default function AppProviders(props: AppProvidersProps) {
 
   return (
     <RuntimeProvider runtime={runtime}>
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider>{children}</TooltipProvider>
-      </QueryClientProvider>
+      <HostProvider host={runtime.host}>
+        <QueryClientProvider client={queryClient}>
+          <TooltipProvider>{children}</TooltipProvider>
+        </QueryClientProvider>
+      </HostProvider>
     </RuntimeProvider>
   );
 }

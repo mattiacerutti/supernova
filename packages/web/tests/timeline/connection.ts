@@ -1,7 +1,7 @@
 import type {CreateSessionPayload, SessionActivity} from "@supernova/contracts/services/sessions/procedures";
 import type {ChatDocument} from "@supernova/contracts/services/chat/schemas";
 import type {LiveState, UserMessageContentPart} from "@supernova/contracts/services/chat/schemas";
-import type {ProviderLoginsState} from "@supernova/contracts/services/providers/services";
+import type {LoginState} from "@supernova/contracts/services/providers/schemas";
 import type {ListedSession, SessionStatuses, SessionsView} from "@supernova/contracts/services/sessions/services";
 import type {TerminalsState} from "@supernova/contracts/services/workspace/services";
 import type {Facet} from "@earendil-works/chord";
@@ -32,7 +32,7 @@ class TimelineServer {
   private readonly documents = new Map<string, Published<ChatDocument>>();
   private readonly statuses = new Published<SessionStatuses>({sessions: {}});
   private readonly view = new Published<SessionsView>({projects: {}, open: null});
-  private readonly logins = new Published<ProviderLoginsState>({logins: {}});
+  private readonly login = new Published<LoginState | null>(null);
   private readonly terminals = new Published<TerminalsState>({terminals: {}});
   private openId: string | null = null;
   private activeSessionId = TIMELINE_SESSION_ID;
@@ -97,12 +97,13 @@ class TimelineServer {
       host.serve(ProvidersService, (_params, _principal, self) => ({
         variant: "owner",
         members: {
-          logins: this.logins.member(self),
-          cancelLogin: async () => fail("ProviderLoginError", "No login."),
-          list: () => value([]),
-          logout: ({providerId}) => value({providerId}),
-          startLogin: async () => fail("ProviderLoginError", "No login."),
-          submitLoginInput: async () => fail("ProviderLoginError", "No login."),
+          providers: new Published<readonly never[]>([]).member(self),
+          login: this.login.member(self),
+          start: async () => fail("ProviderLoginError", "No login."),
+          answer: async () => fail("ProviderLoginError", "No login."),
+          cancel: async () => fail("ProviderLoginError", "No login."),
+          dismiss: () => value(null),
+          logout: () => value(null),
         },
       }));
       host.serve(WorkspaceService, (_params, _principal, self) => ({
