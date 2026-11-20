@@ -72,12 +72,16 @@ export function testRuntimeClient(input: {readonly server: Facet<RuntimePrincipa
   void server.load([{name: "@test/server", facet: input.server}], context);
 
   const browser = createHost<RuntimePrincipal>({onError});
-  const client = runtimeClient(browser, (onState) => {
-    const [down, up] = memoryLinkPair();
-    server.accept(down, {principal: {kind: "owner"}}, context);
-    browser.connect(up, {principal: {kind: "server"}}, context);
-    onState("connected");
-    return () => up.close();
+  const client = runtimeClient(browser, {
+    connect: (onState) => {
+      const [down, up] = memoryLinkPair();
+      server.accept(down, {principal: {kind: "owner"}}, context);
+      browser.connect(up, {principal: {kind: "server"}}, context);
+      onState("connected");
+      return () => up.close();
+    },
+    // Client tests have no HTTP server to open a terminal's byte channel on.
+    terminalSocketUrl: () => "ws://127.0.0.1:9/terminal",
   });
   return {
     client,

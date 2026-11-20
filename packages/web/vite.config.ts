@@ -23,6 +23,10 @@ export default defineConfig(({mode}) => ({
         target: process.env.SUPERNOVA_SERVER_URL ?? "http://127.0.0.1:4317",
         ws: true,
       },
+      "/terminal": {
+        target: process.env.SUPERNOVA_SERVER_URL ?? "http://127.0.0.1:4317",
+        ws: true,
+      },
     },
     strictPort: true,
   },

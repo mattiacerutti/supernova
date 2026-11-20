@@ -5,10 +5,11 @@ import {ChatService} from "@supernova/contracts/services/chat/services";
 import {SessionsService, SessionStatusService} from "@supernova/contracts/services/sessions/services";
 import type {ChatDocument} from "@supernova/contracts/services/chat/schemas";
 import type {SessionsView} from "@supernova/contracts/services/sessions/services";
+import {TERMINAL_CLOSED_CODE} from "@supernova/contracts/services/workspace/schemas";
 import {TerminalService, WorkspaceService} from "@supernova/contracts/services/workspace/services";
 import {afterEach, beforeEach, describe, expect, it, vi} from "vitest";
 import {assistantTexts, createPiTestRuntime, fauxAssistantMessage, selectedModelReference, turnContents, waitUntil} from "@tests/support/test-runtime";
-import {shellCommand, testShell} from "@tests/support/terminal";
+import {shellCommand, testShell, TestViewer} from "@tests/support/terminal";
 
 const firstMessage = {contentParts: [{text: "Hi", type: "text" as const}], modelReference: selectedModelReference};
 
@@ -377,7 +378,7 @@ describe("the server host over the wire", () => {
       else process.env.SHELL = originalShell;
     });
 
-    it("sends a terminal's output only to clients holding it, and its listing to every client", async () => {
+    it("sends a terminal's output only over its byte channel, and its listing to every client", async () => {
       const {get, pi, server} = await connect();
       const workspace = await get(WorkspaceService, {});
       // A second window: it follows the list of terminals but never shows this one.
@@ -391,34 +392,32 @@ describe("the server host over the wire", () => {
       await waitUntil(() => expect(otherWorkspace.terminals.value.terminals["wire-terminal"]).toMatchObject({sessionId: "s"}));
 
       const terminal = await get(TerminalService, {terminalId: "wire-terminal"});
-      await terminal.write({data: shellCommand("echo WIRE_$((20+1))", "node -p \"'WIRE_' + (20+1)\"")}, context);
-      await waitUntil(() => expect(terminal.output.value.output).toContain("WIRE_21"), {timeoutMs: 5_000});
-      // The listing carries no output, and the window that never held it received none.
+      const {token} = await terminal.channel(context);
+      expect(await server.serverHost.terminals.admit(token)).toEqual({kind: "admitted"});
+      const viewer = new TestViewer();
+      await server.serverHost.terminals.connect(token, viewer.socket);
+      viewer.type(shellCommand("echo WIRE_$((20+1))", "node -p \"'WIRE_' + (20+1)\""));
+      await waitUntil(async () => expect(await viewer.text()).toContain("WIRE_21"), {timeoutMs: 5_000});
+
+      const decoded = (frames: readonly Uint8Array[]) => frames.map((frame) => new TextDecoder().decode(frame)).join("\n");
+      expect(decoded(other.received)).not.toContain("WIRE_21");
       expect(JSON.stringify(otherWorkspace.terminals.value)).not.toContain("WIRE_21");
-      const otherReceived = other.received.map((frame) => new TextDecoder().decode(frame)).join("\n");
-      expect(otherReceived).not.toContain("WIRE_21");
     });
 
-    it("replays history to a client that attaches later, applies the last resize, and ends the output on close", async () => {
+    it("refuses a byte channel for a closed terminal and closes the open one", async () => {
       const {get, pi, server} = await connect();
       const workspace = await get(WorkspaceService, {});
-      await workspace.openTerminal({cols: 80, cwd: pi.defaultProjectRoot, id: "shared", rows: 24, sessionId: "s"}, context);
-      const first = await get(TerminalService, {terminalId: "shared"});
-      await first.write({data: shellCommand("echo EARLY_$((1+1))", "node -p \"'EARLY_' + (1+1)\"")}, context);
-      await waitUntil(() => expect(first.output.value.output).toContain("EARLY_2"), {timeoutMs: 5_000});
+      await workspace.openTerminal({cols: 80, cwd: pi.defaultProjectRoot, id: "closing", rows: 24, sessionId: "s"}, context);
+      const terminal = await get(TerminalService, {terminalId: "closing"});
+      const viewer = new TestViewer();
+      await server.serverHost.terminals.connect((await terminal.channel(context)).token, viewer.socket);
+      await waitUntil(() => expect(viewer.resets).toBe(1));
+      const {token} = await terminal.channel(context);
 
-      const otherClient = await server.connectClient();
-      const other = await get(TerminalService, {terminalId: "shared"}, otherClient.host as typeof server.client);
-      await waitUntil(() => expect(other.output.value.output).toContain("EARLY_2"));
-
-      await first.resize({cols: 100, rows: 30}, context);
-      await other.resize({cols: 90, rows: 20}, context);
-      await other.write({data: shellCommand("stty size", "node -p \"process.stdout.rows + ' ' + process.stdout.columns\"")}, context);
-      await waitUntil(() => expect(first.output.value.output).toContain("20 90"), {timeoutMs: 5_000});
-
-      expect(await workspace.closeTerminal({id: "shared"}, context)).toBeNull();
-      await waitUntil(() => expect(other.output.value.closed).toBe(true));
-      await expect(other.write({data: "x"}, context)).rejects.toMatchObject({code: "TerminalNotFoundError"});
+      expect(await workspace.closeTerminal({id: "closing"}, context)).toBeNull();
+      expect(viewer.closedWith).toBe(TERMINAL_CLOSED_CODE);
+      expect(await server.serverHost.terminals.admit(token)).toMatchObject({kind: "refused"});
+      await expect(terminal.resize({cols: 10, rows: 10}, context)).rejects.toMatchObject({code: "TerminalNotFoundError"});
     });
 
     it("fails to hold an unknown terminal", async () => {

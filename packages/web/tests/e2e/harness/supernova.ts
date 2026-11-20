@@ -53,7 +53,7 @@ export async function startSupernova(): Promise<Supernova> {
       configFile: false,
       logLevel: "silent",
       build: {outDir: join(REPO, "packages/web/dist")},
-      preview: {host: "127.0.0.1", port: 0, proxy: {"/ws": {target: server.url, ws: true}}},
+      preview: {host: "127.0.0.1", port: 0, proxy: {"/ws": {target: server.url, ws: true}, "/terminal": {target: server.url, ws: true}}},
     });
     resources.push(client);
     return {projectsRoot: home, model, baseURL: client.resolvedUrls!.local[0]!, logs: () => output, stop};

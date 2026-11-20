@@ -1,9 +1,12 @@
 import {WebglAddon} from "@xterm/addon-webgl";
+import type {TerminalThemePayload} from "@supernova/contracts/services/workspace/procedures";
 import type {ITheme} from "@xterm/xterm";
 import {Terminal} from "@xterm/xterm";
 import {useRef, useState} from "react";
 import {useAttachTerminal} from "@/features/workspace/api/terminal/terminal-session";
 import {fitTerminal} from "@/features/workspace/lib/terminal/fit-terminal";
+import {terminalDisplay} from "@/features/workspace/lib/terminal/terminal-display";
+import {silenceTerminalQueries} from "@/features/workspace/lib/terminal/silence-terminal-queries";
 import {useWorkspacePanelStore} from "@/features/workspace/stores/workspace-panel-store";
 import type {WorkspaceTerminalTab} from "@/features/workspace/types/workspace-panel";
 import {useMountEffect} from "@/hooks/use-mount-effect";
@@ -26,6 +29,16 @@ function terminalTheme(host: HTMLElement): ITheme {
     foreground: resolveColor(host, "var(--color-ink)"),
     selectionBackground: resolveColor(host, "var(--color-overlay-strong)"),
   };
+}
+
+/** Computed styles give `rgb(r, g, b)`. */
+function colorValue(color: string | undefined): number {
+  const [r = 0, g = 0, b = 0] = (color?.match(/\d+(\.\d+)?/g) ?? []).map(Number);
+  return (Math.round(r) << 16) | (Math.round(g) << 8) | Math.round(b);
+}
+
+function reportedTheme(theme: ITheme): TerminalThemePayload {
+  return {background: colorValue(theme.background), foreground: colorValue(theme.foreground), scheme: useSettingsStore.getState().resolvedMode};
 }
 
 function statusMessage(tab: WorkspaceTerminalTab, error: string | undefined): string | undefined {
@@ -66,6 +79,7 @@ export default function TerminalTab(props: TerminalTabProps) {
       theme: terminalTheme(host),
     });
     terminal.open(host);
+    const silenced = silenceTerminalQueries(terminal);
     // WebGL paints in the same frame the grid changes; losing the context falls back to the DOM renderer.
     const webgl = new WebglAddon();
     webgl.onContextLoss(() => webgl.dispose());
@@ -77,16 +91,10 @@ export default function TerminalTab(props: TerminalTabProps) {
     const session = attachTerminal({
       cols: terminal.cols,
       cwd,
+      display: terminalDisplay(terminal, () => refit()),
       id: tab.id,
       onChange: (change) => {
         switch (change.type) {
-          case "terminal.history":
-            terminal.reset();
-            terminal.write(change.data);
-            break;
-          case "terminal.output":
-            terminal.write(change.data);
-            break;
           case "terminal.exited":
             update({exitCode: change.exitCode});
             break;
@@ -102,13 +110,17 @@ export default function TerminalTab(props: TerminalTabProps) {
       rows: terminal.rows,
       sessionId,
       start: tab.number === undefined,
+      theme: reportedTheme(terminal.options.theme ?? {}),
     });
 
     const input = terminal.onData((data) => session.write(data));
     // Grid and shell resize in the same frame, so neither wraps for a width the other lacks.
     const resize = terminal.onResize(({cols, rows}) => session.resize(cols, rows));
-    // Several clients can show one shell, and the last to resize sets its size. Focusing this one takes it back.
-    const claimSize = (): void => session.resize(terminal.cols, terminal.rows);
+    // Several clients can show one shell, and the last to resize sets its size and colors. Focusing this one takes them back.
+    const claimSize = (): void => {
+      session.resize(terminal.cols, terminal.rows);
+      session.setTheme(reportedTheme(terminal.options.theme ?? {}));
+    };
     terminal.textarea?.addEventListener("focus", claimSize);
     // A hidden tab reports 0×0; fitting then would collapse the grid, so it waits for the show.
     const refit = (): void => {
@@ -119,7 +131,10 @@ export default function TerminalTab(props: TerminalTabProps) {
     // A font that finishes loading after the first fit changes the cell width, and with it how many columns fit.
     document.fonts.addEventListener("loadingdone", refit);
     const unsubscribeTheme = useSettingsStore.subscribe((state, previous) => {
-      if (state.resolvedMode !== previous.resolvedMode || state.themeId !== previous.themeId) terminal.options.theme = terminalTheme(host);
+      if (state.resolvedMode !== previous.resolvedMode || state.themeId !== previous.themeId) {
+        terminal.options.theme = terminalTheme(host);
+        session.setTheme(reportedTheme(terminal.options.theme));
+      }
       if (state.codeFont !== previous.codeFont || state.fontSizes.terminal !== previous.fontSizes.terminal) {
         terminal.options.fontFamily = getComputedStyle(host).getPropertyValue("--font-mono");
         terminal.options.fontSize = state.fontSizes.terminal;
@@ -137,6 +152,7 @@ export default function TerminalTab(props: TerminalTabProps) {
         input.dispose();
         resize.dispose();
         session.detach();
+        silenced.dispose();
         terminal.dispose();
       },
     };

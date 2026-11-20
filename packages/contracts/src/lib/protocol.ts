@@ -10,6 +10,7 @@ export const sessionHost = ({sessionId}: {readonly sessionId: string}) => Sessio
 export type RuntimePrincipal = {readonly kind: "owner"} | {readonly kind: "server"} | {readonly kind: "worker"; readonly sessionId: string; readonly generation: number};
 
 export const RUNTIME_SOCKET_PATH = "/ws";
+export const TERMINAL_SOCKET_PATH = "/terminal";
 
 /** A typed schema that Chord does not check. */
 export const json = <T>(): Schema<T> => unknown() as Schema<T>;

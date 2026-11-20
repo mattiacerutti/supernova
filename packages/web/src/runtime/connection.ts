@@ -1,9 +1,9 @@
-import type {Link, WebSocketLike} from "@earendil-works/chord";
+import type {ConnectionState, Link, WebSocketLike} from "@earendil-works/chord";
 import {createHost, keepConnected, webSocketLink} from "@earendil-works/chord";
 import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
 import {pageEnvironment} from "@earendil-works/chord/web";
 import type {RuntimePrincipal} from "@supernova/contracts/lib/protocol";
-import {RUNTIME_SOCKET_PATH} from "@supernova/contracts/lib/protocol";
+import {RUNTIME_SOCKET_PATH, TERMINAL_SOCKET_PATH} from "@supernova/contracts/lib/protocol";
 import type {RuntimeClient} from "@/runtime/client";
 import {runtimeClient} from "@/runtime/client";
 
@@ -25,9 +25,10 @@ export function resolveSocketUrl(endpoint: string, path = "/ws"): string {
 
 export function createRuntimeClient(endpoint: string): RuntimeClient {
   const url = resolveSocketUrl(endpoint, RUNTIME_SOCKET_PATH);
+  const terminalUrl = resolveSocketUrl(endpoint, TERMINAL_SOCKET_PATH);
   const host = createHost<RuntimePrincipal>({onError: (error) => console.error("[runtime]", error)});
 
-  return runtimeClient(host, (onState) => {
+  const connect = (onState: (state: ConnectionState) => void) => {
     const connection = keepConnected({
       open: (events) => {
         const socket = new WebSocket(url);
@@ -42,7 +43,9 @@ export function createRuntimeClient(endpoint: string): RuntimeClient {
       environment: pageEnvironment(),
     });
     return () => connection.stop();
-  });
+  };
+
+  return runtimeClient(host, {connect, terminalSocketUrl: (token) => `${terminalUrl}?${new URLSearchParams({token})}`});
 }
 
 let sharedClient: RuntimeClient | undefined;
