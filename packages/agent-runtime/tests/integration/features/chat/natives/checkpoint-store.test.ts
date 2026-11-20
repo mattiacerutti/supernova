@@ -63,6 +63,34 @@ async function writeConcurrencyFixture(repo: string, marker: string): Promise<vo
   );
 }
 
+function wholeSecond(milliseconds: number): number {
+  return Math.floor(milliseconds / 1000);
+}
+
+async function waitForSecondAfter(milliseconds: number): Promise<void> {
+  while (wholeSecond(Date.now()) <= wholeSecond(milliseconds)) await new Promise((resolve) => setTimeout(resolve, 10));
+}
+
+/**
+ * Stages `racy.txt`, then rewrites it at the same size within the same second, so the staged entry
+ * matches the new file on size, mtime, and ctime. Retries when the setup straddles a second boundary.
+ */
+async function stageSameSecondEdit(repo: string): Promise<void> {
+  const path = join(repo, "racy.txt");
+  for (let attempt = 0; attempt < 5; attempt++) {
+    await waitForSecondAfter(Date.now());
+    await writeFile(path, "before\n");
+    const staged = await stat(path);
+    await git(repo, ["add", "racy.txt"]);
+    const index = await stat(join(repo, ".git", "index"));
+    await writeFile(path, "after!\n");
+    const edited = await stat(path);
+    const seconds = [staged.mtimeMs, staged.ctimeMs, index.mtimeMs, edited.mtimeMs, edited.ctimeMs].map(wholeSecond);
+    if (seconds.every((second) => second === seconds[0])) return;
+  }
+  throw new Error("Could not stage and edit a file within one second.");
+}
+
 async function rootTreeId(storageRoot: string, projectRoot: string, checkpointId: string): Promise<string> {
   const manifestPath = join(storageRoot, "projects", hash(await realpath(projectRoot)), "manifests", hash(sessionId), `${hash(checkpointId)}.json`);
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
@@ -254,6 +282,22 @@ describe("checkpoint store", () => {
     await expect(readFile(join(repo, "tracked.log"), "utf8")).resolves.toBe("ignored but tracked after\n");
     await expect(readFile(join(repo, "small-untracked.txt"), "utf8")).resolves.toBe("captured\n");
     await expect(readFile(join(repo, "boundary-untracked.bin"), "utf8")).resolves.toBe(boundaryUntracked);
+  });
+
+  it("captures a same-size edit made in the same second as the last index write", async () => {
+    const repo = await createRepo();
+    const storageRoot = mkdtempSync(join(tmpdir(), "supernova-checkpoint-storage-"));
+    tempDirs.push(repo, storageRoot);
+    await stageSameSecondEdit(repo);
+    // A capture in a later second is what a copied index with a fresh mtime gets wrong.
+    await waitForSecondAfter((await stat(join(repo, "racy.txt"))).mtimeMs);
+
+    await capture(storageRoot, repo, "edited");
+
+    const projectStorage = join(storageRoot, "projects", hash(await realpath(repo)));
+    const manifest = JSON.parse(await readFile(join(projectStorage, "manifests", hash(sessionId), `${hash("edited")}.json`), "utf8"));
+    const shadowGitDir = join(projectStorage, "repositories", manifest.repositories[0].repositoryId, "git");
+    await expect(gitOutput(shadowGitDir, ["show", `${manifest.repositories[0].treeId}:racy.txt`])).resolves.toBe("after!");
   });
 
   it("removes refs from earlier repositories when a later repository capture fails", async () => {
