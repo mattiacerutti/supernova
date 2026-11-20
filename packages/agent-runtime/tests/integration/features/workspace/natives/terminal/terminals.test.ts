@@ -151,6 +151,8 @@ describe("Terminals", () => {
 
     const {viewer: later} = await view("sized");
     expect(later.events[0]).toEqual({type: "reset", cols: 90, rows: 20});
+    // The reset runs in the write queue, after anything drawn before it.
+    await later.drawn();
     expect(later.terminal.cols).toBe(90);
   });
 
