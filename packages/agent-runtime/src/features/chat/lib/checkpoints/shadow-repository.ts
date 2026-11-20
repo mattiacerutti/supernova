@@ -1,4 +1,4 @@
-import {copyFile, lstat, mkdir, mkdtemp, readdir, realpath, rm, stat, writeFile} from "node:fs/promises";
+import {copyFile, lstat, mkdir, mkdtemp, readdir, realpath, rm, stat, utimes, writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {basename, dirname, join, relative, resolve} from "node:path";
 import {CheckpointConflictError} from "@supernova/contracts/services/chat/procedures";
@@ -176,7 +176,12 @@ async function withTemporaryIndex<T>(run: (indexPath: string) => Promise<T>): Pr
 
 async function seedIndex(repository: DiscoveredRepository, target: GitTarget, indexPath: string): Promise<void> {
   try {
+    // Git rechecks the contents of entries modified no earlier than the index file itself ("racily clean"),
+    // so a copy with a fresh mtime would hide same-size edits from the last second. Reading the time before
+    // copying keeps it no newer than the copied contents; Date's millisecond precision only makes it older.
+    const {atime, mtime} = await stat(repository.sourceIndexPath);
     await copyFile(repository.sourceIndexPath, indexPath);
+    await utimes(indexPath, atime, mtime);
     const sourceIndexDirectory = dirname(repository.sourceIndexPath);
     const sharedIndexes = (await readdir(sourceIndexDirectory)).filter((name) => name.startsWith("sharedindex."));
     await Promise.all(sharedIndexes.map((name) => copyFile(join(sourceIndexDirectory, name), join(dirname(indexPath), name)).catch(() => undefined)));
