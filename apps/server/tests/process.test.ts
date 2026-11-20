@@ -1,6 +1,7 @@
 import {test, expect} from "bun:test";
 import {fork} from "node:child_process";
 import {once} from "node:events";
+import {connect} from "node:net";
 import {mkdtemp, rm} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {resolve, join} from "node:path";
@@ -109,6 +110,35 @@ test("an occupied explicit port fails without disturbing its owner", async () =>
     expect((await fetch(`${owner.url}/health`)).status).toBe(200);
   } finally {
     await owner.close();
+    await rm(home, {recursive: true, force: true});
+  }
+}, 30_000);
+
+test("routes terminal byte channels beside /ws and refuses an upgrade without a valid token", async () => {
+  const home = await mkdtemp(join(tmpdir(), "supernova-terminal-socket-test-"));
+  const server = await startServerProcess({entry, ...runtime, env: {SUPERNOVA_HOME: home, PI_OFFLINE: "1"}});
+  // Raw HTTP: a WebSocket client reports a refused upgrade without its status.
+  const upgradeStatus = (path: string) =>
+    new Promise<string>((resolve, reject) => {
+      const {port} = new URL(server.url);
+      const socket = connect(Number(port), "127.0.0.1", () =>
+        socket.write(
+          `GET ${path} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n`
+        )
+      );
+      socket.once("data", (chunk) => {
+        resolve(String(chunk).split("\r\n")[0]!);
+        socket.destroy();
+      });
+      socket.once("error", reject);
+    });
+  try {
+    expect(await upgradeStatus("/ws")).toBe("HTTP/1.1 101 Switching Protocols");
+    expect(await upgradeStatus("/terminal?token=forged")).toBe("HTTP/1.1 403 Forbidden");
+    expect(await upgradeStatus("/terminal")).toBe("HTTP/1.1 403 Forbidden");
+    expect(await upgradeStatus("/elsewhere")).toBe("HTTP/1.1 400 Bad Request");
+  } finally {
+    await server.close();
     await rm(home, {recursive: true, force: true});
   }
 }, 30_000);

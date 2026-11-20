@@ -1,4 +1,4 @@
-import {bool, num, obj, opt, type Static, str} from "@earendil-works/chord";
+import {num, obj, opt, type Static, str} from "@earendil-works/chord";
 import {TaggedError} from "@supernova/contracts/lib/errors";
 
 export const Terminal = obj({
@@ -10,17 +10,17 @@ export const Terminal = obj({
   startedAt: str(),
 });
 
-export const TerminalOutput = obj({
-  output: str(),
-  /** Characters the cap dropped from the front. */
-  dropped: num(),
-  exitCode: opt(num()),
-  closed: opt(bool()),
-});
+/** The terminal itself is gone; after any other close, the client reconnects. */
+export const TERMINAL_CLOSED_CODE = 4000;
 
 export class TerminalError extends TaggedError("TerminalError") {}
 
 export class TerminalNotFoundError extends TaggedError("TerminalNotFoundError") {}
 
 export type Terminal = Static<typeof Terminal>;
-export type TerminalOutput = Static<typeof TerminalOutput>;
+
+/** A text frame on the byte channel; binary frames are output. `reset` precedes a snapshot at that size. */
+export type TerminalChannelEvent = {readonly type: "reset"; readonly cols: number; readonly rows: number} | {readonly type: "exit"; readonly exitCode: number};
+
+/** A client's text frame: bytes drawn, which free the server to send more. */
+export type TerminalChannelAck = {readonly type: "ack"; readonly bytes: number};

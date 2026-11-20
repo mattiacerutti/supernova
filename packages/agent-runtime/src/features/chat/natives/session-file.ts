@@ -177,8 +177,8 @@ export class SessionFile {
 
   /**
    * Undo, redo and revert: shows the first `target(position)` turns of the current and undone ones together. Restores
-   * the workspace to the checkpoint there first, then moves to a conversation that ends there, as p2's `/tree` does: one
-   * that already ends there, else a fork.
+   * the workspace to the checkpoint there first, then moves to a conversation that ends there: one that
+   * already ends there, else a fork.
    */
   public async navigate(force: boolean, target: (position: {readonly turns: readonly TurnPosition[]; readonly active: number}) => number, context: Context): Promise<void> {
     const state = await getState(this.harness, context);

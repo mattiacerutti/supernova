@@ -32,11 +32,17 @@ export interface RuntimeClient {
   readonly workspace: WorkspaceOwner;
   readonly status: SessionStatusOwner;
   readonly sessions: SessionsOwner;
+  terminalSocketUrl(token: string): string;
   onConnectionChange(listener: (state: ConnectionState) => void): () => void;
   dispose(): Promise<void>;
 }
 
-export function runtimeClient(host: Host<RuntimePrincipal>, connect: (onState: (state: ConnectionState) => void) => () => void): RuntimeClient {
+interface RuntimeConnection {
+  readonly connect: (onState: (state: ConnectionState) => void) => () => void;
+  readonly terminalSocketUrl: (token: string) => string;
+}
+
+export function runtimeClient(host: Host<RuntimePrincipal>, {connect, terminalSocketUrl}: RuntimeConnection): RuntimeClient {
   const listeners = new Set<(state: ConnectionState) => void>();
   const stop = connect((state) => {
     for (const listener of [...listeners]) listener(state);
@@ -74,6 +80,7 @@ export function runtimeClient(host: Host<RuntimePrincipal>, connect: (onState: (
     get sessions() {
       return service(SessionsService, {clientId});
     },
+    terminalSocketUrl,
     onConnectionChange(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);

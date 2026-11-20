@@ -7,6 +7,7 @@ import type {SettingsManager} from "@earendil-works/pi-coding-agent";
 import {getAgentDir} from "@earendil-works/pi-coding-agent";
 import type {RuntimePrincipal} from "@supernova/contracts/lib/protocol";
 import {ServerHost} from "@supernova/contracts/lib/protocol";
+import {TERMINAL_CLOSED_CODE} from "@supernova/contracts/services/workspace/schemas";
 import type {RuntimeNatives, RuntimePaths} from "@supernova/agent-runtime/core/contract";
 import {SessionHosts} from "@supernova/agent-runtime/composition/session-hosts";
 import {SessionsNative, SessionStatusNative} from "@supernova/agent-runtime/features/sessions/contract";
@@ -20,7 +21,10 @@ import {FileCheckpointStore} from "@supernova/agent-runtime/features/chat/native
 import {chatFacet} from "@supernova/agent-runtime/features/chat/facet";
 import {SupernovaTools} from "@supernova/agent-runtime/features/chat/tools/web-fetch";
 import {sessionsFacet} from "@supernova/agent-runtime/features/sessions/facet";
+import {TerminalsNative} from "@supernova/agent-runtime/features/workspace/contract";
 import {workspaceFacet} from "@supernova/agent-runtime/features/workspace/facet";
+import type {TerminalAdmission, Terminals} from "@supernova/agent-runtime/features/workspace/natives/terminal/terminals";
+import type {TerminalSocket} from "@supernova/agent-runtime/features/workspace/natives/terminal/terminal-viewer";
 import {worktreesFacet} from "@supernova/agent-runtime/features/worktrees/facet";
 import {loadPiSettings} from "@supernova/agent-runtime/pi/config/settings";
 import type {SessionRecord} from "@supernova/agent-runtime/core/session-state";
@@ -42,8 +46,14 @@ export interface ServerHostOptions {
   readonly settings?: (cwd: string) => SettingsManager;
 }
 
+export interface TerminalSockets {
+  readonly admit: (token: string) => Promise<TerminalAdmission>;
+  readonly connect: (token: string, socket: TerminalSocket) => Promise<void>;
+}
+
 export interface ServerHostHandle {
   readonly host: Host<RuntimePrincipal>;
+  readonly terminals: TerminalSockets;
   readonly close: () => Promise<void>;
 }
 
@@ -100,8 +110,18 @@ export async function startServerHost(options: ServerHostOptions = {}): Promise<
     );
   }
 
+  const terminals = async (): Promise<Terminals | undefined> => (await host.registry(TerminalsNative, BACKGROUND_CONTEXT)).value?.value;
+
   return {
     host,
+    terminals: {
+      admit: async (token) => (await terminals())?.admit(token) ?? {kind: "refused", status: 404},
+      connect: async (token, socket) => {
+        const opened = await terminals();
+        if (opened) opened.connect(token, socket);
+        else socket.close(TERMINAL_CLOSED_CODE);
+      },
+    },
     close: async () => {
       await hosts.close();
       await host.close(BACKGROUND_CONTEXT);

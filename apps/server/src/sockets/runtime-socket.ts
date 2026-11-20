@@ -1,4 +1,5 @@
-import type {Server as HttpServer} from "node:http";
+import type {IncomingMessage} from "node:http";
+import type {Duplex} from "node:stream";
 import type {Host, WebSocketLike} from "@earendil-works/chord";
 import {webSocketLink} from "@earendil-works/chord";
 import {BACKGROUND_CONTEXT} from "@earendil-works/chord/context";
@@ -32,11 +33,14 @@ function boundedSocket(socket: WebSocket): WebSocketLike {
 }
 
 /** No authentication: every client is the owner, so the server must only be reachable by its owner. */
-export function acceptRuntimeSockets(server: HttpServer, path: string, host: Host<RuntimePrincipal>): () => Promise<void> {
-  const sockets = new WebSocketServer({server, path});
-  sockets.on("connection", (socket: WebSocket) => host.accept(webSocketLink(boundedSocket(socket)), {principal: {kind: "owner"}}, BACKGROUND_CONTEXT));
-  return async () => {
-    for (const client of sockets.clients) client.terminate();
-    await new Promise<void>((resolve) => sockets.close(() => resolve()));
+export function runtimeSockets(host: Host<RuntimePrincipal>): {
+  readonly server: WebSocketServer;
+  readonly upgrade: (request: IncomingMessage, socket: Duplex, head: Buffer) => void;
+} {
+  const server = new WebSocketServer({noServer: true});
+  return {
+    server,
+    upgrade: (request, socket, head) =>
+      server.handleUpgrade(request, socket, head, (ws) => host.accept(webSocketLink(boundedSocket(ws)), {principal: {kind: "owner"}}, BACKGROUND_CONTEXT)),
   };
 }

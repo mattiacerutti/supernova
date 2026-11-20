@@ -28,7 +28,7 @@ These public contract entry points are the exception to the shared no-barrel rul
 
 - In schema and procedure files, declare all exported schemas/classes first.
 - Put all exported interfaces and types below the schema/class declarations.
-- Schemas use Chord's builders from `@earendil-works/chord` (`obj`, `arr`, `map`, `union`, `oneOf`, `lit`, `opt`), as p2 does: argument objects must be closed, and records are `map`. A value Pi owns is `json<PiType>()`: Pi defines its shape, so it is carried unchecked. Export each schema and its `Static` type under the same name.
+- Schemas use Chord's builders from `@earendil-works/chord` (`obj`, `arr`, `map`, `union`, `oneOf`, `lit`, `opt`): argument objects must be closed, and records are `map`. A value Pi owns is `json<PiType>()`: Pi defines its shape, so it is carried unchecked. Export each schema and its `Static` type under the same name.
 - Procedure files expose named payload, result, and error definitions.
 
 ## Errors

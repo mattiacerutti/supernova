@@ -14,6 +14,8 @@ Bun manages packages and scripts; Turborepo coordinates workspace tasks. The ser
 
 Clients talk to the runtime through Chord (`@earendil-works/chord`) over WebSocket. Feature contracts expose commands and reads as methods, and changing state as documents that start with a snapshot and continue with deltas. Keep this remote boundary separate from feature ownership: holding a document observes work but does not own its lifetime. The server is one Chord host; each session runs in its own in-process host, reached through the server's route, so a browser holding a session's `ChatService` talks to that session's host. See [Contracts](contracts.md) for contract conventions and [Agent runtime](agent-runtime.md) for state ownership.
 
+A terminal's bytes go over their own socket, `/terminal`, which admits a connection only with a token its `TerminalService` gave over `/ws` (see [Agent runtime](agent-runtime.md#terminals)). Proxies that carry `/ws` must carry `/terminal` too.
+
 The socket has no authentication: every client acts as the owner, so the server must only be reachable by its owner. Remote-capable does not mean safe to expose publicly or on an untrusted network. Runtime code is plain TypeScript; there is no Effect.
 
 ## Runtime modes
