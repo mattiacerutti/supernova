@@ -22,6 +22,8 @@ export interface SpawnPtyInput {
 
 export type SpawnPty = (input: SpawnPtyInput) => Promise<Pty>;
 
+const encoder = new TextEncoder();
+
 /** POSIX shells read their profile as a login shell; PowerShell has no such flag and rejects `-l`. */
 function shellArguments(): string[] {
   return process.platform === "win32" ? [] : ["-l"];
@@ -37,7 +39,8 @@ export const spawnPty: SpawnPty = async (input) => {
     name: "xterm-256color",
     rows: input.rows,
   });
-  child.onData((data) => input.onData(data as unknown as Uint8Array));
+  // Windows ignores `encoding: null` and always decodes to strings.
+  child.onData((data: string | Buffer) => input.onData(typeof data === "string" ? encoder.encode(data) : data));
   child.onExit(({exitCode}) => input.onExit(exitCode));
   return {
     pid: child.pid,

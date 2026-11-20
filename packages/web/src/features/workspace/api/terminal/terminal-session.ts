@@ -17,14 +17,17 @@ const ACK_BATCH_BYTES = 64 * 1024;
 const ACK_DELAY_MS = 50;
 /** Typing while the channel connects is sent once it opens; past this, a long outage drops it instead. */
 const MAX_PENDING_INPUT_BYTES = 64 * 1024;
+/** Below the server's 1 MiB message limit. */
+const MAX_INPUT_FRAME_BYTES = 256 * 1024;
 const RECONNECT_MIN_MS = 250;
 const RECONNECT_MAX_MS = 5_000;
 
 const encoder = new TextEncoder();
 
-/** `write`'s callback runs once the bytes are drawn: acks count drawn bytes. */
+/** Callbacks run once the bytes are drawn: acks count drawn bytes. */
 export interface TerminalDisplay {
-  readonly reset: (cols: number, rows: number) => void;
+  /** Replaces the screen with `screen`, drawn at the size it was taken, after output written before it. */
+  readonly reset: (cols: number, rows: number, screen: Uint8Array, drawn: () => void) => void;
   readonly write: (data: Uint8Array, drawn: () => void) => void;
 }
 
@@ -93,15 +96,19 @@ function attachTerminal(runtime: RuntimeClient, input: AttachTerminalInput): Ter
     current.send(JSON.stringify({type: "ack", bytes: unacked} satisfies TerminalChannelAck));
     unacked = 0;
   };
+  // A socket replaced meanwhile drew bytes the new one's viewer never sent.
   const acknowledge = (current: WebSocket, bytes: number): void => {
+    if (current !== socket) return;
     unacked += bytes;
     if (unacked >= ACK_BATCH_BYTES) flushAck(current);
     else ackTimer ??= setTimeout(() => flushAck(current), ACK_DELAY_MS);
   };
 
+  /** Set by `reset`: the next binary frame is that snapshot. */
+  let resetTo: {readonly cols: number; readonly rows: number} | undefined;
   const event = (frame: TerminalChannelEvent): void => {
     if (frame.type === "reset") {
-      display.reset(frame.cols, frame.rows);
+      resetTo = {cols: frame.cols, rows: frame.rows};
     } else if (!exited) {
       exited = true;
       emit({type: "terminal.exited", exitCode: frame.exitCode});
@@ -125,6 +132,9 @@ function attachTerminal(runtime: RuntimeClient, input: AttachTerminalInput): Ter
       current.binaryType = "arraybuffer";
       socket = current;
       unacked = 0;
+      clearTimeout(ackTimer);
+      ackTimer = undefined;
+      resetTo = undefined;
       current.onopen = () => {
         reconnectDelay = RECONNECT_MIN_MS;
         for (const bytes of pendingInput.splice(0)) current.send(bytes);
@@ -135,7 +145,10 @@ function attachTerminal(runtime: RuntimeClient, input: AttachTerminalInput): Ter
         if (typeof message.data === "string") event(JSON.parse(message.data) as TerminalChannelEvent);
         else {
           const bytes = new Uint8Array(message.data);
-          display.write(bytes, () => acknowledge(current, bytes.length));
+          const drawn = () => acknowledge(current, bytes.length);
+          if (!resetTo) return display.write(bytes, drawn);
+          display.reset(resetTo.cols, resetTo.rows, bytes, drawn);
+          resetTo = undefined;
         }
       };
       current.onclose = (closeEvent) => {
@@ -199,10 +212,14 @@ function attachTerminal(runtime: RuntimeClient, input: AttachTerminalInput): Ter
     },
     write: (data) => {
       const bytes = encoder.encode(data);
-      if (socket?.readyState === WebSocket.OPEN) socket.send(bytes);
-      else if (!closed && pendingBytes + bytes.length <= MAX_PENDING_INPUT_BYTES) {
-        pendingInput.push(bytes);
-        pendingBytes += bytes.length;
+      // A large paste is split, in order, so no frame passes the server's limit.
+      for (let start = 0; start < bytes.length; start += MAX_INPUT_FRAME_BYTES) {
+        const frame = bytes.subarray(start, start + MAX_INPUT_FRAME_BYTES);
+        if (socket?.readyState === WebSocket.OPEN) socket.send(frame);
+        else if (!closed && pendingBytes + frame.length <= MAX_PENDING_INPUT_BYTES) {
+          pendingInput.push(frame);
+          pendingBytes += frame.length;
+        }
       }
     },
   };

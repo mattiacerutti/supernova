@@ -12,6 +12,8 @@ export const Terminal = obj({
 
 /** The terminal itself is gone; after any other close, the client reconnects. */
 export const TERMINAL_CLOSED_CODE = 4000;
+/** The token was spent or expired: the terminal runs, and a new token reconnects. */
+export const TERMINAL_RETRY_CODE = 4001;
 
 export class TerminalError extends TaggedError("TerminalError") {}
 

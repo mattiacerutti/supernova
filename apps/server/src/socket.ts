@@ -16,8 +16,10 @@ export function acceptSockets(server: HttpServer, host: Host<RuntimePrincipal>, 
   const terminal = terminalSockets(terminals);
 
   const onUpgrade = (request: IncomingMessage, socket: Duplex, head: Buffer): void => {
-    const url = new URL(request.url ?? "/", "http://localhost");
-    if (url.pathname === RUNTIME_SOCKET_PATH) runtime.upgrade(request, socket, head);
+    // `new URL` throws on targets the HTTP parser accepts (`//`), and a throw here would end the process.
+    const url = URL.parse(request.url ?? "/", "http://localhost");
+    if (!url) refuse(socket, 400);
+    else if (url.pathname === RUNTIME_SOCKET_PATH) runtime.upgrade(request, socket, head);
     else if (url.pathname === TERMINAL_SOCKET_PATH) terminal.upgrade(request, socket, head, url);
     else refuse(socket, 400);
   };

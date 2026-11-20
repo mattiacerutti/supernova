@@ -5,6 +5,7 @@ import {Terminal} from "@xterm/xterm";
 import {useRef, useState} from "react";
 import {useAttachTerminal} from "@/features/workspace/api/terminal/terminal-session";
 import {fitTerminal} from "@/features/workspace/lib/terminal/fit-terminal";
+import {terminalDisplay} from "@/features/workspace/lib/terminal/terminal-display";
 import {silenceTerminalQueries} from "@/features/workspace/lib/terminal/silence-terminal-queries";
 import {useWorkspacePanelStore} from "@/features/workspace/stores/workspace-panel-store";
 import type {WorkspaceTerminalTab} from "@/features/workspace/types/workspace-panel";
@@ -87,25 +88,10 @@ export default function TerminalTab(props: TerminalTabProps) {
     terminal.focus();
 
     const update = (change: Partial<WorkspaceTerminalTab>): void => updateTab<WorkspaceTerminalTab>(sessionId, tab.id, (current) => ({...current, ...change}));
-    // A snapshot is drawn at the size it was taken; once drawn, the grid fits this tab again, and the shell follows.
-    let fitAfterDraw = false;
     const session = attachTerminal({
       cols: terminal.cols,
       cwd,
-      display: {
-        reset: (cols, rows) => {
-          terminal.reset();
-          terminal.resize(cols, rows);
-          fitAfterDraw = true;
-        },
-        write: (data, drawn) =>
-          terminal.write(data, () => {
-            drawn();
-            if (!fitAfterDraw) return;
-            fitAfterDraw = false;
-            refit();
-          }),
-      },
+      display: terminalDisplay(terminal, () => refit()),
       id: tab.id,
       onChange: (change) => {
         switch (change.type) {

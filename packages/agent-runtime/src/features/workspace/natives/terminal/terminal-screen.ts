@@ -6,8 +6,17 @@ import type {TerminalThemePayload} from "@supernova/contracts/services/workspace
 const SCREEN_SCROLLBACK = 5_000;
 /** Foreground, background, cursor: one OSC may ask for several, continuing in this order. */
 const SPECIAL_COLORS = [10, 11, 12] as const;
+interface XtermCore {
+  readonly buffer: {readonly scrollTop: number; readonly scrollBottom: number};
+  readonly coreMouseService: {readonly activeEncoding: string};
+  readonly _inputHandler: {readonly _parser: {readonly currentState: number}; readonly _utf8Decoder: {readonly interim: Uint8Array}};
+}
+
 /** Contour's dark/light protocol: the program asks to hear of scheme changes. */
 const SCHEME_UPDATES_MODE = 2031;
+
+/** The serializer writes the screen, modes and cursor, but not these. */
+const MOUSE_ENCODINGS: Readonly<Record<string, string>> = {SGR: "\x1b[?1006h", SGR_PIXELS: "\x1b[?1016h"};
 
 const ESC = "\x1b";
 const ST = `${ESC}\\`;
@@ -34,6 +43,7 @@ export class TerminalScreen {
   private schemeUpdates = false;
   private written = 0;
   private parsed = 0;
+  private readonly pendingSnapshots: ((data: string) => void)[] = [];
 
   public constructor(cols: number, rows: number, theme: TerminalThemePayload, reply: (data: string) => void) {
     this.theme = theme;
@@ -65,6 +75,7 @@ export class TerminalScreen {
     this.terminal.write(bytes, () => {
       this.parsed += bytes.length;
       onParsed();
+      if (this.pendingSnapshots.length > 0 && this.betweenSequences()) for (const pending of this.pendingSnapshots.splice(0)) this.snapshot(pending);
     });
   }
 
@@ -72,12 +83,26 @@ export class TerminalScreen {
     this.terminal.write(new Uint8Array(0), callback);
   }
 
+  /**
+   * Waits until no sequence or character is half parsed: the serializer keeps none of that, so a viewer would print the
+   * rest as text. A program that leaves one half written stalls only new viewers, until it writes again.
+   */
   public snapshot(callback: (data: string) => void): void {
-    this.flush(() => callback(this.serializer.serialize({scrollback: SCREEN_SCROLLBACK})));
+    this.flush(() => {
+      if (!this.betweenSequences()) {
+        this.pendingSnapshots.push(callback);
+        return;
+      }
+      const {buffer} = this.core();
+      const cursor = `${ESC}[${this.terminal.buffer.active.cursorY + 1};${this.terminal.buffer.active.cursorX + 1}H`;
+      const margins = buffer.scrollTop === 0 && buffer.scrollBottom === this.terminal.rows - 1 ? "" : `${ESC}[${buffer.scrollTop + 1};${buffer.scrollBottom + 1}r${cursor}`;
+      callback(this.serializer.serialize({scrollback: SCREEN_SCROLLBACK}) + margins + (MOUSE_ENCODINGS[this.core().coreMouseService.activeEncoding] ?? ""));
+    });
   }
 
+  /** Behind the output already written, so it is parsed at the size it was written for. */
   public resize(cols: number, rows: number): void {
-    this.terminal.resize(cols, rows);
+    this.flush(() => this.terminal.resize(cols, rows));
   }
 
   public setTheme(theme: TerminalThemePayload): void {
@@ -88,6 +113,16 @@ export class TerminalScreen {
 
   public dispose(): void {
     this.terminal.dispose();
+  }
+
+  // Internals xterm exposes no API for; pinned with xterm 6.0.0, and the snapshot tests fail if they move.
+  private core(): XtermCore {
+    return (this.terminal as unknown as {readonly _core: XtermCore})._core;
+  }
+
+  private betweenSequences(): boolean {
+    const {_inputHandler: input} = this.core();
+    return input._parser.currentState === 0 && !input._utf8Decoder.interim.some(Boolean);
   }
 
   private reportColors(offset: number, data: string): boolean {

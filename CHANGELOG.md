@@ -15,15 +15,15 @@ All notable changes to Supernova are documented in this file.
 
 ### Changed
 
-- Terminals now show the right screen when you reopen or reload one, including full-screen programs such as vim and htop, and at the terminal's current size. Before, a reopened terminal replayed its last output, which could garble the screen or lose a full-screen program entirely.
-- Programs that ask the terminal a question, such as where the cursor is or whether the background is light or dark, now get one answer, even with the terminal open in two windows or in none. Before, each open window answered, and the extra answers could show up as stray text at the prompt.
-- Terminals stay responsive while a command prints a lot of output: a slow connection skips to the current screen instead of falling seconds behind, and typing echoes without the delay it had.
+- Changed terminals to show the right screen when you reopen or reload one, including full-screen programs such as vim and htop, and at the terminal's current size. Before, a reopened terminal replayed its last output, which could garble the screen or lose a full-screen program entirely.
+- Changed terminals to stay responsive while a command prints a lot of output: a slow connection skips to the current screen instead of falling seconds behind, and typing echoes without the delay it had.
 - Changed the providers list to update in every open window when a provider is connected or disconnected, and to allow one provider login at a time.
 - Sidebars now use a smooth ease-out when opening and a faster ease-in when closing.
 - The sidebar's leading icon now only marks pinned sessions. Worktree and forked sessions show small markers after their title instead. Hovering or focusing a worktree or forked session opens a card beside it with its full title, status, and worktree branch.
 
 ### Fixed
 
+- Fixed programs that ask the terminal a question, such as where the cursor is or whether the background is light or dark, getting an answer from every open window, which could show up as stray text at the prompt. They now get one answer, even with the terminal open in no window.
 - Fixed a provider login continuing on the server after its window was closed or reloaded. An unfinished login now also ends after 10 minutes.
 - Screen readers now announce the message composer and the sidebar's pinned, forked, and worktree session markers.
 - Fixed OpenAI subscription login failing because an installation device ID was missing.

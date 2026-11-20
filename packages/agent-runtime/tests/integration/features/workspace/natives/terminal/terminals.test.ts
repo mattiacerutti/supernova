@@ -5,10 +5,10 @@ import {join} from "node:path";
 import type {Host} from "@earendil-works/chord";
 import {createHost, memoryLinkPair} from "@earendil-works/chord";
 import {BACKGROUND_CONTEXT as context} from "@earendil-works/chord/context";
-import {afterAll, afterEach, beforeAll, beforeEach, describe, expect, it} from "vitest";
+import {afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi} from "vitest";
 import type {RuntimePrincipal} from "@supernova/contracts/lib/protocol";
 import {ServerHost} from "@supernova/contracts/lib/protocol";
-import {TERMINAL_CLOSED_CODE} from "@supernova/contracts/services/workspace/schemas";
+import {TERMINAL_CLOSED_CODE, TERMINAL_RETRY_CODE} from "@supernova/contracts/services/workspace/schemas";
 import {TerminalService, WorkspaceService} from "@supernova/contracts/services/workspace/services";
 import {TerminalsNative} from "@supernova/agent-runtime/features/workspace/contract";
 import {workspaceFacet} from "@supernova/agent-runtime/features/workspace/facet";
@@ -17,6 +17,7 @@ import {cleanupTempDirs, waitUntil} from "@tests/support/async";
 import {shellCommand, testShell, TestViewer} from "@tests/support/terminal";
 
 const posixIt = it.skipIf(process.platform === "win32");
+const quote = (path: string) => `'${path.replaceAll("'", "'\\''")}'`;
 
 describe("Terminals", () => {
   const tempDirs: string[] = [];
@@ -182,9 +183,14 @@ describe("Terminals", () => {
     const script = join(cwd, "ask.sh");
     await writeFile(
       script,
-      ["#!/bin/sh", "saved=$(stty -g); stty raw -echo min 0 time 20", 'printf "$1"; printf "[asked]"; : > "$2.asked"', 'dd bs=1 count=64 2>/dev/null > "$2"', 'stty "$saved"'].join(
-        "\n"
-      )
+      [
+        "#!/bin/sh",
+        "saved=$(stty -g); stty raw -echo min 0 time 20",
+        'printf "$1"; printf "[asked]"; : > "$2.asked"',
+        // Renamed once `dd` ends, so the reply is never read half written.
+        'dd bs=1 count=64 2>/dev/null > "$2.part"; mv "$2.part" "$2"',
+        'stty "$saved"',
+      ].join("\n")
     );
     await chmod(script, 0o755);
     let asks = 0;
@@ -192,12 +198,11 @@ describe("Terminals", () => {
       /** Starts asking without waiting for the answer; `answer` waits for it. */
       ask: (viewer: TestViewer, query: string, before = "") => {
         const file = join(cwd, `reply-${(asks += 1)}`);
-        viewer.type(`${before}${script} '${query}' ${file}\n`);
+        viewer.type(`${before}${quote(script)} '${query}' ${quote(file)}\n`);
         return {
           asked: () => waitUntil(() => expect(existsSync(`${file}.asked`)).toBe(true), {timeoutMs: 8_000}),
           answer: async () => {
-            // `dd` writes once its two seconds end, so the file is complete when it is not empty.
-            await waitUntil(async () => expect((await readFile(file, "latin1").catch(() => "")).length).toBeGreaterThan(0), {timeoutMs: 8_000});
+            await waitUntil(() => expect(existsSync(file)).toBe(true), {timeoutMs: 8_000});
             return readFile(file, "latin1");
           },
         };
@@ -264,13 +269,58 @@ describe("Terminals", () => {
     expect(await subscribed.answer()).toBe("\x1b[?997;1n");
   });
 
+  posixIt.each([
+    {name: "inside an escape sequence", first: "START\\033[?104", rest: "9hALT", done: async (later: TestViewer) => expect(later.terminal.buffer.active.type).toBe("alternate")},
+    {name: "inside a UTF-8 character", first: "START\\303", rest: "\\251ALT", done: async (later: TestViewer) => expect(await later.text()).toContain("STARTéALT")},
+  ])("gives a viewer that attaches with output stopped $name the screen it completes", async ({first, rest, done}) => {
+    const cwd = await workspace();
+    await terminals.open({cols: 80, cwd, id: "split", rows: 24, sessionId: "s1"});
+    const {held, viewer} = await view("split");
+    // The program holds the rest back until the late viewer has attached.
+    const go = join(cwd, "go");
+    viewer.type(`clear; printf '${first}'; while [ ! -e ${quote(go)} ]; do sleep 0.05; done; printf '${rest}'\n`);
+    // The program's output, not the echoed command, which spells `START` too.
+    await waitUntil(async () => expect(await viewer.text()).toMatch(/^START/m), {timeoutMs: 5_000});
+    const later = new TestViewer();
+    terminals.connect((await held.channel(context)).token, later.socket);
+    await writeFile(go, "");
+    await waitUntil(async () => expect(await later.text()).toContain("ALT"), {timeoutMs: 5_000});
+    await done(later);
+    expect(await later.text()).not.toContain("9h");
+  });
+
+  posixIt.each([
+    {
+      name: "scrolling margins",
+      setup: "\\033[2;10r",
+      check: (later: TestViewer) =>
+        expect((later.terminal as unknown as {_core: {buffer: {scrollTop: number; scrollBottom: number}}})._core.buffer).toMatchObject({scrollTop: 1, scrollBottom: 9}),
+    },
+    {
+      name: "the SGR mouse encoding",
+      setup: "\\033[?1000h\\033[?1006h",
+      check: (later: TestViewer) => expect((later.terminal as unknown as {_core: {coreMouseService: {activeEncoding: string}}})._core.coreMouseService.activeEncoding).toBe("SGR"),
+    },
+  ])("restores $name for a viewer that attaches later", async ({setup, check}) => {
+    const cwd = await workspace();
+    await terminals.open({cols: 80, cwd, id: "modes", rows: 24, sessionId: "s1"});
+    const {viewer} = await view("modes");
+    viewer.type(`printf '${setup}SET'; sleep 30\n`);
+    await waitUntil(async () => expect(await viewer.text()).toMatch(/^SET/m), {timeoutMs: 5_000});
+    const {viewer: later} = await view("modes");
+    await later.drawn();
+    check(later);
+  });
+
   it("reports the exit after the shell's last output, and keeps the exited terminal listed", async () => {
     const cwd = await workspace();
     await terminals.open({cols: 80, cwd, id: "exits", rows: 24, sessionId: "s1"});
     const {viewer} = await view("exits");
     viewer.type(shellCommand("echo BYE_$((1+1)); exit 3", "echo BYE_2 & exit 3"));
     await waitUntil(() => expect(viewer.events).toContainEqual({type: "exit", exitCode: 3}), {timeoutMs: 5_000});
-    expect(await viewer.text()).toContain("BYE_2");
+    const exitAt = viewer.frames.findIndex((frame) => typeof frame !== "string" && frame.type === "exit");
+    // On its own line: the echoed command contains `BYE_$((1+1))`, not `BYE_2`.
+    expect(viewer.frames.slice(0, exitAt).join("")).toMatch(/^BYE_2\r?$/m);
     await waitUntil(() => expect(list().exits?.exitCode).toBe(3));
   });
 
@@ -353,12 +403,38 @@ describe("Terminals", () => {
     expect(refused.closedWith).toBe(TERMINAL_CLOSED_CODE);
   });
 
-  it("closes a viewer that sends text other than an ack", async () => {
+  it.each(["echo hi", "null", '{"type":"ack","bytes":-1}'])("closes a viewer that sends the text frame %s", async (text) => {
     const cwd = await workspace();
     await terminals.open({cols: 80, cwd, id: "strict", rows: 24, sessionId: "s1"});
     const {viewer} = await view("strict");
-    viewer.sendText("echo hi");
+    viewer.sendText(text);
     expect(viewer.closedWith).toBe(1003);
+  });
+
+  it("refuses a token for a terminal that closed and reopened under its id", async () => {
+    const cwd = await workspace();
+    await terminals.open({cols: 80, cwd, id: "reused", rows: 24, sessionId: "s1"});
+    const held = await hold("reused");
+    const {token} = await held.channel(context);
+    await terminals.close({id: "reused"});
+    await terminals.open({cols: 80, cwd, id: "reused", rows: 24, sessionId: "s1"});
+
+    expect(terminals.admit(token)).toEqual({kind: "refused", status: 404});
+  });
+
+  it("closes a viewer whose token expired with a code that lets it reconnect", async () => {
+    const cwd = await workspace();
+    await terminals.open({cols: 80, cwd, id: "expiring", rows: 24, sessionId: "s1"});
+    const held = await hold("expiring");
+    const {token} = await held.channel(context);
+    vi.setSystemTime(Date.now() + 31_000);
+    try {
+      const viewer = new TestViewer();
+      terminals.connect(token, viewer.socket);
+      expect(viewer.closedWith).toBe(TERMINAL_RETRY_CODE);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("closes a held object's viewers when the hold ends, without closing the shell", async () => {

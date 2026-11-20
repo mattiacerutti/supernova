@@ -61,9 +61,13 @@ export class TerminalViewer {
 
   public output(bytes: Uint8Array): void {
     if (this.behind) return;
+    // Past the window only when nothing is in flight: an empty window would otherwise wait for acks that cannot come.
+    if (this.lag() > 0 && this.lag() + bytes.length > OUTPUT_WINDOW) {
+      this.behind = true;
+      return;
+    }
     this.send(bytes);
     this.sent += bytes.length;
-    if (this.lag() > OUTPUT_WINDOW) this.behind = true;
   }
 
   public exit(exitCode: number): void {
@@ -79,13 +83,13 @@ export class TerminalViewer {
   }
 
   private acknowledge(text: string): boolean {
-    let ack: Partial<TerminalChannelAck>;
+    let ack: Partial<TerminalChannelAck> | null;
     try {
-      ack = JSON.parse(text) as Partial<TerminalChannelAck>;
+      ack = JSON.parse(text) as Partial<TerminalChannelAck> | null;
     } catch {
       return false;
     }
-    if (ack.type !== "ack" || !Number.isSafeInteger(ack.bytes) || ack.bytes! <= 0) return false;
+    if (typeof ack !== "object" || ack === null || ack.type !== "ack" || !Number.isSafeInteger(ack.bytes) || ack.bytes! <= 0) return false;
     this.acked = Math.min(this.sent, this.acked + ack.bytes!);
     return true;
   }

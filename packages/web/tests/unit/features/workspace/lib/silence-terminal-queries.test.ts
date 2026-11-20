@@ -35,6 +35,7 @@ describe("silenceTerminalQueries", () => {
     ["foreground color", "\x1b]10;?\x1b\\"],
     ["background color", "\x1b]11;?\x07"],
     ["cursor color", "\x1b]12;?\x1b\\"],
+    ["status string", "\x1bP$qm\x1b\\"],
   ])("leaves a %s query to the server", async (_name, query) => {
     const {sent, write} = open();
     await write(query);

@@ -6,11 +6,18 @@ import {WebSocketServer} from "ws";
 import {refuse} from "@/socket";
 
 const MAX_TERMINAL_MESSAGE_BYTES = 1024 * 1024;
-/** An idle terminal sends nothing; without these, a dead connection looks open and proxies close idle ones. */
+/** An idle terminal sends nothing; without pings, proxies close idle connections. */
 const TERMINAL_PING_MS = 15_000;
 
 function terminalSocket(socket: WebSocket): TerminalSocket {
-  const ping = setInterval(() => socket.ping(), TERMINAL_PING_MS).unref();
+  let answered = true;
+  socket.on("pong", () => (answered = true));
+  // A ping unanswered by the next one means the connection is gone, though it looks open.
+  const ping = setInterval(() => {
+    if (!answered) return socket.terminate();
+    answered = false;
+    socket.ping();
+  }, TERMINAL_PING_MS).unref();
   socket.on("close", () => clearInterval(ping));
   socket.on("error", () => socket.terminate());
   return {

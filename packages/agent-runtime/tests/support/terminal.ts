@@ -21,6 +21,8 @@ export class TestViewer {
   public readonly socket: TerminalSocket;
   public readonly terminal = new xtermHeadless.Terminal({allowProposedApi: true, cols: 80, rows: 24, scrollback: 5_000});
   public readonly events: TerminalChannelEvent[] = [];
+  /** Every frame in arrival order: events, and output as text. */
+  public readonly frames: (TerminalChannelEvent | string)[] = [];
   public closedWith: number | undefined;
   public total = 0;
   public acknowledge: boolean;
@@ -96,12 +98,16 @@ export class TestViewer {
     if (typeof data === "string") {
       const event = JSON.parse(data) as TerminalChannelEvent;
       this.events.push(event);
-      if (event.type === "reset") {
-        this.terminal.reset();
-        this.terminal.resize(event.cols, event.rows);
-      }
+      this.frames.push(event);
+      // In the write queue, as the browser does: output still queued must not draw over the snapshot.
+      if (event.type === "reset")
+        this.terminal.write("", () => {
+          this.terminal.reset();
+          this.terminal.resize(event.cols, event.rows);
+        });
       return;
     }
+    this.frames.push(new TextDecoder().decode(data));
     this.total += data.length;
     this.pending += data.length;
     this.terminal.write(data, () => {

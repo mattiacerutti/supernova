@@ -1,7 +1,7 @@
 import {randomBytes} from "node:crypto";
 import type {TerminalClosePayload, TerminalOpenPayload, TerminalOpenResult, TerminalResizePayload, TerminalThemePayload} from "@supernova/contracts/services/workspace/procedures";
 import type {Terminal} from "@supernova/contracts/services/workspace/schemas";
-import {TERMINAL_CLOSED_CODE, TerminalError, TerminalNotFoundError} from "@supernova/contracts/services/workspace/schemas";
+import {TERMINAL_CLOSED_CODE, TERMINAL_RETRY_CODE, TerminalError, TerminalNotFoundError} from "@supernova/contracts/services/workspace/schemas";
 import type {TerminalsState} from "@supernova/contracts/services/workspace/services";
 import type {Published} from "@supernova/agent-runtime/lib/chord/state";
 import type {SpawnPty} from "@supernova/agent-runtime/features/workspace/lib/terminal/pty";
@@ -30,9 +30,12 @@ type Entry = {
   cols: number;
   rows: number;
   paused: boolean;
+  /** Its viewers have been told; a viewer that attaches later is told after its snapshot. */
+  exitNotified: boolean;
 };
 
-type Grant = {readonly terminalId: string; readonly expires: number; readonly owner: object};
+/** The entry, not its id: a terminal reopened under the same id is another terminal. */
+type Grant = {readonly entry: Entry; readonly expires: number; readonly owner: object};
 
 const encoder = new TextEncoder();
 
@@ -68,6 +71,8 @@ export class Terminals {
     if (!entry) {
       const {id, cwd, sessionId, cols, rows} = input;
       const terminal: Terminal = {cwd, id, number: nextNumber(this.list(), sessionId), sessionId, startedAt: new Date().toISOString()};
+      // Callbacks reach this entry, not whatever holds the id by then; none runs before it is set below.
+      const created = {} as {current: Entry};
       const process = TerminalProcess.spawn({
         cols,
         cwd,
@@ -75,14 +80,24 @@ export class Terminals {
         scheme: this.theme.scheme,
         sessionId,
         spawnPty: this.deps.spawnPty,
-        onOutput: (data) => this.output(id, data),
-        onExit: (exitCode) => this.exited(id, exitCode),
+        onOutput: (data) => this.output(created.current, data),
+        onExit: (exitCode) => this.exited(created.current, exitCode),
       });
-      const screen = new TerminalScreen(cols, rows, this.theme, (reply) => void process.then((opened) => opened.write(encoder.encode(reply))));
-      entry = {terminal, process, screen, viewers: new Set(), cols, rows, paused: false};
+      const screen = new TerminalScreen(
+        cols,
+        rows,
+        this.theme,
+        (reply) =>
+          void process.then(
+            (opened) => opened.write(encoder.encode(reply)),
+            () => undefined
+          )
+      );
+      created.current = {terminal, process, screen, viewers: new Set(), cols, rows, paused: false, exitNotified: false};
+      entry = created.current;
       this.entries.set(id, entry);
       this.publishList();
-      process.catch(() => this.remove(id));
+      process.catch(() => this.remove(created.current));
     }
     try {
       await entry.process;
@@ -97,25 +112,25 @@ export class Terminals {
     const entry = this.entry(id);
     const process = await entry.process;
     if (entry.cols === input.cols && entry.rows === input.rows) return;
-    entry.cols = input.cols;
-    entry.rows = input.rows;
     process.resize(input.cols, input.rows);
     entry.screen.resize(input.cols, input.rows);
+    entry.cols = input.cols;
+    entry.rows = input.rows;
   }
 
   /** With several viewers, the last to report wins, as with the size. */
   public setTheme(id: string, theme: TerminalThemePayload): void {
-    this.theme = theme;
     this.entry(id).screen.setTheme(theme);
+    this.theme = theme;
   }
 
   /** `owner` is the `hold` whose `release` ends the viewers this token admits. */
   public grant(id: string, owner: object): string {
-    this.entry(id);
+    const entry = this.entry(id);
     const now = Date.now();
     for (const [token, grant] of this.grants) if (grant.expires < now) this.grants.delete(token);
     const token = randomBytes(24).toString("base64url");
-    this.grants.set(token, {terminalId: id, expires: now + TOKEN_TTL_MS, owner});
+    this.grants.set(token, {entry, expires: now + TOKEN_TTL_MS, owner});
     return token;
   }
 
@@ -123,21 +138,25 @@ export class Terminals {
   public admit(token: string): TerminalAdmission {
     const grant = this.grants.get(token);
     if (!grant || grant.expires < Date.now() || !this.owned.has(grant.owner)) return {kind: "refused", status: 403};
-    if (!this.entries.has(grant.terminalId)) return {kind: "refused", status: 404};
+    if (!this.isCurrent(grant.entry)) return {kind: "refused", status: 404};
     return {kind: "admitted"};
   }
 
   public connect(token: string, socket: TerminalSocket): void {
     const grant = this.grants.get(token);
     this.grants.delete(token);
-    const entry = grant && this.entries.get(grant.terminalId);
     const viewers = grant && this.owned.get(grant.owner);
-    if (!grant || !entry || !viewers || grant.expires < Date.now()) {
-      socket.close(TERMINAL_CLOSED_CODE);
-      return;
-    }
+    if (!grant || !this.isCurrent(grant.entry)) return socket.close(TERMINAL_CLOSED_CODE);
+    // The terminal still runs; a new token from the hold, if it still has one, reconnects.
+    if (!viewers || grant.expires < Date.now()) return socket.close(TERMINAL_RETRY_CODE);
+    const {entry} = grant;
     const viewer: TerminalViewer = new TerminalViewer(socket, {
-      input: (bytes) => void entry.process.then((process) => process.write(bytes)),
+      // A shell that failed to start is removed, which closes this viewer.
+      input: (bytes) =>
+        void entry.process.then(
+          (process) => process.write(bytes),
+          () => undefined
+        ),
       catchUp: () => this.snapshot(entry, viewer),
       closed: () => {
         entry.viewers.delete(viewer);
@@ -147,7 +166,10 @@ export class Terminals {
     entry.viewers.add(viewer);
     viewers.add(viewer);
     this.snapshot(entry, viewer);
-    if (entry.terminal.exitCode !== undefined) viewer.exit(entry.terminal.exitCode);
+    // Behind the snapshot. A shell exiting meanwhile tells every viewer itself, this one included.
+    entry.screen.flush(() => {
+      if (entry.viewers.has(viewer) && entry.exitNotified) viewer.exit(entry.terminal.exitCode!);
+    });
   }
 
   public hold(owner: object): void {
@@ -165,7 +187,7 @@ export class Terminals {
     const entry = this.entries.get(input.id);
     if (!entry) return;
     await (await entry.process.catch(() => undefined))?.close();
-    this.remove(input.id);
+    this.remove(entry);
   }
 
   public async closeSession(sessionId: string): Promise<void> {
@@ -183,29 +205,34 @@ export class Terminals {
     await Promise.all([...this.entries.keys()].map((id) => this.close({id})));
   }
 
-  private output(id: string, data: Uint8Array): void {
-    const entry = this.entries.get(id);
-    if (!entry) return;
+  private output(entry: Entry, data: Uint8Array): void {
+    if (!this.isCurrent(entry)) return;
     entry.screen.write(data, () => {
       for (const viewer of entry.viewers) viewer.output(data);
       if (entry.paused && entry.screen.backlog < SCREEN_BACKLOG / 2) {
         entry.paused = false;
-        void entry.process.then((process) => process.resume());
+        void entry.process.then(
+          (process) => process.resume(),
+          () => undefined
+        );
       }
     });
     if (!entry.paused && entry.screen.backlog > SCREEN_BACKLOG) {
       entry.paused = true;
-      void entry.process.then((process) => process.pause());
+      void entry.process.then(
+        (process) => process.pause(),
+        () => undefined
+      );
     }
   }
 
   // Flushed first, so viewers draw the exit notice below the shell's last output.
-  private exited(id: string, exitCode: number): void {
-    const entry = this.entries.get(id);
-    if (!entry) return;
+  private exited(entry: Entry, exitCode: number): void {
+    if (!this.isCurrent(entry)) return;
     entry.terminal = {...entry.terminal, exitCode};
     this.publishList();
     entry.screen.flush(() => {
+      entry.exitNotified = true;
       for (const viewer of entry.viewers) viewer.exit(exitCode);
     });
   }
@@ -216,10 +243,10 @@ export class Terminals {
     });
   }
 
-  private remove(id: string): void {
-    const entry = this.entries.get(id);
-    if (!entry) return;
-    this.entries.delete(id);
+  // A close that waited may find the id reopened; that terminal is another one.
+  private remove(entry: Entry): void {
+    if (!this.isCurrent(entry)) return;
+    this.entries.delete(entry.terminal.id);
     for (const viewer of entry.viewers) viewer.close(TERMINAL_CLOSED_CODE);
     entry.viewers.clear();
     entry.screen.dispose();
@@ -229,6 +256,10 @@ export class Terminals {
   private publishList(): void {
     if (!this.published) return;
     this.deps.list.set({terminals: Object.fromEntries([...this.entries].map(([id, entry]) => [id, entry.terminal]))});
+  }
+
+  private isCurrent(entry: Entry): boolean {
+    return this.entries.get(entry.terminal.id) === entry;
   }
 
   private entry(id: string): Entry {

@@ -86,4 +86,19 @@ test.describe("terminals", () => {
     await expect(terminalStatus(app.page)).toHaveText("This terminal was closed. Close the tab and open a new terminal to start another.");
     await other.close();
   });
+
+  test("takes a paste larger than one socket message", async ({app, project}) => {
+    await openTerminal(app.page);
+    // 1.5 MiB, past the server's 1 MiB message limit; xterm hands a paste over in one piece.
+    const text = "0123456789abcdef".repeat(98_304);
+    // Raw, so the tty's line limit does not cut the input; `head` stops after exactly the pasted bytes.
+    await typeInTerminal(app.page, `stty raw -echo; head -c ${text.length} > pasted.txt; stty sane`);
+    await app.page.getByRole("region", {name: "Project workspace"}).getByRole("textbox", {name: "Terminal input"}).focus();
+    await app.page.evaluate((pasted) => {
+      const data = new DataTransfer();
+      data.setData("text/plain", pasted);
+      document.activeElement?.dispatchEvent(new ClipboardEvent("paste", {clipboardData: data, bubbles: true, cancelable: true}));
+    }, text);
+    await expect.poll(async () => (await project.read("pasted.txt"))?.length, {timeout: 20_000}).toBe(text.length);
+  });
 });
