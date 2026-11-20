@@ -238,8 +238,8 @@ export class Terminals {
   }
 
   private snapshot(entry: Entry, viewer: TerminalViewer): void {
-    entry.screen.snapshot((screen) => {
-      if (entry.viewers.has(viewer)) viewer.reset(entry.cols, entry.rows, screen);
+    entry.screen.snapshot(({cols, rows, screen}) => {
+      if (entry.viewers.has(viewer)) viewer.reset(cols, rows, screen);
     });
   }
 

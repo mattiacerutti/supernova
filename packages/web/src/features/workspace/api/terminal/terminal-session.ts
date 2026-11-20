@@ -212,15 +212,15 @@ function attachTerminal(runtime: RuntimeClient, input: AttachTerminalInput): Ter
     },
     write: (data) => {
       const bytes = encoder.encode(data);
-      // A large paste is split, in order, so no frame passes the server's limit.
-      for (let start = 0; start < bytes.length; start += MAX_INPUT_FRAME_BYTES) {
-        const frame = bytes.subarray(start, start + MAX_INPUT_FRAME_BYTES);
-        if (socket?.readyState === WebSocket.OPEN) socket.send(frame);
-        else if (!closed && pendingBytes + frame.length <= MAX_PENDING_INPUT_BYTES) {
-          pendingInput.push(frame);
-          pendingBytes += frame.length;
-        }
+      if (socket?.readyState !== WebSocket.OPEN) {
+        // Whole or not at all: the shell must never get the end of a paste without its start.
+        if (closed || pendingBytes + bytes.length > MAX_PENDING_INPUT_BYTES) return;
+        pendingInput.push(bytes);
+        pendingBytes += bytes.length;
+        return;
       }
+      // A large paste is split, in order, so no frame passes the server's limit.
+      for (let start = 0; start < bytes.length; start += MAX_INPUT_FRAME_BYTES) socket.send(bytes.subarray(start, start + MAX_INPUT_FRAME_BYTES));
     },
   };
 }

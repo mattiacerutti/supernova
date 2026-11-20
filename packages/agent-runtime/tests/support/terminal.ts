@@ -101,7 +101,7 @@ export class TestViewer {
       this.frames.push(event);
       // In the write queue, as the browser does: output still queued must not draw over the snapshot.
       if (event.type === "reset")
-        this.terminal.write("", () => {
+        this.terminal.write("\x18", () => {
           this.terminal.reset();
           this.terminal.resize(event.cols, event.rows);
         });

@@ -6,6 +6,12 @@ import type {TerminalThemePayload} from "@supernova/contracts/services/workspace
 const SCREEN_SCROLLBACK = 5_000;
 /** Foreground, background, cursor: one OSC may ask for several, continuing in this order. */
 const SPECIAL_COLORS = [10, 11, 12] as const;
+export interface ScreenSnapshot {
+  readonly cols: number;
+  readonly rows: number;
+  readonly screen: string;
+}
+
 interface XtermCore {
   readonly buffer: {readonly scrollTop: number; readonly scrollBottom: number};
   readonly coreMouseService: {readonly activeEncoding: string};
@@ -43,7 +49,7 @@ export class TerminalScreen {
   private schemeUpdates = false;
   private written = 0;
   private parsed = 0;
-  private readonly pendingSnapshots: ((data: string) => void)[] = [];
+  private readonly pendingSnapshots: ((snapshot: ScreenSnapshot) => void)[] = [];
 
   public constructor(cols: number, rows: number, theme: TerminalThemePayload, reply: (data: string) => void) {
     this.theme = theme;
@@ -87,16 +93,21 @@ export class TerminalScreen {
    * Waits until no sequence or character is half parsed: the serializer keeps none of that, so a viewer would print the
    * rest as text. A program that leaves one half written stalls only new viewers, until it writes again.
    */
-  public snapshot(callback: (data: string) => void): void {
+  /** `cols` and `rows` are the size the screen was taken at, which a resize queued behind it has not changed yet. */
+  public snapshot(callback: (snapshot: ScreenSnapshot) => void): void {
     this.flush(() => {
       if (!this.betweenSequences()) {
         this.pendingSnapshots.push(callback);
         return;
       }
       const {buffer} = this.core();
-      const cursor = `${ESC}[${this.terminal.buffer.active.cursorY + 1};${this.terminal.buffer.active.cursorX + 1}H`;
-      const margins = buffer.scrollTop === 0 && buffer.scrollBottom === this.terminal.rows - 1 ? "" : `${ESC}[${buffer.scrollTop + 1};${buffer.scrollBottom + 1}r${cursor}`;
-      callback(this.serializer.serialize({scrollback: SCREEN_SCROLLBACK}) + margins + (MOUSE_ENCODINGS[this.core().coreMouseService.activeEncoding] ?? ""));
+      const {cursorX, cursorY} = this.terminal.buffer.active;
+      // With origin mode on, a cursor position counts from the top margin.
+      const row = cursorY + 1 - (this.terminal.modes.originMode ? buffer.scrollTop : 0);
+      const margins =
+        buffer.scrollTop === 0 && buffer.scrollBottom === this.terminal.rows - 1 ? "" : `${ESC}[${buffer.scrollTop + 1};${buffer.scrollBottom + 1}r${ESC}[${row};${cursorX + 1}H`;
+      const mouse = MOUSE_ENCODINGS[this.core().coreMouseService.activeEncoding] ?? "";
+      callback({cols: this.terminal.cols, rows: this.terminal.rows, screen: this.serializer.serialize({scrollback: SCREEN_SCROLLBACK}) + margins + mouse});
     });
   }
 

@@ -91,8 +91,10 @@ test.describe("terminals", () => {
     await openTerminal(app.page);
     // 1.5 MiB, past the server's 1 MiB message limit; xterm hands a paste over in one piece.
     const text = "0123456789abcdef".repeat(98_304);
-    // Raw, so the tty's line limit does not cut the input; `head` stops after exactly the pasted bytes.
-    await typeInTerminal(app.page, `stty raw -echo; head -c ${text.length} > pasted.txt; stty sane`);
+    // Raw, so the tty's line limit does not cut the input; `head` stops after exactly the pasted bytes. The marker says
+    // raw mode is on, as the paste must not arrive before it.
+    await typeInTerminal(app.page, `stty raw -echo; : > raw.txt; head -c ${text.length} > pasted.txt; stty sane`);
+    await expect.poll(() => project.read("raw.txt")).toBe("");
     await app.page.getByRole("region", {name: "Project workspace"}).getByRole("textbox", {name: "Terminal input"}).focus();
     await app.page.evaluate((pasted) => {
       const data = new DataTransfer();
@@ -100,5 +102,38 @@ test.describe("terminals", () => {
       document.activeElement?.dispatchEvent(new ClipboardEvent("paste", {clipboardData: data, bubbles: true, cancelable: true}));
     }, text);
     await expect.poll(async () => (await project.read("pasted.txt"))?.length, {timeout: 20_000}).toBe(text.length);
+  });
+
+  test("while the terminal reconnects, sends typing once it is back and drops a paste too large to hold, whole", async ({app, project}) => {
+    // Every terminal channel passes through here, so the test can hold one closed.
+    let blocked = false;
+    const open = new Set<{close: () => Promise<void>}>();
+    await app.page.routeWebSocket(/\/terminal/, (ws) => {
+      if (blocked) return void ws.close();
+      ws.connectToServer();
+      open.add(ws);
+      ws.onClose(() => open.delete(ws));
+    });
+    await openTerminal(app.page);
+    await typeInTerminal(app.page, "echo before > before.txt");
+    await expect.poll(() => project.read("before.txt")).toBe("before\n");
+
+    blocked = true;
+    for (const ws of [...open]) await ws.close();
+    // Larger than what the tab holds while disconnected; its end alone must never reach the shell.
+    const paste = `echo ${"x".repeat(70_000)}; echo tail > partial.txt`;
+    await app.page.getByRole("region", {name: "Project workspace"}).getByRole("textbox", {name: "Terminal input"}).focus();
+    await app.page.evaluate((pasted) => {
+      const data = new DataTransfer();
+      data.setData("text/plain", pasted);
+      document.activeElement?.dispatchEvent(new ClipboardEvent("paste", {clipboardData: data, bubbles: true, cancelable: true}));
+    }, paste);
+    await app.page.keyboard.type("echo held > held.txt");
+    await app.page.keyboard.press("Enter");
+
+    // A partial paste would leave the shell inside an unfinished command, so the typing after it would never run.
+    blocked = false;
+    await expect.poll(() => project.read("held.txt"), {timeout: 15_000}).toBe("held\n");
+    expect(await project.read("partial.txt")).toBeUndefined();
   });
 });

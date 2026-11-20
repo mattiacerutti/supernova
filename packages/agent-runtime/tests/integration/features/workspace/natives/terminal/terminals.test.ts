@@ -315,6 +315,31 @@ describe("Terminals", () => {
     check(later);
   });
 
+  it("labels a snapshot with the size it was taken at, when a resize lands while it waits", async () => {
+    const cwd = await workspace();
+    await terminals.open({cols: 80, cwd, id: "racing", rows: 24, sessionId: "s1"});
+    const held = await hold("racing");
+    const later = new TestViewer();
+    // The snapshot is queued behind output; the resize lands before it is taken.
+    terminals.connect((await held.channel(context)).token, later.socket);
+    await held.resize({cols: 40, rows: 12}, context);
+    await waitUntil(() => expect(later.resets).toBe(1));
+    await later.drawn();
+    expect(later.events[0]).toEqual({type: "reset", cols: 80, rows: 24});
+    expect([later.terminal.cols, later.terminal.rows]).toEqual([80, 24]);
+  });
+
+  posixIt("puts the cursor where the program left it when origin mode counts from a margin", async () => {
+    const cwd = await workspace();
+    await terminals.open({cols: 80, cwd, id: "origin", rows: 24, sessionId: "s1"});
+    const {viewer} = await view("origin");
+    viewer.type("printf '\\033[5;20r\\033[?6h\\033[1;1HO%sN' RIGI; sleep 30\n");
+    await waitUntil(async () => expect((await viewer.screen())[4]).toBe("ORIGIN"), {timeoutMs: 5_000});
+    const {viewer: later} = await view("origin");
+    await later.drawn();
+    expect([later.terminal.buffer.active.cursorY, later.terminal.buffer.active.cursorX]).toEqual([4, 6]);
+  });
+
   it("reports the exit after the shell's last output, and keeps the exited terminal listed", async () => {
     const cwd = await workspace();
     await terminals.open({cols: 80, cwd, id: "exits", rows: 24, sessionId: "s1"});
