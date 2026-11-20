@@ -44,8 +44,8 @@ describe("Terminals", () => {
     await waitUntil(() => expect(viewer.resets).toBe(1));
     return {held, viewer};
   };
-  const shows = async (viewer: TestViewer, expected: string) => {
-    await waitUntil(async () => expect(await viewer.text()).toContain(expected), {timeoutMs: 5_000});
+  const shows = async (viewer: TestViewer, expected: string, timeoutMs = 5_000) => {
+    await waitUntil(async () => expect(await viewer.text()).toContain(expected), {timeoutMs});
   };
   const workspace = async (): Promise<string> => {
     const cwd = await realpath(await mkdtemp(join(tmpdir(), "supernova-terminal-")));
@@ -160,14 +160,15 @@ describe("Terminals", () => {
     const {viewer: slow} = await view("flood", {acknowledge: false});
     const {viewer: fast} = await view("flood");
 
+    // About 2 MiB, eight windows; Windows' ConPTY redraws instead of passing bytes through, so it takes longer there.
     fast.type(
       shellCommand(
-        "yes 0123456789012345678901234567890123456789 | head -n 100000; echo DONE_$((1+1))",
-        "node -e \"process.stdout.write(('0123456789012345678901234567890123456789\\n').repeat(100000)); console.log('DONE_' + (1+1))\""
+        "yes 0123456789012345678901234567890123456789 | head -n 50000; echo DONE_$((1+1))",
+        "node -e \"process.stdout.write(('0123456789012345678901234567890123456789\\n').repeat(50000)); console.log('DONE_' + (1+1))\""
       )
     );
-    await shows(fast, "DONE_2");
-    expect(fast.total).toBeGreaterThan(100_000 * 41);
+    await shows(fast, "DONE_2", 20_000);
+    expect(fast.total).toBeGreaterThan(50_000 * 41);
     expect(slow.total).toBeLessThan(1024 * 1024);
     expect(await slow.text()).not.toContain("DONE_2");
 
