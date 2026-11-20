@@ -1,7 +1,7 @@
 import {BOTTOM_TOLERANCE_PX, DETACHED_DISTANCE_PX, expect, test} from "@tests/timeline/fixture";
 import type {TimelineDriver, VisibleTextAnchor} from "@tests/timeline/fixture";
 import type {TimelineVisualSample} from "@tests/timeline/test-api";
-import {OTHER_SESSION_ID, TIMELINE_SESSION_ID} from "@tests/timeline/data";
+import {OTHER_SESSION_ID, PAGED_SESSION_ID, PAGED_SESSION_PAGE_TURNS, PAGED_SESSION_TITLE, TIMELINE_SESSION_ID, timelineStreamLine} from "@tests/timeline/data";
 
 function visibleSamples(samples: readonly TimelineVisualSample[], sessionId: string): readonly TimelineVisualSample[] {
   return samples.filter((sample) => sample.visible && sample.pathname === `/session/${sessionId}`);
@@ -472,6 +472,76 @@ test.describe("session timeline visual stability", () => {
     const after = await timeline.measureVisibleTextAnchor(before);
 
     assertAnchorUnmoved(before, after, samples);
+  });
+});
+
+/** Asserts the tracked message painted at its first top on every frame, never shifted and never unrendered. */
+async function expectTrackedTextHeld(timeline: TimelineDriver): Promise<void> {
+  await expect.poll(async () => (await timeline.trackedMessageTops()).length, {message: "the change should be followed by sampled frames"}).toBeGreaterThanOrEqual(10);
+  const tops = await timeline.trackedMessageTops();
+  const first = tops[0];
+  expect(first, "the tracked message should be rendered when tracking starts").not.toBeNull();
+  const moved = tops.findIndex((top) => top === null || Math.abs(top - first!) > 1);
+  expect(moved, `the message moved from ${first} to ${tops[moved]} in frame ${moved} of ${JSON.stringify(tops)}`).toBe(-1);
+}
+
+test.describe("reading position across a change of rows", () => {
+  // A multi-step turn folds its first message and reasoning behind "Worked for" when it settles.
+  for (const {finalLines, firstLines, name, scrollUp, tracked} of [
+    {name: "the message after folded work, near the end", firstLines: 30, finalLines: 80, scrollUp: 600, tracked: timelineStreamLine(31)},
+    {name: "the message after folded work, more of the fold above than content below", firstLines: 40, finalLines: 20, scrollUp: 400, tracked: timelineStreamLine(41)},
+    {name: "the turn before a settling multi-step turn", firstLines: 40, finalLines: 6, scrollUp: 1_300, tracked: "Assistant history 27."},
+  ]) {
+    test(`settlement keeps ${name} where it was`, async ({timeline}) => {
+      await timeline.openMainSession();
+      await timeline.sendMessage();
+      await timeline.waitForLineGrowth(firstLines);
+      await timeline.breakForReasoning();
+      await timeline.waitForLineGrowth(finalLines);
+      await timeline.detachSlightly();
+      await timeline.scrollUp(scrollUp);
+      await timeline.waitForScrollToSettle();
+      await timeline.trackMessage(tracked);
+
+      await timeline.completeMessage();
+
+      await expectTrackedTextHeld(timeline);
+    });
+  }
+
+  test("settlement that folds away everything on screen lands on Worked for", async ({page, timeline}) => {
+    await timeline.openMainSession();
+    await timeline.sendMessage();
+    await timeline.waitForLineGrowth(80);
+    await timeline.breakForReasoning();
+    await timeline.waitForLineGrowth(30);
+    await timeline.detachSlightly();
+    await timeline.scrollUp(1_300);
+    await timeline.waitForScrollToSettle();
+    await expect(page.locator(".session-markdown", {hasText: "Extreme-speed streamed response:"}).first()).toContainText(timelineStreamLine(40));
+
+    await timeline.completeMessage();
+
+    const workedFor = page.getByLabel("Session timeline").getByRole("button", {name: /^Worked for/});
+    await expect(workedFor).toBeVisible();
+    const top = await workedFor.evaluate((element) => element.getBoundingClientRect().top - element.closest('[aria-label="Session timeline"]')!.getBoundingClientRect().top);
+    expect(top, "Worked for should take the folded message's place at the top of the viewport").toBeLessThan(80);
+  });
+
+  test("loading earlier history keeps the message being read where it was", async ({page, timeline}) => {
+    await page.goto(`/session/${PAGED_SESSION_ID}`, {waitUntil: "commit"});
+    await expect(page.getByRole("heading", {name: PAGED_SESSION_TITLE})).toBeVisible();
+    await timeline.expectAtBottom();
+    // Near the top of the first page, so the client asks for the one before it.
+    await timeline.scrollUp((await timeline.scrollHeight()) - 900);
+    await timeline.waitForScrollToSettle();
+    const firstPageHeight = await timeline.scrollHeight();
+    await timeline.trackMessage(`Assistant history ${24 - PAGED_SESSION_PAGE_TURNS}.`);
+
+    await timeline.releaseHistoryPage();
+    await expect.poll(() => timeline.scrollHeight()).toBeGreaterThan(firstPageHeight);
+
+    await expectTrackedTextHeld(timeline);
   });
 });
 

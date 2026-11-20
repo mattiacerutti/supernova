@@ -28,6 +28,7 @@ All notable changes to Supernova are documented in this file.
 - The command palette's Open session in page now opens with its apps listed instead of empty first. Searching sessions drops results that no longer match as you type, instead of showing the previous search's results until the new ones arrive.
 - Long URLs and other unbroken text in assistant messages now wrap instead of running past the conversation column.
 - Fixed undo sometimes leaving a file unchanged when the agent edited it without changing its size, within a second of the last Git index update. The checkpoint missed the edit, so there was nothing to restore.
+- Fixed the timeline moving what you were reading when a response with reasoning or several messages finished, or when earlier messages loaded.
 
 ### Removed
 

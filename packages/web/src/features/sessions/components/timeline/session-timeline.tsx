@@ -120,7 +120,6 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
   const tailRowKeySignature = buildTimelineRowKeys(timelineRows.slice(committedRowKeys.length), earlierHistory.count + committedTurns.starts).join(" ");
   const tailRowKeys = useMemo(() => (tailRowKeySignature ? tailRowKeySignature.split(" ") : []), [tailRowKeySignature]);
   const getItemKey = useCallback((index: number) => committedRowKeys[index] ?? tailRowKeys[index - committedRowKeys.length] ?? index, [committedRowKeys, tailRowKeys]);
-  const firstRowKey = committedRowKeys[0] ?? tailRowKeys[0];
   const hasEarlierHistory = earlierHistory.count > 0;
   // The status sits in the canvas's top padding rather than in a row, so loaded turns go in below it.
   const paddingStart = TIMELINE_ANCHOR_TOP_MARGIN_PX + (hasEarlierHistory ? TIMELINE_EARLIER_HISTORY_HEIGHT_PX : 0);
@@ -174,8 +173,6 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
       const virtualContent = virtualContentRef.current;
       if (virtualContent) virtualContent.style.height = `${instance.getTotalSize()}px`;
       elementScroll(offset, options, instance);
-      // The offset already includes a pending prepend shift, so the DOM now carries it.
-      if (prependRef.current) prependRef.current = {...prependRef.current, shift: 0};
       // A size correction must update the virtual range before paint, not wait for the next native scroll event.
       // Going through the offset observer also consumes TanStack's accumulated size adjustments.
       if (options.adjustments !== undefined && viewportRef.current) scrollOffsetChangedRef.current?.(viewportRef.current.scrollTop, false);
@@ -283,25 +280,43 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
     easeStreamGrowth();
   };
 
-  // DOM offset, not TanStack's, which lags to the next scroll event.
-  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item) => {
-    if (prependRef.current && item.index < prependRef.current.beforeIndex) return true;
-    return anchorScrollRef.current === null && anchorSpaceHeightRef.current === 0 && item.end <= (viewportRef.current?.scrollTop ?? 0);
+  // When the rows change (settlement, loaded history, undo), the first row on screen that survives keeps its place.
+  // Following the end or pinning a sent message owns the scroll position instead.
+  const renderedItemKeyRef = useRef(getItemKey);
+  const readingAnchorRef = useRef<{readonly index: number; readonly offset: number} | null>(null);
+  const findReadingAnchor = (): {readonly index: number; readonly offset: number} | null => {
+    const viewport = viewportRef.current;
+    if (!viewport || anchorScrollRef.current !== null || (!autoFollowPausedByExpansion && !canScrollToEnd)) return null;
+    const indexes = new Map<unknown, number>(Array.from({length: timelineRows.length}, (_, index) => [getItemKey(index), index]));
+    // The rows' DOM still shows the previous rows here, which is what the reader sees.
+    const surviving = [...virtualizer.elementsCache].flatMap(([key, element]) => {
+      const index = indexes.get(key);
+      if (index === undefined || !element.isConnected) return [];
+      const top = Number.parseFloat(element.style.top);
+      return [{index, top, bottom: top + element.offsetHeight}];
+    });
+    const scrollTop = viewport.scrollTop;
+    const ordered = surviving.toSorted((left, right) => left.top - right.top);
+    const onScreen = ordered.find((candidate) => candidate.bottom > scrollTop && candidate.top < scrollTop + viewport.clientHeight);
+    if (onScreen) return {index: onScreen.index, offset: scrollTop - onScreen.top};
+    // Everything on screen was folded away: land on what replaced it, the row after the last survivor above.
+    const above = ordered.findLast((candidate) => candidate.bottom <= scrollTop);
+    const replacement = above ? above.index + 1 : 0;
+    if (replacement < timelineRows.length) return {index: replacement, offset: -TIMELINE_ANCHOR_TOP_MARGIN_PX};
+    return above ? {index: above.index, offset: scrollTop - above.top} : null;
   };
-
-  // Prepended turns shift the scroll position in this render so rows on screen stay put; `shift` is what the DOM still
-  // owes, `beforeIndex` marks the new rows so their measurement corrects it.
-  const firstRowRef = useRef<{readonly key: string; readonly start: number} | null>(null);
-  const prependRef = useRef<{readonly shift: number; readonly beforeIndex: number} | null>(null);
-  const previousFirstRow = firstRowRef.current;
-  const prependedIndex = previousFirstRow ? committedRowKeys.indexOf(previousFirstRow.key) : -1;
   virtualizer.getTotalSize();
-  if (previousFirstRow && prependedIndex > 0) {
-    const shift = (virtualizer.measurementsCache[prependedIndex]?.start ?? previousFirstRow.start) - previousFirstRow.start;
-    virtualizer.scrollOffset = (virtualizer.scrollOffset ?? 0) + shift;
-    prependRef.current = {shift: (prependRef.current?.shift ?? 0) + shift, beforeIndex: prependedIndex};
+  if (getItemKey !== renderedItemKeyRef.current) {
+    const anchor = findReadingAnchor();
+    readingAnchorRef.current = anchor;
+    const start = anchor ? virtualizer.measurementsCache[anchor.index]?.start : undefined;
+    // Render the range at the anchor's new place now, not a frame late; the layout effect corrects unmeasured estimates.
+    if (anchor && start !== undefined) virtualizer.scrollOffset = start + anchor.offset;
   }
-  firstRowRef.current = firstRowKey === undefined ? null : {key: firstRowKey, start: virtualizer.measurementsCache[0]?.start ?? paddingStart};
+
+  // DOM offset, not TanStack's, which lags to the next scroll event. A pending reading anchor does its own correction.
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item) =>
+    readingAnchorRef.current === null && anchorScrollRef.current === null && anchorSpaceHeightRef.current === 0 && item.end <= (viewportRef.current?.scrollTop ?? 0);
 
   const virtualItems = virtualizer.getVirtualItems();
 
@@ -322,6 +337,8 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
 
     onResumeAutoFollow();
     stopAnchorScroll();
+    // Sending claims the viewport from the reader's place.
+    readingAnchorRef.current = null;
     streamScrollAnimationRef.current?.cancel();
     // Sending from history reveals the new message first; never mount the entire history to animate across it.
     scrollToEnd({behavior: "auto"});
@@ -362,6 +379,7 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
     previousTurnCountRef.current = turnCount;
     if (!turnsReverted || (anchorSpaceHeightRef.current === 0 && anchorScrollRef.current === null)) return;
 
+    readingAnchorRef.current = null;
     releaseAnchorScroll();
     setAnchorSpaceHeight(0);
     realContentHeightRef.current = null;
@@ -369,21 +387,34 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
   }, [releaseAnchorScroll, scrollToEnd, setAnchorSpaceHeight, turnCount]);
 
   useLayoutEffect(() => {
+    renderedItemKeyRef.current = getItemKey;
     const viewport = viewportRef.current;
-    const prepend = prependRef.current;
-    if (prepend) {
-      // During user scrolling TanStack defers ref measurements to ResizeObserver. Finish the prepended overscan
-      // before releasing its anchor, including new rows that occupy the old top padding.
-      const measured = virtualItems.flatMap((item) => {
+    const anchor = readingAnchorRef.current;
+    if (viewport && anchor) {
+      // During user scrolling TanStack leaves new rows to its ResizeObserver; the anchor needs their heights now.
+      const unmeasured = virtualItems.flatMap((item) => {
         const element = virtualizer.elementsCache.get(item.key);
-        return item.index < prepend.beforeIndex && element ? [{index: item.index, height: element.offsetHeight}] : [];
+        return element && !virtualizer.itemSizeCache.has(item.key) ? [{index: item.index, height: element.offsetHeight}] : [];
       });
-      for (const {index, height} of measured) virtualizer.resizeItem(index, height);
+      for (const {index, height} of unmeasured) virtualizer.resizeItem(index, height);
+      const start = virtualizer.measurementsCache[anchor.index]?.start;
+      if (start !== undefined) {
+        // Publish the new height first, or the browser clamps against the old one.
+        if (virtualContentRef.current) virtualContentRef.current.style.height = `${virtualizer.getTotalSize()}px`;
+        const scrollTop = start + anchor.offset;
+        // Shrink or grow the space under a sent message to what the restored position needs.
+        const space = anchorSpaceRef.current;
+        if (space && anchorSpaceHeightRef.current > 0) {
+          const realContentHeight = space.getBoundingClientRect().top - viewport.getBoundingClientRect().top + viewport.scrollTop;
+          realContentHeightRef.current = realContentHeight;
+          setAnchorSpaceHeight(Math.max(0, scrollTop + viewport.clientHeight - realContentHeight));
+        }
+        viewport.scrollTop = scrollTop;
+        scrollOffsetChangedRef.current?.(viewport.scrollTop, false);
+      }
     }
-    const shift = prependRef.current?.shift ?? 0;
-    prependRef.current = null;
+    readingAnchorRef.current = null;
     if (!viewport) return;
-    if (shift !== 0) viewport.scrollTop += shift;
     // Without enough content to scroll, no scroll event would ever ask for more.
     if (viewport.scrollHeight - viewport.clientHeight < viewport.clientHeight) loadEarlierNearTop(viewport);
   });

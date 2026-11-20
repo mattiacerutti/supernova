@@ -179,6 +179,15 @@ export class TimelineDriver {
     await this.waitForSettledStatus("completed");
   }
 
+  /** Waits until the client has asked for the page before its earliest turn, then answers it. */
+  public async releaseHistoryPage(): Promise<void> {
+    await expect.poll(() => this.mockState().then((state) => state.heldHistoryPages), {message: "the timeline should ask for earlier history"}).toBeGreaterThan(0);
+    await this.page.evaluate(() => {
+      if (!window.__supernovaTimelineMock) throw new Error("Timeline runtime mock is not installed");
+      window.__supernovaTimelineMock.releaseHistoryPage();
+    });
+  }
+
   /** Interrupts the response with a collapsed reasoning step so the next lines start a new assistant message. */
   public async breakForReasoning(): Promise<void> {
     await this.page.evaluate(() => {
@@ -348,6 +357,51 @@ export class TimelineDriver {
 
       return {elementTop: element.getBoundingClientRect().top, scrollTop: viewport.scrollTop, text: previous.text};
     }, anchor);
+  }
+
+  /** Waits until native scrollTop holds still across several painted frames, so a wheel gesture has fully landed. */
+  public async waitForScrollToSettle(): Promise<void> {
+    await this.timeline().evaluate(
+      (viewport) =>
+        new Promise<void>((resolve) => {
+          let last = viewport.scrollTop;
+          let still = 0;
+          const check = (): void => {
+            still = viewport.scrollTop === last ? still + 1 : 0;
+            last = viewport.scrollTop;
+            if (still >= 10) resolve();
+            else window.requestAnimationFrame(check);
+          };
+          window.requestAnimationFrame(check);
+        })
+    );
+  }
+
+  /** Records the top of the newest rendered message containing `text`, relative to the timeline, on every painted frame from now on. */
+  public async trackMessage(text: string): Promise<void> {
+    await this.timeline().evaluate((viewport, messageText) => {
+      const find = () => [...viewport.querySelectorAll<HTMLElement>(".session-markdown")].findLast((candidate) => candidate.textContent?.includes(messageText));
+      if (!find()) throw new Error(`No rendered message contains "${messageText}"`);
+      const tops: (number | null)[] = [];
+      (window as unknown as {__trackedTextTops?: (number | null)[]}).__trackedTextTops = tops;
+      const sample = (): void => {
+        const element = find();
+        tops.push(element ? element.getBoundingClientRect().top - viewport.getBoundingClientRect().top : null);
+      };
+      const scheduleFrame = (): void => {
+        window.requestAnimationFrame(() => {
+          window.setTimeout(sample, 0);
+          scheduleFrame();
+        });
+      };
+      sample();
+      scheduleFrame();
+    }, text);
+  }
+
+  /** The tops recorded since `trackMessage`; `null` where the message was not rendered. */
+  public async trackedMessageTops(): Promise<readonly (number | null)[]> {
+    return await this.page.evaluate(() => (window as unknown as {__trackedTextTops?: (number | null)[]}).__trackedTextTops ?? []);
   }
 
   /** Reads native bottom distance directly from the scroll viewport. */
