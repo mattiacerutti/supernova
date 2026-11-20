@@ -14,12 +14,16 @@ it("delivers the shell's output as bytes", async () => {
   const cwd = await realpath(await mkdtemp(join(tmpdir(), "supernova-pty-")));
   tempDirs.push(cwd);
   const chunks: unknown[] = [];
-  const pty = await spawnPty({cols: 80, cwd, env: process.env, onData: (data) => chunks.push(data), onExit: () => undefined, rows: 24, shell: testShell});
+  let exit: () => void = () => undefined;
+  const exited = new Promise<void>((resolve) => (exit = resolve));
+  const pty = await spawnPty({cols: 80, cwd, env: process.env, onData: (data) => chunks.push(data), onExit: () => exit(), rows: 24, shell: testShell});
   try {
-    pty.write(new TextEncoder().encode(shellCommand("echo PTY_$((1+1))", "echo PTY_2")));
-    await waitUntil(() => expect(new TextDecoder().decode(Buffer.concat(chunks as Uint8Array[]))).toMatch(/PTY_2\r?\n/), {timeoutMs: 5_000});
+    pty.write(new TextEncoder().encode(shellCommand("echo PTY_$((1+1))", "node -p \"'PTY_' + (1+1)\"")));
+    await waitUntil(() => expect(new TextDecoder().decode(Buffer.concat(chunks as Uint8Array[]))).toContain("PTY_2"), {timeoutMs: 5_000});
     expect(chunks.every((chunk) => chunk instanceof Uint8Array)).toBe(true);
   } finally {
     pty.kill("SIGKILL");
+    // Windows keeps a running shell's directory from being removed.
+    await exited;
   }
 });

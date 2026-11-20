@@ -270,17 +270,17 @@ describe("Terminals", () => {
   });
 
   posixIt.each([
-    {name: "inside an escape sequence", first: "START\\033[?104", rest: "9hALT", done: async (later: TestViewer) => expect(later.terminal.buffer.active.type).toBe("alternate")},
-    {name: "inside a UTF-8 character", first: "START\\303", rest: "\\251ALT", done: async (later: TestViewer) => expect(await later.text()).toContain("STARTéALT")},
+    {name: "inside an escape sequence", first: "ST%sRT\\033[?104", rest: "9hALT", done: async (later: TestViewer) => expect(later.terminal.buffer.active.type).toBe("alternate")},
+    {name: "inside a UTF-8 character", first: "ST%sRT\\303", rest: "\\251ALT", done: async (later: TestViewer) => expect(await later.text()).toContain("STARTéALT")},
   ])("gives a viewer that attaches with output stopped $name the screen it completes", async ({first, rest, done}) => {
     const cwd = await workspace();
     await terminals.open({cols: 80, cwd, id: "split", rows: 24, sessionId: "s1"});
     const {held, viewer} = await view("split");
     // The program holds the rest back until the late viewer has attached.
     const go = join(cwd, "go");
-    viewer.type(`clear; printf '${first}'; while [ ! -e ${quote(go)} ]; do sleep 0.05; done; printf '${rest}'\n`);
-    // The program's output, not the echoed command, which spells `START` too.
-    await waitUntil(async () => expect(await viewer.text()).toMatch(/^START/m), {timeoutMs: 5_000});
+    // `printf` builds `START` from an argument, so the echoed command never shows it.
+    viewer.type(`clear; printf '${first}' A; while [ ! -e ${quote(go)} ]; do sleep 0.05; done; printf '${rest}'\n`);
+    await shows(viewer, "START");
     const later = new TestViewer();
     terminals.connect((await held.channel(context)).token, later.socket);
     await writeFile(go, "");
@@ -305,8 +305,8 @@ describe("Terminals", () => {
     const cwd = await workspace();
     await terminals.open({cols: 80, cwd, id: "modes", rows: 24, sessionId: "s1"});
     const {viewer} = await view("modes");
-    viewer.type(`printf '${setup}SET'; sleep 30\n`);
-    await waitUntil(async () => expect(await viewer.text()).toMatch(/^SET/m), {timeoutMs: 5_000});
+    viewer.type(`printf '${setup}S%sT' E; sleep 30\n`);
+    await shows(viewer, "SET");
     const {viewer: later} = await view("modes");
     await later.drawn();
     check(later);
@@ -316,11 +316,11 @@ describe("Terminals", () => {
     const cwd = await workspace();
     await terminals.open({cols: 80, cwd, id: "exits", rows: 24, sessionId: "s1"});
     const {viewer} = await view("exits");
-    viewer.type(shellCommand("echo BYE_$((1+1)); exit 3", "echo BYE_2 & exit 3"));
+    viewer.type(shellCommand("echo BYE_$((1+1)); exit 3", "node -p \"'BYE_' + (1+1)\" & exit 3"));
     await waitUntil(() => expect(viewer.events).toContainEqual({type: "exit", exitCode: 3}), {timeoutMs: 5_000});
     const exitAt = viewer.frames.findIndex((frame) => typeof frame !== "string" && frame.type === "exit");
-    // On its own line: the echoed command contains `BYE_$((1+1))`, not `BYE_2`.
-    expect(viewer.frames.slice(0, exitAt).join("")).toMatch(/^BYE_2\r?$/m);
+    const outputBefore = viewer.frames.slice(0, exitAt).filter((frame) => typeof frame === "string");
+    expect(outputBefore.join("")).toContain("BYE_2");
     await waitUntil(() => expect(list().exits?.exitCode).toBe(3));
   });
 
