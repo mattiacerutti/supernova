@@ -295,11 +295,6 @@ export class TimelineDriver {
     return await this.page.locator(".session-markdown", {hasText: "Extreme-speed streamed response:"}).count();
   }
 
-  /** Reads the current height of the lossy fake space below an anchored message. */
-  public async fakeSpaceHeight(): Promise<number> {
-    return await this.page.locator("[data-timeline-fake-space]").evaluate((element) => element.getBoundingClientRect().height);
-  }
-
   /** Reaches the bottom through a native wheel gesture, without assigning scrollTop. */
   public async manuallyScrollToBottom(): Promise<void> {
     for (let gesture = 0; gesture < 40; gesture += 1) {

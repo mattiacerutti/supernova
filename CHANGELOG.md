@@ -18,6 +18,7 @@ All notable changes to Supernova are documented in this file.
 - Changed the providers list to update in every open window when a provider is connected or disconnected, and to allow one provider login at a time.
 - Sidebars now use a smooth ease-out when opening and a faster ease-in when closing.
 - The sidebar's leading icon now only marks pinned sessions. Worktree and forked sessions show small markers after their title instead. Hovering or focusing a worktree or forked session opens a card beside it with its full title, status, and worktree branch.
+- Changed sending a message to rise it into place at the end of the timeline instead of scrolling it to the top above blank space, and to keep your place when you send while scrolled up.
 
 ### Fixed
 
