@@ -306,7 +306,7 @@ export class TimelineDriver {
 
   /** Uses the product's scroll-to-latest control. */
   public async clickScrollToBottom(): Promise<void> {
-    const button = this.page.getByRole("button", {name: "Scroll to latest message"}).and(this.page.locator('[data-active="true"]'));
+    const button = this.page.getByRole("button", {name: "Scroll to latest message"});
     await expect(button).toBeVisible();
     await button.click();
     await this.expectAtBottom();
@@ -404,9 +404,9 @@ export class TimelineDriver {
     return await this.timeline().evaluate((viewport) => viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop);
   }
 
-  /** Reports whether the timeline remains attached to its latest content. */
+  /** Reports whether the timeline remains attached to its latest content: at the end, offering no way back to it. */
   public async isFollowing(): Promise<boolean> {
-    return await this.timeline().evaluate((viewport) => !viewport.dataset.scrollable?.includes("end"));
+    return (await this.bottomDistance()) <= BOTTOM_TOLERANCE_PX && (await this.page.getByRole("button", {name: "Scroll to latest message"}).count()) === 0;
   }
 
   /** Reports whether timeline content has grown beyond the viewport. */
@@ -484,7 +484,7 @@ export class TimelineDriver {
   private async waitForSettledStatus(status: "aborted" | "completed"): Promise<void> {
     await expect.poll(() => this.mockState().then((state) => state.status)).toBe(status);
     await expect(this.page.getByRole("button", {name: "Send message"})).toBeVisible();
-    await expect(this.page.locator('[data-slot="message-scroller-content"]')).toHaveAttribute("aria-busy", "false");
+    await expect(this.page.locator('[aria-label="Session timeline"] [role="log"]')).toHaveAttribute("aria-busy", "false");
   }
 }
 

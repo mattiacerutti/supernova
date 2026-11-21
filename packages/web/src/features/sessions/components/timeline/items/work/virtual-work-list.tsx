@@ -23,7 +23,7 @@ export default function VirtualWorkList(props: VirtualWorkListProps) {
     count,
     estimateSize,
     getItemKey: getKey,
-    getScrollElement: () => bodyRef.current?.closest<HTMLDivElement>('[data-slot="message-scroller-viewport"]') ?? null,
+    getScrollElement: () => bodyRef.current?.closest<HTMLDivElement>('[data-slot="timeline-viewport"]') ?? null,
     indexAttribute: "data-work-index",
     initialMeasurementsCache: measurements?.get(id),
     overscan: 3,

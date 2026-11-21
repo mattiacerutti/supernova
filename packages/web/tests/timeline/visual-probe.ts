@@ -21,7 +21,7 @@ export function installTimelineVisualProbe(): void {
       lastUserMessageTop: lastUserMessage ? lastUserMessage.getBoundingClientRect().top - viewport.getBoundingClientRect().top : null,
       lineCount: window.__supernovaTimelineMock?.getState().lineCount ?? 0,
       pathname: window.location.pathname,
-      scrollButtonVisible: document.querySelector('[data-slot="message-scroller-button"]') !== null,
+      scrollButtonVisible: document.querySelector('[data-slot="scroll-to-end-button"]') !== null,
       scrollHeight: viewport.scrollHeight,
       scrollTop: viewport.scrollTop,
       statusFooterOffset: footerTransform === "none" ? 0 : new DOMMatrixReadOnly(footerTransform).m42,
