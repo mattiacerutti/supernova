@@ -24,10 +24,7 @@ export default function ScrollToEndButton(props: ScrollToEndButtonProps) {
           <button
             className="grid size-9 cursor-pointer place-items-center rounded-full bg-surface text-ink-strong inset-ring-1 inset-ring-border-strong transition-colors duration-200 hover:bg-surface-popover"
             data-slot="scroll-to-end-button"
-            onClick={(event) => {
-              event.currentTarget.blur();
-              onClick();
-            }}
+            onClick={onClick}
             type="button"
           >
             <Icon name="arrow-down" size="sm" />

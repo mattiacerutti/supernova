@@ -37,7 +37,9 @@ function translateYOf(element: HTMLElement): number {
 
 /** Transform-only, so it runs on the compositor and never triggers layout while streaming. */
 function easeFrom(element: HTMLElement, offset: number, current: Animation | null, maxOffset: number, duration = TIMELINE_EASE_MS): Animation {
-  const start = Math.sign(offset) * Math.min(Math.abs(translateYOf(element) + offset), maxOffset);
+  // From what is painted, so an ease still running in the other direction shortens this one instead of flipping it.
+  const painted = translateYOf(element) + offset;
+  const start = Math.sign(painted) * Math.min(Math.abs(painted), maxOffset);
   current?.cancel();
   return element.animate([{transform: `translateY(${start}px)`}, {transform: "translateY(0)"}], {duration, easing: "cubic-bezier(0.22, 1, 0.36, 1)"});
 }
@@ -48,8 +50,14 @@ interface ScreenRow {
   readonly start: number;
 }
 
-/** Only the reader changes it; layout changes only reapply it. */
-type ScrollPosition = {readonly follow: true} | {readonly follow: false; readonly scrollTop: number; readonly rows: readonly ScreenRow[]};
+/**
+ * Only the reader changes it; layout changes only reapply it. `rows` are the measured rows on screen, `above` the
+ * measured rows just above them, nearest first, one of which survives when a fold removes everything on screen.
+ */
+type ScrollPosition = {readonly follow: true} | {readonly follow: false; readonly scrollTop: number; readonly rows: readonly ScreenRow[]; readonly above: readonly ScreenRow[]};
+
+// A fold removes a turn's steps but keeps its prompt; this reaches past the steps of a turn on screen to it.
+const TIMELINE_HELD_ROWS_ABOVE = 8;
 
 interface TimelineEarlierHistory {
   readonly count: number;
@@ -185,38 +193,58 @@ export default function SessionTimeline(props: SessionTimelineProps) {
   virtualizer.shouldAdjustScrollPositionOnItemSizeChange = () => false;
   const virtualItems = virtualizer.getVirtualItems();
 
-  /** The virtualizer's own viewport size, so remembering the rows costs no layout read. */
-  const rowsOnScreen = (scrollTop: number): ScreenRow[] => {
+  /** Uses the virtualizer's own viewport size, so remembering the rows costs no layout read. */
+  const hold = (scrollTop: number): void => {
     const bottom = scrollTop + (virtualizer.scrollRect?.height ?? 0);
-    const rows: ScreenRow[] = [];
-    for (let index = virtualizer.getVirtualItemForOffset(scrollTop)?.index ?? 0; index < virtualizer.options.count; index += 1) {
+    const first = virtualizer.getVirtualItemForOffset(scrollTop)?.index ?? 0;
+    // Only measured rows are where the reader sees them; an estimated one moves what follows once it is measured.
+    const measured = (index: number): ScreenRow | null => {
       const row = virtualizer.measurementsCache[index];
-      if (!row || row.start >= bottom) break;
-      // Only measured rows are where the reader sees them; an estimated one moves what follows once it is measured.
-      if (row.end > scrollTop && virtualizer.itemSizeCache.has(row.key)) rows.push({key: row.key, index, start: row.start});
+      return row && virtualizer.itemSizeCache.has(row.key) ? {key: row.key, index, start: row.start} : null;
+    };
+    const above: ScreenRow[] = [];
+    for (let index = first - 1; index >= 0 && above.length < TIMELINE_HELD_ROWS_ABOVE; index -= 1) {
+      const row = measured(index);
+      if (row) above.push(row);
     }
-    return rows;
+    const rows: ScreenRow[] = [];
+    for (let index = first; index < virtualizer.options.count; index += 1) {
+      const row = measured(index);
+      const bounds = virtualizer.measurementsCache[index];
+      if (!bounds || bounds.start >= bottom) break;
+      if (row && bounds.end > scrollTop) rows.push(row);
+    }
+    positionRef.current = {follow: false, scrollTop, rows, above};
   };
 
-  const hold = (viewport: HTMLDivElement): void => {
-    const scrollTop = viewport.scrollTop;
-    positionRef.current = {follow: false, scrollTop, rows: rowsOnScreen(scrollTop)};
-  };
-
-  /** Where the held rows put the viewport now, or `null` when none of them is left to hold. */
-  const heldScrollTop = ({rows, scrollTop}: Extract<ScrollPosition, {follow: false}>): number | null => {
+  const indexOfKey = (row: ScreenRow, indexes: {map?: Map<VirtualItem["key"], number>}): number => {
     const {count} = virtualizer.options;
-    let indexes: Map<VirtualItem["key"], number> | undefined;
+    if (row.index < count && getItemKey(row.index) === row.key) return row.index;
+    indexes.map ??= new Map(Array.from({length: count}, (_, at) => [getItemKey(at), at]));
+    return indexes.map.get(row.key) ?? -1;
+  };
+
+  /**
+   * Where the held place puts the viewport now, measured from the held scrollTop since the browser may have clamped the
+   * live one against a shorter canvas. `null` when what was held is gone, as when navigation removes it.
+   */
+  const heldScrollTop = ({above, rows, scrollTop}: Extract<ScrollPosition, {follow: false}>): number | null => {
+    const indexes = {};
+    const moved = (row: ScreenRow): number | null => {
+      const index = indexOfKey(row, indexes);
+      return index < 0 ? null : virtualizer.measurementsCache[index]!.start - row.start;
+    };
+    // A held row that survives keeps its place.
     for (const row of rows) {
-      let index = row.index < count && getItemKey(row.index) === row.key ? row.index : -1;
-      if (index < 0) {
-        indexes ??= new Map(Array.from({length: count}, (_, at) => [getItemKey(at), at]));
-        index = indexes.get(row.key) ?? -1;
-      }
-      // Measured from the held scrollTop: the browser may since have clamped the live one against a shorter canvas.
-      if (index >= 0) return scrollTop + virtualizer.measurementsCache[index]!.start - row.start;
+      const shift = moved(row);
+      if (shift !== null) return scrollTop + shift;
     }
-    const replacement = rows[0] && virtualizer.measurementsCache[rows[0].index];
+    const survivor = above.find((row) => moved(row) !== null);
+    if (above.length > 0 && !survivor) return null;
+    // Nothing on screen was measured yet: the offset itself is the place, moved with what lies above it.
+    if (rows.length === 0) return scrollTop + (survivor ? moved(survivor)! : 0);
+    // Everything on screen was folded away, as into "Worked for": the row after the surviving one takes its place.
+    const replacement = virtualizer.measurementsCache[survivor ? indexOfKey(survivor, indexes) + 1 : 0];
     return replacement ? replacement.start - TIMELINE_TOP_PADDING_PX : null;
   };
 
@@ -228,12 +256,13 @@ export default function SessionTimeline(props: SessionTimelineProps) {
     // The canvas holds the current total, so the browser does not clamp the new position against the old height.
     const total = `${virtualizer.getTotalSize()}px`;
     if (content.style.height !== total) content.style.height = total;
-    const position = positionRef.current;
-    const held = position.follow ? null : heldScrollTop(position);
-    if (held === null) positionRef.current = {follow: true};
     // One layout read per call: this runs on every streamed frame and every row measurement.
     const before = viewport.scrollTop;
     const end = viewport.scrollHeight - viewport.clientHeight;
+    const position = positionRef.current;
+    const held = position.follow ? null : heldScrollTop(position);
+    // Only a timeline that cannot scroll at all follows on its own; a held place at the end of a longer one stays held.
+    if (held === null || end <= TIMELINE_END_THRESHOLD_PX) positionRef.current = {follow: true};
     const top = Math.max(0, Math.min(held ?? end, end));
     if (Math.abs(before - top) > 0.5) {
       viewport.scrollTop = top;
@@ -241,8 +270,8 @@ export default function SessionTimeline(props: SessionTimelineProps) {
       scrollOffsetChangedRef.current?.(top, virtualizer.isScrolling);
     }
     lastScrollTopRef.current = top;
-    if (held === null) easeFollowing(viewport, top - before);
-    else hold(viewport);
+    if (positionRef.current.follow) easeFollowing(viewport, top - before);
+    else hold(top);
     easeFooter(top);
     setScrollButtonVisible(end - top >= TIMELINE_SCROLL_BUTTON_THRESHOLD_PX);
   };
@@ -287,7 +316,7 @@ export default function SessionTimeline(props: SessionTimelineProps) {
   // Every row that shows work reads this context, so its value must keep its identity across streamed frames.
   const holdRef = useRef(hold);
   holdRef.current = hold;
-  const onToggleWork = useCallback(() => viewportRef.current && holdRef.current(viewportRef.current), []);
+  const onToggleWork = useCallback(() => viewportRef.current && holdRef.current(viewportRef.current.scrollTop), []);
   const {expanded: workExpanded, measurements: workMeasurements} = useWorkExpansionState(onToggleWork);
   const workExpansion = useMemo(() => ({expanded: workExpanded, measurements: workMeasurements, onToggle: onToggleWork}), [workExpanded, workMeasurements, onToggleWork]);
 
@@ -343,7 +372,7 @@ export default function SessionTimeline(props: SessionTimelineProps) {
   const readerScrolls = (viewport: HTMLDivElement, upward: boolean): void => {
     if (!upward) return;
     stopEase(viewport);
-    hold(viewport);
+    hold(viewport.scrollTop);
   };
 
   // Only the reader's scrolling lands here unchanged: the timeline's own writes already left the position in place.
@@ -354,7 +383,7 @@ export default function SessionTimeline(props: SessionTimelineProps) {
     lastScrollTopRef.current = scrollTop;
     const fromEnd = viewport.scrollHeight - viewport.clientHeight - scrollTop;
     if (fromEnd <= TIMELINE_END_THRESHOLD_PX) positionRef.current = {follow: true};
-    else if (movedUp || !positionRef.current.follow) hold(viewport);
+    else if (movedUp || !positionRef.current.follow) hold(scrollTop);
     footerTopRef.current = footerRef.current ? virtualizer.getTotalSize() - scrollTop : null;
     loadEarlierNearTop(viewport);
     setScrollButtonVisible(fromEnd >= TIMELINE_SCROLL_BUTTON_THRESHOLD_PX);
@@ -448,6 +477,8 @@ export default function SessionTimeline(props: SessionTimelineProps) {
             onClick={() => {
               positionRef.current = {follow: true};
               keepPosition();
+              // The button disappears; the keyboard keeps scrolling the timeline.
+              viewportRef.current?.focus({preventScroll: true});
             }}
             visible={scrollButtonVisible}
           />

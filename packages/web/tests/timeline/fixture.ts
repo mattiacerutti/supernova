@@ -188,6 +188,31 @@ export class TimelineDriver {
     });
   }
 
+  /** Scrolls up with the wheel until `text` is near the top of the viewport, as a reader looking for it would. */
+  public async scrollToText(text: string): Promise<void> {
+    await this.timeline().hover();
+    for (let gesture = 0; gesture < 60; gesture += 1) {
+      const top = await this.timeline().evaluate((viewport, wanted) => {
+        // Streamed and settled text render differently; find the line itself through its text node.
+        const walker = document.createTreeWalker(viewport, NodeFilter.SHOW_TEXT);
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+          const at = node.textContent?.indexOf(wanted) ?? -1;
+          if (at < 0) continue;
+          const range = document.createRange();
+          range.setStart(node, at);
+          range.setEnd(node, at + wanted.length);
+          return range.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
+        }
+        return null;
+      }, text);
+      if (top !== null && top >= 0 && top < 160) break;
+      // Small steps while it is not rendered: virtualization only mounts rows near the screen.
+      await this.page.mouse.wheel(0, top === null ? -120 : top - 80);
+      await this.waitForScrollToSettle();
+    }
+    await this.waitForScrollToSettle();
+  }
+
   /** Interrupts the response with a collapsed reasoning step so the next lines start a new assistant message. */
   public async breakForReasoning(): Promise<void> {
     await this.page.evaluate(() => {
@@ -397,6 +422,12 @@ export class TimelineDriver {
   /** The tops recorded since `trackMessage`; `null` where the message was not rendered. */
   public async trackedMessageTops(): Promise<readonly (number | null)[]> {
     return await this.page.evaluate(() => (window as unknown as {__trackedTextTops?: (number | null)[]}).__trackedTextTops ?? []);
+  }
+
+  /** Waits for `frames` more painted samples than were recorded when called, so a check sees the frames after a change. */
+  public async waitForTrackedFrames(frames = 10): Promise<void> {
+    const recorded = (await this.trackedMessageTops()).length;
+    await expect.poll(async () => (await this.trackedMessageTops()).length, {message: "the change should be followed by sampled frames"}).toBeGreaterThanOrEqual(recorded + frames);
   }
 
   /** Reads native bottom distance directly from the scroll viewport. */
