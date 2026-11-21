@@ -40,20 +40,16 @@ export function buildTimelineRows(input: BuildTimelineRowsInput): readonly Timel
   return rows;
 }
 
-/** Keyed by the turn's position in the whole history so identity survives settlement and prepended turns. */
+/**
+ * By turn position, so keys survive prepended turns, and row id, so settlement keeps the rows it doesn't fold.
+ * User rows use the turn alone: a sent message's id changes when the server echoes it.
+ */
 export function buildTimelineRowKeys(rows: readonly TimelineRow[], earlierTurns: number): readonly string[] {
-  const typeCounts = new Map<string, number>();
   let turnIndex = earlierTurns - 1;
 
   return rows.map((item) => {
-    if (item.type === "user") {
-      turnIndex += 1;
-      typeCounts.clear();
-    }
-
-    const typeIndex = typeCounts.get(item.type) ?? 0;
-    typeCounts.set(item.type, typeIndex + 1);
-    return `turn:${turnIndex}:${item.type}:${typeIndex}`;
+    if (item.type === "user") turnIndex += 1;
+    return `turn:${turnIndex}:${item.type === "user" ? "user" : item.id}`;
   });
 }
 

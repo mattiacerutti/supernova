@@ -13,6 +13,10 @@ export const OTHER_SESSION_ID = "other-session";
 export const OTHER_SESSION_TITLE = "Second long session";
 export const EMPTY_SESSION_ID = "empty-session";
 export const EMPTY_SESSION_TITLE = "Empty session";
+export const PAGED_SESSION_ID = "paged-session";
+export const PAGED_SESSION_TITLE = "Paged session";
+/** Turns of the paged session the client first receives; the rest load as pages of the same size. */
+export const PAGED_SESSION_PAGE_TURNS = 6;
 
 export const timelineModel = {
   id: "timeline-model",
@@ -62,6 +66,7 @@ export function createTimelineSessions(): Map<string, TimelineSession> {
     historySession({historyTurnCount: 28, id: TIMELINE_SESSION_ID, title: TIMELINE_SESSION_TITLE}),
     historySession({historyTurnCount: 24, id: OTHER_SESSION_ID, title: OTHER_SESSION_TITLE}),
     historySession({historyTurnCount: 0, id: EMPTY_SESSION_ID, title: EMPTY_SESSION_TITLE}),
+    historySession({historyTurnCount: 24, id: PAGED_SESSION_ID, title: PAGED_SESSION_TITLE}),
   ];
 
   return new Map(sessions.map((session) => [session.record.id, session]));

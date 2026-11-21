@@ -1,5 +1,5 @@
 import {AnimatePresence, motion, useReducedMotion} from "framer-motion";
-import {MessageScrollerButton} from "@/features/sessions/components/timeline/viewport/message-scroller";
+import Icon from "@/components/ui/icon";
 
 interface ScrollToEndButtonProps {
   readonly bottomOffset: number;
@@ -21,7 +21,15 @@ export default function ScrollToEndButton(props: ScrollToEndButtonProps) {
           initial={{opacity: 0, scale: 0.95, x: "-50%", y: shouldReduceMotion ? 0 : "100%"}}
           style={{bottom: `calc(1rem + ${bottomOffset}px)`}}
         >
-          <MessageScrollerButton onClick={onClick} behavior="auto" className="static translate-x-0 bg-surface transition-colors hover:bg-surface-popover rtl:translate-x-0" />
+          <button
+            className="grid size-9 cursor-pointer place-items-center rounded-full bg-surface text-ink-strong inset-ring-1 inset-ring-border-strong transition-colors duration-200 hover:bg-surface-popover"
+            data-slot="scroll-to-end-button"
+            onClick={onClick}
+            type="button"
+          >
+            <Icon name="arrow-down" size="sm" />
+            <span className="sr-only">Scroll to latest message</span>
+          </button>
         </motion.div>
       )}
     </AnimatePresence>

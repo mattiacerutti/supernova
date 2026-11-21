@@ -17,7 +17,15 @@ import {TerminalService, WorkspaceService} from "@supernova/contracts/services/w
 import type {RuntimeClient} from "@/runtime/client";
 import {Published, testRuntimeClient} from "@tests/support/test-server";
 import {assistantEntry, isTurnEntry, page, runningLive, transcript, userEntry} from "@tests/support/session";
-import {createTimelineSessions, timelineModelDetails, timelineStreamContent, TIMELINE_PROJECT_PATH, TIMELINE_SESSION_ID} from "@tests/timeline/data";
+import {
+  createTimelineSessions,
+  PAGED_SESSION_ID,
+  PAGED_SESSION_PAGE_TURNS,
+  timelineModelDetails,
+  timelineStreamContent,
+  TIMELINE_PROJECT_PATH,
+  TIMELINE_SESSION_ID,
+} from "@tests/timeline/data";
 import type {TimelineMockState} from "@tests/timeline/test-api";
 
 const STREAM_LINES_PER_FRAME = 2;
@@ -41,16 +49,25 @@ class TimelineServer {
   private status: TimelineMockState["status"] = "idle";
   private streamFrame: number | null = null;
   private streamTargetLineCount = 0;
+  // Earlier pages wait here until the test releases them, so it can observe the timeline before they arrive.
+  private readonly heldPages: (() => void)[] = [];
 
   public constructor() {
     window.__supernovaTimelineMock = {
       breakForReasoning: () => this.breakForReasoning(),
       completeStream: () => this.settleStream("completed"),
       emitLines: (lineCount) => this.emitLines(lineCount),
+      releaseHistoryPage: () => this.heldPages.shift()?.(),
       getState: () => {
         const session = this.session(TIMELINE_SESSION_ID);
         const count = (entries: ChatDocument["entries"]) => entries.items.filter(isTurnEntry).length;
-        return {lineCount: this.lineCount, status: this.status, turnCount: count(session.entries), undoneTurnCount: count(session.undone)};
+        return {
+          heldHistoryPages: this.heldPages.length,
+          lineCount: this.lineCount,
+          status: this.status,
+          turnCount: count(session.entries),
+          undoneTurnCount: count(session.undone),
+        };
       },
     };
   }
@@ -132,8 +149,8 @@ class TimelineServer {
               document: this.document(sessionId).member(self),
               abort: async () => (this.settleStream("aborted"), ok),
               compact: async () => ok,
-              // Timeline sessions are one page; paging is the server's and covered by its tests.
-              loadHistory: async () => page([]),
+              // Only the paged session has history beyond its first page; paging itself is the server's and covered by its tests.
+              loadHistory: async ({edge, side}) => this.historyPage(sessionId, side, edge),
               redoCheckpoint: async () => (this.redoCheckpoint(sessionId), ok),
               revertToMessage: async ({turnId}) => (this.revertToMessage(sessionId, turnId), ok),
               sendMessage: async ({contentParts}) => (this.startStream(sessionId, contentParts), ok),
@@ -148,10 +165,26 @@ class TimelineServer {
   private document(sessionId: string): Published<ChatDocument> {
     let document = this.documents.get(sessionId);
     if (!document) {
-      document = new Published(this.session(sessionId));
+      const session = this.session(sessionId);
+      document = new Published(sessionId === PAGED_SESSION_ID ? {...session, entries: this.olderTurns(session.entries.items, null)} : session);
       this.documents.set(sessionId, document);
     }
     return document;
+  }
+
+  /** `edge === null` is the newest page. */
+  private olderTurns(entries: ChatDocument["entries"]["items"], edge: number | null): ChatDocument["entries"] {
+    const end = edge === null ? entries.length : entries.findIndex((entry) => entry.id === edge);
+    const starts = this.turnStarts(entries.slice(0, end));
+    const firstTurn = Math.max(0, starts.length - PAGED_SESSION_PAGE_TURNS);
+    const start = starts[firstTurn] ?? 0;
+    return page(entries.slice(start, end), start > 0 ? entries[start - 1]!.id : null, firstTurn);
+  }
+
+  private async historyPage(sessionId: string, side: "entries" | "undone", edge: number): Promise<ChatDocument["entries"]> {
+    if (side !== "entries" || sessionId !== PAGED_SESSION_ID) return page([]);
+    await new Promise<void>((resolve) => this.heldPages.push(resolve));
+    return this.olderTurns(this.session(sessionId).entries.items, edge);
   }
 
   private record(sessionId: string): ListedSession {

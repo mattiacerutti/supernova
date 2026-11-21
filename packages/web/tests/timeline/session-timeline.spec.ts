@@ -1,7 +1,7 @@
 import {BOTTOM_TOLERANCE_PX, DETACHED_DISTANCE_PX, expect, test} from "@tests/timeline/fixture";
 import type {TimelineDriver, VisibleTextAnchor} from "@tests/timeline/fixture";
 import type {TimelineVisualSample} from "@tests/timeline/test-api";
-import {OTHER_SESSION_ID, TIMELINE_SESSION_ID} from "@tests/timeline/data";
+import {OTHER_SESSION_ID, PAGED_SESSION_ID, PAGED_SESSION_PAGE_TURNS, PAGED_SESSION_TITLE, TIMELINE_SESSION_ID, timelineStreamLine} from "@tests/timeline/data";
 
 function visibleSamples(samples: readonly TimelineVisualSample[], sessionId: string): readonly TimelineVisualSample[] {
   return samples.filter((sample) => sample.visible && sample.pathname === `/session/${sessionId}`);
@@ -38,29 +38,19 @@ function assertAnchorUnmoved(before: VisibleTextAnchor, after: VisibleTextAnchor
   expect(scrollJump, `a transient scroll jump was rendered during settlement: ${JSON.stringify(scrollJump)}`).toBeUndefined();
 }
 
-/** Assert painted positions: compositor motion intentionally differs from native scrollTop. */
-function assertContinuousAnchorScroll(input: {readonly rowIndexBeforeSend: number; readonly samples: readonly TimelineVisualSample[]}): void {
+/** The sent bubble paints at the end, rising into place: never above where it lands, never jumping down. */
+function assertBubbleRises(input: {readonly rowIndexBeforeSend: number; readonly samples: readonly TimelineVisualSample[]}): void {
   const {rowIndexBeforeSend, samples} = input;
   const frames = visibleSamples(samples, TIMELINE_SESSION_ID).filter((sample) => sample.lastRowIndex > rowIndexBeforeSend && sample.lastUserMessageTop !== null);
-  const firstFrame = frames[0];
-  expect(firstFrame, "the sent message should paint before reaching its anchor").toBeDefined();
-  const travel = firstFrame!.lastUserMessageTop! - 24;
-  expect(travel, "the message should first paint near the bottom").toBeGreaterThanOrEqual(DETACHED_DISTANCE_PX);
-
-  const settledIndex = frames.findIndex((sample) => sample.lastUserMessageTop! <= 25);
-  const movingFrames = frames.slice(0, settledIndex < 0 ? frames.length : settledIndex + 1);
-  expect(movingFrames.length, "pinning should span multiple painted positions").toBeGreaterThanOrEqual(4);
-  expect(movingFrames.at(-1)!.timestamp - firstFrame!.timestamp).toBeGreaterThanOrEqual(40);
-  const quarterFrame = movingFrames.find((sample) => sample.lastUserMessageTop! <= firstFrame!.lastUserMessageTop! - travel / 4);
-  expect((quarterFrame?.timestamp ?? Number.POSITIVE_INFINITY) - firstFrame!.timestamp, "pinning should move immediately").toBeLessThanOrEqual(40);
-
-  const backwardJump = movingFrames.find((sample, index) => index > 0 && sample.lastUserMessageTop! > movingFrames[index - 1]!.lastUserMessageTop! + 1);
-  const forwardJump = movingFrames.find((sample, index) => index > 0 && movingFrames[index - 1]!.lastUserMessageTop! - sample.lastUserMessageTop! > travel / 3);
-  expect(backwardJump, `pinning moved backwards: ${JSON.stringify(backwardJump)}`).toBeUndefined();
-  expect(forwardJump, `pinning jumped forwards: ${JSON.stringify(forwardJump)}`).toBeUndefined();
+  expect(frames.length, "the sent message should paint over several frames").toBeGreaterThanOrEqual(4);
+  const landed = frames.at(-1)!.lastUserMessageTop!;
+  const above = frames.find((sample) => sample.lastUserMessageTop! < landed - 1);
+  const downward = frames.find((sample, index) => index > 0 && sample.lastUserMessageTop! > frames[index - 1]!.lastUserMessageTop! + 1);
+  expect(above, `the bubble should not travel above where it lands: ${JSON.stringify(above)}`).toBeUndefined();
+  expect(downward, `the bubble should only rise: ${JSON.stringify(downward)}`).toBeUndefined();
   expect(
-    movingFrames.some((sample) => sample.scrollButtonVisible),
-    "hide the scroll-to-latest button during pinning"
+    frames.some((sample) => sample.scrollButtonVisible),
+    "hide the scroll-to-latest button while sending"
   ).toBe(false);
 }
 
@@ -112,10 +102,13 @@ test.describe("session timeline visual stability", () => {
     ).toBeUndefined();
   });
 
-  test("keeps following when a new session first grows beyond the viewport", async ({timeline}) => {
+  test("keeps following when a new session first grows beyond the viewport", async ({page, timeline}) => {
     const sessionId = await timeline.startEmptySession();
     await timeline.expectStatusOutsideVirtualization();
     expect(await timeline.isScrollable(), "the initial response should still fit inside the viewport").toBe(false);
+    // An upward key cannot move a timeline that fits, so it must not detach it either.
+    await page.getByLabel("Session timeline").focus();
+    await page.keyboard.press("ArrowUp");
     await timeline.resetVisualProbe();
 
     await timeline.waitForLineGrowth(90);
@@ -167,41 +160,19 @@ test.describe("session timeline visual stability", () => {
     expect(secondScrollTop, "the viewport should advance with the growing response").toBeGreaterThan(firstScrollTop);
   });
 
-  test("sending a message scrolls it to the top of the viewport and expands the response below it", async ({timeline}) => {
+  test("sending a message rises it in at the end and follows the response below it", async ({timeline}) => {
     await timeline.expectAtBottom();
     const rowIndexBeforeSend = await timeline.lastRowIndex();
     await timeline.resetVisualProbe();
-    const messageText = "Anchor this message at the top of the timeline";
+    const messageText = "Send this message from the composer";
     await timeline.sendMessage(messageText);
 
-    await expect.poll(() => timeline.messageViewportTop(messageText), {message: "the sent message should settle near the viewport top"}).toBeLessThanOrEqual(30);
-    expect(await timeline.messageViewportTop(messageText), "the sent message should not overshoot the viewport top").toBeGreaterThanOrEqual(0);
-    expect(await timeline.fakeSpaceHeight(), "fake space should back the anchored position").toBeGreaterThan(0);
     await timeline.expectAtBottom();
+    assertBubbleRises({rowIndexBeforeSend, samples: await timeline.visualSamples()});
 
-    const samples = await timeline.visualSamples();
-    assertContinuousAnchorScroll({rowIndexBeforeSend, samples});
-
-    await timeline.waitForLineGrowth(5);
-    expect(await timeline.messageViewportTop(messageText), "streamed rows should expand below the anchored message without scrolling").toBeLessThanOrEqual(30);
+    await timeline.waitForLineGrowth(30);
     await timeline.expectAtBottom();
-  });
-
-  test("the fake space below an anchored message is lossy when scrolling up", async ({timeline}) => {
-    const messageText = "Anchor a message to create fake space";
-    await timeline.sendMessage(messageText);
-    await expect.poll(() => timeline.messageViewportTop(messageText), {message: "the sent message should settle near the viewport top"}).toBeLessThanOrEqual(30);
-    const beforeScrollHeight = await timeline.scrollHeight();
-    expect(await timeline.fakeSpaceHeight(), "the anchored message should leave meaningful fake space").toBeGreaterThan(120);
-
-    await timeline.scrollUp(100);
-    await expect.poll(() => timeline.scrollHeight(), {message: "scrolling up should destroy fake space"}).toBeLessThan(beforeScrollHeight - 50);
-    await timeline.expectAtBottom();
-
-    const shrunkenScrollHeight = await timeline.scrollHeight();
-    await timeline.scrollDown(400);
-    expect(await timeline.scrollHeight(), "scrolling back down must not recoup the lost space").toBeLessThanOrEqual(shrunkenScrollHeight);
-    await timeline.expectAtBottom();
+    expect(await timeline.messageViewportTop(messageText), "the response should push the sent message up as it follows").toBeLessThan(0);
   });
 
   test("streamed content stays bottom-locked in the same frame while auto-following", async ({page, timeline}) => {
@@ -260,7 +231,7 @@ test.describe("session timeline visual stability", () => {
     assertBottomLocked({minimumFrameCount: 1, samples: await timeline.visualSamples()});
   });
 
-  test("clicking scroll to bottom while detached during streaming reattaches to auto-scroll", async ({timeline}) => {
+  test("clicking scroll to bottom while detached during streaming reattaches to auto-scroll", async ({page, timeline}) => {
     await timeline.sendMessage();
     await timeline.waitForLineGrowth(60);
     await timeline.detachFar();
@@ -268,6 +239,7 @@ test.describe("session timeline visual stability", () => {
     await timeline.resetVisualProbe();
 
     await timeline.clickScrollToBottom();
+    await expect(page.getByLabel("Session timeline"), "the keyboard should keep scrolling the timeline").toBeFocused();
 
     const attachedScrollTop = await timeline.scrollTop();
     const intermediateFrames = visibleSamples(await timeline.visualSamples(), TIMELINE_SESSION_ID).filter(
@@ -316,14 +288,23 @@ test.describe("session timeline visual stability", () => {
     assertBottomLocked({samples: await timeline.recordStreamGrowth(60)});
   });
 
-  test("sending a message from a detached scroll position scrolls to the bottom and reattaches", async ({timeline}) => {
-    await timeline.detachFar();
-
+  test("sending a message from a detached scroll position keeps the same content visible without scrolling", async ({page, timeline}) => {
     await timeline.sendMessage();
-    await timeline.waitForLineGrowth(45);
-    await timeline.expectAtBottom();
+    await timeline.waitForLineGrowth(90);
+    await timeline.completeMessage();
+    await timeline.detachFar();
+    const before = await timeline.captureVisibleTextAnchor();
+    await timeline.resetVisualProbe();
 
-    assertBottomLocked({samples: await timeline.recordStreamGrowth(60)});
+    await timeline.sendMessage("Sent while reading earlier output", {awaitBottom: false});
+    await timeline.waitForLineGrowth(30);
+    const samples = await waitForPrimaryFrames({timeline});
+    const after = await timeline.measureVisibleTextAnchor(before);
+
+    assertAnchorUnmoved(before, after, samples);
+    await expect(page.getByRole("button", {name: "Scroll to latest message"})).toBeVisible();
+    await timeline.clickScrollToBottom();
+    assertBottomLocked({samples: await timeline.recordStreamGrowth(30)});
   });
 
   test("/undo from the bottom removes the latest message and stays at the bottom in the same frame", async ({timeline}) => {
@@ -337,19 +318,15 @@ test.describe("session timeline visual stability", () => {
     assertBottomLocked({samples});
   });
 
-  test("/undo of an anchored message collapses the fake space and pins the previous turn to the bottom", async ({timeline}) => {
-    const messageText = "Anchor a message that will be undone";
-    await timeline.sendMessage(messageText);
-    await expect.poll(() => timeline.messageViewportTop(messageText), {message: "the sent message should settle near the viewport top"}).toBeLessThanOrEqual(30);
+  test("/undo of a turn just sent stays at the bottom with the previous turn", async ({timeline}) => {
+    await timeline.sendMessage("A message that will be undone");
     await timeline.waitForLineGrowth(5);
     await timeline.abortMessage();
     const beforeScrollHeight = await timeline.scrollHeight();
-    expect(await timeline.fakeSpaceHeight(), "the aborted anchored turn should leave fake space behind").toBeGreaterThan(0);
 
     await timeline.undoLatestWithSlashCommand();
 
-    await expect.poll(() => timeline.fakeSpaceHeight(), {message: "reverting the anchored turn should collapse its fake space"}).toBe(0);
-    expect(await timeline.scrollHeight(), "the reverted turn's blank space must not survive the undo").toBeLessThan(beforeScrollHeight);
+    expect(await timeline.scrollHeight(), "the reverted turn should leave no space behind").toBeLessThan(beforeScrollHeight);
     await timeline.expectAtBottom();
   });
 
@@ -425,7 +402,6 @@ test.describe("session timeline visual stability", () => {
     await expect.poll(() => timeline.streamedResponseCount(), {message: "the response should be split into two assistant messages"}).toBe(2);
     await timeline.detachSlightly();
     await timeline.manuallyScrollToBottom();
-    expect(await timeline.fakeSpaceHeight(), "the timeline should be attached to real content").toBe(0);
     await timeline.resetVisualProbe();
 
     await timeline.completeMessage();
@@ -475,19 +451,119 @@ test.describe("session timeline visual stability", () => {
   });
 });
 
-test.describe("message pinning", () => {
-  test("reduced motion pins without animated intermediate positions", async ({page, timeline}) => {
+/** Asserts the tracked message painted at its first top on every frame, never shifted and never unrendered. */
+async function expectTrackedTextHeld(timeline: TimelineDriver): Promise<void> {
+  await timeline.waitForTrackedFrames();
+  const tops = await timeline.trackedMessageTops();
+  const first = tops[0];
+  expect(first, "the tracked message should be rendered when tracking starts").not.toBeNull();
+  const moved = tops.findIndex((top) => top === null || Math.abs(top - first!) > 1);
+  expect(moved, `the message moved from ${first} to ${tops[moved]} in frame ${moved} of ${JSON.stringify(tops)}`).toBe(-1);
+}
+
+test.describe("reading position across a change of rows", () => {
+  // A multi-step turn folds its first message and reasoning behind "Worked for" when it settles.
+  for (const {finalLines, firstLines, name, scrollUp, tracked} of [
+    {name: "the message after folded work, near the end", firstLines: 30, finalLines: 80, scrollUp: 600, tracked: timelineStreamLine(31)},
+    {name: "the message after folded work, more of the fold above than content below", firstLines: 40, finalLines: 20, scrollUp: 400, tracked: timelineStreamLine(41)},
+    {name: "the turn before a settling multi-step turn", firstLines: 40, finalLines: 6, scrollUp: 1_300, tracked: "Assistant history 27."},
+  ]) {
+    test(`settlement keeps ${name} where it was`, async ({timeline}) => {
+      await timeline.openMainSession();
+      await timeline.sendMessage();
+      await timeline.waitForLineGrowth(firstLines);
+      await timeline.breakForReasoning();
+      await timeline.waitForLineGrowth(finalLines);
+      await timeline.detachSlightly();
+      await timeline.scrollUp(scrollUp);
+      await timeline.waitForScrollToSettle();
+      await timeline.trackMessage(tracked);
+
+      await timeline.completeMessage();
+
+      await expectTrackedTextHeld(timeline);
+    });
+  }
+
+  test("settlement that folds away everything on screen lands on Worked for", async ({page, timeline}) => {
+    await timeline.openMainSession();
+    await timeline.sendMessage();
+    // Three messages, each after a reasoning step: lines 1-20, 21-50 and 51-90.
+    await timeline.waitForLineGrowth(20);
+    await timeline.breakForReasoning();
+    await timeline.waitForLineGrowth(30);
+    await timeline.breakForReasoning();
+    await timeline.waitForLineGrowth(40);
+    await timeline.detachSlightly();
+    // Into the second message, which settlement folds along with the first; the final answer starts below the screen.
+    await timeline.scrollToText(timelineStreamLine(25));
+    const finalAnswerTop = await page.getByLabel("Session timeline").evaluate((viewport) => {
+      const final = [...viewport.querySelectorAll<HTMLElement>(".session-markdown")].find((element) => element.textContent?.includes("line 000051"));
+      return (final?.getBoundingClientRect().top ?? Number.POSITIVE_INFINITY) - viewport.getBoundingClientRect().bottom;
+    });
+    expect(finalAnswerTop, "the final answer should start below the screen").toBeGreaterThan(0);
+
+    await timeline.completeMessage();
+
+    const workedFor = page
+      .getByLabel("Session timeline")
+      .getByRole("button", {name: /^Worked for/})
+      .last();
+    await expect(workedFor).toBeInViewport();
+    const top = await workedFor.evaluate((element) => element.getBoundingClientRect().top - element.closest('[aria-label="Session timeline"]')!.getBoundingClientRect().top);
+    expect(top, "Worked for should take the folded messages' place at the top of the viewport").toBeLessThan(80);
+  });
+
+  test("jumping into rows never measured keeps the place while the response streams", async ({page, timeline}) => {
+    await timeline.openMainSession();
+    await timeline.sendMessage();
+    await timeline.waitForLineGrowth(4);
+    // A press on the scrollbar track: the viewport itself takes the pointer, then the position jumps.
+    await page.getByLabel("Session timeline").evaluate((viewport) => {
+      viewport.dispatchEvent(new PointerEvent("pointerdown", {bubbles: true}));
+      viewport.scrollTop = Math.round((viewport.scrollHeight - viewport.clientHeight) / 2);
+      viewport.dispatchEvent(new PointerEvent("pointerup", {bubbles: true}));
+    });
+    await timeline.waitForScrollToSettle();
+    await timeline.expectDetached();
+    // Rows above the jump settle their estimates as they measure; the reader's place moves with them, not to the end.
+    await timeline.trackMessage((await timeline.captureVisibleTextAnchor()).text);
+
+    await page.evaluate(() => window.__supernovaTimelineMock!.emitLines(30));
+
+    await expectTrackedTextHeld(timeline);
+  });
+
+  test("loading earlier history keeps the message being read where it was", async ({page, timeline}) => {
+    await page.goto(`/session/${PAGED_SESSION_ID}`, {waitUntil: "commit"});
+    await expect(page.getByRole("heading", {name: PAGED_SESSION_TITLE})).toBeVisible();
+    await timeline.expectAtBottom();
+    // Near the top of the first page, so the client asks for the one before it.
+    await timeline.scrollUp((await timeline.scrollHeight()) - 900);
+    await timeline.waitForScrollToSettle();
+    const firstPageHeight = await timeline.scrollHeight();
+    await timeline.trackMessage(`Assistant history ${24 - PAGED_SESSION_PAGE_TURNS}.`);
+
+    await timeline.releaseHistoryPage();
+    await expect.poll(() => timeline.scrollHeight()).toBeGreaterThan(firstPageHeight);
+
+    await expectTrackedTextHeld(timeline);
+  });
+});
+
+test.describe("sending", () => {
+  test("reduced motion sends without an entrance animation", async ({page, timeline}) => {
     await page.emulateMedia({reducedMotion: "reduce"});
     await timeline.openMainSession();
     const rowIndexBeforeSend = await timeline.lastRowIndex();
     await timeline.resetVisualProbe();
-    const message = "Pin without motion";
-    await timeline.sendMessage(message);
-    await expect.poll(() => timeline.messageViewportTop(message)).toBeGreaterThanOrEqual(23);
-    await expect.poll(() => timeline.messageViewportTop(message)).toBeLessThanOrEqual(25);
-    const frames = visibleSamples(await timeline.visualSamples(), TIMELINE_SESSION_ID).filter((sample) => sample.lastRowIndex > rowIndexBeforeSend);
+    await timeline.sendMessage("Send without motion");
+    const frames = visibleSamples(await timeline.visualSamples(), TIMELINE_SESSION_ID).filter(
+      (sample) => sample.lastRowIndex > rowIndexBeforeSend && sample.lastUserMessageTop !== null
+    );
     expect(frames.length).toBeGreaterThan(0);
-    expect(frames.every((sample) => sample.lastUserMessageTop !== null && Math.abs(sample.lastUserMessageTop - 24) <= 1)).toBe(true);
+    const landed = frames.at(-1)!.lastUserMessageTop!;
+    expect(frames.every((sample) => Math.abs(sample.lastUserMessageTop! - landed) <= 1 && Math.abs(sample.streamOffset) <= 0.5)).toBe(true);
   });
 });
 

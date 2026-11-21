@@ -18,6 +18,7 @@ All notable changes to Supernova are documented in this file.
 - Changed the providers list to update in every open window when a provider is connected or disconnected, and to allow one provider login at a time.
 - Sidebars now use a smooth ease-out when opening and a faster ease-in when closing.
 - The sidebar's leading icon now only marks pinned sessions. Worktree and forked sessions show small markers after their title instead. Hovering or focusing a worktree or forked session opens a card beside it with its full title, status, and worktree branch.
+- Changed sending a message to rise it into place at the end of the timeline instead of scrolling it to the top above blank space, and to keep your place when you send while scrolled up.
 
 ### Fixed
 
@@ -28,6 +29,7 @@ All notable changes to Supernova are documented in this file.
 - The command palette's Open session in page now opens with its apps listed instead of empty first. Searching sessions drops results that no longer match as you type, instead of showing the previous search's results until the new ones arrive.
 - Long URLs and other unbroken text in assistant messages now wrap instead of running past the conversation column.
 - Fixed undo sometimes leaving a file unchanged when the agent edited it without changing its size, within a second of the last Git index update. The checkpoint missed the edit, so there was nothing to restore.
+- Fixed the timeline moving what you were reading when a response with reasoning or several messages finished, or when earlier messages loaded.
 
 ### Removed
 

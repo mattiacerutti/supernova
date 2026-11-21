@@ -179,6 +179,40 @@ export class TimelineDriver {
     await this.waitForSettledStatus("completed");
   }
 
+  /** Waits until the client has asked for the page before its earliest turn, then answers it. */
+  public async releaseHistoryPage(): Promise<void> {
+    await expect.poll(() => this.mockState().then((state) => state.heldHistoryPages), {message: "the timeline should ask for earlier history"}).toBeGreaterThan(0);
+    await this.page.evaluate(() => {
+      if (!window.__supernovaTimelineMock) throw new Error("Timeline runtime mock is not installed");
+      window.__supernovaTimelineMock.releaseHistoryPage();
+    });
+  }
+
+  /** Scrolls up with the wheel until `text` is near the top of the viewport, as a reader looking for it would. */
+  public async scrollToText(text: string): Promise<void> {
+    await this.timeline().hover();
+    for (let gesture = 0; gesture < 60; gesture += 1) {
+      const top = await this.timeline().evaluate((viewport, wanted) => {
+        // Streamed and settled text render differently; find the line itself through its text node.
+        const walker = document.createTreeWalker(viewport, NodeFilter.SHOW_TEXT);
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+          const at = node.textContent?.indexOf(wanted) ?? -1;
+          if (at < 0) continue;
+          const range = document.createRange();
+          range.setStart(node, at);
+          range.setEnd(node, at + wanted.length);
+          return range.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
+        }
+        return null;
+      }, text);
+      if (top !== null && top >= 0 && top < 160) break;
+      // Small steps while it is not rendered: virtualization only mounts rows near the screen.
+      await this.page.mouse.wheel(0, top === null ? -120 : top - 80);
+      await this.waitForScrollToSettle();
+    }
+    await this.waitForScrollToSettle();
+  }
+
   /** Interrupts the response with a collapsed reasoning step so the next lines start a new assistant message. */
   public async breakForReasoning(): Promise<void> {
     await this.page.evaluate(() => {
@@ -286,11 +320,6 @@ export class TimelineDriver {
     return await this.page.locator(".session-markdown", {hasText: "Extreme-speed streamed response:"}).count();
   }
 
-  /** Reads the current height of the lossy fake space below an anchored message. */
-  public async fakeSpaceHeight(): Promise<number> {
-    return await this.page.locator("[data-timeline-fake-space]").evaluate((element) => element.getBoundingClientRect().height);
-  }
-
   /** Reaches the bottom through a native wheel gesture, without assigning scrollTop. */
   public async manuallyScrollToBottom(): Promise<void> {
     for (let gesture = 0; gesture < 40; gesture += 1) {
@@ -302,7 +331,7 @@ export class TimelineDriver {
 
   /** Uses the product's scroll-to-latest control. */
   public async clickScrollToBottom(): Promise<void> {
-    const button = this.page.getByRole("button", {name: "Scroll to latest message"}).and(this.page.locator('[data-active="true"]'));
+    const button = this.page.getByRole("button", {name: "Scroll to latest message"});
     await expect(button).toBeVisible();
     await button.click();
     await this.expectAtBottom();
@@ -350,14 +379,65 @@ export class TimelineDriver {
     }, anchor);
   }
 
+  /** Waits until native scrollTop holds still across several painted frames, so a wheel gesture has fully landed. */
+  public async waitForScrollToSettle(): Promise<void> {
+    await this.timeline().evaluate(
+      (viewport) =>
+        new Promise<void>((resolve) => {
+          let last = viewport.scrollTop;
+          let still = 0;
+          const check = (): void => {
+            still = viewport.scrollTop === last ? still + 1 : 0;
+            last = viewport.scrollTop;
+            if (still >= 10) resolve();
+            else window.requestAnimationFrame(check);
+          };
+          window.requestAnimationFrame(check);
+        })
+    );
+  }
+
+  /** Records the top of the newest rendered message containing `text`, relative to the timeline, on every painted frame from now on. */
+  public async trackMessage(text: string): Promise<void> {
+    await this.timeline().evaluate((viewport, messageText) => {
+      const find = () => [...viewport.querySelectorAll<HTMLElement>(".session-markdown")].findLast((candidate) => candidate.textContent?.includes(messageText));
+      if (!find()) throw new Error(`No rendered message contains "${messageText}"`);
+      const tops: (number | null)[] = [];
+      (window as unknown as {__trackedTextTops?: (number | null)[]}).__trackedTextTops = tops;
+      const sample = (): void => {
+        const element = find();
+        tops.push(element ? element.getBoundingClientRect().top - viewport.getBoundingClientRect().top : null);
+      };
+      const scheduleFrame = (): void => {
+        window.requestAnimationFrame(() => {
+          window.setTimeout(sample, 0);
+          scheduleFrame();
+        });
+      };
+      sample();
+      scheduleFrame();
+    }, text);
+  }
+
+  /** The tops recorded since `trackMessage`; `null` where the message was not rendered. */
+  public async trackedMessageTops(): Promise<readonly (number | null)[]> {
+    return await this.page.evaluate(() => (window as unknown as {__trackedTextTops?: (number | null)[]}).__trackedTextTops ?? []);
+  }
+
+  /** Waits for `frames` more painted samples than were recorded when called, so a check sees the frames after a change. */
+  public async waitForTrackedFrames(frames = 10): Promise<void> {
+    const recorded = (await this.trackedMessageTops()).length;
+    await expect.poll(async () => (await this.trackedMessageTops()).length, {message: "the change should be followed by sampled frames"}).toBeGreaterThanOrEqual(recorded + frames);
+  }
+
   /** Reads native bottom distance directly from the scroll viewport. */
   public async bottomDistance(): Promise<number> {
     return await this.timeline().evaluate((viewport) => viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop);
   }
 
-  /** Reports whether the timeline remains attached to its latest content. */
+  /** Reports whether the timeline remains attached to its latest content: at the end, offering no way back to it. */
   public async isFollowing(): Promise<boolean> {
-    return await this.timeline().evaluate((viewport) => !viewport.dataset.scrollable?.includes("end"));
+    return (await this.bottomDistance()) <= BOTTOM_TOLERANCE_PX && (await this.page.getByRole("button", {name: "Scroll to latest message"}).count()) === 0;
   }
 
   /** Reports whether timeline content has grown beyond the viewport. */
@@ -435,7 +515,7 @@ export class TimelineDriver {
   private async waitForSettledStatus(status: "aborted" | "completed"): Promise<void> {
     await expect.poll(() => this.mockState().then((state) => state.status)).toBe(status);
     await expect(this.page.getByRole("button", {name: "Send message"})).toBeVisible();
-    await expect(this.page.locator('[data-slot="message-scroller-content"]')).toHaveAttribute("aria-busy", "false");
+    await expect(this.page.locator('[aria-label="Session timeline"] [role="log"]')).toHaveAttribute("aria-busy", "false");
   }
 }
 

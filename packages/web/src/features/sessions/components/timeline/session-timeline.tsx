@@ -1,11 +1,9 @@
-import {useMessageScroller, useMessageScrollerScrollable} from "@shadcn/react/message-scroller";
 import type {SessionSetupStep} from "@supernova/contracts/services/sessions/procedures";
-import {defaultRangeExtractor, elementScroll, observeElementOffset, useVirtualizer} from "@tanstack/react-virtual";
+import {defaultRangeExtractor, observeElementOffset, observeElementRect, useVirtualizer} from "@tanstack/react-virtual";
 import type {VirtualItem} from "@tanstack/react-virtual";
 import {useReducedMotion} from "framer-motion";
 import {useCallback, useLayoutEffect, useMemo, useRef, useState} from "react";
-import type {KeyboardEvent, PointerEvent, UIEvent} from "react";
-import {MessageScroller, MessageScrollerContent, MessageScrollerProvider, MessageScrollerViewport} from "@/features/sessions/components/timeline/viewport/message-scroller";
+import type {KeyboardEvent, PointerEvent} from "react";
 import EarlierHistoryStatus from "@/features/sessions/components/timeline/viewport/earlier-history-status";
 import ScrollToEndButton from "@/features/sessions/components/timeline/viewport/scroll-to-end-button";
 import SessionTimelineVirtualRow from "@/features/sessions/components/timeline/rows/session-timeline-virtual-row";
@@ -15,28 +13,51 @@ import {WorkExpansionContext, useWorkExpansionState} from "@/features/sessions/h
 import {buildTimelineRowKeys, buildTimelineRows, hasLiveTimelineOutput, withForkDivider} from "@/features/sessions/lib/timeline/rows/timeline-rows";
 import type {SessionTimelineItem} from "@/features/sessions/types/session-timeline-item";
 
-const TIMELINE_ANCHOR_SCROLL_DURATION_MS = 700;
-const TIMELINE_ANCHOR_TOP_MARGIN_PX = 24;
+const TIMELINE_TOP_PADDING_PX = 24;
 const TIMELINE_BOTTOM_PADDING_PX = 16;
 const TIMELINE_EARLIER_HISTORY_HEIGHT_PX = 48;
 const TIMELINE_CACHE_LIMIT = 16;
 const TIMELINE_SCROLL_BUTTON_THRESHOLD_PX = 50;
-const TIMELINE_STREAM_SCROLL_ANIMATION_MS = 160;
-const TIMELINE_STREAM_SCROLL_MAX_OFFSET_PX = 56;
+// DOM bounds can be fractional even at the native scroll limit.
+const TIMELINE_END_THRESHOLD_PX = 1;
+const TIMELINE_AUTOSCROLL_THUMB_HIDE_MS = 180;
+const TIMELINE_EASE_MS = 160;
+const TIMELINE_EASE_MAX_OFFSET_PX = 56;
+const TIMELINE_SEND_EASE_MS = 320;
+const TIMELINE_SEND_BUBBLE_MS = 380;
+const TIMELINE_UPWARD_KEYS = new Set(["ArrowUp", "PageUp", "Home"]);
+const TIMELINE_SCROLL_KEYS = new Set([...TIMELINE_UPWARD_KEYS, "ArrowDown", "PageDown", "End", " "]);
 
 const timelineCache = new Map<string, VirtualItem[]>();
 
-/** Transform-only, so it runs on the compositor and never triggers layout while streaming. */
-function animateCatchUp(element: HTMLElement, offset: number, current: Animation | null, maxOffset = TIMELINE_STREAM_SCROLL_MAX_OFFSET_PX): Animation {
+function translateYOf(element: HTMLElement): number {
   const transform = window.getComputedStyle(element).transform;
-  const inFlight = transform === "none" ? 0 : new DOMMatrixReadOnly(transform).m42;
-  const start = Math.sign(offset) * Math.min(Math.abs(inFlight + offset), maxOffset);
-  current?.cancel();
-  return element.animate([{transform: `translateY(${start}px)`}, {transform: "translateY(0)"}], {
-    duration: TIMELINE_STREAM_SCROLL_ANIMATION_MS,
-    easing: "cubic-bezier(0.22, 1, 0.36, 1)",
-  });
+  return transform === "none" ? 0 : new DOMMatrixReadOnly(transform).m42;
 }
+
+/** Transform-only, so it runs on the compositor and never triggers layout while streaming. */
+function easeFrom(element: HTMLElement, offset: number, current: Animation | null, maxOffset: number, duration = TIMELINE_EASE_MS): Animation {
+  // From what is painted, so an ease still running in the other direction shortens this one instead of flipping it.
+  const painted = translateYOf(element) + offset;
+  const start = Math.sign(painted) * Math.min(Math.abs(painted), maxOffset);
+  current?.cancel();
+  return element.animate([{transform: `translateY(${start}px)`}, {transform: "translateY(0)"}], {duration, easing: "cubic-bezier(0.22, 1, 0.36, 1)"});
+}
+
+interface ScreenRow {
+  readonly key: VirtualItem["key"];
+  readonly index: number;
+  readonly start: number;
+}
+
+/**
+ * Only the reader changes it; layout changes only reapply it. `rows` are the measured rows on screen, `above` the
+ * measured rows just above them, nearest first, one of which survives when a fold removes everything on screen.
+ */
+type ScrollPosition = {readonly follow: true} | {readonly follow: false; readonly scrollTop: number; readonly rows: readonly ScreenRow[]; readonly above: readonly ScreenRow[]};
+
+// A fold removes a turn's steps but keeps its prompt; this reaches past the steps of a turn on screen to it.
+const TIMELINE_HELD_ROWS_ABOVE = 8;
 
 interface TimelineEarlierHistory {
   readonly count: number;
@@ -60,47 +81,41 @@ interface SessionTimelineProps {
   readonly streamError: string | null;
 }
 
-interface SessionTimelineViewportProps extends SessionTimelineProps {
-  readonly anchorFirstIndex: number | null;
-  readonly onAnchorChange: (firstIndex: number | null) => void;
-  readonly autoFollowPausedByExpansion: boolean;
-  readonly onResumeAutoFollow: () => void;
-}
-
-function SessionTimelineViewport(props: SessionTimelineViewportProps) {
+export default function SessionTimeline(props: SessionTimelineProps) {
   const {
-    anchorFirstIndex,
     bottomOverlayHeight = 0,
     compacting,
-    autoFollowPausedByExpansion,
-    onResumeAutoFollow,
     earlierHistory,
     isStreaming,
     items,
     lastCopiedTurnId,
     liveItems,
-    onAnchorChange,
     onForkFromTurn,
     onRevertToMessage,
     sessionId,
     setupStep,
     streamError,
   } = props;
-  const {scrollToEnd} = useMessageScroller();
-  const {end: canScrollToEnd} = useMessageScrollerScrollable();
   const viewportRef = useRef<HTMLDivElement>(null);
-  const virtualContentRef = useRef<HTMLDivElement>(null);
-  const scrollOffsetChangedRef = useRef<((offset: number, isScrolling: boolean) => void) | null>(null);
-  const streamContentRef = useRef<HTMLDivElement>(null);
-  const anchorSpaceRef = useRef<HTMLDivElement>(null);
-  const anchorSpaceHeightRef = useRef(0);
-  const realContentHeightRef = useRef<number | null>(null);
-  const anchorContentRef = useRef<HTMLDivElement>(null);
-  const anchorScrollRef = useRef<{row: VirtualItem; initialTop: number; offset: number; animation: Animation | null} | null>(null);
-  const streamAnimationReadyRef = useRef(false);
-  const streamScrollAnimationRef = useRef<Animation | null>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const footerRef = useRef<HTMLDivElement>(null);
-  const footerAnimationRef = useRef<Animation | null>(null);
+  const scrollOffsetChangedRef = useRef<((offset: number, isScrolling: boolean) => void) | null>(null);
+  const positionRef = useRef<ScrollPosition>({follow: true});
+  const easeRef = useRef<Animation | null>(null);
+  const footerEaseRef = useRef<Animation | null>(null);
+  const footerTopRef = useRef<number | null>(null);
+  const lastScrollTopRef = useRef(0);
+  const touchYRef = useRef<number | null>(null);
+  const autoscrollTimerRef = useRef<number | undefined>(undefined);
+  const [scrollButtonVisible, setScrollButtonVisibleState] = useState(false);
+  const scrollButtonVisibleRef = useRef(false);
+  // Called on every streamed frame; an unchanged value set from a layout effect still costs React a render to bail out.
+  const setScrollButtonVisible = (visible: boolean): void => {
+    if (scrollButtonVisibleRef.current === visible) return;
+    scrollButtonVisibleRef.current = visible;
+    setScrollButtonVisibleState(visible);
+  };
+  const shouldReduceMotion = useReducedMotion();
 
   const hasTimelineContent = items.length > 0 || liveItems.length > 0 || isStreaming || streamError !== null;
   // The divider sits among the committed rows, so their keys and indexes stay one memoized run.
@@ -108,32 +123,31 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
   const timelineRows = hasTimelineContent ? buildTimelineRows({items: committedRows, liveItems, streamError}) : [];
   const activeTurnId = liveItems[0]?.turnId ?? null;
   const hasLiveOutput = hasLiveTimelineOutput(liveItems);
-  if (!hasLiveOutput) streamAnimationReadyRef.current = false;
-
+  // Easing starts a frame after output first appears, so the frame that introduces it lays out without motion.
+  const easeReadyRef = useRef(false);
+  if (!hasLiveOutput) easeReadyRef.current = false;
   const pullStatusIntoLastMessage = hasLiveOutput && liveItems.at(-1)?.spacing === "message";
   // Not compiled (TanStack Virtual), so the history's share is memoized by hand: these walk every loaded row, and the
   // timeline renders on every streamed frame and scroll range change. A stable `getItemKey` also spares TanStack
   // from re-measuring every row on each render.
   const committedRowKeys = useMemo(() => buildTimelineRowKeys(committedRows, earlierHistory.count), [committedRows, earlierHistory.count]);
-  const committedTurns = useMemo(() => ({ids: new Set(items.map((item) => item.turnId)), starts: items.filter((item) => item.type === "user").length}), [items]);
+  const committedTurnStarts = useMemo(() => items.filter((item) => item.type === "user").length, [items]);
   // Live rows open a new turn, so their keys continue from the history's turn count.
-  const tailRowKeySignature = buildTimelineRowKeys(timelineRows.slice(committedRowKeys.length), earlierHistory.count + committedTurns.starts).join(" ");
+  const tailRowKeySignature = buildTimelineRowKeys(timelineRows.slice(committedRowKeys.length), earlierHistory.count + committedTurnStarts).join(" ");
   const tailRowKeys = useMemo(() => (tailRowKeySignature ? tailRowKeySignature.split(" ") : []), [tailRowKeySignature]);
   const getItemKey = useCallback((index: number) => committedRowKeys[index] ?? tailRowKeys[index - committedRowKeys.length] ?? index, [committedRowKeys, tailRowKeys]);
-  const firstRowKey = committedRowKeys[0] ?? tailRowKeys[0];
   const hasEarlierHistory = earlierHistory.count > 0;
   // The status sits in the canvas's top padding rather than in a row, so loaded turns go in below it.
-  const paddingStart = TIMELINE_ANCHOR_TOP_MARGIN_PX + (hasEarlierHistory ? TIMELINE_EARLIER_HISTORY_HEIGHT_PX : 0);
-  const [scrollButtonVisible, setScrollButtonVisible] = useState(false);
-  const shouldReduceMotion = useReducedMotion();
-
-  const hasLiveUserRow = liveItems[0]?.type === "user";
-  const liveUserRowIndex = hasLiveUserRow ? committedRows.length : -1;
-  const previousHasLiveUserRowRef = useRef(hasLiveUserRow);
-
-  // Distinct, so a settling turn rendered by both projections counts once.
-  const turnCount = committedTurns.ids.size + (activeTurnId !== null && !committedTurns.ids.has(activeTurnId) ? 1 : 0);
-  const previousTurnCountRef = useRef(turnCount);
+  const paddingStart = TIMELINE_TOP_PADDING_PX + (hasEarlierHistory ? TIMELINE_EARLIER_HISTORY_HEIGHT_PX : 0);
+  const liveUserRowIndex = liveItems[0]?.type === "user" ? committedRows.length : -1;
+  // A send while following eases in further and longer.
+  const sentRowKey = liveUserRowIndex < 0 ? null : getItemKey(liveUserRowIndex);
+  const sentRowKeyRef = useRef(sentRowKey);
+  const sendingRef = useRef(false);
+  if (sentRowKey !== sentRowKeyRef.current) {
+    sentRowKeyRef.current = sentRowKey;
+    sendingRef.current = sentRowKey !== null && positionRef.current.follow;
+  }
 
   // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual owns mutable scroll state by design.
   const virtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
@@ -141,7 +155,19 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
     directDomUpdates: true,
     directDomUpdatesMode: "position",
     estimateSize: () => 86,
-    onChange: (instance, scrolling) => {
+    getItemKey,
+    getScrollElement: () => viewportRef.current,
+    initialMeasurementsCache: timelineCache.get(sessionId),
+    observeElementOffset: (instance, onOffsetChange) => {
+      scrollOffsetChangedRef.current = onOffsetChange;
+      return observeElementOffset(instance, onOffsetChange);
+    },
+    observeElementRect: (instance, onRectChange) =>
+      observeElementRect(instance, (rect) => {
+        onRectChange(rect);
+        keepPosition();
+      }),
+    onChange: (instance) => {
       // Direct DOM updates position only the new virtual range. Rows awaiting React's unmount still paint,
       // so keep those mounted rows in the same coordinate system after a measurement shifts the range.
       for (const [key, element] of instance.elementsCache) {
@@ -150,296 +176,189 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
         const top = `${item.start}px`;
         if (element.style.top !== top) element.style.top = top;
       }
-      if (!scrolling) syncViewport();
-    },
-    getItemKey,
-    getScrollElement: () => viewportRef.current,
-    initialMeasurementsCache: timelineCache.get(sessionId),
-    observeElementOffset: (instance, onOffsetChange) => {
-      scrollOffsetChangedRef.current = onOffsetChange;
-      return observeElementOffset(instance, onOffsetChange);
+      // Also while the reader scrolls: rows measured on the way in would otherwise shift what is on screen.
+      keepPosition();
     },
     overscan: 3,
     paddingEnd: TIMELINE_BOTTOM_PADDING_PX,
     paddingStart,
-    // Measure a detached, tall prompt before pinning instead of waiting for it to enter the viewport.
+    // Mount a sent prompt before the send scrolls to it, so its bubble can animate in.
     rangeExtractor: (range) => {
-      // Keep the swept viewport mounted while its pixels move independently of native scrollTop.
-      const indexes = defaultRangeExtractor(anchorFirstIndex === null ? range : {...range, startIndex: Math.min(range.startIndex, anchorFirstIndex)});
+      const indexes = defaultRangeExtractor(range);
       if (liveUserRowIndex < 0 || indexes.includes(liveUserRowIndex)) return indexes;
       return [...indexes, liveUserRowIndex].toSorted((left, right) => left - right);
     },
-    // Publish the new height before TanStack adjusts scrollTop, or the browser clamps against the old height.
-    scrollToFn: (offset, options, instance) => {
-      const virtualContent = virtualContentRef.current;
-      if (virtualContent) virtualContent.style.height = `${instance.getTotalSize()}px`;
-      elementScroll(offset, options, instance);
-      // The offset already includes a pending prepend shift, so the DOM now carries it.
-      if (prependRef.current) prependRef.current = {...prependRef.current, shift: 0};
-      // A size correction must update the virtual range before paint, not wait for the next native scroll event.
-      // Going through the offset observer also consumes TanStack's accumulated size adjustments.
-      if (options.adjustments !== undefined && viewportRef.current) scrollOffsetChangedRef.current?.(viewportRef.current.scrollTop, false);
-    },
   });
+  // The held position corrects for rows changing size; TanStack's own correction would correct twice.
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = () => false;
+  const virtualItems = virtualizer.getVirtualItems();
 
-  const setAnchorSpaceHeight = useCallback((height: number): void => {
-    anchorSpaceHeightRef.current = height;
-    if (anchorSpaceRef.current) anchorSpaceRef.current.style.height = `${height}px`;
-  }, []);
-
-  const stopAnchorScroll = (): void => {
-    const anchor = anchorScrollRef.current;
-    anchorScrollRef.current = null;
-    const viewport = viewportRef.current;
-    const content = anchorContentRef.current;
-    if (!anchor?.animation) return;
-    // Hand user gestures the painted position, not the destination hidden behind the transform.
-    const transform = content ? window.getComputedStyle(content).transform : "none";
-    const offset = transform === "none" ? 0 : new DOMMatrixReadOnly(transform).m42;
-    anchor.animation.cancel();
-    if (viewport && offset !== 0) viewport.scrollTop -= offset;
+  /** Uses the virtualizer's own viewport size, so remembering the rows costs no layout read. */
+  const hold = (scrollTop: number): void => {
+    const bottom = scrollTop + (virtualizer.scrollRect?.height ?? 0);
+    const first = virtualizer.getVirtualItemForOffset(scrollTop)?.index ?? 0;
+    // Only measured rows are where the reader sees them; an estimated one moves what follows once it is measured.
+    const measured = (index: number): ScreenRow | null => {
+      const row = virtualizer.measurementsCache[index];
+      return row && virtualizer.itemSizeCache.has(row.key) ? {key: row.key, index, start: row.start} : null;
+    };
+    const above: ScreenRow[] = [];
+    for (let index = first - 1; index >= 0 && above.length < TIMELINE_HELD_ROWS_ABOVE; index -= 1) {
+      const row = measured(index);
+      if (row) above.push(row);
+    }
+    const rows: ScreenRow[] = [];
+    for (let index = first; index < virtualizer.options.count; index += 1) {
+      const row = measured(index);
+      const bounds = virtualizer.measurementsCache[index];
+      if (!bounds || bounds.start >= bottom) break;
+      if (row && bounds.end > scrollTop) rows.push(row);
+    }
+    positionRef.current = {follow: false, scrollTop, rows, above};
   };
 
-  const releaseAnchorScroll = useCallback((): void => {
-    stopAnchorScroll();
-    onAnchorChange(null);
-  }, [onAnchorChange]);
-
-  // While pinning, space tracks geometry. Afterwards it is lossy: growth and scrolling up consume it.
-  const syncAnchorSpace = useCallback(
-    (viewport: HTMLDivElement): void => {
-      const currentHeight = anchorSpaceHeightRef.current;
-      const anchor = anchorScrollRef.current;
-      if (currentHeight === 0 && !anchor) return;
-      const space = anchorSpaceRef.current;
-      if (!space) return;
-
-      const viewportTop = viewport.getBoundingClientRect().top;
-      // scrollHeight includes min-height: 100%, even when the transcript is short.
-      const realContentHeight = space.getBoundingClientRect().top - viewportTop + viewport.scrollTop;
-      const previousRealContentHeight = realContentHeightRef.current ?? realContentHeight;
-      realContentHeightRef.current = realContentHeight;
-
-      if (anchor) {
-        // Retain the last measurement if settlement virtualizes the row away.
-        anchor.row = virtualizer.getVirtualItems().find((row) => row.key === anchor.row.key) ?? anchor.row;
-        const requiredHeight = Math.max(0, anchor.row.start - TIMELINE_ANCHOR_TOP_MARGIN_PX + viewport.clientHeight - realContentHeight);
-        if (requiredHeight !== currentHeight) setAnchorSpaceHeight(requiredHeight);
-        const end = Math.max(0, realContentHeight + requiredHeight - viewport.clientHeight);
-        const offset = end - (anchor.row.start - anchor.initialTop);
-        if (offset !== anchor.offset) {
-          anchor.offset = offset;
-          // Preserve the animation clock when measurements or streaming move its destination.
-          (anchor.animation?.effect as KeyframeEffect | null)?.setKeyframes([{transform: `translateY(${offset}px)`}, {transform: "translateY(0)"}]);
-        }
-        if (anchor.animation && Math.abs(viewport.scrollTop - end) > 0.5) viewport.scrollTop = end;
-        return;
-      }
-
-      const shrinkDelta = previousRealContentHeight - realContentHeight;
-      if (shrinkDelta > 0) {
-        setAnchorSpaceHeight(currentHeight + shrinkDelta);
-        viewport.scrollTop += shrinkDelta;
-        return;
-      }
-
-      const requiredHeight = viewport.scrollTop + viewport.clientHeight - realContentHeight;
-      const nextHeight = Math.max(0, Math.min(currentHeight, requiredHeight));
-      if (nextHeight !== currentHeight) setAnchorSpaceHeight(nextHeight);
-    },
-    [setAnchorSpaceHeight, virtualizer]
-  );
-
-  // Measured against the previous commit, not the virtualizer's scroll delta: auto-follow may already have scrolled.
-  const streamEndRef = useRef<{footerTop: number; scrollTop: number} | null>(null);
-  const measureStreamEnd = (): void => {
-    const viewport = viewportRef.current;
-    streamEndRef.current = viewport ? {footerTop: (footerRef.current?.offsetTop ?? 0) - viewport.scrollTop, scrollTop: viewport.scrollTop} : null;
+  const indexOfKey = (row: ScreenRow, indexes: {map?: Map<VirtualItem["key"], number>}): number => {
+    const {count} = virtualizer.options;
+    if (row.index < count && getItemKey(row.index) === row.key) return row.index;
+    indexes.map ??= new Map(Array.from({length: count}, (_, at) => [getItemKey(at), at]));
+    return indexes.map.get(row.key) ?? -1;
   };
-  const easeStreamGrowth = (): void => {
-    const previous = streamEndRef.current;
-    measureStreamEnd();
+
+  /**
+   * Where the held place puts the viewport now, measured from the held scrollTop since the browser may have clamped the
+   * live one against a shorter canvas. `null` when what was held is gone, as when navigation removes it.
+   */
+  const heldScrollTop = ({above, rows, scrollTop}: Extract<ScrollPosition, {follow: false}>): number | null => {
+    const indexes = {};
+    const moved = (row: ScreenRow): number | null => {
+      const index = indexOfKey(row, indexes);
+      return index < 0 ? null : virtualizer.measurementsCache[index]!.start - row.start;
+    };
+    // A held row that survives keeps its place.
+    for (const row of rows) {
+      const shift = moved(row);
+      if (shift !== null) return scrollTop + shift;
+    }
+    const survivor = above.find((row) => moved(row) !== null);
+    if (above.length > 0 && !survivor) return null;
+    // Nothing on screen was measured yet: the offset itself is the place, moved with what lies above it.
+    if (rows.length === 0) return scrollTop + (survivor ? moved(survivor)! : 0);
+    // Everything on screen was folded away, as into "Worked for": the row after the surviving one takes its place.
+    const replacement = virtualizer.measurementsCache[survivor ? indexOfKey(survivor, indexes) + 1 : 0];
+    return replacement ? replacement.start - TIMELINE_TOP_PADDING_PX : null;
+  };
+
+  /** The only writer of the scroll position: after any change of rows, sizes or viewport, it puts the reader back. */
+  const keepPosition = (): void => {
     const viewport = viewportRef.current;
-    const current = streamEndRef.current;
-    if (!previous || !current || !viewport || shouldReduceMotion || !isStreaming || !streamAnimationReadyRef.current || anchorScrollRef.current !== null) return;
+    const content = contentRef.current;
+    if (!viewport || !content) return;
+    // The canvas holds the current total, so the browser does not clamp the new position against the old height.
+    const total = `${virtualizer.getTotalSize()}px`;
+    if (content.style.height !== total) content.style.height = total;
+    // One layout read per call: this runs on every streamed frame and every row measurement.
+    const before = viewport.scrollTop;
+    const end = viewport.scrollHeight - viewport.clientHeight;
+    const position = positionRef.current;
+    const held = position.follow ? null : heldScrollTop(position);
+    // Only a timeline that cannot scroll at all follows on its own; a held place at the end of a longer one stays held.
+    if (held === null || end <= TIMELINE_END_THRESHOLD_PX) positionRef.current = {follow: true};
+    const top = Math.max(0, Math.min(held ?? end, end));
+    if (Math.abs(before - top) > 0.5) {
+      viewport.scrollTop = top;
+      // Synchronously, so the rows for the new position render before paint; keeping `isScrolling` avoids a re-render.
+      scrollOffsetChangedRef.current?.(top, virtualizer.isScrolling);
+    }
+    lastScrollTopRef.current = top;
+    if (positionRef.current.follow) easeFollowing(viewport, top - before);
+    else hold(top);
+    easeFooter(top);
+    setScrollButtonVisible(end - top >= TIMELINE_SCROLL_BUTTON_THRESHOLD_PX);
+  };
 
-    const footer = footerRef.current;
-    const footerShift = current.footerTop - previous.footerTop;
-    if (footer && footerShift > 0) footerAnimationRef.current = animateCatchUp(footer, -footerShift, footerAnimationRef.current, Number.POSITIVE_INFINITY);
-
-    const scrolled = current.scrollTop - previous.scrollTop;
-    const atEnd = viewport.scrollHeight - viewport.clientHeight - current.scrollTop <= 1;
-    if (streamContentRef.current && atEnd && scrolled > 0 && scrolled <= TIMELINE_STREAM_SCROLL_MAX_OFFSET_PX * 4) {
-      streamScrollAnimationRef.current = animateCatchUp(streamContentRef.current, scrolled, streamScrollAnimationRef.current);
+  // Following jumps as rows grow; easing back from each jump smooths it. Larger jumps are not streamed growth.
+  const easeFollowing = (viewport: HTMLDivElement, scrolled: number): void => {
+    const content = contentRef.current;
+    if (scrolled <= 0 || !content) return;
+    viewport.dataset.autoscrolling = "";
+    window.clearTimeout(autoscrollTimerRef.current);
+    autoscrollTimerRef.current = window.setTimeout(() => delete viewport.dataset.autoscrolling, TIMELINE_AUTOSCROLL_THUMB_HIDE_MS);
+    if (shouldReduceMotion) return;
+    if (sendingRef.current) {
+      const offset = Math.min(scrolled, virtualizer.scrollRect?.height ?? scrolled);
+      easeRef.current = easeFrom(content, offset, easeRef.current, Number.POSITIVE_INFINITY, TIMELINE_SEND_EASE_MS);
+      if (footerRef.current) footerEaseRef.current = easeFrom(footerRef.current, offset, footerEaseRef.current, Number.POSITIVE_INFINITY, TIMELINE_SEND_EASE_MS);
+    } else if (easeReadyRef.current && scrolled <= TIMELINE_EASE_MAX_OFFSET_PX * 4) {
+      easeRef.current = easeFrom(content, scrolled, easeRef.current, TIMELINE_EASE_MAX_OFFSET_PX);
     }
   };
 
-  // Consume anchor space before following, then animate the resulting movement.
-  const syncViewport = (): void => {
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-    syncAnchorSpace(viewport);
-    if (!autoFollowPausedByExpansion && anchorScrollRef.current === null && !canScrollToEnd) scrollToEnd({behavior: "auto"});
-    easeStreamGrowth();
+  /** Derived from the canvas height, so it costs no layout read. */
+  const easeFooter = (scrollTop: number): void => {
+    const footer = footerRef.current;
+    const top = footer ? virtualizer.getTotalSize() - scrollTop : null;
+    const previous = footerTopRef.current;
+    footerTopRef.current = top;
+    if (!footer || top === null || previous === null || top <= previous || shouldReduceMotion || !easeReadyRef.current || sendingRef.current) return;
+    footerEaseRef.current = easeFrom(footer, previous - top, footerEaseRef.current, Number.POSITIVE_INFINITY);
   };
 
-  // DOM offset, not TanStack's, which lags to the next scroll event.
-  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item) => {
-    if (prependRef.current && item.index < prependRef.current.beforeIndex) return true;
-    return anchorScrollRef.current === null && anchorSpaceHeightRef.current === 0 && item.end <= (viewportRef.current?.scrollTop ?? 0);
+  /** The reader's gesture starts from what is painted, not from the destination hidden behind an ease. */
+  const stopEase = (viewport: HTMLDivElement): void => {
+    const ease = easeRef.current;
+    const content = contentRef.current;
+    if (ease?.playState !== "running" || !content) return;
+    const offset = translateYOf(content);
+    ease.cancel();
+    viewport.scrollTop -= offset;
   };
 
-  // Prepended turns shift the scroll position in this render so rows on screen stay put; `shift` is what the DOM still
-  // owes, `beforeIndex` marks the new rows so their measurement corrects it.
-  const firstRowRef = useRef<{readonly key: string; readonly start: number} | null>(null);
-  const prependRef = useRef<{readonly shift: number; readonly beforeIndex: number} | null>(null);
-  const previousFirstRow = firstRowRef.current;
-  const prependedIndex = previousFirstRow ? committedRowKeys.indexOf(previousFirstRow.key) : -1;
-  virtualizer.getTotalSize();
-  if (previousFirstRow && prependedIndex > 0) {
-    const shift = (virtualizer.measurementsCache[prependedIndex]?.start ?? previousFirstRow.start) - previousFirstRow.start;
-    virtualizer.scrollOffset = (virtualizer.scrollOffset ?? 0) + shift;
-    prependRef.current = {shift: (prependRef.current?.shift ?? 0) + shift, beforeIndex: prependedIndex};
-  }
-  firstRowRef.current = firstRowKey === undefined ? null : {key: firstRowKey, start: virtualizer.measurementsCache[0]?.start ?? paddingStart};
-
-  const virtualItems = virtualizer.getVirtualItems();
+  // Every row that shows work reads this context, so its value must keep its identity across streamed frames.
+  const holdRef = useRef(hold);
+  holdRef.current = hold;
+  const onToggleWork = useCallback(() => viewportRef.current && holdRef.current(viewportRef.current.scrollTop), []);
+  const {expanded: workExpanded, measurements: workMeasurements} = useWorkExpansionState(onToggleWork);
+  const workExpansion = useMemo(() => ({expanded: workExpanded, measurements: workMeasurements, onToggle: onToggleWork}), [workExpanded, workMeasurements, onToggleWork]);
 
   const loadEarlierNearTop = (viewport: HTMLDivElement): void => {
     if (hasEarlierHistory && viewport.scrollTop < viewport.clientHeight) earlierHistory.load();
   };
 
-  // Anchors a sent message near the top; space below it is consumed as the response grows.
   useLayoutEffect(() => {
-    const hadLiveUserRow = previousHasLiveUserRowRef.current;
-    previousHasLiveUserRowRef.current = hasLiveUserRow;
-    if (!hasLiveUserRow || hadLiveUserRow) return;
-
+    keepPosition();
     const viewport = viewportRef.current;
-    const content = anchorContentRef.current;
-    const row = virtualizer.getVirtualItems().find((item) => item.index === liveUserRowIndex);
-    if (!viewport || !content || !row) return;
-
-    onResumeAutoFollow();
-    stopAnchorScroll();
-    streamScrollAnimationRef.current?.cancel();
-    // Sending from history reveals the new message first; never mount the entire history to animate across it.
-    scrollToEnd({behavior: "auto"});
-    const firstIndex = virtualizer.getVirtualItemForOffset(viewport.scrollTop)?.index ?? row.index;
-    const anchor = {
-      row,
-      initialTop: row.start - viewport.scrollTop,
-      offset: 0,
-      animation: null as Animation | null,
-    };
-    anchorScrollRef.current = anchor;
-    syncAnchorSpace(viewport);
-    setScrollButtonVisible(false);
-
-    const anchorScrollTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
-    if (anchorScrollTop <= viewport.scrollTop || shouldReduceMotion) {
-      viewport.scrollTop = anchorScrollTop;
-      releaseAnchorScroll();
-      return;
-    }
-
-    // Claim the viewport during commit, before auto-follow would jump to the anchored position next frame.
-    onAnchorChange(firstIndex);
-
-    anchor.animation = content.animate([{transform: `translateY(${anchor.offset}px)`}, {transform: "translateY(0)"}], {
-      duration: TIMELINE_ANCHOR_SCROLL_DURATION_MS,
-      easing: "cubic-bezier(0.16, 1, 0.3, 1)",
-    });
-    anchor.animation.onfinish = () => {
-      if (anchorScrollRef.current === anchor) releaseAnchorScroll();
-    };
-    viewport.scrollTop = anchorScrollTop;
-  }, [hasLiveUserRow, liveUserRowIndex, onAnchorChange, onResumeAutoFollow, releaseAnchorScroll, scrollToEnd, shouldReduceMotion, syncAnchorSpace, virtualizer]);
-
-  // A revert removes turns: collapse the anchor space rather than let it swallow the removed height.
-  useLayoutEffect(() => {
-    const turnsReverted = turnCount < previousTurnCountRef.current;
-    previousTurnCountRef.current = turnCount;
-    if (!turnsReverted || (anchorSpaceHeightRef.current === 0 && anchorScrollRef.current === null)) return;
-
-    releaseAnchorScroll();
-    setAnchorSpaceHeight(0);
-    realContentHeightRef.current = null;
-    scrollToEnd({behavior: "auto"});
-  }, [releaseAnchorScroll, scrollToEnd, setAnchorSpaceHeight, turnCount]);
-
-  useLayoutEffect(() => {
-    const viewport = viewportRef.current;
-    const prepend = prependRef.current;
-    if (prepend) {
-      // During user scrolling TanStack defers ref measurements to ResizeObserver. Finish the prepended overscan
-      // before releasing its anchor, including new rows that occupy the old top padding.
-      const measured = virtualItems.flatMap((item) => {
-        const element = virtualizer.elementsCache.get(item.key);
-        return item.index < prepend.beforeIndex && element ? [{index: item.index, height: element.offsetHeight}] : [];
-      });
-      for (const {index, height} of measured) virtualizer.resizeItem(index, height);
-    }
-    const shift = prependRef.current?.shift ?? 0;
-    prependRef.current = null;
+    const sending = sendingRef.current;
+    sendingRef.current = false;
     if (!viewport) return;
-    if (shift !== 0) viewport.scrollTop += shift;
     // Without enough content to scroll, no scroll event would ever ask for more.
     if (viewport.scrollHeight - viewport.clientHeight < viewport.clientHeight) loadEarlierNearTop(viewport);
+    if (!sending || sentRowKey === null || shouldReduceMotion) return;
+    virtualizer.elementsCache
+      .get(sentRowKey)
+      ?.querySelector("article")
+      ?.animate(
+        [
+          {transform: "translateY(24px) scale(0.82)", transformOrigin: "100% 100%", opacity: 0.6},
+          {transform: "none", transformOrigin: "100% 100%", opacity: 1},
+        ],
+        {duration: TIMELINE_SEND_BUBBLE_MS, easing: "cubic-bezier(0.34, 1.32, 0.64, 1)"}
+      );
   });
-
-  useLayoutEffect(syncViewport);
-
-  // Virtualized rows have no per-turn ancestor, so each row of the hovered group is flagged. A turn's user
-  // message is its own group; otherwise hovering it would reveal the assistant's actions, and vice versa.
-  const setHoveredTurn = (viewport: HTMLDivElement, hoverGroup: string | undefined): void => {
-    for (const row of viewport.querySelectorAll<HTMLElement>("[data-hover-group]"))
-      row.classList.toggle("turn-hover", hoverGroup !== undefined && row.dataset.hoverGroup === hoverGroup);
-  };
-
-  const handleViewportPointerOver = (event: PointerEvent<HTMLDivElement>): void => {
-    setHoveredTurn(event.currentTarget, (event.target as HTMLElement).closest<HTMLElement>("[data-hover-group]")?.dataset.hoverGroup);
-  };
-
-  const handleViewportPointerLeave = (event: PointerEvent<HTMLDivElement>): void => {
-    setHoveredTurn(event.currentTarget, undefined);
-  };
-
-  const handleViewportKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
-    const target = event.target as HTMLElement;
-    if (event.defaultPrevented || target.isContentEditable || target.closest("input, textarea, select")) return;
-    if (event.key === " " && target.closest("button")) return;
-    // Message Scroller cancels its own scrolling on these keys, not our animation.
-    if (["ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown", " "].includes(event.key)) {
-      releaseAnchorScroll();
-      onResumeAutoFollow();
-    }
-  };
-
-  const handleViewportScroll = (event: UIEvent<HTMLDivElement>): void => {
-    const viewport = event.currentTarget;
-    const isAnchorScrolling = anchorScrollRef.current !== null;
-    if (!isAnchorScrolling) syncAnchorSpace(viewport);
-    measureStreamEnd();
-    loadEarlierNearTop(viewport);
-    setScrollButtonVisible(!isAnchorScrolling && viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop >= TIMELINE_SCROLL_BUTTON_THRESHOLD_PX);
-  };
 
   useLayoutEffect(() => {
     if (!hasLiveOutput) return;
-
     const frame = window.requestAnimationFrame(() => {
-      streamAnimationReadyRef.current = true;
-      measureStreamEnd();
+      easeReadyRef.current = true;
+      if (viewportRef.current) footerTopRef.current = footerRef.current ? virtualizer.getTotalSize() - viewportRef.current.scrollTop : null;
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [hasLiveOutput]);
+  }, [hasLiveOutput, virtualizer]);
 
   useLayoutEffect(
     () => () => {
-      streamScrollAnimationRef.current?.cancel();
-      footerAnimationRef.current?.cancel();
-      stopAnchorScroll();
+      easeRef.current?.cancel();
+      footerEaseRef.current?.cancel();
+      window.clearTimeout(autoscrollTimerRef.current);
       if (virtualizer.options.count === 0) return;
 
       timelineCache.delete(sessionId);
@@ -449,99 +368,124 @@ function SessionTimelineViewport(props: SessionTimelineViewportProps) {
     [sessionId, virtualizer]
   );
 
+  /** An upward gesture holds the place before its scroll lands, so following cannot pull it back meanwhile. */
+  const readerScrolls = (viewport: HTMLDivElement, upward: boolean): void => {
+    if (!upward) return;
+    stopEase(viewport);
+    hold(viewport.scrollTop);
+  };
+
+  // Only the reader's scrolling lands here unchanged: the timeline's own writes already left the position in place.
+  const handleScroll = (viewport: HTMLDivElement): void => {
+    const scrollTop = viewport.scrollTop;
+    if (scrollTop === lastScrollTopRef.current) return;
+    const movedUp = scrollTop < lastScrollTopRef.current - 0.5;
+    lastScrollTopRef.current = scrollTop;
+    const fromEnd = viewport.scrollHeight - viewport.clientHeight - scrollTop;
+    if (fromEnd <= TIMELINE_END_THRESHOLD_PX) positionRef.current = {follow: true};
+    else if (movedUp || !positionRef.current.follow) hold(scrollTop);
+    footerTopRef.current = footerRef.current ? virtualizer.getTotalSize() - scrollTop : null;
+    loadEarlierNearTop(viewport);
+    setScrollButtonVisible(fromEnd >= TIMELINE_SCROLL_BUTTON_THRESHOLD_PX);
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+    const target = event.target as HTMLElement;
+    if (event.defaultPrevented || target.isContentEditable || target.closest("input, textarea, select")) return;
+    if (event.key === " " && target.closest("button")) return;
+    if (TIMELINE_SCROLL_KEYS.has(event.key)) readerScrolls(event.currentTarget, TIMELINE_UPWARD_KEYS.has(event.key) || (event.key === " " && event.shiftKey));
+  };
+
+  // Virtualized rows have no per-turn ancestor, so each row of the hovered group is flagged. A turn's user
+  // message is its own group; otherwise hovering it would reveal the assistant's actions, and vice versa.
+  const setHoveredTurn = (viewport: HTMLDivElement, hoverGroup: string | undefined): void => {
+    for (const row of viewport.querySelectorAll<HTMLElement>("[data-hover-group]"))
+      row.classList.toggle("turn-hover", hoverGroup !== undefined && row.dataset.hoverGroup === hoverGroup);
+  };
+
+  const handlePointerOver = (event: PointerEvent<HTMLDivElement>): void => {
+    setHoveredTurn(event.currentTarget, (event.target as HTMLElement).closest<HTMLElement>("[data-hover-group]")?.dataset.hoverGroup);
+  };
+
   return (
     <div className="relative min-h-0 flex-1 select-text">
       {hasTimelineContent ? (
-        <MessageScroller>
-          <MessageScrollerViewport
+        <>
+          <div
             aria-label="Session timeline"
-            onKeyDown={handleViewportKeyDown}
-            onPointerLeave={handleViewportPointerLeave}
+            className="scroll-fade-y size-full min-h-0 min-w-0 overflow-x-hidden overflow-y-auto overscroll-contain contain-content [scrollbar-gutter:stable] data-autoscrolling:scrollbar-thumb-transparent data-autoscrolling:scrollbar-track-transparent"
+            data-slot="timeline-viewport"
+            onKeyDown={handleKeyDown}
             onPointerDown={(event) => {
-              if (event.target === event.currentTarget) onResumeAutoFollow();
+              // A scrollbar drag lands on the viewport itself.
+              if (event.target === event.currentTarget) readerScrolls(event.currentTarget, true);
             }}
-            onPointerOver={handleViewportPointerOver}
-            onScroll={handleViewportScroll}
-            onTouchMove={() => {
-              releaseAnchorScroll();
-              onResumeAutoFollow();
+            onPointerLeave={(event) => setHoveredTurn(event.currentTarget, undefined)}
+            onPointerOver={handlePointerOver}
+            onScroll={(event) => handleScroll(event.currentTarget)}
+            onTouchMove={(event) => {
+              const y = event.touches[0]?.clientY ?? null;
+              // A finger moving down scrolls the content up.
+              readerScrolls(event.currentTarget, y !== null && touchYRef.current !== null && y > touchYRef.current);
+              touchYRef.current = y;
             }}
-            onWheel={() => {
-              releaseAnchorScroll();
-              onResumeAutoFollow();
+            onTouchStart={(event) => {
+              touchYRef.current = event.touches[0]?.clientY ?? null;
             }}
+            onWheel={(event) => readerScrolls(event.currentTarget, event.deltaY < 0)}
             ref={viewportRef}
+            role="region"
+            tabIndex={0}
           >
-            <MessageScrollerContent aria-busy={isStreaming} className="block min-h-full overflow-clip">
-              <div ref={anchorContentRef}>
-                <div
-                  className="relative w-full overflow-clip"
-                  data-timeline-virtual-content
-                  ref={(element) => {
-                    virtualContentRef.current = element;
-                    virtualizer.containerRef(element);
-                  }}
-                >
-                  {hasEarlierHistory && (
-                    <EarlierHistoryStatus
-                      failed={earlierHistory.failed}
-                      height={TIMELINE_EARLIER_HISTORY_HEIGHT_PX}
-                      onRetry={earlierHistory.retry}
-                      top={TIMELINE_ANCHOR_TOP_MARGIN_PX}
-                    />
-                  )}
-                  <div className="absolute inset-0" data-timeline-stream-content ref={streamContentRef}>
-                    {virtualItems.map((virtualItem) => {
-                      const item = timelineRows[virtualItem.index];
-                      if (!item) return null;
+            <div aria-busy={isStreaming} aria-relevant="additions" className="min-h-full overflow-clip" role="log">
+              <div
+                className="relative w-full overflow-clip"
+                data-timeline-stream-content
+                data-timeline-virtual-content
+                ref={(element) => {
+                  contentRef.current = element;
+                  virtualizer.containerRef(element);
+                }}
+              >
+                {hasEarlierHistory && (
+                  <EarlierHistoryStatus failed={earlierHistory.failed} height={TIMELINE_EARLIER_HISTORY_HEIGHT_PX} onRetry={earlierHistory.retry} top={TIMELINE_TOP_PADDING_PX} />
+                )}
+                <WorkExpansionContext value={workExpansion}>
+                  {virtualItems.map((virtualItem) => {
+                    const item = timelineRows[virtualItem.index];
+                    if (!item) return null;
 
-                      return (
-                        <div
-                          className="group/turn absolute inset-s-0 w-full"
-                          data-index={virtualItem.index}
-                          data-hover-group={item.type === "user" ? `user:${item.turnId}` : item.turnId}
-                          key={virtualItem.key}
-                          ref={virtualizer.measureElement}
-                        >
-                          <SessionTimelineVirtualRow activeTurnId={activeTurnId} item={item} onForkFromTurn={onForkFromTurn} onRevertToMessage={onRevertToMessage} />
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-                {isStreaming && <StreamingStatus compacting={compacting} pullIntoLastMessage={pullStatusIntoLastMessage} ref={footerRef} setupStep={setupStep} />}
+                    return (
+                      <div
+                        className="group/turn absolute inset-s-0 w-full"
+                        data-index={virtualItem.index}
+                        data-hover-group={item.type === "user" ? `user:${item.turnId}` : item.turnId}
+                        key={virtualItem.key}
+                        ref={virtualizer.measureElement}
+                      >
+                        <SessionTimelineVirtualRow activeTurnId={activeTurnId} item={item} onForkFromTurn={onForkFromTurn} onRevertToMessage={onRevertToMessage} />
+                      </div>
+                    );
+                  })}
+                </WorkExpansionContext>
               </div>
-              <div aria-hidden="true" className="shrink-0" data-timeline-fake-space ref={anchorSpaceRef} />
-            </MessageScrollerContent>
-          </MessageScrollerViewport>
-          <ScrollToEndButton bottomOffset={bottomOverlayHeight} onClick={onResumeAutoFollow} visible={scrollButtonVisible} />
-        </MessageScroller>
+              {isStreaming && <StreamingStatus compacting={compacting} pullIntoLastMessage={pullStatusIntoLastMessage} ref={footerRef} setupStep={setupStep} />}
+            </div>
+          </div>
+          <ScrollToEndButton
+            bottomOffset={bottomOverlayHeight}
+            onClick={() => {
+              positionRef.current = {follow: true};
+              keepPosition();
+              // The button disappears; the keyboard keeps scrolling the timeline.
+              viewportRef.current?.focus({preventScroll: true});
+            }}
+            visible={scrollButtonVisible}
+          />
+        </>
       ) : (
         <TimelineEmptyState />
       )}
     </div>
-  );
-}
-
-/** Auto-follow belongs to the message scroller except while a sent message is being anchored. */
-export default function SessionTimeline(props: SessionTimelineProps) {
-  const [anchorFirstIndex, setAnchorFirstIndex] = useState<number | null>(null);
-  const [autoFollowPausedByExpansion, setAutoFollowPausedByExpansion] = useState(false);
-  const resumeAutoFollow = useCallback(() => setAutoFollowPausedByExpansion(false), []);
-  const workExpansion = useWorkExpansionState(() => setAutoFollowPausedByExpansion(true));
-
-  // DOM bounds can be fractional even at the native scroll limit.
-  return (
-    <MessageScrollerProvider autoScroll={anchorFirstIndex === null && !autoFollowPausedByExpansion} defaultScrollPosition="end" scrollEdgeThreshold={1}>
-      <WorkExpansionContext value={workExpansion}>
-        <SessionTimelineViewport
-          {...props}
-          anchorFirstIndex={anchorFirstIndex}
-          onAnchorChange={setAnchorFirstIndex}
-          autoFollowPausedByExpansion={autoFollowPausedByExpansion}
-          onResumeAutoFollow={resumeAutoFollow}
-        />
-      </WorkExpansionContext>
-    </MessageScrollerProvider>
   );
 }
