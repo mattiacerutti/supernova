@@ -19,7 +19,7 @@ export default function AssistantCompaction(props: AssistantCompactionProps) {
   };
 
   return (
-    <section className="space-y-2">
+    <section>
       <Marker className="cursor-pointer select-none gap-1.5 px-0 py-0 hover:text-ink-muted" onClick={handleToggle} render={<button type="button" />} variant="separator">
         <MarkerContent>Compacted for {formatDuration(item.durationMs)}</MarkerContent>
         <Icon className={cn("transition-transform duration-160 ease-out", expanded && "rotate-90")} name="chevron-right" size="xs" />
@@ -28,10 +28,13 @@ export default function AssistantCompaction(props: AssistantCompactionProps) {
         className="grid grid-rows-[0fr] opacity-0 will-change-[grid-template-rows,opacity] transition-[grid-template-rows,opacity] duration-300 ease-in-out data-[expanded=true]:grid-rows-[1fr] data-[expanded=true]:opacity-100"
         data-expanded={expanded}
       >
-        <div className="overflow-hidden pt-1">
-          <AssistantMessageContent className="text-ink" mode="text">
-            {item.event.summary ?? ""}
-          </AssistantMessageContent>
+        {/* The gap lives inside the collapsing track, so a closed summary takes no height under the marker. */}
+        <div className="overflow-hidden">
+          <div className="pt-3">
+            <AssistantMessageContent className="text-ink" mode="text">
+              {item.event.summary ?? ""}
+            </AssistantMessageContent>
+          </div>
         </div>
       </div>
     </section>

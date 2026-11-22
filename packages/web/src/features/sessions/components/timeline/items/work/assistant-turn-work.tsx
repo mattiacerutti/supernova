@@ -5,6 +5,7 @@ import SessionTimelineRow from "@/features/sessions/components/timeline/rows/ses
 import VirtualWorkList from "@/features/sessions/components/timeline/items/work/virtual-work-list";
 import WorkExpansionBody from "@/features/sessions/components/timeline/items/work/work-expansion-body";
 import {useWorkExpansion} from "@/features/sessions/hooks/use-work-expansion";
+import {gapBelow, rowSpacing} from "@/features/sessions/lib/timeline/rows/timeline-rows";
 import {formatDuration} from "@/features/sessions/lib/timeline/work/work-timeline-items";
 import type {TurnWorkSessionTimelineItem} from "@/features/sessions/types/session-timeline-item";
 import {cn} from "@/lib/cn";
@@ -37,9 +38,10 @@ export default function AssistantTurnWork(props: AssistantTurnWorkProps) {
           id={item.id}
           renderRow={(index) => {
             const child = item.items[index]!;
+            const next = item.items[index + 1];
             return (
               <div className="[&>div]:px-0">
-                <SessionTimelineItemFrame item={child}>
+                <SessionTimelineItemFrame gap={gapBelow(rowSpacing(child), next && rowSpacing(next))}>
                   <SessionTimelineRow item={child} />
                 </SessionTimelineItemFrame>
               </div>

@@ -10,11 +10,11 @@ import SessionTimelineVirtualRow from "@/features/sessions/components/timeline/r
 import StreamingStatus from "@/features/sessions/components/timeline/viewport/streaming-status";
 import TimelineEmptyState from "@/features/sessions/components/timeline/viewport/timeline-empty-state";
 import {WorkExpansionContext, useWorkExpansionState} from "@/features/sessions/hooks/use-work-expansion";
-import {buildTimelineRowKeys, buildTimelineRows, hasLiveTimelineOutput, withForkDivider} from "@/features/sessions/lib/timeline/rows/timeline-rows";
+import {buildTimelineRowKeys, buildTimelineRows, gapBelow, hasLiveTimelineOutput, rowSpacing, withForkDivider} from "@/features/sessions/lib/timeline/rows/timeline-rows";
+import type {TimelineSpacing} from "@/features/sessions/lib/timeline/rows/timeline-rows";
 import type {SessionTimelineItem} from "@/features/sessions/types/session-timeline-item";
 
 const TIMELINE_TOP_PADDING_PX = 24;
-const TIMELINE_BOTTOM_PADDING_PX = 16;
 const TIMELINE_EARLIER_HISTORY_HEIGHT_PX = 48;
 const TIMELINE_CACHE_LIMIT = 16;
 const TIMELINE_SCROLL_BUTTON_THRESHOLD_PX = 50;
@@ -67,6 +67,7 @@ interface TimelineEarlierHistory {
 }
 
 interface SessionTimelineProps {
+  /** What overlays the timeline's bottom edge, as the rolled back messages drawer; nothing scrolls out of reach under it. */
   readonly bottomOverlayHeight?: number;
   readonly earlierHistory: TimelineEarlierHistory;
   readonly compacting: boolean;
@@ -105,6 +106,7 @@ export default function SessionTimeline(props: SessionTimelineProps) {
   const footerEaseRef = useRef<Animation | null>(null);
   const footerTopRef = useRef<number | null>(null);
   const lastScrollTopRef = useRef(0);
+  const bottomInsetRef = useRef(bottomOverlayHeight);
   const touchYRef = useRef<number | null>(null);
   const autoscrollTimerRef = useRef<number | undefined>(undefined);
   const [scrollButtonVisible, setScrollButtonVisibleState] = useState(false);
@@ -126,7 +128,9 @@ export default function SessionTimeline(props: SessionTimelineProps) {
   // Easing starts a frame after output first appears, so the frame that introduces it lays out without motion.
   const easeReadyRef = useRef(false);
   if (!hasLiveOutput) easeReadyRef.current = false;
-  const pullStatusIntoLastMessage = hasLiveOutput && liveItems.at(-1)?.spacing === "message";
+  // The status follows the last row like one more row would. The end of the timeline stands apart like the prompt that
+  // will follow it, so sending one leaves the last row's height alone and the send's ease moves everything together.
+  const statusSpacing: TimelineSpacing = isStreaming && !setupStep && !compacting ? "close" : "apart";
   // Not compiled (TanStack Virtual), so the history's share is memoized by hand: these walk every loaded row, and the
   // timeline renders on every streamed frame and scroll range change. A stable `getItemKey` also spares TanStack
   // from re-measuring every row on each render.
@@ -180,7 +184,6 @@ export default function SessionTimeline(props: SessionTimelineProps) {
       keepPosition();
     },
     overscan: 3,
-    paddingEnd: TIMELINE_BOTTOM_PADDING_PX,
     paddingStart,
     // Mount a sent prompt before the send scrolls to it, so its bubble can animate in.
     rangeExtractor: (range) => {
@@ -270,7 +273,10 @@ export default function SessionTimeline(props: SessionTimelineProps) {
       scrollOffsetChangedRef.current?.(top, virtualizer.isScrolling);
     }
     lastScrollTopRef.current = top;
-    if (positionRef.current.follow) easeFollowing(viewport, top - before);
+    // An overlay animates its own height; easing the scroll that follows it would trail it.
+    const insetGrowth = bottomOverlayHeight - bottomInsetRef.current;
+    bottomInsetRef.current = bottomOverlayHeight;
+    if (positionRef.current.follow) easeFollowing(viewport, top - before - Math.max(0, insetGrowth));
     else hold(top);
     easeFooter(top);
     setScrollButtonVisible(end - top >= TIMELINE_SCROLL_BUTTON_THRESHOLD_PX);
@@ -437,7 +443,7 @@ export default function SessionTimeline(props: SessionTimelineProps) {
             role="region"
             tabIndex={0}
           >
-            <div aria-busy={isStreaming} aria-relevant="additions" className="min-h-full overflow-clip" role="log">
+            <div aria-busy={isStreaming} aria-relevant="additions" className="min-h-full overflow-clip" role="log" style={{paddingBottom: bottomOverlayHeight}}>
               <div
                 className="relative w-full overflow-clip"
                 data-timeline-stream-content
@@ -454,6 +460,7 @@ export default function SessionTimeline(props: SessionTimelineProps) {
                   {virtualItems.map((virtualItem) => {
                     const item = timelineRows[virtualItem.index];
                     if (!item) return null;
+                    const next = timelineRows[virtualItem.index + 1];
 
                     return (
                       <div
@@ -463,13 +470,19 @@ export default function SessionTimeline(props: SessionTimelineProps) {
                         key={virtualItem.key}
                         ref={virtualizer.measureElement}
                       >
-                        <SessionTimelineVirtualRow activeTurnId={activeTurnId} item={item} onForkFromTurn={onForkFromTurn} onRevertToMessage={onRevertToMessage} />
+                        <SessionTimelineVirtualRow
+                          activeTurnId={activeTurnId}
+                          gap={gapBelow(rowSpacing(item), next ? rowSpacing(next) : statusSpacing)}
+                          item={item}
+                          onForkFromTurn={onForkFromTurn}
+                          onRevertToMessage={onRevertToMessage}
+                        />
                       </div>
                     );
                   })}
                 </WorkExpansionContext>
               </div>
-              {isStreaming && <StreamingStatus compacting={compacting} pullIntoLastMessage={pullStatusIntoLastMessage} ref={footerRef} setupStep={setupStep} />}
+              {isStreaming && <StreamingStatus compacting={compacting} ref={footerRef} setupStep={setupStep} />}
             </div>
           </div>
           <ScrollToEndButton

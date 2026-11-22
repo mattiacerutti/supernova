@@ -5,7 +5,6 @@ export type {SessionAssistantEvent, SessionCompactionEvent, SessionReasoningEven
 interface SessionTimelineItemBase {
   readonly final: boolean;
   readonly id: string;
-  readonly spacing: "message" | "work";
   readonly turnId: string;
 }
 
@@ -23,7 +22,6 @@ export interface ReasoningSessionTimelineItem extends SessionTimelineItemBase {
 
 export interface UserSessionTimelineItem extends SessionTimelineItemBase {
   readonly message: SessionUserMessage;
-  readonly spacing: "message";
   readonly type: "user";
 }
 

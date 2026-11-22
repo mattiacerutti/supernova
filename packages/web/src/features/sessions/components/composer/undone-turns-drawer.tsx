@@ -2,6 +2,7 @@ import type {UserMessageContentPart} from "@supernova/contracts/services/chat/sc
 import type {SessionTurn} from "@/features/sessions/types/session-turn";
 import {AnimatePresence, motion} from "framer-motion";
 import {useLayoutEffect, useRef, useState} from "react";
+import {flushSync} from "react-dom";
 import type {UIEvent} from "react";
 import Button from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
@@ -62,6 +63,7 @@ export default function UndoneTurnsDrawer(props: UndoneTurnsDrawerProps) {
   const {disabled = false, later, onHeightChange, onRevertToMessage, turns} = props;
   const [expanded, setExpanded] = useState(false);
   const drawerRef = useRef<HTMLDivElement | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
   const visible = turns.length > 0;
   const count = turns.length + later.count;
   const previewTurn = turns[0];
@@ -76,13 +78,16 @@ export default function UndoneTurnsDrawer(props: UndoneTurnsDrawerProps) {
     }
 
     const updateHeight = (): void => {
-      // Subtracts 20px to account for the drawer's bottom overlap with the composer
-      onHeightChange(Math.max(0, drawer.getBoundingClientRect().height - 20));
+      // Without the 20px tucked under the composer, and without the expanded list, which covers the timeline instead of moving it.
+      const listHeight = listRef.current?.getBoundingClientRect().height ?? 0;
+      onHeightChange(Math.max(0, drawer.getBoundingClientRect().height - listHeight - 20));
     };
 
     updateHeight();
-    const observer = new ResizeObserver(updateHeight);
+    // Synchronously, so the timeline makes room in the frame the drawer grew instead of trailing it by one.
+    const observer = new ResizeObserver(() => flushSync(updateHeight));
     observer.observe(drawer);
+    if (listRef.current) observer.observe(listRef.current);
 
     return () => observer.disconnect();
   }, [expanded, onHeightChange, visible]);
@@ -114,7 +119,7 @@ export default function UndoneTurnsDrawer(props: UndoneTurnsDrawerProps) {
         >
           <div className="min-h-0 min-w-0 overflow-hidden">
             <div className="relative mx-2 overflow-hidden rounded-t-3xl corner-superellipse/1.3 bg-surface-recessed px-4 pb-7 pt-2.5 inset-ring-1 inset-ring-border-muted">
-              <div className={cn("flex items-center justify-between gap-3 px-1", expanded && "mb-3")}>
+              <div className="flex items-center justify-between gap-3 px-1">
                 <div className="flex min-w-0 items-center gap-2 text-sm text-ink">
                   <span className="shrink-0 font-medium">
                     {count} rolled back {count === 1 ? "message" : "messages"}
@@ -141,8 +146,8 @@ export default function UndoneTurnsDrawer(props: UndoneTurnsDrawerProps) {
               </div>
               <AnimatePresence initial={false}>
                 {expanded && (
-                  <motion.div animate={{height: "auto", opacity: 1}} exit={{height: 0, opacity: 0}} initial={{height: 0, opacity: 0}} transition={DRAWER_TRANSITION}>
-                    <div className="min-h-0 min-w-0 overflow-visible">
+                  <motion.div animate={{height: "auto", opacity: 1}} exit={{height: 0, opacity: 0}} initial={{height: 0, opacity: 0}} ref={listRef} transition={DRAWER_TRANSITION}>
+                    <div className="min-h-0 min-w-0 overflow-visible pt-3">
                       <motion.div
                         animate={{opacity: 1, y: 0}}
                         className="scroll-fade-y max-h-40 space-y-1 overflow-x-hidden overflow-y-auto pr-1 pb-0.5"

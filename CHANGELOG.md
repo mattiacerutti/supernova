@@ -28,6 +28,7 @@ All notable changes to Supernova are documented in this file.
 - Session times in the sidebar and command palette now keep counting while the app is open. Before, a session showed the time it had when it last changed or when the app started, so it could read "now" days later.
 - The command palette's Open session in page now opens with its apps listed instead of empty first. Searching sessions drops results that no longer match as you type, instead of showing the previous search's results until the new ones arrive.
 - Long URLs and other unbroken text in assistant messages now wrap instead of running past the conversation column.
+- Fixed the end of the timeline sitting under the rolled back messages drawer, and a turn losing its message actions and "Worked for" summary after `/compact`.
 - Fixed undo sometimes leaving a file unchanged when the agent edited it without changing its size, within a second of the last Git index update. The checkpoint missed the edit, so there was nothing to restore.
 - Fixed the timeline moving what you were reading when a response with reasoning or several messages finished, or when earlier messages loaded.
 

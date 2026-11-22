@@ -72,8 +72,24 @@ describe("buildSessionTimeline", () => {
     expect(timeline.committedItems).toMatchObject([
       {type: "user"},
       {items: [{type: "work"}, {event: {id: "assistant-1"}, final: false, type: "assistant"}, {type: "work"}], type: "turn-work"},
-      {event: {id: "assistant-2"}, final: true, spacing: "message", type: "assistant"},
+      {event: {id: "assistant-2"}, final: true, type: "assistant"},
     ]);
+
+    // /compact after the turn settled adds the compaction to it; the response still ends the turn.
+    const compacted = buildSessionTimeline({
+      live: false,
+      liveTurn: null,
+      turns: [
+        turn({
+          events: [
+            toolEvent("tool-1", 1),
+            assistantEvent("assistant-1", 2),
+            {id: "compaction-1", status: "completed", summary: "Summary", timestamp: timestamp(5), type: "compaction"},
+          ],
+        }),
+      ],
+    });
+    expect(compacted.committedItems).toMatchObject([{type: "user"}, {type: "turn-work"}, {event: {id: "assistant-1"}, final: true, type: "assistant"}, {type: "compaction"}]);
   });
 
   it("keeps a settled turn flat and stamps its last item when it ends on work", () => {
@@ -83,8 +99,8 @@ describe("buildSessionTimeline", () => {
     const endsOnWork = buildSessionTimeline({live: false, liveTurn: null, turns: [turn({events: [assistantEvent("assistant-1", 1), toolEvent("tool-1", 3, "command")]})]});
     expect(endsOnWork.committedItems).toMatchObject([
       {type: "user"},
-      {event: {id: "assistant-1"}, final: false, spacing: "work", type: "assistant"},
-      {events: [{tool: {name: "bash"}}], final: true, spacing: "work", type: "work"},
+      {event: {id: "assistant-1"}, final: false, type: "assistant"},
+      {events: [{tool: {name: "bash"}}], final: true, type: "work"},
     ]);
 
     const toolsOnly = buildSessionTimeline({live: false, liveTurn: null, turns: [turn({events: [reasoningEvent("reasoning-1", 1), toolEvent("tool-1", 3, "command")]})]});

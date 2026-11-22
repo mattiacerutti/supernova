@@ -1,7 +1,7 @@
 import {describe, expect, it} from "vitest";
 import {sessionView} from "@/features/sessions/lib/session-view";
 import {buildCommittedTimelineItems, buildLiveTimelineItems} from "@/features/sessions/lib/timeline/rows/build-session-timeline";
-import {buildTimelineRowKeys, buildTimelineRows, withForkDivider} from "@/features/sessions/lib/timeline/rows/timeline-rows";
+import {buildTimelineRowKeys, buildTimelineRows, gapBelow, rowSpacing, withForkDivider} from "@/features/sessions/lib/timeline/rows/timeline-rows";
 import {assistantEntry, runningLive, sessionDocument, toolCall, toolResultEntry, transcript, userEntry} from "@tests/support/session";
 
 const EARLIER_TURNS = 3;
@@ -63,5 +63,20 @@ describe("the fork divider", () => {
     const withDivider = buildTimelineRowKeys(withForkDivider(history, history[0]!.turnId), EARLIER_TURNS);
 
     expect(withDivider.filter((key) => !key.includes("fork-divider"))).toEqual(buildTimelineRowKeys(history, EARLIER_TURNS));
+  });
+});
+
+describe("the space between rows", () => {
+  it("is the same whichever of two rows draws it, and none after the last", () => {
+    const {history, live: liveItems} = timeline(true);
+    const rows = buildTimelineRows({items: history, liveItems, streamError: "Failed"});
+    const gaps = rows.map((row, index) => {
+      const next = rows[index + 1];
+      return gapBelow(rowSpacing(row), next && rowSpacing(next));
+    });
+
+    // First prompt | its folded steps and reply | second prompt | the live reply | the error.
+    expect(rows.map((row) => row.type)).toEqual(["user", "turn-work", "assistant", "user", "assistant", "stream-error"]);
+    expect(gaps).toEqual(["apart", "close", "apart", "apart", "close", undefined]);
   });
 });

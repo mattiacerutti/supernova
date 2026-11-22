@@ -16,6 +16,22 @@ export interface ForkDividerTimelineRow {
 
 export type TimelineRow = ForkDividerTimelineRow | SessionTimelineItem | StreamErrorTimelineRow;
 
+export type TimelineSpacing = "apart" | "close";
+
+/** Prompts and separators stand apart from their neighbors; a response's steps, errors included, sit close. */
+export function rowSpacing(row: TimelineRow): TimelineSpacing {
+  return row.type === "user" || row.type === "fork-divider" || row.type === "compaction" ? "apart" : "close";
+}
+
+/**
+ * The space below a row: the wider of its spacing and the next one's, so it never depends on which of the two draws it.
+ * Below rather than above, so a page of history prepended above a row leaves that row's height alone.
+ */
+export function gapBelow(spacing: TimelineSpacing, next: TimelineSpacing | undefined): TimelineSpacing | undefined {
+  if (next === undefined) return undefined;
+  return spacing === "apart" || next === "apart" ? "apart" : "close";
+}
+
 interface BuildTimelineRowsInput {
   readonly items: readonly TimelineRow[];
   readonly liveItems: readonly SessionTimelineItem[];

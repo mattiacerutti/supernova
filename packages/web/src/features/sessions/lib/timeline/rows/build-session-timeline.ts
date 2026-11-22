@@ -23,7 +23,6 @@ function turnToTimelineItems(turn: SessionTurn, live: boolean): SessionTimelineI
       final: false,
       id: `work:${turn.id}:${workIndex}`,
       live: workLive,
-      spacing: "work",
       turnId: turn.id,
       type: "work",
     });
@@ -32,7 +31,7 @@ function turnToTimelineItems(turn: SessionTurn, live: boolean): SessionTimelineI
     workEvents = [];
   };
 
-  items.push({final: false, id: `user:${turn.userMessage.id}`, message: turn.userMessage, spacing: "message", turnId: turn.id, type: "user"});
+  items.push({final: false, id: `user:${turn.userMessage.id}`, message: turn.userMessage, turnId: turn.id, type: "user"});
 
   for (const [eventIndex, event] of turn.events.entries()) {
     if (event.type === "tool") {
@@ -42,7 +41,7 @@ function turnToTimelineItems(turn: SessionTurn, live: boolean): SessionTimelineI
 
     if (event.type === "reasoning") {
       flushWork(false, event.timestamp);
-      items.push({event, final: false, id: `reasoning:${event.id}`, live, spacing: "work", turnId: turn.id, type: "reasoning"});
+      items.push({event, final: false, id: `reasoning:${event.id}`, live, turnId: turn.id, type: "reasoning"});
       continue;
     }
 
@@ -56,7 +55,6 @@ function turnToTimelineItems(turn: SessionTurn, live: boolean): SessionTimelineI
         event,
         final: false,
         id: `compaction:${event.id}`,
-        spacing: "work",
         turnId: turn.id,
         type: "compaction",
       });
@@ -64,24 +62,26 @@ function turnToTimelineItems(turn: SessionTurn, live: boolean): SessionTimelineI
     }
 
     flushWork(false, event.timestamp);
-    items.push({event, final: false, id: `assistant:${event.id}`, live, spacing: "work", turnId: turn.id, type: "assistant"});
+    items.push({event, final: false, id: `assistant:${event.id}`, live, turnId: turn.id, type: "assistant"});
   }
 
   flushWork(turn.status === "streaming" && live, turn.completedAt);
 
-  // A settled turn ending on a response folds its work behind "Worked for"; one ending on work stays flat.
+  // A compaction after the response, as /compact adds, follows the turn instead of ending it.
+  const compactions = items.splice(items.findLastIndex((item) => item.type !== "compaction") + 1);
+  return [...settleTurn(items, turn, live), ...compactions];
+}
+
+/** A settled turn ending on a response folds its work behind "Worked for"; one ending on work stays flat. */
+function settleTurn(items: SessionTimelineItem[], turn: SessionTurn, live: boolean): SessionTimelineItem[] {
   const last = items.at(-1);
-  if (!last || last.type === "user" || last.type === "compaction") return items;
+  if (!last || last.type === "user") return items;
   const response = last.type === "assistant" && last.event.content.trim().length > 0;
-  items[items.length - 1] = {...last, final: !live, spacing: response ? "message" : "work"};
+  items[items.length - 1] = {...last, final: !live};
   if (live || !response || items.length <= 2) return items;
 
   const durationMs = Math.max(0, Date.parse(last.event.timestamp) - Date.parse(turn.startedAt));
-  return [
-    items[0]!,
-    {durationMs, final: false, id: `turn-work:${turn.id}`, items: items.slice(1, -1), spacing: "work", turnId: turn.id, type: "turn-work"},
-    items[items.length - 1]!,
-  ];
+  return [items[0]!, {durationMs, final: false, id: `turn-work:${turn.id}`, items: items.slice(1, -1), turnId: turn.id, type: "turn-work"}, items[items.length - 1]!];
 }
 
 export function buildSessionTimeline(input: BuildSessionTimelineInput): SessionTimelineItems {
