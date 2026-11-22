@@ -1,20 +1,17 @@
 import type {Facet, FacetHost} from "@earendil-works/chord";
 import {defineFacet} from "@earendil-works/chord";
 import type {RuntimePrincipal} from "@supernova/contracts/lib/protocol";
-import type {TerminalOutput} from "@supernova/contracts/services/workspace/schemas";
 import {TerminalNotFoundError} from "@supernova/contracts/services/workspace/schemas";
 import type {TerminalsState} from "@supernova/contracts/services/workspace/services";
 import {TerminalService, WorkspaceService} from "@supernova/contracts/services/workspace/services";
 import {TerminalsNative, TerminalsStore} from "@supernova/agent-runtime/features/workspace/contract";
-import {spawnPty} from "@supernova/agent-runtime/features/workspace/lib/pty";
-import {Terminals} from "@supernova/agent-runtime/features/workspace/natives/terminals";
+import {spawnPty} from "@supernova/agent-runtime/features/workspace/lib/terminal/pty";
+import {Terminals} from "@supernova/agent-runtime/features/workspace/natives/terminal/terminals";
 import {getChanges, getDiffContents, listBranches, listFiles, listRepositories, readFile} from "@supernova/agent-runtime/features/workspace/workspace";
-import {method} from "@supernova/agent-runtime/lib/chord/methods";
+import {action, method} from "@supernova/agent-runtime/lib/chord/methods";
 import {nativeOf, serveNative} from "@supernova/agent-runtime/lib/chord/natives";
 import {forbidden, isOwner} from "@supernova/agent-runtime/lib/chord/principals";
 import {derivedState} from "@supernova/agent-runtime/lib/chord/state";
-
-const NO_OUTPUT: TerminalOutput = {output: "", dropped: 0};
 
 export const workspaceFacet: Facet<RuntimePrincipal> = defineFacet<RuntimePrincipal>((host) => {
   serveTerminalsStore(host);
@@ -27,17 +24,15 @@ function serveTerminalsStore(host: FacetHost<RuntimePrincipal>): void {
 
   host.serve(TerminalsStore, (_params, self) => {
     const list = self.writable<TerminalsState>({terminals: {}});
-    const outputs = self.writable<Readonly<Record<string, TerminalOutput>>>({});
 
     const terminals = self.open(
-      async () => new Terminals({spawnPty, list: list, outputs: outputs}),
+      async () => new Terminals({spawnPty, list}),
       (opened) => opened.shutdown()
     );
     self.contribute(TerminalsNative, terminals);
 
     return {
       list: derivedState(self, [list], ([value]) => value),
-      outputs: derivedState(self, [outputs], ([value]) => value),
       open: (input) => terminals.value.open(input),
       close: async (input) => {
         await terminals.value.close(input);
@@ -78,22 +73,26 @@ function serveTerminalService(host: FacetHost<RuntimePrincipal>): void {
   host.serve(TerminalService, ({terminalId}, principal, self) => {
     if (!isOwner(principal)) throw forbidden("Only the owner uses terminals.");
 
-    const store = self.get(TerminalsStore, {});
+    self.get(TerminalsStore, {});
     const terminals = nativeOf(self, TerminalsNative);
 
-    self.open(
+    // Holds of one terminal share this object, so its end closes every viewer it admitted.
+    const viewers = self.open(
       async () => {
         if (!terminals().has(terminalId)) throw new TerminalNotFoundError({message: "Terminal not found."});
+        const owner = {};
+        terminals().hold(owner);
+        return owner;
       },
-      () => undefined
+      (owner) => terminals().release(owner)
     );
 
     return {
       variant: "owner",
       members: {
-        output: derivedState(self, [store.outputs], ([outputs]) => outputs[terminalId] ?? NO_OUTPUT),
-        write: method((input) => terminals().write(terminalId, input)),
+        channel: action(() => ({token: terminals().grant(terminalId, viewers.value)})),
         resize: method((input) => terminals().resize(terminalId, input)),
+        theme: method((input) => terminals().setTheme(terminalId, input)),
       },
     };
   });

@@ -1,10 +1,9 @@
 import {createServer} from "node:http";
 import type {ServerResponse} from "node:http";
 import type {AddressInfo, Socket} from "node:net";
-import {RUNTIME_SOCKET_PATH} from "@supernova/contracts/lib/protocol";
 import type {ServerHostHandle} from "@supernova/agent-runtime";
 import {startServerHost} from "@supernova/agent-runtime";
-import {acceptRuntimeSockets} from "@/runtime-socket";
+import {acceptSockets} from "@/socket";
 
 export const DEFAULT_HOST = "127.0.0.1";
 export const DEFAULT_PORT = 4317;
@@ -76,7 +75,7 @@ export async function startServer({host, port}: StartServerOptions): Promise<Run
     });
 
     services = await startServerHost();
-    closeSockets = acceptRuntimeSockets(listener, RUNTIME_SOCKET_PATH, services.host);
+    closeSockets = acceptSockets(listener, services.host, services.terminals);
 
     const address = listener.address() as AddressInfo;
     const hostname = host.includes(":") ? `[${host}]` : host;

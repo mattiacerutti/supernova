@@ -81,9 +81,19 @@ Throw a contract error where the failure is detected, not by classifying causes 
 
 Anything clients follow over time is owned by a class (`SessionStatus`, `Terminals`, the catalog) inside its store, so it outlives every client. A provider login is the exception: `ProvidersService` opens `Logins` itself, so the login ends with the last screen that could answer it. The store passes the class a `self.writable` and exposes it with `self.derive` as a JSON state member; remote objects hand that member on or derive from it. The class sets the whole value; do not edit documents or queue writes. Chord diffs each new value against the last, so a grown string goes out as an append and a grown list as inserts, and a new hold starts from the current value. Do not add a parallel replication protocol.
 
-A derive diffs, so it does not know a string lost its front: a trimmed terminal buffer goes out whole, once per 64 KiB of output (the slack between the cap and the trim). Keep values whose every change is large out of a derive.
+A derive diffs, so it does not know a string lost its front: a trimmed buffer goes out whole. Keep values whose every change is large out of a derive.
 
-Keep high-volume state separate from summaries. A client that needs the terminal list should not also receive every terminal's output, so `TerminalService` derives one terminal's output from the store's map; only that terminal's changes reach its holders. Replicated values must be strict JSON: no `undefined` fields. See [workspace/facet.ts](../../packages/agent-runtime/src/features/workspace/facet.ts) for the serving pattern.
+Keep high-volume state separate from summaries. Replicated values must be strict JSON: no `undefined` fields. See [workspace/facet.ts](../../packages/agent-runtime/src/features/workspace/facet.ts) for the serving pattern.
+
+### Terminals
+
+A terminal's output is the one stream that does not go through Chord state: it is bytes, and a slow client must be able to skip it. Chord carries identity and lifetime, and a socket per viewer carries the bytes.
+
+- `Terminals` owns the shell (`TerminalProcess`) and a headless xterm (`TerminalScreen`) that follows every byte, so a viewer that attaches gets the current screen, modes and cursor, then only the output after it. The shell pauses while the screen is behind, so parsing bounds a flood.
+- `TerminalService.channel()` gives a one-use token, valid briefly, for `/terminal?token=`. The token belongs to that held object: the object's end closes every socket it admitted, and closing the terminal ends them with `TERMINAL_CLOSED_CODE`. Holds of one terminal share its object, so each call to `channel()` makes its own viewer.
+- `TerminalViewer` is one socket's flow control: at most 256 KiB unacknowledged after its latest snapshot. A viewer past that gets no output until its acks catch up, then a fresh snapshot instead of what it missed. Acks go over the socket, since they belong to the viewer, not the shared object.
+- The server's screen is the one that answers the program's queries (cursor position, device attributes, modes, colors), once, however many viewers show the terminal, including none or one that fell behind. Viewers report the colors they draw with through `TerminalService.theme`; the last report wins, as with the size, and a program that enabled mode 2031 hears of a scheme change. The browser's xterm consumes the queries it would otherwise answer (`silence-terminal-queries.ts`).
+- `apps/server` routes upgrades by path: a `ws` server bound to the HTTP server would refuse every other path's upgrade.
 
 ### Serving a feature
 
@@ -93,7 +103,7 @@ Keep method bodies direct: assign the new view selection, then refresh it. Avoid
 
 A session host acts with a `worker` principal naming its session and start generation; the server checks that generation against the session hosts before accepting reports.
 
-Accepted session creation, forks and archives are server-owned: `SessionsService` calls `SessionOperations` without the caller's abort signal; a local object's calls act as the server, so the operations reach the session's chat as the server and a browser's cancellation never reaches them (as p2's `SessionOperations` does). Releasing a session (archive, failed create) suspends its route, closes its host, deletes its checkpoints and forgets its status (`operations/release-session.ts`); its route resolves again only when a hold arrives after the suspension, and the catalog then decides.
+Accepted session creation, forks and archives are server-owned: `SessionsService` calls `SessionOperations` without the caller's abort signal; a local object's calls act as the server, so the operations reach the session's chat as the server and a browser's cancellation never reaches them. Releasing a session (archive, failed create) suspends its route, closes its host, deletes its checkpoints and forgets its status (`operations/release-session.ts`); its route resolves again only when a hold arrives after the suspension, and the catalog then decides.
 
 The built-in features are facets that ship and update with the app; nothing reloads or removes them while the server runs. Revisit that when a built-in feature must be switched on and off live; do not add plugin machinery in anticipation.
 

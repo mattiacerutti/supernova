@@ -1,23 +1,16 @@
-import type {Pty, SpawnPty} from "@supernova/agent-runtime/features/workspace/lib/pty";
+import type {Pty, SpawnPty} from "@supernova/agent-runtime/features/workspace/lib/terminal/pty";
 import {userProcessEnv} from "@supernova/agent-runtime/lib/user-process-env";
 
-/** A few screens of scrollback, not a whole build log. */
-const HISTORY_LIMIT_CHARS = 256 * 1024;
-/** Slack, because a trim resends the whole buffer. */
-const HISTORY_TRIMMED_CHARS = 192 * 1024;
 const KILL_GRACE_MS = 1_000;
-/** A busy PTY delivers hundreds of reads per second. */
-const OUTPUT_COALESCE_MS = 8;
-const OUTPUT_COALESCE_CHARS = 32 * 1024;
 
 export interface TerminalProcessInput {
   readonly cols: number;
   readonly cwd: string;
-  readonly id: string;
   readonly rows: number;
+  readonly scheme: "light" | "dark";
   readonly sessionId: string;
   readonly spawnPty: SpawnPty;
-  readonly onOutput: (data: string) => void;
+  readonly onOutput: (data: Uint8Array) => void;
   readonly onExit: (exitCode: number) => void;
 }
 
@@ -32,29 +25,13 @@ export class TerminalProcess {
 
   public static async spawn(input: TerminalProcessInput): Promise<TerminalProcess> {
     const process = new TerminalProcess();
-    let pending = "";
-    let flushTimer: NodeJS.Timeout | undefined;
-    const flush = (): void => {
-      clearTimeout(flushTimer);
-      flushTimer = undefined;
-      if (pending.length === 0) return;
-      const data = pending;
-      pending = "";
-      input.onOutput(data);
-    };
     process.pty = await input.spawnPty({
       cols: input.cols,
       cwd: input.cwd,
-      env: {...userProcessEnv(), SUPERNOVA_SESSION_ID: input.sessionId, TERM: "xterm-256color"},
-      onData: (data) => {
-        pending += data;
-        if (pending.length >= OUTPUT_COALESCE_CHARS) flush();
-        else flushTimer ??= setTimeout(flush, OUTPUT_COALESCE_MS);
-      },
+      env: {...userProcessEnv(), COLORFGBG: input.scheme === "dark" ? "15;0" : "0;15", SUPERNOVA_SESSION_ID: input.sessionId, TERM: "xterm-256color"},
+      onData: input.onOutput,
       onExit: (exitCode) => {
         if (process.exitCode !== undefined) return;
-        // Else the client draws the exit notice above the last output.
-        flush();
         process.exitCode = exitCode;
         process.resolveExit();
         input.onExit(exitCode);
@@ -65,12 +42,20 @@ export class TerminalProcess {
     return process;
   }
 
-  public write(data: string): void {
+  public write(data: Uint8Array): void {
     if (this.exitCode === undefined) this.pty?.write(data);
   }
 
   public resize(cols: number, rows: number): void {
     if (this.exitCode === undefined) this.pty?.resize(cols, rows);
+  }
+
+  public pause(): void {
+    if (this.exitCode === undefined) this.pty?.pause();
+  }
+
+  public resume(): void {
+    if (this.exitCode === undefined) this.pty?.resume();
   }
 
   public close(): Promise<void> {
@@ -90,8 +75,4 @@ export class TerminalProcess {
     })();
     return this.closing;
   }
-}
-
-export function overflow(output: string): number {
-  return output.length > HISTORY_LIMIT_CHARS ? output.length - HISTORY_TRIMMED_CHARS : 0;
 }
