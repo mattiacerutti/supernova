@@ -19,7 +19,7 @@ type Step = {readonly text: string} | ToolCall;
 type Turn =
   | {readonly type: "answer"; readonly steps: readonly Step[]}
   | {readonly type: "error"; readonly status: number; readonly message: string}
-  | {readonly type: "hold"; readonly before: string; readonly after: string; readonly started: () => void; readonly released: Promise<void>};
+  | {readonly type: "hold"; readonly before: string; readonly after: string | ToolCall; readonly started: () => void; readonly released: Promise<void>};
 
 const TITLE_SYSTEM_PROMPT = "Generate a concise title for this coding session";
 
@@ -82,7 +82,7 @@ export class ScriptedModel {
   }
 
   /** Streams `before` on the next request, then waits for `release()`; a stop from the client ends it. */
-  public hold(script: {readonly before?: string; readonly after?: string} = {}): {readonly started: Promise<void>; release(): void} {
+  public hold(script: {readonly before?: string; readonly after?: string | ToolCall} = {}): {readonly started: Promise<void>; release(): void} {
     let started!: () => void;
     let release!: () => void;
     const startedPromise = new Promise<void>((resolve) => (started = resolve));
@@ -140,7 +140,7 @@ export class ScriptedModel {
     turn.started();
     await Promise.race([turn.released, new Promise((resolve) => response.once("close", resolve))]);
     if (response.destroyed) return;
-    stream(response, [{text: turn.after}]);
-    finish(response, false);
+    stream(response, [typeof turn.after === "string" ? {text: turn.after} : turn.after]);
+    finish(response, typeof turn.after !== "string");
   }
 }

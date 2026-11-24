@@ -66,16 +66,8 @@ export function forgetSession(runtime: RuntimeClient, sessionId: string): void {
 }
 
 export function markSeenAsItChanges(runtime: RuntimeClient, sessionId: string): () => void {
-  const history = historyOf(runtime, sessionId);
-  let seen = history.read().document;
-  // At the session's activity time: stamping now would hide a later completion.
-  const markSeen = () => seen && useSessionVisitsStore.getState().markSessionVisited(sessionId, seen.updatedAt);
-  markSeen();
-  return history.subscribe(() => {
-    const {document} = history.read();
-    if (document === seen) return;
-    seen = document;
-    markSeen();
+  return follow(runtime.sessions.view, ({open}) => {
+    if (open?.id === sessionId) useSessionVisitsStore.getState().markSessionVisited(sessionId, open.updatedAt);
   });
 }
 

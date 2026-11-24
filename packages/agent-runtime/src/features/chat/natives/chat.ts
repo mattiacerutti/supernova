@@ -25,6 +25,7 @@ import {preparePromptImages} from "@supernova/agent-runtime/features/chat/lib/us
 import type {SessionFileSetup, SessionModel} from "@supernova/agent-runtime/features/chat/natives/session-file";
 import {SessionFile} from "@supernova/agent-runtime/features/chat/natives/session-file";
 import type {Transcript, TranscriptFrame} from "@supernova/agent-runtime/features/chat/natives/transcript";
+import {isTurnStart} from "@supernova/agent-runtime/features/chat/lib/transcript/history-page";
 import {errorMessage} from "@supernova/agent-runtime/lib/errors";
 import {findSelectedModel} from "@supernova/agent-runtime/pi/lib/models/selected-model";
 import {toPiThinkingLevel} from "@supernova/agent-runtime/pi/lib/models/thinking-levels";
@@ -92,6 +93,7 @@ export class Chat {
         sessionId: id,
         path: join(deps.sessionsRoot, id, "session.sqlite"),
         checkpoints: deps.checkpointStore,
+        onEntriesCommitted: (at) => void ports.report({kind: "entries", at}).catch(() => undefined),
         onReport: (error) => void ports.report({kind: "notice", notice: {level: "warning", message: errorMessage(error, String(error))}}).catch(() => undefined),
       },
       context
@@ -144,10 +146,13 @@ export class Chat {
   }
 
   public async updateActivity(frame: TranscriptFrame, context: Context): Promise<void> {
-    const activity = sessionActivityOf((frame.view.docs["pi.live"] ?? {}) as LiveState);
+    const live = (frame.view.docs["pi.live"] ?? {}) as LiveState;
+    const activity = sessionActivityOf(live);
     if (activity !== this.activity) {
+      // A resumed run keeps the time of its durable user entry, not the time the host reopened.
+      const at = activity === "idle" && this.activity !== undefined ? Date.now() : live.run && frame.view.entries.findLast(isTurnStart)?.model?.[0]?.timestamp;
       this.activity = activity;
-      await this.ports.report({kind: "activity", activity}).catch(() => undefined);
+      await this.ports.report({kind: "activity", activity, ...(at === undefined ? {} : {at: new Date(at).toISOString()})}).catch(() => undefined);
     }
 
     if (activity === "idle") await this.file.recordAfterTurnCheckpoints(context);
@@ -200,8 +205,6 @@ export class Chat {
       },
       withoutAbortSignal(context)
     );
-
-    await this.ports.report({kind: "sent", at: sent.at});
 
     void sent.answered().then(
       (settled) => {

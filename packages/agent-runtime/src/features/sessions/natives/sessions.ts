@@ -136,11 +136,23 @@ export class Sessions {
     return {projectPath, sessionId};
   }
 
-  public view({openId, projects}: {readonly projects: Readonly<Record<string, number>>; readonly openId: string | null}): SessionsView {
+  public view(
+    {openId, projects}: {readonly projects: Readonly<Record<string, number>>; readonly openId: string | null},
+    anchors: ReadonlyMap<string, string> = new Map()
+  ): SessionsView {
+    const running = Array.from(anchors.keys(), (id) => this.catalog.find(id)).filter((row): row is SessionRecord => row !== undefined && row.archivedAt === undefined);
+    const sortAt = (row: SessionRecord) => anchors.get(row.id) ?? row.updatedAt;
     return {
       projects: Object.fromEntries(
         Object.entries(projects).map(([projectPath, depth]) => {
-          const records = this.catalog.list({projectPath, limit: depth + 1});
+          const path = resolveProjectPath(projectPath);
+          const active = running.filter((row) => row.projectPath === path);
+          // Each active row can displace at most one idle row from the indexed prefix.
+          let records = this.catalog.list({projectPath: path, limit: depth + 1 + active.length});
+          if (active.length) {
+            records = records.filter((row) => !anchors.has(row.id)).concat(active);
+            records.sort((a, b) => Number(b.pinned) - Number(a.pinned) || sortAt(b).localeCompare(sortAt(a)) || Buffer.compare(Buffer.from(b.id), Buffer.from(a.id)));
+          }
           return [projectPath, {depth, loading: false, items: records.slice(0, depth).map(toListedSession), hasMore: records.length > depth}];
         })
       ),

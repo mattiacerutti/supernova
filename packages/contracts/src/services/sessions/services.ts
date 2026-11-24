@@ -78,6 +78,7 @@ export const SessionsErrors = {
 } satisfies Errors<typeof SessionsService>;
 
 export interface SessionStatusEntry {
+  readonly activeTurnSentAt?: string;
   readonly activity: SessionActivity;
   readonly setupStep: SessionSetupStep | null;
   readonly notices: readonly SessionNotice[];
@@ -88,7 +89,7 @@ export interface SessionStatuses {
 }
 
 export const SessionStatusService = remote("supernova.session-status", {
-  version: 3,
+  version: 4,
   params: {},
   hostAddress: serverHost,
   variants: {

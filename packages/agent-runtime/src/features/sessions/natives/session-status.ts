@@ -8,7 +8,7 @@ const NOTICE_LIMIT = 20;
 const IDLE: SessionStatusEntry = {activity: "idle", setupStep: null, notices: []};
 
 export type StatusChange =
-  | {readonly kind: "activity"; readonly activity: SessionActivity}
+  | {readonly kind: "activity"; readonly activity: SessionActivity; readonly at?: string}
   | {readonly kind: "setup"; readonly step: SessionSetupStep | null}
   | {readonly kind: "notice"; readonly notice: Omit<SessionNotice, "id" | "at">}
   | {readonly kind: "unavailable"};
@@ -44,9 +44,14 @@ export class SessionStatus {
 
 function changed(current: SessionStatusEntry, change: StatusChange): SessionStatusEntry {
   switch (change.kind) {
-    case "activity":
-      if (current.activity === change.activity) return current;
-      return {...current, activity: change.activity, ...(change.activity === "running" ? {setupStep: null} : {})};
+    case "activity": {
+      const activeTurnSentAt = change.activity === "idle" ? undefined : change.at;
+      if (current.activity === change.activity && current.activeTurnSentAt === activeTurnSentAt) return current;
+      const next = {...current, activity: change.activity, ...(change.activity === "running" ? {setupStep: null} : {})};
+      if (activeTurnSentAt === undefined) delete next.activeTurnSentAt;
+      else next.activeTurnSentAt = activeTurnSentAt;
+      return next;
+    }
     case "setup":
       return current.setupStep === change.step ? current : {...current, setupStep: change.step};
     case "notice": {
@@ -54,6 +59,6 @@ function changed(current: SessionStatusEntry, change: StatusChange): SessionStat
       return {...current, notices: [...current.notices, notice].slice(-NOTICE_LIMIT)};
     }
     case "unavailable":
-      return current.activity === "idle" && current.setupStep === null ? current : {...current, activity: "idle", setupStep: null};
+      return current.activity === "idle" && current.setupStep === null ? current : {...IDLE, notices: current.notices};
   }
 }

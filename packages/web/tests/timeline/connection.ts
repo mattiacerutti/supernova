@@ -216,7 +216,6 @@ class TimelineServer {
     this.writeRecord({id, title: "Untitled session", forked: false, pinned: false, projectPath, updatedAt});
     const session: ChatDocument = {
       id,
-      updatedAt,
       entries: page([]),
       undone: page([]),
       agent: {},
@@ -230,6 +229,9 @@ class TimelineServer {
   }
 
   private commit(session: ChatDocument, activity: SessionActivity): void {
+    const previous = this.sessions.get(session.id);
+    const record = this.records.get(session.id);
+    if (record && previous?.entries.items.at(-1)?.id !== session.entries.items.at(-1)?.id) this.records.set(session.id, {...record, updatedAt: new Date().toISOString()});
     this.sessions.set(session.id, session);
     this.document(session.id).set(session);
     this.statuses.change((draft) => {
@@ -240,11 +242,7 @@ class TimelineServer {
   }
 
   private matching(include: (record: ListedSession) => boolean): ListedSession[] {
-    // A session's activity is its conversation's, as the catalog's `touch` keeps it.
-    return [...this.records.values()]
-      .filter(include)
-      .map((record) => ({...record, updatedAt: this.sessions.get(record.id)?.updatedAt ?? record.updatedAt}))
-      .toSorted((left, right) => Number(right.pinned) - Number(left.pinned) || right.updatedAt.localeCompare(left.updatedAt));
+    return [...this.records.values()].filter(include).toSorted((left, right) => Number(right.pinned) - Number(left.pinned) || right.updatedAt.localeCompare(left.updatedAt));
   }
 
   private window(projectPath: string, depth: number) {
@@ -265,7 +263,6 @@ class TimelineServer {
         ...session,
         entries: page(all.slice(0, cut)),
         undone: page(all.slice(cut), cut < all.length ? (all[cut - 1]?.id ?? null) : null),
-        updatedAt: new Date().toISOString(),
       },
       "idle"
     );
@@ -370,7 +367,6 @@ class TimelineServer {
       ...previous,
       entries: page([...previous.entries.items, ...transcript([answer], {firstId: this.nextEntryId(previous)})]),
       live: {},
-      updatedAt: new Date().toISOString(),
     };
     delete next.runStart;
     this.commit(next, "idle");

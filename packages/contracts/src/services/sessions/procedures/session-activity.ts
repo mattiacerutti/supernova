@@ -20,8 +20,9 @@ const NoticeFields = {
 export const SessionNotice = obj({...NoticeFields, id: str(), at: str()});
 
 export const SessionReport = union([
-  obj({kind: lit("activity"), activity: SessionActivity}),
-  obj({kind: lit("sent"), at: str()}),
+  // A busy run carries its user entry's time; settlement carries its finish time. Initial idle has neither.
+  obj({kind: lit("activity"), activity: SessionActivity, at: opt(str())}),
+  obj({kind: lit("entries"), at: str()}),
   obj({kind: lit("notice"), notice: obj(NoticeFields)}),
   obj({kind: lit("title"), title: str()}),
 ]);

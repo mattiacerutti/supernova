@@ -76,6 +76,29 @@ describe("listing, searching, pinning, and archiving saved sessions", () => {
     expect(first.hasMore).toBe(true);
   });
 
+  it("merges running chats at send time before limiting the window, without hiding committed activity", async () => {
+    const at = (minute: number) => new Date(Date.UTC(2026, 0, 1) + minute * 60_000).toISOString();
+    const {sessions} = await sessionsWith([
+      ...Array.from({length: 40}, (_, index) => record({id: `idle-${index}`, updatedAt: at(index)})),
+      record({id: "running", updatedAt: at(45)}),
+      record({id: "other", projectPath: "/other"}),
+      record({id: "archived", archivedAt: at(40)}),
+      record({id: "pin", pinned: true}),
+    ]);
+    const view = (depth: number, anchors: Record<string, string>) =>
+      sessions.view({projects: {[workspace]: depth}, openId: null}, new Map(Object.entries(anchors))).projects[workspace]!;
+    const running = {running: at(37.5), other: at(50), archived: at(50)};
+    expect(view(3, running).items.map(({id}) => id)).toEqual(["pin", "idle-39", "idle-38"]);
+    const deeper = view(5, running);
+    expect(deeper.items.map(({id}) => id)).toEqual(["pin", "idle-39", "idle-38", "running", "idle-37"]);
+    expect(deeper.items[3]?.updatedAt).toBe(at(45));
+    expect(view(3, running).hasMore).toBe(true);
+    expect(view(42, running).hasMore).toBe(false);
+    expect(view(3, {}).items.map(({id}) => id)).toEqual(["pin", "running", "idle-39"]);
+    // The send report can arrive before the catalog's first entry report.
+    expect(view(2, {"idle-0": at(50)}).items.map(({id}) => id)).toEqual(["pin", "idle-0"]);
+  });
+
   it("deepens a project's window without skipping or repeating sessions", async () => {
     const {sessions} = await sessionsWith(["a", "b", "c", "d", "e"].map((id, index) => record({id, updatedAt: `2026-01-0${index + 1}T00:00:00.000Z`})));
 

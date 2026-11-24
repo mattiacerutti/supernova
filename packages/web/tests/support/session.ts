@@ -148,7 +148,6 @@ export function sessionDocument(
   const {entries = [], undone = [], ...rest} = input;
   return {
     id: "session-1",
-    updatedAt: new Date(Date.UTC(2026, 0, 1)).toISOString(),
     agent: {},
     live: {},
     usage: {models: {}, tools: {}},

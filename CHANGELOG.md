@@ -24,6 +24,7 @@ All notable changes to Supernova are documented in this file.
 
 ### Fixed
 
+- Fixed chats finishing in the background not moving up in the sidebar or showing a blue dot. Activity times update as entries are saved, without moving running chats between pages.
 - Fixed programs that ask the terminal a question, such as where the cursor is or whether the background is light or dark, getting an answer from every open window, which could show up as stray text at the prompt. They now get one answer, even with the terminal open in no window.
 - Fixed a provider login continuing on the server after its window was closed or reloaded. An unfinished login now also ends after 10 minutes.
 - Screen readers now announce the message composer and the sidebar's pinned, forked, and worktree session markers.
