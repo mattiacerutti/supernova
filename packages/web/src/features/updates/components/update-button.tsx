@@ -14,13 +14,13 @@ export default function UpdateButton(props: UpdateButtonProps) {
   const {className} = props;
   const {state, download, install} = useDesktopUpdate();
   const [pending, setPending] = useState(false);
-  const [installDialogOpen, setInstallDialogOpen] = useState(false);
+  const [installVersion, setInstallVersion] = useState<string | null>(null);
 
   if (!state) return null;
 
   const downloading = state.status === "downloading";
   const actionable = state.status === "available" || state.status === "downloaded" || (state.status === "error" && state.version !== null);
-  if (!actionable && !downloading) return null;
+  if (!actionable && !downloading && installVersion === null) return null;
 
   const version = state.version ?? "";
   const label = downloading
@@ -40,7 +40,7 @@ export default function UpdateButton(props: UpdateButtonProps) {
 
   const handleClick = (): void => {
     if (state.status === "downloaded") {
-      setInstallDialogOpen(true);
+      setInstallVersion(state.version);
       return;
     }
 
@@ -48,12 +48,13 @@ export default function UpdateButton(props: UpdateButtonProps) {
   };
 
   const handleConfirmInstall = (): void => {
-    setInstallDialogOpen(false);
-    runUpdateAction(install, "Could not install the update");
+    if (installVersion === null) return;
+    setInstallVersion(null);
+    runUpdateAction(() => install(installVersion), "Could not install the update");
   };
 
   const handleCancelInstall = (): void => {
-    setInstallDialogOpen(false);
+    setInstallVersion(null);
   };
 
   return (
@@ -63,7 +64,8 @@ export default function UpdateButton(props: UpdateButtonProps) {
           "group relative h-4.5 w-4.5 overflow-hidden transition-[width] duration-160 ease-out enabled:hover:w-14 enabled:focus-visible:w-14 motion-reduce:transition-none",
           className
         )}
-        disabled={downloading || pending}
+        disabled={!actionable || pending}
+        hidden={!actionable && !downloading}
         label={label}
         onClick={handleClick}
         title={label}
@@ -80,7 +82,12 @@ export default function UpdateButton(props: UpdateButtonProps) {
           </span>
         </span>
       </IconButton>
-      <UpdateInstallDialog onCancel={handleCancelInstall} onConfirm={handleConfirmInstall} open={installDialogOpen} version={state.version} />
+      <UpdateInstallDialog
+        onCancel={handleCancelInstall}
+        onConfirm={handleConfirmInstall}
+        ready={state.status === "downloaded" && state.version === installVersion}
+        version={installVersion}
+      />
     </>
   );
 }

@@ -19,7 +19,7 @@ interface DesktopUpdater {
   readonly start: () => void;
   readonly check: () => Promise<DesktopUpdateState | null>;
   readonly download: () => Promise<void>;
-  readonly quitAndInstall: () => void;
+  readonly install: (version: string, beforeInstall: () => Promise<boolean>) => Promise<void>;
 }
 
 function isAutoUpdateSupported(): boolean {
@@ -31,6 +31,8 @@ function isAutoUpdateSupported(): boolean {
 export function createDesktopUpdater({nightly, onStateChange}: CreateDesktopUpdaterOptions): DesktopUpdater {
   const supported = isAutoUpdateSupported();
   let state = INITIAL_UPDATE_STATE;
+  let updating = false;
+  let checking: Promise<boolean> | undefined;
 
   const setState = (next: DesktopUpdateState): void => {
     if (next === state) return;
@@ -42,10 +44,19 @@ export function createDesktopUpdater({nightly, onStateChange}: CreateDesktopUpda
     setState(reduceUpdateState(state, event));
   };
 
-  const checkForUpdates = async (): Promise<void> => {
-    if (state.status === "downloading" || state.status === "downloaded") return;
+  const refresh = (): Promise<boolean> => {
     // Failures surface through the updater "error" event.
-    await autoUpdater.checkForUpdates().catch(() => undefined);
+    return (checking ??= autoUpdater
+      .checkForUpdates()
+      .catch(() => null)
+      .then((result) => result?.isUpdateAvailable === true)
+      .finally(() => {
+        checking = undefined;
+      }));
+  };
+
+  const checkForUpdates = async (): Promise<void> => {
+    if (!updating) await refresh();
   };
 
   return {
@@ -81,17 +92,32 @@ export function createDesktopUpdater({nightly, onStateChange}: CreateDesktopUpda
     },
 
     download: async () => {
-      const canDownload = state.status === "available" || (state.status === "error" && state.version !== null);
-      if (!supported || !canDownload) return;
+      if (!supported || updating || state.version === null) return;
 
-      setState({status: "downloading", version: state.version, downloadPercent: 0, message: null});
-      // Failures surface through the updater "error" event.
-      await autoUpdater.downloadUpdate().catch(() => undefined);
+      updating = true;
+      try {
+        if (!(await refresh()) || state.status !== "available") return;
+
+        setState({status: "downloading", version: state.version, downloadPercent: 0, message: null});
+        await autoUpdater.downloadUpdate().catch(() => undefined);
+      } finally {
+        updating = false;
+      }
     },
 
-    quitAndInstall: () => {
-      if (state.status !== "downloaded") return;
-      autoUpdater.quitAndInstall(true, true);
+    install: async (version, beforeInstall) => {
+      if (!supported || updating) return;
+
+      updating = true;
+      try {
+        // A check already in flight can invalidate the version the user confirmed.
+        if (checking) await checking;
+        if (state.status !== "downloaded" || state.version !== version) return;
+
+        if (await beforeInstall()) autoUpdater.quitAndInstall(true, true);
+      } finally {
+        updating = false;
+      }
     },
   };
 }

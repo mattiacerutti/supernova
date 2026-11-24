@@ -54,15 +54,19 @@ function registerDesktopIpc(): void {
 
   ipcMain.handle(DESKTOP_IPC_CHANNELS.getUpdateState, () => updater.getState());
   ipcMain.handle(DESKTOP_IPC_CHANNELS.checkForUpdates, () => updater.check());
-  ipcMain.handle(DESKTOP_IPC_CHANNELS.downloadUpdate, () => updater.download());
+  ipcMain.handle(DESKTOP_IPC_CHANNELS.downloadUpdate, () => (quitting ? undefined : updater.download()));
 
-  ipcMain.handle(DESKTOP_IPC_CHANNELS.installUpdate, async () => {
-    if (quitting || updater.getState().status !== "downloaded") return;
+  ipcMain.handle(DESKTOP_IPC_CHANNELS.installUpdate, async (_, version: unknown) => {
+    if (quitting || typeof version !== "string") return;
 
-    // Stop the API first so quitAndInstall does not race the before-quit shutdown.
-    quitting = true;
-    await server?.close().catch(() => undefined);
-    updater.quitAndInstall();
+    await updater.install(version, async () => {
+      if (quitting) return false;
+
+      // Stop the API first so quitAndInstall does not race the before-quit shutdown.
+      quitting = true;
+      await server?.close().catch(() => undefined);
+      return true;
+    });
   });
 }
 
