@@ -31,6 +31,6 @@ export interface DesktopApi {
   readonly getUpdateState: () => Promise<DesktopUpdateState>;
   readonly checkForUpdates: () => Promise<DesktopUpdateState | null>;
   readonly downloadUpdate: () => Promise<void>;
-  readonly installUpdate: () => Promise<void>;
+  readonly installUpdate: (version: string) => Promise<void>;
   readonly onUpdateState: (listener: (state: DesktopUpdateState) => void) => () => void;
 }

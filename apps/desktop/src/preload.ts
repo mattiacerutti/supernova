@@ -21,7 +21,7 @@ const desktopApi = {
   getUpdateState: () => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.getUpdateState),
   checkForUpdates: () => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.checkForUpdates),
   downloadUpdate: () => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.downloadUpdate),
-  installUpdate: () => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.installUpdate),
+  installUpdate: (version) => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.installUpdate, version),
   onUpdateState: (listener) => {
     const handler = (_: IpcRendererEvent, state: DesktopUpdateState): void => listener(state);
     ipcRenderer.on(DESKTOP_IPC_CHANNELS.updateState, handler);

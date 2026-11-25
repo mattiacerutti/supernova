@@ -23,7 +23,7 @@ export function reduceUpdateState(state: DesktopUpdateState, event: UpdaterEvent
       if (state.status === "downloaded" && state.version === event.version) return state;
       return {status: "available", version: event.version, downloadPercent: null, message: null};
     case "not-available":
-      return state.status === "downloading" || state.status === "downloaded" ? state : INITIAL_UPDATE_STATE;
+      return state.status === "downloading" ? state : INITIAL_UPDATE_STATE;
     case "download-progress":
       return {status: "downloading", version: state.version, downloadPercent: event.percent, message: null};
     case "downloaded":

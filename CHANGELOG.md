@@ -35,6 +35,7 @@ All notable changes to Supernova are documented in this file.
 - Fixed the end of the timeline sitting under the rolled back messages drawer, and a turn losing its message actions and "Worked for" summary after `/compact`.
 - Fixed undo sometimes leaving a file unchanged when the agent edited it without changing its size, within a second of the last Git index update. The checkpoint missed the edit, so there was nothing to restore.
 - Fixed the timeline moving what you were reading when a response with reasoning or several messages finished, or when earlier messages loaded.
+- Fixed desktop updates getting stuck on an older release by continuing to check after a download and refreshing the offer before starting a new download.
 
 ### Removed
 

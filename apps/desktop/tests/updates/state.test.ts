@@ -26,7 +26,7 @@ const cases: ReadonlyArray<ReducerCase> = [
   {name: "an offered update never demotes an in-flight download", state: downloadingState, event: {type: "available", version: "0.2.0"}, want: downloadingState},
   {name: "a missing update never demotes an in-flight download", state: downloadingState, event: {type: "not-available"}, want: downloadingState},
   {name: "re-offering a downloaded update keeps it installable", state: downloadedState, event: {type: "available", version: "0.1.0"}, want: downloadedState},
-  {name: "a missing update keeps a downloaded update installable", state: downloadedState, event: {type: "not-available"}, want: downloadedState},
+  {name: "an update that is no longer offered is not installable", state: downloadedState, event: {type: "not-available"}, want: INITIAL_UPDATE_STATE},
   {name: "a newer version replaces a downloaded update", state: downloadedState, event: {type: "available", version: "0.2.0"}, want: {...availableState, version: "0.2.0"}},
   {name: "errors keep the offered version so the download can be retried", state: downloadingState, event: {type: "error", message: "network unreachable"}, want: errorState},
   {name: "re-checking after an error clears the message", state: errorState, event: {type: "checking"}, want: {...errorState, status: "checking", message: null}},

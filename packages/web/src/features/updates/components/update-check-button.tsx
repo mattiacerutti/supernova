@@ -7,7 +7,7 @@ import {useDesktopUpdate} from "@/features/updates/hooks/use-desktop-update";
 export default function UpdateCheckButton() {
   const {state, check, download, install} = useDesktopUpdate();
   const [pending, setPending] = useState(false);
-  const [installDialogOpen, setInstallDialogOpen] = useState(false);
+  const [installVersion, setInstallVersion] = useState<string | null>(null);
 
   const status = state?.status ?? "idle";
   const downloadable = status === "available" || (status === "error" && state?.version != null);
@@ -38,14 +38,15 @@ export default function UpdateCheckButton() {
   };
 
   const handleClick = (): void => {
-    if (status === "downloaded") setInstallDialogOpen(true);
+    if (status === "downloaded") setInstallVersion(state?.version ?? null);
     else if (downloadable) runAction(download, "Could not download the update");
     else runAction(handleCheck, "Could not check for updates");
   };
 
   const handleConfirmInstall = (): void => {
-    setInstallDialogOpen(false);
-    runAction(install, "Could not install the update");
+    if (installVersion === null) return;
+    setInstallVersion(null);
+    runAction(() => install(installVersion), "Could not install the update");
   };
 
   return (
@@ -59,7 +60,12 @@ export default function UpdateCheckButton() {
       >
         {label}
       </Button>
-      <UpdateInstallDialog onCancel={() => setInstallDialogOpen(false)} onConfirm={handleConfirmInstall} open={installDialogOpen} version={state?.version ?? null} />
+      <UpdateInstallDialog
+        onCancel={() => setInstallVersion(null)}
+        onConfirm={handleConfirmInstall}
+        ready={status === "downloaded" && state?.version === installVersion}
+        version={installVersion}
+      />
     </>
   );
 }

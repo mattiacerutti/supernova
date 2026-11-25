@@ -7,7 +7,7 @@ interface DesktopUpdate {
   readonly state: DesktopUpdateState | undefined;
   readonly check: () => Promise<DesktopUpdateState | null>;
   readonly download: () => Promise<void>;
-  readonly install: () => Promise<void>;
+  readonly install: (version: string) => Promise<void>;
 }
 
 export function useDesktopUpdate(): DesktopUpdate {
@@ -45,6 +45,6 @@ export function useDesktopUpdate(): DesktopUpdate {
     state,
     check: async () => (await window.desktopApi?.checkForUpdates()) ?? null,
     download: async () => window.desktopApi?.downloadUpdate(),
-    install: async () => window.desktopApi?.installUpdate(),
+    install: async (version) => window.desktopApi?.installUpdate(version),
   };
 }
