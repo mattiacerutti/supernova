@@ -38,7 +38,6 @@ export interface SessionModel {
 }
 
 export interface SentMessage {
-  readonly at: string;
   readonly answered: () => Promise<{readonly status: string; readonly reason?: string; readonly detail?: unknown}>;
 }
 
@@ -75,7 +74,13 @@ export class SessionFile {
   }
 
   public static async open(
-    input: SessionFileSetup & {readonly sessionId: string; readonly path: string; readonly checkpoints: CheckpointStore; readonly onReport: (error: unknown) => void},
+    input: SessionFileSetup & {
+      readonly sessionId: string;
+      readonly path: string;
+      readonly checkpoints: CheckpointStore;
+      readonly onReport: (error: unknown) => void;
+      readonly onEntriesCommitted?: (at: string) => void;
+    },
     context: Context
   ): Promise<SessionFile> {
     // Once begun, the migration finishes even if the caller leaves.
@@ -100,6 +105,17 @@ export class SessionFile {
     await harness.root(context, {agent: {cwd: input.cwd}});
     // An absent address cannot be observed: the state document exists from the start.
     await file.update(() => undefined, context);
+    const reportEntries = input.onEntriesCommitted;
+    if (reportEntries) {
+      harness.observeCommits({
+        advance: ({changes}) => {
+          if (!changes.some((change) => change.type === "entry")) return;
+          const at = new Date().toISOString();
+          queueMicrotask(() => reportEntries(at));
+        },
+        end: () => undefined,
+      });
+    }
     harness.resume();
 
     return file;
@@ -152,8 +168,7 @@ export class SessionFile {
       state.workspaceCheckpoint = checkpoints.before;
     }, context);
 
-    const [entry] = await getEntries(this.harness, conversation.id, {after: entryId - 1, through: entryId}, context);
-    return {at: new Date(entry?.model?.[0]?.timestamp ?? Date.now()).toISOString(), answered: () => submission.wait(context)};
+    return {answered: () => submission.wait(context)};
   }
 
   public async compact(model: SessionModel, context: Context): Promise<void> {

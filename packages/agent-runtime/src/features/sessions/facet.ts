@@ -101,10 +101,12 @@ function serveStatusService(host: FacetHost<RuntimePrincipal>): void {
 
             switch (report.kind) {
               case "activity":
-                return status().change(sessionId, {kind: "activity", activity: report.activity});
+                status().change(sessionId, report);
+                if (report.activity === "idle" && report.at !== undefined) await sessions().touch({sessionId, at: report.at});
+                return;
               case "notice":
                 return status().change(sessionId, {kind: "notice", notice: report.notice});
-              case "sent":
+              case "entries":
                 return sessions().touch({sessionId, at: report.at});
               case "title":
                 return sessions().proposeTitle({sessionId, title: report.title});
@@ -132,6 +134,7 @@ function serveSessionsService(host: FacetHost<RuntimePrincipal>): void {
       if (!isOwner(principal)) throw forbidden("Only the owner manages sessions.");
 
       const catalog = self.get(SessionCatalogStore, {});
+      const status = self.get(SessionStatusStore, {});
       const operations = self.get(SessionOperations, {});
       const sessions = nativeOf(self, SessionsNative);
       const shown = self.writable<Shown>({projects: {}, openId: null});
@@ -145,7 +148,13 @@ function serveSessionsService(host: FacetHost<RuntimePrincipal>): void {
       return {
         variant: "owner",
         members: {
-          view: derivedState(self, [catalog.revision, shown], ([, value]) => sessions().view(value as Shown)),
+          view: derivedState(self, [catalog.revision, shown, status.statuses], ([, value, board]) => {
+            const anchors = new Map<string, string>();
+            for (const [id, entry] of Object.entries(board.sessions)) {
+              if (entry.activeTurnSentAt !== undefined) anchors.set(id, entry.activeTurnSentAt);
+            }
+            return sessions().view(value as Shown, anchors);
+          }),
 
           showProject: method(async ({depth, projectPath}) => {
             projects((next) => {

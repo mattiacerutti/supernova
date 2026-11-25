@@ -48,7 +48,7 @@ Legacy JSONL imports remain isolated in `features/sessions/lib/legacy/`. Preserv
 A browser tab holds three kinds of object:
 
 - `SessionsService {clientId}`: the tab's sessions. Its `view` holds a window per sidebar project the tab shows, and the record of the session the tab has open (`open`), whether or not a window has it. Its methods are the operations on any session (create, fork, rename, pin, archive) and a one-shot, paged title search. The view re-reads its windows and its open record after each catalog write.
-- `SessionStatusService {}`: what every live session is doing, and its notices. Session hosts report into it, as their worker principal: activity, notices, a message they accepted (activity time), and a generated title. It is the one channel a session host tells the server about its session.
+- `SessionStatusService {}`: what every live session is doing, and its notices. Session hosts report into it, as their worker principal: activity, notices, entry commits, and a generated title. The catalog records the latest reported entry commit or settlement, not streaming partials; a crash before the report lands can leave it behind. For sidebar windows only, a running chat sorts at its durable user entry's time. Merge running rows at that time with the indexed idle rows before limiting the window; search and visit markers use the catalog time directly. It is the one channel a session host tells the server about its session.
 - `ChatService {sessionId}`, served by the session's own host: its conversation and commands.
 
 A route change must never redirect an already-issued command to another session.

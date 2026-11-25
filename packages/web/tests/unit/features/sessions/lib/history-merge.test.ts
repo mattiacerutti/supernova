@@ -6,7 +6,7 @@ import {sessionView} from "@/features/sessions/lib/session-view";
 import {assistantEntry, page, runningLive, sessionDocument, transcript, turnAt} from "@tests/support/session";
 
 function session(input?: Partial<ChatDocument>): ChatDocument {
-  return {...sessionDocument(), updatedAt: "2026-01-01T00:00:00.000Z", ...input};
+  return {...sessionDocument(), ...input};
 }
 
 function live(document: ChatDocument) {

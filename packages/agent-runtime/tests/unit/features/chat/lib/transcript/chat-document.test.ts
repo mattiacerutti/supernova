@@ -17,7 +17,7 @@ function turnEntry(id: number, turnIndex: number, text = ""): EntryRecord {
 
 /** The document of a conversation whose entries before the undo point are `history` and after it `undone`, with a run from `runStart`. */
 function buildSession(input: {
-  readonly record: {readonly id: string; readonly updatedAt: string};
+  readonly record: {readonly id: string};
   readonly history: readonly EntryRecord[];
   readonly undone: readonly EntryRecord[];
   readonly runStart: number | undefined;
@@ -55,7 +55,7 @@ describe("session entries", () => {
     // An extension's continuation is Pi's own user entry, so it belongs to the turn before it.
     const continuation = {id: 2, conversationId: 1, kind: "pi.user", model: [{role: "user", content: "Continue", timestamp: 0}]} as unknown as EntryRecord;
     const undone = turnEntry(3, 1);
-    const session = buildSession({record: {id: "s", updatedAt: new Date(0).toISOString()}, history: [authored, continuation], undone: [undone], runStart: undefined});
+    const session = buildSession({record: {id: "s"}, history: [authored, continuation], undone: [undone], runStart: undefined});
 
     expect(session.entries.items).toEqual([authored, continuation]);
     expect(session.entries.items[0]).toBe(authored);
@@ -64,23 +64,6 @@ describe("session entries", () => {
     expect(session).not.toHaveProperty("checkpoints");
     expect(session).not.toHaveProperty("title");
     expect(compile(ChatDocument).errors(session)).toEqual([]);
-  });
-});
-
-describe("session activity", () => {
-  const answer = (id: number, timestamp: number): EntryRecord =>
-    ({id, conversationId: 1, kind: "pi.assistant", model: [{role: "assistant", content: "", timestamp}]}) as unknown as EntryRecord;
-  const user = (id: number, turnIndex: number, timestamp: number): EntryRecord =>
-    ({...turnEntry(id, turnIndex), model: [{role: "user", content: "", timestamp}]}) as unknown as EntryRecord;
-  const history = [user(1, 0, 1_000), answer(2, 2_000), user(3, 1, 3_000), answer(4, 4_000)];
-  const session = (runStart: number | undefined) => buildSession({record: {id: "s", updatedAt: new Date(0).toISOString()}, history, undone: [], runStart});
-
-  it("is the newest entry once every turn has settled", () => {
-    expect(session(undefined).updatedAt).toBe(new Date(4_000).toISOString());
-  });
-
-  it("stops at the live turn's user message while its run answers it", () => {
-    expect(session(3).updatedAt).toBe(new Date(3_000).toISOString());
   });
 });
 

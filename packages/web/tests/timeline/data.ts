@@ -53,7 +53,6 @@ function historySession(input: {readonly historyTurnCount: number; readonly id: 
     record: {id: input.id, title: input.title, forked: false, pinned: false, projectPath: TIMELINE_PROJECT_PATH, updatedAt},
     session: sessionDocument({
       id: input.id,
-      updatedAt,
       entries: transcript(drafts),
       agent: {model: {modelId: timelineModel.id, provider: timelineModel.providerId}, thinkingLevel: "high"},
       context: {contextWindow: 200_000, usedTokens: 20_000},

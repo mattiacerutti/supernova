@@ -107,20 +107,43 @@ test.describe("a conversation", () => {
     await expect(app.timeline.text("Worked this time.")).toBeVisible();
   });
 
-  test("runs two sessions at once without mixing them", async ({app, model}) => {
-    const first = model.hold({after: "Answer for A."});
+  test("keeps a running chat behind Show more until it finishes, then marks it unseen on the first page", async ({app, model, project}) => {
+    const first = model.hold({after: {name: "bash", arguments: {command: "pwd"}}});
     await app.composer.send("Question A");
     await first.started;
     await app.sidebar.rename(ScriptedModel.title, "Session A");
 
-    await app.page.getByRole("button", {exact: true, name: /^New session in /}).click();
-    model.reply("Answer for B.");
-    await app.composer.send("Question B");
-    await expect(app.timeline.text("Answer for B.")).toBeVisible();
+    for (let i = 1; i <= 5; i++) {
+      await project.project.startSession();
+      model.reply(`Answer ${i}`);
+      await app.composer.send(`Question ${i}`);
+      await expect(app.timeline.text(`Answer ${i}`)).toBeVisible();
+    }
+    const more = app.sidebar.root.getByRole("button", {name: "Show more"});
+    await expect(more).toBeVisible();
+    await expect(app.sidebar.session("Session A")).toHaveCount(0);
 
+    const finished = app.sidebar.session("Session A").getByRole("status", {name: "Finished while closed"});
+    const answer = model.hold({after: "Answer for A."});
     first.release();
+    await answer.started;
+    await app.reload();
+    await expect(more).toBeVisible();
+    await expect(app.sidebar.session("Session A")).toHaveCount(0);
+    await more.click();
+    await expect.poll(() => app.sidebar.titles()).toEqual([...Array(5).fill(ScriptedModel.title), "Session A"]);
+    await expect(finished).toBeHidden();
+    await app.sidebar.root.getByRole("button", {name: "Show less"}).click();
+    await expect(app.sidebar.session("Session A")).toHaveCount(0);
+    answer.release();
+    await expect(finished).toBeVisible();
+    await expect.poll(() => app.sidebar.titles()).toEqual(["Session A", ...Array(4).fill(ScriptedModel.title)]);
+    await app.reload();
+    await expect(finished).toBeVisible();
     await app.sidebar.open("Session A");
     await expect(app.timeline.text("Answer for A.")).toBeVisible();
-    await expect(app.timeline.text("Question B")).toHaveCount(0);
+    await expect(app.timeline.text("Question 5")).toHaveCount(0);
+    await app.composer.editor.hover();
+    await expect(finished).toHaveCount(0);
   });
 });

@@ -44,10 +44,6 @@ function navigated(turns: readonly SessionTurn[], undoneTurns: readonly SessionT
   return {turns: all.slice(0, shown), undoneTurns: all.slice(shown)};
 }
 
-function listingOrder(left: ListedSession, right: ListedSession): number {
-  return Number(right.pinned) - Number(left.pinned) || right.updatedAt.localeCompare(left.updatedAt) || right.id.localeCompare(left.id);
-}
-
 export function sessionStatus(entry: SessionStatusEntry | undefined, optimism: SessionOptimism = {}, session?: Pick<ChatDocument, "live">): SessionStatus {
   // The document's `live` wins: status can lag it by a frame.
   const activity = session ? sessionActivityOf(session.live) : (entry?.activity ?? "idle");
@@ -77,10 +73,13 @@ export function listedSessions(input: {
   const {items, optimism, projectPath} = input;
   const listed = new Set(items.map((session) => session.id));
   const added = Object.values(optimism).flatMap(({created, message}) => (created && message && !listed.has(created.id) && created.projectPath === projectPath ? [created] : []));
-  return [...added, ...items]
-    .filter((session) => !optimism[session.id]?.archived)
-    .map((session) => ({...session, title: optimism[session.id]?.title ?? session.title, pinned: optimism[session.id]?.pinned ?? session.pinned}))
-    .toSorted(listingOrder);
+  return (
+    [...added, ...items]
+      .filter((session) => !optimism[session.id]?.archived)
+      .map((session) => ({...session, title: optimism[session.id]?.title ?? session.title, pinned: optimism[session.id]?.pinned ?? session.pinned}))
+      // Preserve the server's running-turn order within each optimistic pin group.
+      .toSorted((left, right) => Number(right.pinned) - Number(left.pinned))
+  );
 }
 
 export function sessionView(input: {

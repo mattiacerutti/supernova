@@ -26,7 +26,7 @@ function lastCopiedTurnId(checkpoints: Readonly<Record<string, TurnCheckpoints>>
 }
 
 export function chatDocument(input: {
-  readonly record: Pick<SessionRecord, "id" | "forkedFrom" | "updatedAt">;
+  readonly record: Pick<SessionRecord, "id" | "forkedFrom">;
   readonly view: ConversationView;
   readonly undone: readonly EntryRecord[];
   readonly lastUndoneTurnIndex?: number;
@@ -49,16 +49,9 @@ export function chatDocument(input: {
   });
   const copiedTurnId = record.forkedFrom !== undefined ? lastCopiedTurnId(state.checkpoints, record.id, lastShownEntryId) : undefined;
 
-  // A running session does not keep climbing the sidebar.
-  const liveStart = runStart === undefined ? -1 : entries.items.findIndex((entry) => entry.id >= runStart);
-  const settled = liveStart === -1 ? entries.items : entries.items.slice(0, liveStart + 1);
-  const lastTimestamp = settled.findLast((entry) => entry.model?.[0]?.timestamp !== undefined)?.model?.[0]?.timestamp;
-  const lastActivity = lastTimestamp === undefined ? undefined : new Date(lastTimestamp).toISOString();
-
   return {
     id: record.id,
     ...(copiedTurnId ? {lastCopiedTurnId: copiedTurnId} : {}),
-    updatedAt: lastActivity !== undefined && lastActivity > record.updatedAt ? lastActivity : record.updatedAt,
     entries,
     undone,
     // A fork takes the agent as it was at its fork point, so after an undo too it is the shown turns'.

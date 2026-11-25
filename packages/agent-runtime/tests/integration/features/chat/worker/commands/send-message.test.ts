@@ -118,6 +118,43 @@ describe("sending messages through Pi sessions", () => {
     expect(session.entries.items.filter((entry) => entry.kind === "pi.tool-result")).toHaveLength(2);
   });
 
+  it("advances catalog time for tool entries before settlement but keeps the running turn's send time", async () => {
+    const pi = await createPiTestRuntime();
+    runtimes.push(pi);
+    const {info} = await pi.createSession();
+    let releaseTool!: () => void;
+    let releaseAnswer!: () => void;
+    const toolRound = new Promise<void>((resolve) => (releaseTool = resolve));
+    const answer = new Promise<void>((resolve) => (releaseAnswer = resolve));
+    const seen = await pi.observe(info.id);
+    pi.faux.setResponses([
+      async () => {
+        await toolRound;
+        return fauxAssistantMessage([{type: "toolCall", id: "one", name: "read", arguments: {path: "missing.txt"}}], {stopReason: "toolUse"});
+      },
+      async () => {
+        await answer;
+        return fauxAssistantMessage("Done.");
+      },
+    ]);
+    try {
+      await pi.chat.sendMessage({sessionId: info.id, contentParts: [{type: "text", text: "Read the file"}], modelReference: selectedModelReference});
+      await waitUntil(() => expect(seen.board.at(-1)?.sessions[info.id]?.activeTurnSentAt).toBeDefined());
+      const sentAt = seen.board.at(-1)!.sessions[info.id]!.activeTurnSentAt!;
+      await waitUntil(async () => expect((await pi.store.find(info.id))!.updatedAt >= sentAt).toBe(true));
+      const before = (await pi.store.find(info.id))!.updatedAt;
+      releaseTool();
+      await waitUntil(() => expect(seen.versions.at(-1)?.entries.items.some((entry) => entry.kind === "pi.tool-result")).toBe(true));
+      await waitUntil(async () => expect((await pi.store.find(info.id))!.updatedAt > before).toBe(true));
+      expect(seen.board.at(-1)?.sessions[info.id]).toMatchObject({activity: "running", activeTurnSentAt: sentAt});
+    } finally {
+      releaseTool();
+      releaseAnswer();
+      seen.stop();
+    }
+    await pi.settled(info.id);
+  });
+
   it("keeps the session untitled without persisting a fallback when title generation fails", async () => {
     const pi = await createPiTestRuntime();
     runtimes.push(pi);

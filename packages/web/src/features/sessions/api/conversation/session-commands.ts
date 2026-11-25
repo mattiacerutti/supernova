@@ -50,14 +50,13 @@ function emptySession(projectPath: string, sessionId: string): {readonly record:
   const updatedAt = new Date().toISOString();
   return {
     record: {id: sessionId, title: "Untitled session", forked: false, pinned: false, projectPath, updatedAt},
-    document: emptyConversation(sessionId, updatedAt),
+    document: emptyConversation(sessionId),
   };
 }
 
-function emptyConversation(sessionId: string, updatedAt: string): ChatDocument {
+function emptyConversation(sessionId: string): ChatDocument {
   return {
     id: sessionId,
-    updatedAt,
     entries: {items: [], remaining: 0, precedingEntryId: null},
     undone: {items: [], remaining: 0, precedingEntryId: null},
     agent: {},

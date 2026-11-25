@@ -25,7 +25,6 @@ export const ChatDocument = obj({
   id: str(),
   /** In a fork, the last turn copied from its source. */
   lastCopiedTurnId: opt(str()),
-  updatedAt: str(),
   entries: ChatEntries,
   undone: ChatEntries,
   agent: json<AgentState>(),

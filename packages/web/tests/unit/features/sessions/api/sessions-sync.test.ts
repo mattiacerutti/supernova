@@ -5,11 +5,10 @@ import type {ListedSession, SessionStatusEntry, SessionStatuses, SessionsView} f
 import {afterEach, beforeEach, describe, expect, it, vi} from "vitest";
 import {sessionActions} from "@/features/sessions/api/conversation/session-commands";
 import {historyOf} from "@/features/sessions/api/chat-history";
-import {followSession, markSeenAsItChanges, syncSessions} from "@/features/sessions/api/sessions-sync";
+import {followSession, syncSessions} from "@/features/sessions/api/sessions-sync";
 import {readSessionView} from "@/features/sessions/hooks/use-session";
 import {listedSessions, sessionView} from "@/features/sessions/lib/session-view";
 import {useSessionOptimismStore} from "@/features/sessions/stores/session-optimism-store";
-import {hasUnseenActivity, useSessionVisitsStore} from "@/features/sessions/stores/sidebar/session-visits-store";
 import {sessionToastManager} from "@/lib/toast";
 import type {ChatOwner, RuntimeClient, SessionsOwner} from "@/runtime/client";
 import {page, sessionDocument, text, transcript, turnAt, userEntry, runningLive} from "@tests/support/session";
@@ -44,7 +43,7 @@ function live(sessionId = "session-1", document: ChatDocument | null = session({
 }
 
 function session(input?: Partial<ChatDocument>): ChatDocument {
-  return {...sessionDocument(), updatedAt: "2026-01-01T00:00:00.000Z", ...input};
+  return {...sessionDocument(), ...input};
 }
 
 function twoTurns(): ChatDocument {
@@ -172,7 +171,6 @@ describe("session commands and views", () => {
   beforeEach(() => {
     disconnect();
     useSessionOptimismStore.setState({optimism: {}});
-    useSessionVisitsStore.setState({visits: {}});
   });
 
   afterEach(() => {
@@ -180,7 +178,6 @@ describe("session commands and views", () => {
     disconnect = () => undefined;
     client = undefined;
     useSessionOptimismStore.setState({optimism: {}});
-    useSessionVisitsStore.setState({visits: {}});
   });
 
   function setup() {
@@ -567,20 +564,6 @@ describe("session commands and views", () => {
     await waitUntil(() => expect(services.chat.compact).toHaveBeenCalledOnce());
     finish();
     await waitUntil(() => expect(live()).toMatchObject({status: "idle"}));
-  });
-
-  it("stamps a followed session as visited at its activity time, so later activity elsewhere stays unseen", async () => {
-    const {document, open, services} = setup();
-    services.documents.set("session-1", new Published(session()));
-    open("session-1");
-    const stopMarking = markSeenAsItChanges(services.client, "session-1");
-    await waitUntil(() => expect(document("session-1")).toBeDefined());
-
-    await publish(services, "session-1", {...services.documents.get("session-1")!.current, updatedAt: "2026-01-01T00:05:00.000Z"});
-
-    await waitUntil(() => expect(useSessionVisitsStore.getState().visits["session-1"]).toBe("2026-01-01T00:05:00.000Z"));
-    expect(hasUnseenActivity({activityAtMs: Date.parse("2026-01-01T00:09:00.000Z"), visitedAt: useSessionVisitsStore.getState().visits["session-1"]})).toBe(true);
-    stopMarking();
   });
 
   it("moves a pin at once and keeps it until the runtime confirms", () => {
